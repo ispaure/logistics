@@ -46,7 +46,7 @@ def configure_ios(project):
     except plistlib.InvalidFileException:
         data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(pbx)]))
     objects = data['objects']
-    targets = [(key, obj) for key, obj in objects.items() if obj.get('productType') == 'com.apple.product-type.application']
+    targets = [(key, obj) for key, obj in objects.items() if obj.get('productType') == 'com.apple.product-type.application' and obj.get('name') != 'LogisticsWatch']
     if len(targets) != 1:
         raise ValueError('Expected one containing app for the share extension.')
     app_id, app = targets[0]

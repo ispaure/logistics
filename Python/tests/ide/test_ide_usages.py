@@ -1,4 +1,8 @@
 """Semantic usages and declaration-click navigation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import tempfile
 import unittest

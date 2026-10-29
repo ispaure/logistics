@@ -1,4 +1,8 @@
 """Actual WebView input bridge, native ink encoding and on-device recovery."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from .web_checks import wait_for_text

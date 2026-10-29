@@ -1,4 +1,8 @@
 """Transfer feedback preserves navigation and leaves local reader commands usable."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -8,7 +12,7 @@ import toga
 
 from mobile.app import LogisticsMobile
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
-from mobile_build.tests.reading.test_remote_readers import RemoteClient
+from mobile_build.tests.support.readers import RemoteClient
 
 
 class TransferFeedbackTests(TestCase):

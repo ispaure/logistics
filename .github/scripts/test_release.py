@@ -1,4 +1,6 @@
 """Release layout, submodule validation and safe publishing regressions."""
+
+# TEST_STAGE = TestStage.REGRESSION
 import hashlib
 import json
 import os

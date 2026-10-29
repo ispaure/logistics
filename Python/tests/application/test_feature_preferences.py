@@ -1,4 +1,8 @@
 """Feature choices survive startup, preserve unrelated settings and roll back failed saves."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType

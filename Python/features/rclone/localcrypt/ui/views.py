@@ -1,4 +1,5 @@
 """Session unlock, provider-backed browsing and existing private document hosts."""
+from features.video.formats import VIDEO_EXTENSIONS
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
@@ -132,7 +133,7 @@ class CryptBrowserView(qt.QMainWindow):
             from features.books.ui.preview import cover_thumbnail
             return cover_thumbnail(EPUBBook(path, source=self.provider), size)[0]
         if suffix in {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}:
-            from commonUtils.ui.file_browser.thumbnails import image_thumbnail
+            from features.images.ui.decoding import image_thumbnail
             with self.provider.open(relative) as stream:
                 data = stream.read(16 * 1024 * 1024 + 1)
             check_cancelled(cancelled)
@@ -176,7 +177,7 @@ class CryptBrowserView(qt.QMainWindow):
                 check_cancelled(cancelled)
                 return [('Book Metadata', BrowserDetails(tuple(fields), cover, message))]
             if path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}:
-                from commonUtils.ui.file_browser.thumbnails import image_thumbnail
+                from features.images.ui.decoding import image_thumbnail
                 with self.provider.open(path) as stream:
                     data = stream.read(16 * 1024 * 1024 + 1)
                 check_cancelled(cancelled)
@@ -185,7 +186,11 @@ class CryptBrowserView(qt.QMainWindow):
                 buffer = qt.QBuffer()
                 buffer.setData(qt.QByteArray(data))
                 buffer.open(qt.QIODevice.OpenModeFlag.ReadOnly)
-                dimensions = qt.QImageReader(buffer).size()
+                decoder = qt.QImageReader(buffer)
+                dimensions = decoder.size()
+                from features.images.orientation import image_orientation
+                if image_orientation(data) >= 5:
+                    dimensions.transpose()
                 fields = (('Width', dimensions.width()), ('Height', dimensions.height())) if dimensions.isValid() else ()
                 return [('Image Information', BrowserDetails(fields, image_thumbnail(data, (360, 500))))]
             return ()
@@ -281,7 +286,7 @@ class CryptBrowserView(qt.QMainWindow):
             return
         path = Path(path)
         suffix = path.suffix.lower()
-        if suffix in {'.mp4', '.mkv'}:
+        if suffix in VIDEO_EXTENSIONS:
             from features.video.ui.player import open_video_choice
             from commonUtils.runtime.resources.selection import ResourceChoice
             return open_video_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)

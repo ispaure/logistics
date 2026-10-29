@@ -1,4 +1,8 @@
 """Native controller proof, kept separate from ordinary feature UI cases."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import toga

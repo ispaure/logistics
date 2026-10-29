@@ -1,4 +1,8 @@
 """Native open-file deletion, Recent filtering and retained-copy acceptance."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

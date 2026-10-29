@@ -1,4 +1,8 @@
 """Physical Markdown QA must never inherit main-app storage privileges."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 
 from mobile_build.validation.markdown_physical_tools import BUNDLE, qa_entitlements

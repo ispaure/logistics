@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 import base64
 from unittest.mock import patch, Mock

@@ -1,4 +1,8 @@
 """Actual native image zoom, compact reading and sanitized appearance content."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 import json

@@ -1,4 +1,8 @@
 """Synthetic performance fixtures; reports contain metrics, never document text."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import inspect
 import time

@@ -1,4 +1,8 @@
 """Exercise the actual native app in Briefcase test mode on an emulator/simulator."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import base64
 import json

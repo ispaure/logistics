@@ -1,4 +1,8 @@
 """Separate-app native collection probe; synthetic credentials and archives only."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 from hashlib import sha256

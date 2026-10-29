@@ -1,4 +1,8 @@
 """Failure-only WebKit isolation; never used as native acceptance evidence."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from uuid import uuid4

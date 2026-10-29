@@ -1,4 +1,8 @@
 """Fast local listing timestamps retain local offsets across DST transitions."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from datetime import datetime
 import os
 import time

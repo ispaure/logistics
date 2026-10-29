@@ -148,6 +148,13 @@
     "workspace_navigation.py",
     "workspace_policy.py",
     "provider_progress.py",
-    "settings/reader_history.py"
+    "settings/reader_history.py",
+    "ios/widgets/WatchValueSnapshot.swift",
+    "ios/widgets/WatchValuePublisher.swift",
+    "ios/widgets/WatchValueBootstrap.m",
+    "ios/watch/WatchValueReceiver.swift",
+    "ios/watch/LogisticsWatchApp.swift",
+    "ios/watch/WatchValueWidget.swift",
+    "ios/widgets/SyncWatchValues.swift"
   ]
 }

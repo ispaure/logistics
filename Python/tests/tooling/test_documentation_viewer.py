@@ -1,4 +1,8 @@
 """Real desktop help widgets open the migrated guides and scoped file trees."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch

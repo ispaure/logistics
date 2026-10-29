@@ -6,10 +6,65 @@ const {chromium} = require('playwright');
  const browser=await chromium.launch({headless:true, ...(process.env.LOGISTICS_CHROME ? {executablePath:process.env.LOGISTICS_CHROME} : {})});
  try {
   const page=await browser.newPage({viewport:{width:390,height:844}});
-  await page.route('**/*', r=>r.abort());
-  await page.setContent(fixture.html);
+  let initialHTML=fixture.html,releaseImage;
+  const pendingImage=new Promise(resolve=>{releaseImage=resolve;});
+  const imageURL='https://logistics.invalid/delayed-cover.png';
+  const raster=fixture.delayImage ? fixture.html.match(/data:image\/png;base64,([^"']+)/)[1] : null;
+  if(raster)initialHTML=initialHTML.replace('data:image/png;base64,'+raster,imageURL)
+    .replace('img-src data:','img-src data: https://logistics.invalid');
+  await page.route('**/*', async r=>{
+   if(raster && r.request().url()===imageURL){
+    await pendingImage;await r.fulfill({contentType:'image/png',body:Buffer.from(raster,'base64')});
+   }else await r.abort();
+  });
+  await page.setContent(initialHTML,{waitUntil:'domcontentloaded'});
   await page.evaluate(()=>{window.walks=0;const create=document.createTreeWalker.bind(document);document.createTreeWalker=(...args)=>{walks++;return create(...args);};});
   await page.evaluate(fixture.script);
+  if(fixture.images){
+   if(raster)assert.equal(await page.evaluate(()=>document.querySelector('img').complete),false,'Cover must still be loading at reader startup');
+   releaseImage();
+   await page.waitForFunction(()=>[...document.images].every(img=>img.complete && img.naturalWidth>0));
+   for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1200,height:800},
+                          {width:800,height:1200}]){
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(60);
+    const image=await page.evaluate(()=>{
+     reader.setMotion(false);reader.seekPage(0);
+     const position=reader.pagination(),left=document.querySelector('img').getBoundingClientRect().left;
+     reader.seekPage(Math.floor((left-position.left+.5)/position.stride));
+     const img=document.querySelector('img'),box=img.getBoundingClientRect();
+     const view=document.body.firstElementChild.getBoundingClientRect();
+     return {box:box.toJSON(),view:view.toJSON(),fragments:img.getClientRects().length,pages:reader.pagination().count,
+       columns:reader.pagination().columns,columnWidth:reader.pagination().width,stride:reader.pagination().stride,
+       style:img.style.cssText,width:innerWidth,height:innerHeight};
+    });
+    assert.equal(image.fragments,1,JSON.stringify(image));
+    assert(image.box.top>=image.view.top-.5 && image.box.bottom<=image.view.bottom+.5,JSON.stringify(image));
+    assert(image.box.left>=image.view.left-.5 && image.box.right<=image.view.right+.5,JSON.stringify(image));
+    const columnLeft=image.view.left+Math.floor((image.box.left-image.view.left+.5)/image.stride)*image.stride;
+    assert(image.box.right<=columnLeft+image.columnWidth+.5,'Image must not cross the gutter: '+JSON.stringify(image));
+    assert(Math.abs(image.box.width/image.box.height-fixture.naturalWidth/fixture.naturalHeight)<.02,JSON.stringify(image));
+    assert(image.box.width<=fixture.naturalWidth+.5 && image.box.height<=fixture.naturalHeight+.5,'Small images must not be enlarged');
+    // Spread counts include the empty right column; there must be no extra spread.
+    if(fixture.singleCover)assert.equal(image.pages,image.columns,'A single cover must fit the first spread: '+JSON.stringify(image));
+    if(!fixture.singleCover){
+     const after=await page.evaluate(()=>{
+      const text=document.querySelector('#after').firstChild,range=document.createRange();
+      range.selectNodeContents(document.body);range.setEnd(text,0);reader.seek(range.toString().length);
+      const box=document.querySelector('#after').getBoundingClientRect(),view=document.body.firstElementChild.getBoundingClientRect();
+      return box.left>=view.left-.5 && box.right<=view.right+.5 && box.top>=view.top-.5 && box.bottom<=view.bottom+.5;
+     });
+     assert(after,'Text after the image must remain reachable and visible');
+    }
+    await page.evaluate(html=>reader.measure(html,'cover'),fixture.html);
+    await page.waitForFunction(()=>reader.measurement()?.done);
+    const measured=await page.evaluate(()=>reader.measurement());
+    assert(!measured.error,JSON.stringify(measured));
+    assert.equal(measured.count,image.pages,'Hidden cover measurement must match the live cover');
+   }
+   process.stdout.write(JSON.stringify({images:true}));
+   return;
+  }
   const checkMeasurement=async()=>{
    const before=await page.evaluate(()=>reader.pagination());
    await page.evaluate(html=>reader.measure(html,'same-chapter'),fixture.html);

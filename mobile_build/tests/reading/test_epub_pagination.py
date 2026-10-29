@@ -1,4 +1,8 @@
 """Native page-count jobs retain numeric results and retire with their bridge."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from types import SimpleNamespace

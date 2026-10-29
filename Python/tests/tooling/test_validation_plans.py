@@ -1,4 +1,8 @@
 """Shared plans retain discovery, platform coverage and gate order."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import unittest
 
@@ -9,13 +13,17 @@ class ValidationPlanTests(unittest.TestCase):
     def test_desktop_plan_preserves_existing_commands_and_budgets(self):
         posix = desktop_checks('Darwin', Path('reports'))
         windows = desktop_checks('Windows', Path('reports'))
-        self.assertEqual([p[0] for p in posix], ['commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
-        self.assertEqual([p[2] for p in posix], [1800, 1800, 600, 600])
-        self.assertEqual([row[:2] for row in windows[1:]], [row[:2] for row in posix])
-        self.assertEqual([row[2] for row in windows[1:]], [1800,1800,600,600])
-        self.assertEqual(windows[0], ('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
-        self.assertIn('--isolate-modules', posix[0][1])
-        self.assertIn('--isolate-modules', posix[1][1])
+        self.assertEqual([p[0] for p in posix], ['test-structure', 'commonutils.smoke', 'logistics.smoke',
+                         'commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
+        self.assertEqual([p[2] for p in posix], [120, 1800, 1800, 1800, 1800, 600, 600])
+        self.assertEqual([windows[0], *windows[2:]], posix)
+        self.assertEqual(windows[1], ('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
+        for name, command, _ in posix[1:5]:
+            self.assertIn('--isolate-modules', command)
+            if name.endswith('.smoke'):
+                self.assertEqual(command[-4:], ['--profile', 'smoke', '--mode', 'fast'])
+            else:
+                self.assertNotIn('--profile', command)  # Full coverage stays the default.
 
     def test_compression_retries_get_fresh_attempts_and_preserve_previous_evidence(self):
         import importlib.util

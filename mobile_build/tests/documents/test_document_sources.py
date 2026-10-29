@@ -1,4 +1,8 @@
 """Recent provider files require durable credentials and keep no content or secrets."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -11,6 +15,34 @@ from mobile.workspace import Session
 
 
 class DocumentSourceTests(TestCase):
+    def test_video_history_uses_saved_or_encrypted_credential_history(self):
+        from services.documents.mobile_storage import remember_video
+        for saved in (False, True):
+            with self.subTest(saved=saved), TemporaryDirectory() as directory:
+                app = self.app(saved=saved)
+                app.recent_documents = RecentDocuments(Path(directory))
+                app.credential_document_lists = Mock()
+                copies = SimpleNamespace(remote_storage=True, remote='Drive', client=app.cloud_client)
+                provider = SimpleNamespace(document_readers=lambda: copies)
+                content = SimpleNamespace(provider=provider, path='Movie.mkv', restricted=not saved)
+                remember_video(app, content)
+                self.assertEqual(bool(app.recent_documents.items), saved)
+                call = app.credential_document_lists.remember.call_args
+                self.assertEqual(call.args[0].kind, 'video')
+                self.assertFalse(call.kwargs['opened'])
+                self.assertEqual(call.args[1]['key'], 'Movie.mkv')
+
+    def test_local_video_appears_in_recent_history(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.mobile_storage import remember_video
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = SimpleNamespace(recent_documents=RecentDocuments(root))
+            remember_video(app, SimpleNamespace(provider=LocalFiles(root), path='Movie.avi', restricted=False))
+            entry = app.recent_documents.sessions()[0]
+            self.assertEqual((entry.title, entry.kind), ('Movie.avi', 'video'))
+            self.assertEqual(entry.source, dict(type='local', path=str(root / 'Movie.avi')))
+
     def app(self, *, saved=False, retained=False):
         client = SimpleNamespace(package_records=[dict(remotes=['Drive'], saved=saved,
                                  identities={'Drive': 'a' * 64})],
@@ -76,6 +108,44 @@ class DocumentSourceTests(TestCase):
 
 
 class ReopenSourceTests(IsolatedAsyncioTestCase):
+    async def test_downloaded_video_uses_decrypted_name_instead_of_opaque_cache_key(self):
+        from unittest.mock import patch
+        client = SimpleNamespace()
+        copies = SimpleNamespace(client=client, record=lambda key: dict(identity='a' * 64))
+        app = SimpleNamespace(cloud_client=client, show_cloud=Mock(), crypt_copies=copies,
+                              require_remote_credentials_async=AsyncMock(return_value=True))
+        provider = SimpleNamespace(name='Movie.mkv', close=Mock())
+        source = dict(type='download', remote='Drive', identity='a' * 64, key='opaque-cache-id')
+        with patch('features.rclone.localcrypt.mobile.resources.DownloadedCryptFile', return_value=provider), patch(
+                'features.video.mobile.player.open_video', new_callable=AsyncMock, return_value=True) as open_video:
+            self.assertTrue(await reopen_file(app, source, kind='video'))
+            open_video.assert_awaited_once_with(app, provider, 'Movie.mkv')
+            provider.close.assert_called_once()
+
+    async def test_local_video_reopens_with_native_player(self):
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'Movie.avi'
+            path.write_bytes(b'fixture')
+            app = SimpleNamespace(require_document_feature=Mock(return_value=True), require_feature=Mock(return_value=True))
+            with patch('features.video.mobile.player.open_video', new_callable=AsyncMock, return_value=True) as open_video:
+                self.assertTrue(await reopen_file(app, dict(type='local', path=str(path))))
+            self.assertEqual(open_video.await_args.args[1].root, path.parent)
+            self.assertEqual(open_video.await_args.args[2], path.name)
+
+    async def test_remote_video_rechecks_credentials_and_releases_initial_resource(self):
+        from unittest.mock import patch
+        app = SimpleNamespace(show_cloud=Mock(), require_remote_credentials_async=AsyncMock(return_value=True),
+                              open_crypt=AsyncMock())
+        service, resource = Mock(), Mock()
+        service.remotes.open.return_value = resource
+        with patch('features.rclone.mobile.service.native_service', return_value=service), patch(
+                'features.video.mobile.player.open_video', new_callable=AsyncMock, return_value=True) as open_video:
+            self.assertTrue(await reopen_file(app, dict(type='remote', remote='Drive', identity='a' * 64, key='Movie.mkv')))
+            open_video.assert_awaited_once_with(app, resource, 'Movie.mkv')
+            resource.close.assert_called_once()
+            app.open_crypt.assert_not_awaited()
+
     async def test_ios_top_level_text_reopens_after_container_relocation(self):
         from services.documents.locations import use_shared_local, _shared_local_roots
         with TemporaryDirectory() as directory:

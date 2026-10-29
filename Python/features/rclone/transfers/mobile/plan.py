@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 from threading import Event, Thread
-from types import MappingProxyType
 from typing import Callable, Mapping
 from uuid import uuid4
 
@@ -11,6 +10,7 @@ from commonUtils.runtime.operations import check_cancelled
 from features.rclone.transfers.review import ReviewRequest, replace_changes
 from features.rclone.transfers.service import TransferPlan
 from features.rclone.transfers.transfer_options import TransferOptions
+from .models import CopyMapping, TransferOutcome
 
 
 def native_scanner(client, job, local_path, *, push, options=TransferOptions(), cleanup_plan=lambda cancelled: {}):
@@ -50,7 +50,7 @@ def native_scanner(client, job, local_path, *, push, options=TransferOptions(), 
 @dataclass(frozen=True)
 class NativeTransferRequest:
     store: object
-    job: Mapping
+    job: CopyMapping | Mapping
     push: bool
     new: bool
     options: TransferOptions
@@ -60,7 +60,7 @@ class NativeTransferRequest:
     def __post_init__(self):
         if type(self.push) is not bool or type(self.new) is not bool:
             raise ValueError('Transfer direction and mapping status must be explicit.')
-        object.__setattr__(self, 'job', MappingProxyType(dict(self.job)))
+        object.__setattr__(self, 'job', CopyMapping.from_record(self.job))
 
 
 def build_plan(client, transfer, credentials):
@@ -86,7 +86,7 @@ def build_plan(client, transfer, credentials):
         try:
             return (active() and store.original == records
                     and (store.signature(current) == signature if current is not None else transfer.new))
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, ValueError):
             return False
     check_cancelled(lambda: not active())
     prefix = job['prefix']
@@ -106,6 +106,7 @@ def build_plan(client, transfer, credentials):
         check_cancelled(stopping)
         return scan(emit, stopping)
     def execute(approved, context):
-        return store.execute_review(dict(job), client, push=transfer.push, new=transfer.new,
+        result = store.execute_review(dict(job), client, push=transfer.push, new=transfer.new,
             options=approved.options, cancelled=context.cancelled, progress=context.progress)
+        return TransferOutcome.from_result('push' if transfer.push else 'pull', result)
     return TransferPlan(request, compare, valid, execute, active=active)

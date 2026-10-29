@@ -1,4 +1,8 @@
 """Repeated private-copy opens preserve resource identity across launches."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

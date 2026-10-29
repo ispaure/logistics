@@ -1,4 +1,8 @@
 """Native Workspaces containment follows allocation without replacing routes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
@@ -22,6 +26,7 @@ class WorkspaceColumnsTests(TestCase):
         root = toga.Box(children=[view])
         native_impl = type('AppleApp', (), {'__module__': 'toga_iOS.app'})()
         app = NS(_impl=native_impl, native_host=NS(adapter=NS(navigation=[])), routes=NS(roots={'files': root}), main_window=Mock())
+        app.main_window.size = NS(width=900, height=600)
         workspace = NS(app=app, content_width=Mock(return_value=900))
         with patch('mobile.fold_layout.division', return_value=None), \
                 patch('mobile.ios_workspace_columns.WorkspaceColumns') as create:
@@ -32,7 +37,8 @@ class WorkspaceColumnsTests(TestCase):
             sync(workspace)
             create.assert_called_once()
             columns.layout.assert_called_once()
-            workspace.content_width.return_value = 390
+            app.main_window.size = NS(width=800, height=1100)
+            workspace.content_width.return_value = 800
             sync(workspace)
             columns.close.assert_called_once()
             self.assertIsNone(workspace.file_columns)

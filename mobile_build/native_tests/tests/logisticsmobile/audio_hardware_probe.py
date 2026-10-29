@@ -3,6 +3,10 @@
 This uses the real selected output and native speech. No route injection, calls,
 Bluetooth pairing or personal device changes are automated by this entry point.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

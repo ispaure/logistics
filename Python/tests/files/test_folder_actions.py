@@ -1,4 +1,8 @@
 """Hosted process lifetimes and unread results, using harmless local subprocesses."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import sys
 import time
 import unittest

@@ -1,4 +1,8 @@
 """Composite spread geometry stays portable and bounds the native allocation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from features.comics.mobile.composite import spread_geometry, MAX_PIXELS, MAX_SIDE
 

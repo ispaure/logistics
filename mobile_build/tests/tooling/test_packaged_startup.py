@@ -1,4 +1,8 @@
 """Start the staged payload without access to the source checkout's packages."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import importlib.util
 import os
 from pathlib import Path

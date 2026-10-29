@@ -1,4 +1,8 @@
 """Cloud video ranges use real rclone and credential-bound native resources."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from http.client import HTTPConnection, RemoteDisconnected
 from pathlib import Path

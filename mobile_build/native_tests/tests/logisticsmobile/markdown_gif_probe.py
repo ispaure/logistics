@@ -3,6 +3,10 @@
 The driver captures native screenshots while each phase is active. Those pixels,
 not canvas drawImage (which may use a GIF's first frame), prove visible animation.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 import json

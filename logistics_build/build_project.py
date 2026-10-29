@@ -81,7 +81,7 @@ class LogisticsProject:
                     'int' if isinstance(value, int) else
                     'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'tools.manager_checkout', 'vm.shared_host'} else
                     'reference' if name.endswith('reference') or name.startswith('signing.') or name.endswith('_python') else 'text')
-            rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded or name in reserved)
+            rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded or name in reserved or name in {'android.image', 'android.model'})
             if name in reserved:
                 rows[name]['origin'] += '; legacy reserved field, not used by isolated local backends'
             if name == 'android.avd':
@@ -218,6 +218,8 @@ class LogisticsProject:
             plan = replace(plan, source=dict(plan.source, test_suite=suite))
         if options.get('pattern'):
             plan = replace(plan, source=dict(plan.source, focused_test_pattern=options['pattern']))
+        from logistics_build.manager_suites import with_structure_gate
+        plan = with_structure_gate(plan, str(self.interpreter))
         plan = with_reports(plan, target)
         snapshot = self.private / 'snapshots' / plan.source.get('fingerprint', '')
         resources = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
@@ -280,6 +282,8 @@ class LogisticsProject:
             expected_system={'macos':'Darwin','linux':'Linux','windows':'Windows'}[target]
             from build_manager.local import inspect_python
             source['toolchain'] = inspect_python(options['tools.desktop_python'], ('Pillow', 'PySide6', 'pyzipper', 'yt-dlp'))
+            if source['toolchain']['python'].split()[0] != options['testing.python_version']:
+                raise ValueError('Selected desktop Python differs from the shared test environment profile.')
             if source['toolchain']['system'] != expected_system:
                 raise ValueError('The selected interpreter does not run on the requested native host; no fallback was selected.')
         snapshot = self.private / 'snapshots' / source['fingerprint']
@@ -305,8 +309,16 @@ class LogisticsProject:
                                   timeout=180, environment=env, kind='setup')
             from build_manager.test_manifest import discover as discover_tests
             test_dependencies = {row['id']: tuple(row['after']) for row in discover_tests(snapshot, 'desktop')} if not pattern and not suite else {}
+            smoke_ids = tuple(name for name, _, _ in commands if name.endswith('.smoke'))
+            for name, _, _ in commands:
+                if name.endswith('.smoke'):
+                    original = name.removesuffix('.smoke')
+                    test_dependencies[name] = tuple(d + '.smoke' for d in test_dependencies.get(original, ()) if d + '.smoke' in smoke_ids)
+                elif name != 'test-structure':
+                    test_dependencies[name] = tuple(dict.fromkeys((*test_dependencies.get(name, ()), *smoke_ids)))
             phases = (prerequisites,) + tuple(Phase(name, (python, *arguments), str(snapshot), timeout=timeout,
-                                 environment=env, dependencies=('environment', *test_dependencies.get(name, ()))) for name, arguments, timeout in commands)
+                                 environment=env, dependencies=('environment', *test_dependencies.get(name, ())),
+                                 kind='setup' if name == 'test-structure' else 'test') for name, arguments, timeout in commands)
             return Plan('Logistics', operation, source, phases, str(workspace), backend=backend)
         if operation == 'Test' and target == 'ios' and suite == 'ios.runtime':
             return self.ios_simulator_plan(source, snapshot, workspace, options, env, pattern, False, runtime_only=True)
@@ -347,6 +359,18 @@ class LogisticsProject:
         return Plan('Logistics', operation, source, tuple(phases),
                     str(workspace), backend='GitHub', effect='dispatch')
 
+    def local_manager_test_arguments(self, source):
+        if source.get('run_overrides', {}).get('testing.manager_source') != 'working-tree-local':
+            return ()
+        checkout = os.environ.get('LOGISTICS_MANAGER_CHECKOUT', '')
+        if not checkout:
+            raise ValueError('Local manager validation requires the owning CLI checkout identity.')
+        from build_manager.dependency_sources import local_test_identity
+        from logistics_build.guest_manager import dependency_pin
+        capture = local_test_identity(checkout, dependency_pin(self.root))
+        source['manager_local_test_capture'] = {key: value for key, value in capture.items() if key != 'files'}
+        return ('--manager-checkout', checkout, '--manager-working-tree', capture['fingerprint'])
+
     def local_vm_plan(self, operation, target, source, workspace, options, pattern):
         if target == 'windows':
             return self.windows_vm_plan(operation, source, workspace, options, pattern)
@@ -368,7 +392,10 @@ class LogisticsProject:
             '--source-identity', json.dumps(source))
         if options['vm.fedora_mode'] == 'container-on-ubuntu':
             command += ('--container-image', 'localhost/logistics-fedora-tests:43')
-        if options['tools.manager_checkout']:
+        local_manager = self.local_manager_test_arguments(source)
+        if local_manager:
+            command += local_manager
+        elif options['tools.manager_checkout']:
             command += ('--manager-checkout', options['tools.manager_checkout'])
         if options['vm.shutdown_after_run']:
             command += ('--shutdown',)
@@ -396,7 +423,10 @@ class LogisticsProject:
         results = workspace / ('windows-' + uuid4().hex)
         command = (str(self.interpreter), '-m', 'logistics_build.windows_backend', '--vm', guest['uuid'],
                    '--snapshot', str(snapshot), '--results', str(results), '--source-identity', json.dumps(source))
-        if options['tools.manager_checkout']:
+        local_manager = self.local_manager_test_arguments(source)
+        if local_manager:
+            command += local_manager
+        elif options['tools.manager_checkout']:
             command += ('--manager-checkout', options['tools.manager_checkout'])
         prepared = options['vm.windows_prepared_reference']
         if prepared:
@@ -420,6 +450,9 @@ class LogisticsProject:
         if options['android.avd']:
             raise ValueError('Existing AVD state is preserved. Configure the disposable image/model instead of an existing AVD name.')
         from build_manager.android_emulators import AndroidEmulator
+        from logistics_build.test_environments import load as load_environments, android_image
+        environments = load_environments(snapshot)
+        options = dict(options, **{'android.image': android_image(environments), 'android.model': environments['android_model']})
         sdk = Path(options['tools.android_sdk'])
         java = Path(options['tools.java'])
         if not options['tools.android_sdk'] or not options['tools.java'] or not (java/'bin/java').is_file():
@@ -464,17 +497,22 @@ class LogisticsProject:
         from build_manager.apple_simulators import AppleSimulators
         from mobile_build.validation.ui_tools import select_ios_device
         env = dict(env)
+        from logistics_build.test_environments import load as load_environments, runtime_id
+        environments = load_environments(snapshot)
         if options['tools.xcode']:
             env['DEVELOPER_DIR'] = options['tools.xcode']
         env.update(PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+os.environ.get('PATH',''),
                    PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'))
         client = AppleSimulators(env)
+        from mobile_build.select_ios_sdk import choose
+        sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-version'], env=env, text=True, timeout=30).strip()
+        choose([(env.get('DEVELOPER_DIR', 'selected Xcode'), sdk)], environments['ios_sdk'])
         inventory = client.devices()['devices']
         selected = []
         kinds = ('iphone',) if runtime_only else ('iphone', 'duo', 'ipad') if include_ipad else ('iphone', 'duo')
         for kind in kinds:
             configured = options['ios.'+kind]
-            rows = [(runtime, row) for runtime, devices in inventory.items() for row in devices
+            rows = [(runtime, row) for runtime, devices in inventory.items() if runtime == runtime_id(environments, kind) for row in devices
                     if row.get('isAvailable') and (not configured or configured in (row['udid'], row['name']))]
             candidate = select_ios_device({'devices': {runtime: [row for rt,row in rows if rt == runtime] for runtime,_ in rows}}, ipad=kind=='ipad', duo=kind=='duo')
             matches = [(runtime,row) for runtime,row in rows if row['udid']==candidate]
@@ -497,7 +535,7 @@ class LogisticsProject:
             lease = run/(kind+'-lease.json')
             phases.append(Phase(kind, (*base,'test','--root',str(snapshot),'--kind',kind,'--model',row['model'],
                           '--runtime',row['runtime'],'--lease',str(lease),'--result',str(report)), str(snapshot),
-                          timeout=2100, environment=env, dependencies=(previous_cleanup or 'ios-build',), artifacts=(str(report),)))
+                          timeout=2100, environment=env, dependencies=('ios-build', *((previous_cleanup,) if previous_cleanup else ())), artifacts=(str(report),)))
             phases.append(Phase(kind+'-cleanup', (*base,'cleanup','--root',str(snapshot),'--lease',str(lease)), str(snapshot),
                           timeout=180, environment=env, always=True, kind='cleanup', dependencies=(kind,)))
             previous_cleanup = kind+'-cleanup'
@@ -571,7 +609,8 @@ class LogisticsProject:
                 arguments += ['--build-number' if target == 'ios' else '--version-code', build_override]
             if target == 'ios':
                 for key, flag in [('signing.app_profile', '--profile'), ('signing.inbox_profile', '--inbox-profile'),
-                                  ('signing.widget_profile', '--widget-profile'), ('signing.widget_actions_profile', '--widget-actions-profile')]:
+                                  ('signing.widget_profile', '--widget-profile'), ('signing.widget_actions_profile', '--widget-actions-profile'),
+                                  ('signing.watch_profile', '--watch-profile'), ('signing.watch_widget_profile', '--watch-widget-profile')]:
                     if options.get(key):
                         arguments += [flag, options[key]]
             if target == 'ios':
@@ -579,6 +618,8 @@ class LogisticsProject:
                     required = ['signing.inbox_profile']
                     if (snapshot / 'mobile_build/build_support/widget_build.py').is_file():
                         required += ['signing.widget_profile', 'signing.widget_actions_profile']
+                    if (snapshot / 'mobile_build/build_support/watch_build.py').is_file():
+                        required += ['signing.watch_profile', 'signing.watch_widget_profile']
                     missing = [name for name in required if not options.get(name)]
                     if missing:
                         raise ValueError('Manual iOS signing requires all extension profiles: ' + ', '.join(missing)

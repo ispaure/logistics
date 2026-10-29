@@ -19,6 +19,16 @@ from commonUtils.runtime.streams import file_sha256
 BUNDLE = 'io.github.ispaure.logisticsmobile'
 
 
+def ios_provisioning_args(source, ios):
+    mode = source.get('run_overrides', {}).get('devices.ios_provisioning', 'existing')
+    if mode == 'existing':
+        return []
+    if mode != 'update':
+        raise ValueError('Invalid iOS provisioning choice.')
+    # This explicit run choice authorizes profile/capability updates, never new devices.
+    return ['-allowProvisioningUpdates', *ios.provisioning_auth_args()]
+
+
 def read_json(path, default=None):
     path = Path(path)
     if not path.exists() and default is not None:
@@ -125,7 +135,10 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
         artifacts=(str(report), str(package)), resources={'host.mobile-build': 1, 'host.signing-keychain': 1},
         label=('Use shared Android Release APK' if platform == 'android' else 'Export & sign iOS Release for devices') if shared else
               ('Build Android Debug APK' if platform == 'android' else 'Build & sign iOS Debug app'),
-        description='Reuse the selected Release build; no compilation' if shared else 'Development variant · separate from Release')
+        description='Reuse the selected Release build; no compilation' if shared else
+            ('Development build with explicitly authorized Apple provisioning updates; no device registration'
+             if platform == 'ios' and source.get('run_overrides', {}).get('devices.ios_provisioning') == 'update'
+             else 'Development variant · separate from Release'))
     phases = [prepare]
     for index, target in enumerate(targets):
         receipt = workspace / ('device-' + str(index) + '.json')
@@ -178,7 +191,8 @@ def prepare(path, digest):
         ios.refresh_sources(env); ios.prepare_project(config['team_id'])
         ios.run(['xcodebuild', '-project', str(ios.PBX.parent), '-scheme', 'Logistics Mobile',
             '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', 'generic/platform=iOS',
-            '-derivedDataPath', str(ios.DERIVED), 'build'], env=env, log=workspace / 'logs/device-build.log')
+            '-derivedDataPath', str(ios.DERIVED), *ios_provisioning_args(data['source'], ios),
+            'build'], env=env, log=workspace / 'logs/device-build.log')
         identities = [ios.validate_app(ios.APP, config['team_id'], target['id']) for target in data['targets']]
         if config.get('signing_identity') and any(row != config['signing_identity'] for row in identities):
             raise ValueError('Existing device signing identity differs; installation is blocked.')

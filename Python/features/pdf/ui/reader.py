@@ -43,6 +43,9 @@ class PDFWindow(qt.QMainWindow):
         self.wheel_delta = 0
         root = qt.QWidget(self)
         layout = qt.QVBoxLayout(root)
+        from commonUtils.ui.readers.layout import READER_LAYOUT
+        layout.setContentsMargins(*READER_LAYOUT.desktop_margins)
+        layout.setSpacing(READER_LAYOUT.spacing)
         controls = qt.QHBoxLayout()
         from commonUtils.ui.readers.reader_chrome import reader_button, ReaderFullscreen
         self.previous = reader_button(self, 'Previous page', icon='previous')

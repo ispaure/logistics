@@ -22,4 +22,5 @@ def image_dimensions(data):
     width, height = header.width, header.height
     if not 0 < width <= 8192 or not 0 < height <= 8192 or width * height > 16_000_000:
         raise ValueError('Page dimensions exceed the mobile 16-megapixel limit.')
-    return width, height
+    from .orientation import image_orientation
+    return (height, width) if image_orientation(data) in (5, 6, 7, 8) else (width, height)

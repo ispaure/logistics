@@ -3,6 +3,10 @@
 These events verify application behavior, not a physical Apple Pencil digitizer.
 Capture is stubbed because untrusted PointerEvents cannot acquire native capture.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 
 POINTER_CHECKS = r'''(()=>{
@@ -74,6 +78,43 @@ async def exercise_pointer_input(panel):
         assert panel.web._impl.native.isKindOfClass_(ObjCClass('WKWebView'))
         report['native_view'] = 'WKWebView'
     return report
+
+
+async def exercise_page_selection(panel):
+    """Check browser selection separately from the notebook's stroke selector."""
+    import asyncio
+    result = json.loads(await panel.web.evaluate_javascript(r'''(()=>{
+        const paper=$('paperWrap'), saved=active;
+        const contact=new PointerEvent('pointerdown',{
+            pointerId:9001,pointerType:'touch',bubbles:true,cancelable:true});
+        active=9000;
+        try{canvas.dispatchEvent(contact)}finally{active=saved}
+        const menu=new Event('contextmenu',{bubbles:true,cancelable:true});
+        canvas.dispatchEvent(menu);
+        document.activeElement?.blur();
+        const range=document.createRange();range.selectNode(paper);
+        const selection=getSelection();selection.removeAllRanges();selection.addRange(range);
+        return JSON.stringify({extra_contact_consumed:contact.defaultPrevented,
+            callout_blocked:menu.defaultPrevented,
+            canvas_selection_disabled:(getComputedStyle(canvas).getPropertyValue('-webkit-user-select')||getComputedStyle(canvas).userSelect)==='none'});
+    })()'''))
+    await asyncio.sleep(.15)
+    await panel.web.evaluate_javascript(r'''(()=>{
+        const saved=active;active=9000;
+        try{canvas.dispatchEvent(new PointerEvent('pointerdown',{
+            pointerId:9001,pointerType:'touch',bubbles:true,cancelable:true}))}
+        finally{active=saved}
+    })()''')
+    result['page_selection_cleared'] = json.loads(await panel.web.evaluate_javascript('JSON.stringify(getSelection().isCollapsed)'))
+    result['text_fields_editable'] = json.loads(await panel.web.evaluate_javascript(r'''(()=>{
+        const field=document.createElement('input');field.value='Rename me';
+        document.body.append(field);field.focus();field.select();
+        const style=getComputedStyle(field);
+        const editable=(style.getPropertyValue('-webkit-user-select')||style.userSelect)==='text'&&field.selectionEnd===9;
+        field.remove();return JSON.stringify(editable);
+    })()'''))
+    assert all(result.values()), result
+    return result
 
 
 async def exercise_continuous_ink(panel):

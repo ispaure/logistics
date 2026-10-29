@@ -1,4 +1,8 @@
 """Tracked test input scopes invalidate affected evidence, not unrelated edits."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
 import os
 from unittest.mock import patch

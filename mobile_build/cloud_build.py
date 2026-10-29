@@ -199,7 +199,7 @@ def ios(project=None):
     data = json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(pbx)]))
     found = 0
     objects = data['objects']
-    app_targets = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application']
+    app_targets = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application' and obj.get('name') != 'LogisticsWatch']
     if len(app_targets) != 1:
         raise ValueError('Expected one containing iOS app.')
     for key in objects[app_targets[0]['buildConfigurationList']]['buildConfigurations']:

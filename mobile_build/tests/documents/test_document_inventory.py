@@ -1,4 +1,8 @@
 """Inventories retain metadata only and leave full recovery validation to open."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import asyncio
 from pathlib import Path

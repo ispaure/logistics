@@ -8,6 +8,12 @@ FEATURE_NAME = 'rclone'
 FEATURE_LABEL = 'rclone'
 
 
+def desktop_session():
+    """Resolve desktop credential ownership only at the desktop host boundary."""
+    from . import session
+    return session
+
+
 def initialize() -> None:
     """Initialize the rclone feature."""
 

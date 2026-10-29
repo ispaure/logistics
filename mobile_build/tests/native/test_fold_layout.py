@@ -1,4 +1,8 @@
 """Hinge geometry and comic seam policy, including unequal page shapes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 

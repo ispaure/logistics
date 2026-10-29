@@ -27,3 +27,10 @@ def visible_pages(start, sizes, viewport, mode='auto', double_pages=()):
     if mode == 'double' or width >= sum(ratios) * max(1, height) + SPREAD_GAP:
         return (start, start + 1)
     return (start,)
+
+
+def page_progress(indices, count, *, half=None):
+    """Describe source pages, independently of slide count or visual RTL order."""
+    numbers = ' & '.join(str(index + 1) for index in sorted(set(indices)))
+    part = f' {half + 1}/2' if half is not None else ''
+    return f'{numbers}{part} / {count}'

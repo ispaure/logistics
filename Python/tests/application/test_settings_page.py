@@ -1,4 +1,8 @@
 """Settings retains custom feature layouts and protects raw configuration edits."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path

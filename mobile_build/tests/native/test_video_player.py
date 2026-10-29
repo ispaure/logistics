@@ -1,4 +1,8 @@
 """Mobile playback admission, privacy lifetime and generated project wiring."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 import plistlib

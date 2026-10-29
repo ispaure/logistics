@@ -1,4 +1,8 @@
 """Drive migration preserves bytes, private records and unavailable-card boundaries."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import errno
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,7 +14,7 @@ from services.documents.locations import (
     recover_location, wipe_destination, start_empty_location, describe_location,
 )
 from features.rclone.transfers.mobile.jobs import MirrorJobs
-from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+from mobile_build.tests.support.mirror import MirrorClient
 from mobile.folder_hub import hub_entries
 
 

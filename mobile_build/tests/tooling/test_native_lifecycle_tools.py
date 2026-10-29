@@ -1,4 +1,8 @@
 """External lifecycle checks keep evidence and scope commands to the QA app."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 import subprocess

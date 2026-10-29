@@ -1,4 +1,8 @@
 """Mixed saved/session package metadata drives both platforms' shared Workspaces."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory

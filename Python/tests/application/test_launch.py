@@ -1,5 +1,9 @@
 """Startup initializes Qt before hooks that can display error dialogs."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from unittest.mock import Mock, patch
 import unittest
 

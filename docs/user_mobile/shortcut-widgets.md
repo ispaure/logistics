@@ -1,4 +1,4 @@
-# Show a Shortcut value on your Home Screen
+# Show Shortcut values on your phone and Apple Watch
 
 Logistics' **Shortcut Value** widget displays a number or short text supplied by
 Apple Shortcuts on iOS 17 or later. Use a small or medium Home Screen widget.
@@ -56,20 +56,52 @@ must run with the current number as its Value. The initial em dash and setup
 message mean no display record was found for that name; changing the widget's
 name alone cannot create one.
 
+## Apple Watch
+
+The Watch companion is retained in source but omitted from current builds while
+its Apple signing profiles are unavailable. The setup below applies only to a
+build that explicitly includes the companion for watchOS 10 or later.
+Install it through the iPhone's Watch app, then open Logistics on the Watch once.
+Keep your existing **Set Widget Value** action and `DuoFoldCount` name. Add
+Logistics' **Sync Widget Values to Watch** immediately after it in the same
+Shortcut. The first action saves the display value; the second sends the saved
+values from the phone app's background process without opening its interface.
+Run **Show Fold Count** with both actions to initialize the Watch without
+incrementing your count.
+
+To show the number on a watch face, edit the face, select a supported complication
+slot and choose Logistics' **Shortcut Value**. Its default name is `DuoFoldCount`.
+Inline, circular and rectangular slots are supported. Other values use the same
+case-sensitive name as the iPhone action. The Watch app lists received values and
+offers **Refresh from iPhone**; the complication opens that app when tapped.
+
+The Watch retains the last received value while disconnected. Transfers and
+complication refreshes are scheduled by Apple and may lag behind the phone.
+Use **Refresh from iPhone** to request the current snapshot; if no value arrives,
+unlock the phone after a restart, open Logistics on it, then run the publishing
+Shortcut again. The companion requires the paired iPhone and does not independently
+count folds. It retains up to 16 recently published names, including the fold count;
+large values may reduce that number to fit the transfer size limit.
+
 ## Battery, refresh timing and privacy
 
 The action and widget run in separate native extensions. Updating a value does
 not launch Logistics' Python runtime, browser, readers, transfers or application
-interface. They make no network requests and run no polling timer. Each changed
+interface. They contact no application server and run no polling timer. Each changed
 value replaces one small local record and requests a widget reload. Sending the
-same title and value again skips both the write and reload request.
+same title and value again skips that record write and phone widget reload, while
+still retrying Watch synchronization. Display values are copied to the paired Watch
+through Watch Connectivity; its app and complication use local shared storage there.
+The separate **Sync Widget Values to Watch** action may start the containing
+phone app in the background, including its normal runtime. Use that action after
+publishing when you want automatic Watch updates while Logistics is closed.
 
 iOS schedules actual widget refreshes, so the displayed number can lag behind
 Shortcuts. There is no periodic refresh fallback. Battery impact has not been
 measured on a physical phone; the implementation avoids continuous background work.
 
-Only explicitly supplied values are shared with the extensions. They stay in
-the app's local shared container, outside its document library. The widget may
+Only explicitly supplied values are shared with the extensions and paired Watch.
+They stay in local shared containers, outside the document library. The widget may
 be visible to anyone who can see your screen; use it for non-sensitive values.
 The action permits locked execution after the phone's first unlock following a
 restart. Before that first unlock, protected storage may be unavailable.

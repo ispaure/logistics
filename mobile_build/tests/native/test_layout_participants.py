@@ -1,4 +1,8 @@
 """Layout subscriptions retire independently of host and native widget lifetimes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import gc
 import weakref
 import unittest

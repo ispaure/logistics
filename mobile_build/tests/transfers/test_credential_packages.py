@@ -1,4 +1,8 @@
 """ZIP retention, saved-package migration and password-only session unlock."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from io import BytesIO
 from zipfile import ZipFile

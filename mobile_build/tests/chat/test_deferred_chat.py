@@ -1,4 +1,8 @@
 """Chat draft batching preserves revisions and keeps session API keys out of files."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from copy import deepcopy
 from pathlib import Path

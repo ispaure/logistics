@@ -76,7 +76,9 @@ jobs:
         with:
           python-version: '3.12.2'
       - name: Test release tooling
-        run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
+        run: |
+          python dev.py test-structure
+          python Python/tests/run_regressions.py .github/scripts --isolate-modules
       - name: Package tagged source and pinned submodules
         run: python .github/scripts/package_release.py --output "$RUNNER_TEMP/release.zip"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

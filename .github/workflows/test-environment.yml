@@ -1,0 +1,79 @@
+name: Project test environment settings
+on:
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        default: all
+    outputs:
+      macos_runner:
+        value: ${{ jobs.profile.outputs.macos_runner }}
+      windows_runner:
+        value: ${{ jobs.profile.outputs.windows_runner }}
+      linux_runner:
+        value: ${{ jobs.profile.outputs.linux_runner }}
+      ios_runner:
+        value: ${{ jobs.profile.outputs.ios_runner }}
+      android_runner:
+        value: ${{ jobs.profile.outputs.android_runner }}
+      macos_major:
+        value: ${{ jobs.profile.outputs.macos_major }}
+      windows_major:
+        value: ${{ jobs.profile.outputs.windows_major }}
+      python_version:
+        value: ${{ jobs.profile.outputs.python_version }}
+      fedora_image:
+        value: ${{ jobs.profile.outputs.fedora_image }}
+      ios_sdk:
+        value: ${{ jobs.profile.outputs.ios_sdk }}
+      iphone_runtime:
+        value: ${{ jobs.profile.outputs.iphone_runtime }}
+      duo_runtime:
+        value: ${{ jobs.profile.outputs.duo_runtime }}
+      ipad_runtime:
+        value: ${{ jobs.profile.outputs.ipad_runtime }}
+      android_api:
+        value: ${{ jobs.profile.outputs.android_api }}
+      android_model:
+        value: ${{ jobs.profile.outputs.android_model }}
+      android_local_abi:
+        value: ${{ jobs.profile.outputs.android_local_abi }}
+      android_github_abi:
+        value: ${{ jobs.profile.outputs.android_github_abi }}
+      desktop_matrix:
+        value: ${{ jobs.profile.outputs.desktop_matrix }}
+      android_device:
+        value: ${{ jobs.profile.outputs.android_device }}
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    outputs:
+      macos_runner: ${{ steps.profile.outputs.macos_runner }}
+      windows_runner: ${{ steps.profile.outputs.windows_runner }}
+      linux_runner: ${{ steps.profile.outputs.linux_runner }}
+      ios_runner: ${{ steps.profile.outputs.ios_runner }}
+      android_runner: ${{ steps.profile.outputs.android_runner }}
+      macos_major: ${{ steps.profile.outputs.macos_major }}
+      windows_major: ${{ steps.profile.outputs.windows_major }}
+      python_version: ${{ steps.profile.outputs.python_version }}
+      fedora_image: ${{ steps.profile.outputs.fedora_image }}
+      ios_sdk: ${{ steps.profile.outputs.ios_sdk }}
+      iphone_runtime: ${{ steps.profile.outputs.iphone_runtime }}
+      duo_runtime: ${{ steps.profile.outputs.duo_runtime }}
+      ipad_runtime: ${{ steps.profile.outputs.ipad_runtime }}
+      android_api: ${{ steps.profile.outputs.android_api }}
+      android_model: ${{ steps.profile.outputs.android_model }}
+      android_local_abi: ${{ steps.profile.outputs.android_local_abi }}
+      android_github_abi: ${{ steps.profile.outputs.android_github_abi }}
+      desktop_matrix: ${{ steps.profile.outputs.desktop_matrix }}
+      android_device: ${{ steps.profile.outputs.android_device }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: profile
+        env:
+          TARGET: ${{ inputs.target }}
+        run: python logistics_build/test_environments.py --target "$TARGET" --github-output "$GITHUB_OUTPUT"

@@ -1,4 +1,8 @@
 """Real Git conflicts: raw stage inputs, safe saving and optional staging."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 import shutil
 from pathlib import Path

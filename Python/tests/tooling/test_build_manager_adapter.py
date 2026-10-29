@@ -1,4 +1,8 @@
 """Project integration contracts; controlled providers never publish or upload."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import os
 from pathlib import Path
@@ -171,23 +175,24 @@ class ManagerAdapterTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[3]
         project = LogisticsProject(root)
         with patch('logistics_build.build_project.sys.platform', 'darwin'), patch('logistics_build.build_project.platform.system', return_value='Darwin'), patch('logistics_build.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
-                patch('logistics_build.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}):
+                patch('logistics_build.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin', 'python': '3.12.2 fixture'}):
             plan = project.make_plan('Test', 'macos', 'This Mac')
         names = [phase.id for phase in plan.phases]
         expected = [name for name, _, _ in desktop_checks('Darwin', 'reports')]
         self.assertEqual(names, ['environment', *expected, 'release-tooling'])
-        self.assertEqual(next(phase for phase in plan.phases if phase.id == 'logistics').dependencies, ('environment', 'commonutils'))
+        self.assertEqual(next(phase for phase in plan.phases if phase.id == 'logistics').dependencies,
+                         ('environment', 'commonutils', 'commonutils.smoke', 'logistics.smoke', 'test-structure'))
         self.assertTrue(all('environment' in phase.dependencies for phase in plan.phases[1:]))
         self.assertTrue(all(phase.environment['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] == '1' for phase in plan.phases))
         self.assertEqual(plan.source['toolchain']['system'], 'Darwin')
         with patch('logistics_build.build_project.sys.platform', 'darwin'), patch('logistics_build.build_project.platform.system', return_value='Darwin'), patch('logistics_build.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
-                patch('logistics_build.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}):
+                patch('logistics_build.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin', 'python': '3.12.2 fixture'}):
             focused = project.make_plan('Test', 'macos', 'This Mac', pattern='test_dev_commands.py')
-        command = focused.phases[1].argv
+        command = next(phase for phase in focused.phases if phase.kind == 'test').argv
         self.assertEqual(command[0], plan.phases[0].argv[0])
         self.assertIn('Python/tests/run_regressions.py', command)
         self.assertEqual(command[command.index('--pattern') + 1], 'test_dev_commands.py')
-        self.assertIn('junit', focused.phases[1].artifact_types.values())
+        self.assertIn('junit', next(phase for phase in focused.phases if phase.kind == 'test').artifact_types.values())
         hosted = project.github_plan('Test', 'macos', dict(dirty=False, logistics_commit='a' * 40), root, {}, 'alpha', '')
         self.assertEqual(hosted.source['hosted_coverage'], 'macos')
 
@@ -202,11 +207,11 @@ class ManagerAdapterTests(unittest.TestCase):
                 patch('build_manager.parallels.Parallels') as provider:
             provider.return_value.selected.return_value = dict(uuid='fedora-id', name='Synthetic Fedora', status='running')
             plan = project.make_plan('Test', 'linux', 'Local Parallels VM')
-            self.assertEqual([phase.id for phase in plan.phases], ['fedora'])
+            self.assertEqual([phase.id for phase in plan.phases], ['test-structure', 'fedora'])
             self.assertEqual(plan.source['linux_coverage'], 'fedora')
             provider.return_value.selected.assert_called_once_with('Synthetic Fedora')
             self.assertTrue(all(phase.cwd == str(project.private / 'snapshots/fixture') for phase in plan.phases))
-            self.assertTrue(all(phase.artifacts for phase in plan.phases))
+            self.assertTrue(all(phase.artifacts for phase in plan.phases if phase.kind == 'test'))
             snapshot.assert_called_once()
         with patch('logistics_build.build_project.sys.platform', 'darwin'), patch('logistics_build.build_project.identity', return_value=source), patch('logistics_build.build_project.materialize') as snapshot, \
                 patch('logistics_build.build_project.manager_settings.settings', return_value=(values, {})), \
@@ -262,8 +267,10 @@ class ManagerAdapterTests(unittest.TestCase):
         values = manager_settings.defaults(project.mobile)
         def row(kind):
             return dict(udid=kind, name=kind, isAvailable=True, state='Shutdown', deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.'+kind)
-        inventory = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [row('iPhone-18-Pro'),row('iPhone-Duo'),row('iPad-Pro')]}}
-        with patch('logistics_build.build_project.sys.platform','darwin'), patch('build_manager.apple_simulators.AppleSimulators') as client:
+        inventory = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [row('iPhone-18-Pro'), row('iPad-Pro')],
+                                 'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [row('iPhone-Duo')]}}
+        with patch('logistics_build.build_project.sys.platform','darwin'), patch('build_manager.apple_simulators.AppleSimulators') as client, \
+                patch('logistics_build.build_project.subprocess.check_output', return_value='27.1'):
             client.return_value.devices.return_value = inventory
             client.return_value.toolchain.return_value = {'xcode':'Synthetic Xcode','sdk':'Synthetic SDK'}
             plan = project.ios_simulator_plan({}, project.root, project.private/'fixture-ios', values, {}, '', True)
@@ -271,11 +278,11 @@ class ManagerAdapterTests(unittest.TestCase):
             self.assertEqual([row['kind'] for row in plan.source['simulator_sequence']], ['iphone','duo','ipad'])
             self.assertTrue(all(phase.always for phase in plan.phases if phase.kind=='cleanup'))
             self.assertEqual({phase.id:phase.dependencies for phase in plan.phases if phase.id in ('iphone','duo','ipad')},
-                             {'iphone':('ios-build',),'duo':('iphone-cleanup',),'ipad':('duo-cleanup',)})
+                             {'iphone':('ios-build',),'duo':('ios-build','iphone-cleanup'),'ipad':('ios-build','duo-cleanup')})
             phases = {phase.id: phase for phase in plan.phases}
             self.assertEqual(phases['ios-runtime'].dependencies, ('ios-runtime-tools', 'ipad-cleanup'))
             self.assertTrue(phases['ios-runtime-cleanup'].always)
-            inventory['devices']['com.apple.CoreSimulator.SimRuntime.iOS-27-1'].pop(1)
+            inventory['devices']['com.apple.CoreSimulator.SimRuntime.iOS-27-1'].clear()
             core_only = project.ios_simulator_plan({}, project.root, project.private/'fixture-ios', values, {}, '', False, runtime_only=True)
             self.assertEqual([row['kind'] for row in core_only.source['simulator_sequence']], ['iphone'])
             with self.assertRaisesRegex(RuntimeError,'Duo'):

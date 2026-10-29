@@ -1,4 +1,8 @@
 """Notebook host actions retain document identity across native decisions/failures."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch

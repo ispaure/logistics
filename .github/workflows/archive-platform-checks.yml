@@ -45,6 +45,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  environment:
+    uses: ./.github/workflows/test-environment.yml
+    with:
+      target: ${{ inputs.target || 'all' }}
+
   static:
     runs-on: ubuntu-latest
     steps:
@@ -64,6 +69,7 @@ jobs:
         env:
           PYTHONPATH: .:Python
         run: |
+          python dev.py test-structure
           python Python/tests/run_regressions.py Python/tests/tooling --pattern test_dev_commands.py --isolate-modules
           python Python/tests/run_regressions.py Python/tests/tooling --pattern test_architecture_contracts.py --isolate-modules
           python Python/tests/run_regressions.py Python/tests/tooling --pattern test_document_architecture.py --isolate-modules
@@ -93,15 +99,15 @@ jobs:
         run: bash -n LaunchLogistics_MAC.command LaunchLogistics_LINUX_UV.sh Python/commonUtils/launchers/LaunchPythonProject_LINUX_UV.sh
 
   desktop:
+    needs: environment
     if: ${{ inputs.target != 'linux' }}
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
     # Suite budgets come from build-tests.json; leave room for all four gates.
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        os: ${{ fromJSON(inputs.target == 'macos' && '["macos-latest"]' || inputs.target == 'windows' && '["windows-latest"]' || '["macos-latest", "windows-latest"]') }}
+      matrix: ${{ fromJSON(needs.environment.outputs.desktop_matrix) }}
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'
@@ -117,12 +123,15 @@ jobs:
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12.2'
+          python-version: ${{ needs.environment.outputs.python_version }}
+          architecture: ${{ matrix.target == 'windows' && 'x64' || 'arm64' }}
       - name: Install explicitly pinned external manager
         run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - name: Test packaged Windows launcher and release tooling
         if: runner.os == 'Windows'
-        run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
+        run: |
+          python dev.py test-structure
+          python Python/tests/run_regressions.py .github/scripts --isolate-modules
       - name: Run all regressions and full before/after compression parity
         run: python Python/tests/run_platform_checks.py --install
         env:
@@ -146,7 +155,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: archive-checks-${{ matrix.os }}
+          name: archive-checks-${{ matrix.target }}
           path: |
             test-results/**/*.json
             test-results/**/*.log
@@ -154,9 +163,10 @@ jobs:
           retention-days: 14
 
   fedora43:
+    needs: environment
     if: ${{ !inputs.target || inputs.target == 'all' || inputs.target == 'linux' }}
-    name: Fedora 43 container
-    runs-on: ubuntu-latest
+    name: Fedora desktop
+    runs-on: ${{ needs.environment.outputs.linux_runner }}
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -168,8 +178,11 @@ jobs:
         run: python logistics_build/release_test_evidence.py fetch
       - name: Fetch the historical public submodule for parity tests
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
-      - name: Run all checks inside Fedora 43
-        run: docker run --rm -e GITHUB_ACTIONS -e GITHUB_REPOSITORY -e GITHUB_SHA -e GITHUB_REF -e LOGISTICS_REUSE_TEST_RESULTS -v "$PWD:/workspace" -w /workspace fedora:43 bash Python/tests/platform/fedora43.sh
+      - name: Run the single Fedora desktop suite
+        env:
+          FEDORA_IMAGE: ${{ needs.environment.outputs.fedora_image }}
+          TEST_PYTHON: ${{ needs.environment.outputs.python_version }}
+        run: docker run --rm -e GITHUB_ACTIONS -e GITHUB_REPOSITORY -e GITHUB_SHA -e GITHUB_REF -e LOGISTICS_REUSE_TEST_RESULTS -e TEST_PYTHON -v "$PWD:/workspace" -w /workspace "$FEDORA_IMAGE" bash Python/tests/platform/fedora43.sh
       - name: Return container reports to the runner account
         if: always()
         run: |

@@ -72,6 +72,8 @@ def main():
     parser.add_argument('--inbox-profile', type=Path, help='Existing manual Inbox provisioning profile')
     parser.add_argument('--widget-profile', type=Path, help='Existing manual widget provisioning profile')
     parser.add_argument('--widget-actions-profile', type=Path, help='Existing manual widget actions provisioning profile')
+    parser.add_argument('--watch-profile', type=Path, help='Existing manual Watch provisioning profile')
+    parser.add_argument('--watch-widget-profile', type=Path, help='Existing manual Watch widget provisioning profile')
     parser.add_argument('--gui', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
@@ -85,6 +87,9 @@ def main():
             arguments += ['--widget-profile', str(args.widget_profile)]
         if args.widget_actions_profile:
             arguments += ['--widget-actions-profile', str(args.widget_actions_profile)]
+        for name in ('watch_profile', 'watch_widget_profile'):
+            if getattr(args, name):
+                arguments += ['--' + name.replace('_', '-'), str(getattr(args, name))]
         if args.gui:
             deploy(number, ask=gui_input, prepare_only=args.prepare_only, archive_arguments=arguments)
         else:

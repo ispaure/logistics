@@ -1,4 +1,8 @@
 """Native mobile switches, persisted choices and disabled-document admission."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

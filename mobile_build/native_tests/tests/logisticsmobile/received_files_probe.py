@@ -1,4 +1,8 @@
 """Verify visible received storage and native intake in a disposable iOS QA app."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

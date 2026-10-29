@@ -377,7 +377,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             self.wide = self.wide or fold is not None
             if frame is not None and frame.destination == 'files':
                 minimum = 516 if self.app.preferences.values.get('android_eink') == 'true' else 640
-                self.wide = self.content_width('files', margin=0) >= minimum or fold is not None
+                from .pane_layout import browser_columns
+                self.wide = browser_columns(self.content_width('files', margin=0),
+                    self.app.main_window.size.height, minimum=minimum, fold=fold,
+                    allow_portrait=minimum == 516)
             from .ios_workspace_columns import sync
             sync(self)
             from .folder_hub_ui import reflow_folder_notice

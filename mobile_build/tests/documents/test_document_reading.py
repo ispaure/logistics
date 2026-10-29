@@ -1,4 +1,8 @@
 """Reader session capabilities preserve privacy independently of encryption labels."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS

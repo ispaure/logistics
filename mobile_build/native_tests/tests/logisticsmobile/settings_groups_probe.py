@@ -1,4 +1,8 @@
 """Isolated native grouped-settings review on phone, iPad and a Duo crease."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path
@@ -6,6 +10,9 @@ import traceback
 
 import toga
 from mobile.app import LogisticsMobile
+from . import start_native_check
+from .settings import PROBE_ROTATION_SETTLE
+from .rotation_checks import rotate
 from tests.logisticsmobile.fixtures import capture_window
 
 
@@ -15,7 +22,7 @@ class Probe(LogisticsMobile):
         super().startup()
 
     def on_running(self):
-        self.loop.create_task(self.probe())
+        start_native_check(self, type(self).probe)
 
     async def probe(self):
         from rubicon.objc import ObjCClass
@@ -27,9 +34,7 @@ class Probe(LogisticsMobile):
             window = self.main_window._impl.native
             duo = 'Duo' in str(ObjCClass('UIDevice').currentDevice.name)
             if duo:
-                preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(16)
-                window.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
-                await asyncio.sleep(1)
+                await rotate(self, 'landscape-right', settle=PROBE_ROTATION_SETTLE)
                 self._hinge_status = 2
             for mode in (1, 2):
                 window.overrideUserInterfaceStyle = mode

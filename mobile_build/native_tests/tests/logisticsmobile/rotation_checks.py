@@ -1,8 +1,16 @@
 """Real orientation changes must preserve routes and respect the native safe area."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import json
 from pathlib import Path
 import sys
+
+from commonUtils.testing.rotation import NativeRotation
+from commonUtils.testing.waiting import wait_until, wait_for_assertion
+from .settings import ROTATION_SETTLE, CONTROL_SETTLE_TIMEOUT
 
 
 def panel_state(app):
@@ -52,37 +60,20 @@ def pose_snapshot(app):
 
 
 
-async def rotate(app, orientation):
-    landscape = orientation.startswith('landscape')
-    native_errors = []
+async def rotate(app, orientation, *, settle=ROTATION_SETTLE):
     from .timings import section, measure
+    rotation = NativeRotation(app.main_window,
+                              activity=app._impl.native if sys.platform != 'ios' else None)
+    def rejected(error):
+        print('LOGISTICS_ROTATION_REJECTED=' + json.dumps(dict(
+            orientation=orientation, error=error)), flush=True)
     with section(app, 'rotation-dispatch', orientation=orientation):
-        if sys.platform == 'ios':
-            from rubicon.objc import Block, ObjCClass, ObjCInstance, objc_id
-            mask = {'portrait': 2, 'portrait-upside-down': 4, 'landscape-left': 8, 'landscape-right': 16}[orientation]
-            preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(mask)
-            def rejected(error):
-                native_errors.append(str(ObjCInstance(error)))
-                print('LOGISTICS_ROTATION_REJECTED=' + json.dumps(dict(
-                    orientation=orientation, error=native_errors[-1])), flush=True)
-            rejection = Block(rejected, None, objc_id)
-            app.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=rejection)
-        else:
-            app._impl.native.setRequestedOrientation({'portrait': 1, 'portrait-upside-down': 9, 'landscape-left': 0, 'landscape-right': 8}[orientation])
+        rotation.request(orientation, on_rejected=rejected)
     with section(app, 'rotation-acknowledgement', orientation=orientation):
-        for _ in range(60):
-            await asyncio.sleep(.1)
-            if sys.platform == 'ios':
-                # Interface orientation is only an acknowledgement of this request,
-                # never an input to production layout or an aspect-ratio assumption.
-                if int(app.main_window._impl.native.windowScene.interfaceOrientation) == {'portrait': 1, 'portrait-upside-down': 2, 'landscape-left': 3, 'landscape-right': 4}[orientation]:
-                    break
-            elif (app.main_window.size.width > app.main_window.size.height) == landscape:
-                break
-        else:
-            raise AssertionError('Native rotation did not complete: ' + orientation
-                                 + ('; UIKit: ' + '; '.join(native_errors) if native_errors else ''))
-    await measure(app, 'rotation-post-ack-settle', asyncio.sleep(.6), orientation=orientation)
+        from commonUtils.testing.settings import ROTATION_TIMEOUT
+        await wait_until(lambda: rotation.acknowledged(orientation), timeout=ROTATION_TIMEOUT,
+                         message='Native rotation did not complete: ' + orientation)
+    await measure(app, 'rotation-post-ack-settle', asyncio.sleep(settle), orientation=orientation)
 
 
 def safe_geometry(app):
@@ -200,13 +191,8 @@ def assert_visible_controls(app):
 
 async def settled_visible_controls(app):
     """Wait briefly for UIKit's rotation morph, retaining strict final bounds."""
-    for attempt in range(21):
-        try:
-            return assert_visible_controls(app)
-        except AssertionError:
-            if attempt == 20:
-                raise
-            await asyncio.sleep(.1)
+    return await wait_for_assertion(lambda: assert_visible_controls(app),
+                                    timeout=CONTROL_SETTLE_TIMEOUT)
 
 
 def assert_bar_control_bounds(rect, bounds, label):

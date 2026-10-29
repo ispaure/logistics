@@ -1,4 +1,8 @@
 """Decode real frames/audio for every requested desktop container/codec pairing."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 from pathlib import Path
 import shutil
 import unittest

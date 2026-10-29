@@ -1,4 +1,8 @@
 """Native privacy policy, including Rubicon's callable custom getters."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import sys
 from types import SimpleNamespace
 import unittest

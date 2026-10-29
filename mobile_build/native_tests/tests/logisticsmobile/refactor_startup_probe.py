@@ -1,4 +1,8 @@
 """Focused native startup/composition evidence using an isolated QA app."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.SMOKE
 import asyncio
 import json
 from pathlib import Path

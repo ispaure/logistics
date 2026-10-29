@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from mobile_build.select_ios_sdk import choose, version
 

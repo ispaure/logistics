@@ -1,4 +1,8 @@
 """Archive restaging must test current code rather than stale compiled payloads."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from hashlib import sha1
 from io import BytesIO
 import json

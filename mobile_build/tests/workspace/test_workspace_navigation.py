@@ -1,10 +1,19 @@
 """Phone drawers and Duo panes retain the actual document/chat owners."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from toga.types import Size
 
-from mobile.app import LogisticsMobile
+from mobile_build.tests.support.app import create_app
+
+# Width patches below model a full-height landscape viewport. Toga dummy's
+# default 480-point height is compact and intentionally cannot show two panes.
+WORKSPACE_HEIGHT = 500
 
 
 class WorkspaceNavigationTests(unittest.TestCase):
@@ -170,8 +179,9 @@ class WorkspaceNavigationTests(unittest.TestCase):
 
     def setUp(self):
         self.directory = TemporaryDirectory()
-        LogisticsMobile.storage_root = Path(self.directory.name)
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(self.directory.cleanup)
+        self.app = create_app(self, root=Path(self.directory.name))
+        self.app.main_window.size = Size(self.app.main_window.size.width, WORKSPACE_HEIGHT)
         self.app.show_documents(destination='documents')
         self.navigation = self.app.adaptive
 
@@ -180,10 +190,6 @@ class WorkspaceNavigationTests(unittest.TestCase):
             if drawer.task is not None and not drawer.task.done():
                 drawer.task.cancel()
             self.app.loop.run_until_complete(drawer.browser.close())
-        self.app.main_window.close()
-        self.app.loop.close()
-        LogisticsMobile.storage_root = None
-        self.directory.cleanup()
 
     def test_system_metadata_is_hidden_in_folders_and_file_lists(self):
         from commonUtils.runtime.resources.local import LocalFiles

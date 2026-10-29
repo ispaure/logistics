@@ -54,8 +54,8 @@ def keychain_groups_match(actual, identity):
     return sorted(actual or default) == sorted(identity['keychain_access_groups'] or default)
 
 
-def export_options(team, profile=None, *, upload=False, inbox_profile=None, widget_profile=None, widget_actions_profile=None):
-    extensions = {'.inbox': inbox_profile, '.widgets': widget_profile, '.widget-actions': widget_actions_profile}
+def export_options(team, profile=None, *, upload=False, inbox_profile=None, widget_profile=None, widget_actions_profile=None, watch_profile=None, watch_widget_profile=None):
+    extensions = {'.inbox': inbox_profile, '.widgets': widget_profile, '.widget-actions': widget_actions_profile, '.watchkitapp': watch_profile, '.watchkitapp.widgets': watch_widget_profile}
     if any(extensions.values()) and not profile:
         raise ValueError('Extension profiles require the containing app profile too.')
     options = dict(method='app-store-connect', destination='upload' if upload else 'export',
@@ -170,8 +170,12 @@ def archive_release(args, workspace, identity, env):
             profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(args.profile.resolve())]))
             validate_profile(profile, identity)
             for suffix, argument in (('.inbox', 'inbox_profile'), ('.widgets', 'widget_profile'),
-                                     ('.widget-actions', 'widget_actions_profile')):
+                                     ('.widget-actions', 'widget_actions_profile'), ('.watchkitapp', 'watch_profile'),
+                                     ('.watchkitapp.widgets', 'watch_widget_profile')):
                 path = getattr(args, argument, None)
+                if not any(obj.get('buildSettings', {}).get('PRODUCT_BUNDLE_IDENTIFIER') == BUNDLE + suffix
+                           for obj in data['objects'].values()):
+                    continue
                 if not path:
                     raise ValueError('Manual signing requires --' + argument.replace('_', '-') + ' for the extension.')
                 extension_profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(path.resolve())]))
@@ -193,8 +197,10 @@ def archive_release(args, workspace, identity, env):
             if settings.get('PRODUCT_BUNDLE_IDENTIFIER') in {BUNDLE + suffix for suffix in EXTENSION_SUFFIXES}:
                 settings['CURRENT_PROJECT_VERSION'] = args.build_number
         # Extension plists use literal versions, so update them alongside build settings.
-        for folder in ('IncomingShare', 'LogisticsWidget', 'LogisticsWidgetActions'):
+        for folder in ('IncomingShare', 'LogisticsWidget', 'LogisticsWidgetActions', 'LogisticsWatch', 'LogisticsWatchWidget'):
             extension_info = project / folder / 'Info.plist'
+            if not extension_info.exists():
+                continue
             extension_metadata = plistlib.loads(extension_info.read_bytes())
             extension_metadata['CFBundleVersion'] = args.build_number
             extension_info.write_bytes(plistlib.dumps(extension_metadata))
@@ -220,7 +226,8 @@ def archive_release(args, workspace, identity, env):
         (workspace / 'release.json').write_text(json.dumps(record, indent=2) + '\n')
         (workspace / 'ExportOptions.plist').write_bytes(plistlib.dumps(export_options(identity['team_id'], profile,
             inbox_profile=extension_profiles.get('.inbox'), widget_profile=extension_profiles.get('.widgets'),
-            widget_actions_profile=extension_profiles.get('.widget-actions'))))
+            widget_actions_profile=extension_profiles.get('.widget-actions'),
+            watch_profile=extension_profiles.get('.watchkitapp'), watch_widget_profile=extension_profiles.get('.watchkitapp.widgets'))))
         print('Archive prepared: ' + str(workspace))
     except Exception:
         print('Incomplete workspace and diagnostics retained: ' + str(workspace), file=sys.stderr)
@@ -256,7 +263,8 @@ def export_release(workspace, env, *, upload=False):
         return {'UUID': extensions[suffix]} if extensions.get(suffix) else None
     options = export_options(identity['team_id'], profile, upload=upload,
         inbox_profile=extension_profile('.inbox'), widget_profile=extension_profile('.widgets'),
-        widget_actions_profile=extension_profile('.widget-actions'))
+        widget_actions_profile=extension_profile('.widget-actions'),
+        watch_profile=extension_profile('.watchkitapp'), watch_widget_profile=extension_profile('.watchkitapp.widgets'))
     destination = workspace / ('UploadOptions.plist' if upload else 'ExportOptions.plist')
     destination.write_bytes(plistlib.dumps(options))
     run(['xcodebuild', '-exportArchive', '-archivePath', str(workspace / 'Logistics.xcarchive'),
@@ -294,9 +302,11 @@ def main():
     parser.add_argument('--inbox-profile', type=Path, help='Matching App Store profile for the Inbox extension')
     parser.add_argument('--widget-profile', type=Path, help='Matching App Store profile for the widget extension')
     parser.add_argument('--widget-actions-profile', type=Path, help='Matching App Store profile for the widget actions extension')
+    parser.add_argument('--watch-profile', type=Path, help='Matching App Store profile for the Watch companion')
+    parser.add_argument('--watch-widget-profile', type=Path, help='Matching App Store profile for the Watch widget')
     parser.add_argument('--unsigned-check', action='store_true', help='Local archive packaging check only; cannot export/upload')
     args = parser.parse_args()
-    if any((args.inbox_profile, args.widget_profile, args.widget_actions_profile)) and not args.profile:
+    if any((args.inbox_profile, args.widget_profile, args.widget_actions_profile, args.watch_profile, args.watch_widget_profile)) and not args.profile:
         parser.error('Extension profiles require --profile for the containing app.')
     if args.unsigned_check and args.command not in ('plan', 'archive'):
         parser.error('--unsigned-check applies only to a local archive check.')

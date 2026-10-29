@@ -23,4 +23,6 @@ jobs:
       - name: Check documentation ownership, hierarchy and links
         env:
           PYTHONPATH: Python
-        run: python -m unittest discover -s Python/tests -p test_documentation_layout.py -v
+        run: |
+          python dev.py test-structure
+          python Python/tests/run_regressions.py Python/tests --pattern test_documentation_layout.py --isolate-modules

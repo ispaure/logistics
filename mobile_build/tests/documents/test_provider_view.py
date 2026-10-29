@@ -1,4 +1,8 @@
 """Failed provider construction retires its controls, preserving the active reader."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase

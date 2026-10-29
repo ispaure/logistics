@@ -1,4 +1,8 @@
 """Host replacement preserves data before retiring callbacks and resources."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch

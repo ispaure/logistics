@@ -1,4 +1,8 @@
 """iOS upgrade migration, shared Local routing and private-state boundaries."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 import sys
@@ -12,7 +16,7 @@ from features.rclone.transfers.mobile.jobs import MirrorJobs
 from mobile.ios_storage import MIGRATION, prepare_storage, prepare_for_app
 from mobile.documents import DocumentStore
 from mobile.folder_hub import hub_entries
-from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+from mobile_build.tests.support.mirror import MirrorClient
 
 
 class IOSStorageTests(unittest.TestCase):

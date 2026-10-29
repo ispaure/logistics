@@ -164,7 +164,8 @@
       "guide": "docs/features/images/development/development.md",
       "tests": {
         "desktop": [
-          "test_feature_registry.py"
+          "test_feature_registry.py",
+          "test_image*.py"
         ]
       },
       "mobile_manifest": "Python/features/images/mobile_sources.json"
@@ -281,7 +282,10 @@
           "test_local_crypt.py",
           "test_remote_browser.py",
           "test_credential*.py",
-          "test_review_session.py"
+          "test_review_session.py",
+          "test_transfer_adapters.py",
+          "test_transfer_service.py",
+          "test_remote_bridge_native.py"
         ],
         "mobile": [
           "test_cloud_restore.py",
@@ -297,7 +301,12 @@
           "test_remote_activity.py",
           "test_smb_ui.py",
           "test_transfer_execution.py",
-          "test_transfer_feedback.py"
+          "test_transfer_feedback.py",
+          "test_native_credential_service.py",
+          "test_native_transfer_service.py",
+          "test_home_unlock.py",
+          "test_connection_packages.py",
+          "test_remote_service.py"
         ]
       },
       "mobile_manifest": "Python/features/rclone/mobile_sources.json"

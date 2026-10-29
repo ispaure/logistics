@@ -1,4 +1,8 @@
 """Configured collection folders, including encrypted and pulled copies."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import os
 from pathlib import Path

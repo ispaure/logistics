@@ -3,12 +3,17 @@
 
 def mount_actions(header, controller):
     """Native symbol items adapt independently, including on iPhone Duo."""
-    from .ios_toolbar import mount_actions as mount
+    from .ios_toolbar import mount_actions as mount, mount_leading, vertical_edge
     for button in header.title_actions:
         if button.parent is not None:
             button.parent.remove(button)
         button.app, button.window = header.app, header.window
-    mount(controller, header, header.title_actions)
+    # Leading groups follow UIKit's Back item on vertical bars. Keeping Search
+    # here places it directly below Back, outside the trailing tools/overflow.
+    search = [button for button in header.title_actions
+              if getattr(button, 'control_icon', None) == 'find'] if vertical_edge(controller) else []
+    mount(controller, header, [button for button in header.title_actions if button not in search])
+    mount_leading(controller, search)
 
 
 def mount(header, controller, title):

@@ -1,4 +1,8 @@
 """Workspace ownership, recovery, stale completion and privacy invariants."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import os
 from pathlib import Path

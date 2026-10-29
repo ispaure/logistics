@@ -3,6 +3,10 @@
 Install only in a disposable application ID. Data is synthetic; no storage,
 credentials, network or production launchers are involved.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import cProfile
 from io import StringIO

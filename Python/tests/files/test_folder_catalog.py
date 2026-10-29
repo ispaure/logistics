@@ -1,4 +1,8 @@
 """Detached folder projection preserves account identity and explicit host grouping."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory

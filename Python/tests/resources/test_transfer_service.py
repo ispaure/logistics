@@ -1,4 +1,8 @@
 """Approval binds execution to one plan, generation, options and runtime."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
 from threading import Barrier, Event, Thread
 import unittest

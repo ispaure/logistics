@@ -10,7 +10,13 @@
         "mobile-host"
       ],
       "interpreter": "desktop",
-      "timeout": 1800
+      "timeout": 1800,
+      "smoke_args": [
+        "--profile",
+        "smoke",
+        "--mode",
+        "fast"
+      ]
     },
     {
       "id": "logistics",
@@ -22,7 +28,13 @@
         "commonutils"
       ],
       "interpreter": "desktop",
-      "timeout": 1800
+      "timeout": 1800,
+      "smoke_args": [
+        "--profile",
+        "smoke",
+        "--mode",
+        "fast"
+      ]
     },
     {
       "id": "portable-contracts",
@@ -33,7 +45,13 @@
       "after": [
         "commonutils"
       ],
-      "interpreter": "desktop"
+      "interpreter": "desktop",
+      "smoke_args": [
+        "--profile",
+        "smoke",
+        "--mode",
+        "fast"
+      ]
     },
     {
       "id": "desktop-ui",
@@ -44,7 +62,13 @@
       "after": [
         "commonutils"
       ],
-      "interpreter": "desktop"
+      "interpreter": "desktop",
+      "smoke_args": [
+        "--profile",
+        "smoke",
+        "--mode",
+        "fast"
+      ]
     },
     {
       "id": "mobile-host",
@@ -55,7 +79,21 @@
       "after": [
         "commonutils"
       ],
-      "interpreter": "mobile"
+      "interpreter": "mobile",
+      "smoke_args": [
+        "--profile",
+        "smoke",
+        "--mode",
+        "fast"
+      ]
     }
-  ]
+  ],
+  "test_structure": {
+    "command": [
+      "-m",
+      "logistics_build.test_structure",
+      "--check"
+    ],
+    "interpreter": "desktop"
+  }
 }

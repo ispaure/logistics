@@ -1,4 +1,8 @@
 """Executor allocations must not finalize retired native UI cycles."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import gc
 import threading

@@ -1,4 +1,8 @@
 """Exact review and interrupted-attempt guards; no provider request is sent."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import hashlib
 import json
 import os

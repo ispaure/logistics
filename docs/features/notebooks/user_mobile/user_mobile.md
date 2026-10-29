@@ -74,7 +74,10 @@ Write with a stylus or enable **Draw with finger**. With finger drawing disabled
 horizontal finger swipes change pages when the page fits the viewport width.
 Vertical drags scroll; when zoomed in, finger drags pan instead of turning pages.
 Pointer cancellation discards the unfinished stroke. Resize and zoom change the
-view while stored points retain page coordinates. High magnification may soften
+view while stored points retain page coordinates. The drawing surface suppresses
+browser page selection and long-press callouts, including extra contacts during
+a stroke; text fields remain editable and the Select / move tool remains available.
+High magnification may soften
 the screen preview to keep memory use bounded; saved and exported ink keeps its
 full native geometry. Pressure depends on what the
 device supplies; Android forwards historical pen positions and pressure directly

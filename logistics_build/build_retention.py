@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 
 from build_manager.locking import workspace_lock
@@ -16,6 +17,10 @@ from build_manager.retention import lease, linked, prune, remove_tree
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_MARKER = '.manager-build-output'
+GIB = 1024 ** 3
+SNAPSHOT_BUDGET = 24 * GIB
+DEVICE_BUDGET = 12 * GIB  # Per platform; newest three and active/pinned work win.
+
 RESERVED_OUTPUTS = {'firebase', 'testflight', 'mobile_app', 'logisticsmobile',
                     'physical-device', 'cloud-host', 'go-cache'}
 
@@ -42,6 +47,31 @@ def enroll_output(name, root=ROOT):
     return path
 
 
+def device_group(root, platform):
+    parent = Path(root) / 'mobile_build/.tools/build-manager/workspaces/devices' / platform
+
+    def eligible(path):
+        if not re.fullmatch('[0-9a-f]{32}', path.name):
+            return False
+        recipe = path / 'recipe.json'
+        try:
+            if linked(recipe) or recipe.stat().st_size > 262144:
+                return False
+            data = json.loads(recipe.read_text())
+            return (data.get('schema') == 1 and data.get('platform') == platform
+                    and Path(data.get('workspace', '')).absolute() == path.absolute())
+        except (OSError, ValueError, TypeError, AttributeError):
+            return False
+
+    return dict(root=parent, eligible=eligible, lock_path=lambda p: p / 'operation.lock')
+
+
+def device_access(path):
+    # Opening operation.lock must not make an abandoned workspace look newly used.
+    files = [p for p in path.glob('*.json') if not linked(p) and p.is_file()]
+    return max((p.stat().st_mtime for p in files), default=path.stat().st_mtime)
+
+
 def clean(root=ROOT, *, apply=False, snapshots=True):
     root = Path(root)
     mobile = root / 'mobile_build'
@@ -52,7 +82,18 @@ def clean(root=ROOT, *, apply=False, snapshots=True):
     if snapshots:
         removed += prune(mobile / '.tools/build-manager/snapshots',
                          eligible=lambda p: bool(re.fullmatch('[0-9a-f]{64}', p.name)) and (p / '.manager-source.json').is_file(),
-                         age_days=7, apply=apply, lock_path=lambda p: p.with_suffix('.lock'))
+                         age_days=7, max_bytes=SNAPSHOT_BUDGET, grace_days=1/24,
+                         apply=apply, lock_path=lambda p: p.with_suffix('.lock'))
+        for platform in ('ios', 'android'):
+            removed += prune(**device_group(root, platform), age_days=1, max_bytes=DEVICE_BUDGET,
+                             grace_days=1/24, last_used=device_access, apply=apply)
+        if sys.platform == 'darwin':
+            from logistics_build.xcode_storage import storage_group, access_order
+            try:
+                removed += prune(**storage_group(root), age_days=1, max_bytes=12 * GIB,
+                                 order_key=access_order, last_used=lambda p: access_order(p)[0], apply=apply)
+            except (OSError, subprocess.SubprocessError) as error:
+                print('Xcode cache cleanup unavailable: ' + str(error), file=sys.stderr)
     removed += prune(root / 'test-results/build-scratch',
                      eligible=lambda p: (p / '.manager-scratch').is_file(), keep=1, age_days=1, apply=apply)
     return removed
@@ -118,15 +159,24 @@ def storage_groups(root=ROOT):
     """Manual cleanup owns the same declared generated trees as retention."""
     root = Path(root)
     mobile = root / 'mobile_build'
-    return {
+    groups = {
         'iOS / TestFlight': dict(root=mobile / 'build/testflight', eligible=lambda p: p.name.isdigit()),
         'Android / Firebase': dict(root=mobile / 'build/firebase', eligible=lambda p: p.name.isdigit()),
         'Reviewed build outputs': dict(root=mobile / 'build', eligible=reviewed_output),
         'Source snapshots': dict(root=mobile / '.tools/build-manager/snapshots',
             eligible=lambda p: bool(re.fullmatch('[0-9a-f]{64}', p.name)) and (p / '.manager-source.json').is_file(),
             lock_path=lambda p: p.with_suffix('.lock')),
+        **{'Device workspaces / ' + platform: device_group(root, platform) for platform in ('ios', 'android')},
         'Disposable scratch': dict(root=root / 'test-results/build-scratch', eligible=lambda p: (p / '.manager-scratch').is_file()),
     }
+
+    if sys.platform == 'darwin':
+        from logistics_build.xcode_storage import storage_group
+        try:
+            groups['Xcode project caches'] = storage_group(root)
+        except (OSError, subprocess.SubprocessError) as error:
+            print('Xcode cache inventory unavailable: ' + str(error), file=sys.stderr)
+    return groups
 
 
 def storage_inventory(root=ROOT):

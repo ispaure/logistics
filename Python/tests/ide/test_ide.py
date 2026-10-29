@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import tempfile
 import unittest
 from pathlib import Path

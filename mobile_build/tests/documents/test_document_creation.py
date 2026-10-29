@@ -1,4 +1,8 @@
 """User-created documents publish into browsable local or encrypted folders."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.SMOKE
 import base64
 import os
 from pathlib import Path

@@ -1,4 +1,8 @@
 """Registry publication keeps format/mode and preserves originals on failure."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import os
 from pathlib import Path

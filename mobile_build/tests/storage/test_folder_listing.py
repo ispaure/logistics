@@ -1,4 +1,8 @@
 """Folder reads publish only into the browser and credentials that requested them."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from threading import Event, get_ident
 from types import SimpleNamespace as NS

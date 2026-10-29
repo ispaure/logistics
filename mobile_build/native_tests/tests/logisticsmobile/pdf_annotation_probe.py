@@ -1,4 +1,8 @@
 """Native PDF-to-notebook menus, backgrounds, collisions and timed pen input."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 import json

@@ -1,4 +1,8 @@
 """Chapter contents retain the page allocation and obey the E Ink policy."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import patch

@@ -1,4 +1,8 @@
 """Three-launch Android E Ink opt-in, restoration and private-WebView checks."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import os

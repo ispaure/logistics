@@ -70,5 +70,27 @@
       "request": {},
       "ok": false
     }
+  ],
+  "request_limits": [
+    {
+      "action": "mirror_info",
+      "python": 2097152,
+      "native": 2097152
+    },
+    {
+      "action": "image_thumbnail",
+      "python": 25165824,
+      "native": 25165824
+    },
+    {
+      "action": "crypt_write_buffer",
+      "python": 47185920,
+      "native": 44804780
+    },
+    {
+      "action": "mirror_review",
+      "python": 2097152,
+      "native": 0
+    }
   ]
 }

@@ -1,4 +1,8 @@
 """Retained imports are measurable and can be deleted independently of sources."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -125,7 +129,7 @@ class SavedFilesTests(unittest.TestCase):
             self.drain(app)
 
     def test_remote_preview_never_becomes_a_saved_import_or_recent_after_restart(self):
-        from mobile_build.tests.reading.test_remote_readers import RemoteClient
+        from mobile_build.tests.support.readers import RemoteClient
         from features.rclone.mobile.remote_readers import RemoteReaders
         for remote in ('Cloud', 'Secret'):
             with self.subTest(remote=remote), TemporaryDirectory() as directory:

@@ -1,17 +1,21 @@
 """Folder identity follows actual storage and root navigation returns to the Hub."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from unittest.mock import AsyncMock, patch
 import unittest
 
 import toga
 from mobile.browser_ui import FolderLocationHeader
 from mobile.control_icons import icon_button
-from mobile_build.tests.documents.test_obsidian import ObsidianTests
+from mobile_build.tests.documents import test_obsidian as obsidian_tests
 
 
 class FolderLocationTests(unittest.TestCase):
-    setUp = ObsidianTests.setUp
-    tearDown = ObsidianTests.tearDown
-    run_async = ObsidianTests.run_async
+    setUp = obsidian_tests.ObsidianTests.setUp
+    tearDown = obsidian_tests.ObsidianTests.tearDown
+    run_async = obsidian_tests.ObsidianTests.run_async
 
     def test_apple_header_back_calls_bound_async_handler_with_one_widget(self):
         from types import SimpleNamespace

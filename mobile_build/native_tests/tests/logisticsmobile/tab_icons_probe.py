@@ -1,4 +1,8 @@
 """Exercise the actual iOS tab icons through backend item reconstruction."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import os

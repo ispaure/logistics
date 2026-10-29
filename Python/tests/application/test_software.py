@@ -1,4 +1,8 @@
 """Local resources and lazy software provisioning without external transfers."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 from contextlib import contextmanager
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')

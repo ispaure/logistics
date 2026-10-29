@@ -1,4 +1,8 @@
 """Reader anchors/search/spreads and recoverable mobile metadata publication."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from io import BytesIO
 import json
 from pathlib import Path

@@ -1,4 +1,8 @@
 """Review command affordances in a disposable iOS/Android workspace."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import traceback

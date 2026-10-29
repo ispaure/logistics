@@ -34,6 +34,8 @@ def configure_ios(project):
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, support / 'VideoPlayer.m')
+    for helper in source.parent.glob('*.m'):
+        shutil.copyfile(helper, support / helper.name)
     launcher = project / 'LogisticsMobile/main.m'
     text = launcher.read_text()
     include = '#import "../Support/VideoPlayer.m"'
@@ -45,7 +47,7 @@ def configure_ios(project):
     except plistlib.InvalidFileException:
         data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(pbx)]))
     objects = data['objects']
-    targets = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application']
+    targets = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application' and obj.get('name') != 'LogisticsWatch']
     if len(targets) != 1:
         raise ValueError('Expected one containing iOS video app.')
     target = targets[0]

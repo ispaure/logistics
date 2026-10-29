@@ -1,4 +1,8 @@
 """Desktop credential ZIP import, explicit unlock choices and empty-list recovery."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace

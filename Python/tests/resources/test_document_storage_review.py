@@ -1,4 +1,8 @@
 """Storage policy follows Save As and rejects stale credential generations."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace

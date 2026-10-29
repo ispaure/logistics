@@ -1,4 +1,8 @@
 """Portrait wide-page navigation across imported and provider reader surfaces."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory

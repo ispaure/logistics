@@ -3,6 +3,10 @@
 Use this module's main in a disposable simulator probe bundle. Ordinary app
 storage is never opened; screenshots/results live under the probe's cache.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path
@@ -10,6 +14,9 @@ import traceback
 from uuid import uuid4
 
 from mobile.app import LogisticsMobile
+from . import start_native_check
+from .settings import PROBE_ROTATION_SETTLE
+from .rotation_checks import rotate
 
 
 class NavigationClearanceProbe(LogisticsMobile):
@@ -18,19 +25,16 @@ class NavigationClearanceProbe(LogisticsMobile):
         super().startup()
 
     def on_running(self):
-        self.loop.create_task(self.probe())
+        start_native_check(self, type(self).probe)
 
     async def probe(self):
-        from rubicon.objc import ObjCClass
         from .fixtures import capture_window
         report = {'success': False, 'samples': []}
         try:
             await asyncio.sleep(1)
             window = self.main_window._impl.native
             for orientation, mask in (('portrait', 2), ('landscape', 8), ('portrait-return', 2)):
-                preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(mask)
-                window.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
-                await asyncio.sleep(1)
+                await rotate(self, 'landscape-left' if mask == 8 else 'portrait', settle=PROBE_ROTATION_SETTLE)
                 for name, show in (('home', self.show_home), ('documents', self.show_documents_hub),
                                    ('settings', self.show_settings), ('files', self.show_locations),
                                    ('chat', self.show_chat)):

@@ -1,4 +1,8 @@
 """Native editor/destination callbacks with actual local or encrypted storage."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from uuid import uuid4
@@ -154,7 +158,7 @@ async def exercise_destination_edges(app):
             controller = jclass('androidx.core.view.WindowCompat').getInsetsController(
                 app._impl.native.getWindow(), native)
             ime = jclass('androidx.core.view.WindowInsetsCompat$Type').ime()
-            from .keyboard_wait import settled_keyboard
+            from commonUtils.testing.waiting import settled_keyboard
             def request_keyboard():
                 native.requestFocus()
                 # isActive reconciles the served input connection after an

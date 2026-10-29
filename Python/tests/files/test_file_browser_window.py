@@ -1,4 +1,8 @@
 """General browser extension installation, actions and worker-safe closure."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from contextlib import closing
 
 import os

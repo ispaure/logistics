@@ -1,4 +1,8 @@
 """Verify actual process overlap, output isolation and the batch workspace lock."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import fcntl
 import json
 import os

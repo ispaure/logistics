@@ -15,7 +15,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from build_manager.android_emulators import AndroidEmulator
 from logistics_build.build_retention import scratch
 from mobile_build.deployment.android_deploy import deployment_environment, tools_environment, build_tools
-from tests.readers.video_fixtures import codec_matrix, multitrack_movie
+from tests.readers.video_fixtures import codec_matrix, multitrack_movie, orientation_fixtures
 from mobile_build.tools import stage
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -228,6 +228,8 @@ def run_ios(source, output, *, cloud=False, model_name='iPad', ui=False, duoctl=
             codec_matrix(tests / 'video-fixtures', duration=60 if ui else 30)
             if ui:
                 multitrack_movie(tests / 'video-fixtures', tests / 'video-fixtures/h264-aac.mp4')
+            if ui:
+                orientation_fixtures(tests / 'image-orientation-fixtures')
         # Video QA does not exercise app extensions. Remove only this scratch copy's
         # extensions, whose signed identities belong to the containing production app.
         for extension_directory in ('PlugIns', 'Extensions'):
@@ -280,6 +282,19 @@ def run_ios(source, output, *, cloud=False, model_name='iPad', ui=False, duoctl=
                 report = json.loads(paths[0].read_text())
                 if (cache / 'video-ui').exists():
                     shutil.copytree(cache / 'video-ui', output / 'screens', dirs_exist_ok=True)
+                    orientation = output / 'screens/orientation'
+                    if (orientation / 'manifest.json').exists():
+                        from PIL import Image
+                        for row in json.loads((orientation / 'manifest.json').read_text()):
+                            with Image.open(orientation / (row['name'] + '.png')) as decoded:
+                                pixels = decoded.convert('RGB')
+                                if list(pixels.size) != row['size']:
+                                    report.update(success=False, error='Incorrect native image dimensions: ' + row['name'])
+                                w, h = pixels.size
+                                points = ((2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3))
+                                if any(max(abs(a - b) for a, b in zip(pixels.getpixel(point), expected)) >= 25
+                                       for point, expected in zip(points, row['corners'])):
+                                    report.update(success=False, error='Incorrect native image orientation: ' + row['name'])
                 frames = output / 'frames'
                 frames.mkdir(exist_ok=True)
                 for frame in cache.rglob('video-cloud-frames/*.png'):

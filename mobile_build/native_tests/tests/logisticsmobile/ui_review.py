@@ -1,4 +1,8 @@
 """Actual workflow screenshots in a disposable synthetic native test workspace."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from commonUtils.runtime.platform import get_os, OS
 

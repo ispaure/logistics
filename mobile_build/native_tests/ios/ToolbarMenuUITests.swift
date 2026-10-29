@@ -1,3 +1,4 @@
+// TEST_STAGE = TestStage.EXTENDED
 import XCTest
 final class NavigationUITests: XCTestCase {
  func testToolbarMenuSingleTap() throws {

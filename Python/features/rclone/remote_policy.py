@@ -1,4 +1,5 @@
 """Portable rules for read-only, memory-only remote documents."""
+from features.video.formats import VIDEO_EXTENSIONS
 from pathlib import PurePosixPath
 
 LOCAL_COPY_MESSAGE = ('This file cannot be previewed directly through the remote. '
@@ -19,7 +20,7 @@ def direct_kind(path, size):
     suffix = PurePosixPath(str(path)).suffix.lower()
     if size < 0:
         raise LocalCopyRequired()
-    if suffix in {'.mp4', '.mkv'}:
+    if suffix in VIDEO_EXTENSIONS:
         return 'video'
     if suffix in TEXT and size <= TEXT_LIMIT:
         return 'text'

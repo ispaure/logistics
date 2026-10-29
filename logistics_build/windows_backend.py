@@ -28,6 +28,8 @@ def prepare(vm, output):
     client = Parallels()
     guest = client.start(vm)
     catalog = json.loads(Path(__file__).with_name('build_manager_tools.json').read_text())['windows_arm64']
+    from logistics_build.test_environments import load
+    catalog['runtime']['python'] = 'cpython-' + load()['python_version'] + '-windows-x86_64'
     token = uuid4().hex
     parameters = windows_parameters(token, catalog, **catalog['runtime'])
     record = dict(token=token, vm=guest['uuid'], status='preparing', tests_run=False)
@@ -95,6 +97,8 @@ def _run_attempt(args):
                        PYTHONUTF8='1', QT_QPA_PLATFORM='offscreen',
                        UV_PYTHON_INSTALL_DIR=str(root / 'python'), UV_CACHE_DIR=str(root / 'cache'),
                        UV_PYTHON_ARCH='x86_64', BROWSER_TEST_ARTIFACTS=str(root / reports / 'browser-diagnostics'))
+    if getattr(args, 'manager_working_tree', None):
+        environment['LOGISTICS_MANAGER_LOCAL_TEST_SOURCE'] = args.manager_working_tree
     if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off':
         environment['LOGISTICS_REUSE_TEST_RESULTS'] = 'off'
     result = dict(schema=1, status='running', source=args.source_identity, backend='Parallels Windows', original_state=selected['status'],
@@ -127,7 +131,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
         manager_path = str(root / manager)
         if args.manager_checkout:
             from logistics_build.guest_manager import archive
-            guest.stage(manager, archive(args.manager_checkout, args.snapshot, 'zip'))
+            guest.stage(manager, archive(args.manager_checkout, args.snapshot, 'zip', working_tree=getattr(args, 'manager_working_tree', None)))
             guest.call_idempotent("foreach($folder in @($p.root,($p.root+'\\Python\\commonUtils'))){& $p.git -C $folder config core.fileMode false;if($LASTEXITCODE -ne 0){throw 'Manager Git setup failed'}}", values=dict(root=manager_path,git=prepared['git']))
             setup_command = ['-m','logistics_build.guest_manager','--checkout',manager_path,'--project',target]
         else:
@@ -197,6 +201,7 @@ def main():
     parser.add_argument('--notebook-rendering', choices=('native', 'software', 'chromium-software', 'warp', 'all'),
                         help='Select a graphics path for native notebook acceptance')
     parser.add_argument('--manager-checkout', type=Path)
+    parser.add_argument('--manager-working-tree', help='Exact captured manager content identity for explicit local testing only')
     parser.add_argument('--shutdown', action='store_true')
     args = parser.parse_args()
     if args.native_notebooks and not args.pattern:

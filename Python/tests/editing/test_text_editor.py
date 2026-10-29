@@ -1,5 +1,9 @@
 """Editor document lifecycle and independence from optional reading features."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

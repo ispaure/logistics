@@ -1,21 +1,20 @@
 """Managed Local/LocalCrypt copies with verified, explicit pull and push."""
 from services.documents.locations import collection_path
-import json
-import os
 import shutil
 import stat
 from pathlib import Path
-from threading import RLock, Event, Thread
-from uuid import uuid4
+from threading import RLock
 
-from commonUtils.persistence import atomic_write_bytes
-from commonUtils.runtime.resources.paths import resource_path
-from services.identifiers import uuid, digest as valid_digest
+from services.identifiers import digest as valid_digest
+from .models import CopyMapping, PullResult, CreatedCopy, MAX_COPIES
 from features.rclone.transfers.local_policy import transfer_inventory, cleanup_candidates, remove_generated
-from features.rclone.transfers.transfer_options import TransferOptions, DEFAULT_EXCLUDES, CLEANUP_NAMES
-from features.rclone.transfers.scope import pull_name, push_scope
-
-MAX_RECORD_BYTES = 4 * 1024 * 1024
+from features.rclone.transfers.transfer_options import CLEANUP_NAMES
+from features.rclone.transfers.scope import pull_name
+from .records import CopyRecords
+from .records import MAX_RECORD_BYTES as MAX_RECORD_BYTES  # Legacy public constant.
+from .planning import CopyPlanner
+from .transport import sync_copy
+from features.rclone.mobile.bridge_protocol import crypt_path
 
 
 def copy_target(root, job):
@@ -35,85 +34,43 @@ def remote_location(client, job):
         raise ValueError('Load the matching connection first.')
     path = job['prefix']
     if job['crypt']:
-        path = client.request('crypt_path', remote=job['remote'], identity=job['cipher_identity'],
-            path=path, directory=True, decode=True)['path']
+        path = crypt_path(client, remote=job['remote'], identity=job['cipher_identity'],
+            path=path, directory=True)
     return job['remote'], path
 
 
 class MirrorJobs:
     def __init__(self, root):
         self.root = Path(root)
-        if not self.root.is_absolute() or self.root.is_symlink():
-            raise ValueError('Transfers require private storage.')
-        self.path = self.root / 'mirror-jobs.json'
-        self.jobs, self.error = {}, ''
-        self.original = None
         self.lock = RLock()
-        try:
-            if self.path.exists():
-                if self.path.is_symlink() or self.path.stat().st_size > MAX_RECORD_BYTES:
-                    raise ValueError('Invalid transfer records.')
-                with self.path.open('rb') as stream:
-                    self.original = stream.read(MAX_RECORD_BYTES + 1)
-                if len(self.original) > MAX_RECORD_BYTES:
-                    raise ValueError('Invalid transfer records.')
-                value = json.loads(self.original)
-                if not isinstance(value, dict) or value.get('schema') not in (3, 4):
-                    raise ValueError('Invalid transfer records.')
-                if set(value) != {'schema', 'jobs'}:
-                    raise ValueError('Invalid transfer records.')
-                if not isinstance(value['jobs'], list) or len(value['jobs']) > 16:
-                    raise ValueError('Invalid transfer records.')
-                for job in value['jobs']:
-                    job = dict(job)
-                    if value['schema'] == 3:
-                        job.pop('baseline', None)
-                    self.validate(job)
-                    if job['id'] in self.jobs:
-                        raise ValueError('Duplicate local copy.')
-                    self.jobs[job['id']] = job
-        except (OSError, ValueError, TypeError, KeyError):
-            self.jobs = {}
-            self.error = 'Transfer records could not be restored; the original file was preserved.'
+        self.records = CopyRecords(self.root, self.guard)
+        self.planner = CopyPlanner(self.root, self.jobs, self.check_name, self.guard)
+
+    @property
+    def path(self):
+        return self.records.path
+
+    @property
+    def jobs(self):
+        return self.records.jobs
+
+    @property
+    def original(self):
+        return self.records.original
+
+    @property
+    def error(self):
+        return self.records.error
 
     @staticmethod
     def validate(job):
-        fields = {'id', 'remote', 'identity', 'cipher_identity', 'crypt', 'prefix', 'target'}
-        if (not isinstance(job, dict) or set(job) != fields or not uuid(job['id'])
-                or not isinstance(job['remote'], str) or not 0 < len(job['remote']) <= 80
-                or any(ord(c) < 32 for c in job['remote']) or not valid_digest(job['identity'])
-                or type(job['crypt']) is not bool or (job['crypt'] and not valid_digest(job['cipher_identity']))
-                or (not job['crypt'] and job['cipher_identity'] != '')
-                or not isinstance(job['prefix'], str) or resource_path(job['prefix']) != job['prefix']
-                or not isinstance(job['target'], str) or not job['target'] or resource_path(job['target']) != job['target']
-                or '/' in job['target']):
-            raise ValueError('Invalid local copy mapping.')
+        CopyMapping.from_record(job)
 
     def save(self):
-        if self.error or self.path.is_symlink():
-            raise ValueError(self.error or 'Transfer records cannot be linked.')
-        for job in self.jobs.values():
-            self.validate(job)
-        data = json.dumps({'schema': 4, 'jobs': list(self.jobs.values())},
-                          ensure_ascii=False, allow_nan=False).encode('utf-8')
-        if len(data) > MAX_RECORD_BYTES:
-            raise ValueError('Transfer records exceed the size limit.')
-        atomic_write_bytes(self.path, data, validate=self.check_records)
-        self.original = data
-        descriptor = os.open(self.path.parent, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+        self.records.save()
 
     def check_records(self):
-        self.guard(self.path)
-        current = None
-        if self.path.exists():
-            with self.path.open('rb') as stream:
-                current = stream.read(MAX_RECORD_BYTES + 1)
-        if current != self.original:
-            raise OSError('Local copy records changed; reopen Logistics before transferring again.')
+        self.records.check_records()
 
     def target(self, job):
         return copy_target(self.root, job)
@@ -168,33 +125,17 @@ class MirrorJobs:
                     raise ValueError('The local folder already exists without this mapping. Move it before pulling.')
 
     def create(self, client, remote, folder='', *, storage=None, cancelled=lambda: False, progress=lambda **kw: None):
+        """Programmatic Pull uses the same proposal resolver as interactive review."""
         with self.lock:
-            self.check_records()
-            if self.error:
-                raise ValueError(self.error)
-            if storage not in (None, 'Local', 'LocalCrypt'):
-                raise ValueError('Choose Local or LocalCrypt.')
-            info = client.request('mirror_info', remote=remote, path=folder, decrypted=storage == 'Local')
-            if storage == 'LocalCrypt' and not info['crypt']:
-                raise ValueError('LocalCrypt requires a crypt remote with encryption keys.')
-            existing = next((job for job in self.jobs.values()
-                             if job['remote'] == remote and job['identity'] == info['identity'] and job['prefix'] == info['prefix'] and job['crypt'] == info['crypt']), None)
-            if existing is not None:
-                return existing, self.pull(existing['id'], client, cancelled=cancelled, progress=progress)
-            if len(self.jobs) >= 16:
-                raise ValueError('Remove a local copy mapping before adding another (limit: 16).')
-            key = uuid4().hex
-            target = self.copy_name(remote, folder, info['crypt'])
-            self.check_name(target, info['crypt'], adopt=True)
-            job = dict(id=key, remote=remote, identity=info['identity'], cipher_identity=info['cipher_identity'],
-                       crypt=info['crypt'], prefix=info['prefix'], target=target)
-            self.validate(job)
-            self.jobs[key] = job
+            proposal = self.prepare_review(client, remote, folder, storage=storage)
+            key = proposal['id']
+            existing = key in self.jobs
+            job = self.jobs.setdefault(key, proposal)
             try:
                 result = self.pull(key, client, cancelled=cancelled, progress=progress)
-                return job, result
+                return CreatedCopy(job, result)
             except BaseException:
-                if not self.target(job).exists():
+                if not existing and not self.target(job).exists():
                     self.jobs.pop(key, None)
                 raise
 
@@ -203,53 +144,21 @@ class MirrorJobs:
         return client.request(action, decrypted=not job['crypt'], **values)
 
     def prepare_review(self, client, remote, folder='', *, storage=None):
-        """Resolve a proposed copy without writing records or creating a folder."""
+        """Capture a proposal under the same lock used for execution admission."""
         with self.lock:
             self.check_records()
             if self.error:
                 raise ValueError(self.error)
-            info = client.request('mirror_info', remote=remote, path=folder, decrypted=storage == 'Local')
-            if storage == 'LocalCrypt' and not info['crypt']:
-                raise ValueError('LocalCrypt requires a crypt remote with encryption keys.')
-            existing = next((job for job in self.jobs.values() if job['remote'] == remote
-                and job['identity'] == info['identity'] and job['prefix'] == info['prefix'] and job['crypt'] == info['crypt']), None)
-            if existing is not None:
-                return dict(existing)
-            if len(self.jobs) >= 16:
-                raise ValueError('Remove a local copy mapping before adding another (limit: 16).')
-            target = self.copy_name(remote, folder, info['crypt'])
-            self.check_name(target, info['crypt'], adopt=True)
-            job = dict(id=uuid4().hex, remote=remote, identity=info['identity'], cipher_identity=info['cipher_identity'],
-                       crypt=info['crypt'], prefix=info['prefix'], target=target)
-            self.validate(job)
-            return job
+            return self.planner.pull(client, remote, folder, storage=storage).to_record()
 
     def prepare_push(self, client, local_folder, *, remote=None, specific=False):
-        """Infer a new ordinary Push from its local name; mappings retain ownership."""
         with self.lock:
             self.check_records()
-            target = self.guard(collection_path(self.root) / local_folder)
-            if not target.is_dir():
-                raise ValueError('Choose an existing local folder.')
-            remote, prefix = push_scope(local_folder, remote, specific=specific)
-            info = client.request('mirror_info', remote=remote, path=prefix, decrypted=True)
-            existing = next((job for job in self.jobs.values() if not job['crypt']
-                             and job['target'].casefold() == local_folder.casefold()), None)
-            if existing is not None:
-                if existing['remote'] != remote or existing['identity'] != info['identity'] or existing['prefix'] != info['prefix']:
-                    raise ValueError('This local folder belongs to another copy.')
-                return dict(existing)
-            if len(self.jobs) >= 16:
-                raise ValueError('Remove a local copy mapping before adding another (limit: 16).')
-            self.check_name(local_folder, False, adopt=True)
-            job = dict(id=uuid4().hex, remote=remote, identity=info['identity'], cipher_identity='',
-                       crypt=False, prefix=info['prefix'], target=local_folder)
-            self.validate(job)
-            return job
+            return self.planner.push(client, local_folder, remote=remote, specific=specific).to_record()
 
     @staticmethod
     def signature(job):
-        return tuple(job[field] for field in ('id', 'remote', 'identity', 'cipher_identity', 'crypt', 'prefix', 'target'))
+        return CopyMapping.from_record(job)
 
     def execute_review(self, proposal, client, *, push=False, new=False, options=None, cancelled=lambda: False, progress=lambda **kw: None):
         """Execute the approved mapping; never resolve or rename its destination again."""
@@ -262,7 +171,7 @@ class MirrorJobs:
                 if self.signature(current) != self.signature(proposal):
                     raise ValueError('The destination changed. Review the transfer again.')
             else:
-                if not new or len(self.jobs) >= 16:
+                if not new or len(self.jobs) >= MAX_COPIES:
                     raise ValueError('The copy mapping changed. Review the transfer again.')
                 self.check_name(proposal['target'], proposal['crypt'], adopt=True)
                 self.jobs[proposal['id']] = dict(proposal)
@@ -277,13 +186,13 @@ class MirrorJobs:
     def cleanup_plan(self, job, client, cancelled=lambda: False):
         if not job['crypt']:
             return {}
-        prefix = client.request('crypt_path', remote=job['remote'], path=job['prefix'],
-            identity=job['cipher_identity'], directory=True, decode=True)['path']
+        prefix = crypt_path(client, remote=job['remote'], path=job['prefix'],
+            identity=job['cipher_identity'], directory=True)
         def decode(name, stopping):
             self.check(client, job, stopping)
             full = '/'.join(part for part in (job['prefix'], name) if part)
-            plain = client.request('crypt_path', remote=job['remote'], path=full,
-                identity=job['cipher_identity'], decode=True)['path']
+            plain = crypt_path(client, remote=job['remote'], path=full,
+                identity=job['cipher_identity'])
             return plain[len(prefix) + 1:] if prefix else plain
         return cleanup_candidates(self.guard(self.target(job)), decode, cancelled)
 
@@ -332,39 +241,9 @@ class MirrorJobs:
             return result
 
     def sync(self, job, client, *, push, cancelled, progress, options=None):
-        self.check(client, job, cancelled)
-        run = uuid4().hex
-        done = Event()
-        def monitor():
-            while not done.wait(.2):
-                if cancelled():
-                    try:
-                        client.cancel()
-                    except (OSError, ValueError):
-                        pass
-                    return
-                try:
-                    state = client.request('mirror_progress', run=run)
-                    progress(phase=state['phase'] or 'Discovering / checking files', files=state.get('files', 0),
-                             done=state['done'], total=state['total'], total_files=state.get('total_files', 0),
-                             checks=state.get('checks', 0), listed=state.get('listed', 0), active=state.get('active', 0), attempt=state.get('attempt', 0),
-                             max_attempts=state.get('max_attempts', 0), retrying=state.get('retrying', False))
-                except (OSError, ValueError, TypeError, KeyError):
-                    pass
-        watcher = Thread(target=monitor, daemon=True)
-        watcher.start()
-        try:
-            progress(phase='Discovering / checking files', files=0, done=0, total=0)
-            self.check(client, job, cancelled)
-            result = self.request(client, job, 'mirror_sync', remote=job['remote'], path=job['prefix'],
-                identity=job['identity'], local_path=str(self.guard(self.target(job)).resolve()), run=run, push=push,
-                **(options or TransferOptions(excludes=DEFAULT_EXCLUDES)).bridge_arguments(push=push))
-            state = client.request('mirror_progress', run=run)
-            progress(phase='Sync complete; verifying local copy', files=result, done=state['done'], total=state['total'])
-            return result
-        finally:
-            done.set()
-            watcher.join()
+        return sync_copy(job, client, check=self.check,
+                         local_path=lambda: self.guard(self.target(job)), push=push,
+                         cancelled=cancelled, progress=progress, options=options)
 
     def pull(self, key, client, *, options=None, cancelled=lambda: False, progress=lambda **kw: None):
         with self.lock:
@@ -384,7 +263,7 @@ class MirrorJobs:
             if self.inspect(target, cancelled, copy_links=not job['crypt'], allow_missing=True) is None:
                 raise FileNotFoundError('Pull destination became unavailable. Check collection storage and retry.')
             self.save()
-            return 'updated', None
+            return PullResult('updated')
 
 
     def wipe_folder(self, path):
@@ -407,8 +286,6 @@ class MirrorJobs:
             job = self.jobs[key]
             self.wipe_folder(self.target(job))
             self.remove(key)
-
-
 
 
     def remove(self, key):

@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from features.rclone.mobile.credentials_ui import CredentialWorkflow
 """Credential publication updates retained Home controls and uses published metadata."""
 import json
@@ -151,11 +155,29 @@ class CredentialFreshnessTests(IsolatedAsyncioTestCase):
             clear_private_reader=lambda: True, clear_private_catalog=Mock(),
             _load_crypt_remote_names=metadata, remember_loaded_packages=Mock(), retained_packages=Mock())
         result = CredentialResult('Original.zip', ('Original',), False, 1)
-        with patch('features.rclone.mobile.credentials_ui.native_service'), \
-             patch('features.rclone.mobile.credentials_ui.run_credentials', new=AsyncMock(return_value=result)):
+        with patch('features.rclone.mobile.credential_workflow.native_service'), \
+             patch('features.rclone.mobile.credential_workflow.run_credentials', new=AsyncMock(return_value=result)):
             await CredentialWorkflow(app).import_cloud_package()
         app.remember_loaded_packages.assert_not_called()
         app.retained_packages.assert_not_called()
         self.assertIs(app.cloud_pending_zip, selected)
         self.assertEqual(app.cloud_password.value, '')
         app.set_cloud_busy.assert_called_with(False)
+
+
+class RetainedCredentialWorkflowTests(IsolatedAsyncioTestCase):
+    async def test_wrong_package_refreshes_loaded_remotes_without_resuming_connection(self):
+        from unittest.mock import AsyncMock
+        from features.rclone.credential_loading import CredentialResult
+        from features.rclone.mobile.credential_loading import NativeCredentialLoad
+        from features.rclone.mobile.credential_workflow import CredentialLoadWorkflow
+        client = SimpleNamespace(generation=2)
+        view = Mock()
+        view.current.return_value = True
+        workflow = CredentialLoadWorkflow(view)
+        workflow.load = AsyncMock(return_value=CredentialResult('Other.zip', ('Other',), False, 2))
+        with self.assertRaisesRegex(ValueError, 'does not match'):
+            await workflow.unlock(client, NativeCredentialLoad(None, None, False), 'synthetic',
+                                  package='Other.zip', navigation=1, generation=1, remote='Expected')
+        view.remotes_loaded.assert_called_once_with(['Other'])
+        view.loaded.assert_not_called()

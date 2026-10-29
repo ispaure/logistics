@@ -1,5 +1,9 @@
 """Browser-level gestures and native-batch contract, shared by native/Qt probes."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 INPUT_CHECKS = r'''(()=>{
 const saved={send,state,active,points,pan,mode,inkSettings,selected,pendingInk,pendingErase,
     busy,eraserKind,erasePreviewCount,

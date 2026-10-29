@@ -1,4 +1,8 @@
 """Provider Markdown owns surfaces while sessions retain drafts and access policy."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

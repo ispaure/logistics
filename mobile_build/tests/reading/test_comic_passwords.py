@@ -1,4 +1,8 @@
 """Native widget password retry/close flow with an isolated archive callback."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import json
 import os

@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from threading import Event
 from unittest.mock import patch

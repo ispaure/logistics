@@ -1,4 +1,8 @@
 """Whole-book page arithmetic never substitutes chapter or resource weights."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from features.books.locations import LayoutPages
 

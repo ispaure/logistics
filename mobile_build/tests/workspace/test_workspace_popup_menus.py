@@ -1,4 +1,8 @@
 """Anchored workspace commands retain mapping identity and current busy guards."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
@@ -74,7 +78,7 @@ class ColdWorkspaceTransferTests(TestCase):
         from tempfile import TemporaryDirectory
         from unittest.mock import AsyncMock
         from mobile.app import LogisticsMobile
-        from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+        from mobile_build.tests.support.mirror import MirrorClient
         for push in (False, True):
             with self.subTest(push=push), TemporaryDirectory() as directory:
                 LogisticsMobile.storage_root = Path(directory)

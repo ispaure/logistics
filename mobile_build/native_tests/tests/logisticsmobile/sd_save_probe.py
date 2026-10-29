@@ -1,4 +1,8 @@
 """Isolated Android file replacement/reopen check on an explicit test directory."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from io import BytesIO
 import json
 from pathlib import Path

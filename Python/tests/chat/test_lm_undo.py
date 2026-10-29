@@ -1,4 +1,8 @@
 """Turn Undo preserves later work, staging, pending editors and durable progress."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace

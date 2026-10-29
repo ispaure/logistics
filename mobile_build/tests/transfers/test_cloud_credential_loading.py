@@ -1,4 +1,8 @@
 """Credential loading stays local and refuses publication contention promptly."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import ctypes
 import json
 import threading

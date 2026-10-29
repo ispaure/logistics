@@ -148,6 +148,8 @@ def key_for(phase, *, runtime=None):
     for name in ('QT_QPA_PLATFORM', 'DISPLAY', 'WAYLAND_DISPLAY', 'LANG', 'LC_ALL', 'TZ', 'PYTHONHASHSEED'):
         if name not in environment and name in os.environ:
             environment[name] = os.environ[name]
+    if (root / 'test-environments.json').is_file():
+        scopes = [*scopes, 'test-environments.json']
     try:
         input_identity = inputs(root, scopes)
         manager_identity = inputs(manager, ['Python']) if suite in {'manager-contracts', 'logistics', 'release-tooling'} else None

@@ -4,6 +4,10 @@ Network identity and route/AVAudioSession injections are labelled synthetic.
 External app/screen/cellular actions are driven by video_privacy_tools.
 """
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 import asyncio
 import base64
 from io import BytesIO

@@ -1,4 +1,8 @@
 """Bound UI work without relying on machine-dependent timing thresholds."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

@@ -1,4 +1,8 @@
 """Library record caches invalidate on source revisions and expose copies only."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import asyncio
 from pathlib import Path

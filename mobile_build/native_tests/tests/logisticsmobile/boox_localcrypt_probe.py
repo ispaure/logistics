@@ -1,4 +1,8 @@
 """Physical BOOX cold LocalCrypt unlock using real native button taps."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import traceback
 
 from .android_predictive_back_probe import AndroidPredictiveBackProbe, BUNDLE

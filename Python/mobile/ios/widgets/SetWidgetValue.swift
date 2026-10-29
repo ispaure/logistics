@@ -26,6 +26,8 @@ struct SetWidgetValue: AppIntent {
         if try store.set(name: LogisticsWidgetSettings.storageName(name), title: label, value: value) {
             WidgetCenter.shared.reloadTimelines(ofKind: LogisticsWidgetSettings.kind)
         }
+        // Persist a Watch snapshot too; the following Sync action sends it from the phone app.
+        await WatchValuePublisher.shared.publish(name: name)
         return .result()
     }
 }

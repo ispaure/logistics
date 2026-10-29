@@ -1,4 +1,8 @@
 """Disposable native speech-control geometry check using a silent fixture engine."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

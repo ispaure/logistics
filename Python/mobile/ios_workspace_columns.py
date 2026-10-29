@@ -212,8 +212,10 @@ def sync(workspace):
     master = getattr(view, '_workspace_frame', None)
     active = getattr(workspace, 'file_columns', None)
     from .fold_layout import division
-    wide = (workspace.content_width('files', margin=0) >= 640 or
-            division(workspace.app, workspace.app.main_window) is not None)
+    from .pane_layout import browser_columns
+    wide = browser_columns(workspace.content_width('files', margin=0),
+        workspace.app.main_window.size.height,
+        fold=division(workspace.app, workspace.app.main_window))
     if not wide or master is None:
         if active is not None:
             active.close()

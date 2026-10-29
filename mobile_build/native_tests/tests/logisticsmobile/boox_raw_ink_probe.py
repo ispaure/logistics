@@ -1,4 +1,8 @@
 """Physical Boox comparison; SDK preview is QA-only and saved ink stays canonical."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

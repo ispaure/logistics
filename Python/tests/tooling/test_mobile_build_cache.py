@@ -1,4 +1,8 @@
 """App cache identity changes when executable permissions or payload change."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

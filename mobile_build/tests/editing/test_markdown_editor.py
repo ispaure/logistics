@@ -1,4 +1,8 @@
 """Markdown defaults, block preservation and per-owner bridge lifetime."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import quote

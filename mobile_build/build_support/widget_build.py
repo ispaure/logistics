@@ -12,11 +12,11 @@ EXTENSIONS = (
     ('LogisticsWidget', '.widgets', 'com.apple.widgetkit-extension',
      ('WidgetSettings.swift', 'ValueWidget.swift'), ('WidgetValueStore.swift', 'WidgetValueView.swift')),
     ('LogisticsWidgetActions', '.widget-actions', 'com.apple.appintents-extension',
-     ('WidgetSettings.swift', 'SetWidgetValue.swift'), ('WidgetValueStore.swift',)),
+     ('WidgetSettings.swift', 'SetWidgetValue.swift', 'WatchValueSnapshot.swift', 'WatchValuePublisher.swift'), ('WidgetValueStore.swift',)),
 )
 
 
-def configure_ios(project):
+def configure_ios(project, *, include_watch=False):
     project = Path(project)
     pbx = next(project.glob('*.xcodeproj/project.pbxproj'))
     try:
@@ -25,7 +25,7 @@ def configure_ios(project):
         data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(pbx)]))
     objects = data['objects']
     apps = [(key, value) for key, value in objects.items()
-            if value.get('productType') == 'com.apple.product-type.application']
+            if value.get('productType') == 'com.apple.product-type.application' and value.get('name') != 'LogisticsWatch']
     if len(apps) != 1:
         raise ValueError('Expected one containing app for widgets.')
     app_id, app = apps[0]
@@ -98,6 +98,8 @@ def configure_ios(project):
                 LD_RUNPATH_SEARCH_PATHS=['$(inherited)', '@executable_path/Frameworks', '@executable_path/../../Frameworks'],
                 MARKETING_VERSION=str(metadata['CFBundleShortVersionString']),
                 CURRENT_PROJECT_VERSION=str(metadata['CFBundleVersion']))
+            if extension_kit:
+                settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) LOGISTICS_WIDGET_ACTIONS'
             for name in ('DEVELOPMENT_TEAM', 'CODE_SIGN_STYLE', 'CODE_SIGN_IDENTITY'):
                 if name in base:
                     settings[name] = base[name]
@@ -127,4 +129,8 @@ def configure_ios(project):
         for key in (app_id, target):
             attributes = project_object.setdefault('attributes', {}).setdefault('TargetAttributes', {}).setdefault(key, {})
             attributes.setdefault('SystemCapabilities', {})['com.apple.ApplicationGroups.iOS'] = {'enabled': 1}
+    # Keep Watch packaging opt-in until its signing assets are available.
+    if include_watch:
+        from .watch_build import configure
+        configure(project, data)
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))

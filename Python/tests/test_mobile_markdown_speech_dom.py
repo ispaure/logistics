@@ -1,4 +1,8 @@
 """Exercise the mobile speech extractor against a real rendered document."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import ast
 import json
 from pathlib import Path

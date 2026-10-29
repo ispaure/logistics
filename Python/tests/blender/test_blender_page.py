@@ -1,4 +1,8 @@
 """Blender page discovery, worker lifecycle and saved-state inventory display."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event

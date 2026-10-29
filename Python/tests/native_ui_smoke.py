@@ -1,4 +1,8 @@
 """Exercise the public application UI on the native Qt backend with private fixtures."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.SMOKE
 import faulthandler
 from contextlib import ExitStack
 import json

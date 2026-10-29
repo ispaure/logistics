@@ -1,4 +1,8 @@
 """Disposable iOS simulator proof of reusable native utilities using synthetic content."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 import json

@@ -5,14 +5,17 @@ from pathlib import Path
 
 def desktop_checks(system, results, root=None):
     """The existing platform gate, with no platform's required checks omitted."""
-    checks = []
+    checks = [('test-structure', ['-m', 'logistics_build.test_structure', '--check'], 120)]
     if system == 'Windows':
         checks.append(('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
     from build_manager.test_manifest import discover
     root = Path(root) if root is not None else Path(__file__).resolve().parents[1]
+    rows = discover(root, 'desktop')
+    checks.extend((row['id'] + '.smoke', ['Python/tests/run_regressions.py', row['directory'],
+                   '--isolate-modules', *row['smoke_args']], row['timeout']) for row in rows if row.get('smoke_args'))
     checks.extend((row['id'], ['Python/tests/run_regressions.py', row['directory'], '--isolate-modules'],
                    row['timeout'])
-                  for row in discover(root, 'desktop'))
+                  for row in rows)
     checks.extend([
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
         ('manager-contracts', ['-m', 'build_manager.contracts'], 600),

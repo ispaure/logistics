@@ -1,4 +1,8 @@
 """Shared state and dummy-host contracts; actual adapters have native cases."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch

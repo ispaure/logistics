@@ -1,4 +1,8 @@
 """Disposable native acceptance for the shared reader Close action."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

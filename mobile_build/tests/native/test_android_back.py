@@ -1,4 +1,8 @@
 """Android Back policy with real retained panels on Toga's dummy backend."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -420,7 +424,7 @@ class AndroidBackTests(unittest.TestCase):
             self.assertIs(app.body, origin)
 
     def test_pdf_back_closes_search_then_closes_fullscreen_reader_to_origin(self):
-        from mobile_build.tests.reading.test_pdf_reader import native_pdf, PDF
+        from mobile_build.tests.support.pdf import native_pdf, PDF
         app = self.app
         path = app.private_root / 'fixture.pdf'
         path.write_bytes(PDF)
@@ -429,6 +433,9 @@ class AndroidBackTests(unittest.TestCase):
         with patch('features.pdf.document.PDFDocument.open', native_pdf):
             app.loop.run_until_complete(app.open_download(path=path))
             reader = app.private_sessions.active
+            # Exercise Back with visible controls, then re-enter fullscreen.
+            self.assertTrue(reader.reading_frame.immersive)
+            reader.toggle_private_reading_mode()
             reader.pdf_tools.toggle()
             panel = app.body
             self.assertTrue(self.routes.system_back())

@@ -1,4 +1,8 @@
 """Monotonic native-suite diagnostics; assertions and scheduling stay unchanged."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager, nullcontext
 import json
 from pathlib import Path

@@ -9,7 +9,7 @@ dnf install -y git python3-pip mesa-libEGL mesa-libGL libxkbcommon dbus-libs \
 # Qt WebEngine runs only synthetic test pages in this disposable root container.
 export QTWEBENGINE_DISABLE_SANDBOX=1
 python3 -m pip install uv
-uv venv --python 3.12.2 --seed /tmp/logistics-platform-venv
+uv venv --python "${TEST_PYTHON:-3.12.2}" --seed /tmp/logistics-platform-venv
 git config --global --add safe.directory /workspace
 git config --global --add safe.directory /workspace/Python/commonUtils
 export LOGISTICS_MANAGER_CHECKOUT=/tmp/logistics-build-deployment-manager

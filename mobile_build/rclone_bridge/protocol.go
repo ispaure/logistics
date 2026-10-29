@@ -92,17 +92,24 @@ func dispatch(action, input string) (output string) {
 	return encodeReply(action, result, err)
 }
 
+// requestLimit returns encoded JSON bytes; zero explicitly permits larger review plans.
+func requestLimit(action string) int {
+	switch action {
+	case "crypt_write_buffer":
+		return base64.StdEncoding.EncodedLen(downloadLimit) + 64*1024
+	case "image_thumbnail":
+		return 24 * packageLimit
+	case "mirror_review":
+		return 0
+	default:
+		return 2 * packageLimit
+	}
+}
+
 func decodeRequest(action, input string) (bridgeRequest, error) {
 	var request bridgeRequest
-	limit := 2 * packageLimit
-	if action == "crypt_write_buffer" {
-		limit = base64.StdEncoding.EncodedLen(downloadLimit) + 64*1024
-	}
-	if action == "image_thumbnail" {
-		limit = 24 * packageLimit
-	}
-	// Review cleanup plans grow with the selected tree and have no size cap.
-	if action != "mirror_review" && len(input) > limit {
+	limit := requestLimit(action)
+	if limit > 0 && len(input) > limit {
 		return request, errors.New("request exceeds limits")
 	}
 	err := json.Unmarshal([]byte(input), &request)

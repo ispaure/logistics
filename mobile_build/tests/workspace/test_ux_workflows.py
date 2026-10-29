@@ -1,4 +1,8 @@
 """Task-oriented regressions for the mobile UX passes; no external services."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

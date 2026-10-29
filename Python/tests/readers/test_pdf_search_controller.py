@@ -1,4 +1,8 @@
 """PDF search transitions without a UI toolkit, worker or PDF decoder."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 
 from features.pdf.search import Match, Results

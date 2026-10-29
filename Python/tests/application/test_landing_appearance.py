@@ -1,5 +1,9 @@
 """Rendered landing geometry and pointer feedback under the application theme."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 

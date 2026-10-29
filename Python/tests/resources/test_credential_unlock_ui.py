@@ -1,4 +1,8 @@
 """Credential retries keep the original prompt and never publish failed keys."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase

@@ -1,4 +1,8 @@
 """Focused native Back/close through the shared session transition coordinator."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

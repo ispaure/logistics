@@ -1,4 +1,8 @@
 """Focused in-app video checks, run only on owned test devices/simulators."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 import json

@@ -1,4 +1,8 @@
 """Generation publishes before dispatch and keeps failed turns recoverable."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory

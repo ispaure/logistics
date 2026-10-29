@@ -1,4 +1,8 @@
 """Real-widget notebook resource, binary publication and privacy acceptance."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from contextlib import contextmanager
 import json

@@ -1,5 +1,9 @@
 """Run with: PYTHONPATH=Python python3 -m unittest discover -s Python/tests -v."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from contextlib import redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO, StringIO

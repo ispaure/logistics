@@ -1,4 +1,8 @@
 """Shared document commands follow available space and retain storage context."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,8 +14,8 @@ from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
 from mobile.document_sources import folder_action, show_in_folder
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
-from mobile_build.tests.reading.test_pdf_reader import PDF, native_pdf
-from mobile_build.tests.reading.test_remote_readers import RemoteClient
+from mobile_build.tests.support.pdf import PDF, native_pdf
+from mobile_build.tests.support.readers import RemoteClient
 from mobile.action_menu import DocumentNativeMenu
 
 

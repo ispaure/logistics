@@ -1,4 +1,8 @@
 """Real native rclone/WebDAV/crypt video acceptance on disposable devices."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 from io import BytesIO

@@ -1,4 +1,8 @@
 """Exercise production mobile live editing in a real browser document."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import ast
 from html import escape
 import json

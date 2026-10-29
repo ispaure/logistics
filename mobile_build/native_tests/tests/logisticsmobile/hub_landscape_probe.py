@@ -1,4 +1,8 @@
 """Disposable Duo hub rotation/seam check; partial hinge status is injected."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

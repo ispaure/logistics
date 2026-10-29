@@ -1,4 +1,8 @@
 """Progress lifetime and worker callbacks without constructing native controls."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import unittest
 from unittest.mock import Mock

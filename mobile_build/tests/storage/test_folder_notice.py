@@ -1,4 +1,8 @@
 """Incoming status messages fit the allocated Workspaces pane as it changes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch

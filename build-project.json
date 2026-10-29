@@ -668,6 +668,30 @@
         "ios-devices"
       ],
       "description": "Release uses captured current files and requires full release gates. Existing signing and app data are preserved; incompatible updates stop."
+    },
+    {
+      "id": "devices.ios_provisioning",
+      "label": "iOS development provisioning",
+      "kind": "choice",
+      "default": "existing",
+      "options": {
+        "existing": "Use existing signing assets",
+        "update": "Authorize Apple provisioning updates"
+      },
+      "destinations": ["ios-devices"],
+      "description": "Explicitly permit Apple profile and capability updates for a Debug device build using the configured API key. Does not register devices. Release exports use existing profiles."
+    },
+    {
+      "id": "testing.manager_source",
+      "label": "Manager source for local tests",
+      "kind": "choice",
+      "default": "pinned",
+      "options": {
+        "pinned": "Committed project pin",
+        "working-tree-local": "Current local manager edits (tests only)"
+      },
+      "workflow_option": true,
+      "description": "Explicit local validation only. Captures current manager source/tests with a verified content identity; releases and delivery retain the committed pin."
     }
   ],
   "dynamic_run_inputs": true

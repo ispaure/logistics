@@ -1,4 +1,8 @@
 """Regression coverage for Chromium's encoded inline HTML size limit."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock

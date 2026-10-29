@@ -422,6 +422,9 @@ of the chapter drawer on iOS and Android is still pending.
 ## Mobile EPUB spreads
 
 `mobile/presentation.py` paginates the inert chapter into one or two CSS columns.
+Images keep their aspect ratio and fit within the column height after subtracting
+their own and their containing elements' vertical margins, padding and borders.
+The same sizing runs for live chapters and hidden page-count measurements.
 Wide landscape viewports (width >= 700 and height >= 480 logical pixels) use two
 columns, as does an active vertical fold. The column stride includes the gutter;
 turns and seeks snap to a whole spread, including an odd final page. Saved UTF-16

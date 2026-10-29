@@ -1,4 +1,8 @@
 """All private CLI paths enforce the same cancellation and revocation boundary."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import Mock, patch
 import unittest

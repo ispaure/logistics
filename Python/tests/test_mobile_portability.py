@@ -1,4 +1,8 @@
 """Run mobile core fixtures in a fresh interpreter that rejects desktop imports."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import os
 from pathlib import Path

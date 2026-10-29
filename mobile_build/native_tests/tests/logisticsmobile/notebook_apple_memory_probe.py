@@ -1,4 +1,8 @@
 """WKWebView page-two/zoom regression; simulator pen events, synthetic files only."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 from hashlib import sha256
 import json

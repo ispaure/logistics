@@ -1,4 +1,8 @@
 """Mutate editor fixtures to prove the architecture command rejects bypasses."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from contextlib import redirect_stdout
 from io import StringIO
 import json

@@ -1,4 +1,8 @@
 """Turn diff aggregation, checkpoint persistence and clickable Git preview reuse."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 import json
 from pathlib import Path

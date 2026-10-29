@@ -8,7 +8,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 REQUIRED = {
     'validate': ('.github/workflows/archive-platform-checks.yml',
-                 {'static', 'macos-latest', 'windows-latest', 'Fedora 43 container'}),
+                 {'static', 'macos', 'windows', 'Fedora desktop'}),
     'mobile-build': ('.github/workflows/mobile-build.yml',
                      {'Build shared iOS test app', 'Build and validate Android', 'Validate iOS iphone',
                       'Validate iOS duo', 'Validate iOS ipad', 'Require every selected native check'}),

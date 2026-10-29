@@ -1,4 +1,8 @@
 """Native toolbar ownership across document edits, routes and fullscreen."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch

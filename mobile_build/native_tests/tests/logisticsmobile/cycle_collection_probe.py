@@ -4,6 +4,10 @@ Run as a separate native probe, never as a release acceptance report. Set
 LOGISTICS_CYCLE_COLLECTION_CONTROL=1 only to reproduce the unsafe automatic
 collector; the default exercises the application's UI-loop collection owner.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import gc
 import json

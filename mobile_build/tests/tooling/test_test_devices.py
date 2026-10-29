@@ -1,4 +1,8 @@
 """Device batching must avoid duplicate updates, rebuilds and identity changes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 import tempfile

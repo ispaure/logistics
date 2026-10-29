@@ -1,4 +1,8 @@
 """Shared scrubbing semantics for comic pages, PDF pages and EPUB chapters."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch

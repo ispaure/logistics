@@ -1,4 +1,8 @@
 """Native-check supervision retains output and retires timed-out descendants."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory

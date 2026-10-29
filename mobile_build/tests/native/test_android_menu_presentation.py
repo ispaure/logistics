@@ -1,4 +1,8 @@
 """Android popup themes follow current contrast; folder titles stay centered."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
@@ -8,7 +12,7 @@ from travertino.layout import Viewport
 from mobile.action_menu import NativeMenu
 from mobile.browser_ui import FolderLocationHeader
 from mobile.control_icons import icon_button
-from mobile_build.tests.documents.test_obsidian import ObsidianTests
+from mobile_build.tests.documents import test_obsidian as obsidian_tests
 
 
 class AndroidPopupTests(TestCase):
@@ -42,8 +46,8 @@ class AndroidPopupTests(TestCase):
 
 
 class AndroidFolderTitleTests(TestCase):
-    setUp = ObsidianTests.setUp
-    tearDown = ObsidianTests.tearDown
+    setUp = obsidian_tests.ObsidianTests.setUp
+    tearDown = obsidian_tests.ObsidianTests.tearDown
 
     def test_fresh_reader_drawer_accepts_automatic_button_widths(self):
         parent = toga.Button('Parent folder', style=toga.style.Pack(height=48))

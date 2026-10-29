@@ -3,6 +3,10 @@
 Use only the separate QA bundle below. Synthetic drafts live in its cache.
 Retain old Android hosts deliberately so GC cannot conceal missing retirement.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import json
 import os

@@ -2,6 +2,10 @@
 
 Run as a separate app ID. This is local evidence, not the release CASES suite.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from hashlib import sha256
 import json

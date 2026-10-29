@@ -1,4 +1,8 @@
 """Cancellation preserves ZIP sources and finishes the current comic transaction."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from io import BytesIO

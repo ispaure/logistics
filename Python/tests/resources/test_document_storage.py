@@ -1,4 +1,8 @@
 """Document baselines, failure preservation and provider policy across formats."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory

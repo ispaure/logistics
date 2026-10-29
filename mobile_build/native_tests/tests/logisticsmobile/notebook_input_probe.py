@@ -1,4 +1,8 @@
 """Real Android history delivery, pressure, chrome and overview in isolated QA."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

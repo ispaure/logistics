@@ -1,4 +1,8 @@
 """LM context, persistence and stream framing regression contracts."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 import json
 from pathlib import Path

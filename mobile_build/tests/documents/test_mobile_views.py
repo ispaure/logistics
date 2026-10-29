@@ -1,4 +1,8 @@
 """Document retirement is a shared policy without feature or GUI import coupling."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 from pathlib import Path
 import subprocess

@@ -1,4 +1,8 @@
 """Shared review cancellation, stale results and actual CLI dry-run behavior."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import os
 from tempfile import TemporaryDirectory

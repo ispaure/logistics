@@ -1,4 +1,8 @@
 """Conversation lists cache summaries only and preserve cold-start selection."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

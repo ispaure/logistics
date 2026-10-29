@@ -1,4 +1,8 @@
 """Direct CI entry point must bootstrap shared imports in its own interpreter."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import subprocess
 import sys

@@ -1,5 +1,9 @@
 """Launch selection, sidebar-free settings, and feature retirement."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from unittest.mock import Mock, patch

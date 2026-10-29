@@ -1,4 +1,8 @@
 """Shared deletion admits only a writable, declared, stable file revision."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace

@@ -1,4 +1,8 @@
 """Interrupted multi-file promotion preserves complete old Plex generations."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager
 import os
 from pathlib import Path

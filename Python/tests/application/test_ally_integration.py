@@ -1,4 +1,8 @@
 """Public regression coverage uses fake sibling checkouts, never private source."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 from pathlib import Path
 import shutil

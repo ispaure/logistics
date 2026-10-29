@@ -1,4 +1,8 @@
 """Real asynchronous HTTP and Qt ownership checks, using a local fixture server."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path

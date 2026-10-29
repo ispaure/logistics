@@ -1,4 +1,8 @@
 """Navigation, resource boundaries and transactional EPUB metadata preservation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import json
 from tempfile import TemporaryDirectory

@@ -361,20 +361,34 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
 - Provider histories keep the three highest-numbered build directories
   and every directory used within the last 24 hours.
 - Manager source snapshots keep the three most recently used snapshots and every
-  snapshot used within seven days. Snapshot reuse refreshes its age. Execution
-  holds a snapshot resource lock; pruning skips a leased snapshot.
+  snapshot used within seven days, subject to a 24 GiB allocation budget.
+  Above that budget, older snapshots can expire sooner after a one-hour grace
+  period. Snapshot reuse refreshes its age. Execution holds a snapshot resource
+  lock; pruning skips a leased snapshot.
 - Explicitly enrolled legacy build outputs keep the three most recently used
   directories plus everything used within seven days. Enrollment refreshes age.
 - A `.keep` file anywhere inside a tree pins that enclosing build or snapshot.
   Pin a prepared artifact before keeping its path for long-term upload/retry use.
+- Recipe-identified device-build workspaces retain the three newest per platform
+  plus those used within one day, with a 12 GiB budget per platform and a one-hour
+  grace period. Their operation locks and paused-workflow holds protect installs.
+- On macOS, Xcode DerivedData is identified using `info.plist`'s `WorkspacePath`
+  under this checkout's generated build folders. Cache display names alone do
+  not establish ownership. Retain the three newest eligible caches plus caches
+  accessed within one day, subject to a 12 GiB budget. Access within one hour,
+  an open Xcode GUI, matching build processes, snapshot locks and pins protect
+  caches. Failed process inspection skips Xcode cleanup with a diagnostic.
+- Budgets are soft: newest entries, pins, durable workflow holds and active locks
+  always win. Measurement skips links; pressure eviction selects oldest first.
 - Shared SDKs, signing keys, profiles, monotonic counters, existing simulators,
-  deployment workspaces and unclassified evidence are outside this sweep.
+  persistent deployment workspaces and unclassified evidence are outside this sweep.
+  Xcode's shared module caches, archives and DeviceSupport are also preserved.
 
 Run `python -m logistics_build.build_retention` from the repository root for a JSON preview;
 add `--apply` to remove expired owned outputs. Pruning respects active build locks,
 skips symbolic links and reports filesystem errors. Old saved plans can refer to
 expired snapshots: prepare a fresh plan before running them. Retention preserves
-recent failures for diagnosis; it does not guarantee a fixed disk-size ceiling.
+recent failures within the age/budget policy; protected entries can exceed a budget.
 The numeric families deliberately exclude unclassified historical backup names.
 
 For an older named directory directly under `mobile_build/build/`, first review
@@ -411,6 +425,12 @@ its expired workspace. This is a shared lifecycle for agent-created probes as we
 as human-driven builds, not a system-wide cache cleaner.
 
 ## Guided manager suites and tester acceptance
+
+For adding a file, suite or native case, use the
+[file-responsibility table](adding-tests.md#decide-which-files-to-update).
+`build-tests.json` supplies execution roots/prerequisites; descriptor `test_suites`
+supplies selectable choices. The adapter connects those choices to phases,
+optional file previews and declared JUnit artifacts. These are separate steps.
 
 The descriptor now declares `portable.contracts` (tooling contracts under
 `Python/tests/tooling`), `desktop.ui` (application/UI checks under
@@ -693,3 +713,90 @@ required job, and be at most 24 hours old. Missing, skipped, failed, stale or
 unavailable proof runs that family afresh. The retained evidence artifact links
 the accepted run IDs and source. Packaging/reproducibility checks and publication
 remain required. The selector consumes completed GitHub workflow records.
+
+## Shared test environment settings
+
+Project settings → **Test environments (local and GitHub)** edits the tracked
+`test-environments.json` file. Save changes locally; this does not commit, push,
+install SDKs, create machines or dispatch a workflow. Machine paths, signing and
+credentials remain in the private project profile. Existing Android image/model
+rows show the derived values; edit their shared fields in Test environments.
+
+The current profile selects macOS26 (`macos-26`), Windows11 ARM
+(`windows-11-arm`, with x64 Python matching the local Windows bridge), and
+Fedora44 on ARM. GitHub's Ubuntu24.04 ARM job hosts the one Fedora desktop
+container; it does not run a second Ubuntu desktop suite. Desktop/build Python
+is 3.12.2. Native iOS uses the 27.1 SDK series with explicit ordinary iPhone/iPad
+27.0 and Duo27.1 runtimes. Missing or different versions fail before acceptance;
+there is no automatic substitution of another family or runtime.
+
+Android native tests share API36 and the `pixel_9` hardware profile. The local
+accelerated emulator uses ARM64, while the hosted Linux/KVM emulator uses x86_64.
+Both ABIs and runner labels are visible settings. The hosted CPython runtime's
+managed emulator is configured from the same API and Google APIs image family;
+its upstream testbed hardware fixture remains separate from native app geometry
+acceptance. Native and core-runtime suites remain required. CPython source and
+its verified build recipe remain pinned in `mobile_runtime_tools.json`.
+
+A numbered runner label pins an OS family, not the provider's exact patch image.
+The actual OS, architecture, interpreter, dependencies and SDK are still recorded
+in evidence. Existing receipt matching remains conservative: these settings do
+not authorize reusing results across differing toolchains. Environment changes
+participate in input identities and therefore invalidate affected reusable proof.
+GitHub reads the committed file through `test-environment.yml`; private GUI
+profiles are never copied to GitHub. The release evidence selector follows stable
+platform job names, so changing a runner label does not silently break reuse.
+
+
+## Test structure preflight and smoke gates
+
+`build-tests.json` declares `test_structure.command` and its configured interpreter.
+The external manager's test-manifest protocol runs that project-owned checker as
+`test-structure` before tests; Logistics uses
+`python -m logistics_build.test_structure --check`. The checker validates the
+captured checkout's `test-structure.json` roots and enum declarations without
+importing tests. A malformed source blocks test execution with its path and reason.
+The manager's protocol is documented in its own `docs/development/test-manifests.md`;
+shared enum/validator APIs are documented in commonUtils' own testing reference.
+
+Each suite opts into a `<suite>.smoke` phase through `smoke_args`. All selected
+smoke phases precede broad regression phases, preserving shared-library prerequisite
+order. Full phases still select all stages and produce complete evidence. Smoke
+success alone cannot satisfy a full or release phase, and phase IDs/arguments keep
+these receipts distinct. Manager dependencies leave downstream phases unrun after
+a failed gate; independent diagnostic work can still complete. Cleanup phases keep
+their existing always-run graph. Local direct runners default to diagnostic mode;
+`--mode fast` gates later work after smoke and `--fail-fast` stops at the first failure.
+See [testing](testing.md#execution-stages-and-failure-policy) for profiles and reports.
+
+Logistics adds this checker to native preparation/testing plans too, before builds
+or device preparation that lead to tests. Desktop environment bootstrap may run
+first to provide the configured interpreter. Remote guests use their captured
+platform runner's preflight; hosted workflows validate checked-out sources. These
+checks inspect test structure, not SDK availability or native correctness.
+
+The manager protocol change and commonUtils enum must be available in the versions
+used by consumers. Publish those dependency commits and update the pinned manager
+and submodule references together when publishing this refactor; local editable
+checkouts do not update a CI dependency pin automatically.
+
+Validation-only multi-platform journeys keep ordinary iPhone, Duo and iPad native
+coverage, as delivery journeys do. The shared Fedora version must match the
+dedicated guest; the current guest is Fedora44. A mismatch stops before guest
+setup and remains a failed attempt rather than silently using another version.
+
+### Testing uncommitted manager changes locally
+
+For a validation-only journey, select **Manager source for local tests → Current
+local manager edits (tests only)**, or pass
+`--run-value testing.manager_source=working-tree-local` to the CLI. This captures
+the owning manager checkout's public source, tests and documentation at an exact
+content identity. Tracked changes and new files under declared public source
+roots are transferred; arbitrary untracked root files and private caches are not.
+The captured identity is checked before transfer, after copying, and in the
+guest before installation. Changed or tampered inputs stop the attempt.
+
+The manager's base commit and its own commonUtils dependency must still match the
+project's committed pin. Default transfers remain strict committed-source
+transfers. Working manager source cannot authorize delivery or GitHub execution;
+its results are local development evidence and do not update any release pin.

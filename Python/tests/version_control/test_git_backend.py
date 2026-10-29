@@ -1,4 +1,8 @@
 """Real disposable repositories, including conflicts and a local bare remote."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import os
 import shutil

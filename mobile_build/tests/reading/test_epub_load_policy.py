@@ -1,4 +1,8 @@
 """Native bootstrap navigation must not bypass the offline reader boundary."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock

@@ -1,5 +1,9 @@
 """Portable speech ownership, UTF-16 utterances and safe reader styling."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 import unittest
 from features.books.mobile.speech import utterances, SpeechSession
 from features.books.mobile.typography import css, options

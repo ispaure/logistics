@@ -87,9 +87,45 @@ def with_reports(plan, target):
             includes = [argv[index + 1] for index, arg in enumerate(argv) if arg == '--include-pattern']
             inventory = tuple(path.relative_to(test_root).as_posix() for path in sorted(test_root.rglob(pattern))
                               if path.is_file() and all(fnmatchcase(path.name, extra) for extra in includes))
+            from commonUtils.testing.stages import PROFILES, validate
+            selected = {argv[i + 1] for i, arg in enumerate(argv) if arg == '--stage'}
+            if not selected:
+                profile = argv[argv.index('--profile') + 1] if '--profile' in argv else 'full'
+                selected = {stage.value for stage in PROFILES[profile]}
+            classified = validate(test_root / path for path in inventory)
+            inventory = tuple(row.path.relative_to(test_root).as_posix() for row in classified
+                              if any(stage.value in selected for _, stage, _ in row.cases)
+                              or not row.cases and row.default.value in selected)
         reported = replace(phase, test_files=inventory, argv=tuple(argv), artifacts=(*phase.artifacts, str(report)),
                            artifact_types=dict(phase.artifact_types, **{str(report): 'junit'}))
         phases.append(reported)
+    return replace(plan, phases=tuple(phases))
+
+
+def with_structure_gate(plan, interpreter):
+    """Validate captured test source before tests, builds or native preparation."""
+    if plan.backend == 'GitHub' or not any(p.kind == 'test' for p in plan.phases):
+        return plan
+    from build_manager import Phase
+    existing = next((p for p in plan.phases if p.id == 'test-structure'), None)
+    if existing is None:
+        first = plan.phases[0]
+        gate = Phase('test-structure', (interpreter, '-m', 'logistics_build.test_structure', '--check'),
+                     first.cwd, timeout=120, environment=dict(first.environment), kind='setup')
+    else:
+        gate = existing
+    phases = [gate] if existing is None else []
+    for phase in plan.phases:
+        if phase.id == gate.id:
+            if existing is not None:
+                phases.append(phase)
+            continue
+        # Environment bootstrap can be needed before a configured test Python;
+        # it does not execute tests. Cleanup retains its original dependency graph.
+        dependencies = phase.dependencies
+        if not phase.always and phase.id != 'environment' and (phase.kind == 'test' or not dependencies):
+            dependencies = tuple(dict.fromkeys((*dependencies, gate.id)))
+        phases.append(replace(phase, dependencies=dependencies))
     return replace(plan, phases=tuple(phases))
 
 
@@ -136,7 +172,10 @@ def with_host_gates(plan, desktop_python):
     from build_manager import Phase
     first = plan.phases[0]
     env = dict(first.environment, QT_QPA_PLATFORM='offscreen')
-    from build_manager.test_manifest import phases as manifest_phases
+    from build_manager import test_manifest
+    if not hasattr(test_manifest, 'structure_contract'):
+        raise ValueError('Update the configured build manager: test-structure and smoke-gate manifest support is required.')
+    manifest_phases = test_manifest.phases
     hosts = manifest_phases(first.cwd, 'mobile-host',
         {'desktop': desktop_python, 'mobile': first.argv[0]},
         ('Python/tests/run_regressions.py', '{directory}', '--isolate-modules'), environment=env)

@@ -1,4 +1,8 @@
 """E Ink selection stays visible even when the native theme disables indicators."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch

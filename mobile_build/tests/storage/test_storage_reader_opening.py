@@ -1,4 +1,8 @@
 """Every supported book format reaches its reader through each storage entry point."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import os
 from pathlib import Path
@@ -12,7 +16,7 @@ from services.documents.locations import use_shared_local, _shared_local_roots
 from mobile.app import LogisticsMobile
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 from mobile_build.tests.reading.test_library_catalog import CryptClient
-from mobile_build.tests.reading.test_pdf_reader import PDF, native_pdf
+from mobile_build.tests.support.pdf import PDF, native_pdf
 
 
 class ReaderClient(CryptClient):

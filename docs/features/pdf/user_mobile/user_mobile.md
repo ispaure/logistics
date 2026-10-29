@@ -35,7 +35,7 @@ LocalCrypt sessions also retire when credentials change. Password-protected and
 damaged PDFs cannot be opened. PDF password entry and PDF annotation editing
 are not supported.
 
-Tap the PDF page to enter fullscreen; tap it again to restore the controls.
+PDFs open fullscreen. Tap the PDF page to restore the controls; tap it again to hide them.
 Fullscreen fits the whole page to the largest size the screen allows while
 keeping its aspect ratio, for both portrait and landscape pages. Space remains
 above/below or beside the page only when its proportions differ from the screen.

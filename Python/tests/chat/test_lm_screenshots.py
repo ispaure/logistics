@@ -1,4 +1,8 @@
 """Portable screenshot records and multimodal request context contracts."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 import base64
 import struct

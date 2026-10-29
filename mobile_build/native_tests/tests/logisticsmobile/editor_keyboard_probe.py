@@ -1,4 +1,8 @@
 """Isolated long-document typing and keyboard geometry checks."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import sys

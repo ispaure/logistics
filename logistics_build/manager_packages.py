@@ -18,11 +18,13 @@ def archive(state, arguments):
     parser.add_argument('--inbox-profile')
     parser.add_argument('--widget-profile')
     parser.add_argument('--widget-actions-profile')
+    parser.add_argument('--watch-profile')
+    parser.add_argument('--watch-widget-profile')
     args = parser.parse_args(arguments)
     number = deploy.reserve_build(args.build_number)
     command = [sys.executable, '-m', 'mobile_build.deployment.testflight_tools']
     extra = []
-    for key in ('profile', 'inbox_profile', 'widget_profile', 'widget_actions_profile'):
+    for key in ('profile', 'inbox_profile', 'widget_profile', 'widget_actions_profile', 'watch_profile', 'watch_widget_profile'):
         if getattr(args, key):extra += ['--' + key.replace('_', '-'), getattr(args, key)]
     for stage in ('plan', 'archive'):
         subprocess.run([*command, stage, '--build-number', number, *(extra if stage == 'archive' else [])],

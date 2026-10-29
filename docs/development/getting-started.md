@@ -85,6 +85,10 @@ actual provider/device behavior. A mobile presentation change also needs its
 [own native validation](mobile-handbook.md). Do not weaken a native gate because
 its SDK, host or device is unavailable; report the unverified scope.
 
+To add coverage rather than only run existing tests, follow
+[adding and diagnosing tests](adding-tests.md) for a complete example, fixture
+choices and the configuration files required at each step.
+
 ## 5. Update the guide a reader needs
 
 Describe visible behavior in the feature's `user/` or `user_mobile/` guide and

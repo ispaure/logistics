@@ -1,5 +1,9 @@
 """Native background rectangles and pixel ownership; never mock safe insets."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 
 async def accessibility_round_trip(app, canvas):
     """Exercise the real observer callback with a forced policy, not OS settings."""

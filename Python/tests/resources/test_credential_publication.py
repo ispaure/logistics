@@ -1,4 +1,8 @@
 """Credential publication keeps invalidation fail-safe across mobile scenes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from unittest.mock import patch
 

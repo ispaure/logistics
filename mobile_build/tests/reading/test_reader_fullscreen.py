@@ -1,4 +1,8 @@
 """Reader chrome distinguishes immersive text from edge-to-edge comic images."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch

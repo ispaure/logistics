@@ -1,4 +1,8 @@
 """Native video button dispatch, safe frames and orientation checks on owned iOS QA apps."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path
@@ -144,6 +148,21 @@ async def exercise(app):
         startup = getattr(app, 'startup_task', None)
         if startup is not None:
             await asyncio.shield(startup)
+        from features.images.mobile.decoding import decode_page
+        from features.images.validation import image_dimensions
+        from toga.platform import get_factory
+        fixtures = Path(__file__).with_name('image-orientation-fixtures')
+        oriented = output / 'orientation'
+        oriented.mkdir(exist_ok=True)
+        expected = json.loads((fixtures / 'manifest.json').read_text())
+        for case in expected:
+            data = (fixtures / (case['name'] + '.source')).read_bytes()
+            size = image_dimensions(data)
+            image = decode_page(data, size, size, get_factory().Image.__module__)
+            assert tuple(image.size) == tuple(case['size']), (case['name'], image.size, case['size'])
+            image.save(oriented / (case['name'] + '.png'))
+        (oriented / 'manifest.json').write_text(json.dumps(expected))
+        report['orientation_cases'] = len(expected)
         from commonUtils.runtime.resources.local import LocalFiles
         from features.video.mobile.player import open_video
         root = app.private_root / 'video-ui-fixtures'
@@ -312,6 +331,14 @@ async def exercise(app):
         assert len([entry for entry in app.recent_documents.sessions() if entry.identity == recent.identity]) == 1
         await reopened.close()
         report['recent_video_reopened_playing'] = True
+        # The same owned native QA run verifies the reported iOS notebook issue.
+        from services.documents.mobile_notebooks import open_notebook
+        from .web_checks import wait_for_text
+        from .notebook_pointer_checks import exercise_page_selection
+        app.set_feature_enabled('notebooks', True, refresh=False)
+        assert await open_notebook(app, name='Palm selection QA')
+        await wait_for_text(app.notebook_panel.web, 'Palm selection QA')
+        report['notebook_selection'] = await exercise_page_selection(app.notebook_panel)
         report['success'] = True
     except Exception:
         report['error'] = traceback.format_exc()

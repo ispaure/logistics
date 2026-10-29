@@ -1,4 +1,8 @@
 """Library authoring, safe return and remote command rejection."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from unittest.mock import AsyncMock, patch
 import unittest
 import mobile_build.tests.documents.test_obsidian as fixtures

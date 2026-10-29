@@ -11,6 +11,7 @@ from commonUtils import ui
 from commonUtils.runtime.diagnostics import print_debug_msg
 
 from . import configuration
+from .diagnostics import report_failure
 
 
 def get_credential_package_directories() -> tuple[Path, ...]:
@@ -65,7 +66,8 @@ def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str, *, remembe
         config_path = config_path.with_suffix('.session')
     try:
         service.credentials.load(DesktopCredentialLoad(zip_path, config_path, remember), zip_pw)
-    except Exception:
+    except Exception as error:
+        report_failure('load desktop credential package', error)
         ui.display_msg_box_ok('Load Remote Credential',
             'Could not load the credential ZIP. Check the password and local file access. Every credential TXT must be password-protected.')
         return False

@@ -421,10 +421,31 @@
         !control('erase').contains(target)) eraserDialog.close()
   }
   document.addEventListener('pointerdown', e => dismissToolPanels(e.target), true);
+  const paper = control('paperWrap');
+  paper.addEventListener('selectstart', e => e.preventDefault());
+  paper.addEventListener('contextmenu', e => e.preventDefault());
+  function clearPaperSelection() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+    for (let i = 0; i < selection.rangeCount; i++) {
+      const range = selection.getRangeAt(i);
+      const node = range.commonAncestorContainer;
+      const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      if (element?.closest('input,textarea,[contenteditable=true]')) continue;
+      if (range.intersectsNode(paper)) {
+        selection.removeAllRanges();
+        break
+      }
+    }
+  }
+  document.addEventListener('selectionchange', clearPaperSelection);
   const startPointer = canvas.onpointerdown;
   canvas.onpointerdown = e => {
     // The Android native pen bridge calls this handler directly.
     dismissToolPanels(canvas);
+    // WebKit need not emit selectionchange for a programmatic/nonselectable
+    // range. A drawing or palm contact also clears any stale paper selection.
+    clearPaperSelection();
     startPointer(e)
   };
   window.addEventListener('resize', () => {

@@ -95,8 +95,8 @@ class ReaderControls(qt.QWidget):
         end = displayed[-1]
         with qt.QSignalBlocker(self.progress):
             self.progress.setValue(0 if start == 0 else end)
-        numbers = ' & '.join(str(index + 1) for index in displayed)
-        self.progress_label.setText(f'Page {numbers} / {count} · {(end + 1) / count:.0%}')
+        from features.comics.reading import page_progress
+        self.progress_label.setText(f'Page {page_progress(displayed, count)} · {(end + 1) / count:.0%}')
 
 
 class ReaderMenus(qt.QObject):

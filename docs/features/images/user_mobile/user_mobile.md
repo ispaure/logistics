@@ -50,3 +50,8 @@ If Photos saving fails, capture stops and the original encoded files remain in
 manually after resolving permission or storage issues. Successful saves remove
 the temporary original. Camera/Photos access can be changed in iOS Settings.
 Leaving the app stops the burst and camera session; returning resumes preview.
+
+Images open with the available viewing area maximized. Tap the image to restore
+controls. Portrait, landscape, exterior-display and side-by-side windows fit
+the current allocation without stretching the image. JPEG, WebP and PNG
+orientation metadata is applied once, including mirrored orientations.

@@ -1,4 +1,8 @@
 """Isolated Markdown/EPUB height and rotation checks on Android and iOS."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 import json
@@ -13,6 +17,8 @@ from commonUtils.runtime.resources.documents import LocalDocuments
 from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 from mobile.app import LogisticsMobile
+from . import start_native_check
+from .settings import PROBE_ROTATION_SETTLE
 
 BUNDLE = 'io.github.ispaure.logisticscompactprobe'
 
@@ -33,22 +39,12 @@ class CompactReadingProbe(LogisticsMobile):
         super().startup()
 
     def on_running(self):
-        if not getattr(self, '_compact_probe_started', False):
-            self._compact_probe_started = True
-            self.loop.create_task(self.probe())
+        start_native_check(self, type(self).probe)
 
     async def rotate(self, landscape):
-        if sys.platform == 'ios':
-            from rubicon.objc import ObjCClass
-            preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(8 if landscape else 2)
-            self.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
-        else:
-            self._impl.native.setRequestedOrientation(0 if landscape else 1)
-        for _ in range(40):
-            await asyncio.sleep(.1)
-            if (self.main_window.size.width > self.main_window.size.height) == landscape:
-                break
-        await asyncio.sleep(1)
+        from .rotation_checks import rotate
+        await rotate(self, 'landscape-left' if landscape else 'portrait', settle=PROBE_ROTATION_SETTLE)
+
 
     def height(self, widget):
         native = widget._impl.native

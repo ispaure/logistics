@@ -1,5 +1,9 @@
 """FUSE commands, recovery and cleanup using simulated mount states."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory

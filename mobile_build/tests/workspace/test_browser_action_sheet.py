@@ -1,4 +1,8 @@
 """Native file action sheets retain full names above guarded commands."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch

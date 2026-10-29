@@ -76,6 +76,11 @@ class ReadingPublication:
         footer = getattr(view, 'page_footer', None)
         if footer is not None:
             footer.sync(comic=comic, count=count, index=index, right_to_left=right_to_left)
+            if comic:
+                reader = getattr(view, 'crypt_reader', None)
+                navigation = getattr(reader, 'comic_navigation', None) or getattr(view, 'comic_navigation', None)
+                if navigation is not None:
+                    footer.set_progress_text(navigation.progress_label, 'Pages ' + navigation.progress_label)
             if chapter is not None:
                 footer.chapter_progress(index, count, *chapter)
         self.chrome()

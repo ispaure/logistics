@@ -180,3 +180,21 @@ alpha behavior, resize rounding, JPEG optimization and WebP method 6 are unchang
 Exclusive link/copy publication comes from the shared persistence owner. Its copy
 fallback is deliberately non-atomic and retains the stage; feature code still owns
 source removal. Image staging regressions patch the canonical persistence owner.
+
+## Display orientation
+
+`orientation.py` reads bounded primary EXIF orientation in JPEG APP1, WebP EXIF
+and PNG eXIf metadata. Validation reports the oriented display dimensions before
+comic spread selection and portrait splitting. `mobile/decoding.py` uses ImageIO
+thumbnail transforms on iOS and an explicit bitmap matrix on Android; both
+standalone images and comic composition use that owner. Desktop image documents
+and comics share `ui/decoding.py`: known EXIF matrices are applied exactly once,
+including WebP metadata ignored by Qt's plugin. Other formats retain Qt's native
+container transforms; comics retain their Pillow fallback. Native
+rclone thumbnails map oriented output coordinates back into the decoded source
+without allocating another full-size image. Optional malformed metadata falls
+back to the encoded orientation; pixel validation remains the decoder's job.
+The Logistics image file type and remote/private browser previews use the same
+desktop orientation owner before returning PNG pixels to the existing RAM cache.
+The representative fixtures check dimensions and four asymmetric corner colors
+for all eight orientations in JPEG, WebP and PNG, including preview output.

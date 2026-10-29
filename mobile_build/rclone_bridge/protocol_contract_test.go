@@ -1,3 +1,4 @@
+// TEST_STAGE = TestStage.SMOKE
 package main
 
 import (
@@ -87,6 +88,30 @@ func TestSharedProtocolContract(t *testing.T) {
 		}
 		if reply["ok"] != item.OK {
 			t.Errorf("%s: unexpected response status", item.Action)
+		}
+	}
+}
+
+func TestSharedRequestLimits(t *testing.T) {
+	data, err := os.ReadFile("protocol_contract.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Limits []struct {
+			Action string `json:"action"`
+			Native int    `json:"native"`
+		} `json:"request_limits"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if len(fixture.Limits) == 0 {
+		t.Fatal("request limit fixture is empty")
+	}
+	for _, item := range fixture.Limits {
+		if actual := requestLimit(item.Action); actual != item.Native {
+			t.Errorf("%s: limit %d, want %d", item.Action, actual, item.Native)
 		}
 	}
 }

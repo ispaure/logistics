@@ -1,4 +1,8 @@
 """Independent registry owners isolate state while the application has an explicit runtime."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import gc
 from pathlib import Path
 from tempfile import TemporaryDirectory

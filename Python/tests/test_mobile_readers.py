@@ -1,4 +1,8 @@
 """Portable mobile library/reader scenarios using generated books and pages."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from pathlib import Path
 import struct

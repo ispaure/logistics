@@ -1,4 +1,8 @@
 """External output must never outlive the visible comic or a privacy change."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import sys
 import unittest

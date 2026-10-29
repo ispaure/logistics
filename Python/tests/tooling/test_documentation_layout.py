@@ -1,4 +1,8 @@
 """Documentation ownership and navigation contracts for migrated manuals."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import re
 import unittest

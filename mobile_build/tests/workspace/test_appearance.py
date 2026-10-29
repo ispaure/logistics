@@ -1,4 +1,8 @@
 """Palette readability and matching offline document surfaces."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from commonUtils.ui.appearance.colors import contrast_ratio
 from mobile.palette import LIGHT, DARK, argb, themed_chapter, css_variables

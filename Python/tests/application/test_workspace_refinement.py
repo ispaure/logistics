@@ -1,4 +1,8 @@
 """Application-level browser headers retain local creation and minimum-tab rules."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import tempfile
 from pathlib import Path
 from commonUtils.tests.qt_test_case import QtTestCase

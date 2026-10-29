@@ -10,6 +10,9 @@ import subprocess
 import sys
 import time
 
+# Resolve the consumer's shared library before the external manager adds its
+# own checkout to sys.path. Native contract imports belong to this snapshot.
+import commonUtils
 from build_manager.apple_simulators import AppleSimulators
 from build_manager.native_commands import command, interrupt
 

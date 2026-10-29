@@ -1,4 +1,8 @@
 """Workspace decisions can run without a native toolkit or application instance."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 from mobile.workspace_policy import WorkspaceSelection, session_view

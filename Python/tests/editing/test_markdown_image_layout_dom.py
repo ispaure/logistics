@@ -1,4 +1,8 @@
 """Measure the production mobile HTML with real raster decoding and panel resizing."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import ast
 from io import BytesIO
 import json

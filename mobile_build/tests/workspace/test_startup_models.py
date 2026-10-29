@@ -1,4 +1,8 @@
 """Startup prepares durable models off-thread and defers inactive native views."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

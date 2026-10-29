@@ -1,4 +1,8 @@
 """Offline native-font bridge contracts, independent of an Android runtime."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import struct
 import sys
 import unittest

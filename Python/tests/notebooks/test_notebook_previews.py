@@ -1,4 +1,8 @@
 """Overview previews are bounded, respect hidden layers and leave the book alone."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import unittest
 from xml.etree import ElementTree as ET

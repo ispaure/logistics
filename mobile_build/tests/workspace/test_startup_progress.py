@@ -1,4 +1,8 @@
 """Startup reports real phases, yields for drawing and preserves failure state."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import sys
 from types import SimpleNamespace

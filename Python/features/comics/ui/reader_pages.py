@@ -93,7 +93,8 @@ def read_image(pages, index):
     if size.width() * size.height() > MAX_DISPLAY_PIXELS:
         reader.setScaledSize(size.scaled(MAX_DISPLAY_SIDE, MAX_DISPLAY_SIDE,
                                         qt.Qt.AspectRatioMode.KeepAspectRatio))
-    image = reader.read()
+    from features.images.ui.decoding import read_oriented
+    image = read_oriented(reader, data)
     if not image.isNull():
         return image
     qt_error = reader.errorString() or 'This page could not be displayed'

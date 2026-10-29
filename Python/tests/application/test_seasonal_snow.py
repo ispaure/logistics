@@ -1,4 +1,8 @@
 """Calendar boundaries and the desktop decoration/settings contract."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory

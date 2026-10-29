@@ -1,4 +1,8 @@
 """Native document Back and tab return preserve the browser viewport."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 import json

@@ -1,4 +1,8 @@
 """The disposable sleep/trim driver cannot target a physical device."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

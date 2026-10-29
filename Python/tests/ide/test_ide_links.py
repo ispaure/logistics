@@ -1,4 +1,8 @@
 """IDE-only modifier navigation feedback and stale worker results."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import tempfile
 from pathlib import Path
 from unittest.mock import patch

@@ -1,4 +1,8 @@
 """Recent history retains ordinary identities and excludes private sessions."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -7,6 +11,21 @@ from mobile.workspace import Session
 
 
 class RecentDocumentTests(unittest.TestCase):
+    def test_video_reference_restores_without_becoming_a_workspace_kind(self):
+        from mobile.workspace import KINDS
+        with TemporaryDirectory() as directory:
+            history = RecentDocuments(Path(directory))
+            source = dict(type='local', path='/files/Movie.mkv')
+            session = Session('', 'file-reference', history.reference_id(source), 'video', title='Movie.mkv')
+            history.remember_file(session, source)
+            history.remember_file(session, source)
+            restored = RecentDocuments(Path(directory))
+            self.assertFalse(restored.error)
+            self.assertEqual(len(restored.sessions()), 1)
+            self.assertEqual(restored.sessions()[0].kind, 'video')
+            self.assertEqual(restored.sessions()[0].source, source)
+            self.assertNotIn('video', KINDS)
+
     def test_bound_order_restore_and_private_removal(self):
         with TemporaryDirectory() as directory:
             history = RecentDocuments(Path(directory))

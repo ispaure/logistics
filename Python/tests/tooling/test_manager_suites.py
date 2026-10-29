@@ -1,6 +1,11 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from build_manager.test_manifest import discover as _discover
 """Named suite routing and required release evidence; no live provider/device work."""
 import json
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
@@ -22,14 +27,17 @@ class ManagerSuiteTests(unittest.TestCase):
             root = Path(temporary)
             suite = root / 'suite'
             (suite / 'nested').mkdir(parents=True)
-            (suite / 'test_live_one.py').write_text('raise AssertionError("inventory must not import tests")')
-            (suite / 'nested/test_live_two.py').write_text('raise AssertionError("inventory must not import tests")')
+            (suite / 'test_live_one.py').write_text('# TEST_STAGE = TestStage.SMOKE\nraise AssertionError("inventory must not import tests")')
+            (suite / 'nested/test_live_two.py').write_text('# TEST_STAGE = TestStage.REGRESSION\nraise AssertionError("inventory must not import tests")')
             (suite / 'test_other.py').write_text('')
             phase = Phase('shared', (sys.executable, 'Python/tests/run_regressions.py', 'suite',
                 '--isolate-modules', '--include-pattern', 'test_live*'), str(root))
             plan = Plan('Fixture', 'Test', {}, (phase,), str(root))
             planned = suites.with_reports(plan, 'android')
             self.assertEqual(planned.phases[0].test_files, ('nested/test_live_two.py', 'test_live_one.py'))
+            smoke = replace(phase, argv=(*phase.argv, '--profile', 'smoke'))
+            self.assertEqual(suites.with_reports(replace(plan, phases=(smoke,)), 'android').phases[0].test_files,
+                             ('test_live_one.py',))
 
     def test_catalog_selection_rejects_unknown_inapplicable_and_remote_suites(self):
         suites.selection(ROOT, 'portable.contracts', 'Test', 'macos', 'This Mac', 'test_manager*.py')
@@ -56,10 +64,10 @@ class ManagerSuiteTests(unittest.TestCase):
             with patch.object(project, '_make_plan', return_value=full), patch('logistics_build.build_retention.clean'):
                 core = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.runtime')
                 native = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.native')
-            self.assertEqual([p.id for p in core.phases], ['ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
-            self.assertEqual(core.phases[1].dependencies, ('ios-runtime-tools',))
-            self.assertIn('--runtime', core.phases[1].argv)
-            self.assertEqual([p.id for p in native.phases], ['ios-build','iphone','iphone-cleanup'])
+            self.assertEqual([p.id for p in core.phases], ['test-structure','ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
+            self.assertEqual(core.phases[2].dependencies, ('ios-runtime-tools', 'test-structure'))
+            self.assertIn('--runtime', core.phases[2].argv)
+            self.assertEqual([p.id for p in native.phases], ['test-structure','ios-build','iphone','iphone-cleanup'])
             with patch.dict('os.environ', LOGISTICS_IOS_RUNTIME_EVIDENCE='wrong-external-receipt.json'):
                 gate = suites.acceptance_phase(core, 'ios')
             self.assertEqual(gate.argv[gate.argv.index('--runtime-report')+1], str(root/'core.json'))
@@ -74,11 +82,12 @@ class ManagerSuiteTests(unittest.TestCase):
         with patch('logistics_build.build_project.sys.platform', 'darwin'), patch('logistics_build.build_retention.clean'), patch('logistics_build.build_project.identity', return_value=identity), \
                 patch('logistics_build.build_project.materialize'), patch('logistics_build.build_project.manager_settings.settings', return_value=(values, {})), \
                 patch('logistics_build.build_project.manager_settings.app_version', return_value='1.0.0'), \
-                patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}), \
+                patch('build_manager.local.inspect_python', return_value={
+                    'system': 'Darwin', 'python': values['testing.python_version']}), \
                 patch('logistics_build.build_project.platform.system', return_value='Darwin'):
             plan = project.make_plan('Test', 'macos', 'This Mac', suite='portable.contracts', pattern='test_manager*.py')
         phase = plan.phases[-1]
-        self.assertEqual([row.id for row in plan.phases], ['environment', 'portable.contracts'])
+        self.assertEqual([row.id for row in plan.phases], ['test-structure', 'environment', 'portable.contracts'])
         self.assertIn('Python/tests/tooling', phase.argv)
         self.assertIn('test_manager*.py', phase.argv)
         self.assertIn('junit', phase.artifact_types.values())
@@ -87,7 +96,7 @@ class ManagerSuiteTests(unittest.TestCase):
     def test_real_isolated_runner_retains_failure_skip_and_duration(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / 'test_fixture.py').write_text('import unittest\nclass Cases(unittest.TestCase):\n'
+            (root / 'test_fixture.py').write_text('# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\nclass Cases(unittest.TestCase):\n'
                 ' def test_pass(self): pass\n def test_fail(self): self.fail("expected evidence")\n'
                 ' @unittest.skip("host absent")\n def test_skip(self): pass\n')
             output = root / 'cases.xml'
@@ -188,6 +197,7 @@ class ManagerSuiteTests(unittest.TestCase):
     def test_reviewed_workflow_depends_on_native_runtime_gate_and_prepared_artifact(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / 'build-tests.json').write_text((ROOT / 'build-tests.json').read_text())
             project = LogisticsProject(root)
             source = dict(logistics_commit='a', commonUtils_commit='b', fingerprint='fixed', dirty=False)
             build = Phase('prepare-verified-artifact', (sys.executable, '-c', 'pass'), str(root), kind='build', artifacts=(str(root/'prepared.json'),))
@@ -198,9 +208,12 @@ class ManagerSuiteTests(unittest.TestCase):
             with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('logistics_build.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
                 plan = project.make_plan('Reviewed Firebase workflow', 'android', 'This Mac')
             rows = {phase.id: phase for phase in plan.phases}
-            self.assertEqual(rows['release-acceptance'].dependencies, ('commonutils','portable-contracts','desktop-ui','mobile-host','android-native','android-runtime'))
-            self.assertEqual(rows['android-native'].dependencies, ('commonutils','portable-contracts','desktop-ui','mobile-host'))
-            self.assertEqual(rows['android-runtime'].dependencies, ('commonutils','portable-contracts','desktop-ui','mobile-host'))
+            host_gates = ('test-structure', 'commonutils.smoke', 'portable-contracts.smoke',
+                          'desktop-ui.smoke', 'mobile-host.smoke',
+                          'commonutils', 'portable-contracts', 'desktop-ui', 'mobile-host')
+            self.assertEqual(rows['release-acceptance'].dependencies, (*host_gates, 'android-native', 'android-runtime'))
+            self.assertEqual(rows['android-native'].dependencies, host_gates)
+            self.assertEqual(rows['android-runtime'].dependencies, host_gates)
             self.assertIn('Python/tests/tooling', rows['portable-contracts'].argv)
             self.assertIn('Python/tests/application', rows['desktop-ui'].argv)
             self.assertIn('mobile_build/tests', rows['mobile-host'].argv)
@@ -218,7 +231,9 @@ class ManagerSuiteTests(unittest.TestCase):
 
     def test_reviewed_ios_forces_required_ipad_coverage(self):
         with TemporaryDirectory() as directory:
-            root = Path(directory);project = LogisticsProject(root)
+            root = Path(directory)
+            (root / 'build-tests.json').write_text((ROOT / 'build-tests.json').read_text())
+            project = LogisticsProject(root)
             source = dict(logistics_commit='a', commonUtils_commit='b', fingerprint='fixed', dirty=False)
             build = Phase('prepare-verified-artifact', (sys.executable,'-c','pass'),str(root),kind='build',artifacts=(str(root/'prepared.json'),))
             phases = tuple(Phase(kind,(sys.executable,'-c','pass'),str(root),artifacts=(str(root/(kind+'.json')),)) for kind in ('iphone','duo','ipad'))

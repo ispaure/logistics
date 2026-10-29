@@ -1,4 +1,8 @@
 """Logistics pins feed reusable preparation without changing backend receipts."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory

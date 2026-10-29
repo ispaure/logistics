@@ -1,4 +1,8 @@
 """Third-party source warnings do not leak out of metadata-only inspection."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import ast
 from pathlib import Path
 from tempfile import TemporaryDirectory

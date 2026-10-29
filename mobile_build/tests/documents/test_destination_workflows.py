@@ -1,4 +1,8 @@
 """Real provider bytes for Save As naming, folder creation and browsed moves."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

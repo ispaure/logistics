@@ -45,11 +45,14 @@ def defaults(root):
         'auth.github_reference': '', 'auth.github_kind': 'auto',
         'signing.app_profile': '', 'signing.inbox_profile': '',
         'signing.widget_profile': '', 'signing.widget_actions_profile': '',
+        'signing.watch_profile': '', 'signing.watch_widget_profile': '',
         'github.repository': 'ispaure/logistics', 'github.token_environment': 'GH_TOKEN',
         'github.authentication': 'existing git credential helper',
         'github.workflow': 'release.yml',
         'firebase.release_notes': '',
     })
+    from logistics_build.test_environments import load
+    values.update({'testing.' + key: value for key, value in load(root.parent).items()})
     return values
 
 
@@ -63,7 +66,7 @@ VARIABLES = {
 
 def current_settings(values):
     """Discard retired Ubuntu selectors from saved profiles and captured overrides."""
-    return {key: value for key, value in values.items() if key not in {'vm.linux', 'vm.linux_scope'}}
+    return {key: value for key, value in values.items() if key not in {'vm.linux', 'vm.linux_scope'} and not key.startswith('testing.')}
 
 
 def settings(root, *, overrides=None):
@@ -77,6 +80,14 @@ def settings(root, *, overrides=None):
     values, sources = resolve(schema, account=account, profile=current_settings(loaded_profile(root)),
                               environment=os.environ, overrides=current_settings(overrides or {}))
     validate(values, configured)
+    for key in configured:
+        if key.startswith('testing.'):
+            sources[key] = 'tracked test-environments.json; shared with GitHub'
+    from logistics_build.test_environments import load, android_image
+    test_environment = load(Path(root).parent)
+    values['android.image'] = android_image(test_environment)
+    values['android.model'] = test_environment['android_model']
+    sources['android.image'] = sources['android.model'] = 'derived from shared test environment settings'
     # Discover only checkout-owned dedicated guests, never adopt a named personal VM.
     # Frozen run profiles already contain resolved UUIDs and must remain authoritative.
     if os.environ.get('LOGISTICS_MANAGER_CHECKOUT'):
@@ -144,6 +155,10 @@ def distribution(root, provider, original):
 
 
 def save(root, changes):
+    from logistics_build.test_environments import load, save as save_environments, validate as validate_environments
+    environment_changes = {key.removeprefix('testing.'): value for key, value in changes.items() if key.startswith('testing.')}
+    validate_environments(dict(load(Path(root).parent), **environment_changes))
+    changes = {key: value for key, value in changes.items() if not key.startswith('testing.')}
     base = defaults(root)
     current = loaded_profile(root)
     incoming = current_settings(dict(current, **changes))
@@ -151,6 +166,8 @@ def save(root, changes):
     validate(values, base)
     for key in ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds'):
         incoming[key] = int(values[key])
+    if environment_changes:
+        save_environments(Path(root).parent, environment_changes)
     save_profile(profile_path(root), incoming, allowed=base)
 
 

@@ -1,4 +1,8 @@
 """Actual Local/LocalCrypt vault controls, nested notes and adaptive presentation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 from services.documents.locations import collection_path, CollectionFiles

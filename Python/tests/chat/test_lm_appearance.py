@@ -1,4 +1,8 @@
 """Theme transitions and content-sized chat messages without a remote server."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory

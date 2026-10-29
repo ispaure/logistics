@@ -1,4 +1,8 @@
 """Storage discovery against strict old/new Android API surfaces."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import sys
 from types import SimpleNamespace

@@ -1,4 +1,8 @@
 """Workspaces discovery snapshots native state before reading files in a worker."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

@@ -1,4 +1,8 @@
 """Prevent new architectural edges without importing production presentation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -146,7 +150,18 @@ class OwnershipTests(unittest.TestCase):
             'comics': [('mobile', 'test_comic_sharing.py')],
             'lm': [('mobile', 'test_chat_inventory.py')],
             'pdf': [('mobile', 'test_pdf_reader.py')],
-            'rclone': [('desktop', 'test_remote_browser.py'), ('mobile', 'test_credential_document_lists.py')],
+            'rclone': [
+                ('desktop', 'test_remote_browser.py'),
+                ('desktop', 'test_transfer_adapters.py'),
+                ('desktop', 'test_transfer_service.py'),
+                ('desktop', 'test_remote_bridge_native.py'),
+                ('mobile', 'test_credential_document_lists.py'),
+                ('mobile', 'test_native_credential_service.py'),
+                ('mobile', 'test_native_transfer_service.py'),
+                ('mobile', 'test_home_unlock.py'),
+                ('mobile', 'test_connection_packages.py'),
+                ('mobile', 'test_remote_service.py'),
+            ],
             'text_editor': [('desktop', 'test_editor_resource_picker.py'), ('mobile', 'test_provider_opening.py')],
             'mobile-host': [('mobile', 'test_application_lifecycle.py')],
             'mobile-storage': [('mobile', 'test_storage_location.py')],

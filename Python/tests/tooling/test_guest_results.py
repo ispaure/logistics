@@ -1,4 +1,8 @@
 """Collect evidence before conditional cleanup on either guest backend."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory

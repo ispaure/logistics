@@ -1,4 +1,8 @@
 """Dependency boundaries that keep feature adapters usable outside their host."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import ast
 from pathlib import Path
 import subprocess

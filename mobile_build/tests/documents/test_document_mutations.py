@@ -1,4 +1,8 @@
 """Live editor identity and saved bytes across real resource mutations."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

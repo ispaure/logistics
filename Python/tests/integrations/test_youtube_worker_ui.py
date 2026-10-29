@@ -1,4 +1,8 @@
 """Downloads remain responsive, retain failures and cancel before closing."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event

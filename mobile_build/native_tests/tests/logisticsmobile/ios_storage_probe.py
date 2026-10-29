@@ -1,4 +1,8 @@
 """Exercise actual Foundation migration APIs on a disposable native fixture."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 
 

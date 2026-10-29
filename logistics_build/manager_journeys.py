@@ -24,7 +24,7 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-RUN_FIELDS={'testing.reuse_verified_results','devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+RUN_FIELDS={'testing.manager_source','testing.reuse_verified_results','devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.ios_provisioning','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
 
 
 def run_values(values):
@@ -32,6 +32,10 @@ def run_values(values):
     if not isinstance(values,dict) or set(values)-RUN_FIELDS or any(not isinstance(v,str) or len(v)>20000 for v in values.values()):
         raise ValueError('Only declared non-secret run choices can be changed for one run.')
     result = dict(values)
+    if result.get('devices.ios_provisioning', 'existing') not in {'existing', 'update'}:
+        raise ValueError('Choose existing iOS signing assets or explicitly authorize provisioning updates.')
+    if result.get('testing.manager_source', 'pinned') not in {'pinned', 'working-tree-local'}:
+        raise ValueError('Choose pinned or working-tree-local manager source for local tests.')
     if result.get('testing.reuse_verified_results', 'on') not in {'on', 'off'}:
         raise ValueError('Choose On or Off for verified test reuse.')
     if result.get('devices.android_signing', 'debug') not in {'debug', 'beta'}:
@@ -131,6 +135,8 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
     for name,target in (('testflight','ios'),('firebase','android')):
         if name in destinations and locations.get(target,project.journey_capability['platforms'][target]['backend']) == 'GitHub':
             raise ValueError(name+' preparation needs local native validation and matching receipts. Choose the local host for '+target+' or remove this delivery destination; GitHub validation is available for checks-only runs.')
+    if source.get('run_overrides', {}).get('testing.manager_source') == 'working-tree-local' and (delivery or any(value == 'GitHub' for value in locations.values())):
+        raise ValueError('Uncommitted manager source is available for local validation only; no delivery or GitHub effects.')
     if 'github' in destinations:
         from logistics_build.build_snapshots import git
         if git(project.root, 'status', '--porcelain') or git(project.root, 'rev-parse', 'HEAD') != source['logistics_commit']:
@@ -166,7 +172,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         mobile = target in {'ios', 'android'}
         backend = locations.get(target,row['backend'])
         plan = project.make_plan('Test', target, backend, revision=revision,
-            include_ipad=delivery and target == 'ios', _context=context,
+            include_ipad=target == 'ios', _context=context,
             _release_validation=delivery and mobile and (('testflight' if target == 'ios' else 'firebase') in destinations or target in release_devices))
         retain(plan)
         branch_sources[target] = plan.source

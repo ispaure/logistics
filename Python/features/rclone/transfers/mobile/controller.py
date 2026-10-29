@@ -5,8 +5,54 @@ from .execution import TransferExecution, TransferState
 
 
 class TransferController(MirrorUI):
-    METHODS = ('register_transfer_status', 'dismiss_transfer_status', 'refresh_transfer_status', 'existing_crypt_locations', 'crypt_folder_target', 'linked_crypt_locations', 'mirror_store', 'show_transfers', 'choose_transfer_copy', 'delete_mirror_copy', 'mirror_connection_ready', 'start_mirror_pull', 'mirror_job_signature', 'start_mirror_review', 'pull_remote_copy', 'push_remote_copy', 'run_mirror_work', 'publish_mirror_progress', 'cancel_mirror_transfer', 'open_mirror_copy', 'show_local_push', 'transfer_options', 'show_transfer_options', 'begin_transfer_review', 'review_transfer', '_review_transfer')
-    FIELDS = ('_cancel_transfer_review', '_mirror_progress_widgets', '_review_starting', '_transfer_cancel', '_transfer_review_view', 'file_roots', 'mirrors', 'transfer_banners', 'transfer_busy', 'transfer_complete', 'transfer_endpoints', 'transfer_epoch', 'transfer_message', 'transfer_notice', 'transfer_notification', 'transfer_progress', 'transfer_task', 'transfer_view')
+    METHODS = (
+        'register_transfer_status',
+        'dismiss_transfer_status',
+        'refresh_transfer_status',
+        'existing_crypt_locations',
+        'crypt_folder_target',
+        'linked_crypt_locations',
+        'mirror_store',
+        'show_transfers',
+        'choose_transfer_copy',
+        'delete_mirror_copy',
+        'mirror_connection_ready',
+        'start_mirror_pull',
+        'mirror_job_signature',
+        'start_mirror_review',
+        'pull_remote_copy',
+        'push_remote_copy',
+        'run_mirror_work',
+        'publish_mirror_progress',
+        'cancel_mirror_transfer',
+        'open_mirror_copy',
+        'show_local_push',
+        'transfer_options',
+        'show_transfer_options',
+        'begin_transfer_review',
+        'review_transfer',
+        '_review_transfer',
+    )
+    FIELDS = (
+        '_cancel_transfer_review',
+        '_mirror_progress_widgets',
+        '_review_starting',
+        '_transfer_cancel',
+        '_transfer_review_view',
+        'file_roots',
+        'mirrors',
+        'transfer_banners',
+        'transfer_busy',
+        'transfer_complete',
+        'transfer_endpoints',
+        'transfer_epoch',
+        'transfer_message',
+        'transfer_notice',
+        'transfer_notification',
+        'transfer_progress',
+        'transfer_task',
+        'transfer_view',
+    )
 
     FIELDS += ('transfer_percentage',)
 

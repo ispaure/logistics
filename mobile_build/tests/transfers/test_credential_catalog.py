@@ -1,4 +1,8 @@
 """Credential display grouping preserves identity and persistence boundaries."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 
 from features.rclone.mobile.credential_catalog import CredentialCatalog, remember_association

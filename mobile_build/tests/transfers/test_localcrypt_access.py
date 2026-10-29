@@ -1,4 +1,8 @@
 """LocalCrypt resource sessions close independently and never revive old grants."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import json
 from pathlib import Path

@@ -3,6 +3,10 @@
 The isolated build supplies canvas_baseline.py from a recorded source revision.
 Measurements end at JavaScript/animation callbacks, not at visible E Ink pixels.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import math

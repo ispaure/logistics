@@ -1,4 +1,8 @@
 """Wireless discovery recovers Bonjour-only peers without disrupting ready devices."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import socket
 import subprocess
 import unittest

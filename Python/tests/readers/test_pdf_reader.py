@@ -1,4 +1,8 @@
 """Real PDF decoding, page navigation and provider memory boundaries."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path

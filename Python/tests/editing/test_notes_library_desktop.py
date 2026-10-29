@@ -1,4 +1,8 @@
 """Real desktop Notes Library documents: lazy providers, navigation and revocation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase

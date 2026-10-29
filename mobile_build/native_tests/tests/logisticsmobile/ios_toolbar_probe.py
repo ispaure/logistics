@@ -3,6 +3,10 @@
 Launch with a separate QA bundle ID; never install over the normal app. Results
 and screenshots are written to that QA app's cache. No remote service is used.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path
@@ -94,9 +98,11 @@ class ToolbarProbe(LogisticsMobile):
             (root / 'Note.md').write_text('# Synthetic note\n\nToolbar fixture.')
             await self.show_files(location=('Local files', 'Comics'))
             sample = await self.record('folder')
-            assert 'Search this folder' in sample['trailing']
             if sample['edge']:
-                assert sample['overflow'] and len(sample['trailing']) == 1, sample
+                assert sample['leading'][0] == 'Search this folder', sample
+                assert 'Search this folder' not in sample['trailing'] and sample['overflow'], sample
+            else:
+                assert 'Search this folder' in sample['trailing'], sample
             await self.press(self.file_browser.search_button)
             assert self.file_browser.search_open
             await self.record('folder-search')

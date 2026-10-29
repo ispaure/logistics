@@ -1,4 +1,8 @@
 """Writer admission, captured connection lifetime and terminal outcomes without UI."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from threading import Event
 from types import SimpleNamespace
@@ -99,6 +103,25 @@ class TransferExecutionTests(unittest.IsolatedAsyncioTestCase):
         work.assert_not_called()
         self.view.started.side_effect = None
         self.assertTrue(await self.execution.run(lambda *_: 1, 'push'))
+
+    async def test_conflicted_legacy_and_named_results_do_not_publish_verified_completion(self):
+        from features.rclone.transfers.mobile.models import TransferOutcome
+        for result in (('conflict', None), TransferOutcome('pull', status='conflict')):
+            with self.subTest(result=result):
+                self.assertFalse(await self.execution.run(lambda *_: result, 'pull'))
+                self.assertFalse(self.state.complete)
+                self.assertFalse(self.state.busy)
+                self.assertIn('Files changed', self.state.message)
+                self.assertNotIn('100%', self.state.message)
+
+    async def test_completion_formatting_failure_does_not_leave_success_state(self):
+        from unittest.mock import patch
+        self.view.finished.side_effect = lambda: self.assertFalse(self.state.complete)
+        with patch('features.rclone.transfers.mobile.execution.completion_message',
+                   side_effect=ValueError('completion display failed')):
+            self.assertFalse(await self.execution.run(lambda *_: 1, 'push'))
+        self.assertFalse(self.state.complete)
+        self.assertIn('Sync stopped', self.state.message)
 
 
 class MirrorCopyAdmissionTests(unittest.IsolatedAsyncioTestCase):

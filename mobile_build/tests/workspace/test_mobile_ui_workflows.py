@@ -1,4 +1,8 @@
 """Visible file/library actions retain source identity, drafts and private cleanup."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -141,7 +145,7 @@ class MobileWorkflowTests(unittest.TestCase):
     def test_local_browsing_during_pull_preserves_transfer_cancel_and_the_writer(self):
         import asyncio
         from threading import Event
-        from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+        from mobile_build.tests.support.mirror import MirrorClient
         app = self.app
         app.preferences.save(comic_layout='single')
         started, release = Event(), Event()

@@ -1,4 +1,8 @@
 """Compare an archived compression baseline against the current worktree."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import io
 import json
 import os

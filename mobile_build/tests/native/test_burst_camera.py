@@ -1,4 +1,8 @@
 """Camera launch placement and generated-project permissions survive refreshes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import plistlib
 from pathlib import Path
 from tempfile import TemporaryDirectory

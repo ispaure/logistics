@@ -1,4 +1,8 @@
 """Physical Android page-switch and handwriting memory regression, synthetic data only."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import json
 import math

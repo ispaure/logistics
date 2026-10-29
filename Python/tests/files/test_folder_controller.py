@@ -1,4 +1,8 @@
 """Folder workers preserve cancellation, generation and private-path boundaries."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from threading import Event
 from types import SimpleNamespace as NS
 import unittest

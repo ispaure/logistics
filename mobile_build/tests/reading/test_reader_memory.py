@@ -1,4 +1,8 @@
 """Cross-runtime admission policy and memory-only accounting."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 from pathlib import Path
 from types import SimpleNamespace
 import unittest

@@ -1,4 +1,8 @@
 """Images remain provider documents across navigation and failed replacement."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -54,7 +58,7 @@ class ImageDocumentTests(unittest.TestCase):
                     LogisticsMobile.storage_root = None
 
     def test_home_server_image_navigation_is_read_only_and_session_only(self):
-        from mobile_build.tests.reading.test_remote_readers import RemoteClient
+        from mobile_build.tests.support.readers import RemoteClient
         from features.rclone.mobile.remote_readers import RemoteReaders
         class ServerClient(RemoteClient):
             package_records = [dict(package_name='Session network shares', remotes=['Photos'], saved=False)]

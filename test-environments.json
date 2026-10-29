@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "macos_runner": "macos-26",
+  "windows_runner": "windows-11-arm",
+  "linux_runner": "ubuntu-24.04-arm",
+  "ios_runner": "xcode-27",
+  "android_runner": "ubuntu-24.04",
+  "python_version": "3.12.2",
+  "fedora_image": "fedora:44",
+  "ios_sdk": "27.1",
+  "iphone_runtime": "27.0",
+  "duo_runtime": "27.1",
+  "ipad_runtime": "27.0",
+  "android_api": "36",
+  "android_model": "pixel_9",
+  "android_local_abi": "arm64-v8a",
+  "android_github_abi": "x86_64",
+  "macos_major": "26",
+  "windows_major": "11"
+}

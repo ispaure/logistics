@@ -1,4 +1,8 @@
 """Isolated Android phone chat/IME geometry proof; no real server or account."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

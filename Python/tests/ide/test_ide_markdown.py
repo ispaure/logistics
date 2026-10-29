@@ -1,4 +1,8 @@
 """Markdown tabs participate in the IDE document lifecycle."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import time
 from pathlib import Path
 from unittest.mock import patch

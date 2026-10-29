@@ -1,4 +1,8 @@
 """Sharing overrides presentation without changing standalone preferences."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from dataclasses import replace
 from io import BytesIO

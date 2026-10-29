@@ -1,4 +1,8 @@
 """The application participant owns queued work without any browser window."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep

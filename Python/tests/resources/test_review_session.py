@@ -1,4 +1,8 @@
 """Approval cannot outlive its reviewed files or credential binding."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from threading import Event
 import unittest
 from features.rclone.transfers.review import ReviewSession, ReviewRequest

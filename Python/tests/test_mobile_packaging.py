@@ -1,4 +1,8 @@
 """Mobile payload selection and evidence checks, using isolated Git fixtures."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import importlib.util
 import json
 from pathlib import Path

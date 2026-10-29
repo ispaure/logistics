@@ -1,4 +1,8 @@
 """Developer commands preserve suite isolation, environment selection and failures."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import importlib.util
 import os
 import sys

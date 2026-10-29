@@ -1,4 +1,8 @@
 """Shared live magnifier settings survive new readers and process preferences."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

@@ -1,4 +1,8 @@
 """Bounded checks for content rendered by the actual native WebView."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 

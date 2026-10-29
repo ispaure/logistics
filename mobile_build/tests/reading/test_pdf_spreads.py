@@ -1,4 +1,8 @@
 """Exhaustive mixed-aspect spread traversal without native rasterization."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from itertools import product
 from types import SimpleNamespace
 import unittest

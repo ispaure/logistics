@@ -1,3 +1,4 @@
+// TEST_STAGE = TestStage.REGRESSION
 package io.github.ispaure.logistics.notebooks;
 
 import android.graphics.Rect;

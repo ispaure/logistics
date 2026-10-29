@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[2]
 # Direct CI script execution does not inherit the application's source path.
 # The pinned external manager imports commonUtils from its consumer checkout.
 sys.path.insert(0, str(REPO / 'Python'))
+sys.path.insert(0, str(REPO))
 spec = importlib.util.spec_from_file_location('native_ui_contract',
     Path(__file__).resolve().parents[1] / 'native_tests/tests/logisticsmobile/__init__.py')
 contract = importlib.util.module_from_spec(spec)
@@ -133,6 +134,8 @@ def clear_run_reports(logs, target):
 
 
 def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
+    from logistics_build.test_structure import inventory
+    inventory(REPO)
     if no_update:
         if target == 'ios':
             verify_prebuilt_ios(local=local)
@@ -308,9 +311,10 @@ def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
         raise ValueError('Invalid selected Simulator SDK version.')
     # The 27.1 runtime is Duo-only; ordinary phones/tablets use 27.0 with
     # that SDK. Preserve the selected family's compatible runtime major.
-    prefix = 'com.apple.CoreSimulator.SimRuntime.iOS-' + parts[0]
-    devices = {runtime: rows for runtime, rows in client.devices()['devices'].items()
-               if runtime == prefix or runtime.startswith(prefix + '-')}
+    from logistics_build.test_environments import load, runtime_id
+    family = 'duo' if duo else 'ipad' if ipad else 'iphone'
+    required = runtime_id(load(REPO), family)
+    devices = {runtime: rows for runtime, rows in client.devices()['devices'].items() if runtime == required}
     selected = select_ios_device(dict(devices=devices), ipad=ipad, duo=duo)
     runtime, profile = next((runtime, row) for runtime, rows in devices.items()
                             for row in rows if row['udid'] == selected)

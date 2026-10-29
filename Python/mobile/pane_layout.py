@@ -27,3 +27,8 @@ def panes(width, height, *, fold=None, browser_priority=False, leading_fraction=
     if leading_fraction is not None:
         leading = usable * leading_fraction
     return PaneLayout('row', leading, gap, usable - leading)
+
+
+def browser_columns(width, height, *, minimum=640, fold=None, allow_portrait=False):
+    """Portrait and compact windows browse one pane; landscape may show sources."""
+    return bool(fold is not None or width >= minimum and (allow_portrait or width > height >= 500))

@@ -1,5 +1,9 @@
 """Feature-owned collection matching, recursive bounds and atomic per-file batches."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace

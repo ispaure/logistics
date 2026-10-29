@@ -50,7 +50,7 @@ def configure_app_manifest(project):
         data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(path)]))
     objects = data['objects']
     groups = [item for item in objects.values() if item.get('isa') == 'PBXGroup' and item.get('path') == 'LogisticsMobile']
-    applications = [item for item in objects.values() if item.get('productType') == 'com.apple.product-type.application']
+    applications = [item for item in objects.values() if item.get('productType') == 'com.apple.product-type.application' and item.get('name') != 'LogisticsWatch']
     resources = [objects[key] for app in applications for key in app['buildPhases']
                  if objects[key].get('isa') == 'PBXResourcesBuildPhase']
     if len(groups) != 1 or len(resources) != 1:

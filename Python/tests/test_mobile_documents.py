@@ -1,4 +1,8 @@
 """Portable mobile storage and scoped import contracts; no OS impersonation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.SMOKE
 from contextlib import contextmanager
 import codecs
 import io

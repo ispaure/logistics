@@ -1,4 +1,8 @@
 """Bounded native-fixture policy evidence; delegate decisions stay unchanged."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import inspect
 
 

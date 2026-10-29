@@ -1,5 +1,9 @@
 """Alpha preservation in shared image compression and explicit Comics opt-out."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory

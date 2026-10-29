@@ -3,6 +3,10 @@
 This is a targeted probe entry point, separate from the release CASES contract.
 Use a separate app ID and copy its result from the app cache after each phase.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 import json
@@ -17,6 +21,8 @@ import zlib
 
 from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
+from . import start_native_check
+from .settings import PROBE_ROTATION_SETTLE
 
 BUNDLE = 'io.github.ispaure.logisticsreaderprobe'
 
@@ -67,14 +73,12 @@ class ReaderProbe(LogisticsMobile):
         super().startup()
 
     def on_running(self):
-        self.loop.create_task(self.probe())
+        start_native_check(self, type(self).probe)
 
     async def until(self, predicate, message='Reader condition timed out'):
-        for _ in range(150):
-            if predicate():
-                return
-            await asyncio.sleep(.1)
-        raise AssertionError(message)
+        from commonUtils.testing.waiting import wait_until
+        from .settings import READER_READY_TIMEOUT
+        return await wait_until(predicate, timeout=READER_READY_TIMEOUT, message=message)
 
     async def settled(self, owner):
         await self.until(lambda: not owner.book_busy)
@@ -91,13 +95,9 @@ class ReaderProbe(LogisticsMobile):
         await self.settled(owner)
 
     async def rotate(self, landscape):
-        if sys.platform == 'ios':
-            from rubicon.objc import ObjCClass
-            preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(8 if landscape else 2)
-            self.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
-        else:
-            self._impl.native.setRequestedOrientation(0 if landscape else 1)
-        await asyncio.sleep(1)
+        from .rotation_checks import rotate
+        await rotate(self, 'landscape-left' if landscape else 'portrait', settle=PROBE_ROTATION_SETTLE)
+
 
     async def composite_zoom(self, spread, output, prefix):
         assert len(spread.canvases) == 1

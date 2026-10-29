@@ -1,4 +1,8 @@
 """Real native widgets + compiled crypt bridge, using desktop-made ciphertext."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 import json

@@ -1,4 +1,8 @@
 """Native remote previews, transfer workflows and retained credential lifecycle."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from commonUtils.runtime.resources.documents import LocalDocuments
 

@@ -1,4 +1,8 @@
 """Indexed eraser broad phase must preserve the exact full-scan cut geometry."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import random
 import unittest
 from unittest.mock import patch

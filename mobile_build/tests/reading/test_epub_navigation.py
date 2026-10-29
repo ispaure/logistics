@@ -1,4 +1,8 @@
 """Nested chapter disclosure preserves exact destinations without search UI."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 import unittest
 import toga

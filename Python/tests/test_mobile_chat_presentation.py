@@ -1,4 +1,8 @@
 """Inert message formatting and bounded mobile composer layout."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 
 from features.lm.domain import message

@@ -1,4 +1,8 @@
 """Source isolation, credential defaults and iOS shared-root browsing."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -404,7 +408,7 @@ class FolderSourceTabTests(unittest.TestCase):
             app.file_changing_location = False
 
     def test_ios_imported_and_synced_folders_open_directly_above_browse_all(self):
-        from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+        from mobile_build.tests.support.mirror import MirrorClient
         app = self.app
         documents = Path(self.directory.name) / 'Documents'
         (documents / 'Local' / 'Imported').mkdir(parents=True)
@@ -499,7 +503,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(set(source_choices(choices, 'Local', {'Mac'})), {'Offline', 'Share copy'})
 
     def test_rows_show_storage_for_selected_tab(self):
-        from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+        from mobile_build.tests.support.mirror import MirrorClient
         class Client(MirrorClient):
             def cancel(self): pass
         app = self.app
@@ -555,7 +559,7 @@ class FolderSourceTabTests(unittest.TestCase):
 
     def test_tab_taps_open_matching_copy_and_menus_keep_same_mapping_actions(self):
         from unittest.mock import AsyncMock, patch
-        from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+        from mobile_build.tests.support.mirror import MirrorClient
         app = self.app
         class Client(MirrorClient):
             def cancel(self): pass

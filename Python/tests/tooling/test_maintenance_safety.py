@@ -1,4 +1,8 @@
 """Regression coverage for failed feature discovery and numerical boundaries."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from unittest.mock import patch
 from types import ModuleType

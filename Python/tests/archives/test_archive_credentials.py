@@ -1,4 +1,8 @@
 """Credential package loading validates in memory and never extracts plaintext TXT."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

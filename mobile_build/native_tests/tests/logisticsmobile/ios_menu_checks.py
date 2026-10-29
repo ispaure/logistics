@@ -1,4 +1,8 @@
 """Exercise folder/file action sheets in an isolated native test app."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 
 

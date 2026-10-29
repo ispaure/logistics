@@ -1,4 +1,8 @@
 """Disposable native Settings geometry checks, with explicit hinge injection."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path
@@ -7,6 +11,9 @@ from uuid import uuid4
 
 import toga
 from mobile.app import LogisticsMobile
+from . import start_native_check
+from .settings import PROBE_ROTATION_SETTLE
+from .rotation_checks import rotate
 
 
 class SettingsLayoutProbe(LogisticsMobile):
@@ -15,10 +22,10 @@ class SettingsLayoutProbe(LogisticsMobile):
         super().startup()
 
     def on_running(self):
-        self.loop.create_task(self.probe())
+        start_native_check(self, type(self).probe)
 
     async def probe(self):
-        from rubicon.objc import Block, ObjCClass, objc_id
+        from rubicon.objc import Block, objc_id
         from toga_iOS.libs import UIGraphicsImageRenderer
         from toga_iOS.images import nsdata_to_bytes
         output = Path(self.paths.cache) / 'settings-layout-probe'
@@ -27,9 +34,7 @@ class SettingsLayoutProbe(LogisticsMobile):
         try:
             await asyncio.sleep(1)
             window = self.main_window._impl.native
-            preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(16)
-            window.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
-            await asyncio.sleep(1)
+            await rotate(self, 'landscape-right', settle=PROBE_ROTATION_SETTLE)
             report['observed_hinge_status'] = getattr(self, '_hinge_status', None)
             report['window'] = [float(window.bounds.size.width), float(window.bounds.size.height)]
             report['orientation'] = int(window.windowScene.interfaceOrientation)

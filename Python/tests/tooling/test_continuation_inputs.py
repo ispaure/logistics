@@ -1,4 +1,8 @@
 """Source applicability must fail closed for application, shared and mode changes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory

@@ -15,7 +15,7 @@ def configure_ios(project):
     except plistlib.InvalidFileException:
         data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(pbx)]))
     objects = data['objects']
-    apps = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application']
+    apps = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application' and obj.get('name') != 'LogisticsWatch']
     if len(apps) != 1:
         raise ValueError('Expected one main application for Wi-Fi access.')
     configurations = objects[apps[0]['buildConfigurationList']]['buildConfigurations']

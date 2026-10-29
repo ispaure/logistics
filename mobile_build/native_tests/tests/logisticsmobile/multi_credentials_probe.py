@@ -1,4 +1,8 @@
 """Disposable native proof of mixed credential modes; synthetic ZIPs only."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 import json

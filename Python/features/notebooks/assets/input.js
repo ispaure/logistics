@@ -28,6 +28,9 @@ function hits(p) {
   return state.strokes.filter(s => visible.has(s.layer) && s.points.some((v, i) => distance(p, i ? s.points[i - 1] : v, v) < (mode === 'erase' ? eraserRadius + v[3] / 2 : Math.max(12, v[3] / 2)))).map(s => s.id)
 }
 canvas.onpointerdown = e => {
+  // A second contact (often the resting palm) must not fall through to the
+  // browser's default selection even while a Pencil stroke owns the canvas.
+  e.preventDefault();
   if (e.pointerType === 'pen' && state.native_pen && e.isTrusted && !e.nativePen) {
     e.preventDefault();
     return

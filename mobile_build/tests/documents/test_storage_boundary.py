@@ -1,4 +1,8 @@
 """Shared mobile document dispatch and native privacy choices."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch

@@ -1,5 +1,9 @@
 """Contributed actions retain confirmation, workflow and refresh behavior."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from unittest.mock import Mock, patch
 import unittest
 

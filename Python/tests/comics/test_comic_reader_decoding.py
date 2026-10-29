@@ -1,5 +1,9 @@
 """Reader decoding when a platform's Qt image codecs are unavailable."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 import gc
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')

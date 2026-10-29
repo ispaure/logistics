@@ -1,4 +1,8 @@
 """Folder Back stacks and explicit reader-to-folder navigation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -505,7 +509,7 @@ class ShowInFolderTests(TestCase):
 
     def test_remote_reader_reveals_original_remote_and_selects_file(self):
         from features.rclone.mobile.remote_readers import RemoteReaders
-        from mobile_build.tests.reading.test_remote_readers import RemoteClient
+        from mobile_build.tests.support.readers import RemoteClient
         from mobile.document_sources import show_in_folder, folder_action
         app = self.app
         app.cloud_client = client = RemoteClient()

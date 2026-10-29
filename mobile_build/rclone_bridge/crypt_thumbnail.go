@@ -27,10 +27,15 @@ func nativeThumbnail(ctx context.Context, data []byte, width, height int) (map[s
 	if err != nil {
 		return nil, err
 	}
-	if width*config.Height > height*config.Width {
-		width = max(1, height*config.Width/config.Height)
+	orientation := imageOrientation(data)
+	displayWidth, displayHeight := config.Width, config.Height
+	if orientation >= 5 {
+		displayWidth, displayHeight = displayHeight, displayWidth
+	}
+	if width*displayHeight > height*displayWidth {
+		width = max(1, height*displayWidth/displayHeight)
 	} else {
-		height = max(1, width*config.Height/config.Width)
+		height = max(1, width*displayHeight/displayWidth)
 	}
 	small := image.NewNRGBA(image.Rect(0, 0, width, height))
 	bounds := original.Bounds()
@@ -39,7 +44,8 @@ func nativeThumbnail(ctx context.Context, data []byte, width, height int) (map[s
 			return nil, ctx.Err()
 		}
 		for x := 0; x < width; x++ {
-			small.Set(x, y, original.At(bounds.Min.X+x*config.Width/width, bounds.Min.Y+y*config.Height/height))
+			sx, sy := encodedPoint(x*displayWidth/width, y*displayHeight/height, config.Width, config.Height, orientation)
+			small.Set(x, y, original.At(bounds.Min.X+sx, bounds.Min.Y+sy))
 		}
 	}
 	var output bytes.Buffer

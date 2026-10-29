@@ -1,4 +1,8 @@
 """Controlled device contracts. No live discovery, native build or installation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
 import json
 import os
@@ -15,6 +19,19 @@ from logistics_build.manager_journeys import PlanningContext
 
 
 class ManagerDeviceTests(unittest.TestCase):
+    def test_provisioning_updates_require_explicit_captured_choice(self):
+        from logistics_build.manager_journeys import run_values
+        ios = Mock()
+        ios.provisioning_auth_args.return_value = ['-authenticationKeyPath', '/protected/key.p8']
+        self.assertEqual(devices.ios_provisioning_args({}, ios), [])
+        ios.provisioning_auth_args.assert_not_called()
+        values = run_values({'devices.ios_provisioning': 'update'})
+        args = devices.ios_provisioning_args({'run_overrides': values}, ios)
+        self.assertIn('-allowProvisioningUpdates', args)
+        self.assertNotIn('-allowProvisioningDeviceRegistration', args)
+        with self.assertRaises(ValueError):
+            run_values({'devices.ios_provisioning': 'automatic'})
+
     def setUp(self):
         self.temp = TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name); self.mobile = self.root / 'mobile_build'

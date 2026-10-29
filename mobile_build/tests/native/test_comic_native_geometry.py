@@ -1,4 +1,8 @@
 """Fullscreen centering compares screen positions using the actual window origin."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import patch

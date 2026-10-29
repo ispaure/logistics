@@ -330,7 +330,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         title = reader.title if record['kind'] == 'epub' else record['name']
         direction = ' · Right-to-left manga' if getattr(reader, 'right_to_left', False) else ''
         position = str(index + 1) if record['kind'] == 'epub' or len(indices) == 1 else f'{indices[0] + 1}–{indices[-1] + 1}'
-        self.book_status.text = (f'Page {position}/{count}{self.comic_navigation.part_label}{direction}' if record['kind'] == 'comic'
+        self.book_status.text = (f'Page {self.comic_navigation.progress_label}{direction}' if record['kind'] == 'comic'
                                  else f'{title} · {position}/{count}{direction}')
         publication.footer(self, comic=record['kind'] == 'comic', count=count, index=index,
                            right_to_left=getattr(reader, 'right_to_left', False),

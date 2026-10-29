@@ -1,4 +1,8 @@
 """Disposable native profiling; never installed as the ordinary app launcher."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import cProfile
 from io import StringIO

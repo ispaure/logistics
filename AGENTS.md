@@ -88,7 +88,13 @@ build path or temporary device, give it an explicit cleanup lifecycle and report
 any leftovers; do not leave SDK/AVD copies in global temporary storage.
 
 Automatic retention keeps three newest provider builds plus those used within
-one day; source snapshots keep three newest plus those used within seven days.
+one day; source snapshots keep three newest plus those used within seven days,
+subject to a 24 GiB soft budget and one-hour grace period. Recipe-owned device-build
+workspaces keep three newest per platform plus one day, with 12 GiB per platform.
+Metadata-identified Xcode project caches keep three newest eligible entries plus
+one day, with 12 GiB and one-hour access protection. Budget pressure evicts oldest
+eligible entries sooner; newest entries, pins, durable holds and active locks win.
+Preserve other projects' caches and all existing personal simulators/device data.
 A `.keep` file anywhere inside an owned tree pins it. Active leases protect
 running work. Retention never sweeps arbitrary `/tmp` paths, existing personal
 simulators, shared SDKs, credentials or unclassified test evidence. Use

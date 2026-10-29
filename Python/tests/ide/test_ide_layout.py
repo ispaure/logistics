@@ -1,4 +1,8 @@
 """Project ownership, compact menus, tab geometry and confined editor gestures."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase

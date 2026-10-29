@@ -1,4 +1,8 @@
 """Real CLI remote reads against synthetic local and crypt backends."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
@@ -188,9 +192,10 @@ class RemoteBrowserTests(QtTestCase):
                 self.wait_until(lambda: not duplicate.file_browser.busy, timeout=15)
 
     def test_unsupported_and_oversize_files_require_manual_copy(self):
-        for name, size in [('movie.avi', 30), ('large.txt', 2*1024*1024), ('photo.png', 20*1024*1024)]:
-            with self.assertRaises(LocalCopyRequired):
+        for name, size in [('opaque.bin', 30), ('large.txt', 2*1024*1024), ('photo.png', 20*1024*1024)]:
+            with self.subTest(name=name), self.assertRaises(LocalCopyRequired):
                 direct_kind(name, size)
+        self.assertEqual(direct_kind('movie.avi', 30), 'video')
         self.assertEqual(direct_kind('large.cbz', 1024**3), 'archive')
 
     def test_forgetting_saved_config_revokes_its_in_memory_snapshot(self):

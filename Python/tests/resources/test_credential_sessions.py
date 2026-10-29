@@ -1,4 +1,8 @@
 """Registry instances own independent, revocable in-memory credential trees."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import unittest
 from features.rclone.credential_sessions import CredentialSessions

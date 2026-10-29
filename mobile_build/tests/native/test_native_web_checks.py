@@ -1,4 +1,8 @@
 """Native WebView probes require real text after provisional navigation settles."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch

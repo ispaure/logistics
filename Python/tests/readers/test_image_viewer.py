@@ -1,4 +1,8 @@
 """Image documents retain their provider and old pixels on failed navigation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import patch, Mock
 from commonUtils.tests.qt_test_case import QtTestCase

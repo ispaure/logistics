@@ -38,6 +38,7 @@ python3 dev.py lint
 | Mobile build tooling ownership | `mobile_build/` | [Build tooling map](build-tooling.md) |
 | Mobile builds, deployment or native bridges | `mobile_build/`; application source stays under `Python/` | [Mobile handbook](mobile-handbook.md) |
 | Tests for any of these | `Python/tests/` or `mobile_build/tests/` | [Test selection and commands](testing.md#find-the-tests-for-your-change) |
+| Test labels, smoke selection and failure policy | `test-structure.json`, `build-tests.json`, shared `TestStage` enum | [Execution stages](testing.md#execution-stages-and-failure-policy) |
 
 Follow registration factories to the canonical implementation. Feature redirectors
 have been removed; import the owning module directly. The application feature
@@ -60,7 +61,7 @@ Read only the contracts relevant to your change. Feature-specific implementation
 | Mobile payload manifests and portable imports | [Mobile preparation](mobile-preparation.md) |
 | Mobile file/conversation drawers and paired panes | [Workspace navigation](mobile-workspace-navigation.md) |
 | iPhone Duo button placement and panel acceptance plan | [iPhone Duo UI brief](iphone-duo-ui-brief.md) |
-| Native Home Screen widgets and Shortcuts actions | [Shortcut value widgets](shortcut-widgets.md) |
+| Native phone/Watch widgets and Shortcuts actions | [Shortcut value widgets](shortcut-widgets.md) |
 | Mobile build/deployment reference | [Mobile launchers](mobile-launchers.md) |
 | Unified plans, profiles and reusable orchestration | [Build manager](build-manager.md) |
 | Combined platform validation and reviewed tester/release delivery | [Combined journey contracts](build-manager-journeys.md) |
@@ -74,6 +75,9 @@ Read only the contracts relevant to your change. Feature-specific implementation
 | Encrypted copies and remote browsing | [LocalCrypt](../features/rclone/development/localcrypt.md), [remote browsing](../features/rclone/development/remote-browsing.md) |
 
 ## Validation and evidence
+
+For a new test, follow [adding and diagnosing tests](adding-tests.md). It covers
+fixtures, information sources, registration files and native case inventories.
 
 [Focused host tests](testing.md) are the everyday starting point. Device interaction
 and native adapter changes additionally need native validation. These references

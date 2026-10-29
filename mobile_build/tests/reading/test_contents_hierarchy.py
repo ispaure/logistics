@@ -1,4 +1,8 @@
 """Contents destinations, disclosure independence and failure fallbacks."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 from types import SimpleNamespace as NS

@@ -1,4 +1,8 @@
 """Real Qt pixels, rapid turns and private snapshot retirement."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from commonUtils.tests.qt_test_case import QtTestCase
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QApplication

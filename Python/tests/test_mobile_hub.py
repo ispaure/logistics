@@ -1,4 +1,8 @@
 """Mobile preferences and offline preview contracts, runnable on real devices."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import json
 from tempfile import TemporaryDirectory

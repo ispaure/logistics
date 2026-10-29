@@ -1,4 +1,8 @@
 """Optional rebuilt host bridge integration; only synthetic in-memory remotes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from io import BytesIO
 import os
 from pathlib import Path
@@ -77,6 +81,8 @@ class RemoteNativeBridgeTests(unittest.TestCase):
             upload = root / 'upload'
             upload.mkdir()
             (upload / 'note.txt').write_bytes(b'native remote sentinel')
+            video_bytes = bytes(range(256)) * 19000
+            (upload / 'movie.avi').write_bytes(video_bytes)
             image = BytesIO()
             Image.new('RGB', (24, 32), 'red').save(image, 'PNG')
             (upload / 'page.png').write_bytes(image.getvalue())
@@ -88,10 +94,37 @@ class RemoteNativeBridgeTests(unittest.TestCase):
                 archive.writestr('Secret.txt', '[Secret]\ntype=crypt\nremote=Cloud:encrypted\n'
                     'password=kbLdY_D-MRsrDH6_akD3SfOzlJ0VseUk2jfUrywMSTOLmTrSvFOxCkP94a-Ul-w\n')
             client.import_package(LocalDocuments(), package, '', remember=False)
+            # The synthetic unencrypted ZIP needs the normal initial resume-password setup.
+            gate = client.session_privacy
+            self.assertTrue(gate.configure('Synthetic-video-resume'))
+            self.assertTrue(gate.authorize(gate.revision))
             for remote in ('Cloud', 'Secret'):
                 identity = client.connection_identity(remote)
                 client.request('mirror_sync', remote=remote, path='folder', identity=identity,
                     run=uuid4().hex, local_path=str(upload), push=True, decrypted=True)
+                # Use VideoContent's actual 4 MiB range policy through the Go
+                # library, rather than a permissive Python client double.
+                from features.rclone.mobile.service import native_service
+                from features.rclone.remote_access import NativeRemoteLocation
+                from features.video.playback import VideoContent
+                resource = native_service(client).remotes.open(NativeRemoteLocation(remote))
+                content = VideoContent(resource, 'folder/movie.avi')
+                try:
+                    from unittest.mock import patch
+                    with patch.object(client, 'request', wraps=client.request) as requests:
+                        with content.open() as stream:
+                            self.assertEqual(stream.read(4 * 1024 * 1024), video_bytes[:4 * 1024 * 1024])
+                            self.assertEqual(stream.read(16), video_bytes[4 * 1024 * 1024:4 * 1024 * 1024 + 16])
+                        fetched = [call for call in requests.call_args_list if call.args[0] == 'remote_range']
+                        self.assertEqual(len(fetched), 2)
+                        with content.open() as rewound:
+                            self.assertEqual(rewound.read(32), video_bytes[:32])
+                        self.assertEqual(len([call for call in requests.call_args_list
+                                              if call.args[0] == 'remote_range']), 2,
+                                         'Rewind fetched data already held in memory')
+                finally:
+                    content.close()
+                    resource.close()
                 readers = RemoteReaders(client, remote)
                 text = readers.open('folder/note.txt')
                 self.assertEqual(text.text, 'native remote sentinel')

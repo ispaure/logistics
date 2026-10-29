@@ -1,4 +1,8 @@
 """Explicit New/Open launch choices must not open an editor on cancellation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from unittest.mock import Mock, patch
 from types import SimpleNamespace

@@ -1,4 +1,8 @@
 """PDF-backed archive round trips, exclusive sibling creation and reader commands."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace

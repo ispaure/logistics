@@ -1,4 +1,6 @@
 """The periodic diagnostic preserves successful and failed test-suite outcomes."""
+
+# TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import subprocess
 import sys
@@ -12,7 +14,7 @@ class RegressionRunnerTests(unittest.TestCase):
     def run_fixture(self, fails):
         with TemporaryDirectory() as temporary:
             fixture = Path(temporary) / 'test_slow.py'
-            fixture.write_text('import time, unittest\n'
+            fixture.write_text('# TEST_STAGE = TestStage.REGRESSION\n' 'import time, unittest\n'
                 'class SlowTest(unittest.TestCase):\n'
                 '    def test_slow(self):\n'
                 '        time.sleep(.15)\n'
@@ -42,7 +44,7 @@ class NestedRegressionRunnerTests(unittest.TestCase):
                 folder = root / name
                 folder.mkdir()
                 (folder / 'test_duplicate.py').write_text(
-                    'import unittest\nclass Test(unittest.TestCase):\n'
+                    '# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\nclass Test(unittest.TestCase):\n'
                     f'    def test_value(self): self.assertFalse({fails!r})\n')
             result = subprocess.run([sys.executable, str(RUNNER), str(root), '--isolate-modules'],
                                     capture_output=True, text=True, timeout=15)
@@ -53,7 +55,7 @@ class NestedRegressionRunnerTests(unittest.TestCase):
 
     def test_empty_test_module_is_an_error(self):
         with TemporaryDirectory() as temporary:
-            (Path(temporary) / 'test_empty.py').write_text('')
+            (Path(temporary) / 'test_empty.py').write_text('# TEST_STAGE = TestStage.REGRESSION\n')
             result = subprocess.run([sys.executable, str(RUNNER), temporary, '--isolate-modules'],
                                     capture_output=True, text=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)
@@ -64,10 +66,10 @@ class NestedRegressionRunnerTests(unittest.TestCase):
             root = Path(temporary)
             child = root / 'child'
             child.mkdir()
-            (child / '__init__.py').write_text('')
+            (child / '__init__.py').write_text('# TEST_STAGE = TestStage.REGRESSION\n')
             for folder in (root, child):
                 (folder / 'test_duplicate.py').write_text(
-                    'import unittest\nclass Test(unittest.TestCase):\n'
+                    '# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\nclass Test(unittest.TestCase):\n'
                     '    def test_value(self): self.assertTrue(True)\n')
             result = subprocess.run([sys.executable, str(RUNNER), temporary, '--isolate-modules'],
                                     capture_output=True, text=True, timeout=15)
@@ -80,10 +82,10 @@ class NestedRegressionRunnerTests(unittest.TestCase):
             root = Path(temporary)
             child = root / 'child'
             child.mkdir()
-            (child / '__init__.py').write_text('')
+            (child / '__init__.py').write_text('# TEST_STAGE = TestStage.REGRESSION\n')
             (child / 'helper.py').write_text('VALUE = 42\n')
             (child / 'test_relative.py').write_text(
-                'import unittest\nfrom .helper import VALUE\nclass Test(unittest.TestCase):\n'
+                '# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\nfrom .helper import VALUE\nclass Test(unittest.TestCase):\n'
                 '    def test_value(self): self.assertEqual(VALUE, 42)\n')
             result = subprocess.run([sys.executable, str(RUNNER), temporary, '--isolate-modules'],
                                     capture_output=True, text=True, timeout=15)
@@ -97,7 +99,7 @@ class StorageIsolationTests(unittest.TestCase):
             root = Path(temporary)
             fixture = root / 'test_storage.py'
             fixture.write_text(
-                'import os, unittest\nfrom pathlib import Path\n'
+                '# TEST_STAGE = TestStage.REGRESSION\n' 'import os, unittest\nfrom pathlib import Path\n'
                 'home = Path.home()\n'
                 'storage = Path(os.environ["COMMONUTILS_STORAGE_ROOT"])\n'
                 '(home / "discovered").write_text("fixture")\n'
@@ -123,7 +125,7 @@ class MatrixSelectionTests(unittest.TestCase):
             for name in ('test_qt_mobile_host.py', 'test_native_other.py'):
                 (root / name).write_text('raise AssertionError("Must not be imported")\n')
             (root / 'test_native_selected.py').write_text(
-                'import unittest\nclass Test(unittest.TestCase):\n'
+                '# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\nclass Test(unittest.TestCase):\n'
                 '    def test_value(self): self.assertTrue(True)\n')
             command = [sys.executable, str(RUNNER), temporary, '--isolate-modules',
                        '--pattern', 'test_native*.py', '--include-pattern', '*selected.py']

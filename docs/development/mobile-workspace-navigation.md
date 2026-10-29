@@ -1585,3 +1585,16 @@ Leading form actions also retain their native item groups when their command sta
 and actual controller ownership are unchanged. Rotation alone does not rebuild
 these groups; changed labels, enabled state, Back policy or controller reuse
 restore the current projection. This contract is covered in `test_ios_toolbar`.
+
+## Compact portrait browsing and viewing
+
+File browsing uses a single content pane in portrait and in narrow windows.
+The exterior display and a narrow interior side-by-side allocation use the same
+window-geometry policy: source/browser columns require at least 640 usable points
+and landscape bounds with at least 500 points of height, unless an active reserved
+fold requires separate panes. This keeps the 678×466 exterior landscape window
+compact while allowing the 951×669 interior landscape window to split.
+The Android E Ink threshold remains 516 points. Native iOS folder Search joins
+the leading group on vertical bars, immediately following system Back; UIKit
+owns safe positioning around the Dynamic Island. Other panel actions continue
+through the shared native navigation-bar projection.

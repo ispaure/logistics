@@ -1,4 +1,8 @@
 """Production migrations preserve legacy data and expose systemic INI overrides."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.SMOKE
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import json

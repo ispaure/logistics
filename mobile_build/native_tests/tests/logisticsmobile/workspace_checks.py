@@ -1,4 +1,8 @@
 """Actual retained-editor and conversation drawer checks, using window bounds."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from commonUtils.runtime.platform import get_os, OS
 from .fixtures import capture_window, ios_toolbar_items

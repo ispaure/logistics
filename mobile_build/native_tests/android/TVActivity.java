@@ -1,3 +1,4 @@
+// TEST_STAGE = TestStage.REGRESSION
 package io.github.ispaure.logisticstvprobe;
 
 import android.app.Activity;

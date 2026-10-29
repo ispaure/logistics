@@ -65,9 +65,11 @@ def compact_private_view(self, view):
     install_document_location(view.crypt_view, copies=view._crypt_reader_store, reader=view.crypt_reader)
     view.crypt_view._native_reader_title = lambda: (Path(view.crypt_reader.name).name +
         (' (🕵️ Session-Only)' if 'Session-Only' in view.crypt_view._document_storage_status else ''))
-    view.crypt_immersive = view.crypt_reader.kind in {'.cbz', '.zip'}
+    image = bool(getattr(view.crypt_reader, 'image_document', False))
+    comic = view.crypt_reader.kind in {'.cbz', '.zip'}
+    view.crypt_immersive = comic or image or view.crypt_reader.kind == '.pdf'
     if view.crypt_immersive:
-        view.reading_frame.set_immersive(True, comic=True)
+        view.reading_frame.set_immersive(True, comic=comic, image=image or view.crypt_reader.kind == '.pdf')
     self.register_transfer_status(view.crypt_view)
 
 

@@ -1,4 +1,8 @@
 """Acquired provider readers retain cleanup ownership until view admission."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from tempfile import TemporaryDirectory
 from pathlib import Path

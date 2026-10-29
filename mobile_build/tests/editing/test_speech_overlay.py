@@ -1,4 +1,8 @@
 """Read-aloud presentation leaves document layout intact and uses saved voices."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch

@@ -1,4 +1,8 @@
 """Hue failures must never address a fallback group or send invalid properties."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from unittest.mock import Mock, patch
 import unittest
 from features.smart_home.philips_hue import api

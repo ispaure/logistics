@@ -267,3 +267,10 @@ comic or EPUB reloads at its saved page or passage when you return. Reading mode
 or visible controls are preserved. Closed documents and readers on other screens
 stay closed or inactive. Password-protected documents retain their usual unlock
 requirements; session-only content is revealed only after its session password.
+
+The progress badge names the source pages currently visible: for example
+**69 & 70 / 250**. A wide page divided into portrait slides shows
+**69 1/2 / 250**, then **69 2/2 / 250**. The saved page remains the source page;
+rotating or changing layout does not turn slide halves into extra comic pages.
+JPEG, WebP and PNG orientation metadata is applied before spread sizing and
+splitting, including mirrored orientations.

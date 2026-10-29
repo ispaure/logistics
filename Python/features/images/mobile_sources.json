@@ -7,6 +7,8 @@
     "mobile/navigation.py",
     "mobile/__init__.py",
     "mobile/burst_camera.py",
-    "mobile/ios/BurstCamera.m"
+    "mobile/ios/BurstCamera.m",
+    "orientation.py",
+    "mobile/decoding.py"
   ]
 }

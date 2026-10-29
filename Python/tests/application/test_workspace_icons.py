@@ -1,4 +1,8 @@
 """Rendered workspace artwork retains its state and palette without an accent."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 

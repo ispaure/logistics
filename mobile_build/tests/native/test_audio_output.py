@@ -1,4 +1,8 @@
 """Output consent, cross-scene revocation and Settings contracts (no hardware claims)."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

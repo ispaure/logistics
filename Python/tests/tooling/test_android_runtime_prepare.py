@@ -1,4 +1,8 @@
 """Cold Android compiler cache resolves the host created by the real build step."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory

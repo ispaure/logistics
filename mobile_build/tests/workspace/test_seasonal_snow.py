@@ -1,4 +1,8 @@
 """Snow preferences persist and high contrast removes the native decoration."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory

@@ -28,7 +28,7 @@ def selected_tests(root, owner):
     return sorted(set(selected))
 
 
-def test_owner(root, owner, python, *, dry_run=False):
+def test_owner(root, owner, python, *, dry_run=False, profile='full', mode='diagnostic', fail_fast=False):
     try:
         selected = selected_tests(root, owner)
     except ValueError as error:
@@ -36,9 +36,16 @@ def test_owner(root, owner, python, *, dry_run=False):
         return 2
     failed = False
     for suite, pattern in selected:
-        command = [str(python), str(root / 'dev.py'), 'test', suite, pattern]
+        command = [str(python), str(root / 'dev.py'), 'test', suite, pattern,
+                   '--profile', profile, '--mode', mode]
+        if fail_fast:
+            command.append('--fail-fast')
         if dry_run:
             print(f'{suite}: {pattern}')
         else:
-            failed |= subprocess.run(command, cwd=root).returncode != 0
+            code = subprocess.run(command, cwd=root).returncode
+            failed |= code != 0
+            if code and (fail_fast or mode == 'fast'):
+                print('Remaining owner selections not run after failure.')
+                break
     return int(failed)

@@ -1,4 +1,8 @@
 """Workspaces keeps a single row outline and a visible monochrome selection."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from types import SimpleNamespace as NS
 from unittest.mock import Mock, patch

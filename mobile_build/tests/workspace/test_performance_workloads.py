@@ -1,4 +1,8 @@
 """Performance evidence observes blocking without exposing fixture contents."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import json
 import time

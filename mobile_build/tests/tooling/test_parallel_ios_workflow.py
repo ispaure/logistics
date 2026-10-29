@@ -1,4 +1,8 @@
 """GitHub mobile scheduling and shell gates, exercised with disposable fixtures."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import itertools
 import json
 import os
@@ -36,9 +40,9 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
 
     def test_parallel_devices_depend_only_on_one_ios_build(self):
         workflow = self.workflow
-        self.assertIn('    needs: ios-build\n', workflow['ios-ui'])
-        self.assertNotIn('needs:', workflow['ios-build'])
-        self.assertNotIn('needs:', workflow['android'])
+        self.assertIn('    needs: [environment, ios-build]\n', workflow['ios-ui'])
+        self.assertIn('    needs: environment\n', workflow['ios-build'])
+        self.assertIn('    needs: environment\n', workflow['android'])
         self.assertIn('fail-fast: false', workflow['ios-ui'])
         self.assertNotIn('max-parallel: 1', workflow['ios-ui'])
         self.assertIn('        device: [iphone, duo, ipad]\n', workflow['ios-ui'])

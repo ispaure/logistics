@@ -1,4 +1,8 @@
 """Project-owned combined plans; native tools/providers never run in these tests."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
 import json
 import os
@@ -52,6 +56,7 @@ class JourneyAdapterTests(unittest.TestCase):
         self.root = Path(self.temporary.name).resolve()
         descriptor = json.loads((ROOT / 'build-project.json').read_text())
         (self.root / 'build-project.json').write_text(json.dumps(descriptor))
+        (self.root / 'build-tests.json').write_text((ROOT / 'build-tests.json').read_text())
         self.values = {'tools.desktop_python': sys.executable, 'tools.mobile_python': sys.executable,
                        'auth.github_reference': 'GH_TOKEN', 'github.repository': 'fixture/repo',
                        'testflight.app_id': 'fixture-ios', 'testflight.external_group': 'Fixture testers',
@@ -372,6 +377,22 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertEqual(mobile.call_args.args[2], source)
         self.assertEqual(mobile.call_args.args[5], self.values)
         materialize.assert_called_once()
+
+    def test_working_manager_source_cannot_authorize_delivery_or_hosted_testing(self):
+        for options in ({'goal': 'deliver', 'destinations': ['firebase']},
+                        {'goal': 'validate', 'platforms': ['ios'], 'destinations': [], 'backends': {'ios': 'GitHub'}}):
+            with self.subTest(options=options), self.assertRaisesRegex(ValueError, 'local validation only'):
+                self.make(run_overrides={'testing.manager_source': 'working-tree-local'}, **options)
+        plan = self.make(goal='validate', destinations=[],
+                         run_overrides={'testing.manager_source': 'working-tree-local'})
+        self.assertEqual(plan.source['run_overrides']['testing.manager_source'], 'working-tree-local')
+
+    def test_validation_only_journey_keeps_all_three_native_ios_families(self):
+        plan = self.make(goal='validate', platforms=['ios'], destinations=[])
+        self.assertTrue(next(call[3] for call in self.project.calls if call[1] == 'ios'))
+        phases = {phase.id for phase in plan.phases}
+        self.assertTrue({'ios.validation.iphone', 'ios.validation.duo', 'ios.validation.ipad'} <= phases)
+        self.assertFalse(any(phase.effect in {'upload', 'publish', 'dispatch'} for phase in plan.phases))
 
     def test_real_bridge_action_serializes_the_integrated_plan_without_native_commands(self):
         import subprocess

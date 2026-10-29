@@ -31,10 +31,14 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
     cache, installed = None, False
     with scratch(REPO) as workspace:
         app = prepare(source, workspace / 'build')
-        (app / 'app/logisticsmobile/__main__.py').write_text(
+        entrypoint = (
             ('from tests.logisticsmobile.reader_space_probe import ReaderSpaceProbe\n'
              f'ReaderSpaceProbe("Reader Layout QA", "{BUNDLE}").main_loop()\n') if reader_space else
             'from tests.logisticsmobile.toolbar_conventions_probe import main\nmain().main_loop()\n')
+        for package in ('logisticsmobile', 'tests/logisticsmobile'):
+            (app / 'app' / package / '__main__.py').write_text(entrypoint)
+            for bytecode in (app / 'app' / package / '__pycache__').glob('__main__*.pyc'):
+                bytecode.unlink()
         info = app / 'Info.plist'
         value = plistlib.loads(info.read_bytes())
         (output / 'native-build.json').write_text(json.dumps(dict(
@@ -42,11 +46,10 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
             runtime=runtime, device_type=model, restaged_native_shell=True), indent=2))
         value['CFBundleIdentifier'] = BUNDLE
         info.write_bytes(plistlib.dumps(value))
-        for info in (app / 'PlugIns').glob('*.appex/Info.plist'):
-            value = plistlib.loads(info.read_bytes())
-            value['CFBundleIdentifier'] = value['CFBundleIdentifier'].replace(
-                'io.github.ispaure.logisticsmobile', BUNDLE)
-            info.write_bytes(plistlib.dumps(value))
+        # This panel audit does not launch production app extensions. Their
+        # containing-app identifiers must not leak into the disposable QA copy.
+        for directory in ('PlugIns', 'Extensions'):
+            shutil.rmtree(app / directory, ignore_errors=True)
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True,
                        capture_output=True)
         shutil.copyfile(app / 'app/fold-source.json', output / 'source.json')

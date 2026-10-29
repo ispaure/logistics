@@ -1,4 +1,8 @@
 """Real native controls for complete, cancelled and early transfer reviews."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 

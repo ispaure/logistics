@@ -4,6 +4,10 @@ The automatic sweep records only poses actually observed. --observe-folds keeps
 one comic session open for Device Hub open/close/fold/rotate interaction, saving
 state and screenshots after each settled geometry change. No fake hinge input.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 from dataclasses import asdict
 import json

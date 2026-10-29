@@ -1,4 +1,8 @@
 """Local documents and alternate content providers do not require rclone I/O."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from contextlib import contextmanager
 from io import BytesIO

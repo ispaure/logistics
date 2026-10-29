@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from features.rclone.mobile.credentials_ui import CredentialWorkflow
 """Home/local actions stay usable while cloud-backed reopens await credentials."""
 import asyncio

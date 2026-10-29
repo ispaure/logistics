@@ -1,4 +1,8 @@
 """Remote service lifetimes and publication races without network access."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import asyncio
 from concurrent.futures import ThreadPoolExecutor

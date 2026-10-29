@@ -41,6 +41,7 @@ class TimingReport:
             'directory': str(directory.resolve()), 'pattern': pattern,
             'isolated': isolated, 'python': sys.executable,
             'platform': platform.platform(), 'complete': False,
+            'test_environment': {key: os.environ.get(key) for key in ('QT_QPA_PLATFORM', 'TOGA_BACKEND')},
             'tests': [], 'modules': [],
         }
 
@@ -61,11 +62,14 @@ class TimingReport:
             for row in self.data['tests']:
                 classname, _, name = row['id'].rpartition('.')
                 cases.append(dict(name=name, classname=classname, status=outcomes[row['outcome']],
-                                  seconds=row['duration_seconds'], message=row.get('message', '')))
+                                  seconds=row['duration_seconds'], message=row.get('message', ''), stage=row.get('stage')))
             for row in self.data['modules']:
                 if row['outcome'] != 'passed' or not row['test_report_complete']:
                     cases.append(dict(name=row['path'], classname='Logistics.runner', status='error',
-                                      seconds=row['duration_seconds'], message='Isolated module: ' + row['outcome']))
+                                      seconds=row['duration_seconds'], message='Isolated module: ' + row['outcome'], stage=row.get('stage')))
+            for row in self.data.get('not_run', []):
+                cases.append(dict(name=row.get('id', row.get('file', 'unstarted')), classname='Logistics.not_run',
+                                  status='skipped', message='Not run: ' + row['reason'], stage=row.get('stage')))
             if not self.data['complete'] or not cases or (exit_code and all(row['status'] == 'passed' for row in cases)):
                 cases.append(dict(name='suite_completion', classname='Logistics.runner', status='error',
                                   message='The suite did not complete successfully with case evidence.'))
@@ -86,16 +90,19 @@ class TimedResult(unittest.TextTestResult):
     """Include setup/teardown/cleanups, with fixture errors and subtest failures."""
     def startTest(self, test):
         self._timing = {'id': test.id(), 'started_at': timestamp(), 'outcome': 'incomplete'}
+        if hasattr(self, 'test_stages'):
+            self._timing['stage'] = self.test_stages[test.id()]
         self._started = perf_counter()
         self.status.update(test=test.id(), started=monotonic())
         classname, _, name = test.id().rpartition('.')
-        emit_progress('test_started', name=name, classname=classname)
+        emit_progress('test_started', name=name, classname=classname, stage=self._timing.get('stage'))
         super().startTest(test)
 
     def stopTest(self, test):
         classname, _, name = test.id().rpartition('.')
         outcomes = {'expected_failure': 'skipped', 'unexpected_success': 'failed', 'incomplete': 'error'}
         emit_progress('test_finished', name=name, classname=classname,
+                      stage=self._timing.get('stage'),
                       status=outcomes.get(self._timing['outcome'], self._timing['outcome']),
                       seconds=perf_counter() - self._started, message=self._timing.get('message', '')[:8000])
         self.report.data['tests'].append(dict(

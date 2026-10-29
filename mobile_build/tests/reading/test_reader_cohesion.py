@@ -1,4 +1,8 @@
 """Reader chrome preserves format capabilities and editing state."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -92,6 +96,8 @@ class ReaderCohesionTests(unittest.TestCase):
             self.assertEqual([b.control_icon for b in view._native_reader_buttons()], ['find', 'more'])
             labels = [label.lower() for label, callback in owner.crypt_actions_menu.actions]
             self.assertFalse(any('chapter' in label or 'read aloud' in label or 'metadata' in label for label in labels))
+            self.assertTrue(owner.reading_frame.immersive)
+            owner.toggle_private_reading_mode()
             owner.pdf_tools.toggle()
             self.assertIn(owner.pdf_tools.panel, owner.pdf_tools.widget.children)
             owner.pdf_number.value = '0'
@@ -104,7 +110,7 @@ class ReaderCohesionTests(unittest.TestCase):
             self.assertIs(owner.pdf_tools.widget.parent, view)
             self.assertLess(view.children.index(owner.pdf_tools.widget), view.children.index(owner.pdf_body))
             self.assertEqual(owner.pdf_tools.button.control_icon, 'find')
-        from mobile_build.tests.reading.test_pdf_reader import native_pdf
+        from mobile_build.tests.support.pdf import native_pdf
         with patch('features.pdf.document.PDFDocument.open', native_pdf):
             self.app.loop.run_until_complete(exercise())
 

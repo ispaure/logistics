@@ -1,4 +1,8 @@
 """Project tree ordering through the real asynchronous filesystem model."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import subprocess
 

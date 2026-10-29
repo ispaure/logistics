@@ -3,6 +3,10 @@
 Requires an installed offline system voice. Never opens user documents or remotes.
 The result records synthetic ranges/highlight text, not microphone audio.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

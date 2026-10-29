@@ -1,4 +1,8 @@
 """Actual system scene creation and writer separation on supported iPads."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 
 

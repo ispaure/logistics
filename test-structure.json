@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "roots": [
+    {"owner": "logistics", "directory": "Python/tests", "patterns": ["test*.py", "native_ui_smoke.py", "compare_comic_zip_versions.py"]},
+    {"owner": "mobile-host", "directory": "mobile_build/tests", "patterns": ["test*.py"]},
+    {"owner": "commonutils", "directory": "Python/commonUtils/tests", "patterns": ["test*.py", "mobile_smoke.py"]},
+    {"owner": "release-tooling", "directory": ".github/scripts", "patterns": ["test*.py"]},
+    {"owner": "native", "directory": "mobile_build/native_tests", "patterns": ["*.py", "*.java", "*.swift"]},
+    {"owner": "bridge", "directory": "mobile_build/rclone_bridge", "patterns": ["*_test.go"]},
+    {"owner": "runtime", "directory": "Python/mobile", "patterns": ["smoke.py"]}
+  ]
+}

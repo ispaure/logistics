@@ -1,3 +1,4 @@
+// TEST_STAGE = TestStage.SMOKE
 package main
 
 import (

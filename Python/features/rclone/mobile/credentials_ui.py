@@ -11,9 +11,11 @@ from commonUtils.ui.native.password_input import PasswordInput
 from .cloud import PACKAGE_LIMIT, download_name
 from features.rclone.credential_loading import CredentialBusyError
 from .messages import import_hint
+from features.rclone.diagnostics import report_failure
 from .credential_catalog import CredentialCatalog, remember_association
 from .service import native_service
 from .credential_loading import NativeCredentialLoad, run_credentials
+from .credential_workflow import CredentialPresentation, CredentialLoadWorkflow
 
 
 class SelectedCredentialZIP:
@@ -39,16 +41,46 @@ class CredentialState:
     cloud_pending_zip: Any = field(init=False, repr=False)
 
 
-class CredentialWorkflow:
+class CredentialLoadPresentation:
+    """Adapt the retained cloud controls to the small credential workflow port."""
+
     def __init__(self, cloud):
         self.cloud = cloud
 
-    def _current(self, client, *, navigation=None, generation=None):
-        """Check the captured host/client and, after publication, its generation."""
+    def current(self, client, *, navigation=None, generation=None):
         cloud = self.cloud
         return (cloud.active_host and cloud.cloud_client is client
                 and (navigation is None or cloud.navigation_generation == navigation)
                 and (generation is None or getattr(client, 'generation', 0) == generation))
+
+    def prepare_publication(self):
+        if not self.cloud.clear_private_reader():
+            return False
+        self.cloud.clear_private_catalog()
+        return True
+
+    async def refresh_kinds(self):
+        await self.cloud._load_crypt_remote_names()
+
+    def remotes_loaded(self, names):
+        cloud = self.cloud
+        cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
+
+    def loaded(self, package, names, *, remember):
+        cloud = self.cloud
+        cloud.remember_loaded_packages(package, names, session_only=not remember)
+        cloud.cloud_package.text = cloud.loaded_package_label()
+        cloud.app.credential_document_lists.refresh()
+
+
+class CredentialWorkflow:
+    def __init__(self, cloud):
+        self.cloud = cloud
+        self.presentation: CredentialPresentation = CredentialLoadPresentation(cloud)
+        self.loader = CredentialLoadWorkflow(self.presentation)
+
+    def _current(self, client, *, navigation=None, generation=None):
+        return self.presentation.current(client, navigation=navigation, generation=generation)
 
     @staticmethod
     def package_title(name):
@@ -196,7 +228,8 @@ class CredentialWorkflow:
             self.package_name = None
             cloud.cloud_status.value = 'Credential package and its remotes forgotten. Local folders were kept.'
             cloud.show_cloud_connections()
-        except Exception:
+        except Exception as error:
+            report_failure('forget package', error)
             cloud.cloud_status.value = 'Some package cleanup failed. Access may already be removed. Unlock the device and retry forgetting.'
             if hasattr(cloud, 'credential_unlock_status'):
                 cloud.credential_unlock_status.text = cloud.cloud_status.value
@@ -459,30 +492,15 @@ class CredentialWorkflow:
                 if not self._current(client, navigation=origin, generation=generation):
                     status.text = 'Credentials changed. Return to Credential Packages and try again.'
                     return
-                if not cloud.clear_private_reader():
+                if not self.presentation.prepare_publication():
                     raise ValueError('Save or discard private edits before unlocking another credential.')
-                cloud.clear_private_catalog()
                 client, origin = cloud.cloud_client, cloud.navigation_generation
-                current = lambda: self._current(client, navigation=origin, generation=generation)
-                result = await run_credentials(native_service(client).credentials.load,
-                    NativeCredentialLoad(cache, selected, remember=remember), secret, valid=current)
-                current = lambda: self._current(client, navigation=origin, generation=result.generation)
-                if not current():
+                result = await self.loader.unlock(client,
+                    NativeCredentialLoad(cache, selected, remember=remember), secret,
+                    package=cache.items[selected]['zip'], navigation=origin,
+                    generation=generation, remote=remote, identity=identity)
+                if result is None:
                     return
-                names = list(result.remotes)
-                await cloud._load_crypt_remote_names()
-                if not current():
-                    return
-                cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
-                checked_remote = cloud.cloud_client.resolve_remote(remote, identity) if remote is not None and identity is not None and hasattr(cloud.cloud_client, 'resolve_remote') else remote
-                if checked_remote is not None and (checked_remote not in names or (identity is not None
-                        and await asyncio.to_thread(cloud.cloud_client.connection_identity, checked_remote) != identity)):
-                    raise ValueError('This ZIP does not match the folder connection.')
-                if not current():
-                    return
-                cloud.remember_loaded_packages(cache.items[selected]['zip'], names, session_only=not remember)
-                cloud.cloud_package.text = cloud.loaded_package_label()
-                cloud.app.credential_document_lists.refresh()
                 cloud.cloud_status.value = 'Credential ZIP unlocked (' + ('Persistent save' if remember else 'Session-Only') + ').'
                 ready = True
             except (OSError, ValueError) as error:
@@ -556,7 +574,8 @@ class CredentialWorkflow:
                 cloud.remember_loaded_packages(cloud.cloud_client.package_name, names, session_only=False)
             cloud._cloud_restored = True
             cloud._publish_restored_connections(names)
-        except Exception:
+        except Exception as error:
+            report_failure('restore saved credentials', error)
             cloud._cloud_restore_error = 'Saved credentials are unavailable. Unlock the device and reload, or forget saved credentials to import again.'
             if hasattr(cloud, 'cloud_status'):
                 cloud.cloud_status.value = cloud._cloud_restore_error
@@ -628,21 +647,17 @@ class CredentialWorkflow:
             if not self._current(client, navigation=origin, generation=generation):
                 cloud.cloud_import_message.text = 'Credentials changed. Try unlocking this package again.'
                 return
-            if not cloud.clear_private_reader():
+            if not self.presentation.prepare_publication():
                 cloud.cloud_import_message.text = import_hint('Save or discard your private edits before loading another package.')
                 return
-            cloud.clear_private_catalog()
-            current = lambda: self._current(client, navigation=origin, generation=generation)
-            result = await run_credentials(native_service(client).credentials.load,
-                NativeCredentialLoad(selected, None, remember=remember), password, valid=current)
-            current = lambda: self._current(client, navigation=origin, generation=result.generation)
-            if not current():
+            result = await self.loader.load(client,
+                NativeCredentialLoad(selected, None, remember=remember), password,
+                navigation=origin, generation=generation)
+            if result is None:
                 return
+            current = lambda: self._current(client, navigation=origin, generation=result.generation)
             names = list(result.remotes)
             loaded_generation = result.generation
-            await cloud._load_crypt_remote_names()
-            if not current():
-                return
             cloud.remember_loaded_packages(selected.name, names, session_only=not remember)
             cache_error = ''
             try:
@@ -664,10 +679,6 @@ class CredentialWorkflow:
             cloud.cloud_rows = {}
             cloud.cloud_entries.items = []
             cloud.cloud_pending_zip = None
-            cloud.cloud_rows = {}
-            cloud.cloud_entries.items = []
-            cloud.cloud_open_remote = None
-            cloud.cloud_location.value = cloud.cloud_path = ''
             cloud.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
             cloud.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
             cloud.app.credential_document_lists.refresh()
@@ -676,6 +687,7 @@ class CredentialWorkflow:
             cloud.cloud_status.value = str(error)
             cloud.cloud_import_message.text = import_hint(str(error))
         except Exception as error:
+            report_failure('import credential package', error)
             cloud.cloud_status.value = 'Import failed: ' + str(error)[:300]
             cloud.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Unlock again.\n' + str(error)[:150])
         finally:

@@ -1,4 +1,8 @@
 """Folder identity is independent of listing, download and failure messages."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory

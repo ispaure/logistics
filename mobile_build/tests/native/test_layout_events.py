@@ -1,4 +1,8 @@
 """Idle readers have no periodic layout wakeups or strong host subscriptions."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import gc
 from types import SimpleNamespace

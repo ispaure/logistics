@@ -1,4 +1,8 @@
 """Deletion phase retries, cancellation ownership and stale native decisions."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from threading import Event
 import unittest

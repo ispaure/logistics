@@ -1,4 +1,8 @@
 """Preference updates preserve originals when settings or preset files are invalid."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch

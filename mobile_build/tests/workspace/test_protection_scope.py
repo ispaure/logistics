@@ -1,4 +1,8 @@
 """Protection is an explicit lifetime contribution, independent of UI discovery."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from types import SimpleNamespace
 from services.protection import ProtectionScope

@@ -1,4 +1,8 @@
 """Credential-list lifecycle and UI integration; AES/password checks live in Go tests."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import asyncio
 import json
@@ -50,6 +54,25 @@ class ListBridge:
 
 
 class CredentialDocumentListTests(unittest.TestCase):
+    def test_video_history_is_encrypted_and_never_restored_as_an_open_document(self):
+        self.client.unlock()
+        session = Session('', 'file-reference', 'video', 'video', title='Sensitive movie.mkv')
+        source = dict(type='remote', remote='Drive', identity='b' * 64, key='Sensitive movie.mkv')
+        self.cache.remember(session, source, opened=False)
+        state = self.cache.states['a' * 64]
+        self.assertEqual(state['open'], [])
+        self.assertEqual(state['recent'][0]['kind'], 'video')
+        for path in (self.cache.path('a' * 64), self.app.recent_documents.path, self.app.workspace.path):
+            if path.exists():
+                self.assertNotIn(b'Sensitive', path.read_bytes())
+        self.client.package_records = []
+        self.cache.refresh()
+        self.assertEqual(self.app.recent_documents.private_items, [])
+        self.client.unlock()
+        self.cache.refresh()
+        self.assertEqual(self.app.recent_documents.sessions()[0].title, session.title)
+        self.assertFalse(any(s.kind == 'video' for s in self.app.workspace.sessions.values()))
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

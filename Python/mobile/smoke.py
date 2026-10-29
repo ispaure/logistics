@@ -1,4 +1,6 @@
 """Run document/core fixtures inside real mobile interpreters, without a UI."""
+
+# TEST_STAGE = TestStage.SMOKE
 import argparse
 import faulthandler
 import importlib.abc

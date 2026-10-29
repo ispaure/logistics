@@ -1,4 +1,8 @@
 """Workspaces retain host-specific palette and control placement."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import MagicMock, patch

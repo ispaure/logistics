@@ -1,4 +1,8 @@
 """Logistics update defaults, settings, offers and safe UI handoff."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory

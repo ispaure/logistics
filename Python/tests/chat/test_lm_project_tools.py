@@ -1,4 +1,8 @@
 """Project scope, limits and editor snapshots for read-only LM context."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory

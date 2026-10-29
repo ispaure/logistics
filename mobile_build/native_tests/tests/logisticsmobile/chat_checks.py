@@ -1,4 +1,8 @@
 """Native streamed chat, transcript layout and credential exclusion."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import contextlib
 import os

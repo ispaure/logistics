@@ -21,7 +21,7 @@ def shared_test_groups(root, pattern):
     return groups
 
 
-def run_checks(root, checks, *, dry_run=False):
+def run_checks(root, checks, *, dry_run=False, stop_on_failure=False):
     """Validate all interpreters before running; retain failures across matrix legs."""
     import shlex
     if not dry_run:
@@ -44,6 +44,9 @@ def run_checks(root, checks, *, dry_run=False):
             code = subprocess.run(command, cwd=root, env=environment).returncode
             if code and not result:
                 result = code
+            if code and stop_on_failure:
+                print('Remaining check groups not run after failure.', flush=True)
+                break
     return result
 
 

@@ -1,4 +1,8 @@
 """Project policy for execution choices, run notes and release names."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import sys
 import unittest

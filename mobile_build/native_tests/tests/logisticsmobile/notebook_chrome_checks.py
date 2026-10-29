@@ -1,5 +1,9 @@
 """Browser assertions for compact notebook chrome and painted ink swatches."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 CHROME_CHECKS = r'''(()=>{
 function require(value,message){if(!value)throw Error(message)}
 const dock=document.querySelector('.mobile-dock').getBoundingClientRect();

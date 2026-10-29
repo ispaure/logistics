@@ -1,4 +1,8 @@
 """Both Android navigation presentations receive the bundled desktop glyphs."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from base64 import b64decode
 from types import SimpleNamespace as NS
 import unittest

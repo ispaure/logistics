@@ -1,4 +1,8 @@
 """Adaptive native bar contracts: live state, grouping, menus and pose changes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch

@@ -1,5 +1,9 @@
 """Native reader packaging requirements are applied idempotently."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch

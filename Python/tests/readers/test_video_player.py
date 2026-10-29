@@ -1,4 +1,8 @@
 """Video range, grant, resume and subtitle contracts without native decoders."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager, ExitStack
 from http.client import HTTPConnection, RemoteDisconnected
 from io import BytesIO

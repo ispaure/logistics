@@ -1,4 +1,8 @@
 """Protect identity and physical-device gates used by local deployment."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import copy
 import json
 import os

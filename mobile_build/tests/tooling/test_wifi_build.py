@@ -1,4 +1,8 @@
 """Wi-Fi platform declarations preserve identities, other entitlements and extensions."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import plistlib
 from tempfile import TemporaryDirectory

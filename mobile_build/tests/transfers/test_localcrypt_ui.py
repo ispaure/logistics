@@ -1,4 +1,8 @@
 """Official Toga dummy backend: encrypted copies never enter persistent editors."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import os
 from pathlib import Path
@@ -6,19 +10,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from mobile.app import LogisticsMobile
-
-
-def seed_offline_copy(copies, data=b'opaque-original'):
-    """Seed a pre-existing offline record without a remote download API."""
-    import json
-    from uuid import uuid4
-    key = uuid4().hex
-    folder = copies.root / key
-    folder.mkdir()
-    (folder / 'data').write_bytes(data)
-    (folder / 'record.json').write_text(json.dumps(dict(
-        remote='Secret', encrypted_path='encoded', identity='a' * 64)))
-    return key
+from mobile_build.tests.support.localcrypt import seed_offline_copy
 
 
 class LocalCryptUITests(unittest.TestCase):

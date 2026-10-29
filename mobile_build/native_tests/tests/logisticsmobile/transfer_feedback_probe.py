@@ -1,4 +1,8 @@
 """Physical Android checks with synthetic local files and a simulated busy transfer."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

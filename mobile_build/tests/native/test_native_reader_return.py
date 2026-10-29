@@ -1,4 +1,8 @@
 """UIKit pop callbacks return to the retained origin within the selected tab."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock

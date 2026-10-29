@@ -1,4 +1,8 @@
 """Secret checks identify categories without returning sensitive matched data."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from Scripts.hygiene import categories
 

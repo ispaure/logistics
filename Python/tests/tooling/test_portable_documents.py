@@ -1,4 +1,8 @@
 """Enforce the document-core import boundary in a clean interpreter."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import subprocess
 import sys

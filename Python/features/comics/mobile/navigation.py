@@ -39,6 +39,12 @@ class ComicNavigation:
         return (0.46, 1.0) if right else (0.0, 0.54)
 
     @property
+    def progress_label(self):
+        from features.comics.reading import page_progress
+        return page_progress(self.visible or (self.page or 0,), self.count,
+                             half=self.half if self.split else None)
+
+    @property
     def part_label(self):
         return f' · {self.half + 1}/2' if self.split else ''
 

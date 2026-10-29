@@ -1,4 +1,8 @@
 """Native Close artwork, accessibility and unsaved-edit acceptance checks."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import inspect
 import json

@@ -3,6 +3,10 @@
 The operator or UI test drives UIKit. No hinge or keyboard geometry is injected.
 Write ``finish`` in the evidence directory to end the bounded observation.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

@@ -1,4 +1,8 @@
 """Native speech voice policy and late callback delivery without device services."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import sys
 from types import SimpleNamespace

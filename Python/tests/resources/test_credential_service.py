@@ -1,4 +1,8 @@
 """Credential preparation never publishes; stale/single-use admission erases staging."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from concurrent.futures import ThreadPoolExecutor
 import gc
 from pathlib import Path

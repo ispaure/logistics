@@ -1,4 +1,8 @@
 """Native child layout cannot recursively re-enter an unchanged Android viewport."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch

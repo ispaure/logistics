@@ -3,6 +3,10 @@
 Stage as a separate-bundle app entry point. Reports include loaded source hashes;
 dummy adapters are refused. Keep reports in ignored native-validation evidence.
 """
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import gc
 from hashlib import sha256

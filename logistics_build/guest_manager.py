@@ -2,6 +2,7 @@
 import argparse
 import base64
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -38,19 +39,23 @@ def verify(checkout, project, *, pinned_source=False):
             from build_manager.dependency_sources import verify as verify_source
         finally:
             sys.path.pop(0)
+    local_identity = os.environ.get('LOGISTICS_MANAGER_LOCAL_TEST_SOURCE', '')
+    if local_identity:
+        from build_manager.dependency_sources import verify_local_test_source
+        return verify_local_test_source(checkout, dependency_pin(project), local_identity)
     return verify_source(checkout, dependency_pin(project), pinned_source=pinned_source)
 
 
-def archive(checkout, project, kind):
+def archive(checkout, project, kind, *, working_tree=None):
     from build_manager.dependency_sources import archive as source_archive
     from logistics_build.build_retention import scratch
     with scratch(Path(project)) as workspace:
-        return source_archive(checkout, dependency_pin(project), kind, workspace)
+        return source_archive(checkout, dependency_pin(project), kind, workspace, **({"working_tree": working_tree} if working_tree else {}))
 
 
-def stage_linux(client, vm, workspace, token, uid, gid, checkout, project):
+def stage_linux(client, vm, workspace, token, uid, gid, checkout, project, *, working_tree=None):
     from build_manager.parallels import OWNED
-    payload = archive(checkout, project, 'tar')
+    payload = archive(checkout, project, 'tar', working_tree=working_tree)
     script = OWNED + """
 import base64,io,os,tarfile
 manager=path/'manager'

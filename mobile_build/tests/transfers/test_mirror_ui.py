@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -5,7 +9,7 @@ from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
 from mobile.app import LogisticsMobile
-from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+from mobile_build.tests.support.mirror import MirrorClient
 
 
 class ProgressLoop:

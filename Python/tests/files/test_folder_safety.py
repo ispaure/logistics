@@ -1,4 +1,8 @@
 """System-folder policy resolves links and remains configurable without banning user volumes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

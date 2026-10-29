@@ -1,4 +1,8 @@
 """Native size and inset changes wake responsive layouts without navigation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace
 import unittest

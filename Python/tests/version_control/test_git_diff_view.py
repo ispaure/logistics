@@ -1,4 +1,8 @@
 """Diff presentation retains content while hiding patch transport metadata."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from features.git.diff_view import present_diff
 

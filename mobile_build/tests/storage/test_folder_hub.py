@@ -1,14 +1,19 @@
 """Mobile masks, physical discovery, session associations and transfer destination safety."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from mobile_build.tests.support.app import mobile_app
 from unittest.mock import patch, AsyncMock
 from mobile.folder_hub import hub_entries, visible_remotes
 from mobile.preferences import Preferences
 from features.rclone.transfers.mobile.jobs import MirrorJobs
-from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
+from mobile_build.tests.support.mirror import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
@@ -35,12 +40,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_failed_local_tab_save_keeps_navigation_available_and_reports_failure(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.build_folder_picker(choices={})
             with patch.object(app.preferences, 'save', side_effect=OSError('Disk full')):
                 app.folder_local_buttons['Rclone'].on_press()
@@ -52,12 +53,8 @@ class FolderHubTests(unittest.TestCase):
     def test_remote_only_crypt_icon_uses_loaded_credential_snapshot(self):
         from mobile.app import LogisticsMobile
         from types import SimpleNamespace
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_cloud(present=False)
             app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None, package_records=(dict(
                 package_name='Session.zip', saved=False, remotes=['Secret', 'Regular'],
@@ -71,12 +68,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_local_workspace_entry_and_browsing_do_not_construct_cloud_controls(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             with patch.object(app, 'show_cloud') as cloud:
                 app.select_destination('files')
                 app.native_host.activate('files')
@@ -94,12 +87,8 @@ class FolderHubTests(unittest.TestCase):
         from features.rclone.mobile.credential_packages import CredentialPackages
         from mobile_build.tests.transfers.test_credential_packages import CacheClient, PACKAGE
         from types import SimpleNamespace
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.cloud_client = client = CacheClient()
             client.loaded = False
             vault = SimpleNamespace(root=Path(directory) / 'retained', unlock=lambda **kw: dict(key='fixture'))
@@ -131,12 +120,8 @@ class FolderHubTests(unittest.TestCase):
     def test_startup_rclone_tab_restores_saved_remotes_and_shows_cloud_and_lock(self):
         from mobile.app import LogisticsMobile
         from types import SimpleNamespace
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             self.assertFalse(hasattr(app, 'cloud_view'))
             client = SimpleNamespace(vault=object(), generation=1, package_name='', package_records=(),
                                      crypt_remotes=lambda: ['Secret'], cancel=lambda: None)
@@ -166,12 +151,8 @@ class FolderHubTests(unittest.TestCase):
     def test_crypt_icons_follow_session_lock_and_local_location(self):
         from mobile.app import LogisticsMobile
         from types import SimpleNamespace
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_cloud(present=False)
             app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None, package_records=())
             local = dict(name='Secret', source='LocalCrypt', kind='crypt', value='Secret', remote='Secret')
@@ -196,12 +177,8 @@ class FolderHubTests(unittest.TestCase):
     def test_loaded_package_populates_hub_without_selector_or_bridge_access(self):
         from mobile.app import LogisticsMobile
         from types import SimpleNamespace
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_cloud(present=False)
             app.cloud_client = SimpleNamespace(generation=7, cancel=lambda: None, package_records=(
                 dict(package_name='Personal.zip', remotes=['PersonalDrive', 'PersonalCrypt']),))
@@ -255,12 +232,8 @@ class FolderHubTests(unittest.TestCase):
             def cancel(self): pass
         started, release = Event(), Event()
         ui_thread = get_ident()
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
             app.cloud_remote.items = ['Secret']
@@ -306,12 +279,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_return_to_hub_and_options_never_enter_native_discovery(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_cloud(present=False)
             app.cloud_remote.items = ['First', 'Second']
             app.show_home()
@@ -329,12 +298,8 @@ class FolderHubTests(unittest.TestCase):
         from mobile.app import LogisticsMobile
         started, release = Event(), Event()
         ui_thread = get_ident()
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_locations()
             def discover(**kwargs):
                 self.assertNotEqual(get_ident(), ui_thread)
@@ -364,12 +329,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_refresh_uses_loaded_sources_during_transfer_and_updates_only_changed_rows(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_cloud(present=False)
             app.cloud_remote.items = ['Server-Books']
             app.show_locations()
@@ -399,12 +360,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_refresh_checks_cached_crypt_identity_locally_without_native_requests(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_cloud(present=False)
             app.show_locations()
             app.hub_crypt_roots = {'LocalCrypt: Secret': ('Secret', 'a' * 64)}
@@ -424,12 +381,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_busy_online_tap_has_feedback_without_credential_lookup_and_local_stays_available(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             (Path(directory) / 'LocalFiles' / 'Notes').mkdir(parents=True)
             app.show_cloud(present=False)
             app.cloud_remote.items = ['Online']
@@ -454,12 +407,8 @@ class FolderHubTests(unittest.TestCase):
     def test_pending_online_folder_does_not_block_a_different_local_folder(self):
         import asyncio
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             (Path(directory) / 'LocalFiles' / 'Notes').mkdir(parents=True)
             app.show_cloud(present=False)
             app.cloud_remote.items = ['Online']
@@ -493,12 +442,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_folder_options_use_displayed_snapshot_without_discovery(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_locations()
             with patch.object(app, 'folder_choices', side_effect=AssertionError('Menu must not rediscover folders')):
                 app.choose_folder('All files')
@@ -593,12 +538,8 @@ class FolderHubTests(unittest.TestCase):
 
     def test_discovery_failure_on_tab_entry_keeps_recovery_page_and_retry_works(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_locations()
             app.show_home()
             with patch.object(app, 'folder_choices', side_effect=ValueError('Credentials changed')):
@@ -617,12 +558,8 @@ class FolderHubTests(unittest.TestCase):
     def test_transient_native_credential_index_does_not_clear_folder_rows(self):
         from mobile.app import LogisticsMobile
         from unittest.mock import PropertyMock
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.show_locations()
             with patch.object(type(app.folder_credential), 'value', new_callable=PropertyMock, side_effect=IndexError):
                 app.update_folder_list(app.folder_picker_choices)
@@ -839,12 +776,8 @@ class FolderHubTests(unittest.TestCase):
         class Client(MirrorClient):
             def crypt_remotes(self): return []
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.cloud_client = Client()
             app.show_cloud(present=False)
             job, _ = app.mirror_store().create(app.cloud_client, 'Secret', 'folder', storage='LocalCrypt')
@@ -1035,12 +968,8 @@ class FolderHubTests(unittest.TestCase):
             package_records = ()
             def crypt_remotes(self): return ['Secret']
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
-            LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+        with mobile_app() as app:
+            directory = app.storage_root
             app.cloud_client = client = Client()
             app.show_cloud(present=False)
             app.cloud_remote.items = ['Secret', 'Remote']

@@ -1,5 +1,9 @@
 """Desktop concealment, stale verification and explicit replay authorization."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace

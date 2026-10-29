@@ -1,4 +1,8 @@
 """Isolated Markdown/source validation; synthetic data and separate app ID."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

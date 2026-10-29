@@ -1,4 +1,8 @@
 """Closing a reader releases its slot and returns to the retained source folder."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -9,10 +13,10 @@ import toga
 from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 from features.rclone.mobile.remote_readers import RemoteReaders
-from mobile.app import LogisticsMobile
-from mobile_build.tests.transfers.test_localcrypt_ui import seed_offline_copy
-from mobile_build.tests.reading.test_remote_readers import RemoteClient
-from mobile_build.tests.reading.test_pdf_reader import PDF, native_pdf
+from mobile_build.tests.support.app import create_app
+from mobile_build.tests.support.localcrypt import seed_offline_copy
+from mobile_build.tests.support.readers import RemoteClient
+from mobile_build.tests.support.pdf import PDF, native_pdf
 
 
 class ReaderLifecycleTests(TestCase):
@@ -20,11 +24,7 @@ class ReaderLifecycleTests(TestCase):
         folder = TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         self.root = Path(folder.name)
-        LogisticsMobile.storage_root = self.root
-        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
-        self.addCleanup(self.app.main_window.close)
+        self.app = create_app(self, root=self.root)
         self.app.show_cloud(present=False)
         self.run_async(self.app.show_files())
         self.origin = self.app.body

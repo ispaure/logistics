@@ -1,4 +1,6 @@
 """Only complete, fresh, exact-commit trusted workflow coverage can be reused."""
+
+# TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 from datetime import datetime, timezone
 import unittest

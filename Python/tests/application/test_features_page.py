@@ -1,4 +1,8 @@
 """Feature controls display session state and handle required dependencies."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import unittest

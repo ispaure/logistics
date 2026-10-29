@@ -1,4 +1,8 @@
 """SMB connection entry preserves multiple servers and clears password fields."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

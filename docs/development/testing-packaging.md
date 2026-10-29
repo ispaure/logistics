@@ -9,7 +9,7 @@ the reusable execution machinery must not own these Logistics policies.
 | Plan | Ordered work | Evidence and cost |
 | --- | --- | --- |
 | Static/contracts | Correctness lint, import/ownership/toolchain checks and focused runner contracts | Fast host checks; JSON per-test timings from the isolated runner |
-| Desktop macOS, Fedora, Windows | Windows native startup where applicable, shared regressions, application regressions, full historical compression parity, manager contracts | `summary.json`, per-phase logs and regression timing reports; phase budgets 60/600/900/600/120 seconds |
+| Desktop macOS, Fedora, Windows | Windows native startup where applicable, shared regressions, application regressions, full historical compression parity, manager contracts | `summary.json`, per-phase logs and regression timing reports; budgets come from `build-tests.json` and `logistics_build/validation_plans.py`; structure preflight and selected smoke phases precede broad suites |
 | Native iOS | One test-app build, then required iPhone, Duo and iPad suites | Hosted devices run in parallel; local selected devices run sequentially; each has isolated source-verified reports |
 | Native Android | Curated payload, native bridge/application build, emulator readiness, functional flows and rotation, report verification | Full profiled x86-64 software-rendered CI app run: 32.7 minutes; all 260 pose audits retained |
 | Runtime testbeds | Pinned CPython build, curated portable payload, actual Android/iOS smoke suite, exact source/report verification | Separate required runtime gates; host mocks and app builds do not replace them |

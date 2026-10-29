@@ -1,4 +1,8 @@
 """Navigation work stays bounded without weakening local resource boundaries."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.EXTENDED
 import asyncio
 import os
 from pathlib import Path

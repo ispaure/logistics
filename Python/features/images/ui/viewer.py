@@ -77,7 +77,14 @@ class ImageWindow(qt.QMainWindow):
         elif result and not self.operation.cancelled.is_set():
             key, data, rows = result
             pixmap = qt.QPixmap()
-            if data is not None and not pixmap.loadFromData(data):
+            if data is not None:
+                buffer = qt.QBuffer()
+                buffer.setData(data)
+                buffer.open(qt.QIODevice.OpenModeFlag.ReadOnly)
+                decoder = qt.QImageReader(buffer)
+                from features.images.ui.decoding import read_oriented
+                pixmap = qt.QPixmap.fromImage(read_oriented(decoder, data))
+            if data is not None and pixmap.isNull():
                 qt.QMessageBox.warning(self, 'Image viewer', 'Cannot decode this image.')
                 self.previous.setEnabled(True)
                 self.following.setEnabled(True)

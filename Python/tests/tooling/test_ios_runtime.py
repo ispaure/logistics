@@ -1,4 +1,8 @@
 """Portable contracts for the generated iOS testbed; native execution is separate."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 import plistlib

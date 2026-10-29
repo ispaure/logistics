@@ -1,4 +1,8 @@
 """Synthetic native reflow acceptance; no voice, user documents or credentials."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path
@@ -11,6 +15,7 @@ from toga.style import Pack
 from features.books.mobile.presentation import chapter_view
 from features.books.mobile.typography import css
 from mobile.app import LogisticsMobile
+from . import start_native_check
 from .rotation_checks import rotate
 
 BUNDLE = 'io.github.ispaure.logisticsepubrotationqa'
@@ -40,9 +45,7 @@ class EpubRotationProbe(LogisticsMobile):
         super().startup()
 
     def on_running(self):
-        if not getattr(self, '_started', False):
-            self._started = True
-            self.loop.create_task(self.check())
+        start_native_check(self, type(self).check)
 
     async def check(self):
         result = dict(success=False, samples=[])

@@ -1,4 +1,8 @@
 """The native chat bridge belongs to the main app and preserves deployment targets."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import plistlib
 from tempfile import TemporaryDirectory

@@ -1,4 +1,8 @@
 """UI evidence verifier contracts; these fixtures are not native device evidence."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import importlib.util
 import json
@@ -68,7 +72,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
 
     def test_owned_boot_failure_retains_cleanup_lease_and_foreign_label_is_refused(self):
         client = Mock()
-        client.devices.return_value = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [
+        client.devices.return_value = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [
             dict(udid='profile', name='iPad', state='Shutdown', isAvailable=True,
                  deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPad-Pro')]}}
         client.create.return_value = 'created-before-failure'

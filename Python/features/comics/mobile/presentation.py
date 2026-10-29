@@ -6,8 +6,11 @@ from features.images.validation import image_dimensions
 
 
 def page_view(data, *, canvas, on_page, on_toggle, width=None):
-    image_dimensions(data)
-    view = canvas(image=toga.Image(src=data), on_page=on_page,
+    from features.images.mobile.decoding import decode_page
+    from toga.platform import get_factory
+    size = image_dimensions(data)
+    image = decode_page(data, size, size, get_factory().Image.__module__)
+    view = canvas(image=image, on_page=on_page,
                   on_toggle=on_toggle, description='Comic page. Pinch to zoom; swipe at fit size to change pages.',
                   style=Pack(flex=1, width=width if width is not None else NONE))
     view.page_swipes_at_edges = True

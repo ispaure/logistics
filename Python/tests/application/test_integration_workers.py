@@ -1,4 +1,8 @@
 """Retain real Qt owners through background failures and cancellation."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import threading
 from time import monotonic, sleep
 from pathlib import Path

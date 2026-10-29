@@ -1,4 +1,8 @@
 """Disposable iOS glass/background, grouping, layout and close-safety probe."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

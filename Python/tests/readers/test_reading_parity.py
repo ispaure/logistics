@@ -1,4 +1,8 @@
 """Cross-host format behavior over synthetic, disposable books and comics."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory

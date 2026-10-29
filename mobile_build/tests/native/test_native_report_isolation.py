@@ -1,4 +1,8 @@
 """A crashed next device cannot retain the previous device's success artifacts."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory

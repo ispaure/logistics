@@ -1,4 +1,8 @@
 """Retained Workspaces row identity, callback capture and menu retirement."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 

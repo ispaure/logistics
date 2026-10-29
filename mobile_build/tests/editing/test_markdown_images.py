@@ -1,4 +1,8 @@
 """Provider-bound Markdown image rendering for ordinary and encrypted folders."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from io import BytesIO
 from pathlib import Path

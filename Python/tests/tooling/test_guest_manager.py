@@ -1,17 +1,28 @@
 """Exact reviewed manager transfer excludes checkout-local private/uncommitted inputs."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import tarfile
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 import zipfile
 from logistics_build.guest_manager import archive, verify
 
 
 class GuestManagerTests(unittest.TestCase):
     def setUp(self):
+        # These fixtures exercise committed-pin policy, independently of the
+        # outer suite's explicit working-manager capture.
+        capture = patch.dict(os.environ, {'LOGISTICS_MANAGER_LOCAL_TEST_SOURCE': ''})
+        capture.start()
+        self.addCleanup(capture.stop)
         self.folder = TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         self.root = Path(self.folder.name)

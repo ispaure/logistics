@@ -1,4 +1,8 @@
 """Cold-start contracts distinguish native icon rails from horizontal captions."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as State
 import sys
 import unittest

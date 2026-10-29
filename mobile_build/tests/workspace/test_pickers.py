@@ -1,4 +1,8 @@
 """Native picker selection contracts; provider permissions need device tests."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from types import SimpleNamespace
 import unittest

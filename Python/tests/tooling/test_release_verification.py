@@ -1,4 +1,8 @@
 """Actual ZIP bytes prove published source/dependency and digest checks."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import hashlib
 from io import BytesIO
 import json

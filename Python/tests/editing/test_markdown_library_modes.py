@@ -1,4 +1,8 @@
 """Documentation navigation stays fixed; notes mutations use their provider."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch

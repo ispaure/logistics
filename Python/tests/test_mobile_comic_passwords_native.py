@@ -1,4 +1,8 @@
 """Real native standalone AES/ZipCrypto CBZ reads with no remote credentials."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import json
 import os

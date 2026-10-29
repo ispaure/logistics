@@ -1,4 +1,8 @@
 """Fullscreen assertions retain centering and dimensions on notched Android."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as State
 import unittest
 from unittest.mock import patch

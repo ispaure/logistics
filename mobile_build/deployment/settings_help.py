@@ -3,6 +3,7 @@ SECTIONS = {
     'tools': 'Tools and runtimes', 'ios': 'iOS simulators', 'android': 'Android emulator',
     'vm': 'Virtual machines', 'testflight': 'TestFlight', 'firebase': 'Firebase',
     'auth': 'Credentials', 'signing': 'Apple signing', 'github': 'GitHub releases',
+    'testing': 'Test environments (local and GitHub)',
     'app': 'App version', 'build': 'Build numbers',
 }
 HELP = {
@@ -16,8 +17,8 @@ HELP = {
     'ios.duo': 'Simulator model selector for compact multi-window iOS coverage. Tests use an owned disposable simulator.',
     'ios.ipad': 'Simulator model selector for iPad coverage, when that run option is enabled.',
     'android.avd': 'Legacy existing AVD selector is unsupported. Leave empty; the manager creates and removes its own emulator.',
-    'android.image': 'Installed Android SDK system-image package used to create the disposable test emulator.',
-    'android.model': 'Android hardware profile used for the disposable emulator, such as pixel_9.',
+    'android.image': 'Derived from Test environments → Android API and local ABI. Install that SDK image before running; saving settings does not install it.',
+    'android.model': 'Derived from Test environments → Android model; shared by local and hosted native tests.',
     'vm.fedora': 'Dedicated Fedora test machine. The manager fills an empty value from its owned Linux machine; Save remembers the UUID in private project settings. Create or recover it in Setup → Test machines if unavailable.',
     'vm.windows': 'Dedicated Windows test machine. The manager fills an empty value from its owned Windows machine; Save remembers the UUID in private project settings. Create or recover it in Setup → Test machines if unavailable.',
     'vm.fedora_mode': 'Use guest for the dedicated Fedora machine (recommended). container-on-ubuntu is an advanced alternative requiring a separately configured Ubuntu test host with rootless Podman.',
@@ -35,6 +36,8 @@ HELP = {
     'signing.inbox_profile': 'Existing provisioning profile file for the Apple inbox extension.',
     'signing.widget_profile': 'Existing App Store provisioning profile for the Apple widget extension. Manual signing requires profiles for all extensions; leave all profile references empty for automatic signing.',
     'signing.widget_actions_profile': 'Existing App Store provisioning profile for the widget actions extension. Manual signing requires profiles for all extensions; leave all profile references empty for automatic signing.',
+    'signing.watch_profile': 'Existing App Store provisioning profile for the Watch companion; required with manual signing.',
+    'signing.watch_widget_profile': 'Existing App Store provisioning profile for the Watch widget; required with manual signing.',
     'signing.team': 'Pinned Apple developer team from the existing device/signing configuration. Read only.',
     'testflight.app_id': 'App Store Connect application identifier. Identity is guarded and cannot be changed here.',
     'testflight.bundle_id': 'Apple application bundle identifier. Identity is guarded and cannot be changed here.',
@@ -61,10 +64,17 @@ HELP = {
 
 
 def describe_settings(rows):
+    from logistics_build.test_environments import DESCRIPTIONS, LABELS
     for name, entry in rows.items():
+        if name.startswith('testing.'):
+            entry['description'] = DESCRIPTIONS[name.removeprefix('testing.')] + ' Save edits tracked test-environments.json locally; it never commits, pushes or dispatches.'
         entry.setdefault('section', SECTIONS.get(name.split('.')[0], 'Capabilities'))
-        entry.setdefault('label', name.split('.', 1)[1].replace('_', ' ').capitalize())
-        if name in HELP:
+        entry.setdefault('label', LABELS.get(name.removeprefix('testing.'), name.split('.', 1)[1].replace('_', ' ').capitalize()))
+        if name in {'testing.android_local_abi', 'testing.android_github_abi'}:
+            entry['choices'] = ('arm64-v8a', 'x86_64')
+        if name.startswith('testing.'):
+            pass
+        elif name in HELP:
             entry['description'] = HELP[name]
         elif entry.get('read_only') and entry.get('description'):
             pass

@@ -1,4 +1,8 @@
 """Adjacent volumes remain readable across storage and session handoffs."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -10,7 +14,7 @@ from features.rclone.mobile.remote_resources import NativeRemoteResources
 from features.rclone.remote_access import NativeRemoteLocation
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 from mobile_build.tests.storage.test_storage_reader_opening import ReaderClient
-from mobile_build.tests.reading.test_remote_readers import RemoteClient
+from mobile_build.tests.support.readers import RemoteClient
 
 
 class ComicFileNavigationTests(unittest.TestCase):

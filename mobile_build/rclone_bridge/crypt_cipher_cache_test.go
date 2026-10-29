@@ -1,3 +1,4 @@
+// TEST_STAGE = TestStage.REGRESSION
 package main
 
 import (

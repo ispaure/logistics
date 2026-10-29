@@ -10,6 +10,7 @@ from commonUtils.runtime.diagnostics import Severity, log
 
 from features.rclone import executable, session
 from features.rclone.transfers.transfer_options import TransferOptions
+from .launch import LaunchMode, SyncOutcome, SyncState, transfer_concurrency
 
 
 def _watch_transfer(window, config_path, revoked, cancelled, *, session_bound):
@@ -102,7 +103,12 @@ def rclone_sync(source_path, destination_path, *, config_path, query=False, wait
     return _run_sync(**options)
 
 
-def _run_sync(
+def _run_sync(*args, **kwargs):
+    """Compatibility boundary: previews return mappings; launches/completion return bool."""
+    return _execute_sync(*args, **kwargs).legacy_value()
+
+
+def _execute_sync(
     source_path: str | Path,
     destination_path: str | Path,
     *,
@@ -119,16 +125,13 @@ def _run_sync(
     excludes=(),
     on_launch=None
 ):
-    """Synchronize using one explicit config.
-
-    GUI transfers return True when accepted; the progress window owns their actual
-    exit result. Synchronous callers wait for the exit status; previews always use dry-run.
-    """
+    """Return a named outcome; STARTED never claims transfer completion."""
+    mode = LaunchMode.from_legacy(query=query, wait_for_output=wait_for_output, integrated=integrated)
 
     # Background callers preflight provisioning on the GUI thread and pass its path.
     rclone_path = executable_path if executable_path is not None else executable.ensure_rclone()
     if rclone_path is None:
-        return False
+        return SyncOutcome(SyncState.FAILED)
 
     source_path_str = str(source_path)
     destination_path_str = str(destination_path)
@@ -145,12 +148,12 @@ def _run_sync(
         raise ValueError('This credential session has ended. Unlock the package again.')
     arguments = build_sync_arguments(rclone_path, source_path, destination_path,
         config_path=config_path, track_renames=track_renames, bw_limit=bw_limit,
-        dry_run=dry_run or query, integrated=integrated and not query and not wait_for_output, copy_links=copy_links, excludes=excludes)
+        dry_run=dry_run or query, integrated=mode is LaunchMode.INTEGRATED, copy_links=copy_links, excludes=excludes)
     import shlex
     import subprocess
     baseline = subprocess.list2cmdline(arguments) if get_os() == OS.WIN else shlex.join(arguments)
 
-    if not query and not dry_run and not Path(destination_path).exists():
+    if mode is not LaunchMode.PREVIEW and not dry_run and not Path(destination_path).exists():
         match get_os():
             case OS.WIN:
                 if len(destination_path_str) > 1 and destination_path_str[1] == ':':
@@ -160,29 +163,29 @@ def _run_sync(
                 if destination_path_str.startswith('/'):
                     Path(destination_path).mkdir(parents=True, exist_ok=True)
 
-    if query or wait_for_output:
+    if mode in (LaunchMode.PREVIEW, LaunchMode.WAIT):
         result = cmdShellWrapper.run_command(arguments, cancelled=cancelled, **({'environment': environment} if environment is not None else {}))
         if not result.success or cancelled():
             if cancelled():
                 detail = 'Cancelled'
             else:
                 detail = '\n'.join(result.stderr) or ('Cancelled' if result.cancelled else f'Exit status {result.returncode}')
-            if query:
+            if mode is LaunchMode.PREVIEW:
                 raise RuntimeError(f'rclone preview failed: {detail}')
             log(Severity.ERROR, 'rclone sync', detail)
-            return False
-        if query:
-            return rclone_sync_process_query(source_path_str, destination_path_str, result.lines)
-        return True
+            return SyncOutcome(SyncState.CANCELLED if cancelled() or result.cancelled else SyncState.FAILED)
+        if mode is LaunchMode.PREVIEW:
+            return SyncOutcome(SyncState.PREVIEW, rclone_sync_process_query(source_path_str, destination_path_str, result.lines))
+        return SyncOutcome(SyncState.SUCCEEDED)
 
-    if integrated and not wait_for_output:
+    if mode is LaunchMode.INTEGRATED:
         from commonUtils.ui import pyside as qt
         application = qt.QApplication.instance()
         if application is not None and qt.QThread.currentThread() == application.thread():
             from commonUtils.ui.tasks.process_progress import open_process
             from features.rclone.transfers.progress import RcloneProgressParser
             if cancelled():
-                return False
+                return SyncOutcome(SyncState.CANCELLED)
             window = open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
                          arguments[0], arguments[1:], parser=RcloneProgressParser(),
                          context={'operation': 'Sync (dry run)' if dry_run else 'Sync', 'source': source_path_str,
@@ -192,15 +195,17 @@ def _run_sync(
                             cancelled, session_bound=environment is not None)
             if on_launch is not None:
                 on_launch(window)
-            return True
+            return SyncOutcome(SyncState.STARTED)
 
     if environment is not None:
         # Session secrets never enter terminal command strings or global env.
         result = cmdShellWrapper.run_command(arguments, environment=environment, cancelled=cancelled)
         if not result.success or cancelled():
             log(Severity.ERROR, 'rclone sync', 'The session transfer failed or was cancelled.')
-        return result.success and not cancelled()
-    return cmdShellWrapper.exec_cmd(baseline, wait_for_output=False, in_new_window=True) is not False
+        return SyncOutcome(SyncState.CANCELLED if cancelled() or result.cancelled else
+                           SyncState.SUCCEEDED if result.success else SyncState.FAILED)
+    accepted = cmdShellWrapper.exec_cmd(baseline, wait_for_output=False, in_new_window=True) is not False
+    return SyncOutcome(SyncState.STARTED if accepted else SyncState.FAILED)
 
 
 def build_sync_arguments(rclone_path, source_path, destination_path, *, config_path,
@@ -213,7 +218,7 @@ def build_sync_arguments(rclone_path, source_path, destination_path, *, config_p
         arguments += ['--use-json-log', '--stats', '1s', '--stats-log-level', 'NOTICE']
     else:
         arguments += ['--progress']
-    arguments += ['--transfers=1' if '-VM' in str(source_path) else '--transfers=10']
+    arguments += [f'--transfers={transfer_concurrency(source_path)}']
     if dry_run:
         arguments += ['--dry-run']
     arguments += options.cli_arguments()

@@ -1,4 +1,8 @@
 """Isolated GUI checks must run every module and preserve all failure statuses."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 import importlib.util
 import json
@@ -18,7 +22,7 @@ class RegressionRunnerTests(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test_live.py').write_text(
-                'import unittest\nclass Live(unittest.TestCase):\n'
+                '# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\nclass Live(unittest.TestCase):\n'
                 ' def test_current(self): pass\n')
             with patch.dict(os.environ, BUILD_MANAGER_TEST_PROGRESS='1'):
                 result = self.run_modules(root)
@@ -39,7 +43,7 @@ class RegressionRunnerTests(unittest.TestCase):
             spec.loader.exec_module(runner)
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / 'test_stuck.py').write_text('')
+            (root / 'test_stuck.py').write_text('# TEST_STAGE = TestStage.REGRESSION\n')
             report = runner.TimingReport(root / 'report.json', root, 'test*.py', True)
             with patch.object(runner.subprocess, 'run', side_effect=subprocess.TimeoutExpired('probe', 300)), \
                     patch.object(runner, 'monotonic', side_effect=[10.0, 10.25]):
@@ -50,12 +54,14 @@ class RegressionRunnerTests(unittest.TestCase):
             self.assertEqual(data['modules'][0]['duration_seconds'], 0.25)
             self.assertFalse(data['modules'][0]['test_report_available'])
             self.assertFalse(data['complete'])
+            self.assertFalse(data['coverage_complete'])
+            self.assertEqual(data['not_run'][0]['file'], 'test_stuck.py')
 
     def test_selected_suite_takes_precedence_over_runner_directory(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test_pdf_reader.py').write_text(
-                'import unittest\nclass SelectedSuite(unittest.TestCase):\n'
+                '# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\nclass SelectedSuite(unittest.TestCase):\n'
                 ' def test_selected_suite(self): pass\n')
             env = dict(os.environ, PYTHONPATH=str(root) + os.pathsep + os.environ.get('PYTHONPATH', ''))
             result = subprocess.run([sys.executable, str(RUNNER), str(root), '--isolate-modules'],
@@ -71,11 +77,11 @@ class RegressionRunnerTests(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test_first.py').write_text(
-                "import os, unittest\n"
+                '# TEST_STAGE = TestStage.REGRESSION\n' "import os, unittest\n"
                 "class First(unittest.TestCase):\n"
                 " def test_state(self): os.environ['LOGISTICS_TEST_PROCESS_STATE'] = 'changed'\n")
             (root / 'test_second.py').write_text(
-                "import os, unittest\n"
+                '# TEST_STAGE = TestStage.REGRESSION\n' "import os, unittest\n"
                 "class Second(unittest.TestCase):\n"
                 " def test_state(self): self.assertNotIn('LOGISTICS_TEST_PROCESS_STATE', os.environ)\n")
             result = self.run_modules(root)
@@ -90,7 +96,7 @@ class RegressionRunnerTests(unittest.TestCase):
             suite = root / 'suite'
             suite.mkdir()
             (suite / 'test_profile.py').write_text(
-                "import os, sys, unittest\nfrom pathlib import Path\n"
+                '# TEST_STAGE = TestStage.REGRESSION\n' "import os, sys, unittest\nfrom pathlib import Path\n"
                 f"sys.path.insert(0, {str(RUNNER.parents[2])!r})\n"
                 "from mobile_build.deployment.manager_settings import profile_path\n"
                 "class Profile(unittest.TestCase):\n"
@@ -112,10 +118,10 @@ class RegressionRunnerTests(unittest.TestCase):
             root = Path(temporary)
             marker = root / 'later-ran'
             (root / 'test_first.py').write_text(
-                "import unittest\nclass First(unittest.TestCase):\n"
+                '# TEST_STAGE = TestStage.REGRESSION\n' "import unittest\nclass First(unittest.TestCase):\n"
                 " def test_failure(self): self.fail('expected assertion failure')\n")
             (root / 'test_second.py').write_text(
-                "from pathlib import Path\nimport unittest\nclass Second(unittest.TestCase):\n"
+                '# TEST_STAGE = TestStage.REGRESSION\n' "from pathlib import Path\nimport unittest\nclass Second(unittest.TestCase):\n"
                 f" def test_later(self): Path({str(marker)!r}).write_text('ran')\n")
             result = self.run_modules(root)
             self.assertEqual(result.returncode, 1)
@@ -126,7 +132,7 @@ class RegressionRunnerTests(unittest.TestCase):
     def test_abnormal_child_exit_fails_validation(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / 'test_crash.py').write_text('import os\nos._exit(23)\n')
+            (root / 'test_crash.py').write_text('# TEST_STAGE = TestStage.REGRESSION\n' 'import os\nos._exit(23)\n')
             report = root / 'report.json'
             result = self.run_modules(root, '--report', str(report))
             self.assertEqual(result.returncode, 1)
@@ -136,12 +142,14 @@ class RegressionRunnerTests(unittest.TestCase):
             self.assertTrue(data['complete'])
             self.assertEqual(data['modules'][0]['exit_code'], 23)
             self.assertFalse(data['modules'][0]['test_report_complete'])
+            self.assertFalse(data['coverage_complete'])
+            self.assertTrue(data['not_run'])
 
     def test_timing_includes_cleanup_and_preserves_outcomes_across_files(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / 'test_outcomes.py').write_text(
-                'import time, unittest\n'
+                '# TEST_STAGE = TestStage.REGRESSION\n' 'import time, unittest\n'
                 'class Cases(unittest.TestCase):\n'
                 ' def setUp(self): time.sleep(0.02)\n'
                 ' def tearDown(self): time.sleep(0.02)\n'
@@ -157,7 +165,7 @@ class RegressionRunnerTests(unittest.TestCase):
                 '  with self.subTest(value=1): self.fail("subtest failure")\n'
                 '  with self.subTest(value=2): pass\n')
             (root / 'test_fixture.py').write_text(
-                'import unittest\n'
+                '# TEST_STAGE = TestStage.REGRESSION\n' 'import unittest\n'
                 'class Broken(unittest.TestCase):\n'
                 ' @classmethod\n'
                 ' def setUpClass(cls): raise RuntimeError("class fixture error")\n'

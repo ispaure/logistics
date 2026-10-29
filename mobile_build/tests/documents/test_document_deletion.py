@@ -1,4 +1,8 @@
 """Confirmed managed-document deletion preserves cancellation and neighboring drafts."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest

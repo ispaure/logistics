@@ -1,4 +1,5 @@
 """Read-only remote tabs hosted alongside Local and LocalCrypt browser tabs."""
+from features.video.formats import VIDEO_EXTENSIONS
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -95,7 +96,7 @@ class RemoteBrowserView(qt.QMainWindow):
         if self.closing or self.operation.busy:
             return
         suffix = Path(path).suffix.lower()
-        if suffix in {'.mp4', '.mkv'}:
+        if suffix in VIDEO_EXTENSIONS:
             from features.video.ui.player import open_video_choice
             from commonUtils.runtime.resources.selection import ResourceChoice
             return open_video_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)

@@ -4,7 +4,7 @@ import ctypes
 import json
 from pathlib import Path, PurePosixPath
 
-from .bridge_protocol import ACTIONS, decode_envelope
+from .bridge_protocol import ACTIONS, decode_envelope, request_limit_bytes, validate_result
 from .credential_state import NativeCredentialState
 from features.rclone.credential_loading import CredentialBusyError
 
@@ -91,9 +91,8 @@ class CloudClient:
         if values.get('source_remote') and values.get('source_identity'):
             values['source_remote'] = self.resolve_remote(values['source_remote'], values['source_identity'], cipher=True)
         data = json.dumps(values, ensure_ascii=False).encode('utf-8')
-        if len(data) > (45 * PACKAGE_LIMIT if action == 'crypt_write_buffer' else
-                        PACKAGE_LIMIT * (24 if action == 'image_thumbnail' else 2)):
-            raise ValueError('Credential package exceeds the request limit.')
+        if len(data) > request_limit_bytes(action):
+            raise ValueError('Remote request exceeds the size limit for ' + action + '.')
         pointer = self.call(action.encode('ascii'), data)
         if not pointer:
             raise OSError('The native rclone bridge returned no response.')
@@ -113,7 +112,7 @@ class CloudClient:
             if not isinstance(info, dict):
                 info = self.request('vault_info') if action != 'clear' else {}
             self.publish_credentials(action, values, info)
-        return reply.get('result')
+        return validate_result(action, reply.get('result'))
 
     def publish_credentials(self, action, values, info):
         return self.credential_state.publish(action, values, info)

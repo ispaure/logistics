@@ -1,4 +1,8 @@
 """Document entry points preserve the selected tab and retained source panels."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -27,7 +31,7 @@ class DocumentNavigationTests(TestCase):
             path = self.folder / name
             path.write_text('Retained text')
             self.paths.append(path)
-        from mobile_build.tests.reading.test_pdf_reader import PDF
+        from mobile_build.tests.support.pdf import PDF
         path = self.folder / 'document.pdf'
         path.write_bytes(PDF)
         self.paths.append(path)
@@ -128,7 +132,7 @@ class DocumentNavigationTests(TestCase):
         self.assertFalse(app._document_tabs_hidden)
 
     def test_all_formats_keep_home_or_workspace_and_back_restores_same_panel(self):
-        from mobile_build.tests.reading.test_pdf_reader import native_pdf
+        from mobile_build.tests.support.pdf import native_pdf
 
         async def exercise():
             for destination in ('home', 'files', 'documents'):

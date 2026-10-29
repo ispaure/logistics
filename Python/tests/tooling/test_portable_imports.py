@@ -1,4 +1,8 @@
 """Import reviewed portable owners with presentation dependencies actively blocked."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from collections import defaultdict
 import json
 import os

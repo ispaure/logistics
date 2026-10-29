@@ -332,7 +332,11 @@ class ProviderUI(FilesUI):
                 surface = view.crypt_image
             elif kind == 'image':
                 view.crypt_image._external_comic_page = view.crypt_reader.kind in {'.cbz', '.zip'}
-                view.crypt_image.image = toga.Image(src=content)
+                from features.images.mobile.decoding import decode_page
+                from features.images.validation import image_dimensions
+                from toga.platform import get_factory
+                size = image_dimensions(content)
+                view.crypt_image.image = decode_page(content, size, size, get_factory().Image.__module__)
                 surface = view.crypt_image
             else:
                 view.crypt_text.value = content
@@ -346,8 +350,7 @@ class ProviderUI(FilesUI):
         if kind == 'spread':
             view.provider_spread = prepared_spread
             view.crypt_reader.comic_navigation.commit(indices)
-            view.crypt_title.text = private_label(f'Page {index + 1}/{len(view.crypt_reader.labels)}' +
-                view.crypt_reader.comic_navigation.part_label)
+            view.crypt_title.text = private_label('Page ' + view.crypt_reader.comic_navigation.progress_label)
         if surface is not view.crypt_text:
             view.crypt_text.value = ''
         if surface is not view.crypt_image:
@@ -396,8 +399,8 @@ class ProviderUI(FilesUI):
             self._show_crypt_content(kind, content)
             self.page_suspended = False
             if reader.kind in {'.pdf', '.cbz', '.zip'}:
-                self.crypt_title.text = private_label(f'Page {index + 1}/{len(reader.labels)}' +
-                    (reader.comic_navigation.part_label if hasattr(reader, 'comic_navigation') else ''))
+                self.crypt_title.text = private_label('Page ' + (reader.comic_navigation.progress_label if hasattr(reader, 'comic_navigation')
+                    else f'{index + 1} / {len(reader.labels)}'))
             self.refresh_private_bookmarks()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
@@ -549,7 +552,8 @@ class ProviderUI(FilesUI):
 
     def toggle_private_reading_mode(self, widget=None, **kwargs):
         if self.crypt_reader is None or (self.crypt_reader.kind not in {'.cbz', '.zip'}
-                                        and self.crypt_reader.book is None and self.crypt_reader.kind != '.pdf'):
+                                        and self.crypt_reader.book is None and self.crypt_reader.kind != '.pdf'
+                                        and not getattr(self.crypt_reader, 'image_document', False)):
             return
         self.crypt_immersive = not self.crypt_immersive
         panel = getattr(self, 'provider_epub_view', None)
@@ -559,7 +563,7 @@ class ProviderUI(FilesUI):
         if pdf_tools is not None:
             pdf_tools.close()
         comic = self.crypt_reader.kind in {'.cbz', '.zip'}
-        self.reading_frame.set_immersive(self.crypt_immersive, comic=comic, image=self.crypt_reader.kind == '.pdf')
+        self.reading_frame.set_immersive(self.crypt_immersive, comic=comic, image=self.crypt_reader.kind == '.pdf' or getattr(self.crypt_reader, 'image_document', False))
         self.refresh_transfer_status()
         self.resume_crypt()
 

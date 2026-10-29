@@ -1,5 +1,9 @@
 """Encrypted comics preserve decrypted results and never modify on auth failure."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path

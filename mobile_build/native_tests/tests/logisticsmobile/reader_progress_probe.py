@@ -1,4 +1,8 @@
 """Native footer appearance and page/chapter scrubbing on synthetic documents."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

@@ -1,4 +1,8 @@
 """Location actions, bounded remote access and Notes Library document ownership."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import json
 import os

@@ -1,4 +1,8 @@
 """Portable protected-key lifecycle tests; native gates exercise actual OS stores."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import json
 from pathlib import Path

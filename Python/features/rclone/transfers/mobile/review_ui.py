@@ -1,5 +1,6 @@
 """Native presentation over the same review state and decisions as desktop."""
 import asyncio
+from typing import Protocol
 
 import toga
 from toga.style import Pack
@@ -43,6 +44,135 @@ def _display_review(session):
     # A worker can finish between snapshot() and can_approve(). Never enable
     # full approval while the rendered comparison is still visibly partial.
     return snapshot.text(), snapshot.complete and session.can_approve()
+
+
+class ReviewPresentation(Protocol):
+    async def confirm(self, request, *, incomplete: bool) -> bool: ...
+    def scanning(self, session) -> None: ...
+    def show(self, box, cancel, request) -> None: ...
+    def close(self) -> None: ...
+
+
+class TransferReviewDialog:
+    """Render and retire one review; execution stays in the transfer workflow."""
+
+    def __init__(self, view: ReviewPresentation):
+        self.view = view
+
+    async def run(self, session):
+        try:
+            return await self._present(session)
+        finally:
+            session.scan.stop()
+            try:
+                while not session.scan.retired.is_set():
+                    try:
+                        await asyncio.sleep(.05)
+                    except asyncio.CancelledError:
+                        continue
+            finally:
+                self.view.close()
+
+    async def _present(self, session):
+        request = session.request
+        box = toga.Box(style=Pack(direction=COLUMN, margin=12, flex=1))
+        paths = toga.Label(f'From: {request.source}\nTo: {request.destination}', style=Pack(margin_bottom=8))
+        status = toga.Label('Scanning; comparison does not change files.', style=Pack(margin_bottom=8))
+        details = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
+        buttons = toga.Box(style=Pack(direction=ROW))
+        closed = False
+        confirming = False
+        async def choose(incomplete):
+            nonlocal confirming
+            if closed or confirming or not session.can_approve(incomplete=incomplete):
+                return
+            confirming = True
+            confirm.enabled = early.enabled = False
+            try:
+                accepted = await self.view.confirm(request, incomplete=incomplete)
+                if not closed and accepted and session.approve(incomplete=incomplete):
+                    self.view.scanning(session)
+            finally:
+                confirming = False
+                if not closed:
+                    early.enabled = session.can_approve(incomplete=True)
+        def cancel(widget=None, **kwargs):
+            session.cancel()
+        async def full(widget=None, **kwargs):
+            await choose(False)
+        async def partial(widget=None, **kwargs):
+            await choose(True)
+        confirm = toga.Button('Confirm ' + request.operation + '…', on_press=full, enabled=False, style=Pack(flex=1, height=44))
+        early = toga.Button('Proceed without full review…', on_press=partial, style=Pack(height=44))
+        buttons.add(toga.Button('Cancel', on_press=cancel, style=Pack(height=44)), confirm)
+        box.add(toga.Label('Review ' + request.operation, style=Pack(font_size=22)), paths, status, details, early, buttons)
+        previous = None
+        try:
+            self.view.show(box, cancel, request)
+            while True:
+                state = session.poll()
+                full_ready = False
+                if not session.valid():
+                    paths.text = 'Connection locked or changed.'
+                    details.value = ''
+                else:
+                    text, full_ready = _display_review(session)
+                    if text != previous:
+                        details.value, previous = text, text
+                confirm.enabled = full_ready and not confirming
+                early.enabled = not confirming and session.can_approve(incomplete=True)
+                notices = dict(stopping='Stopping comparison…', checking='Checking that the completed review is still current…',
+                    changed='Files changed or could not be checked. Review the current results and confirm again.',
+                    failed='Comparison failed. Retry later, or explicitly proceed without a full review.')
+                if state in notices:
+                    status.text = notices[state]
+                if state in ('approved', 'cancelled'):
+                    break
+                await asyncio.sleep(.1)
+        finally:
+            closed = True
+            paths.text = ''
+            details.value = ''
+            status.text = 'Review closed.'
+            confirm.enabled = early.enabled = False
+        return session.approved
+
+
+class MobileReviewPresentation:
+    """Own the controller fields and navigation effects of a review dialog."""
+
+    def __init__(self, owner):
+        self.owner = owner
+
+    async def confirm(self, request, *, incomplete):
+        return await self.owner.main_window.dialog(toga.ConfirmDialog(
+            'Confirm ' + request.operation, request.confirmation(incomplete=incomplete)))
+
+    def scanning(self, session):
+        self.owner._transfer_cancel = session.scan.cancelled
+
+    def show(self, box, cancel, request):
+        self.owner._transfer_review_view = box
+        self.owner._cancel_transfer_review = cancel
+        self.owner.show_view(box, destination='files', route='transfer-review',
+                             title='Review ' + request.operation)
+
+    def close(self):
+        owner = self.owner
+        owner._transfer_review_view = None
+        owner._cancel_transfer_review = None
+        try:
+            screens = owner.routes.screens['files']
+            index = next((index for index, screen in enumerate(screens)
+                          if screen[0] == 'transfer-review'), None)
+            if index is not None:
+                owner.routes.trim('files', index)
+                owner.routes.render('files')
+        finally:
+            owner._transfer_cancel = None
+            owner.transfer_busy = False
+            owner.set_cloud_busy(False)
+            owner.refresh_transfer_status()
 
 
 class TransferReviewUI:
@@ -168,80 +298,8 @@ class TransferReviewUI:
         self._transfer_cancel = session.scan.cancelled
         self.transfer_message = 'Reviewing ' + request.operation + '…'
         self.refresh_transfer_status()
-        box = toga.Box(style=Pack(direction=COLUMN, margin=12, flex=1))
-        paths = toga.Label(f'From: {request.source}\nTo: {request.destination}', style=Pack(margin_bottom=8))
-        status = toga.Label('Scanning; comparison does not change files.', style=Pack(margin_bottom=8))
-        details = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
-        buttons = toga.Box(style=Pack(direction=ROW))
-        async def choose(incomplete):
-            if not session.can_approve(incomplete=incomplete):
-                return
-            confirm.enabled = early.enabled = False
-            try:
-                accepted = await self.main_window.dialog(toga.ConfirmDialog('Confirm ' + request.operation,
-                    request.confirmation(incomplete=incomplete)))
-                if accepted:
-                    session.approve(incomplete=incomplete)
-                    self._transfer_cancel = session.scan.cancelled
-            finally:
-                early.enabled = session.can_approve(incomplete=True)
-        def cancel(widget=None, **kwargs):
-            session.cancel()
-        async def full(widget=None, **kwargs):
-            await choose(False)
-        async def partial(widget=None, **kwargs):
-            await choose(True)
-        confirm = toga.Button('Confirm ' + request.operation + '…', on_press=full, enabled=False, style=Pack(flex=1, height=44))
-        early = toga.Button('Proceed without full review…', on_press=partial, style=Pack(height=44))
-        buttons.add(toga.Button('Cancel', on_press=cancel, style=Pack(height=44)), confirm)
-        box.add(toga.Label('Review ' + request.operation, style=Pack(font_size=22)), paths, status, details, early, buttons)
-        self._transfer_review_view = box
-        self._cancel_transfer_review = cancel
-        self.show_view(box, destination='files', route='transfer-review', title='Review ' + request.operation)
-        previous = None
-        try:
-            while True:
-                state = session.poll()
-                full_ready = False
-                if not session.valid():
-                    paths.text = 'Connection locked or changed.'
-                    details.value = ''
-                else:
-                    text, full_ready = _display_review(session)
-                    if text != previous:
-                        details.value, previous = text, text
-                confirm.enabled = full_ready
-                early.enabled = session.can_approve(incomplete=True)
-                notices = dict(stopping='Stopping comparison…', checking='Checking that the completed review is still current…',
-                    changed='Files changed or could not be checked. Review the current results and confirm again.',
-                    failed='Comparison failed. Retry later, or explicitly proceed without a full review.')
-                if state in notices:
-                    status.text = notices[state]
-                if state in ('approved', 'cancelled'):
-                    break
-                await asyncio.sleep(.1)
-        finally:
-            session.scan.stop()
-            while not session.scan.retired.is_set():
-                await asyncio.sleep(.05)
-            self._transfer_review_view = None
-            self._cancel_transfer_review = None
-            # A consumed comparison is no longer a destination. Retire its
-            # native controller too, even if another tab is currently visible.
-            screens = self.routes.screens['files']
-            index = next((index for index, screen in enumerate(screens)
-                          if screen[0] == 'transfer-review'), None)
-            if index is not None:
-                self.routes.trim('files', index)
-                self.routes.render('files')
-            paths.text = ''
-            details.value = ''
-            status.text = 'Review closed.'
-            confirm.enabled = early.enabled = False
-            self._transfer_cancel = None
-            self.transfer_busy = False
-            self.set_cloud_busy(False)
-            self.refresh_transfer_status()
+        dialog = TransferReviewDialog(MobileReviewPresentation(self))
+        await dialog.run(session)
         if not session.approved:
             self.transfer_message = 'Review cancelled. No transfer was started.'
             return False

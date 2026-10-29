@@ -1,4 +1,8 @@
 """Edit ownership and response publication without constructing chat widgets."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 from tempfile import TemporaryDirectory
 import unittest

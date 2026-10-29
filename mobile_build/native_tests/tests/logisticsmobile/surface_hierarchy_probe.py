@@ -1,4 +1,8 @@
 """Disposable native evidence for filled controls and navigable hierarchies."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
 import json

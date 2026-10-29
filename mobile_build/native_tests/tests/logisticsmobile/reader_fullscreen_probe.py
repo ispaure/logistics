@@ -1,4 +1,8 @@
 """Isolated synthetic fullscreen geometry check; never reads user credentials."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio, json, traceback
 from pathlib import Path
 from mobile.app import LogisticsMobile

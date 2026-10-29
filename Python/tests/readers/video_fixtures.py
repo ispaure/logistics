@@ -51,6 +51,35 @@ def multitrack_movie(root, source, ffmpeg='ffmpeg'):
     return output
 
 
+def orientation_fixtures(root):
+    """Asymmetric corner colors reveal every EXIF rotation/mirror on native APIs."""
+    import json
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    source = Image.new('RGB', (30, 50))
+    for box, color in (((0, 0, 15, 25), 'red'), ((15, 0, 30, 25), 'green'),
+                       ((0, 25, 15, 50), 'blue'), ((15, 25, 30, 50), 'yellow')):
+        source.paste(color, box)
+    manifest = []
+    for format in ('JPEG', 'WEBP', 'PNG'):
+        for orientation in range(1, 9):
+            metadata = Image.Exif()
+            metadata[274] = orientation
+            data = BytesIO()
+            source.save(data, format=format, exif=metadata)
+            name = f'{format.lower()}-{orientation}'
+            root.joinpath(name + '.source').write_bytes(data.getvalue())
+            with Image.open(BytesIO(data.getvalue())) as encoded:
+                expected = ImageOps.exif_transpose(encoded).convert('RGB')
+                corners = [(2, 2), (expected.width - 3, 2), (2, expected.height - 3),
+                           (expected.width - 3, expected.height - 3)]
+                manifest.append(dict(name=name, size=list(expected.size),
+                    corners=[list(expected.getpixel(point)) for point in corners]))
+    root.joinpath('manifest.json').write_text(json.dumps(manifest))
+
+
 def chapter_movie(root, container='mkv', ffmpeg='ffmpeg'):
     """A short movie with named chapter boundaries, for real decoder/menu tests."""
     root = Path(root)

@@ -1,5 +1,9 @@
 """Real native page-layer presence, plus mobile high-contrast suppression."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 
 async def exercise(app, name):
     if not getattr(app, 'page_turns', False):

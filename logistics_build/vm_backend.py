@@ -54,6 +54,12 @@ def _run_attempt(args):
     expected_host = 'ubuntu' if args.container_image else args.distribution
     if info['system'] != 'Linux' or ('ID=' + expected_host) not in info['os_release'].replace('"', ''):
         raise ValueError('Selected VM does not provide the requested Linux distribution.')
+    from logistics_build.test_environments import load
+    environments = load(args.snapshot)
+    if not args.container_image:
+        fields = dict(line.split('=', 1) for line in info['os_release'].replace(chr(34), '').splitlines() if '=' in line)
+        if fields.get('VERSION_ID') != environments['fedora_image'].split(':')[1]:
+            raise ValueError('Dedicated Fedora version differs from the shared test settings.')
     if len(info['users']) != 1:
         raise ValueError('Select a guest with one identifiable normal test account; no root Qt fallback is allowed.')
     account = info['users'][0]
@@ -76,6 +82,8 @@ def _run_attempt(args):
         env = dict(QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1',
                    UV_PYTHON_INSTALL_DIR=workspace + '/python', UV_CACHE_DIR=workspace + '/cache',
                    PYTHONPATH=workspace + '/source:' + workspace + '/source/Python')
+        if getattr(args, 'manager_working_tree', None):
+            env['LOGISTICS_MANAGER_LOCAL_TEST_SOURCE'] = args.manager_working_tree
         if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off':
             env['LOGISTICS_REUSE_TEST_RESULTS'] = 'off'
         def execute(argv, environment, timeout):
@@ -92,11 +100,12 @@ def _run_attempt(args):
             prepare_image = """import hashlib,json,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]); command=json.loads(sys.argv[2]); image=sys.argv[3]
 definition=root/'source/Python/tests/platform/fedora43.Containerfile'
-sha=hashlib.sha256(definition.read_bytes()).hexdigest()
+settings=json.loads((root/'source/test-environments.json').read_text());base=settings['fedora_image']
+sha=hashlib.sha256(definition.read_bytes()+base.encode()).hexdigest()
 probe=subprocess.run(command+['image','inspect',image],capture_output=True,text=True)
 rows=json.loads(probe.stdout) if probe.returncode==0 else []
 if not rows or rows[0].get('Config',{}).get('Labels',{}).get('build-manager.definition')!=sha:
- subprocess.run(command+['build','--label','build-manager.definition='+sha,'--tag',image,'--file',str(definition),str(definition.parent)],check=True,timeout=900)
+ subprocess.run(command+['build','--label','build-manager.definition='+sha,'--tag',image,'--build-arg','FEDORA_IMAGE='+base,'--file',str(definition),str(definition.parent)],check=True,timeout=900)
  rows=json.loads(subprocess.check_output(command+['image','inspect',image],text=True))
 reports=root/'reports';reports.mkdir(exist_ok=True)
 (reports/'container-image.json').write_text(json.dumps(dict(image_id=rows[0]['Id'],definition_sha256=sha,architecture=rows[0]['Architecture'])))
@@ -114,12 +123,15 @@ reports=root/'reports';reports.mkdir(exist_ok=True)
         setup_started = time.monotonic()
         bootstrap = BOOTSTRAP if not container else '''import json,pathlib,platform,subprocess,sys
 r=pathlib.Path('/etc/os-release').read_text()
-if 'ID=fedora' not in r or 'VERSION_ID=43' not in r: raise ValueError('Expected Fedora43 container')
+expected=json.loads((pathlib.Path(sys.argv[1])/'source/test-environments.json').read_text())['fedora_image'].split(':')[1]
+if 'ID=fedora' not in r or ('VERSION_ID='+expected) not in r.replace(chr(34),''): raise ValueError('Container differs from configured Fedora version')
 p=pathlib.Path(sys.argv[1])/'reports';p.mkdir(exist_ok=True)
 (p/'container-environment.json').write_text(json.dumps(dict(os_release=r,architecture=platform.machine())))
 subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed',sys.argv[1]+'/environment'],check=True,timeout=600)
 '''
         catalog = json.loads(Path(__file__).with_name('build_manager_tools.json').read_text())['linux']
+        from logistics_build.test_environments import load
+        catalog['python'] = load(args.snapshot)['python_version']
         parameters = linux_parameters(**catalog)
         code = execute(['python3', '-c', bootstrap, workspace, json.dumps(parameters)], env, 1020)
         result['setup_seconds'] = time.monotonic() - setup_started
@@ -130,7 +142,7 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
         guest_python = workspace + '/environment/bin/python'
         if args.manager_checkout:
             from logistics_build.guest_manager import stage_linux
-            stage_linux(client, vm, workspace, token, account['uid'], account['gid'], args.manager_checkout, args.snapshot)
+            stage_linux(client, vm, workspace, token, account['uid'], account['gid'], args.manager_checkout, args.snapshot, working_tree=getattr(args, 'manager_working_tree', None))
             setup = [guest_python, '-m', 'logistics_build.guest_manager', '--checkout', workspace+'/manager', '--project', workspace+'/source']
         else:
             setup = [guest_python, 'logistics_build/install_build_manager.py', '--from-pin', workspace+'/manager']
@@ -201,6 +213,7 @@ def main():
     parser.add_argument('--pattern', default='')
     parser.add_argument('--native-notebooks', action='store_true', help='Run native notebook UI probes after focused setup')
     parser.add_argument('--manager-checkout', type=Path)
+    parser.add_argument('--manager-working-tree', help='Exact captured manager content identity for explicit local testing only')
     args = parser.parse_args()
     if args.native_notebooks and not args.pattern:
         parser.error('--native-notebooks requires an explicit focused test pattern')

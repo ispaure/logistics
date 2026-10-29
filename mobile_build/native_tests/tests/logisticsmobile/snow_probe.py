@@ -1,4 +1,8 @@
 """Isolated native snow smoke test, using synthetic content only."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from datetime import date
 import json

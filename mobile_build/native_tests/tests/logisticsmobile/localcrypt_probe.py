@@ -1,4 +1,8 @@
 """Focused native encrypted-copy acceptance in an owned disposable QA app."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from .document_workspace_probe import DocumentWorkspaceProbe
 from .localcrypt_checks import exercise_localcrypt
 

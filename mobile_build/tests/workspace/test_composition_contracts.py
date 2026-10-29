@@ -1,4 +1,8 @@
 """Lazy controller assembly and explicit read/write host capabilities."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace
 import unittest
 from services.workflow_host import HostService, HostAttribute, StateAttribute

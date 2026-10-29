@@ -1,4 +1,8 @@
 """Synthetic export/recovery acceptance shared by desktop and installed runtimes."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import errno
 from hashlib import sha256
 import json

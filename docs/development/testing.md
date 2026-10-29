@@ -1,6 +1,8 @@
 # Development and validation
 
 New contributors can use the shorter [first-contribution walkthrough](getting-started.md).
+For a new test, follow [the worked test contribution](adding-tests.md), including
+which manifests to edit and how cases reach manager results.
 This page is the detailed command and validation reference. Run commands from the
 repository root unless a section says otherwise.
 
@@ -113,6 +115,71 @@ running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscr
 Qt. These checks do not certify native appearance or interactions. See the
 [mobile handbook](mobile-handbook.md) when you need an actual device build.
 
+### Execution stages and failure policy
+
+Every declared test source has one default from `commonUtils.testing.stages.TestStage`:
+
+```python
+from commonUtils.testing.stages import TestStage, stage
+
+TEST_STAGE = TestStage.REGRESSION
+
+@stage(TestStage.SMOKE)
+class StartupTests(unittest.TestCase):
+    ...
+```
+
+Use `SMOKE` for a small, deterministic startup/core-contract gate, `REGRESSION`
+for ordinary behavioral coverage, and `EXTENDED` for expensive performance, soak,
+parity or comprehensive native journeys. Stage describes execution scope, not bug
+severity. A file default labels every case unless its class or method uses
+`@stage(TestStage.MEMBER)`; method overrides take precedence. Keep tests independent;
+ordering must never supply state needed by another test. Standalone embedded
+runtimes and non-Python sources use `# TEST_STAGE = TestStage.SMOKE` or the language's
+`//` comment form, avoiding a runtime dependency just for metadata. Whole native
+journeys keep one stage; their existing ordered case inventory remains authoritative.
+
+`test-structure.json` declares the owned test roots, including commonUtils, release
+tooling, runtime drivers and bridge tests. `python3 dev.py test-structure` validates
+all declarations without importing tests. Missing, duplicate or invalid labels,
+escaping/linked sources and empty declared roots fail before execution. New files
+matching the declared patterns are checked automatically. Add new test locations
+to this manifest. `--inventory` prints the full source inventory as JSON; individual
+runner inventories are also available with `dev.py test desktop --inventory`.
+Static inventories describe locally declared/inherited methods; runtime discovery
+still determines actual unittest IDs, including imported bases and generated cases.
+
+```sh
+python3 dev.py test desktop --profile smoke --mode fast
+python3 dev.py test mobile --profile daily
+python3 dev.py test shared --profile full
+python3 dev.py test bridge --profile smoke --mode fast
+python3 dev.py test-owner resources --profile daily
+```
+
+Profiles are cumulative: `smoke` selects SMOKE, `daily` adds REGRESSION, `full`
+adds EXTENDED. The default is full diagnostic coverage. Files run in fresh
+processes, ordered by stage then path; methods use stage then unittest ID. A mixed
+file can run once per selected stage, with fresh fixtures each time. The underlying
+runner also accepts repeated `--stage` for an exact selection. Native acceptance
+entry points retain their complete platform-specific journeys; choosing a host
+profile does not narrow release acceptance or certify a device.
+
+Diagnostic mode continues independent checks after failures. Fast mode completes
+the selected smoke gate and leaves later stages unrun if smoke fails; discovery
+failures also stop that fast run. `--fail-fast` additionally stops at the first
+failure inside a file and prevents later files/groups from starting. Existing
+cleanup still runs. Failures never count as successful coverage. JSON records the
+selection, stage, mode, failures and unrun work; JUnit marks unrun work skipped with
+its reason. `coverage_complete` means all work in the selected scope ran, even if
+assertions failed; it does not mean a smoke profile covered the full suite.
+
+Pass `--timings path/to/previous.json` to order files by successful duration within
+a stage. It requires the same root, interpreter, platform and Qt/Toga backend
+environment; normal ordering is deterministic without timing history. Bridge Go
+tests run by stage with native Go fail-fast support; they currently report outcomes
+and gated stages on the console rather than the Python JSON timing schema.
+
 ### Shared-library test matrix
 
 Use the same entry point for commonUtils:
@@ -156,6 +223,41 @@ persists it through `GITHUB_ENV` so later fixture subprocesses can find browser
 tooling after application caches are isolated.
 
 ### Test timing and maintenance
+
+Generic host/native test mechanisms and defaults live in `commonUtils.testing`;
+their API contracts belong to commonUtils' own testing guide. The Logistics
+runner keeps its isolated-file timeout and progress interval in
+`Python/tests/runner_settings.py`; shared helpers do not own runner policy. Suite
+selection stays in [build-tests.json](../../build-tests.json), with developer
+routing through `dev.py`; these are different responsibilities.
+
+Logistics mobile host fixtures live in `mobile_build/tests/support/`. `app.py`
+provides `mobile_app()` for an explicit context and `create_app(case)` for a
+unittest cleanup scope. Both restore the previous storage override, close the
+window and drain constructor-allocated loops before deleting owned temporary files,
+including startup failures. Nested contexts restore the enclosing app and default
+loop. Cleanup failures retain owned roots under ignored `test-results/mobile-fixtures/`
+and name the retained path in the error. These contexts require synchronous tests.
+Pass an existing root only when its owner keeps it alive until app cleanup; that
+owner must also retain it if draining fails.
+`mirror.py`, `readers.py`, `pdf.py` and `localcrypt.py` own backend fakes and
+document fixtures reused across test files. Import them directly rather than
+importing another `test_*.py` module for these helpers.
+
+Native scenario budgets shared by Logistics checks live in
+`mobile_build/native_tests/tests/logisticsmobile/settings.py`; deliberate soak
+durations and feature-specific readiness checks stay beside their scenario.
+`rotation_checks.py` adds Logistics timing, route/content retention and safe-area
+assertions around the shared native rotation mechanism. Repeated native startup
+callbacks use `start_native_check` so activity recreation cannot duplicate a run.
+Shared screenshot mechanics remain behind the Logistics timing wrapper.
+
+State the full viewport when testing adaptive layout. A patched width alone does
+not specify portrait/landscape or whether the window is compact; the workspace
+navigation fixture fixes its full window height while varying width. Keyboard
+content-height changes remain separate observations. Preserve real content and
+route assertions when extracting device mechanics; a helper acknowledging a
+rotation does not establish that a reader finished reflowing.
 
 Every host regression run through `dev.py test` or `dev.py test-owner` saves a
 timestamped JSON report under ignored `test-results/test-timings/` and prints

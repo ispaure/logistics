@@ -1,5 +1,9 @@
 """Feature startup order, missing dependencies and contribution contracts."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.SMOKE
+
 from types import ModuleType
 from unittest.mock import Mock, patch
 import unittest

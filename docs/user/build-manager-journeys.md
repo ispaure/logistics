@@ -85,6 +85,11 @@ validation branch, prepares an APK or zipped development-signed iOS app, then
 requires manager approval of the exact retained report and package before each
 installation. The iOS development profile must already cover all selected UDIDs;
 preparation never registers devices or updates provisioning automatically.
+For an explicitly authorized Debug signing repair, set
+`devices.ios_provisioning=update` for that run. The reviewed source captures this
+choice and Xcode may update Apple profiles and capabilities using the configured
+API key. It does not register devices. The default `existing` choice and Release
+exports continue to use existing signing assets.
 Android preparation disables wireless discovery and device version queries.
 Installation validates exact bytes and recipient identity, updates in place and
 never uninstalls, clears storage, downgrades or re-signs on failure. Build/version

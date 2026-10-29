@@ -1,3 +1,7 @@
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import patch
@@ -106,7 +110,8 @@ class TestFlightWorkflowTests(unittest.TestCase):
         from mobile_build.deployment import testflight_tools as tools
         with TemporaryDirectory() as directory:
             workspace = Path(directory)
-            extensions = {'.inbox': 'inbox', '.widgets': 'widgets', '.widget-actions': 'actions'}
+            extensions = {'.inbox': 'inbox', '.widgets': 'widgets', '.widget-actions': 'actions',
+                          '.watchkitapp': 'watch', '.watchkitapp.widgets': 'watch-widget'}
             record = dict(identity=self.identity, build={'signed': True, 'build_number': '123'},
                           profile_uuid='main', extension_profile_uuids=extensions)
             (workspace / 'release.json').write_text(json.dumps(record))

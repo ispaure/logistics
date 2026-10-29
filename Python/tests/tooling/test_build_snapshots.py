@@ -1,4 +1,8 @@
 """Real local repositories prove source isolation without provider credentials."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import os
 from pathlib import Path

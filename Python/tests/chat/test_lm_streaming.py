@@ -1,4 +1,8 @@
 """Shared stream decoding retains mobile policy without importing Qt."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from io import BytesIO
 import json
 import unittest

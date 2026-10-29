@@ -1,4 +1,8 @@
 """Private-copy and scoped credential boundaries; native engine has its own gates."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 import ctypes
 import json

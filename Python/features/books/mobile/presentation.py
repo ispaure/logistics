@@ -34,6 +34,21 @@ SCRIPT = r'''
  const contrastObserver=new MutationObserver(motionChanged);
  contrastObserver.observe(document.head,{childList:true,subtree:true});
  const originalMaxWidth=getComputedStyle(document.body).maxWidth;
+ const fitImages=root=>{
+   for(const image of root.querySelectorAll('img')){
+     let vertical=0;
+     // Cover rasters commonly sit inside a paragraph or figure. Its spacing
+     // consumes column height too, even when the image itself would fit.
+     for(let box=image;box && box!==root;box=box.parentElement){
+       const css=getComputedStyle(box);
+       vertical+=['marginTop','marginBottom','paddingTop','paddingBottom','borderTopWidth','borderBottomWidth']
+         .reduce((sum,key)=>sum+(parseFloat(css[key])||0),0);
+     }
+     // The image's outer box must fit a column, including reader spacing.
+     Object.assign(image.style,{maxHeight:Math.max(1,parseFloat(pages.style.height)-vertical)+'px',
+       maxWidth:'100%',objectFit:'contain',breakInside:'avoid'});
+   }
+ };
  const lastPage=()=>Math.floor((pageCount-1)/columns)*columns;
  const layout=()=>{
    stopMotion();
@@ -60,7 +75,7 @@ SCRIPT = r'''
    pages.style.width=viewportWidth+'px';pages.style.columnWidth=pageWidth+'px';
    pages.style.columnGap=gap+'px';pages.style.columnCount=String(columns);
    pages.style.height=height+'px';viewport.style.height=pages.style.height;
-   for(const image of pages.querySelectorAll('img')) Object.assign(image.style,{maxHeight:pages.style.height,maxWidth:'100%',objectFit:'contain',breakInside:'avoid'});
+   fitImages(pages);
    pageCount=Math.max(1,Math.ceil((pages.scrollWidth+gap-1)/stride));
  };
  const place=value=>{stopMotion();page=Math.max(0,Math.min(lastPage(),Math.floor(value/columns)*columns));pages.style.transform='translateX('+(-page*stride)+'px)';scrollTo(0,0);};
@@ -219,8 +234,8 @@ SCRIPT = r'''
      Object.assign(root.style,{position:'fixed',left:'-100000px',top:'0',transform:'none',visibility:'hidden',pointerEvents:'none'});
      const chapter=new DOMParser().parseFromString(html,'text/html');
      while(chapter.body.firstChild)root.appendChild(chapter.body.firstChild);
-     for(const img of root.querySelectorAll('img'))Object.assign(img.style,{maxHeight:pages.style.height,maxWidth:'100%',objectFit:'contain',breakInside:'avoid'});
      viewport.appendChild(root);measureNodes.add(root);
+     fitImages(root);
      (async()=>{
        let timeout;
        try{

@@ -1,4 +1,8 @@
 """Checkpoint history retains immutable native ink once, not once per edit."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory

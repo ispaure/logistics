@@ -1,4 +1,8 @@
 """Synthetic native-ink archives, recovery, preservation and editing contracts."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import re
 from io import BytesIO

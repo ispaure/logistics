@@ -1,4 +1,8 @@
 """Isolated control-icon review app; never reads a user workspace or remote."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio, json, traceback
 from pathlib import Path
 import toga

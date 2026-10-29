@@ -1,5 +1,9 @@
 """Storage lock injection retains conflict policy without constructing Qt locks."""
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 from pathlib import Path
 import os
 from tempfile import TemporaryDirectory

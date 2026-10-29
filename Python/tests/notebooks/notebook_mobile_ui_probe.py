@@ -26,7 +26,7 @@ from features.notebooks.previews import page_previews
 from mobile.palette import EINK_CSS
 
 
-def main(output):
+def main(output, *, palm_only=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
@@ -84,6 +84,21 @@ def main(output):
         view.setHtml(mobile_editor_html(editor.state(), bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
+        assert js("getComputedStyle(canvas).userSelect") == 'none'
+        assert js("(()=>{let event=new Event('contextmenu',{bubbles:true,cancelable:true});canvas.dispatchEvent(event);return event.defaultPrevented})()")
+        assert js("(()=>{active=99;let event=new PointerEvent('pointerdown',{pointerId:100,pointerType:'touch',bubbles:true,cancelable:true});canvas.dispatchEvent(event);let blocked=event.defaultPrevented&&active===99;active=null;return blocked})()")
+        js("document.activeElement?.blur();let range=document.createRange();range.selectNode($('paperWrap'));let selection=getSelection();selection.removeAllRanges();selection.addRange(range)")
+        wait(lambda: js('getSelection().isCollapsed'))
+        assert js("let field=document.createElement('input');field.type='text';field.value='Rename me';document.body.append(field);field.focus();field.select();let editable=getComputedStyle(field).userSelect==='text'&&field.selectionEnd===9;field.remove();editable")
+        if palm_only:
+            pointer = json.loads(js(POINTER_CHECKS))
+            (output / 'palm-result.json').write_text(json.dumps(dict(success=True,
+                page_selection_blocked=True, extra_contact_consumed=True, text_fields_editable=True,
+                pointer=pointer)))
+            view.close()
+            view.deleteLater()
+            qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            return
         assert json.loads(js("JSON.stringify([...document.querySelectorAll('.brush-card')].map(b=>Number(b.dataset.tool)))")) == [15, 17, 18, 14, 13, 21, 16, 23, 12]
         # Exercise the real mobile config producer without a physical tablet.
         # Android's companion probe checks this boundary against TouchHelper.
@@ -281,4 +296,6 @@ def main(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
-    main(parser.parse_args().output)
+    parser.add_argument('--palm-only', action='store_true', help='Only check canvas selection and extra-contact handling.')
+    args = parser.parse_args()
+    main(args.output, palm_only=args.palm_only)

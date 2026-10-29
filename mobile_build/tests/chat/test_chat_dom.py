@@ -1,4 +1,8 @@
 """Optional browser evidence for transcript node reuse and exact final markup."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import json
 import os
 from pathlib import Path

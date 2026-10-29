@@ -21,7 +21,7 @@ PBX = PROJECT / 'Logistics Mobile.xcodeproj/project.pbxproj'
 INFO = PROJECT / 'LogisticsMobile/LogisticsMobile-Info.plist'
 CONFIG = ROOT / '.device.json'
 BUNDLE = 'io.github.ispaure.logisticsmobile'
-EXTENSION_SUFFIXES = ('.inbox', '.widgets', '.widget-actions')
+EXTENSION_SUFFIXES = ('.inbox', '.widgets', '.widget-actions', '.watchkitapp', '.watchkitapp.widgets')
 DERIVED = output_root(ROOT) / 'build/physical-device'
 APP = DERIVED / 'Build/Products/Debug-iphoneos/Logistics Mobile.app'
 
@@ -116,7 +116,7 @@ def prepare_project(team):
         if settings.get('PRODUCT_BUNDLE_IDENTIFIER') in {BUNDLE + suffix for suffix in EXTENSION_SUFFIXES}:
             settings.update(CURRENT_PROJECT_VERSION=configured['CFBundleVersion'],
                             MARKETING_VERSION=configured['CFBundleShortVersionString'])
-    for folder in ('IncomingShare', 'LogisticsWidget', 'LogisticsWidgetActions'):
+    for folder in ('IncomingShare', 'LogisticsWidget', 'LogisticsWidgetActions', 'LogisticsWatch', 'LogisticsWatchWidget'):
         extension_info = PROJECT / folder / 'Info.plist'
         if extension_info.exists():
             extension_metadata = plistlib.loads(extension_info.read_bytes())

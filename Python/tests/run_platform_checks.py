@@ -64,7 +64,7 @@ def main():
     sys.path.insert(0, str(REPO / 'Python'))
     from logistics_build.validation_plans import desktop_checks
     checks = desktop_checks(platform.system(), results)
-    for name, command, timeout in checks:
+    for index, (name, command, timeout) in enumerate(checks):
         print(f'Running {name} on {platform.system()}…', flush=True)
         from logistics_build.platform_checks import run_check
         check_env = dict(env, QT_QPA_PLATFORM='windows') if name == 'windows-native-ui' else env
@@ -79,7 +79,15 @@ def main():
             print(output[-12000:], flush=True)
             if name == 'windows-native-ui':
                 print(f'Native Windows startup exit: 0x{code & 0xffffffff:08X}', flush=True)
+                report['not_run'] = [dict(name=remaining, reason='Native startup failed')
+                                     for remaining, _, _ in checks[index + 1:]]
                 break  # A fatal bootstrap needs fixing before headless regressions.
+            if name == 'test-structure' or name.endswith('.smoke'):
+                print('Remaining platform stages not run after a failed preflight/smoke gate.', flush=True)
+                report['not_run'] = [dict(name=remaining, reason='Preflight/smoke gate failed')
+                                     for remaining, _, _ in checks[index + 1:]]
+                break
+    (results / 'summary.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(f'Reports: {results}', flush=True)
     return int(any(check['exit_code'] for check in report['checks']))
 

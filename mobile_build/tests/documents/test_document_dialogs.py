@@ -1,4 +1,8 @@
 """Native document decisions use explicit destructive and cancel actions."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace as NS
 from unittest import TestCase

@@ -1,4 +1,8 @@
 """Preview cannot run a live sync; synchronous and terminal failures reach callers."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -6,6 +10,7 @@ from unittest.mock import patch
 
 from commonUtils.integrations.wrappers.cmdShellWrapper import CommandResult
 from features.rclone.transfers import sync
+from features.rclone.transfers.launch import SyncState
 
 
 class RcloneOutcomeTests(unittest.TestCase):
@@ -41,3 +46,14 @@ class RcloneOutcomeTests(unittest.TestCase):
                             wait_for_output=True, executable_path='/already-installed/rclone'))
         provision.assert_not_called()
         self.assertEqual(run.call_args.args[0][0], '/already-installed/rclone')
+
+    def test_wait_reports_completed_success(self):
+        with patch.object(sync.cmdShellWrapper, 'run_command', return_value=CommandResult(0)):
+            result = sync._execute_sync('Remote:', self.destination, config_path='/fake/config', wait_for_output=True)
+        self.assertIs(result.state, SyncState.SUCCEEDED)
+
+    def test_terminal_acceptance_is_started_not_completed(self):
+        with patch.object(sync.cmdShellWrapper, 'exec_cmd', return_value=True):
+            result = sync._execute_sync('Remote:', self.destination, config_path='/fake/config', integrated=False)
+        self.assertIs(result.state, SyncState.STARTED)
+        self.assertTrue(result.legacy_value())

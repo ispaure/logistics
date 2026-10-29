@@ -1,4 +1,8 @@
 """Exercise batched LocalCrypt listing through the shipped C/JSON bridge."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import base64
 from io import BytesIO
 import os

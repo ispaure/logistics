@@ -1,4 +1,8 @@
 """Native folder choice and Notes Library authoring workflows."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch

@@ -1,4 +1,8 @@
 """EPUB navigation returns to the passage and keeps tools out of the text."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory

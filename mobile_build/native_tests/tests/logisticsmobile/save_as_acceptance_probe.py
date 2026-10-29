@@ -1,4 +1,8 @@
 """Focused FIX SAVE AS acceptance; synthetic providers, native UI, explicit tap checkpoints."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import sys

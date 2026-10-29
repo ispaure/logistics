@@ -62,6 +62,7 @@ jobs:
           echo "PIP_FIND_LINKS=$RUNNER_TEMP/logistics-wheels" >> "$GITHUB_ENV"
           python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV"
           python -m mobile_build.deployment.testflight_tools plan --build-number "$BUILD_NUMBER" --team "$IOS_TEAM_ID" --expected-app-identifier "$IOS_APP_IDENTIFIER"
+          python dev.py test-structure
           PYTHONPATH=Python TOGA_BACKEND=toga_dummy python -m unittest mobile_build.tests.tooling.test_testflight_tools mobile_build.tests.tooling.test_testflight_external mobile_build.tests.tooling.test_privacy_build mobile_build.tests.tooling.test_device_tools mobile_build.tests.transfers.test_cloud_import_ui -v
       - name: Install temporary signing assets
         env:

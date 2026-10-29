@@ -20,7 +20,7 @@ def configure_ios(project):
     except plistlib.InvalidFileException:
         data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(pbx)]))
     objects = data['objects']
-    targets = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application']
+    targets = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application' and obj.get('name') != 'LogisticsWatch']
     if len(targets) != 1:
         raise ValueError('Expected one main application for on-device chat.')
     target = targets[0]

@@ -3,6 +3,7 @@ import asyncio
 from dataclasses import dataclass
 from threading import Event, Lock
 from typing import Protocol
+from .models import TransferOutcome
 
 
 def coalesced_progress(loop, publish, *, interval=1.0):
@@ -100,16 +101,12 @@ class TransferPresentation(Protocol):
 
 
 def completion_message(operation, result):
-    """Project existing worker outcomes after verified execution.
-
-    Push returns a file count; Pull returns (status, details); creating a copy
-    returns (job, (status, details)). Invalid shapes fail before completion.
-    """
-    if operation == 'push':
-        return f'Push sync verified: {result} file(s) sent. Destination-only entries were removed.'
-    status, _ = result[1] if operation == 'create' else result
+    """Format one validated outcome, accepting legacy programmatic worker results."""
+    outcome = TransferOutcome.from_result(operation, result)
+    if outcome.operation == 'push':
+        return f'Push sync verified: {outcome.files} file(s) sent. Destination-only entries were removed.'
     return ('Files changed during the operation; inspect the local destination.'
-            if status == 'conflict' else 'Pull sync complete. The local folder now matches the remote.')
+            if outcome.status == 'conflict' else 'Pull sync complete. The local folder now matches the remote.')
 
 
 class TransferExecution:
@@ -143,9 +140,13 @@ class TransferExecution:
             if not view.current(client, generation):
                 state.message = 'Sync stopped because the connection changed; completed destination changes remain.'
                 return False
-            state.message = '100% · ' + completion_message(operation, result)
-            state.complete = result is not None
-            return True
+            outcome = TransferOutcome.from_result(operation, result)
+            complete = outcome.status != 'conflict'
+            prefix = '100% · ' if complete else ''
+            message = prefix + completion_message(operation, outcome)
+            state.message = message
+            state.complete = complete
+            return complete
         except asyncio.CancelledError:
             state.message = 'Sync cancelled; completed destination changes remain.'
             raise

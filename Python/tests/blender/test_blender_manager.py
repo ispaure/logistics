@@ -1,4 +1,8 @@
 """Blender package/preset boundaries, verified downloads and addon inventory."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
 import hashlib
 import io

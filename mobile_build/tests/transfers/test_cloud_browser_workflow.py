@@ -1,4 +1,8 @@
 """Listing ownership is testable without constructing the mobile application."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from contextlib import asynccontextmanager, nullcontext
 from types import SimpleNamespace as NS

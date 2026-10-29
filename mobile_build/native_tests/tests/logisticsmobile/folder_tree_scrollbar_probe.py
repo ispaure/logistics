@@ -1,4 +1,8 @@
 """Native Android folder hierarchy keeps its scrollbar outside row outlines."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path

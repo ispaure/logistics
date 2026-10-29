@@ -1,4 +1,8 @@
 """Shared real-WebView page/zoom memory and raster checks for Apple and desktop."""
+
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
 INSTALL = r'''(()=>{
 window.memoryProbe={writes:0,done:true,error:null};
 for(let name of ['width','height']){
