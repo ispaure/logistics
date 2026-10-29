@@ -68,6 +68,7 @@ class ManagerAdapterTests(unittest.TestCase):
             support = snapshot / 'mobile_build/build_support'
             support.mkdir(parents=True)
             (support / 'widget_build.py').touch()
+            (support / 'watch_build.py').touch()  # Retained source is not a shipped target.
             values = manager_settings.defaults(project.mobile)
             references = dict(app_profile='main', inbox_profile='inbox',
                               widget_profile='widgets', widget_actions_profile='actions')

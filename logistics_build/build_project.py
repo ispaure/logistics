@@ -618,8 +618,9 @@ class LogisticsProject:
                     required = ['signing.inbox_profile']
                     if (snapshot / 'mobile_build/build_support/widget_build.py').is_file():
                         required += ['signing.widget_profile', 'signing.widget_actions_profile']
-                    if (snapshot / 'mobile_build/build_support/watch_build.py').is_file():
-                        required += ['signing.watch_profile', 'signing.watch_widget_profile']
+                    # Watch source is retained for opt-in fixtures, but normal
+                    # packages omit it. Archive preparation checks profiles for
+                    # the targets actually present in the generated project.
                     missing = [name for name in required if not options.get(name)]
                     if missing:
                         raise ValueError('Manual iOS signing requires all extension profiles: ' + ', '.join(missing)
