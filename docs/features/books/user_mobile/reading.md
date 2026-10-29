@@ -39,11 +39,13 @@ sections with the disclosure button, or tap a chapter title to read it. There is
 no search field in this list. On iPhone, iPad and Android the list floats over the page without changing its
 width or reflowing the text. Tap outside, press Back, or choose a chapter to close it. Bookmarks remain below the list. Choosing an imported chapter or
 bookmark returns directly to reading. The footer
-shows the whole-book percentage, **Page X of N**, then **Chapter X of Y** in a compact badge.
+shows the whole-book percentage, **Page X of N**, then **Chapter X of Y** centered
+below the progress bar in muted text matching the storage description.
 Its slim slider jumps to a screen page when released; the arrows still turn
-pages. Page margins come
-from **Appearance…**, without an extra frame narrowing the text. Chapter headings,
-paragraphs and quotations use consistent spacing within the page.
+pages. Side margins come
+from **Appearance…**, without an extra frame narrowing the text. Top and bottom
+page padding is limited to 8 points so the text uses more of the available height.
+Chapter headings, paragraphs and quotations use consistent spacing within the page.
 
 Enable **Settings → EPUB → Justify text** or **Appearance… → Justify text** to
 align paragraphs and lists to both edges. The same device preference applies to

@@ -14,6 +14,23 @@ NODE = os.environ.get('LOGISTICS_NODE') or shutil.which('node')
 
 @skipUnless(NODE, 'Provide Node/Playwright for browser verification')
 class EpubDOMTests(TestCase):
+    def test_compact_vertical_gutters_preserve_horizontal_margin_and_page_counts(self):
+        root = 'https://logistics.invalid/synthetic/'
+        for margin in (8, 16, 24, 32):
+            with self.subTest(margin=margin):
+                html = ('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">'
+                        '<style>' + css(24, margin, 'light') + '</style><meta name="logistics-reader-root" content="'
+                        + root + '"></head><body><h1>Chapter title</h1>'
+                        + '<p>A readable passage. </p>' * 400 + '</body></html>')
+                script = SCRIPT.replace('OPTIONS', json.dumps(dict(root=root, offset=0)))
+                script = script.replace('window.location.href =', 'window.syntheticNotification =')
+                with TemporaryDirectory() as directory:
+                    path = Path(directory) / 'fixture.json'
+                    path.write_text(json.dumps(dict(html=html, script=script, compactMargin=margin)))
+                    result = subprocess.run([NODE, str(Path(__file__).with_name('epub_index_dom.cjs')), str(path)],
+                                            capture_output=True, text=True, timeout=40)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_one_walk_for_repeated_unicode_selections_and_disposal(self):
         root = 'https://logistics.invalid/synthetic/'
         html = ('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">'

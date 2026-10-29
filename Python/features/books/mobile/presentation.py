@@ -18,6 +18,7 @@ SCRIPT = r'''
  if (window.reader && window.reader.root === options.root && !window.reader.disposed) return;
  if (window.reader && window.reader.dispose) window.reader.dispose();
  const pages = document.createElement('div');
+ pages.dataset.logisticsPages='';
  while(document.body.firstChild) pages.appendChild(document.body.firstChild);
  const viewport=document.createElement('div');viewport.appendChild(pages);document.body.appendChild(viewport);
  Object.assign(viewport.style,{overflow:'hidden',position:'relative',width:'100%'});
