@@ -97,6 +97,17 @@ class CryptResources(LocalFiles):
         from commonUtils.runtime.resources.paths import resource_path
         return resource_path(text)
 
+    def _guard(self, path):
+        # The ordinary LocalFiles guard assumes logical and physical roots use
+        # the same spelling. Ciphertext paths have their own native namespace.
+        path = native_path(path)
+        guard_ciphertext_path(path, self.root)
+        if path.exists():
+            info = path.stat()
+            if not stat.S_ISDIR(info.st_mode) and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+                raise ValueError('Choose an independent regular file or folder.')
+        return path
+
     def command(self, operation, path='', *extra, input_data=None, input_writer=None, limit=1024 * 1024, cancelled=lambda: False):
         return self._commands.command(operation, self.relative(path), *extra,
                                       input_data=input_data, input_writer=input_writer,
