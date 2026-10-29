@@ -192,10 +192,10 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
     output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
     manifest = Path('payload/source.json') if local else None
     report = None
-    if target == 'ios' and code in (0, 200):
-        # A complete report already proves every case and exact source. Avoid
-        # depending on a responsive CoreSimulator service after app shutdown.
-        # Briefcase can also lose its exit marker after the full report arrives.
+    if target == 'ios':
+        # Retain failed reports too: the actual assertion belongs in the CLI
+        # failure, not just a generic process exit. Accepted exits still require
+        # complete case/source verification; Briefcase can lose its exit marker.
         try:
             incoming = read_report(path)
         except ValueError:
@@ -203,12 +203,15 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
         if incoming is not None:
             (logs / 'ios-native-ui-stdout.json').write_text(json.dumps(incoming, indent=2) + '\n')
             transport = 'stdout'
-        else:
+        elif code in (0, 200):
             # The cache is atomic and fresh for this device/run; it still has
             # to satisfy the same complete case, backend and source contract.
             incoming = simulator_report(device, started_ns, diagnostics=logs)
             transport = 'simulator-file'
         if incoming is not None:
+            if code not in (0, 200):
+                detail = incoming.get('error') or 'process failed after reporting'
+                raise RuntimeError(f'Native app UI run failed ({code}): {detail}')
             if incoming.get('error'):
                 print('Native iOS report error: ' + str(incoming['error']), flush=True)
             report = verify_report(incoming, target, output, local_manifest=manifest)

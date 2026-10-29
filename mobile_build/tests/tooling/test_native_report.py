@@ -425,6 +425,29 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             finally:
                 os.chdir(previous)
 
+    def test_failed_stdout_preserves_assertion_without_accepting_failed_exit(self):
+        import os
+        from unittest.mock import patch
+        report = self.report()
+        def launch(command, *, stdout, **kwargs):
+            stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
+            stdout.flush()
+            return SimpleNamespace(wait=lambda **kwargs: 232)
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen', side_effect=launch), \
+                patch.object(ui_tools, 'simulator_report', side_effect=AssertionError('No simulator probe needed')):
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                for error in ('AssertionError: Previous page overlaps Home indicator', None):
+                    report['error'] = error
+                    report['success'] = not error
+                    with self.assertRaisesRegex(RuntimeError, error or 'process failed after reporting'):
+                        ui_tools.run('ios', 'device')
+                    saved = json.loads(Path('logs/ios-native-ui-stdout.json').read_text())
+                    self.assertEqual(saved['error'], error)
+            finally:
+                os.chdir(previous)
+
     def test_complete_stdout_does_not_depend_on_simulator_service(self):
         import os
         from unittest.mock import patch
