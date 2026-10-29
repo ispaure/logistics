@@ -55,7 +55,7 @@ class RunRequestTests(unittest.TestCase):
 
 
 class SourceReleaseVersionTests(unittest.TestCase):
-    def test_source_release_uses_metadata_at_exact_commit_independently_of_mobile_version(self):
+    def test_source_release_uses_desktop_metadata_at_exact_commit(self):
         commit = 'a' * 40
         with patch('logistics_build.release_naming.subprocess.check_output', return_value='[project]\nversion="0.1.15"\n') as read:
             self.assertEqual(release_naming.source_version(Path('.'), commit), '0.1.15')

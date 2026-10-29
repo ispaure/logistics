@@ -1,7 +1,7 @@
 [tool.briefcase]
 project_name = "Logistics Mobile"
 bundle = "io.github.ispaure"
-version = "0.1.9"
+version = "0.1.16"
 url = "https://github.com/ispaure/logistics"
 license = "MIT"
 author = "Marc-Andre Voyer"

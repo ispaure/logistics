@@ -45,7 +45,10 @@ with **Automatic** representing no override.
 
 Settings show each effective value's origin: repository defaults, ignored local
 profile, environment or one-run override. Save changes the local profile;
-changing the app version explicitly edits tracked `mobile_build/pyproject.toml`.
+changing the app version explicitly updates `Python/pyproject.toml`, its `uv.lock`
+and `mobile_build/pyproject.toml` together. The CLI equivalent is
+`build-manager set-version 0.1.16 --project PROJECT`. Planning rejects desktop/mobile
+version drift.
 That tracked edit is separate from saving a local profile. A historical source selection reads its version from that selected commit,
 not from the current checkout. Build numbers are separate from app version and release tags.
 
@@ -189,8 +192,8 @@ values in immutable per-run effective settings and review evidence, without writ
 them back to the saved profile. Unknown overrides and credential material fail.
 
 A blank GitHub release identifier uses the source project version from the selected
-commit and the next available local alpha suffix. Mobile marketing versions and
-build numbers remain independent. It creates no tag; publication checks remote availability again.
+commit and the next available local alpha suffix. Desktop, iOS and Android share
+that numeric app version; channel suffixes and provider build numbers are separate. It creates no tag; publication checks remote availability again.
 Custom identifiers remain available under Advanced options.
 
 Cached source snapshots exclude only the known private mobile runtime references

@@ -154,13 +154,21 @@ def save(root, changes):
     save_profile(profile_path(root), incoming, allowed=base)
 
 
-def app_version(root, *, revision=None):
+def app_version(root, *, revision=None, check_project=True):
     if revision is None:
         text = (Path(root) / 'pyproject.toml').read_text()
     else:
         text = subprocess.check_output(['git', '-C', str(Path(root).parent), 'show',
             revision + ':mobile_build/pyproject.toml'], text=True, timeout=30)
-    return tomllib.loads(text)['tool']['briefcase']['version']
+    version = tomllib.loads(text)['tool']['briefcase']['version']
+    desktop = Path(root).parent / 'Python/pyproject.toml'
+    if check_project and desktop.is_file():
+        desktop_text = (desktop.read_text() if revision is None else subprocess.check_output(
+            ['git', '-C', str(Path(root).parent), 'show', revision + ':Python/pyproject.toml'],
+            text=True, timeout=30))
+        if tomllib.loads(desktop_text)['project']['version'] != version:
+            raise ValueError('Desktop and mobile app versions differ. Use build-manager set-version before planning.')
+    return version
 
 
 def set_app_version(root, version):

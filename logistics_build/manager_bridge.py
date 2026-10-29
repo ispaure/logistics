@@ -1,6 +1,5 @@
 """Versioned trusted adapter subprocess; never imported by the manager GUI."""
 import contextlib
-import io
 import json
 from pathlib import Path
 import sys
@@ -39,6 +38,8 @@ def main():
             result = project.run_defaults()
         elif action == 'settings':
             result = project.settings_view()
+        elif action == 'set_app_version':
+            result = project.set_app_version(values['version'])
         elif action == 'save_settings':
             result = project.save_settings(values['changes'])
         elif action == 'verification':

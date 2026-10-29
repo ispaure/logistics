@@ -91,7 +91,7 @@ class LogisticsProject:
             origin='local configuration file', read_only=True, section='Local settings',
             label='Private project settings file',
             description='Save writes project settings here. The manager uses its private application configuration directory; this file is not tracked in the project repository.')
-        rows['app.version'] = dict(value=manager_settings.app_version(self.mobile),
+        rows['app.version'] = dict(value=manager_settings.app_version(self.mobile, check_project=False),
                                   origin='tracked pyproject.toml; intentional source edit required', read_only=True)
         config = self.mobile / '.device.json'
         team = json.loads(config.read_text()).get('team_id', 'not configured') if config.exists() else 'not configured'
@@ -138,7 +138,8 @@ class LogisticsProject:
         manager_settings.save(self.mobile, values)
 
     def set_app_version(self, value):
-        manager_settings.set_app_version(self.mobile, value)
+        from logistics_build.app_version import set_version
+        return set_version(self.root, value)
 
     def make_journey(self, goal, platforms, destinations, **options):
         if self.journey_capability is None:
