@@ -5,6 +5,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.runtime.resources.lifetime import WorkerCancellation
 from features.rclone import session
 from features.rclone.localcrypt import backend, transport
@@ -41,7 +42,7 @@ class LocalCryptCacheRetirementTests(unittest.TestCase):
                 original_guard = backend.guard_ciphertext_path
                 def guard(path, boundary):
                     original_guard(path, boundary)
-                    if path == root / 'ciphertext-folder':
+                    if native_path(path) == native_path(root / 'ciphertext-folder'):
                         guarded.set()
                         if not resume.wait(5):
                             raise RuntimeError('fixture worker was not resumed')
