@@ -1574,3 +1574,9 @@ adapter temporarily switches the tabs/sidebar container to tab-only mode, hides
 the tab bar, and restores the previous mode and sidebar visibility on return.
 Keyboard and fullscreen visibility use the same adapter path, so nested changes
 do not overwrite the original sidebar presentation.
+
+On iOS, `layout_events.defer_host_resize` coalesces Logistics workspace resize
+work onto the next event-loop turn. Toga keeps its synchronous native content
+layout; menus and route/controller presentation change after the UIKit safe-area
+callback returns. Retired hosts discard queued work, while a live reset notice
+can still resize. Android retains synchronous host resize handling.

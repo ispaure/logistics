@@ -35,3 +35,20 @@ def native_resize_changed(app, widget):
         return False
     app._android_resize_geometry = geometry
     return True
+
+
+def defer_host_resize(app, widget, callback):
+    """Keep UIKit toolkit sizing synchronous; defer only host UI mutations."""
+    if not type(getattr(app, '_impl', None)).__module__.startswith('toga_iOS.'):
+        return False
+    app._pending_host_resize = (widget, callback)
+    if not getattr(app, '_host_resize_scheduled', False):
+        app._host_resize_scheduled = True
+        def deliver():
+            app._host_resize_scheduled = False
+            current, notify = app._pending_host_resize
+            app._pending_host_resize = None
+            if getattr(app, 'active_host', True) or getattr(app, '_reset_scheduled', False):
+                notify(current)
+        app.loop.call_soon(deliver)
+    return True

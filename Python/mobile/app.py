@@ -479,6 +479,12 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
+        from .layout_events import defer_host_resize
+        if defer_host_resize(self, widget, lambda current: LogisticsMobile._resize_workspace_now(self, current)):
+            return
+        LogisticsMobile._resize_workspace_now(self, widget)
+
+    def _resize_workspace_now(self, widget=None):
         if not getattr(self, 'active_host', True) and not getattr(self, '_reset_scheduled', False):
             return
         if (getattr(self, '_startup_in_progress', False)
