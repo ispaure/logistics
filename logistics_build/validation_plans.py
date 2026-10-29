@@ -11,7 +11,7 @@ def desktop_checks(system, results, root=None):
     from build_manager.test_manifest import discover
     root = Path(root) if root is not None else Path(__file__).resolve().parents[1]
     checks.extend((row['id'], ['Python/tests/run_regressions.py', row['directory'], '--isolate-modules'],
-                   row['timeout'] if system == 'Windows' else min(row['timeout'], 600 if row['id'] == 'commonutils' else 900))
+                   row['timeout'])
                   for row in discover(root, 'desktop'))
     checks.extend([
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),

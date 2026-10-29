@@ -96,7 +96,8 @@ jobs:
     if: ${{ inputs.target != 'linux' }}
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    # Suite budgets come from build-tests.json; leave room for all four gates.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

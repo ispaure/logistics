@@ -488,3 +488,8 @@ caught import is still a failure. The static CI job runs both checks without
 installing a desktop toolkit. See the [portable owner policy](architecture.md#portable-owner-policy)
 for selection and limits; the document smoke suite additionally exercises real
 format operations without desktop/image packages.
+
+Desktop aggregate deadlines come from `build-tests.json` on every platform.
+The platform launcher must not silently shorten the declared suite budget.
+Individual test-file deadlines and all required checks still apply; hosted job
+limits include room for the complete sequence of declared suites.
