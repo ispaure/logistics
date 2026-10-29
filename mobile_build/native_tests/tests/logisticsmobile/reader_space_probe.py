@@ -76,7 +76,7 @@ class ReaderSpaceProbe(LogisticsMobile):
                 gap = float(window.bounds.size.height - rect.origin.y - rect.size.height)
                 result['bottom_gap'] = gap
                 result['home_inset'] = float(window.safeAreaInsets.bottom)
-                assert gap <= max(0, result['home_inset'] - 16) + 1, result
+                assert result['home_inset'] - 1 <= gap <= result['home_inset'] + 1, result
             else:
                 subtitle = view._android_storage_subtitle
                 assert subtitle.getParent() is not None
