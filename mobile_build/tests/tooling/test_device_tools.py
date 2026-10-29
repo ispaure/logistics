@@ -108,6 +108,39 @@ class DeviceDeploymentTests(unittest.TestCase):
                     device_tools.validate_app(app, 'ABCDEFGHIJ', 'phone')
                 signing.assert_not_called()
 
+    def test_release_export_uses_captured_build_and_preserves_plist_and_signing_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory)
+            info = {'CFBundleIdentifier': BUNDLE, 'MainModule': 'logisticsmobile',
+                    'CFBundleShortVersionString': '0.1.9', 'CFBundleVersion': 'captured-123',
+                    'UIFileSharingEnabled': True}
+            (app / 'Info.plist').write_bytes(plistlib.dumps(info))
+            expected = {'CFBundleShortVersionString': '0.1.9', 'CFBundleVersion': 'older-counter',
+                        'UIFileSharingEnabled': True}
+            identifier = 'ABCDEFGHIJ.' + BUNDLE
+            profile = {'TeamIdentifier': ['ABCDEFGHIJ'], 'ProvisionedDevices': ['phone'],
+                       'Entitlements': {'application-identifier': identifier}}
+            entitlements = {'application-identifier': identifier,
+                            'com.apple.developer.team-identifier': 'ABCDEFGHIJ'}
+            def signature(command, **kwargs):
+                return plistlib.dumps(profile if command[0] == 'security' else entitlements)
+            with (patch.object(device_tools, 'configured_ios_info', return_value=expected),
+                  patch('subprocess.check_output', side_effect=signature),
+                  patch.object(device_tools, 'run') as verify):
+                identity = device_tools.validate_app(app, 'ABCDEFGHIJ', 'phone', build_number='captured-123')
+                self.assertEqual(identity['application_identifier'], identifier)
+                verify.assert_called_once_with(['codesign', '--verify', '--deep', '--strict', str(app)])
+                with self.assertRaisesRegex(RuntimeError, 'configured iOS plist settings'):
+                    device_tools.validate_app(app, 'ABCDEFGHIJ', 'phone', build_number='wrong-build')
+                info['UIFileSharingEnabled'] = False
+                (app / 'Info.plist').write_bytes(plistlib.dumps(info))
+                with self.assertRaisesRegex(RuntimeError, 'configured iOS plist settings'):
+                    device_tools.validate_app(app, 'ABCDEFGHIJ', 'phone', build_number='captured-123')
+                info['UIFileSharingEnabled'] = True
+                (app / 'Info.plist').write_bytes(plistlib.dumps(info))
+                with self.assertRaisesRegex(RuntimeError, 'provisioning differs'):
+                    device_tools.validate_app(app, 'ABCDEFGHIJ', 'other-device', build_number='captured-123')
+
     def test_batch_deploy_uses_saved_targets_and_continues_after_failure(self):
         config = {'device_id': 'phone', 'device_ids': ['phone', 'tablet', 'phone']}
         with patch.object(device_tools, 'run', side_effect=[subprocess.CalledProcessError(1, 'deploy'), None]) as run:

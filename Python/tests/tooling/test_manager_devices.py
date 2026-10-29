@@ -273,11 +273,13 @@ class ManagerDeviceTests(unittest.TestCase):
         def ditto(command, **kwargs):
             if '-x' in command:(Path(command[-1]) / 'Payload/Logistics Mobile.app').mkdir(parents=True)
             else:Path(command[-1]).write_bytes(b'provisioned app')
-        with patch('logistics_build.manager_packages.checked_archive', return_value=(dict(workspace=str(self.root/'release')),dict(identity=identity))), \
+        with patch('logistics_build.manager_packages.checked_archive', return_value=(dict(workspace=str(self.root/'release')),dict(identity=identity, build=dict(build_number='captured-123')))), \
                 patch.object(ios, 'installed', return_value=[]), patch.object(ios, 'choose', return_value=('/fake/xcode','sdk')), \
-                patch.object(ios, 'run', side_effect=export) as run, patch.object(ios, 'validate_app', return_value=identity), \
+                patch.object(ios, 'run', side_effect=export) as run, patch.object(ios, 'validate_app', return_value=identity) as validate, \
                 patch.object(ios, 'device_json', side_effect=AssertionError('No devices')), patch('subprocess.run', side_effect=ditto):
             devices.prepare_shared(data)
+        self.assertEqual(data['build_number'], 'captured-123')
+        validate.assert_called_once_with(workspace / 'exported-app/Payload/Logistics Mobile.app', 'ABCDEFGHIJ', 'udid-1', build_number='captured-123')
         self.assertIn('-exportArchive', run.call_args.args[0])
         self.assertNotIn('archive', run.call_args.args[0]); self.assertNotIn('build', run.call_args.args[0])
         self.assertNotIn('-allowProvisioningUpdates', run.call_args.args[0])

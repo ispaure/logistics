@@ -17,6 +17,15 @@ through `PIP_FIND_LINKS`, but the manager does not select that older name.
 
 Use the standalone [Build Deployment Manager](../user/build-manager.md) for device delivery: choose Delivery → Dev devices, select iPhone / iPad and the saved recipients, then inspect and run the plan. The adapter uses `mobile_build/deployment/device_tools.py` for physical-device operations. The low-level setup commands below are developer diagnostics; normal builds and installs go through the manager.
 
+## Reuse a verified Release archive
+
+A release-device delivery exports the already verified archive for the selected
+team and recipients. The captured archive build number remains authoritative at
+both preparation and installation; the older development counter in the project
+configuration does not replace it. Version, plist capabilities, bundle identity,
+recursive signatures and every selected device's provisioning membership still
+have to match. The adapter retains that build number with the reviewed package.
+
 ## Recover a retained device app after a failed build process
 
 A standalone Duo/iPhone development build can leave a complete signed app even

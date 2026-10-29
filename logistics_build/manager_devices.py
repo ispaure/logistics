@@ -259,6 +259,7 @@ def prepare_shared(data):
         config = read_json(data['config'])
         if file_sha256(data['config']) != data['config_sha256']:
             raise ValueError('Device signing configuration changed; review a new plan.')
+        data['build_number'] = record['build']['build_number']
         if record['identity']['team_id'] != config['team_id']:
             raise ValueError('Release and device signing teams differ.')
         options = workspace / 'DeviceExportOptions.plist'
@@ -276,7 +277,7 @@ def prepare_shared(data):
             subprocess.run(['/usr/bin/ditto', '-x', '-k', str(ipas[0]), str(extracted)], check=True)
             apps = list((extracted / 'Payload').glob('*.app'))
             if len(apps) != 1:raise ValueError('Unexpected device IPA layout.')
-            identities = [ios.validate_app(apps[0], config['team_id'], target['id']) for target in data['targets']]
+            identities = [ios.validate_app(apps[0], config['team_id'], target['id'], build_number=data['build_number']) for target in data['targets']]
             if config.get('signing_identity') and any(row != config['signing_identity'] for row in identities):
                 raise ValueError('Existing device signing identity differs.')
             # Extensions must also provision every selected device.
@@ -392,7 +393,7 @@ def install(report, device, receipt):
         try:
             subprocess.run(['/usr/bin/ditto', '-x', '-k', str(package), str(extracted)], check=True)
             app = extracted / 'Logistics Mobile.app'
-            if ios.validate_app(app, data['identity']['team_id'], udid) != data['identity']:
+            if ios.validate_app(app, data['identity']['team_id'], udid, build_number=data.get('build_number')) != data['identity']:
                 raise ValueError('Reviewed iOS signing identity changed.')
         except BaseException:
             shutil.rmtree(extracted); raise

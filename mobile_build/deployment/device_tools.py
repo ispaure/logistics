@@ -127,9 +127,12 @@ def prepare_project(team):
     INFO.write_bytes(plistlib.dumps(normal_launcher(info)))
 
 
-def validate_app(app, team, udid):
+def validate_app(app, team, udid, *, build_number=None):
     info = plistlib.loads((app / 'Info.plist').read_bytes())
-    if any(info.get(key) != value for key, value in configured_ios_info().items()):
+    expected_info = dict(configured_ios_info())
+    if build_number is not None:
+        expected_info['CFBundleVersion'] = str(build_number)
+    if any(info.get(key) != value for key, value in expected_info.items()):
         raise RuntimeError('Built app is missing configured iOS plist settings; refusing installation.')
     if info.get('CFBundleIdentifier') != BUNDLE or info.get('MainModule') != 'logisticsmobile':
         raise RuntimeError('Built app identity or launcher is incorrect; refusing installation.')
