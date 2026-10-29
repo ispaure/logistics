@@ -184,7 +184,10 @@ class Workspace:
         if serialized == getattr(self, '_saved_state', None):
             try:
                 if self._storage_revision() == self._saved_revision:
-                    return
+                    # Metadata may remain cached after a rapid same-size edit.
+                    with self.path.open('rb') as stream:
+                        if read_up_to(stream, MAX_MANIFEST + 1) == serialized.encode('utf-8'):
+                            return
             except FileNotFoundError:
                 pass
         atomic_write_json(self.path, state,

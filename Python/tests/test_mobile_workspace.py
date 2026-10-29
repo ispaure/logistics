@@ -37,6 +37,26 @@ class WorkspaceTests(unittest.TestCase):
                     workspace.save()
                 self.assertEqual(write.call_count, 4)
 
+    def test_external_same_size_edit_is_detected_with_unchanged_metadata(self):
+        from mobile.workspace import atomic_write_json
+        with TemporaryDirectory() as directory:
+            workspace = Workspace(Path(directory))
+            session = workspace.open('managed-text', 'a' * 32, 'text')
+            session.view['cursor'] = 1
+            workspace.save()
+            original = workspace.path.read_bytes()
+            changed = original.replace(b'"cursor": 1', b'"cursor": 2')
+            self.assertNotEqual(original, changed)
+            self.assertEqual(len(original), len(changed))
+            revision = workspace._storage_revision()
+            workspace.path.write_bytes(changed)
+            # Windows can cache unchanged timestamps across a rapid same-size edit.
+            with patch.object(workspace, '_storage_revision', return_value=revision), \
+                    patch('mobile.workspace.atomic_write_json', wraps=atomic_write_json) as write:
+                workspace.save()
+                self.assertEqual(write.call_count, 1)
+            self.assertEqual(workspace.path.read_bytes(), original)
+
     def test_independent_view_state_restore_duplicate_open_and_stale_completion(self):
         with TemporaryDirectory() as directory:
             workspace = Workspace(Path(directory))

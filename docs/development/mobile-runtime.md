@@ -855,8 +855,10 @@ Android Back tests cover lifecycle behavior. Physical Android launch, filesystem
 and WebView timings still require a device run. Shared syntax detection changes
 are documented and tested in commonUtils, not duplicated in the host contract.
 
-Workspace saves skip repeated durable publication only when the serialized
-ordinary-session state and on-disk revision are unchanged. The revision includes
+Workspace saves skip repeated durable publication only when ordinary-session
+state, on-disk revision and a bounded read of the stored manifest all match.
+Byte comparison detects rapid same-size external edits even when Windows
+returns cached timestamps. The revision includes
 device/inode, size, nanosecond modification/change times, mode and link count.
 Deletion or replacement forces a write; linked paths are still rejected before
 checking the cache. Managed text recovery likewise skips publication only when
