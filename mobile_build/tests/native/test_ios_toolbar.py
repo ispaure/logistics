@@ -117,6 +117,39 @@ class ToolbarTests(TestCase):
         self.assertEqual(self.controller.navigationItem.rightBarButtonItems,
                          [save._ios_action_item, find._ios_action_item])
 
+    def test_leading_projection_survives_rotation_and_reclaims_reused_controller(self):
+        close = Button('close', 'Cancel')
+        mount_leading(self.controller, [close], replaces_back=True)
+        nav = self.controller.navigationItem
+        original = nav.leadingItemGroups
+        self.controller.traitCollection.verticalBarEdge = 0
+        mount_leading(self.controller, [close], replaces_back=True)
+        self.assertIs(nav.leadingItemGroups, original)
+        close.accessible_name = 'Close configuration'
+        mount_leading(self.controller, [close], replaces_back=True)
+        self.assertIsNot(nav.leadingItemGroups, original)
+        self.assertEqual(close._ios_action_item.title, 'Close configuration')
+        owned = nav.leadingItemGroups
+        nav.leadingItemGroups = []
+        mount_leading(self.controller, [close], replaces_back=True)
+        self.assertIsNot(nav.leadingItemGroups, owned)
+        self.assertEqual(nav.leadingItemGroups[0].barButtonItems, [close._ios_action_item])
+        nav.hidesBackButton = False
+        mount_leading(self.controller, [close], replaces_back=True)
+        self.assertTrue(nav.hidesBackButton)
+
+    def test_legacy_leading_array_keeps_identity_until_live_state_changes(self):
+        self.controller.navigationItem.respondsToSelector.return_value = False
+        close = Button('close', 'Cancel')
+        mount_leading(self.controller, [close], replaces_back=True)
+        original = self.controller.navigationItem.leftBarButtonItems
+        mount_leading(self.controller, [close], replaces_back=True)
+        self.assertIs(self.controller.navigationItem.leftBarButtonItems, original)
+        close.enabled = False
+        mount_leading(self.controller, [close], replaces_back=True)
+        self.assertFalse(close._ios_action_item.enabled)
+        self.assertIsNot(self.controller.navigationItem.leftBarButtonItems, original)
+
     def test_status_and_explicit_groups_remain_separate(self):
         status, find, save, close = [Button(icon, icon) for icon in (None, 'find', 'save', 'close')]
         status._toolbar_group = 'transfer-status'

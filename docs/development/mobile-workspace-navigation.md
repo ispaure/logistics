@@ -1580,3 +1580,8 @@ work onto the next event-loop turn. Toga keeps its synchronous native content
 layout; menus and route/controller presentation change after the UIKit safe-area
 callback returns. Retired hosts discard queued work, while a live reset notice
 can still resize. Android retains synchronous host resize handling.
+
+Leading form actions also retain their native item groups when their command state
+and actual controller ownership are unchanged. Rotation alone does not rebuild
+these groups; changed labels, enabled state, Back policy or controller reuse
+restore the current projection. This contract is covered in `test_ios_toolbar`.

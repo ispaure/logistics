@@ -162,15 +162,29 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
 
 
 def mount_leading(controller, buttons, *, replaces_back=False):
+    """Retain unchanged groups through UIKit trait/rotation layout callbacks."""
     from rubicon.objc import ObjCClass, SEL
     nav = controller.navigationItem
+    buttons = list(buttons)
+    grouped = bool(nav.respondsToSelector(SEL('setLeadingItemGroups:')))
+    signature = (action_state(buttons), replaces_back, grouped)
+    mounted = getattr(controller, '_ios_leading_mount', None)
+    if mounted is not None and mounted[0] == signature:
+        current = nav.leadingItemGroups if grouped else nav.leftBarButtonItems
+        if (list(current or ()) == mounted[1]
+                and bool(nav.leftItemsSupplementBackButton) == (not replaces_back)
+                and bool(nav.hidesBackButton) == replaces_back):
+            return
     nav.leftItemsSupplementBackButton = not replaces_back
     nav.hidesBackButton = replaces_back
-    if nav.respondsToSelector(SEL('setLeadingItemGroups:')):
-        nav.leadingItemGroups = [ObjCClass('UIBarButtonItemGroup').alloc().initWithBarButtonItems(
+    if grouped:
+        projection = [ObjCClass('UIBarButtonItemGroup').alloc().initWithBarButtonItems(
             [bar_item(button)], representativeItem=None) for button in buttons]
+        nav.leadingItemGroups = projection
     else:
-        nav.leftBarButtonItems = [bar_item(button) for button in buttons]
+        projection = [bar_item(button) for button in buttons]
+        nav.leftBarButtonItems = projection
+    controller._ios_leading_mount = (signature, projection)
 
 
 def clear_actions(nav):
