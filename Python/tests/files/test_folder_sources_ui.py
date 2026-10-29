@@ -25,6 +25,11 @@ from desktop.settings.workspaces import WorkspaceVisibility, workspace_visibilit
 
 
 class FolderSourceTests(QtTestCase):
+    def make_package(self, path):
+        from commonUtils.archives.zip_access import open_archive
+        with open_archive(path, 'w', password='synthetic password') as archive:
+            archive.writestr('Fixture.txt', '[Fixture]\ntype=local\n')
+
     def until(self, condition):
         from time import monotonic, sleep
         deadline = monotonic() + 10
@@ -426,6 +431,7 @@ class FolderSourceTests(QtTestCase):
         cipher = self.root / 'cipher'
         cipher.mkdir()
         config, package = self.root / 'keys.session', self.root / 'keys.zip'
+        self.make_package(package)
         connection = SimpleNamespace(data=cipher, remote='Private', context=config, package=package)
         self.addCleanup(session.forget, config)
         second = SimpleNamespace(data=cipher, remote='Second', context=config, package=package)
@@ -489,6 +495,7 @@ class FolderSourceTests(QtTestCase):
         from features.rclone.localcrypt.backend import LocalCryptFolder
         self.browser_patcher.stop()
         config, package = self.root / 'keys.session', self.root / 'keys.zip'
+        self.make_package(package)
         self.addCleanup(session.forget, config)
         copies = []
         for name in ('One', 'Two'):
@@ -527,6 +534,7 @@ class FolderSourceTests(QtTestCase):
         from features.rclone.ui_contributions import CopyContext
         from models.folder_entry import FolderEntry
         config, package = self.root / 'local.session', self.root / 'local.zip'
+        self.make_package(package)
         session.remember(config, {'Plain': {'type': 'local'}}, package_path=package)
         self.addCleanup(session.forget, config)
         local = self.folder('Plain')
@@ -589,6 +597,7 @@ class FolderSourceTests(QtTestCase):
         from features.rclone.ui_contributions import CopyContext
         from models.folder_entry import FolderEntry
         config, package = self.root / 'local.session', self.root / 'local.zip'
+        self.make_package(package)
         self.addCleanup(session.forget, config)
         local = self.folder('Plain')
         context = CopyContext(SimpleNamespace(context=config, package=package, data=local.path))
@@ -651,6 +660,7 @@ class FolderSourceTests(QtTestCase):
         from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
         self.browser_patcher.stop()
         config, package = self.root / 'remote.session', self.root / 'remote.zip'
+        self.make_package(package)
         session.remember(config, {'Remote': {'type': 'alias'}}, package_path=package)
         session.forget(config)
         self.addCleanup(session.forget, config)
@@ -769,6 +779,7 @@ class FolderSourceTests(QtTestCase):
         private_path = self.root / 'private-copy'
         private_path.mkdir()
         config, package = self.root / 'keys.session', self.root / 'keys.zip'
+        self.make_package(package)
         self.addCleanup(session.forget, config)
         plain = SimpleNamespace(data=local.path, remote='Shared', context=config, package=package)
         private = SimpleNamespace(data=private_path, remote='Shared', context=config, package=package)
@@ -1002,6 +1013,7 @@ class FolderSourceTests(QtTestCase):
         tools.append(RegisteredContribution('rclone', 'rclone', rclone_tool))
         from features.rclone import session
         config, package = self.root / 'keys.session', self.root / 'keys.zip'
+        self.make_package(package)
         session.remember(config, {'Legacy': {'type': 'crypt'}}, package_path=package)
         self.addCleanup(session.forget, config)
         connection = SimpleNamespace(data=self.root / 'ciphertext', remote='Legacy', package=package, context=config)

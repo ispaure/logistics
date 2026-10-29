@@ -969,7 +969,13 @@ class LocalCryptTests(QtTestCase):
                     self.wait(lambda: not window.busy and not window.page_cache.busy)
                     self.assertTrue(window.pages.document.private)
                     self.assertTrue(window.windowTitle().startswith('🕵️ Private - '))
-                    self.assertFalse(window._remember_position)
+                    from services.documents.reader_positions import PrivateComicState
+                    self.assertIsInstance(window._state, PrivateComicState)
+                    with self.assertRaises(PermissionError):
+                        _ = window._state.state.cipher.identity
+                    with patch('commonUtils.persistence.atomic_write_bytes', side_effect=AssertionError('Passwordless checkpoint wrote disk')):
+                        window._state.save(0, window.pages.pages)
+                    self.assertEqual(window._state.state.memory['page'], 0)
                     self.assertTrue(window.menus.shared.open_action.isEnabled())
                     self.assertEqual(released, [])
                     reused = open_reader_choice(choice('extra'), None, 'comic')
@@ -1007,7 +1013,13 @@ class LocalCryptTests(QtTestCase):
                     self.wait(lambda: not window.reader._loading)
                     self.assertTrue(window.reader.private)
                     self.assertTrue(window.windowTitle().startswith('🕵️ Private - '))
-                    self.assertIsNone(window.reader._state)
+                    from services.documents.credential_state import CredentialState
+                    self.assertIsInstance(window.reader._state, CredentialState)
+                    with self.assertRaises(PermissionError):
+                        _ = window.reader._state.cipher.identity
+                    with patch('commonUtils.persistence.atomic_write_bytes', side_effect=AssertionError('Passwordless checkpoint wrote disk')):
+                        window.reader._state.save({'position': .5})
+                    self.assertEqual(window.reader._state.memory, {'position': .5})
                     self.assertFalse(window.reader.menus.recent.isEnabled())
                     self.assertTrue(window.reader.text.toPlainText())
                     self.assertEqual(released, [])

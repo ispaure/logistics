@@ -25,6 +25,8 @@ class CredentialServiceTests(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.key = self.root / 'Account.session'
         self.request = DesktopCredentialLoad(self.root / 'Account.zip', self.key)
+        # Decoding is mocked, but publication still binds the actual package bytes.
+        self.request.package.write_bytes(b'synthetic encrypted package')
         self.service = CredentialService(DesktopCredentials())
         self.addCleanup(session.forget, self.key)
 
@@ -45,6 +47,14 @@ class CredentialServiceTests(unittest.TestCase):
         self.assertEqual(session.credentials(self.key)['Files']['token'], 'private-token')
         with self.assertRaises(ValueError):
             self.service.unlock(prepared)
+
+    def test_changed_package_cannot_publish_credentials_or_reader_state_key(self):
+        prepared, values = self.prepare()
+        self.request.package.write_bytes(b'replaced package')
+        with self.assertRaises(ValueError):
+            self.service.unlock(prepared)
+        self.assertIsNone(session.credentials(self.key))
+        self.assertEqual(values, {})
 
     def test_discard_foreign_service_and_gc_do_not_publish(self):
         prepared, values = self.prepare()

@@ -1,5 +1,6 @@
 """Desktop credential publication; no dialogs, extracted TXT files or network I/O."""
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from threading import RLock
 from . import session
@@ -121,9 +122,16 @@ class DesktopCredentials:
         existing = session.names(request.config) is not None
         revoked = session.revocation_check(request.config)
         original = _config_revision(request.config) if request.remember else None
+        package_revision = _config_revision(request.package)
+        with request.package.open('rb') as stream:
+            package_bytes = stream.read(1024 * 1024 + 1)
+        if len(package_bytes) > 1024 * 1024:
+            raise ValueError('Credential ZIPs are limited to 1 MiB.')
+        package_identity = sha256(package_bytes).hexdigest()
         def valid():
-            return (_config_revision(request.config) == original if request.remember else
-                    not revoked() if existing else session.names(request.config) is None)
+            return (_config_revision(request.package) == package_revision and
+                    (_config_revision(request.config) == original if request.remember else
+                     not revoked() if existing else session.names(request.config) is None))
         values = session.read_package(request.package, password)
         def close():
             for settings in values.values():
@@ -155,7 +163,7 @@ class DesktopCredentials:
                     desktop_catalog.remember(request.config, request.package, names)
                     session.remember(request.config, {name: dict(settings) for name, settings in values.items()},
                                      package_path=request.package, state_password=password,
-                                     state_identity=__import__('hashlib').sha256(request.package.read_bytes()).hexdigest())
+                                     state_identity=package_identity)
                 return CredentialResult(request.config, names, request.remember)
             return CredentialStage(publish, valid, close)
         except BaseException:

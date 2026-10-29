@@ -55,6 +55,9 @@ collecting an admission releases staging; consumed or foreign admissions cannot
 publish. The desktop adapter copies settings into the session before clearing
 its staging dictionaries. LocalCrypt backing/password checks happen before
 publication, so invalid crypt settings preserve the old session.
+Desktop preparation captures the bounded ZIP digest and file revision before
+decoding. Publication rejects a replaced package and uses the captured digest for
+the reader-state key, rather than rereading a different archive at publication.
 
 The service guards publication with nonblocking admission. A lock, a forget, an unlock
 publication attempt, or saved-vault restore retires other pending loads in that
