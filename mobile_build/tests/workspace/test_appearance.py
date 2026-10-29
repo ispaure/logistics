@@ -268,13 +268,12 @@ class AppearanceTests(unittest.TestCase):
         view._impl.container.bottom_inset = 34
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 16)
-        # A horizontal reader shares the footer's lower hit padding with the
-        # home strip; neither the container nor this fallback adds it back.
-        view.children = [NS(_horizontal_reader_progress=True)]
+        # Reader buttons retain their full hit area above the home strip.
+        view.children = [NS(children=[])]
         view._impl.container.bottom_inset = 0
         reserve_navigation(app)
-        self.assertEqual(view.style.margin_bottom, 34)  # 16 frame + 18 home.
-        view._impl.container.bottom_inset = 18
+        self.assertEqual(view.style.margin_bottom, 50)  # 16 frame + 34 home.
+        view._impl.container.bottom_inset = 34
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 16)
         view._comic_fullscreen = True

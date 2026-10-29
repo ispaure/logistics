@@ -152,7 +152,6 @@ class PageFooter:
         surface(self.spacer, background='transparent', foreground='text')
         surface(self.badge, radius=14, background='alternate')
         self.widget = toga.Box(style=Pack(direction=COLUMN if vertical else ROW, width=56 if vertical else toga.style.pack.NONE, align_items='center', margin_left=4, margin_right=4))
-        self.widget._horizontal_reader_progress = not vertical
         from .reader_progress import style_slider
         style_slider(self.slider)
         self.sync(comic=False, count=0, index=0)

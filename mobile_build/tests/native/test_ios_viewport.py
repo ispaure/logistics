@@ -3,27 +3,10 @@ import asyncio
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
-from mobile.ios_reader_chrome import notify_viewport, progress_bottom_inset
+from mobile.ios_reader_chrome import notify_viewport
 
 
 class ViewportTests(unittest.TestCase):
-    def test_progress_uses_only_home_gesture_padding(self):
-        import toga
-        from mobile.reader_controls import PageFooter, page_buttons
-        footer = PageFooter(*page_buttons(None, None), Mock())
-        root = toga.Box(children=[footer.widget])
-        self.assertEqual(progress_bottom_inset(root, 34, 34), 18)
-        self.assertEqual(progress_bottom_inset(root, 20, 20), 4)
-        self.assertEqual(progress_bottom_inset(root, 0, 0), 0)
-        # Bottom bars and keyboards own their full inset.
-        self.assertEqual(progress_bottom_inset(root, 83, 34), 83)
-        self.assertEqual(progress_bottom_inset(root, 300, 34), 300)
-        root.remove(footer.widget)
-        self.assertEqual(progress_bottom_inset(root, 34, 34), 34)
-        vertical = PageFooter(*page_buttons(None, None), Mock(), vertical=True)
-        root.add(vertical.widget)
-        self.assertEqual(progress_bottom_inset(root, 34, 34), 34)
-
     def test_bar_edge_change_refreshes_actions_without_a_size_change(self):
         from unittest.mock import patch
         loop = asyncio.new_event_loop()
@@ -99,6 +82,17 @@ class AndroidViewportTests(unittest.TestCase):
 
 
 class FixedControlAuditTests(unittest.TestCase):
+    def test_page_button_hit_area_must_stay_above_home_indicator(self):
+        from mobile_build.native_tests.tests.logisticsmobile.rotation_checks import assert_control_bounds
+        window = SimpleNamespace(safeAreaInsets=SimpleNamespace(left=0, right=0, top=62, bottom=34),
+                                 bounds=SimpleNamespace(size=SimpleNamespace(width=402, height=874)))
+        rect = SimpleNamespace(origin=SimpleNamespace(x=4, y=808),
+                               size=SimpleNamespace(width=48, height=48))
+        with self.assertRaises(AssertionError):
+            assert_control_bounds(rect, window, 'Previous page')
+        rect.origin.y = 792
+        assert_control_bounds(rect, window, 'Previous page')
+
     def test_callable_native_window_is_counted_and_cutout_overlap_is_rejected(self):
         import toga
         from unittest.mock import patch

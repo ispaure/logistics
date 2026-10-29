@@ -542,11 +542,11 @@ centered, horizontally scrollable subtitle as folder headers (12-point icons,
 caption text at 75% of the title size), including when UIKit narrows the title
 beside a vertical bar. Native mounting removes the content row from fullscreen
 restoration so it cannot return as a duplicate.
-Horizontal iOS reader footers share 16 points of their lower touch padding with
-the home-gesture inset, keeping the track above the indicator and recovering
-reading height. Both the container inset and floating-bar fallback use that
-reservation; keyboard/tab-bar insets and vertical PDF controls retain their full
-clearance. Android retains its existing system-navigation clearance.
+iOS reader footers retain the full home-gesture safe inset. The complete page
+button and slider hit areas stay above the indicator, even when the visible
+slider track would fit closer. Container layout and floating-bar fallback honor
+the same window-safe bottom; keyboard and tab-bar clearance remain independent.
+Android retains its existing system-navigation clearance.
 The reusable `reader_space_probe.py` checks title/subtitle mounting, a single
 48-point footer, the iOS bottom gap and fullscreen restoration; run it with the
 owning validation helpers' `--reader-space` or `--probe reader-space` options.
