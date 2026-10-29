@@ -12,6 +12,7 @@ from commonUtils.runtime.resources.lifetime import ResourceLeases, WorkerCancell
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
 from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive, serialize_mutation
 from features.rclone import configuration, executable, session
 from .mapping import guard_ciphertext_path, is_linked, unlock, validate_ciphertext_tree
@@ -47,10 +48,10 @@ class CryptResources(LocalFiles):
         if not Path(self.binary).is_file():
             raise ValueError('Install the configured rclone executable first.')
         validate_ciphertext_tree(item)
-        self.root = item.data
+        self.root = native_path(item.data)
         from services.local_storage import install_local_storage_policy
         install_local_storage_policy(item.root)
-        self.storage_id = str(self.root.resolve())
+        self.storage_id = str(item.data.resolve())
         self.context = configuration.get_rclone_config_dir() / ('private-' + uuid4().hex + '.session')
         settings = dict(values[item.remote])
         settings['remote'] = str(item.data.resolve(strict=True))

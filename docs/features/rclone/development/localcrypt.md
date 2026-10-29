@@ -1025,3 +1025,11 @@ capture, Keychain/Keystore behavior and trusted Wi-Fi acceptance still require
 current-device validation; host mocks do not establish those guarantees.
 The rebuilt host bridge also passed its Go suite and synthetic remote/LocalCrypt
 integration roundtrips during this audit; these do not validate physical devices.
+
+## Windows ciphertext paths
+
+Desktop ciphertext I/O uses commonUtils native filesystem paths, so encrypted
+filenames and private resume records remain readable beyond the normal Windows
+path limit. Mapping identities, rclone configuration and logical filenames keep
+their existing form. Link, junction, grant and raw-filesystem protection checks
+remain in force for both ordinary and extended path spellings.

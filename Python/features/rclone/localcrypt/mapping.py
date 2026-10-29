@@ -11,6 +11,7 @@ from pathlib import Path
 import stat
 
 from commonUtils.persistence import atomic_write_json
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.persistence.publication import serialize_mutation
 from features.rclone import configuration, session
 
@@ -26,7 +27,7 @@ def is_linked(path):
 
 def guard_ciphertext_path(path, root):
     """Permit the chosen root's location; reject links below that boundary."""
-    path, root = Path(path).absolute(), Path(root).absolute()
+    path, root = native_path(path), native_path(root)
     path.relative_to(root)
     for candidate in (path, *path.parents):
         if candidate == root:
@@ -36,9 +37,10 @@ def guard_ciphertext_path(path, root):
 
 
 def validate_ciphertext_tree(item):
-    if not item.data.exists():
+    data = native_path(item.data)
+    if not data.exists():
         return
-    for folder, directories, files in os.walk(item.data, followlinks=False):
+    for folder, directories, files in os.walk(data, followlinks=False):
         for name in (*directories, *files):
             path = Path(folder) / name
             if is_linked(path):
