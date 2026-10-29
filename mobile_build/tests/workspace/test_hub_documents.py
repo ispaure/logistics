@@ -178,7 +178,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertFalse(any(session.provider == 'file-reference' for session, _ in app.recent_items()))
 
-    def test_recent_library_copy_survives_original_deletion_and_is_labelled(self):
+    def test_recent_library_copy_survives_original_deletion_with_icon_only(self):
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
         from commonUtils.runtime.resources.documents import LocalDocuments
         from mobile.workspace import Session
@@ -192,7 +192,9 @@ class HubDocumentTests(unittest.TestCase):
         app.recent_documents.remember(session)
         book.unlink()
         recent, summary = next(item for item in app.recent_items() if item[0].resource == record['id'])
-        self.assertIn('Saved copy on device', labels(app.recent_row(recent, summary)))
+        row = app.recent_row(recent, summary)
+        self.assertNotIn('Saved copy on device', labels(row))
+        self.assertIn('storage_local', [glyph for glyph, _ in row.document_button.leading_icons])
         self.assertEqual(store.read_record(record['id'])[0]['name'], record['name'])
 
     def test_recent_cloud_open_shows_activity_until_finished_and_cleans_up_on_failure(self):

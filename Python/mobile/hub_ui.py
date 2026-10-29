@@ -305,8 +305,6 @@ class HubUI:
 
     def recent_row(self, session, summary):
         title, kind, details = summary
-        if session.provider == 'library':
-            details = [*details, 'Saved copy on device']
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         opener = self.recent_opener(session)
         from .browser_ui import middle_filename
