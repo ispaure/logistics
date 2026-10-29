@@ -97,7 +97,9 @@ class GuestManagerTests(unittest.TestCase):
         pin = self.command(self.manager, 'rev-parse', 'HEAD')
         (self.project / 'build-manager-dependency.json').write_text(json.dumps(dict(revision=pin)))
         environment = self.root / 'environment'
-        venv.EnvBuilder(with_pip=False).create(environment)
+        # Relocatable Linux Python keeps its shared library beside the original
+        # executable; copying only that binary breaks the interpreter itself.
+        venv.EnvBuilder(with_pip=False, symlinks=os.name != 'nt').create(environment)
         python = environment / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
         repository = Path(__file__).resolve().parents[3]
         command = [str(python), '-c',
