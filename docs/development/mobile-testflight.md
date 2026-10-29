@@ -188,11 +188,16 @@ One-time local setup:
 Every explicit upload now checks API access before contacting Xcode for upload.
 After success it writes `upload-result.json`, waits up to 30 minutes for the
 specific iOS version/build, preserves existing per-build testing notes (or supplies
-the configured defaults), enables `autoNotifyEnabled`, submits beta review only
-from `READY_FOR_BETA_SUBMISSION`, and adds the build to Friends without removing
-earlier builds. Pending or approved reviews are not resubmitted. The helper verifies
+the configured defaults), enables `autoNotifyEnabled`, and adds the build to
+Friends without removing earlier builds. It verifies and saves that relationship
+before submitting beta review from `READY_FOR_BETA_SUBMISSION`. Pending or approved reviews are not resubmitted. The helper verifies
 group membership and records `external-distribution.json`; it does not wait for
-Apple's human beta review to finish.
+Apple's human beta review to finish. If Apple explicitly rejects review submission
+because another build in the same version is already in review, the confirmed
+Friends assignment remains successful and the receipt records
+`review_status: blocked_by_existing_review` and `review_submitted: false`. This
+does not claim approval or tester availability. Run distribution for the same
+upload after the earlier review completes; other API errors still stop.
 
 Missing encryption information, rejected/expired/internal-only builds, API errors
 and processing timeouts stop with an actionable error. There is no guessed encryption
@@ -202,6 +207,10 @@ upload. Once the issue is resolved, retry distribution for the existing upload:
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools distribute --build-number 202610144
 ```
+
+For a retained snapshot, add `--workspace /absolute/path/to/build/testflight/202610144`.
+This option only accepts an existing uploaded workspace whose app, team and build
+match the selected release. It never exports or uploads the artifact again.
 
 This command does not rebuild or re-upload. It finds the exact app/version/build
 from the retained `release.json` and can resume partially completed distribution.

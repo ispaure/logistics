@@ -287,6 +287,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('plan', 'archive', 'export', 'upload', 'distribute'))
     parser.add_argument('--build-number', required=True, type=build_number)
+    parser.add_argument('--workspace', type=Path, help='Existing uploaded build workspace; distribute only, never uploads.')
     parser.add_argument('--team')
     parser.add_argument('--expected-app-identifier')
     parser.add_argument('--profile', type=Path, help='Installed App Store profile for manual CI signing')
@@ -299,11 +300,19 @@ def main():
         parser.error('Extension profiles require --profile for the containing app.')
     if args.unsigned_check and args.command not in ('plan', 'archive'):
         parser.error('--unsigned-check applies only to a local archive check.')
+    if args.workspace is not None and args.command != 'distribute':
+        parser.error('--workspace applies only to distribution of an existing upload.')
     identity = release_identity(args.team, args.expected_app_identifier)
     config = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['briefcase']
     if config['bundle'] + '.logisticsmobile' != BUNDLE:
         raise ValueError('Briefcase bundle identity has changed.')
-    workspace = ROOT / 'build/testflight' / args.build_number
+    workspace = args.workspace.expanduser().resolve() if args.workspace is not None else ROOT / 'build/testflight' / args.build_number
+    if args.command == 'distribute':
+        record = json.loads((workspace / 'release.json').read_text())
+        uploaded = json.loads((workspace / 'upload-result.json').read_text())
+        if (record['identity'] != identity or record['build']['build_number'] != args.build_number
+                or uploaded.get('status') != 'uploaded' or uploaded.get('build') != record['build']):
+            raise ValueError('Existing uploaded workspace identity/build differs from the selected release.')
     from contextlib import nullcontext
     from build_manager.locking import workspace_lock
     from build_manager.retention import lease

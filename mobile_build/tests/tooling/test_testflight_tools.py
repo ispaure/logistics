@@ -39,6 +39,35 @@ class TestFlightWorkflowTests(unittest.TestCase):
                 build.assert_called_once()
             self.assertTrue(workspace.is_dir())
 
+    def test_distribute_existing_workspace_checks_uploaded_identity_without_build_or_upload(self):
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from mobile_build.deployment import testflight_tools as tools
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'pyproject.toml').write_text('[tool.briefcase]\nbundle="io.github.ispaure"\nversion="0.1.16"\n')
+            workspace = root / 'retained' / '123'
+            workspace.mkdir(parents=True)
+            build = dict(build_number='123', bundle_id=BUNDLE, signed=True, version='0.1.16')
+            (workspace / 'release.json').write_text(json.dumps(dict(identity=self.identity, build=build)))
+            uploaded = workspace / 'upload-result.json'
+            uploaded.write_text(json.dumps(dict(status='uploaded', build=build)))
+            with patch.object(tools, 'ROOT', root), \
+                    patch.object(tools, 'release_identity', return_value=self.identity), \
+                    patch.object(tools, 'distribute_external') as distribute, \
+                    patch.object(tools, 'export_release') as export, \
+                    patch('logistics_build.build_retention.clean_builds'), \
+                    patch('sys.argv', ['testflight_tools', 'distribute', '--build-number', '123',
+                                       '--workspace', str(workspace)]):
+                tools.main()
+                distribute.assert_called_once_with(workspace.resolve())
+                export.assert_not_called()
+                uploaded.write_text(json.dumps(dict(status='uploaded', build=dict(build, build_number='999'))))
+                with self.assertRaisesRegex(ValueError, 'identity/build'):
+                    tools.main()
+                self.assertEqual(distribute.call_count, 1)
+
     def test_xcode_uses_saved_api_key_and_rejects_partial_environment_override(self):
         from mobile_build.deployment.testflight_tools import auth_args
         from pathlib import Path

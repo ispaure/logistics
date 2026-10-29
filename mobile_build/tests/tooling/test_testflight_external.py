@@ -132,6 +132,48 @@ class ExternalDistributionTests(unittest.TestCase):
             self.assertFalse(any(args[0] in {'DELETE', 'PUT'} for args, kw in writes))
             self.assertEqual(json.loads((workspace / 'external-distribution.json').read_text())['status'], 'assigned')
 
+    def test_known_review_conflict_keeps_confirmed_group_and_reports_deferred_review(self):
+        with TemporaryDirectory() as directory:
+            workspace = self.workspace(directory)
+            client = self.client()
+            original = client.request.side_effect
+            def request(method, path, **kwargs):
+                if path == '/v1/betaAppReviewSubmissions':
+                    saved = json.loads((workspace / 'external-distribution.json').read_text())
+                    self.assertTrue(saved['group_assignment_confirmed'])
+                    raise RuntimeError('App Store Connect HTTP 422: Another build in the same train is already in beta review. '
+                                       'Please submit it again once it gets completed.')
+                return original(method, path, **kwargs)
+            client.request.side_effect = request
+            external.distribute(workspace, (client, self.config, self.group))
+            report = json.loads((workspace / 'external-distribution.json').read_text())
+            self.assertEqual(report['status'], 'assigned')
+            self.assertEqual(report['review_status'], 'blocked_by_existing_review')
+            self.assertFalse(report['review_submitted'])
+            self.assertTrue(report['group_assignment_confirmed'])
+            writes = [c.args for c in client.request.call_args_list if c.args[0] == 'POST']
+            self.assertLess(writes.index(('POST', '/v1/betaGroups/group/relationships/builds')),
+                            writes.index(('POST', '/v1/betaAppReviewSubmissions')))
+
+    def test_other_review_errors_still_fail_with_confirmed_group_receipt(self):
+        for message in ['App Store Connect HTTP 422: Invalid review information',
+                        'App Store Connect HTTP 401: Unauthorized', 'Outcome unknown; reconcile first']:
+            with self.subTest(message=message), TemporaryDirectory() as directory:
+                workspace = self.workspace(directory)
+                client = self.client()
+                original = client.request.side_effect
+                def request(method, path, **kwargs):
+                    if path == '/v1/betaAppReviewSubmissions':
+                        raise RuntimeError(message)
+                    return original(method, path, **kwargs)
+                client.request.side_effect = request
+                with self.assertRaisesRegex(RuntimeError, message):
+                    external.distribute(workspace, (client, self.config, self.group))
+                report = json.loads((workspace / 'external-distribution.json').read_text())
+                self.assertEqual(report['status'], 'needs_attention')
+                self.assertTrue(report['group_assignment_confirmed'])
+                self.assertFalse(report['review_submitted'])
+
     def test_retries_do_not_resubmit_review_relink_or_overwrite_existing_notes(self):
         for state in ['WAITING_FOR_BETA_REVIEW', 'IN_BETA_REVIEW', 'BETA_APPROVED', 'IN_BETA_TESTING']:
             with TemporaryDirectory() as directory:

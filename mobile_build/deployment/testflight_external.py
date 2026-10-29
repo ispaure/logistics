@@ -145,12 +145,6 @@ def distribute(workspace, prepared=None):
                 'relationships': {'build': {'data': {'type': 'builds', 'id': build_id}}}}})
         client.request('PATCH', '/v1/buildBetaDetails/' + detail['id'], body={'data': {
             'type': 'buildBetaDetails', 'id': detail['id'], 'attributes': {'autoNotifyEnabled': True}}})
-        if state == 'READY_FOR_BETA_SUBMISSION':
-            client.request('POST', '/v1/betaAppReviewSubmissions', body={'data': {
-                'type': 'betaAppReviewSubmissions', 'relationships': {'build': {'data': {'type': 'builds', 'id': build_id}}}}})
-            report['review_submitted'] = True
-        else:
-            report['review_submitted'] = False
         # Relationship POST is additive; never remove the group's earlier builds.
         linked = client.list('/v1/betaGroups/' + group['id'] + '/relationships/builds', limit=200)
         if not any(item['id'] == build_id for item in linked):
@@ -159,10 +153,29 @@ def distribute(workspace, prepared=None):
         linked = client.list('/v1/betaGroups/' + group['id'] + '/relationships/builds', limit=200)
         if not any(item['id'] == build_id for item in linked):
             raise RuntimeError('Apple has not confirmed the build in the external group. Retry distribute.')
+        report['group_assignment_confirmed'] = True
+        report['review_submitted'] = False
+        save()  # Keep a confirmed relationship even if a later review write fails.
+        if state == 'READY_FOR_BETA_SUBMISSION':
+            try:
+                client.request('POST', '/v1/betaAppReviewSubmissions', body={'data': {
+                    'type': 'betaAppReviewSubmissions', 'relationships': {'build': {'data': {'type': 'builds', 'id': build_id}}}}})
+                report['review_submitted'] = True
+            except RuntimeError as error:
+                conflict = ('App Store Connect HTTP 422: Another build in the same train is already in beta review. '
+                            'Please submit it again once it gets completed.')
+                if str(error) != conflict:
+                    raise
+                # This is a known rejection, not an uncertain write or approval.
+                report['review_status'] = 'blocked_by_existing_review'
+                report['review_error'] = str(error)
         report['status'] = 'assigned'
         save()
         print('Assigned ' + build['version'] + ' (' + build['build_number'] + ') to ' + group['attributes']['name'] +
               '; automatic tester notification enabled. Apple beta review may still be pending.')
+        if report.get('review_status') == 'blocked_by_existing_review':
+            print('Beta review submission is deferred while another build is in review. '
+                  'Run distribute for this same build after that review completes; do not re-upload.')
     except (ValueError, RuntimeError) as error:
         report.update(status='needs_attention', error=str(error))
         save()
