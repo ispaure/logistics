@@ -227,7 +227,20 @@ async def exercise(app):
                     rows.append(dict(name='android-controls', samples=await android_controls(owner)))
                 player = android_player(owner)
                 start_playback(owner)
-                await until(lambda: player.getTime() > 500 and player.getLength() > 1000)
+                states = []
+                def decoded():
+                    state = dict(time=int(player.getTime()), length=int(player.getLength()),
+                        playing=bool(player.isPlaying()), allowed=owner.allowed(),
+                        audio=owner.audio_output.permitted(), protected=owner.restricted)
+                    if not states or states[-1] != state:
+                        states.append(state)
+                        del states[:-20]
+                    return state['time'] > 500 and state['length'] > 1000
+                try:
+                    await until(decoded, timeout=30)
+                except AssertionError:
+                    report['decoder_startup'] = states
+                    raise
                 assert player.getAudioTracksCount() >= 1
                 colors = await android_frame(owner)
                 player.pause()
@@ -251,7 +264,12 @@ async def exercise(app):
                 fullscreen_checked = True
             position = owner.native.position()[0]
             assert position >= 0
+            # Do not keep an extra bridge reference alive past native teardown:
+            # the player's last release must belong to its disposal worker.
+            player = None
+            awake = screen_awake(owner, android)
             await owner.close()
+            await until(lambda: not awake())
             if closed_chrome is not None:
                 await until(closed_chrome)
                 rows[-1]['close_restored_bars'] = True
@@ -292,6 +310,7 @@ async def exercise(app):
         else:
             from mobile.screen_privacy import native_value
             assert not native_value(player, 'isPlaying')
+        player = None
         await owner.close()
         rows.append(dict(name='LocalCrypt', encrypted_resume=True, password_resume=True, external_denied=True))
         report['success'] = True

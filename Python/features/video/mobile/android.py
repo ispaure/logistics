@@ -44,3 +44,6 @@ class AndroidVideo:
 
     def dispose(self):
         self.native.dispose()
+        done = self.owner.app.loop.create_future()
+        done.set_result(None)
+        return done

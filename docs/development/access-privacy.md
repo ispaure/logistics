@@ -65,7 +65,9 @@ credential gates contribute directly, before any scene or player exists.
 managers, EditorPicker, NotebookPanel and ComicBatchController register their
 own gate suppliers; ScreenPrivacy asks the scope instead of inspecting feature
 attributes. Suppliers are synchronous snapshots with no I/O. Notebook disposal
-releases its registration; host disposal clears all window sources. A retained
+releases its registration; host disposal clears its window sources. Asynchronous
+native teardown holds a separate process resource scope until completion, even
+when its window has already closed. A retained
 draft keeps its gate after credential removal; duplicate contributions share one
 challenge. Providers still validate the original grant independently.
 
@@ -135,6 +137,14 @@ A failed native video disposal retains its protection contribution until disposa
 succeeds; setting `closed` denies new commands but cannot make retained pixels or
 buffers public. Provider grants and encrypted checkpoints retain their existing
 validation. Memory pressure and Save/Discard/Cancel vetoes stay with their owners.
+
+Video retirement denies commands and suspends the transport immediately. On iOS,
+VLC stop and final player release run on a serial worker: a decoder can enter
+UIKit during teardown, so joining it on the UI thread can deadlock. Native
+completion returns to the UI loop before the owner closes its provider and
+releases protection. Reopening awaits the same completion task; cancelling a
+navigation request cannot cancel that cleanup. A failed cleanup retains the
+resource and protection rather than reporting successful disposal.
 
 ## Adding a protected surface
 

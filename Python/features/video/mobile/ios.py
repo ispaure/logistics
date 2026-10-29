@@ -13,6 +13,7 @@ class IOSVideo:
         from rubicon.objc import ObjCClass, Block
         self.owner = owner
         self.disposed = False
+        self.disposal = None
         self.presentation = None
         self.native = ObjCClass('LGVideoController').alloc().init()
         self.native.videoURL = owner.transport.url
@@ -82,9 +83,23 @@ class IOSVideo:
         raise RuntimeError('Video presentation did not finish. Close and reopen the video.')
 
     def dispose(self):
+        if self.disposal is not None:
+            return self.disposal
+        from rubicon.objc import Block
+        loop = self.owner.app.loop
+        done = self.disposal = loop.create_future()
         self.disposed = True
         if self.presentation is not None:
             self.presentation.cancel()
             self.presentation = None
-        self.native.retire()
+        def finished():
+            # Complete after returning across the ObjC block bridge.
+            loop.call_soon_threadsafe(done.set_result, None)
+        self.retirement_callback = Block(finished, None)
+        try:
+            self.native.retireWithCompletion(self.retirement_callback)
+        except BaseException:
+            self.disposal = None
+            raise
         self.native.dismissViewControllerAnimated(False, completion=None)
+        return self.disposal

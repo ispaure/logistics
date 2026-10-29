@@ -42,6 +42,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic) BOOL pipActive;
 @property(nonatomic) BOOL casting;
 @property(nonatomic) BOOL retired;
+@property(nonatomic) BOOL retirementComplete;
+@property(nonatomic, strong) NSMutableArray *retirementCallbacks;
 @property(nonatomic) BOOL ended;
 @property(nonatomic) BOOL lockHidden;
 @property(nonatomic) BOOL interrupted;
@@ -545,7 +547,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void (^)(id<VLCPictureInPictureWindowControlling>))pictureInPictureReady {
     __weak LGVideoController *owner = self;
     return ^(id<VLCPictureInPictureWindowControlling> controller) {
-        if (owner.restricted) return;
+        if (owner.restricted || owner.retired) return;
         owner.pipController = controller;
         controller.stateChangeEventHandler = ^(BOOL active) {
             owner.pipActive = active;
@@ -554,7 +556,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         };
     };
 }
-- (void)addSubview:(UIView *)view { [self.movie addSubview:view]; }
+- (void)addSubview:(UIView *)view { if (!self.retired) [self.movie addSubview:view]; }
 - (CGRect)bounds { return self.movie.bounds; }
 - (void)play { if ([self canPlay:YES]) [self startByUser]; }
 - (void)seekBy:(int64_t)offset completion:(dispatch_block_t)completion {
@@ -565,21 +567,47 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (int64_t)mediaTime { return [self positionMilliseconds]; }
 - (BOOL)isMediaSeekable { return self.player.isSeekable; }
 - (BOOL)isMediaPlaying { return self.player.isPlaying; }
-- (void)retire {
+- (void)retireWithCompletion:(dispatch_block_t)completion {
+    NSAssert(NSThread.isMainThread, @"Retire video on the UI thread");
+    if (self.retirementComplete) { if (completion) completion(); return; }
+    if (!self.retirementCallbacks) self.retirementCallbacks = [NSMutableArray array];
+    if (completion) [self.retirementCallbacks addObject:[completion copy]];
     if (self.retired) return;
     [self setScreenAwake:NO];
     self.retired = YES;
+    self.movie.hidden = YES;
+    self.player.audio.muted = YES;
     self.fullscreen = NO;
     [self setControlsShown:YES];
     [self.timer invalidate]; self.timer = nil;
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [self.callObserver setDelegate:nil queue:NULL]; self.callObserver = nil;
     [self.pipController stopPictureInPicture]; self.pipController = nil;
-    for (VLCRendererDiscoverer *discoverer in self.discoverers) [discoverer stop];
-    [self.discoverers removeAllObjects];
     self.player.delegate = nil;
-    [self.player stop]; self.player.drawable = nil;
+    self.player.drawable = nil;
+    // VLC teardown joins a decoder which may synchronously enter UIKit. Keep
+    // MAIN available, and ensure the *last* strong reference dies on the worker.
+    __block VLCMediaPlayer *retiringPlayer = self.player;
+    __block NSMutableArray *retiringDiscoverers = self.discoverers;
     self.player = nil;
+    self.discoverers = nil;
     self.allowed = nil; self.requestPlay = nil; self.closed = nil;
+    static dispatch_queue_t teardownQueue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ teardownQueue = dispatch_queue_create("logistics.video.teardown", DISPATCH_QUEUE_SERIAL); });
+    dispatch_async(teardownQueue, ^{
+        @autoreleasepool {
+            for (VLCRendererDiscoverer *discoverer in retiringDiscoverers) [discoverer stop];
+            retiringDiscoverers = nil;
+            [retiringPlayer stop];
+            retiringPlayer = nil;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.retirementComplete = YES;
+            NSArray *callbacks = [self.retirementCallbacks copy];
+            self.retirementCallbacks = nil;
+            for (dispatch_block_t callback in callbacks) callback();
+        });
+    });
 }
 @end

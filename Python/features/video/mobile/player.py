@@ -19,6 +19,8 @@ class MobileVideo:
         self.hidden = False
         self.native_restricted = None
         self.task = None
+        self.retirement = None
+        self._release_retirement = None
         self.audio_output = app.audio_output
         self.audio_output.register(self, self.pause_audio)
         self.protection = app.protection
@@ -39,20 +41,41 @@ class MobileVideo:
         self.transport.resume()
         return True
 
-    def retire(self):
-        """Synchronous host shutdown/replacement cannot leave a decoder alive."""
+    def retire(self, *, checkpoint=None):
+        """Revoke playback immediately; retain resources until native teardown ends."""
+        if self.retirement is not None:
+            return self.retirement
         self.closed = True
         self.audio_output.unregister(self)
         if self.task is not None:
             self.task.cancel()
-        if self.native is not None:
-            self.native.dispose()
-            self.native = None
-        self.transport.close()
+        self.transport.suspend()
+        if self._release_retirement is None:
+            protected = self.content.restricted or bool(self.native_restricted)
+            self._release_retirement = self.protection.process.retain(self,
+                lambda: (getattr(self.content, 'gate', None),), protected=lambda: protected)
+        # Native disposal closes controls/mutes synchronously, then returns its
+        # completion barrier. A failed disposal must retain the source and scope.
+        disposal = self.native.dispose() if self.native is not None else None
+        self.retirement = self.app.loop.create_task(self._finish_retirement(disposal, checkpoint))
+        return self.retirement
+
+    async def _finish_retirement(self, disposal, checkpoint):
+        if disposal is not None:
+            await asyncio.shield(disposal)
+        self.native = None
+        if checkpoint is not None:
+            position, completed = checkpoint
+            try:
+                await asyncio.to_thread(self.progress.save, position, completed=completed)
+            except (OSError, ValueError, PermissionError):
+                pass
+        await asyncio.to_thread(self.transport.close)
         for subtitle in self.subtitles:
             subtitle.close()
         self.content.close()
         self._release_protection()
+        self._release_retirement()
         if getattr(self.app, 'video_player', None) is self:
             self.app.video_player = None
         routes = getattr(self.app, 'routes', None)
@@ -181,24 +204,11 @@ class MobileVideo:
             self.native.show()  # Authentication restores controls, never autoplay.
 
     async def close(self):
-        if self.closed:
-            return
-        self.closed = True
-        self.audio_output.unregister(self)
-        if self.task is not None:
-            self.task.cancel()
-        try:
-            if self.native is not None:
-                position, completed = self.native.position()
-                self.native.dispose()
-                self.native = None
-                try:
-                    await asyncio.to_thread(self.progress.save, position, completed=completed)
-                except (OSError, ValueError, PermissionError):
-                    pass
-        finally:
-            await asyncio.to_thread(self.transport.close)
-            self.retire()
+        checkpoint = None
+        if not self.closed and self.native is not None:
+            checkpoint = self.native.position()
+        # Cancellation of a navigation request must not cancel decoder cleanup.
+        await asyncio.shield(self.retire(checkpoint=checkpoint))
 
 
 async def open_video(app, provider, path):

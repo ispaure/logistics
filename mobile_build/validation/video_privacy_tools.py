@@ -64,6 +64,7 @@ def rewrite_apk(source, destination, context):
 
 
 def run(platform, binary, output, *, context="all", rclone=None):
+    binary, output = Path(binary).resolve(), Path(output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     events = []
     recording = None

@@ -39,6 +39,13 @@ before attempting a text/document import. The host's existing screen privacy,
 Back and shutdown owners retire or conceal the player. Native controls perform
 their own policy checks before play, cast and picture-in-picture requests.
 
+`retire()` immediately denies commands and starts native disposal. `close()` waits
+for that shared completion barrier, then saves the captured checkpoint and closes
+transport/provider resources before releasing protection. iOS releases VLC on a
+serial worker so decoder-to-UIKit callbacks cannot deadlock the UI thread.
+An independent process resource scope survives host-window disposal until this
+cleanup completes; navigation cancellation cannot release it early.
+
 Android uses `org.videolan.android:libvlc-all:3.7.5`; its feature-owned Java surface
 is installed through the existing Gradle source owner. iOS uses the official
 VLCKit Swift package at the immutable revision in

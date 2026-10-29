@@ -24,6 +24,15 @@ class ProtectionScope:
         self.windows.add(window)
         return window
 
+    def retain(self, owner, gates, *, protected=None):
+        """Keep a resource protected across asynchronous window shutdown.
+
+        The returned bound release owns this scope until actual disposal ends.
+        """
+        resource = self.window()
+        resource.register(owner, gates, protected=protected)
+        return resource.dispose
+
     def protected(self):
         return bool(self.credentials()) or any(window.retained_protected() for window in tuple(self.windows))
 

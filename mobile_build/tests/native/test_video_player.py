@@ -24,8 +24,11 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
             owner = MobileVideo(app, content)
         owner.protection.register(app, lambda: getattr(getattr(app, 'screen_privacy', None), 'gates', lambda: ())())
         self.addCleanup(owner.protection.dispose)
-        self.addCleanup(owner.retire)
+        self.addAsyncCleanup(owner.close)
         owner.native = Mock()
+        disposal = app.loop.create_future()
+        disposal.set_result(None)
+        owner.native.dispose.return_value = disposal
         owner.native.position.return_value = (12000, False)
         owner.progress = Mock()
         app.video_player = owner
@@ -93,6 +96,7 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.retire_changed_policy()
         native.dispose.assert_called_once()
         self.assertTrue(owner.closed)
+        await owner.close()
         self.assertIsNone(owner.app.video_player)
 
     async def test_retained_session_content_keeps_its_native_policy_without_credentials(self):
@@ -118,6 +122,7 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.content.source.check_access.side_effect = ValueError('revoked')
         owner.retire_stale()
         native.dispose.assert_called_once()
+        await owner.close()
         owner.transport.close.assert_called_once()
         self.assertIsNone(owner.app.video_player)
         self.assertFalse(owner.allowed())
@@ -139,7 +144,36 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.content.close.assert_not_called()
         owner.native.dispose.side_effect = None
         owner.retire()
+        await owner.close()
         self.assertFalse(owner.protection.process.protected())
+
+    async def test_pending_native_teardown_keeps_source_protected_after_window_disposal(self):
+        owner = self.player()
+        barrier = owner.app.loop.create_future()
+        owner.native.dispose.return_value = barrier
+        owner.retire()
+        owner.protection.dispose()
+        self.assertTrue(owner.closed)
+        self.assertFalse(owner.allowed())
+        self.assertTrue(owner.protection.process.protected())
+        owner.content.close.assert_not_called()
+        owner.transport.close.assert_not_called()
+        close = asyncio.create_task(owner.close())
+        await asyncio.sleep(0)
+        self.assertFalse(close.done())
+        close.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await close
+        self.assertFalse(barrier.cancelled())
+        barrier.set_result(None)
+        await owner.close()
+        owner.content.close.assert_called_once()
+        self.assertFalse(owner.protection.process.protected())
+
+    async def test_checkpoint_finishes_before_protected_source_disposal(self):
+        owner = self.player()
+        owner.content.close.side_effect = lambda: owner.progress.save.assert_called_once_with(12000, completed=False)
+        await owner.close()
 
 
 class VideoBuildTests(unittest.TestCase):
