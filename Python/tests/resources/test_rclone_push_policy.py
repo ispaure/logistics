@@ -1,6 +1,7 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
+from commonUtils.filesystem.native_paths import native_path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
@@ -78,11 +79,11 @@ class PushPolicyTests(unittest.TestCase):
             self.assertEqual(f.provider.read_bytes('note.md'), f.original)
             # Simulate junk already on the cloud: the ciphertext sync removes it.
             for path in encoded:
-                remote = f.cloud / path.relative_to(f.item.data)
+                remote = f.cloud / path.relative_to(native_path(f.item.data))
                 remote.parent.mkdir(parents=True, exist_ok=True)
                 remote.write_bytes(b'previous remote junk')
             self.assertTrue(actions.push_to_cloud(local_crypt.LocalCryptFolder(f.item), f.context))
-            self.assertTrue(all(not (f.cloud / path.relative_to(f.item.data)).exists() for path in encoded))
+            self.assertTrue(all(not (f.cloud / path.relative_to(native_path(f.item.data))).exists() for path in encoded))
 
     def test_encrypted_junk_preview_cancel_and_corruption_preserve_file(self):
         from io import BytesIO
