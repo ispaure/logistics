@@ -86,6 +86,23 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.retire()
         await asyncio.sleep(.01)
 
+    async def test_leaving_protection_retires_an_ordinary_players_fixed_native_policy(self):
+        owner = self.player(restricted=False)
+        owner.native_restricted = True
+        native = owner.native
+        owner.retire_changed_policy()
+        native.dispose.assert_called_once()
+        self.assertTrue(owner.closed)
+        self.assertIsNone(owner.app.video_player)
+
+    async def test_retained_session_content_keeps_its_native_policy_without_credentials(self):
+        owner = self.player(restricted=True)
+        owner.native_restricted = True
+        self.assertTrue(owner.protection.process.protected())
+        owner.retire_changed_policy()
+        owner.native.dispose.assert_not_called()
+        self.assertFalse(owner.closed)
+
     async def test_ordinary_background_policy_delegates_pip_but_does_not_hide(self):
         owner = self.player(restricted=False)
         owner.conceal()

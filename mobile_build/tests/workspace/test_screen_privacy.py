@@ -89,7 +89,8 @@ class ScreenPrivacyTests(unittest.TestCase):
             self.assertTrue(gate.locked)
             # A broken native pause cannot prevent the synchronous capture shield.
             window.captured = True
-            app.video_player = SimpleNamespace(conceal=Mock(side_effect=RuntimeError('pause failed')), reveal=Mock())
+            app.video_player = SimpleNamespace(conceal=Mock(side_effect=RuntimeError('pause failed')),
+                                              reveal=Mock(), retire_changed_policy=Mock())
             with self.assertRaisesRegex(RuntimeError, 'pause failed'):
                 privacy.refresh()
             self.assertIs(privacy.shield.parent, window)

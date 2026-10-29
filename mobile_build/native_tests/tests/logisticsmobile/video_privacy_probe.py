@@ -391,6 +391,36 @@ async def exercise(app):
             Path(__file__).with_name("video-cloud-fixtures") / "remote/plain/long.mp4"
         )
         (local / "long.mp4").write_bytes(movie.read_bytes())
+        if selection == 'scope':
+            # The native restriction is immutable for one presentation. Prove
+            # that dropping an unrelated retained gate cannot leave stale cast
+            # controls behind or resume ordinary audio automatically.
+            from services.session_auth import ResumePassword
+            assert not app.protection.process.protected()
+            gate = ResumePassword(PASSWORD)
+            release = app.protection.register(object(), lambda: (gate,))
+            try:
+                assert await open_video(app, LocalFiles(local), 'long.mp4')
+                owner = app.video_player
+                assert owner.native_restricted is True
+                await start(owner)
+                release()
+                await until(lambda: owner.closed and app.video_player is None)
+                assert not app.protection.process.protected()
+                assert await open_video(app, LocalFiles(local), 'long.mp4')
+                owner = app.video_player
+                assert owner.native_restricted is False
+                assert owner.allowed(external=True)
+                assert not playing(owner), 'Reopening an ordinary player resumed audio'
+                await start(owner)
+                await owner.close()
+                report['cases'].append(dict(context='ordinary protection transition',
+                    retained_gate_injected=True, native_policy_retired=True,
+                    ordinary_reopen_unrestricted=True, no_autoresume=True))
+                report['success'] = True
+                return
+            finally:
+                release()
         assert await open_video(app, LocalFiles(local), "long.mp4")
         await interruptions(app.video_player, "local ordinary")
         await app.video_player.close()

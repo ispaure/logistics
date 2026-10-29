@@ -107,6 +107,11 @@ Credential metadata publication invalidates stale approval decisions, but pauses
 audio only while protection is active. A queued startup/persistent metadata update
 must not cancel a later ordinary Play. Entering/leaving protection still pauses
 through the scope transition, and revoked content retires through its own grant.
+Native external-playback controls are fixed for one presentation. When process
+protection changes an ordinary video's restriction in either direction, refresh
+retires that player; reopening it uses current policy. Session-only content keeps
+its own restriction even after credentials are removed. Native flags therefore
+cannot leave an ordinary player with a separate, stale casting policy.
 
 Lock-form `saved_content` now belongs only to presentation. Consumers use resume
 challenge state rather than checking whether a widget root was replaced. Device

@@ -63,9 +63,15 @@ class MobileVideo:
     def restricted(self):
         return self.content.restricted or self.protection.process.protected()
 
+    def retire_changed_policy(self):
+        """Native external-playback controls are fixed for this presentation."""
+        if (not self.closed and self.native_restricted is not None
+                and self.native_restricted != self.restricted):
+            self.retire()  # Reopen under current policy rather than keep a second authority.
+
     def retire_stale(self):
-        if self.native_restricted is False and self.restricted:
-            self.retire()  # A newly loaded session must retire existing external playback.
+        self.retire_changed_policy()
+        if self.closed:
             return
         try:
             self.content.source.check_access()

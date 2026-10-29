@@ -455,7 +455,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--rclone", type=Path, help="Pinned host rclone for synthetic fixtures when absent from a frozen source snapshot")
     parser.add_argument(
-        "--context", choices=("all", "remote", "crypt", "localcrypt"), default="all"
+        "--context", choices=("all", "remote", "crypt", "localcrypt", "scope"), default="all"
     )
     args = parser.parse_args()
     run(

@@ -296,6 +296,9 @@ class ScreenPrivacy:
                 gate.lock(reason='challenge')
         hidden = self.prepare_native_protection(transitioning=True)
         scope.changed()
+        video = getattr(self.app, 'video_player', None)
+        if video is not None:
+            video.retire_changed_policy()
         self.sync_lock_view(gates)
         output = getattr(self.app, 'audio_output', None)
         if output is not None:
