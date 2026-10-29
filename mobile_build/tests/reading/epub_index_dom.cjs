@@ -89,12 +89,84 @@ const {chromium} = require('playwright');
   await page.evaluate(()=>reader.turn(1));
   assert.equal(await page.evaluate(()=>new URL(window.syntheticNotification).pathname.endsWith('/next')),true);
   await page.evaluate(()=>{reader.setGeometry(null);reader.seek(0);});
+  // Deep chapter seeks must measure against the new stride, never the outgoing
+  // translation. Check actual glyph visibility; a retained numeric anchor alone
+  // cannot detect landing several pages away from that anchor.
+  const assertVisible=async offset=>{
+   const visible=await page.evaluate(offset=>{
+    const walk=document.createNodeIterator(document.body,NodeFilter.SHOW_TEXT);
+    let node,total=0;
+    while((node=walk.nextNode())){
+     if(total+node.length>offset){
+      const r=document.createRange();r.setStart(node,offset-total);r.setEnd(node,offset-total+1);
+      const box=r.getBoundingClientRect(),p=reader.pagination();
+      return {ok:box.left>=p.left-1 && box.right<=p.left+p.columns*p.width+(p.columns-1)*p.gap+1 && box.top>=0 && box.bottom<=innerHeight,
+        box:box.toJSON(),pagination:p};
+     }
+     total+=node.length;
+    }
+    return false;
+   },offset);
+   assert(visible.ok,`Passage ${offset} is off screen after reflow: ${JSON.stringify(visible)}`);
+  };
+  await page.evaluate(()=>{reader.setMotion(false);reader.seek(25000);reader.turn(1);});
+  const middle=await page.evaluate(()=>reader.pagination().anchor);
+  await assertVisible(middle);
+  for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1200,height:800},
+                         {width:800,height:1200},{width:390,height:844}]){
+   await page.setViewportSize(viewport);
+   await page.waitForTimeout(60);
+   assert.equal(await page.evaluate(()=>reader.pagination().anchor),middle);
+   await assertVisible(middle);
+  }
+  // A live (or paused) word highlight outranks a separately selected passage.
+  await page.evaluate(()=>reader.highlight(27000,27007));
+  for(const viewport of [{width:1200,height:800},{width:844,height:390},{width:390,height:844}]){
+   await page.evaluate(()=>{
+    const node=document.querySelector('p').firstChild,r=document.createRange();
+    r.setStart(node,0);r.setEnd(node,5);getSelection().addRange(r);
+    document.dispatchEvent(new Event('selectionchange'));
+   });
+   await page.setViewportSize(viewport);
+   await page.waitForTimeout(60);
+   assert.equal(await page.evaluate(()=>reader.pagination().anchor),27000);
+   await assertVisible(27000);
+   assert.equal(await page.evaluate(()=>CSS.highlights.get('logistics-speech').size),1);
+  }
+  await page.evaluate(()=>reader.highlight(-1,-1));
+  // Older WebViews use a native selection as the speech highlight.
+  await page.evaluate(()=>{
+   Object.defineProperty(CSS,'highlights',{value:undefined,configurable:true});
+   reader.highlight(28000,28007);
+  });
+  const spoken=await page.evaluate(()=>String(getSelection()));
+  await page.setViewportSize({width:1200,height:800});
+  await page.waitForTimeout(60);
+  await assertVisible(28000);
+  assert.equal(await page.evaluate(()=>String(getSelection())),spoken);
+  await page.evaluate(()=>reader.highlight(-1,-1));
   const result=await page.evaluate(()=>{
    const expected=document.querySelector('p').textContent;
    for(let i=0;i<100;i++) {reader.seek(0,expected.length);if(getSelection().toString()!==expected)throw Error('UTF-16 selection mismatch');reader.speechSource();}
    const count=walks;reader.dispose();return {count,empty:!document.querySelector('body>div')};
   });
   assert.equal(result.count,1);assert(result.empty);
+  // A slow chapter image may finish after the reader has moved or begun TTS.
+  // Its load/error callback must restore the current word, not options.offset.
+  await page.unroute('**/*');
+  let finishImage;
+  const requested=new Promise(resolve=>{
+   page.route('**/late.png',route=>{finishImage=()=>route.abort();resolve();});
+  });
+  await page.setContent(fixture.html.replace('<body>','<body><img src="https://logistics.invalid/late.png">'),
+                        {waitUntil:'domcontentloaded'});
+  await requested;
+  await page.evaluate(fixture.script);
+  await page.evaluate(()=>{reader.seek(25000);reader.highlight(27000,27007);});
+  await finishImage();
+  await page.waitForTimeout(60);
+  assert.equal(await page.evaluate(()=>reader.pagination().anchor),27000);
+  await assertVisible(27000);
   console.log(JSON.stringify(result));
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -53,13 +53,13 @@ def pose_snapshot(app):
 
 
 async def rotate(app, orientation):
-    landscape = orientation != 'portrait'
+    landscape = orientation.startswith('landscape')
     native_errors = []
     from .timings import section, measure
     with section(app, 'rotation-dispatch', orientation=orientation):
         if sys.platform == 'ios':
             from rubicon.objc import Block, ObjCClass, ObjCInstance, objc_id
-            mask = {'portrait': 2, 'landscape-left': 8, 'landscape-right': 16}[orientation]
+            mask = {'portrait': 2, 'portrait-upside-down': 4, 'landscape-left': 8, 'landscape-right': 16}[orientation]
             preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(mask)
             def rejected(error):
                 native_errors.append(str(ObjCInstance(error)))
@@ -68,14 +68,14 @@ async def rotate(app, orientation):
             rejection = Block(rejected, None, objc_id)
             app.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=rejection)
         else:
-            app._impl.native.setRequestedOrientation({'portrait': 1, 'landscape-left': 0, 'landscape-right': 8}[orientation])
+            app._impl.native.setRequestedOrientation({'portrait': 1, 'portrait-upside-down': 9, 'landscape-left': 0, 'landscape-right': 8}[orientation])
     with section(app, 'rotation-acknowledgement', orientation=orientation):
         for _ in range(60):
             await asyncio.sleep(.1)
             if sys.platform == 'ios':
                 # Interface orientation is only an acknowledgement of this request,
                 # never an input to production layout or an aspect-ratio assumption.
-                if int(app.main_window._impl.native.windowScene.interfaceOrientation) == {'portrait': 1, 'landscape-left': 3, 'landscape-right': 4}[orientation]:
+                if int(app.main_window._impl.native.windowScene.interfaceOrientation) == {'portrait': 1, 'portrait-upside-down': 2, 'landscape-left': 3, 'landscape-right': 4}[orientation]:
                     break
             elif (app.main_window.size.width > app.main_window.size.height) == landscape:
                 break

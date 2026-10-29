@@ -61,7 +61,7 @@ SCRIPT = r'''
  };
  const place=value=>{stopMotion();page=Math.max(0,Math.min(lastPage(),Math.floor(value/columns)*columns));pages.style.transform='translateX('+(-page*stride)+'px)';scrollTo(0,0);};
  layout();
- let anchor = options.offset, selectedCache = null, speechRange = null;
+ let anchor = options.offset, selectedCache = null, speechRange = null, speechAnchor = null;
  // Inert chapter text is immutable for this bridge's lifetime. Index once.
  let textNodes = [], textEnds = [], textStarts = new WeakMap();
  const walk = document.createTreeWalker(pages, NodeFilter.SHOW_TEXT);
@@ -83,14 +83,15 @@ SCRIPT = r'''
  const notify = (action, value) => {
    window.location.href = options.root + action + '?offset=' + value + '&end=' + (page===lastPage() ? '1' : '0');
  };
- const visible = () => {
+ const visible = (middle=false) => {
    if(pageAnimation && pageAnimation.playState==='running')return anchor;
-   let total = 0;
+   let total = 0, first = null, last = null;
    const left=viewport.getBoundingClientRect().left, right=left+viewportWidth;
    for (const node of textNodes) {
      if (!node.length) continue;
      const range = document.createRange(); range.selectNodeContents(node);
      const rects = [...range.getClientRects()];
+     if(first!==null && rects.length && rects.every(r=>r.left>=right-1)) break;
      if (rects.some(r => r.right > left+1 && r.left < right-1 && r.bottom > 0 && r.top < innerHeight)) {
        let lo = 0, hi = node.length;
        while (lo < hi) {
@@ -98,11 +99,19 @@ SCRIPT = r'''
          range.setStart(node, mid); range.setEnd(node, Math.min(mid+1,node.length));
          if (range.getBoundingClientRect().right <= left+1) lo = mid+1; else hi = mid;
        }
-       return total + lo;
+       if(!middle) return total + lo;
+       if(first===null) first=total+lo;
+       lo=0;hi=node.length;
+       while(lo<hi){
+         const mid=Math.floor((lo+hi)/2);
+         range.setStart(node,mid);range.setEnd(node,mid+1);
+         if(range.getBoundingClientRect().left<right-1)lo=mid+1;else hi=mid;
+       }
+       last=total+lo;
      }
      total += node.length;
    }
-   return anchor;
+   return first===null ? anchor : Math.floor((first+last)/2);
  };
  const seek = (offset, end=null) => {
    stopMotion();
@@ -110,8 +119,12 @@ SCRIPT = r'''
    selectedCache = end !== null ? {start:offset,end} : null;
    anchor = Math.max(0, offset);
    const r = document.createRange(); r.setStart(...p); r.collapse(true);
+   // The previous translation belongs to the old column stride. Measure in
+   // untransformed chapter coordinates after every reflow, including resize
+   // bursts from native chrome, safe-area and split-pane changes.
+   place(0);
    const left=viewport.getBoundingClientRect().left;
-   place(Math.floor((r.getBoundingClientRect().left-left+page*stride+.5)/stride));
+   place(Math.floor((r.getBoundingClientRect().left-left+.5)/stride));
    const selection = getSelection(); selection.removeAllRanges();
    if (end !== null) {const q=point(end,true); if(q){r.setEnd(...q);selection.addRange(r);}}
  };
@@ -128,7 +141,17 @@ SCRIPT = r'''
  };
  const clearSelectionCache = () => {selectedCache=null;};
  const rememberSelection = () => {const range=selectedRange();if(range) selectedCache=range;};
- const resized = () => {const range=selectedRange() || selectedCache;layout();if(range) seek(range.start,range.end); else seek(anchor);notify('position',anchor);};
+ const resized = () => {
+   const range=selectedRange() || selectedCache;
+   layout();
+   if(speechAnchor!==null) {
+     seek(speechAnchor);
+     if(speechRange) getSelection().addRange(speechRange);
+   }
+   else if(range) seek(range.start,range.end);
+   else seek(anchor);
+   notify('position',anchor);
+ };
  const touchStart=e=>{const t=e.touches.length===1?e.touches[0]:null;touch=t?{x:t.clientX,y:t.clientY}:null;};
  // Two-finger movement belongs to the host's text-size pinch recognizer.
  const touchMove=e=>{if(e.touches.length===1 && !selectedRange()) e.preventDefault();};
@@ -154,7 +177,8 @@ SCRIPT = r'''
        if(previous) previous.clear();
        CSS.highlights.delete('logistics-speech');
      }
-     if (start < 0) {getSelection().removeAllRanges();selectedCache=null;speechRange=null;return;}
+     if (start < 0) {getSelection().removeAllRanges();selectedCache=null;speechRange=null;speechAnchor=null;return;}
+     speechAnchor=start;
      seek(start);
      const p=point(start), q=point(end,true);if(!p || !q)return;
      const r=document.createRange();r.setStart(...p);r.setEnd(...q);
@@ -181,7 +205,7 @@ SCRIPT = r'''
      place(page+(direction>0?columns:-columns));
      // Measure the destination before starting visual motion so saved passage
      // anchors never describe an interpolated position between two pages.
-     anchor=visible();notify('position',anchor);
+     anchor=visible(true);notify('position',anchor);
      if(motionEnabled && !document.getElementById('logistics-eink') && !reducedMotion.matches){
        pageAnimation=pages.animate([{transform:'translateX('+(-previous*stride)+'px)'},
          {transform:'translateX('+(-page*stride)+'px)'}],{duration:220,easing:'ease-out'});
@@ -191,10 +215,10 @@ SCRIPT = r'''
  };
  addEventListener('resize',resized);
  document.addEventListener('selectionchange',rememberSelection);addEventListener('pointerdown',clearSelectionCache);addEventListener('keydown',clearSelectionCache);
- // Images can settle after WebView load. Reapply the initial anchor then.
+ // Images can settle after the reader has already turned or spoken a page.
  Promise.all([...document.images].map(i => i.complete ? Promise.resolve() : new Promise(r => {
    i.addEventListener('load',r,{once:true});i.addEventListener('error',r,{once:true});
- }))).then(() => {if(!disposed){layout();seek(options.offset);}});
+ }))).then(() => {if(!disposed) resized();});
  seek(options.offset);
  requestAnimationFrame(() => {if(!disposed) notify('position',anchor);});
 })();

@@ -16,6 +16,13 @@ from mobile_build.deployment.device_tools import BUNDLE, normal_launcher, select
 
 
 class DeviceDeploymentTests(unittest.TestCase):
+    def test_ios_declares_all_four_orientations_for_phone_and_tablet(self):
+        info = device_tools.configured_ios_info()
+        expected = {'UIInterfaceOrientationPortrait', 'UIInterfaceOrientationPortraitUpsideDown',
+                    'UIInterfaceOrientationLandscapeLeft', 'UIInterfaceOrientationLandscapeRight'}
+        for key in ('UISupportedInterfaceOrientations', 'UISupportedInterfaceOrientations~ipad'):
+            self.assertEqual(set(info[key]), expected)
+
     def test_explicit_xcode_account_does_not_read_or_pass_api_credentials(self):
         identity = {'application_identifier': 'ABCDEFGHIJ.' + BUNDLE}
         config = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', device_id='phone', signing_identity=identity)

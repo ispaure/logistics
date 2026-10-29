@@ -259,10 +259,25 @@ Desktop widgets and controllers live in feature-owned `ui/`. Registration stays 
 `mobile/presentation.py` lays sanitized chapter content into fixed-height CSS
 columns inside a clipped viewport. Page turns translate by one column; touch
 and wheel handlers prevent vertical page scrolling. Resizing rebuilds columns
-and seeks the retained UTF-16 text anchor. The same bridge serves imported and
+and seeks the retained UTF-16 text anchor. Seeks measure untransformed chapter
+coordinates so an outgoing column translation cannot shift the target when the
+column stride changes. Manual turns retain the middle text offset of the visible
+page/spread; subsequent reflows retain that precise passage instead of sampling
+the newly wrapped page again. An active or paused speech word takes priority over
+selection during reflow, and its highlight stays on the displayed page. Deferred
+image settlement restores the current passage rather than the chapter's initial
+offset. The same bridge serves imported and
 nonpersistent provider WebViews. `mobile/navigation.py` owns nested chapter rows;
 the hosts mount them through the shared adaptive sidebar. Search remains an
 explicit action outside the chapter list.
+
+`epub_rotation_probe.py` exercises deep-chapter glyph visibility and retained
+speech highlights through repeated native rotations. The iOS 27 simulator check
+passed 16 iPhone rotations and 20 iPad rotations, including upside-down portrait
+and one/two-column reflow. It drives the speech highlight directly without
+synthesizing audio. Browser regressions additionally cover selection priority,
+the older selection-based highlight fallback and delayed image completion.
+Physical-device and Android rotation acceptance for this change remain pending.
 
 The mobile host's `ReaderController.open_book` reloads the current chapter on
 explicitly reopening an already loaded imported EPUB. A retained archive decoder

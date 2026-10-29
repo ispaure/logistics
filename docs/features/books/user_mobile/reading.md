@@ -24,6 +24,16 @@ rotation or a crease change retains the current passage. Crease positioning
 requires the platform to report a reserved fold region; otherwise the spread
 uses the midpoint. Physical fold-posture validation is still pending. External links and book scripts remain blocked.
 
+After a page turn, rotation keeps a passage near the middle of the displayed
+page or spread visible. During read-aloud, including while paused, rotation
+instead shows the page containing the highlighted word. Repeated rotations
+retain that same text position even when page counts change.
+
+The iOS app declares both portrait and both landscape orientations. Upside-down
+portrait remains subject to device support: [Apple documents that iPhones without
+a Home button do not support it](https://developer.apple.com/documentation/uikit/uiviewcontroller/supportedinterfaceorientations),
+while iPads support all four orientations.
+
 Open the top-left hamburger for a nested **Chapters** overlay. Expand or collapse
 sections with the disclosure button, or tap a chapter title to read it. There is
 no search field in this list. On iPhone, iPad and Android the list floats over the page without changing its

@@ -51,6 +51,8 @@ min_os_version = "15.0"
 requires = ["toga-iOS==0.5.7"]
 
 [tool.briefcase.app.logisticsmobile.iOS.info]
+UISupportedInterfaceOrientations = ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
+"UISupportedInterfaceOrientations~ipad" = ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationPortraitUpsideDown", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
 CFBundleDisplayName = "Logisticks"
 CFBundleName = "Logisticks"
 UIFileSharingEnabled = true
