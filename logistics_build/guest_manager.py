@@ -25,7 +25,19 @@ def dependency_pin(project):
 
 
 def verify(checkout, project, *, pinned_source=False):
-    from build_manager.dependency_sources import verify as verify_source
+    try:
+        from build_manager.dependency_sources import verify as verify_source
+    except ModuleNotFoundError as error:
+        if error.name != 'build_manager':
+            raise
+        # Exact dependency synchronization removes the editable manager. Its
+        # explicitly transferred checkout supplies the bootstrap verifier before
+        # installation; never search neighbouring checkouts or skip pin checks.
+        sys.path.insert(0, str(Path(checkout) / 'Python'))
+        try:
+            from build_manager.dependency_sources import verify as verify_source
+        finally:
+            sys.path.pop(0)
     return verify_source(checkout, dependency_pin(project), pinned_source=pinned_source)
 
 

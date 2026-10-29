@@ -84,6 +84,33 @@ class GuestManagerTests(unittest.TestCase):
         self.assertEqual(self.command(self.manager,'rev-parse','HEAD'),later)
         self.assertEqual((self.manager/'public.py').read_text(),'LATER = True')
 
+    def test_guest_verifies_explicit_pin_without_an_installed_manager(self):
+        import os
+        import venv
+        from build_manager import dependency_sources
+        package = self.manager / 'Python/build_manager'
+        package.mkdir()
+        (package / '__init__.py').write_text('')
+        (package / 'dependency_sources.py').write_text(Path(dependency_sources.__file__).read_text())
+        self.command(self.manager, 'add', 'Python/build_manager')
+        self.commit(self.manager)
+        pin = self.command(self.manager, 'rev-parse', 'HEAD')
+        (self.project / 'build-manager-dependency.json').write_text(json.dumps(dict(revision=pin)))
+        environment = self.root / 'environment'
+        venv.EnvBuilder(with_pip=False).create(environment)
+        python = environment / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+        repository = Path(__file__).resolve().parents[3]
+        command = [str(python), '-c',
+            'import sys; from logistics_build.guest_manager import verify; verify(sys.argv[1], sys.argv[2])',
+            str(self.manager), str(self.project)]
+        env = dict(os.environ, PYTHONPATH=str(repository))
+        result = subprocess.run(command, cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (self.project / 'build-manager-dependency.json').write_text(json.dumps(dict(revision='0' * 40)))
+        denied = subprocess.run(command, cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn('dependency pin', denied.stderr)
+
 
 class FocusedGuestCommandTests(unittest.TestCase):
     def test_manager_focus_uses_explicit_pinned_checkout_not_project_tests(self):
