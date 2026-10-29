@@ -157,12 +157,19 @@ async def exercise_destination_edges(app):
             from .keyboard_wait import settled_keyboard
             def request_keyboard():
                 native.requestFocus()
-                controller.show(ime)
-                manager.showSoftInput(native, 0)
+                # isActive reconciles the served input connection after an
+                # Activity rotation. Do not show an IME for an unserved view.
+                if native.hasWindowFocus() and manager.isActive(native):
+                    controller.show(ime)
+                    manager.showSoftInput(native, 0)
             def keyboard_visible():
                 insets = jclass('androidx.core.view.ViewCompat').getRootWindowInsets(native)
                 return bool(insets is not None and insets.isVisible(ime))
-            keyboard_settled = await settled_keyboard(request_keyboard, keyboard_visible)
+            def input_ready():
+                return bool(native.isAttachedToWindow() and native.hasWindowFocus()
+                            and native.hasFocus() and manager.isActive(native))
+            keyboard_settled = await settled_keyboard(request_keyboard, keyboard_visible,
+                                                       ready=input_ready, attempts=60)
         await asyncio.sleep(.6)
         assert_visible_controls(app)
         sample = dict(orientation=orientation, width=app.main_window.size.width,
@@ -195,11 +202,12 @@ async def exercise_destination_edges(app):
             sample['name_bounds'] = [int(point[0]), int(point[1]), int(native.getWidth()), int(native.getHeight())]
             sample['keyboard_visible'] = bool(insets and insets.isVisible(ime))
             sample['keyboard_settled'] = keyboard_settled
-            assert keyboard_settled, sample
-            sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
             sample['window_focused'] = bool(native.hasWindowFocus())
             sample['input_focused'] = bool(native.hasFocus())
             sample['input_active'] = bool(manager.isActive(native))
+            sample['input_attached'] = bool(native.isAttachedToWindow())
+            assert keyboard_settled, sample
+            sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
             assert not sample['fullscreen_ime'], sample
             if sample['keyboard_visible']:
                 bounds = app._impl.native.getWindowManager().getCurrentWindowMetrics().getBounds()
