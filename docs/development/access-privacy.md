@@ -103,10 +103,12 @@ command own that effect. Audio's passive permission query does not poll native
 routes or pause players. Native monitors and explicit Play observe routes.
 Malformed approval data grants no Bluetooth permission under protection; ordinary
 playback bypasses the list entirely. Protective pauses reject reentrant Play.
-Credential metadata publication invalidates stale approval decisions, but pauses
-audio only while protection is active. A queued startup/persistent metadata update
-must not cancel a later ordinary Play. Entering/leaving protection still pauses
-through the scope transition, and revoked content retires through its own grant.
+Credential metadata publication invalidates stale approval decisions. A queued
+startup/metadata update must not cancel a later, currently authorized Play in
+either mode. Current scope transitions, locks, capture, output/interruption facts
+and source validity decide whether playback stops; a notification alone does not.
+Entering/leaving protection still pauses through the scope transition, and revoked
+content retires through its own grant.
 Native external-playback controls are fixed for one presentation. When process
 protection changes an ordinary video's restriction in either direction, refresh
 retires that player; reopening it uses current policy. Session-only content keeps

@@ -230,7 +230,7 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.pause_speech.assert_not_called()
         self.assertIsNone(self.owner.prompt)
 
-    async def test_credential_refresh_preserves_ordinary_play_but_pauses_protected_audio(self):
+    async def test_credential_metadata_refresh_preserves_current_play_in_either_mode(self):
         from mobile.privacy_effects import retire_stale_content
         self.app.video_player = NS(retire_stale=Mock())
         self.app.credential_document_lists = NS(refresh=Mock())
@@ -245,8 +245,8 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
                     'features.books.mobile.media_controls.enforce_privacy'):
                 retire_stale_content(self.app)
             self.assertGreater(self.owner.policy.revision, revision)
-            self.assertEqual(self.owner.permitted(), not protected)
-            self.assertEqual(self.pause_video.called, protected)
+            self.assertTrue(self.owner.permitted())
+            self.pause_video.assert_not_called()
         # Source validity is checked even when ordinary audio is not paused.
         self.assertEqual(self.app.video_player.retire_stale.call_count, 2)
 

@@ -290,7 +290,8 @@ def run(platform, binary, output, *, context="all", rclone=None):
                 def launch():
                     for attempt in range(3):
                         try:
-                            client.invoke("launch", device, bundle)
+                            client.invoke("launch", "--stdout=" + str(output / "app.stdout.log"),
+                                          "--stderr=" + str(output / "app.stderr.log"), device, bundle)
                             return
                         except RuntimeError as error:
                             # A shell crash may restart the app and reset the probe.
