@@ -124,7 +124,7 @@ SCRIPT = r'''
    // bursts from native chrome, safe-area and split-pane changes.
    place(0);
    const left=viewport.getBoundingClientRect().left;
-   place(Math.floor((r.getBoundingClientRect().left-left+.5)/stride));
+   place(offset>=length ? lastPage() : Math.floor((r.getBoundingClientRect().left-left+.5)/stride));
    const selection = getSelection(); selection.removeAllRanges();
    if (end !== null) {const q=point(end,true); if(q){r.setEnd(...q);selection.addRange(r);}}
  };
@@ -378,3 +378,16 @@ async def speech_source(view, chapter, offset):
             and 0 <= value['start'] < value['end'] <= chapter.length):
         return chapter, value['start'], value['end']
     return chapter, offset, None
+
+
+async def wait_chapter_ready(view):
+    """Wait for this exact native document, rejecting retirement/replacement."""
+    import asyncio
+    bridge = view._chapter_bridge
+    for _ in range(100):
+        if bridge.closed or view._chapter_bridge is not bridge:
+            return False
+        if bridge.ready:
+            return True
+        await asyncio.sleep(.1)
+    return False

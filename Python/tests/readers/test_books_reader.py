@@ -17,6 +17,33 @@ from features.books.preferences import ReadingState
 
 
 class ReaderTests(QtTestCase):
+    def test_speech_continues_to_book_end_but_selection_does_not(self):
+        from commonUtils.tests.appearance.test_read_aloud import SilentEngine
+        speech = self.page.speech
+        speech.engine_factory = SilentEngine
+        speech.show()
+        with patch('commonUtils.ui.readers.read_aloud.passage_language', return_value=''):
+            speech.start()
+            for _ in range(50):
+                if speech.session.state == 'speaking':
+                    speech.session.completed(speech.session.token)
+                self.app.processEvents()
+                self.app.processEvents()
+            self.assertEqual(self.page._current, 1)
+            self.assertEqual(speech.session.state, 'stopped')
+            self.assertTrue(any('First chapter' in text for text in speech.engine.spoken))
+            self.assertTrue(any('Second chapter' in text for text in speech.engine.spoken))
+            self.page.go_chapter(0)
+            self.app.processEvents()
+            cursor = self.page.text.textCursor()
+            cursor.setPosition(0)
+            cursor.setPosition(5, qt.QTextCursor.MoveMode.KeepAnchor)
+            self.page.text.setTextCursor(cursor)
+            speech.start()
+            speech.session.completed(speech.session.token)
+            self.app.processEvents()
+            self.assertEqual(self.page._current, 0)
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         standalone_host = patch.object(self.app, "_commonutils_document_host", None, create=True)

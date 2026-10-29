@@ -62,7 +62,8 @@ Alt+Left/Right moves between chapters.
 
 Choose the **speaker** icon in the toolbar or **View → Read aloud…**. Select a passage
 first to read only that passage; otherwise reading starts at the visible page
-and continues through the current chapter. Language defaults to **Automatic (detect text)**,
+and continues through subsequent chapters to the end of the book. The same speed
+and remaining sleep-timer budget carry across chapter changes. Language defaults to **Automatic (detect text)**,
 which detects the passage locally and chooses an installed voice in that language.
 For uncertain passages, the book’s language metadata provides a fallback. You can
 choose a language and voice manually. Set the speed, then press **Play**. The same button changes to **Pause** while speaking
@@ -142,7 +143,7 @@ follows that pointer and keeps it near the center, including after resizing.
 Skipping backward/forward clears the previous spoken-word highlight in both
 pages before highlighting the new position. For speed, sleep timer and playback
 controls, see the [shared read-aloud guide](../../../../Python/commonUtils/docs/user/markdown/markdown.md#read-aloud).
-Changing chapters or closing the reader stops playback; hiding the floating
+Manually changing chapters or closing the reader stops playback; hiding the floating
 controls leaves speech running.
 
 ## Reading defaults

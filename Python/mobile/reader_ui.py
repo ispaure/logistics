@@ -263,8 +263,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                     and self.navigation_generation == navigation and self.workspace.active == selection):
                 self.book_password.focus()
 
-    async def display_book_page(self, index):
-        self.close_read_aloud()
+    async def display_book_page(self, index, *, preserve_speech=False):
+        if not preserve_speech:
+            self.close_read_aloud()
         sidebar = getattr(self, 'chapter_sidebar', None)
         if sidebar is not None:
             sidebar.show_detail()
@@ -305,7 +306,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 return
             if record['kind'] == 'epub':
                 view = self._prepare_library_epub_view(reader, epoch, index, prepared_epub)
-            self.close_read_aloud()
+            if not preserve_speech:
+                self.close_read_aloud()
             if not publication.mount(view, direction=direction,
                                      publish=publish if record['kind'] == 'comic' else None):
                 return
@@ -363,6 +365,10 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
 
     def _project_book_navigation(self, reader, record, updated, count, index):
         """Project chapter and bookmark controls while the caller suppresses selection."""
+        tree = getattr(self, 'chapter_tree', None)
+        if tree is not None and tree.current != index:
+            tree.current = index
+            tree.render()
         self.chapter_selector.value = next((label for label, entry in self.contents_choices.items()
             if entry.index == index), self.chapter_labels[index]) if self.contents_choices else self.chapter_labels[index]
         self.bookmark_selector.items = ['Bookmarks…'] + [self.chapter_labels[i] for i in updated['bookmarks'] if i < count]
@@ -379,7 +385,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                   or (self.epub_offset == 0 and index in updated['bookmarks'])) if record['kind'] == 'epub' else index in updated['bookmarks']
         self.bookmark_button.text = 'Unbookmark' if marked else 'Bookmark'
 
-    async def move_book_page(self, index):
+    async def move_book_page(self, index, *, preserve_speech=False):
         pending = getattr(self, '_epub_location_task', None)
         if pending is not None and not pending.done():
             self.request_position_flush()
@@ -388,7 +394,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             return
         self.set_book_busy(True)
         try:
-            await self.display_book_page(index)
+            await self.display_book_page(index, **({'preserve_speech': True} if preserve_speech else {}))
         except Exception as error:
             self.book_status.text = 'Cannot read page: ' + str(error)[:500]
         finally:

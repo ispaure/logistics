@@ -347,8 +347,28 @@ class ReaderChrome:
                 return
             self.epub_offset = start
             self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
+        async def next_chapter(panel):
+            reader, epoch = self.book_reader, self.book_epoch
+            index = self.book_record['position'] + 1
+            if reader is None or index >= len(reader.spine):
+                return False
+            shown = panel.overlay is not None
+            panel.hide()
+            self._epub_target = 0
+            await self.move_book_page(index, preserve_speech=True)
+            if panel.closed:
+                return False
+            if (self.book_reader is not reader or self.book_epoch != epoch
+                    or self.book_record['position'] != index):
+                raise RuntimeError('Chapter publication was cancelled')
+            if shown:
+                panel.show_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
+            from features.books.mobile.presentation import wait_chapter_ready
+            if not await wait_chapter_ready(self.epub_view):
+                raise RuntimeError('Chapter did not load')
+            return True
         self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud,
-            app=self.app, document_title=lambda: self.book_record['name'])
+            app=self.app, document_title=lambda: self.book_record['name'], next_chapter=next_chapter)
         self.speech_panel.show_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
 
     def close_read_aloud(self, widget=None, **kwargs):

@@ -366,11 +366,11 @@ class ProviderUI(FilesUI):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
         publication.chrome()
 
-    async def read_crypt_page(self, widget=None, **kwargs):
+    async def read_crypt_page(self, widget=None, *, preserve_speech=False, **kwargs):
         if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:
             return
         panel = getattr(self, 'provider_epub_view', None)
-        if panel is not None and hasattr(panel, 'close_read_aloud'):
+        if not preserve_speech and panel is not None and hasattr(panel, 'close_read_aloud'):
             panel.close_read_aloud()
         self.set_cloud_busy(True)
         self.crypt_read_page.enabled = False
@@ -488,11 +488,11 @@ class ProviderUI(FilesUI):
                        count=len(self.crypt_reader.labels), right_to_left=getattr(self.crypt_reader, 'right_to_left', False),
                        busy=self.cloud_busy, move=self.move_private_page)
 
-    async def move_private_page(self, index):
+    async def move_private_page(self, index, *, preserve_speech=False):
         if self.cloud_busy or self.crypt_reader is None or not 0 <= index < len(self.crypt_reader.labels):
             return
         self.crypt_page.value = self.crypt_reader.labels[index]
-        await self.read_crypt_page()
+        await self.read_crypt_page(**({'preserve_speech': True} if preserve_speech else {}))
 
     async def previous_private_page(self, widget=None, **kwargs):
         if self.crypt_reader is not None and self.crypt_reader.kind == '.pdf':

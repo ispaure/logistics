@@ -31,7 +31,7 @@ class RichBookView(toga.Box):
         self.webview = chapter_view(content, PrivateWebView(style=Pack(flex=1)), offset=self.offset,
             on_event=self.event, on_link=self.link, motion_enabled=motion_enabled)
         from commonUtils.ui.native.adaptive import AdaptiveSidebar
-        self.chapters = ChapterList(self.choices.values(), self.open_chapter)
+        self.chapters = ChapterList(self.choices.values(), self.open_chapter, current=index)
         tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
             self.chapters.rows], style=Pack(direction=COLUMN, margin=8))
         sidebar = chapter_sidebar(tree)
@@ -141,7 +141,7 @@ class RichBookView(toga.Box):
         self.on_chapter = self.on_position = lambda *args: None
 
 
-    def show_read_aloud(self, loop, *, app=None, presentation=None, highlight_allowed=None, privacy_gate=lambda: None, valid=lambda: True):
+    def show_read_aloud(self, loop, *, app=None, presentation=None, highlight_allowed=None, privacy_gate=lambda: None, valid=lambda: True, next_chapter=None):
         panel = getattr(self, 'speech_panel', None)
         if panel is not None and not panel.closed:
             panel.toggle_over(self)
@@ -150,16 +150,19 @@ class RichBookView(toga.Box):
         from .speech_view import ReadAloudPanel
         from .presentation import speech_source
         async def source():
-            return await speech_source(self.webview, self.chapter, self.offset)
+            view = panel.book_view
+            return await speech_source(view.webview, view.chapter, view.offset)
         def follow(start, end):
-            if not self.disposed:
+            view = panel.book_view
+            if not view.disposed:
                 if (highlight_allowed() if highlight_allowed is not None else (app is None or not app.screen_privacy.inactive)):
-                    self.webview._chapter_bridge.highlight(start, end)
+                    view.webview._chapter_bridge.highlight(start, end)
                 if start >= 0:
-                    self.offset = start
-                    self.on_position(start)
-        self.speech_panel = ReadAloudPanel(loop=loop, source=source, on_range=follow, close=self.close_read_aloud,
-            app=app, presentation=presentation, privacy_gate=privacy_gate, valid=valid)
+                    view.offset = start
+                    view.on_position(start)
+        panel = self.speech_panel = ReadAloudPanel(loop=loop, source=source, on_range=follow, close=self.close_read_aloud,
+            app=app, presentation=presentation, privacy_gate=privacy_gate, valid=valid, next_chapter=next_chapter)
+        panel.book_view = self
         self.speech_panel.show_over(self)
 
     def close_read_aloud(self, widget=None, **kwargs):

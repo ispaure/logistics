@@ -101,10 +101,31 @@ class ProviderBookController:
             and hasattr(panel, "show_read_aloud")
             and not self.cloud_busy
         ):
+            async def next_chapter(speech):
+                reader = self.crypt_reader
+                index = speech.book_view.index + 1
+                if reader is None or index >= len(reader.book.spine):
+                    return False
+                shown = speech.overlay is not None
+                speech.hide()
+                self._provider_epub_target = 0
+                await self.move_private_page(index, preserve_speech=True)
+                current = self.provider_epub_view
+                if speech.closed:
+                    return False
+                if self.crypt_reader is not reader or current.index != index:
+                    raise RuntimeError('Chapter publication was cancelled')
+                if shown:
+                    speech.show_over(current)
+                from .presentation import wait_chapter_ready
+                if not await wait_chapter_ready(current.webview):
+                    raise RuntimeError('Chapter did not load')
+                return True
             panel.show_read_aloud(
                 self.loop,
                 presentation=self.format_services.speech_presentation,
                 highlight_allowed=self.format_services.highlight_allowed,
                 privacy_gate=lambda: self.privacy_gate,
                 valid=lambda: self.format_services.speech_valid(),
+                next_chapter=next_chapter,
             )

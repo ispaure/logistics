@@ -58,8 +58,8 @@ class ReaderController(ReaderHost, ReaderUI):
         self.app.save_workspace()
         return self.book_reader is not None
 
-    async def display_book_page(self, index):
-        await super().display_book_page(index)
+    async def display_book_page(self, index, *, preserve_speech=False):
+        await super().display_book_page(index, preserve_speech=preserve_speech)
         if self.session is not None and self.book_record is not None:
             self.session.view['position'] = self.book_record['position']
         self.manager.update_session(self)

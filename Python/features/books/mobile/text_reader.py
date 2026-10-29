@@ -43,6 +43,8 @@ class TextBookView(toga.Box):
 
     def seek(self, offset):
         start = min(bisect_left(self.units, max(0, offset)), len(self.chapter.text))
+        if start == len(self.chapter.text) and start:
+            start = max(0, start - 1200)
         self.offset = self.units[start]
         # Bounded passages make the exact anchor visible at the top on every
         # native backend; native text views do not expose portable caret scroll.
@@ -59,6 +61,10 @@ class TextBookView(toga.Box):
             start = bisect_left(self.units, self.offset)
             offset = self.units[max(0, start - 1200)]
         else:
+            target = self.index + (1 if direction > 0 else -1)
+            if 0 <= target < len(self.book.spine):
+                self.on_chapter(target, 0 if direction > 0 else 16 * 1024 * 1024)
+                return True
             return False
         from commonUtils.ui.native.transitions import begin_page_slide, finish_page_slide
         enabled = self.page_motion_enabled()

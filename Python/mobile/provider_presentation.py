@@ -344,6 +344,8 @@ def prepare_epub_page(host, controller, view, content):
         if hasattr(view, 'page_footer'):
             view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
     from .chapter_drawer import ChapterDrawer
+    old_panel = getattr(view, 'provider_epub_view', None)
+    speech = getattr(old_panel, 'speech_panel', None)
     view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
         font_size=int(host.preferences.values['epub_font_size']),
         margin=int(host.preferences.values['reading_margin']), theme=host.preferences.values['reading_theme'], typography=typography_options(host.preferences.values),
@@ -351,6 +353,10 @@ def prepare_epub_page(host, controller, view, content):
         on_position=position_changed,
         motion_enabled=host.preferences.values.get('android_eink') != 'true',
         sidebar_factory=lambda *args, **kwargs: ChapterDrawer(*args, app=host, **kwargs))
+    if speech is not None and not speech.closed:
+        del old_panel.speech_panel
+        view.provider_epub_view.speech_panel = speech
+        speech.book_view = view.provider_epub_view
     from .font_scaling import bind
     epub_surface = getattr(view.provider_epub_view, 'webview', None)
     if epub_surface is not None:

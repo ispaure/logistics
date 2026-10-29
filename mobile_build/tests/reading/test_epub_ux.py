@@ -16,6 +16,24 @@ from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class EpubUXTests(unittest.TestCase):
+    def test_text_fallback_previous_boundary_opens_last_nonempty_passage(self):
+        from features.books.locations import ChapterText
+        with TemporaryDirectory() as directory:
+            epub, _ = make_books(Path(directory))
+            book = EPUBBook(epub)
+            move = Mock()
+            current = TextBookView(book, 1, on_chapter=move, on_position=Mock())
+            self.assertTrue(current.turn(-1))
+            move.assert_called_once_with(0, 16 * 1024 * 1024)
+            chapter = ChapterText('<html><body><p>' + 'A long chapter. ' * 300 + '</p></body></html>')
+            previous = TextBookView(book, 0, offset=move.call_args.args[1],
+                prepared=('', chapter), on_chapter=Mock(), on_position=Mock())
+            self.assertGreater(previous.offset, 0)
+            self.assertTrue(previous.text.value)
+            self.assertEqual(previous.end, len(chapter.text))
+            current.dispose()
+            previous.dispose()
+
     def test_host_high_contrast_controls_imported_and_private_epub_bridges(self):
         from types import SimpleNamespace as NS
         from features.books.mobile.presentation import ChapterBridge
@@ -243,11 +261,13 @@ class EpubUXTests(unittest.TestCase):
                     await owner.chapter_tree.choose(entry)
                     await until(lambda: show.called and not owner.book_busy and owner.book_record['position'] == 1)
                     self.assertEqual(owner.book_record['position'], 1)
+                    self.assertEqual(owner.chapter_tree.current, 1)
                     show.reset_mock()
                     owner.show_reader_tools()
                     owner.bookmark_selector.value = next(iter(owner.epub_bookmark_choices))
                     await until(lambda: show.called and not owner.book_busy and owner.book_record['position'] == 0)
                     self.assertEqual(owner.book_record['position'], 0)
+                    self.assertEqual(owner.chapter_tree.current, 0)
                     self.assertEqual(owner.epub_offset, 7)
                     self.assertIn('Chapter 1 of 2', owner.page_footer.spacer.accessible_name)
                 app.readers.close(owner.session.id)

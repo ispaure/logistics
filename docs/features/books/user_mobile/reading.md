@@ -86,7 +86,10 @@ the track. Choose speed and press **Play**. Choose your
 installed offline voice in **Settings → Read aloud → Read-aloud voice**; the
 voice picker is kept out of document views. Selected text
 is read on its own; with no selection, reading starts at the current passage and
-continues through this chapter. The current word is highlighted and brought into
+continues through subsequent chapters to the end of the book. Selected text
+stops at the selection's end. Chapter changes keep the same speech controls,
+speed and remaining sleep-timer budget; Stop or closing the reader cancels
+continuation. The current word is highlighted and brought into
 view using system speech progress. Android voices that omit word progress use
 estimated highlighting. Android initially selects the system's current voice
 when it is installed and works offline. The same **Play/Pause** button switches to

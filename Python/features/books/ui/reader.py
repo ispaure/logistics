@@ -331,6 +331,7 @@ class BooksPage(Bookmarks, qt.QWidget):
     def go_chapter(self, index, *, fragment=''):
         if not self.book or self.worker or not 0 <= index < len(self.book.spine):
             return
+        self.speech.stop()
         previous = self._current
         self._current = index
         try:
@@ -339,6 +340,23 @@ class BooksPage(Bookmarks, qt.QWidget):
             self._current = previous
             self.status.setText(str(error))
         self._set_busy(False)
+
+    def continue_speech(self):
+        if self.speech.playback.duration and self.speech.playback.remaining <= 0:
+            self.speech.message.setText('Timer finished · Play to start a new timer.')
+            return
+        if not self.book or self.worker or self._closing or self._current + 1 >= len(self.book.spine):
+            if self.book and self._current + 1 == len(self.book.spine):
+                self.speech.message.setText('Finished book.')
+            return
+        book, target = self.book, self._current + 1
+        self.go_chapter(target)
+        generation = self.speech.session.generation
+        def resume():
+            if (self.book is book and self._current == target and not self._loading
+                    and not self._closing and self.speech.session.generation == generation):
+                self.speech.start()
+        qt.QTimer.singleShot(0, self, resume)
 
     def _position(self):
         bar = self.text.verticalScrollBar()

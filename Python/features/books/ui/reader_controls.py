@@ -155,8 +155,9 @@ def _build_reading_area(page, header):
     reading_layout.setContentsMargins(0, 0, 0, 0)
     page.text = BookText()
     page.speech = ReadAloud(page, lambda: reader_text(speech_widget(page), start=page.text.location()),
-                            scope='the current chapter from this page', text_widget=lambda: speech_widget(page),
+                            scope='the book from this page', text_widget=lambda: speech_widget(page),
                             start_provider=page.text.location,
+                            on_finished=page.continue_speech,
                             language_provider=lambda: next(iter(page.book.values('language')), '') if page.book else '')
     page.speech.positionChanged.connect(page.follow_speech)
     page.menus.view.addAction(page.speech.action)

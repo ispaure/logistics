@@ -86,6 +86,15 @@ const {chromium} = require('playwright');
   await page.evaluate(()=>reader.seek(10000000));
   spread=await page.evaluate(()=>reader.pagination());
   assert.equal(spread.index,Math.floor((spread.count-1)/2)*2);
+  // A previous-chapter boundary supplies its exact text length, not an
+  // oversized sentinel. End-of-text collapsed ranges can have an empty rect.
+  await page.evaluate(()=>{
+   const walk=document.createNodeIterator(document.body,NodeFilter.SHOW_TEXT);
+   let node,length=0;while((node=walk.nextNode()))length+=node.length;
+   reader.seek(0);reader.seek(length);
+  });
+  spread=await page.evaluate(()=>reader.pagination());
+  assert.equal(spread.index,Math.floor((spread.count-1)/2)*2);
   await page.evaluate(()=>reader.turn(1));
   assert.equal(await page.evaluate(()=>new URL(window.syntheticNotification).pathname.endsWith('/next')),true);
   await page.evaluate(()=>{reader.setGeometry(null);reader.seek(0);});

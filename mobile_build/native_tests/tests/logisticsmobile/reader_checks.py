@@ -361,6 +361,46 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
             state['events'] = events[-20:]
             print('LOGISTICS_EPUB_FAILURE=' + json.dumps(state), flush=True)
             raise
+    # Silent synthesis still exercises the actual WebView text source, trusted
+    # bridge, chapter publication, highlight delivery and current chapter row.
+    class SilentSpeech:
+        ready, error, default_voice = True, '', 'Offline'
+        voices = {'Offline': None}
+        def __init__(self, loop):
+            self.calls = []
+        def voice_for_language(self, language, preferred=''):
+            return 'Offline'
+        def speak(self, text, voice, speed, token):
+            self.calls.append(text)
+            self.started(token)
+        def stop(self):
+            pass
+        def close(self):
+            pass
+    owner._epub_target = 0
+    await owner.move_book_page(0)
+    await wait_for_text(original_reader, 'Native EPUB first')
+    await wait_for_reader(owner)
+    with patch('features.books.mobile.speech_view.NativeSpeech', SilentSpeech):
+        owner.show_read_aloud()
+        speech = owner.speech_panel
+        try:
+            await speech.ready_task
+            await speech.play()
+            for _ in range(20):
+                if speech.session.state == 'speaking':
+                    speech.session.completed(speech.session.token)
+                task = speech.continuation_task
+                if task is not None:
+                    await asyncio.wait_for(asyncio.shield(task), 20)
+                if speech.session.state == 'stopped':
+                    break
+            assert owner.book_record['position'] == owner.chapter_tree.current == 1
+            assert owner.speech_panel is speech and not speech.closed
+            assert len(speech.engine.calls) == 2, speech.engine.calls
+            assert 'first' in speech.engine.calls[0] and 'second' in speech.engine.calls[1]
+        finally:
+            owner.close_read_aloud()
     passed.append('native_epub_reader')
     await app.toggle_bookmark()
     assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [

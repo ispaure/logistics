@@ -279,6 +279,18 @@ synthesizing audio. Browser regressions additionally cover selection priority,
 the older selection-based highlight fallback and delayed image completion.
 Physical-device and Android rotation acceptance for this change remain pending.
 
+Whole-book read-aloud uses the shared speech session's natural-finish hook;
+explicit Stop, engine failure and stale callbacks cannot advance chapters.
+Mobile imported readers preserve the panel while publishing the next chapter;
+provider readers transfer it to the replacement view before retiring the old
+view. Continuation waits for the new trusted DOM and rechecks generation and
+speech authorization without requesting a new audio grant. Text selections stay
+bounded, and speed and remaining timer budget survive chapter changes. Desktop
+resumes after its queued chapter layout, guarded against subsequent navigation
+or close. The imported chapter tree is refreshed when its chapter index changes.
+An exact chapter-end seek selects the final page/spread explicitly, including
+when the browser returns an empty rectangle for the trailing text cursor.
+
 The mobile host's `ReaderController.open_book` reloads the current chapter on
 explicitly reopening an already loaded imported EPUB. A retained archive decoder
 does not establish that the native WebView still has its document. Reopen waits
