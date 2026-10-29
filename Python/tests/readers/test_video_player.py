@@ -1,11 +1,12 @@
 """Video range, grant, resume and subtitle contracts without native decoders."""
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from http.client import HTTPConnection, RemoteDisconnected
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+import shutil
 from urllib.parse import urlsplit
 from unittest.mock import patch
 
@@ -23,8 +24,12 @@ class VideoContracts(unittest.TestCase):
         binary = executable.get_rclone_path()
         if not binary.is_file():
             self.skipTest('Pinned rclone is unavailable')
-        with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as fixture, patch.object(
+        with TemporaryDirectory() as directory, ExitStack() as cleanup, crypt_fixture(directory, binary) as fixture, patch.object(
                 executable, 'get_rclone_path', return_value=binary):
+            from commonUtils.filesystem.native_paths import native_path
+            # The normal-root fixture proves production path handling. Retire
+            # its long ciphertext names before stdlib's normal-path cleanup.
+            cleanup.callback(shutil.rmtree, native_path(directory))
             raw = b'video range fixture\x00' * 600000
             fixture.provider.create_file('movie.mkv', BytesIO(raw))
             content = VideoContent(fixture.provider, 'movie.mkv')
