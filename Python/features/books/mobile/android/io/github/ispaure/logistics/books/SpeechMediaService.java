@@ -72,6 +72,17 @@ public final class SpeechMediaService extends Service {
                     if (change < 0) { focused = false; dispatch("interrupt"); }
                 }).build();
         }
+        prepareForeground();
+    }
+    private void prepareForeground() {
+        // Android can deliver another start to the same instance after detach
+        // has retired its controls. Every start must rebuild and acknowledge
+        // its foreground session, even if the owning passage already ended.
+        if (session == null) createSession();
+        bindControls();
+        publish(true);
+    }
+    private void createSession() {
         session = new MediaSession(this, "LogisticsReadAloud");
         session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
         session.setPlaybackToLocal(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
@@ -79,6 +90,9 @@ public final class SpeechMediaService extends Service {
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (launch != null) session.setSessionActivity(PendingIntent.getActivity(this, 0, launch,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        session.setActive(true);
+    }
+    private void bindControls() {
         final Listener controls = listener;
         session.setCallback(new MediaSession.Callback() {
             private void send(String action) {
@@ -96,11 +110,6 @@ public final class SpeechMediaService extends Service {
                 else if ("forward15".equals(action)) send("forward");
             }
         });
-        session.setActive(true);
-        // A short passage can detach before Android delivers onCreate. Fulfil
-        // startForegroundService even then, before focus or listener dispatch.
-        // onStartCommand will retire an ownerless service normally.
-        publish(true);
     }
     private PendingIntent action(String action, int code) {
         Intent intent = new Intent(this, SpeechMediaService.class).setAction("speech." + epoch + "." + action)
@@ -157,7 +166,8 @@ public final class SpeechMediaService extends Service {
         else startForeground(NOTICE, notification);
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (listener == null) { stopSelf(); return START_NOT_STICKY; }
+        prepareForeground();
+        if (listener == null) { stopSelf(startId); return START_NOT_STICKY; }
         if (intent != null && intent.hasExtra("command")) {
             if (intent.getLongExtra("epoch", -1) == epoch) dispatch(intent.getStringExtra("command"));
         } else render();
