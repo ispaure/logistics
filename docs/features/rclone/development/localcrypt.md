@@ -1028,6 +1028,11 @@ integration roundtrips during this audit; these do not validate physical devices
 
 ## Windows ciphertext paths
 
+The provider root remains a normal decoded document path for Markdown URLs and
+resource identity. Only ciphertext I/O uses the extended Windows namespace. Push
+validation uses that same physical namespace for inventory and relative-name
+comparisons, so prefix spelling cannot change the validation result.
+
 Desktop ciphertext I/O uses commonUtils native filesystem paths, so encrypted
 filenames and private resume records remain readable beyond the normal Windows
 path limit. Mapping identities, rclone configuration and logical filenames keep

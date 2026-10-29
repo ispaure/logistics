@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import stat
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.publication import mutation_lock
 from commonUtils.runtime.operations import check_cancelled
@@ -33,13 +34,13 @@ def save_excludes(values):
     atomic_write_json(settings_path(), {'schema': 1, 'excludes': list(values)}, durable_directory=True)
 
 
-def _remove_plain_generated_files(item, original, cleanup, cancelled):
+def _remove_plain_generated_files(root, original, cleanup, cancelled):
     """Remove only allowlisted unencrypted regular files after the root preflight."""
     removed = 0
     for name, stamp in original.items():
         check_cancelled(cancelled)
         if Path(name).name.casefold() in CLEANUP_NAMES and stat.S_ISREG(stamp[2]):
-            path = item.data / name
+            path = root / name
             with path.open('rb') as stream:
                 if stream.read(8) == b'RCLONE\x00\x00':
                     continue  # Resolve encrypted names through the provider below.
@@ -79,21 +80,22 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
     """
     from features.rclone.localcrypt.mapping import unlock
     from features.rclone.localcrypt.backend import CryptResources
+    root = native_path(item.data)
     with mutation_lock:
         check_cancelled(cancelled)
-        if not item.data.is_dir():
+        if not root.is_dir():
             raise ValueError('LocalCrypt push source is missing.')
-        resolved_root = item.data.resolve(strict=True)
-        root_identity = (item.data.stat().st_dev, item.data.stat().st_ino)
+        resolved_root = root.resolve(strict=True)
+        root_identity = (root.stat().st_dev, root.stat().st_ino)
         if str(unlock(item)[item.remote].get('no_data_encryption', 'false')).lower() in {'true', '1', 'yes'}:
             raise ValueError('LocalCrypt push requires content encryption; no_data_encryption is enabled.')
-        original = _inventory(item.data, cancelled)
-        removed = _remove_plain_generated_files(item, original, cleanup, cancelled)
-        before = _inventory(item.data, cancelled)
+        original = _inventory(root, cancelled)
+        removed = _remove_plain_generated_files(root, original, cleanup, cancelled)
+        before = _inventory(root, cancelled)
         for name, stamp in before.items():
             check_cancelled(cancelled)
             if stat.S_ISREG(stamp[2]):
-                with (item.data / name).open('rb') as stream:
+                with (root / name).open('rb') as stream:
                     header = stream.read(32)
                 if len(header) != 32 or header[:8] != b'RCLONE\x00\x00':
                     raise ValueError('LocalCrypt push refused: file is not encrypted: ' + name)
@@ -108,7 +110,7 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
                     directory = pending.pop()
                     report(len(expected), 0, f'Validating encrypted names… ({removed} generated files removed)')
                     for row in provider.list(directory, cancelled=cancelled):
-                        physical = provider._physical(row['path'], row['directory']).relative_to(item.data).as_posix()
+                        physical = provider._physical(row['path'], row['directory']).relative_to(root).as_posix()
                         if physical in expected:
                             raise ValueError('LocalCrypt has ambiguous encoded names.')
                         expected.add(physical)
@@ -125,9 +127,9 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
                     names = ', '.join(sorted(unexpected or expected - set(before))[:5])
                     raise ValueError('LocalCrypt push refused: names do not match the crypt settings: ' + names)
                 _authenticate_contents(provider, binary, decoded_files, cancelled, report)
-            if (item.data.resolve(strict=True) != resolved_root
-                    or (item.data.stat().st_dev, item.data.stat().st_ino) != root_identity
-                    or _inventory(item.data, cancelled) != before):
+            if (root.resolve(strict=True) != resolved_root
+                    or (root.stat().st_dev, root.stat().st_ino) != root_identity
+                    or _inventory(root, cancelled) != before):
                 raise ValueError('LocalCrypt changed during verification. Retry the push.')
             # Authenticate first, then delete through the same version-checked
             # provider operation as the file browser. A junk name cannot hide
@@ -138,14 +140,14 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
                     delete_resource(provider, path, expected=snapshot, cancelled=cancelled)
                 del before[physical]
                 removed += 1
-            after = _inventory(item.data, cancelled)
+            after = _inventory(root, cancelled)
             # Removing a child changes its parent's size/timestamps. Membership,
             # directory identity and all remaining file versions must still match.
             unchanged = set(after) == set(before) and all(
                 after[name][:3] == stamp[:3] if stat.S_ISDIR(stamp[2]) else after[name] == stamp
                 for name, stamp in before.items())
-            if (not unchanged or item.data.resolve(strict=True) != resolved_root
-                    or (item.data.stat().st_dev, item.data.stat().st_ino) != root_identity):
+            if (not unchanged or root.resolve(strict=True) != resolved_root
+                    or (root.stat().st_dev, root.stat().st_ino) != root_identity):
                 raise ValueError('LocalCrypt changed during cleanup. Retry the push.')
             return removed
         except OSError as error:

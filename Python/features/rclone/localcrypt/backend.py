@@ -48,7 +48,9 @@ class CryptResources(LocalFiles):
         if not Path(self.binary).is_file():
             raise ValueError('Install the configured rclone executable first.')
         validate_ciphertext_tree(item)
-        self.root = native_path(item.data)
+        # The public root is a decoded document/URL namespace. Extended Windows
+        # paths belong only to ciphertext I/O, not Markdown file URLs.
+        self.root = item.data
         from services.local_storage import install_local_storage_policy
         install_local_storage_policy(item.root)
         self.storage_id = str(item.data.resolve())
@@ -58,7 +60,7 @@ class CryptResources(LocalFiles):
         self.storage_namespace = sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
         session.remember(self.context, {'view': settings}, private=True, parent=item.context)
         self._cancellation = WorkerCancellation()
-        self._cache = PrivateReadCache(self.root, self._check_active)
+        self._cache = PrivateReadCache(native_path(self.root), self._check_active)
         self._commands = CryptCommand(self.binary, self.context, self._cancellation,
                                       self._check_active, closed=lambda: self.closed)
         self._leases = ResourceLeases(validate=self._check_active, close=self.close)
@@ -90,7 +92,7 @@ class CryptResources(LocalFiles):
 
     def relative(self, path):
         if isinstance(path, Path) and path.is_absolute():
-            path = path.relative_to(self.root).as_posix()
+            path = native_path(path).relative_to(native_path(self.root)).as_posix()
         text = str(path).replace(os.sep, '/') if isinstance(path, Path) else str(path)
         from commonUtils.runtime.resources.paths import resource_path
         return resource_path(text)
@@ -183,7 +185,7 @@ class CryptResources(LocalFiles):
         relative = self.relative(path)
         target = self._cache.path(relative)
         if target is None:
-            target = self.root / self.relative(self._commands.encode(relative))
+            target = native_path(self.root) / self.relative(self._commands.encode(relative))
         guard_ciphertext_path(target, self.root)
         self._cache.remember_path(relative, target)
         return target
@@ -192,7 +194,7 @@ class CryptResources(LocalFiles):
         relative = self.relative(path)
         if not relative:
             self._check_active()
-            return self.root
+            return native_path(self.root)
         # Encoding a child maps every parent with the directory-name settings,
         # including remotes whose filename encryption is disabled.
         if directory:
