@@ -54,6 +54,32 @@ def _forget_cache(root, key=None):
                 manager.forget_memory(key)
 
 
+def clear_recent_cache(root):
+    """Erase locked packages and every scene; preserve loaded open references."""
+    root = Path(root)
+    with _cache_io_lock:
+        managers = [manager for manager in tuple(_managers) if manager.root == root]
+        for manager in managers:
+            manager.retire_writes()
+        if root.is_symlink():
+            raise ValueError('Credential document caches cannot be linked.')
+        for directory in root.iterdir() if root.exists() else ():
+            directory = cache_path(root, directory.name)
+            for path in directory.iterdir():
+                if path.is_symlink() or not path.is_file() or path.suffix != '.zip' or len(path.stem) != 64 or any(c not in '0123456789abcdef' for c in path.stem):
+                    raise ValueError('Unexpected credential history file was preserved.')
+                path.unlink()
+            directory.rmdir()
+        for manager in managers:
+            for state in manager.states.values():
+                state['recent'] = []
+            manager.failed.clear()
+            manager.publish_recent()
+            for key in manager.states.keys() & manager.records().keys():
+                manager.write(key)
+            manager.queue_views()
+
+
 class CredentialDocumentLists:
     def __init__(self, app, *, references, max_recent, reopen):
         self.app = app
@@ -81,7 +107,7 @@ class CredentialDocumentLists:
     def queue_views(self):
         if not self.views_pending and self.app.active_host and not self.app.loop.is_closed():
             self.views_pending = True
-            self.app.loop.call_soon(self.refresh_views)
+            self.app.loop.call_soon_threadsafe(self.refresh_views)
 
     def refresh_views(self):
         self.views_pending = False
@@ -300,20 +326,12 @@ class CredentialDocumentLists:
         self.queue_views()
 
     def clear_recent(self):
-        """Clear loaded encrypted history without closing its open documents."""
-        with _cache_io_lock:
-            for key, state in self.states.items():
-                if key in self.failed or not state['recent']:
-                    continue
-                previous = state['recent']
-                state['recent'] = []
-                try:
-                    self.write(key)
-                except BaseException:
-                    state['recent'] = previous
-                    self.publish_recent()
-                    raise
-            self.publish_recent()
+        """Delete every credential cache, including unloaded/locked packages.
+
+        Legacy files combine recent and reopen references. Both are erased;
+        active document instances and their separately stored positions remain.
+        """
+        clear_recent_cache(self.root)
 
     def closed(self, session):
         key = getattr(session, 'cache_id', None)

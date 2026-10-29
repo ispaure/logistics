@@ -1,4 +1,5 @@
 """Isolated in-memory ownership for desktop rclone credential generations."""
+
 import os
 from pathlib import Path
 import threading
@@ -16,6 +17,7 @@ class CredentialSessions:
         self._known_packages = {}
         self._parents = {}
         self._revocations = {}
+        self._state_secrets = {}
 
     def on_forget(self, config_path, callback):
         """Observe one credential generation without keeping its owner alive."""
@@ -27,9 +29,11 @@ class CredentialSessions:
                 self._revocations.setdefault(path, {})[token] = reference
         if not active:
             callback()
+
         def unsubscribe(*_):
             with self._lock:
                 self._revocations.get(path, {}).pop(token, None)
+
         return unsubscribe
 
     def _forget_locked(self, path):
@@ -39,30 +43,80 @@ class CredentialSessions:
                 callbacks.extend(self._forget_locked(child)[1])
         self._parents.pop(path, None)
         self._private.discard(path)
+        state = self._state_secrets.pop(path, None)
+        if state is not None:
+            state[1][:] = b"\0" * len(state[1])
         removed = self._sets.pop(path, None) is not None
         callbacks.extend(self._revocations.pop(path, {}).values())
         return removed, callbacks
 
-    def remember(self, config_path, values, *, package_path=None, private=False, parent=None):
+    def remember(
+        self,
+        config_path,
+        values,
+        *,
+        package_path=None,
+        private=False,
+        parent=None,
+        state_password=None,
+        state_identity=None,
+    ):
         with self._lock:
             config_path = Path(config_path)
             if parent is not None:
                 ancestor = Path(parent)
                 if ancestor not in self._sets:
-                    raise ValueError('The credential session is locked.')
+                    raise ValueError("The credential session is locked.")
                 while ancestor is not None:
                     if ancestor == config_path:
-                        raise ValueError('Credential sessions cannot depend on themselves or their descendants.')
+                        raise ValueError(
+                            "Credential sessions cannot depend on themselves or their descendants."
+                        )
                     ancestor = self._parents.get(ancestor)
             _, callbacks = self._forget_locked(config_path)
             if parent is not None:
                 self._parents[config_path] = Path(parent)
-            self._sets[Path(config_path)] = (uuid4().hex, values, Path(package_path) if package_path else None)
+            self._sets[Path(config_path)] = (
+                uuid4().hex,
+                values,
+                Path(package_path) if package_path else None,
+            )
+            if state_password and state_identity:
+                self._state_secrets[config_path] = (
+                    state_identity,
+                    bytearray(state_password.encode()),
+                )
             if package_path:
                 self._known_packages[Path(config_path)] = Path(package_path)
             if private:
                 self._private.add(Path(config_path))
         _notify(callbacks)
+
+    def state_authority(self, config_path):
+        """Stable owning source across derived LocalCrypt views and ZIP repacking."""
+        import hashlib
+        import json
+
+        with self._lock:
+            path = Path(config_path)
+            while path in self._sets:
+                if path in self._state_secrets:
+                    return hashlib.sha256(
+                        json.dumps(self._sets[path][1], sort_keys=True).encode()
+                    ).hexdigest()
+                path = self._parents.get(path)
+            return None
+
+    def state_credentials(self, config_path):
+        """Return a short-lived copy; children inherit only an active parent's key."""
+        with self._lock:
+            path = Path(config_path)
+            while path in self._sets:
+                if path in self._state_secrets:
+                    identity, secret = self._state_secrets[path]
+                    return identity, bytearray(secret)
+                path = self._parents.get(path)
+            return None
 
     def names(self, config_path):
         with self._lock:
@@ -90,10 +144,12 @@ class CredentialSessions:
         with self._lock:
             entry = self._sets.get(path)
             identity = entry[0] if entry else None
+
         def revoked():
             with self._lock:
                 current = self._sets.get(path)
                 return identity is None or current is None or current[0] != identity
+
         return revoked
 
     def depends_on(self, context, parent):
@@ -113,24 +169,37 @@ class CredentialSessions:
             if item is None:
                 return None
             identity, values, _package = item
-            aliases = {name: f'logistics_{identity}_{index}' for index, name in enumerate(values)}
-            environment = {key: value for key, value in os.environ.items()
-                           if not key.upper().startswith('RCLONE_CONFIG')}
+            aliases = {
+                name: f"logistics_{identity}_{index}"
+                for index, name in enumerate(values)
+            }
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if not key.upper().startswith("RCLONE_CONFIG")
+            }
             for name, options in values.items():
                 for key, value in options.items():
-                    if key == 'remote':
-                        remote, colon, suffix = value.partition(':')
+                    if key == "remote":
+                        remote, colon, suffix = value.partition(":")
                         if colon and remote in aliases:
-                            value = aliases[remote] + ':' + suffix
-                    environment[f'RCLONE_CONFIG_{aliases[name].upper()}_{key.upper()}'] = value
+                            value = aliases[remote] + ":" + suffix
+                    environment[
+                        f"RCLONE_CONFIG_{aliases[name].upper()}_{key.upper()}"
+                    ] = value
+
             def translate(value):
                 text = str(value)
-                name, colon, suffix = text.partition(':')
-                return aliases[name] + ':' + suffix if colon and name in aliases else value
+                name, colon, suffix = text.partition(":")
+                return (
+                    aliases[name] + ":" + suffix if colon and name in aliases else value
+                )
+
             return environment, translate(source), translate(destination)
 
     def credentials(self, config_path):
         from copy import deepcopy
+
         with self._lock:
             item = self._sets.get(Path(config_path))
             return deepcopy(item[1]) if item else None

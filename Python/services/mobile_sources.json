@@ -32,6 +32,9 @@
     "mobile_features.py",
     "mobile_presentation.py",
     "seasonal.py",
-    "workflow_host.py"
+    "workflow_host.py",
+    "documents/credential_state.py",
+    "documents/history_controls.py",
+    "documents/state_migration.py"
   ]
 }

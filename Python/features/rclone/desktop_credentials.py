@@ -154,7 +154,8 @@ class DesktopCredentials:
                     from . import desktop_catalog
                     desktop_catalog.remember(request.config, request.package, names)
                     session.remember(request.config, {name: dict(settings) for name, settings in values.items()},
-                                     package_path=request.package)
+                                     package_path=request.package, state_password=password,
+                                     state_identity=__import__('hashlib').sha256(request.package.read_bytes()).hexdigest())
                 return CredentialResult(request.config, names, request.remember)
             return CredentialStage(publish, valid, close)
         except BaseException:
