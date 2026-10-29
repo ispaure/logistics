@@ -297,6 +297,13 @@ or close. The imported chapter tree is refreshed when its chapter index changes.
 An exact chapter-end seek selects the final page/spread explicitly, including
 when the browser returns an empty rectangle for the trailing text cursor.
 
+The **TTS prose-dash word boundaries** fix is owned by the shared speech session
+used by desktop Qt and mobile read-aloud. Logistics includes its `speech_text`
+dependency in the mobile payload. Shared speech core and Qt tests cover source
+mapping; `test_speech_overlay.py` covers mobile panel submission, source cursor
+offsets and disposal. See the shared
+[speech input contract](https://github.com/ispaure/commonUtils/blob/main/docs/development/reference/runtime/runtime.md#portable-speech-sessions).
+
 The mobile host's `ReaderController.open_book` reloads the current chapter on
 explicitly reopening an already loaded imported EPUB. A retained archive decoder
 does not establish that the native WebView still has its document. Reopen waits

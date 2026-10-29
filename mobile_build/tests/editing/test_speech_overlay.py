@@ -10,6 +10,29 @@ import unittest
 
 
 class SpeechOverlayTests(unittest.TestCase):
+    def test_mobile_dash_speech_and_cursor_keep_original_passage_offsets(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        from unittest.mock import Mock
+        source_text = '😀 Sumire—Never again'
+        async def source():
+            return SimpleNamespace(text=source_text), 0, None
+        async def exercise():
+            ranges = Mock()
+            panel = ReadAloudPanel(loop=self.app.loop, source=source, on_range=ranges,
+                close=lambda *args: None, engine=Engine(self.app.loop), app=self.app)
+            try:
+                await panel.ready_task
+                await panel.play()
+                self.assertEqual(panel.engine.calls[-1][0], '😀 Sumire — Never again')
+                panel.engine.progress(panel.session.token, 12, 17)
+                self.assertEqual(ranges.call_args.args, (10, 15))
+                self.assertEqual(panel.session.text, source_text)
+            finally:
+                panel.dispose()
+            self.assertIsNone(panel.session.spoken)
+            self.assertEqual(panel.session.text, '')
+        self.run_async(exercise())
+
     setUp = test_obsidian.ObsidianTests.setUp
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async

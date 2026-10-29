@@ -87,6 +87,7 @@ SHARED_REQUIRED_MODULES = (
     'runtime/resources/selection.py',
     'runtime/signals.py',
     'runtime/speech.py',
+    'runtime/speech_text.py',
     'runtime/streams/progress.py',
     'runtime/streams/sse.py',
     # Portable query providers.
