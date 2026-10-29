@@ -213,6 +213,13 @@ def install_apple_destination_layout(host):
         changing, host.changing = host.changing, True
         try:
             refresh_apple_tab_items(host)
+            if current[1] and not adapter.tabs_hidden():
+                # UIKit can report a visible vertical bar with all five items
+                # but no rendered controls on cold launch. Reapply visibility
+                # after attachment/edge settlement to materialize that bar.
+                # Preserve reader/fullscreen and keyboard-owned hidden states.
+                adapter.controller.setTabBarHidden(True, animated=False)
+                adapter.controller.setTabBarHidden(False, animated=False)
         finally:
             host.changing = changing
 

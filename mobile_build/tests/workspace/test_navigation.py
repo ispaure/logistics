@@ -14,11 +14,13 @@ class NavigationTests(unittest.TestCase):
         from mobile.navigation import install_apple_destination_layout
         loop = asyncio.new_event_loop()
         self.addCleanup(loop.close)
+        errors = []
+        loop.set_exception_handler(lambda loop, context: errors.append(context))
         native = SimpleNamespace(window=None,
             bounds=SimpleNamespace(size=SimpleNamespace(width=1000, height=700)))
         container = SimpleNamespace(on_native_layout=Mock())
         host = SimpleNamespace(changing=False, adapter=SimpleNamespace(
-            controller=SimpleNamespace(view=native)), window=SimpleNamespace(
+            controller=SimpleNamespace(view=native, setTabBarHidden=Mock()), tabs_hidden=Mock(return_value=False)), window=SimpleNamespace(
             _impl=SimpleNamespace(container=container), app=SimpleNamespace(loop=loop)))
         original = container.on_native_layout
         edge = [0]
@@ -38,21 +40,34 @@ class NavigationTests(unittest.TestCase):
                 container.on_native_layout(container)
                 await asyncio.sleep(0)
                 self.assertEqual(refresh.call_count, 1)
+                visibility = host.adapter.controller.setTabBarHidden
+                visibility.assert_not_called()  # Conventional horizontal bar.
                 # Inner landscape traits can settle without changing dimensions.
                 edge[0] = 2
                 container.on_native_layout(container)
                 await asyncio.sleep(0)
                 self.assertEqual(refresh.call_count, 2)
+                self.assertEqual([call.args[0] for call in visibility.call_args_list], [True, False])
                 container.on_native_layout(container)
                 await asyncio.sleep(0)
                 self.assertEqual(refresh.call_count, 2)
+                self.assertEqual(visibility.call_count, 2)  # No layout-driven flicker.
+                # Rotation while reading or using the keyboard must not reveal
+                # destinations that the current route deliberately concealed.
+                host.adapter.tabs_hidden.return_value = True
+                edge[0] = 1
+                container.on_native_layout(container)
+                await asyncio.sleep(0)
+                self.assertEqual(refresh.call_count, 3)
+                self.assertEqual(visibility.call_count, 2)
                 edge[0] = 0
                 container.on_native_layout(container)
                 host.adapter = None  # Queued layout must not resurrect a closed host.
                 await asyncio.sleep(0)
-                self.assertEqual(refresh.call_count, 2)
+                self.assertEqual(refresh.call_count, 3)
                 self.assertFalse(host.changing)
         loop.run_until_complete(exercise())
+        self.assertEqual(errors, [])
         self.assertGreater(original.call_count, 1)
 
     def test_android_rotation_rebinds_tab_without_selecting_or_retiring_its_reader(self):

@@ -62,11 +62,28 @@ Destination artwork is projected again after the tab controller attaches to its
 window and whenever UIKit changes its vertical-bar edge. This deferred,
 coalesced layout callback handles launch directly on the Duo inner display;
 it does not require a portrait rotation or change the active destination.
+On an attached vertical-bar layout, a bar that is intended to be visible also
+receives an explicit, nonanimated hide/show transition after item projection.
+The physical Duo can otherwise retain five valid items and report the bar as
+visible while rendering no controls. Rebuilding items alone does not repair that
+state. The transition runs once per window/edge signature; ordinary layout
+callbacks retain the bar, and reader/fullscreen or keyboard-owned hidden states
+are preserved.
 `test_navigation.py` covers late attachment/traits and disposal before a queued
-refresh. Native pose acceptance remains separate from these host contracts.
+refresh, horizontal-bar preservation, hidden-state preservation and callback
+errors. Native pose acceptance remains separate from these host contracts.
 An isolated native navigation fixture also checks cold launch and a portrait /
-landscape round trip on the Duo outer display. This does not establish the
-intermittent inner-display launch case or full-application startup acceptance.
+landscape round trip on the Duo outer display.
+
+On October 28, 2026, five consecutive terminate-and-launch cycles of the normal
+app passed on the physical Duo's opened inner display in landscapeRight. Each
+used a distinct process and showed all five right-side destinations before any
+selection. The tested Python sources were restaged through a manager plan into
+an existing iOS 27.1 native shell, re-signed with the original certificate and
+installed in place after source, provisioning and recursive-signature checks.
+Temporary diagnostic code was removed before those five launches. This verifies
+that physical startup case; it does not certify every pose, reader interaction
+or the separate active Dynamic Island overlap report.
 
 ## Persistent local filename search
 
