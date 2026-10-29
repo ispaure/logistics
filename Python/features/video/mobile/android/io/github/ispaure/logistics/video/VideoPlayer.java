@@ -89,7 +89,7 @@ public final class VideoPlayer {
     private PopupMenu optionsMenu;
     private final AudioManager audio;
     private AudioFocusRequest focusRequest;
-    private boolean focusHeld, manualResumeRequired, pausePending, lockHidden;
+    private boolean focusHeld, manualResumeRequired, pausePending, lockHidden, playbackActive;
     private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
         if (change != AudioManager.AUDIOFOCUS_GAIN) {
             focusHeld = false;
@@ -228,6 +228,7 @@ public final class VideoPlayer {
             if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped)
                 pausePending = false;
             if (event.type == MediaPlayer.Event.Playing) {
+                playbackActive = true;
                 ended = false;
                 if (manualResumeRequired || !focusHeld || !allowed(false)) { pause(); return; }
                 if (resume > 0) { player.setTime(resume); resume = 0; }
@@ -240,6 +241,12 @@ public final class VideoPlayer {
             if (event.type == MediaPlayer.Event.EndReached) { ended = true; lastPosition = 0; setControlsVisible(true); }
             if (event.type == MediaPlayer.Event.EncounteredError)
                 status("Playback failed. Close and reopen this video to retry.");
+            if (event.type == MediaPlayer.Event.Playing) updateScreenAwake();
+            else if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped
+                    || event.type == MediaPlayer.Event.EndReached || event.type == MediaPlayer.Event.EncounteredError) {
+                playbackActive = false;
+                root.setKeepScreenOn(false);
+            }
         });
         Media media = new Media(vlc, Uri.parse(url));
         media.addOption(":network-caching=500");
@@ -392,9 +399,16 @@ public final class VideoPlayer {
         player.play();
     }
 
+    private void updateScreenAwake() {
+        boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
+        root.setKeepScreenOn(attached && !done && !lockHidden && !manualResumeRequired
+                && playbackActive && !pausePending && !ended && !casting && !pip && player.isPlaying());
+    }
+
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (done) return;
+            updateScreenAwake();
             long time = player.getTime(), length = player.getLength();
             if (time >= 0 && !ended) lastPosition = time;
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
@@ -538,6 +552,7 @@ public final class VideoPlayer {
     public boolean completed() { return ended; }
     public void pause() {
         if (done) return;
+        root.setKeepScreenOn(false);
         setControlsVisible(true);
         manualResumeRequired = true;
         if (!audioSuppressed) {
@@ -552,6 +567,7 @@ public final class VideoPlayer {
         }
     }
     public void background() {
+        root.setKeepScreenOn(false);
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
         if (restricted) hide(); else if (!pip && !casting) pause();
     }

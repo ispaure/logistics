@@ -56,6 +56,15 @@ host's bar visibility and behavior across concealment/disposal; iOS uses control
 appearance overrides and invalidates its timer on retirement/disappearance.
 This presentation state does not grant playback or bypass credential gates.
 
+Visible local playback holds the display awake independently of the control-hide
+timer. iOS uses a counted idle-timer request across scene players, restoring the
+previous app setting when the last player releases it. Android requests screen-on
+only on the attached video root. Pause, stop, completion, errors, interruptions,
+concealment and retirement release the request. Casting and picture-in-picture
+do not hold the main display awake. The native fullscreen probe observes the
+actual idle request during Play and after Pause; API compiler checks alone do not
+establish device timeout behavior.
+
 Desktop transport buttons expose play/pause, ten-second skips and mute, with
 accessible labels, tooltips and keyboard equivalents. Track selectors retain
 visible labels and the controls stack below 520 pixels. Fullscreen uses the shared

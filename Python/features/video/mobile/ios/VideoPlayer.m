@@ -8,6 +8,10 @@
 #import <UIKit/UIViewReservedRegion.h>
 #endif
 
+// UIApplication's idle policy is shared by independent scene players.
+static NSUInteger LGVideoAwakeOwners = 0;
+static BOOL LGVideoPreviousIdleTimerDisabled = NO;
+
 @interface LGVideoController : UIViewController
     <VLCDrawable, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling,
      VLCMediaPlayerDelegate, CXCallObserverDelegate, UIGestureRecognizerDelegate>
@@ -45,11 +49,31 @@
 @property(nonatomic) BOOL pausePending;
 @property(nonatomic) BOOL audioSuppressed;
 @property(nonatomic) BOOL resumeMuted;
+@property(nonatomic) BOOL holdsIdleTimer;
+@property(nonatomic) BOOL surfaceVisible;
 @property(nonatomic, strong) CXCallObserver *callObserver;
 @property(nonatomic) int64_t lastPosition;
 @end
 
 @implementation LGVideoController
+- (void)setScreenAwake:(BOOL)awake {
+    if (self.holdsIdleTimer == awake) return;
+    self.holdsIdleTimer = awake;
+    UIApplication *application = UIApplication.sharedApplication;
+    if (awake) {
+        if (LGVideoAwakeOwners++ == 0) LGVideoPreviousIdleTimerDisabled = application.idleTimerDisabled;
+        application.idleTimerDisabled = YES;
+    } else if (--LGVideoAwakeOwners == 0) {
+        application.idleTimerDisabled = LGVideoPreviousIdleTimerDisabled;
+    }
+}
+- (void)updateScreenAwake {
+    [self setScreenAwake:!self.retired && self.surfaceVisible && self.view.window &&
+        !self.lockHidden && !self.manualResumeRequired && !self.pausePending &&
+        !self.ended && !self.casting && !self.pipActive && self.player.isPlaying &&
+        self.player.state == VLCMediaPlayerStatePlaying &&
+        UIApplication.sharedApplication.applicationState == UIApplicationStateActive];
+}
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.blackColor;
@@ -211,10 +235,14 @@
 - (BOOL)showControlsForAccessibility { [self setControlsShown:YES]; return YES; }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    self.surfaceVisible = NO;
+    [self setScreenAwake:NO];
     [self.controlsTimer invalidate]; self.controlsTimer = nil;
 }
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    self.surfaceVisible = YES;
+    [self updateScreenAwake];
     [self setControlsShown:YES];
 }
 - (void)viewDidLayoutSubviews {
@@ -309,6 +337,7 @@
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    [self setScreenAwake:NO];
     [self setControlsShown:YES];
     // VLCKit pause is an explicit pause, but coalesce duplicate OS/lifecycle events.
     self.manualResumeRequired = YES;
@@ -380,7 +409,10 @@
     self.lockHidden = NO;
     self.movie.hidden = self.restricted && self.view.window.screen.isCaptured;
 }
-- (void)background { if (self.restricted) [self suspendForLock]; else if (!self.pipActive && !self.casting) [self pause]; }
+- (void)background {
+    [self setScreenAwake:NO];
+    if (self.restricted) [self suspendForLock]; else if (!self.pipActive && !self.casting) [self pause];
+}
 - (void)backgroundNotification:(NSNotification *)notification { [self background]; }
 - (void)protectedData:(NSNotification *)notification { if (self.restricted) [self suspendForLock]; else [self pause]; }
 - (void)captureChanged:(NSNotification *)notification {
@@ -402,6 +434,7 @@
 }
 - (void)tick:(NSTimer *)timer {
     if (![self canPlay:NO]) [self pause];
+    [self updateScreenAwake];
     int64_t position = [self positionMilliseconds];
     int64_t duration = self.player.media.length.value.longLongValue;
     if (!self.seek.tracking && duration > 0) self.seek.value = (float)position / duration;
@@ -433,6 +466,8 @@
             [self setControlsShown:YES];
         }
         if (state == VLCMediaPlayerStateError) [self showStatus:@"Playback failed. Close and reopen this video to retry."];
+        if (state == VLCMediaPlayerStatePlaying) [self updateScreenAwake];
+        else [self setScreenAwake:NO];
         [self.pipController invalidatePlaybackState];
     });
 }
@@ -498,6 +533,7 @@
     self.startMilliseconds = [self positionMilliseconds];
     [self.player stop];
     self.casting = [self.player setRendererItem:renderer] && renderer != nil;
+    [self updateScreenAwake];
     [self startByUser];
 }
 - (void)pip:(UIButton *)sender {
@@ -513,6 +549,7 @@
         owner.pipController = controller;
         controller.stateChangeEventHandler = ^(BOOL active) {
             owner.pipActive = active;
+            [owner updateScreenAwake];
             [owner setControlsShown:YES];
         };
     };
@@ -530,6 +567,7 @@
 - (BOOL)isMediaPlaying { return self.player.isPlaying; }
 - (void)retire {
     if (self.retired) return;
+    [self setScreenAwake:NO];
     self.retired = YES;
     self.fullscreen = NO;
     [self setControlsShown:YES];

@@ -23,6 +23,20 @@ def android_player(owner):
     return field.get(owner.native.native)
 
 
+def screen_awake(owner, android):
+    """Observe the real OS display-idle request without changing device settings."""
+    if android:
+        native = owner.native.native
+        field = native.getClass().getDeclaredField('root')
+        field.setAccessible(True)
+        root = field.get(native)
+        return lambda: bool(root.getKeepScreenOn())
+    from rubicon.objc import ObjCClass
+    from mobile.screen_privacy import native_value
+    application = ObjCClass('UIApplication').sharedApplication
+    return lambda: bool(native_value(application, 'isIdleTimerDisabled'))
+
+
 def start_playback(owner):
     """Exercise the same explicit Play admission as the native controls."""
     if type(owner.app._impl).__module__.startswith('toga_android.'):
@@ -122,6 +136,8 @@ async def android_controls(owner):
 async def fullscreen_controls(owner, android):
     """Exercise native controls and observed system chrome, not Python mocks."""
     native = owner.native.native
+    awake = screen_awake(owner, android)
+    await until(awake)
     from mobile.screen_privacy import native_value
     if android:
         from java import jclass
@@ -168,6 +184,7 @@ async def fullscreen_controls(owner, android):
     await until(visible)
     await until(lambda: not visible() and hidden_bars(), timeout=5)
     native.pause()
+    await until(lambda: not awake())
     await until(visible)
     await asyncio.sleep(3.2)
     assert visible(), 'Paused controls automatically disappeared'
@@ -175,9 +192,12 @@ async def fullscreen_controls(owner, android):
     await until(lambda: visible() and bars() == previous)
     toggle()
     await until(lambda: not visible() and hidden_bars())
+    start_playback(owner)
+    await until(awake)
     # Caller closes while immersive, then observes restoration through saved host objects.
-    return (dict(tap_reveal=True, auto_hide=True, pause_visible=True, bars_restored=True),
-            lambda: bars() == previous)
+    return (dict(tap_reveal=True, auto_hide=True, pause_visible=True, bars_restored=True,
+                 playing_keeps_screen_awake=True, pause_releases_screen=True),
+            lambda: bars() == previous and not awake())
 
 
 async def exercise(app):

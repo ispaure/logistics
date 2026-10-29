@@ -18,6 +18,11 @@ hide again after three seconds. Pausing, finishing or encountering an error show
 the controls. Choose **Exit fullscreen** to keep them visible. The movie fills
 the player area behind the controls, preserving the video's aspect ratio.
 Automatic hiding is disabled with VoiceOver or Android touch exploration.
+
+While video plays visibly on the device, the player keeps the display awake.
+Pausing, finishing, closing or hiding playback releases that request so normal
+screen timeout can resume. Casting and picture-in-picture do not keep the main
+display awake. The three-second controls timer only hides controls.
 On iOS, the Video accessibility element also offers **Show video controls**.
 Use device volume buttons. The audio/subtitles button lists embedded audio and subtitles, a subtitles
 off action, and matching external sidecars. Put UTF-8 SRT files beside the movie,
