@@ -4,6 +4,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .control_icons import icon_button, apply_icon
 from .appearance import accessible_name
+from commonUtils.ui.readers.layout import READER_LAYOUT
 
 
 # One comic menu contract; storage adapters only supply supported callbacks.
@@ -125,12 +126,13 @@ def page_buttons(previous, next_page):
 
 class PageFooter:
     """Shared page/chapter scrubbing; publish movement only on release."""
-    def __init__(self, previous, following, move, *, compact=False, status=None, unit='page', vertical=False):
+    def __init__(self, previous, following, move, *, compact=False, status=None, unit='page', vertical=False, app=None, destination='documents'):
         self.previous, self.following, self.move = previous, following, move
         self.compact = compact
         self.vertical = vertical
         self.status = status
         self.unit = unit
+        self._layout_app, self._layout_destination = app, destination
         self.count, self.rtl = 0, False
         self.book_boundaries = None
         self.book_seek = None
@@ -143,18 +145,43 @@ class PageFooter:
             self.slider = VerticalPageSlider(on_release=self.release, style=Pack(flex=1, width=44))
         else:
             self.slider = toga.Slider(min=0, max=1, value=0, on_release=self.release,
-                                      style=Pack(flex=1, height=48))
+                                      style=Pack(flex=1, height=READER_LAYOUT.touch_extent))
         accessible_name(self.slider, 'Chapter position' if unit == 'chapter' else 'Page position')
-        self.spacer = toga.Label('', style=Pack(width=92, text_align='center', font_size=10))
-        self.badge = toga.Box(children=[self.spacer], style=Pack(direction=COLUMN, width=104, height=28,
-            align_items='center', justify_content='center', margin_left=6, margin_right=2))
+        self.spacer = toga.Label('', style=Pack(width=92 if vertical else 1, flex=0 if vertical else 1,
+            text_align='center', font_size=10))
+        self.badge = toga.Box(children=[self.spacer], style=Pack(direction=COLUMN if vertical else ROW,
+            **(dict(width=104, height=28, align_items='center', justify_content='center', margin_left=6, margin_right=2) if vertical else {})))
         from .appearance import surface
-        surface(self.spacer, background='transparent', foreground='text')
-        surface(self.badge, radius=14, background='alternate')
-        self.widget = toga.Box(style=Pack(direction=COLUMN if vertical else ROW, width=56 if vertical else toga.style.pack.NONE, align_items='center', margin_left=4, margin_right=4))
+        surface(self.spacer, background='transparent', foreground='text' if vertical else 'muted')
+        if vertical:
+            surface(self.badge, radius=14, background='alternate')
+        self.row = toga.Box(style=Pack(direction=ROW, align_items='center')) if not vertical else None
+        self.widget = toga.Box(style=Pack(direction=COLUMN, width=56 if vertical else toga.style.pack.NONE,
+            **(dict(align_items='center') if vertical else {}),
+            margin_left=READER_LAYOUT.progress_margin, margin_right=READER_LAYOUT.progress_margin))
+        if not vertical:
+            self.widget.add(self.row, self.badge)
+            from .reader_edges import style_progress_caption
+            style_progress_caption(self.spacer)
+        if app is not None:
+            from .layout_participants import participants
+            self._edge_subscription = participants(app).register(('reader-progress', id(self)), self,
+                lambda owner, frame: app.loop.call_soon(owner.refresh_edges,
+                    frame.content_width(destination, margin=0)), order=30)
         from .reader_progress import style_slider
         style_slider(self.slider)
         self.sync(comic=False, count=0, index=0)
+
+    def refresh_edges(self, available=None):
+        from .reader_edges import refresh_progress_edges
+        refresh_progress_edges(self)
+        if not self.vertical:
+            from .reader_edges import progress_width
+            width = progress_width(self.widget, available)
+            if self.badge.style.width != width:
+                self.badge.style.width = width
+            if self.spacer.style.width != width:
+                self.spacer.style.width = width
 
     def sync(self, *, comic, count, index, right_to_left=False):
         self.count, self.index, self.rtl = count, index, comic and right_to_left
@@ -171,15 +198,16 @@ class PageFooter:
             apply_icon(self.previous, 'up', 'Previous page', size=18)
             apply_icon(self.following, 'down', 'Next page', size=18)
         children = [self.following if self.rtl else self.previous,
-                    self.slider, self.badge,
+                    self.slider, *([self.badge] if self.vertical else []),
                     self.previous if self.rtl else self.following]
         if self.compact:
             children = ([] if hasattr(self.previous, '_native_reader_item') else
                         [self.previous, self.following])
-        if list(self.widget.children) != children:
-            for child in list(self.widget.children):
-                self.widget.remove(child)
-            self.widget.add(*children)
+        target = self.widget if self.vertical else self.row
+        if list(target.children) != children:
+            for child in list(target.children):
+                target.remove(child)
+            target.add(*children)
         self.slider.max = max(1, count - 1)
         self.slider.value = count - 1 - index if self.rtl else index
         self.slider.enabled = count > 1
@@ -190,11 +218,15 @@ class PageFooter:
             self.chapter_progress(index, count, 0, 0)
         else:
             self.set_progress_text(progress, f'{self.unit.title()} {progress}')
+        if self._layout_app is not None:
+            self._layout_app.loop.call_soon(self.refresh_edges,
+                self._layout_app.adaptive.content_width(self._layout_destination, margin=0))
 
     def set_progress_text(self, text, label):
         self.spacer.text = text.replace('/', '\n/') if self.vertical else text
-        self.badge.style.width = 48 if self.vertical else max(52, min(120, 20 + 7 * len(text)))
-        self.spacer.style.width = self.badge.style.width - 12
+        if self.vertical:
+            self.badge.style.width = 48
+            self.spacer.style.width = 36
         accessible_name(self.spacer, label)
 
     def set_book(self, book, seek):
@@ -223,11 +255,7 @@ class PageFooter:
         self.slider.max = 1
         self.slider.value = self.book_fraction
         self.slider.enabled = position['fraction'] is not None
-        if self.badge.style.width != 184 or self.badge.style.height != 44:
-            self.badge.style.update(width=184, height=44)
-            self.spacer.style.width = 172
-        self.spacer.text = position['mobile']
-        accessible_name(self.spacer, position['text'])
+        self.set_progress_text(position['mobile'], position['text'])
 
     def chapter_progress(self, index, count, offset, length):
         if self.epub_pagination is not None:

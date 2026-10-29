@@ -12,6 +12,27 @@ class ReaderProgressTests(unittest.TestCase):
         move = AsyncMock()
         return PageFooter(*page_buttons(None, None), move, **kwargs), move
 
+    def test_progress_caption_is_below_full_width_transport_without_a_badge_reservation(self):
+        footer, _ = self.footer(unit='chapter')
+        footer.chapter_progress(2, 12, 25, 100)
+        self.assertEqual(list(footer.widget.children), [footer.row, footer.badge])
+        self.assertEqual(list(footer.row.children), [footer.previous, footer.slider, footer.following])
+        self.assertEqual(footer.spacer.style.text_align, 'center')
+        self.assertEqual(footer.spacer.style.width, 1)
+        self.assertNotEqual(footer.badge.style.width, 184)
+        self.assertNotEqual(footer.badge.style.height, 44)
+
+    def test_caption_width_releases_a_previous_landscape_allocation(self):
+        footer, _ = self.footer(unit='chapter')
+        footer.refresh_edges(750)
+        self.assertEqual(footer.badge.style.width, 742)
+        self.assertEqual(footer.spacer.style.width, 742)
+        footer.refresh_edges(402)
+        self.assertEqual(footer.badge.style.width, 394)
+        self.assertEqual(footer.spacer.style.width, 394)
+        footer.refresh_edges(402)
+        self.assertEqual(footer.badge.style.width, 394)
+
     def test_page_and_chapter_tracks_commit_only_on_release(self):
         for unit in ('page',):
             with self.subTest(unit=unit):
@@ -41,7 +62,7 @@ class ReaderProgressTests(unittest.TestCase):
         status = toga.Label('Page 3–4/82 · 1/2 · Right-to-left manga')
         footer, move = self.footer(status=status)
         footer.sync(comic=True, count=82, index=2, right_to_left=True)
-        self.assertIs(footer.widget.children[0], footer.following)
+        self.assertIs(footer.row.children[0], footer.following)
         self.assertEqual(footer.spacer.text, '3–4/82 · 1/2')
         footer.slider.value = 0
         asyncio.run(footer.release(footer.slider))

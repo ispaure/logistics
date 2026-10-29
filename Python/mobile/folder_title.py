@@ -30,7 +30,8 @@ def storage_title(title, text, kinds, width):
     from .appearance import apple_color
     from .hub_icons import icon
     title_size = 17
-    subtitle_size = title_size * .75
+    from commonUtils.ui.readers.layout import READER_LAYOUT
+    subtitle_size = READER_LAYOUT.caption_size
     view = ObjCClass('UIView').alloc().initWithFrame(CGRect((0, 0), (width, 37)))
     label = ObjCClass('UILabel').alloc().initWithFrame(CGRect((0, 0), (width, 21)))
     label.text = title

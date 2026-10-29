@@ -185,7 +185,8 @@ class ReaderChrome:
                 self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
         self.page_footer = PageFooter(self.previous_page, self.next_page, self.move_book_page,
-                                      status=self.book_status if comic else None, unit='page' if comic else 'chapter')
+                                      status=self.book_status if comic else None, unit='page' if comic else 'chapter',
+                                      app=self.app, destination=self.presentation_destination)
         self.reader_footer = self.page_footer.widget
         if not comic:
             self.book_status.style.update(flex=1, width=1, height=48, margin_top=0)

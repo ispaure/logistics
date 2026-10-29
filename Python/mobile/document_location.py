@@ -123,7 +123,8 @@ def mount_android_subtitle(view, status, *, dark):
             row.addView(image, params)
         caption = TextView(context)
         caption.setSingleLine(True)
-        caption.setTextSize(17 * .75)
+        from commonUtils.ui.readers.layout import READER_LAYOUT
+        caption.setTextSize(READER_LAYOUT.caption_size)
         caption.setTextColor(Color.parseColor(colors['muted']))
         caption.setText(view._document_storage_status)
         row.addView(caption, LinearLayout.LayoutParams(-2, -2))

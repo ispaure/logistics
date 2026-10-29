@@ -189,7 +189,8 @@ def _mount_reader(self, view, controls, comic, neighbors):
     view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page,
                                   status=view.crypt_title if comic else None,
                                   unit='chapter' if view.crypt_reader.book is not None else 'page',
-                                  vertical=view.crypt_reader.kind == '.pdf')
+                                  vertical=view.crypt_reader.kind == '.pdf', app=host,
+                                  destination=self.presentation_destination)
     view.page_footer.sync(comic=view.crypt_reader.kind in {'.cbz', '.zip'},
                           count=len(view.crypt_reader.labels), index=0,
                           right_to_left=getattr(view.crypt_reader, 'right_to_left', False))

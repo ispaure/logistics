@@ -21,6 +21,38 @@ session identity, privacy exclusions and view-state rules remain in `workspace.p
 
 ## Owners
 
+### Reader control edges
+
+All imported/provider book and comic progress rows and PDF progress strips use
+`PageFooter` in `mobile.reader_controls`. Touch extents, track/thumb dimensions,
+spacing and margins come from `commonUtils.ui.readers.layout.READER_LAYOUT`;
+desktop book/comic chrome and PDF/video margins consume that same policy.
+Horizontal EPUB/comic controls use a full-width transport row with a centered,
+muted caption beneath it, matching the native storage subtitle's font size.
+EPUB retains separate page/percentage and chapter lines; comics retain their
+spread/half-page and right-to-left progress rules. PDF keeps its vertical strip.
+Desktop video places its timeline after the transport/actions/status rows.
+`mobile.reader_edges` reads Android's reported corner geometry and reflows
+registered progress controls through `LayoutParticipants`. iOS uses UIKit's safe
+areas, with only unconsumed Home-indicator clearance reserved by the host.
+Reader control clearance must not shrink fullscreen artwork unnecessarily.
+
+Native video receives transient `reader_layout` metrics through its platform
+binding, rather than persisting layout constants in playback preferences. iOS
+uses the window's physical safe bottom plus current top/side/fold constraints.
+Android reports system insets and available rounded-corner geometry to the same
+portable overlay calculation used by the reader policy. Older Android versions
+retain system bar/cutout insets without a guessed radius.
+
+The focused `viewer_layout_probe` exercises imported/provider EPUB and comics,
+PDF, images, text, MP4 and AVI across both landscape directions and portrait
+return. `mobile_build.validation.document_storage_tools --probe viewer-layout`
+runs it in an isolated QA identity. For iOS, `--family all` covers iPhone, iPad
+and Duo closed/open/partial poses using a pinned simulator-only fold helper.
+Builds and devices have manager-owned cleanup; reports/screenshots remain under
+ignored test evidence. This matrix is diagnostic native acceptance, not a claim
+of testing every physical device or a private movie's decoder corruption.
+
 On iOS, `cycle_collection.py` owns cyclic garbage collection for the process's
 UI loop. Toga constraint finalizers call UIKit, so automatic CPython collection
 must not run them during an unrelated worker allocation. Startup disables
