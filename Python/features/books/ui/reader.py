@@ -174,6 +174,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         if self.worker:
             return
         self._save_state()
+        self.book_progress.clear()
         self.book = self.text.book = self._state = None
         self._path = None
         self._bookmarks = []
@@ -518,14 +519,11 @@ class BooksPage(Bookmarks, qt.QWidget):
 
     def _position_changed(self, *args):
         if self.book:
-            self.book_progress.set_position(self._current,
-                min(1, (self.text.page_index + self.spread.step) / self.text.page_count))
-            last = min(self.text.page_count, self.text.page_index + self.spread.step)
-            pages = str(self.text.page_index + 1)
-            if self.spread.enabled and last > self.text.page_index + 1:
-                pages += f'–{last}'
-            self.progress_label.setText(f'Page {pages} / {self.text.page_count}')
-            self.progress_label.setMinimumWidth(self.progress_label.fontMetrics().horizontalAdvance(self.progress_label.text()) + 4)
+            position = self.book_progress.update_position(self)
+            label = position['mobile'] if self.width() < 900 else position['text']
+            self.progress_label.setText(label)
+            self.progress_label.setMinimumWidth(max(self.progress_label.fontMetrics().horizontalAdvance(line)
+                                                    for line in label.splitlines()) + 4)
             self.progress_label.setToolTip(f'Location {self._current + 1}:{self.text.location()} · '
                                           'Pages adapt to your font and window size; saved locations follow the text.')
             if not self._loading:
@@ -574,6 +572,7 @@ class BooksPage(Bookmarks, qt.QWidget):
     def prepare_close(self):
         from commonUtils.ui.resources.picker import resource_tasks_pending
         self._closing = True
+        self.book_progress.clear()
         if resource_tasks_pending(self.reader_window() or self):
             return False
         self.speech.stop()

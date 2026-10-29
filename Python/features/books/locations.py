@@ -130,3 +130,64 @@ def book_location(boundaries, fraction):
     index = min(len(boundaries) - 2, bisect_right(boundaries, fraction) - 1)
     start, end = boundaries[index:index + 2]
     return index, (fraction - start) / (end - start)
+
+
+class LayoutPages:
+    """Session-only screen-page counts for one exact reading layout."""
+    def __init__(self, chapters):
+        self.counts = [None] * chapters
+        self.layout = None
+
+    def reset(self, layout):
+        if layout != self.layout:
+            self.layout = layout
+            self.counts[:] = [None] * len(self.counts)
+            return True
+        return False
+
+    def record(self, chapter, count):
+        if type(count) is not int or not 1 <= count <= 10_000_000:
+            raise ValueError('Invalid rendered page count')
+        self.counts[chapter] = count
+
+    @property
+    def complete(self):
+        return bool(self.counts) and all(count is not None for count in self.counts)
+
+    @property
+    def boundaries(self):
+        if not self.complete:
+            return None
+        total = sum(self.counts)
+        result, offset = [0], 0
+        for count in self.counts:
+            offset += count
+            result.append(offset / total)
+        return result
+
+    def position(self, chapter, page, span=1):
+        count = self.counts[chapter] or 1
+        page = max(0, min(count - 1, page))
+        first, last = page + 1, min(count, page + max(1, span))
+        chapter_text = f'Chapter {chapter + 1} of {len(self.counts)}'
+        if not self.complete:
+            return dict(fraction=None, text=f'Counting pages… · {chapter_text}',
+                        mobile=f'Counting pages…\n{chapter_text}')
+        before, total = sum(self.counts[:chapter]), sum(self.counts)
+        first, last = before + first, before + last
+        pages = str(first) if first == last else f'{first}–{last}'
+        percent = 100 * last // total
+        page_text = f'Page {pages} of {total}'
+        return dict(fraction=last / total, text=f'{percent}% · {page_text} · {chapter_text}',
+                    mobile=f'{percent}% · {page_text}\n{chapter_text}')
+
+    def locate(self, fraction):
+        """Map the whole-book track to an exact chapter/local screen page."""
+        if not self.complete:
+            raise ValueError('Page counting is incomplete')
+        total = sum(self.counts)
+        target = min(total - 1, max(0, int(max(0, min(1, fraction)) * total)))
+        for chapter, count in enumerate(self.counts):
+            if target < count:
+                return chapter, target
+            target -= count

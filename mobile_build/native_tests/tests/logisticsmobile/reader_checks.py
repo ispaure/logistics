@@ -333,6 +333,11 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
     assert retained == {'same': True, 'anchor': 5}, retained
     await original_reader.evaluate_javascript('reader.highlight(-1,-1);reader.seek(0)')
     owner = app.reader_manager().active
+    deadline = asyncio.get_running_loop().time() + 20
+    while not owner.page_footer.epub_pagination.pages.complete:
+        assert asyncio.get_running_loop().time() < deadline, owner.page_footer.spacer.text
+        await asyncio.sleep(.1)
+    assert owner.page_footer.spacer.accessible_name == '50% · Page 1 of 2 · Chapter 1 of 2', owner.page_footer.spacer.accessible_name
     events = []
     original_event = owner.epub_event
     def event_state(reader, epoch, index, action):

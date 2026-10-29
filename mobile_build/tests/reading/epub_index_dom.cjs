@@ -10,6 +10,16 @@ const {chromium} = require('playwright');
   await page.setContent(fixture.html);
   await page.evaluate(()=>{window.walks=0;const create=document.createTreeWalker.bind(document);document.createTreeWalker=(...args)=>{walks++;return create(...args);};});
   await page.evaluate(fixture.script);
+  const checkMeasurement=async()=>{
+   const before=await page.evaluate(()=>reader.pagination());
+   await page.evaluate(html=>reader.measure(html,'same-chapter'),fixture.html);
+   await page.waitForFunction(()=>reader.measurement()?.done);
+   const result=await page.evaluate(()=>reader.measurement());
+   assert(!result.error,JSON.stringify(result));
+   assert.equal(result.count,before.count,'Hidden columns must match the visible chapter exactly');
+   assert.deepEqual(await page.evaluate(()=>reader.pagination()),before,'Counting moved the live passage');
+  };
+  await checkMeasurement();
   await page.evaluate(()=>reader.seek(0));
   const motion=await page.evaluate(()=>{
    reader.turn(1);const position=reader.pagination();
@@ -43,6 +53,7 @@ const {chromium} = require('playwright');
   await page.evaluate(()=>{reader.setMotion(false);reader.seek(0);});
   let spread=await page.evaluate(()=>reader.pagination());
   assert.equal(spread.columns,2);assert.equal(spread.index,0);
+  await checkMeasurement();
   assert(Math.abs(spread.left+spread.width+spread.gap/2-600)<1);
   const rightAnchor=await page.evaluate(()=>{
    const p=reader.pagination();

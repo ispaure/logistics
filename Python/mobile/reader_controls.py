@@ -135,6 +135,9 @@ class PageFooter:
         self.book_boundaries = None
         self.book_seek = None
         self.book_fraction = 0
+        self.epub_pagination = None
+        self.epub_book = None
+        self.screen_pages_unavailable = False
         if vertical:
             from .reader_progress import VerticalPageSlider
             self.slider = VerticalPageSlider(on_release=self.release, style=Pack(flex=1, width=44))
@@ -184,7 +187,10 @@ class PageFooter:
         progress = f'{index + 1}/{count}' if count else '—'
         if comic and self.status is not None and self.status.text.startswith('Page '):
             progress = self.status.text[5:].split(' · Right-to-left')[0]
-        self.set_progress_text(progress, f'{self.unit.title()} {progress}')
+        if self.unit == 'chapter' and count:
+            self.chapter_progress(index, count, 0, 0)
+        else:
+            self.set_progress_text(progress, f'{self.unit.title()} {progress}')
 
     def set_progress_text(self, text, label):
         self.spacer.text = text.replace('/', '\n/') if self.vertical else text
@@ -193,31 +199,55 @@ class PageFooter:
         accessible_name(self.spacer, label)
 
     def set_book(self, book, seek):
-        from features.books.locations import book_boundaries
-        self.book_boundaries = book_boundaries(book)
+        if id(book) != self.epub_book:
+            if self.epub_pagination is not None:
+                self.epub_pagination.cancel()
+            self.epub_pagination = None
+            self.epub_book = id(book)
+            self.book_boundaries = None
+            self.screen_pages_unavailable = False
         self.book_seek = seek
         accessible_name(self.slider, 'Whole book position')
 
-    def chapter_progress(self, index, count, offset, length):
-        fraction = min(1, max(0, offset / length)) if length else 0
-        boundaries = self.book_boundaries
-        start, end = (boundaries[index:index + 2] if boundaries is not None
-                      else (index / count, (index + 1) / count))
-        self.book_fraction = start + (end - start) * fraction
+    def bind_epub(self, view, book, index, render, loop):
+        self.screen_pages_unavailable = False
+        from features.books.mobile.pagination import MobilePagination
+        if self.epub_pagination is None or self.epub_pagination.book is not book:
+            if self.epub_pagination is not None:
+                self.epub_pagination.cancel()
+            self.epub_book = id(book)
+            self.epub_pagination = MobilePagination(book, self.show_epub_pages)
+        self.epub_pagination.bind(view, index, render, loop)
+
+    def show_epub_pages(self, position):
+        self.book_fraction = position['fraction'] or 0
         self.slider.max = 1
         self.slider.value = self.book_fraction
-        self.slider.enabled = count > 0
-        percent = round(100 * self.book_fraction)
-        self.set_progress_text(f'{percent}% · {index + 1}/{count}',
-                               f'Chapter {index + 1} of {count}, {percent}% through book')
+        self.slider.enabled = position['fraction'] is not None
+        if self.badge.style.width != 184 or self.badge.style.height != 44:
+            self.badge.style.update(width=184, height=44)
+            self.spacer.style.width = 172
+        self.spacer.text = position['mobile']
+        accessible_name(self.spacer, position['text'])
+
+    def chapter_progress(self, index, count, offset, length):
+        if self.epub_pagination is not None:
+            self.epub_pagination.publish()
+        else:
+            pending = 'Page count unavailable' if self.screen_pages_unavailable else 'Counting pages…'
+            self.show_epub_pages(dict(fraction=None,
+                text=f'{pending} · Chapter {index + 1} of {count}',
+                mobile=f'{pending}\nChapter {index + 1} of {count}'))
 
     async def release(self, widget, **kwargs):
         if not self.slider.enabled:
             return
         try:
             if self.book_seek is not None:
-                from features.books.locations import book_location
-                await self.book_seek(*book_location(self.book_boundaries, widget.value))
+                if self.epub_pagination is not None and self.epub_pagination.pages.complete:
+                    chapter, page = self.epub_pagination.pages.locate(widget.value)
+                    await self.book_seek(chapter, 0)
+                    await self.epub_pagination.seek_page(chapter, page)
             else:
                 index = round(widget.value)
                 await self.move(self.count - 1 - index if self.rtl else index)

@@ -33,7 +33,10 @@ Touchpad sensitivity and cooldown use the same **commonUtils → Wheel navigatio
 settings as the comic reader.
 
 Page counts adapt to the window size, font and spacing. The footer shows the
-chapter and current page; its tooltip shows a text location. Saved positions and
+whole-book percentage, **Page X of N**, then **Chapter X of Y**. Two-page spreads
+show a page range; the percentage is the last displayed page divided by the total.
+It shows **Counting pages…** until all chapters have been measured, and recounts
+after a layout change. Its tooltip shows a text location. Saved positions and
 new bookmarks follow a position in the chapter's text rather than a fixed page
 number, so changing the layout keeps you near the same passage.
 
@@ -129,8 +132,8 @@ unreasonably large or corrupt books.
 
 Wide reading panes display two consecutive pages; narrower panes display one.
 Page turns advance past the displayed pages, and resizing follows the current
-text location. The bottom track shows estimated whole-book progress, weighted
-by chapter resource size. Taller ticks mark higher-level contents entries;
+text location. The bottom track uses the rendered page counts across the book.
+It becomes available once counting finishes. Taller ticks mark higher-level contents entries;
 click anywhere on the track to jump to that part of the book.
 
 The speaker and Aa toolbar buttons toggle their floating panels. Clicking outside

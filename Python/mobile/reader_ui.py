@@ -360,6 +360,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         bind_epub_geometry(self.epub_view)
         from .font_scaling import bind
         bind(self, self.epub_view, 'epub', web=True)
+        from features.books.mobile.pagination import chapter_renderer
+        self.page_footer.bind_epub(self.epub_view, reader, index,
+            chapter_renderer(reader, self.preferences.values), self.loop)
         view = self.epub_view
         return view
 

@@ -450,12 +450,32 @@ inherit interface font changes, and slate/dark themes still adopt shared accent
 tint changes. `test_books_reader.py` covers skipped imports, reading-size updates
 and successive slate color notifications.
 
-## Whole-book mobile progress
+## Whole-book screen-page progress
 
-`features.books.locations.book_boundaries` supplies the resource-size weights
-shared by desktop and mobile progress. This is an approximation that avoids
-rendering every spine resource. Mobile PageFooter combines the chapter weight
-with the current UTF-16 text offset; its normalized scrubber maps back to a
-chapter and relative passage position. Imported and provider readers defer that
-relative target until the selected chapter's text index is prepared, preserving
-existing saved-position and private-session ownership.
+`features.books.locations.LayoutPages` holds per-spine screen-page counts for one
+layout. Both hosts display percentage, global page (or spread range), then chapter.
+The percentage uses the last visible page divided by the total. Unknown counts
+show “Counting pages…” and disable seeking. Layout changes invalidate the counts;
+saved positions remain UTF-16 text anchors. Ready scrubbers map directly to a
+chapter and local screen page.
+
+Desktop `BookProgress` measures one missing chapter per event-loop step in a hidden
+`BookText` with the live geometry, font, stylesheet and EPUB resource loader. Each
+measurement clears its document and book reference before deletion. Closing stops
+the timer and releases the counter's reader/book references.
+
+Mobile `MobilePagination` measures sanitized chapters in inert offscreen columns
+inside the retained WebView, using the live column geometry and typography and
+waiting for images and fonts. Bridge notifications carry page, page count, column
+count and layout key. Only numeric counts and a weak book reference survive between
+chapter bindings. Disposal cancels the owned counting task, detaches callbacks and
+removes measurement DOM content. Chapter preparation stays in that task; no private
+background worker can outlive disposal. Plain-text fallback reports page counts as
+unavailable instead of estimating them.
+
+`test_books_layout_progress.py` covers unequal chapter counts and spread/seek math;
+`test_books_reader.py` compares hidden counts with live chapter rendering and checks
+resize invalidation. Mobile pagination tests cover counting without navigation and
+disposal before private chapter preparation. The browser DOM fixture compares live
+and hidden counts in single- and two-column layouts. The native EPUB journey checks
+the combined footer once its two-chapter fixture has finished counting.

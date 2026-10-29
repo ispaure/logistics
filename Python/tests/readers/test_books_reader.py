@@ -17,6 +17,39 @@ from features.books.preferences import ReadingState
 
 
 class ReaderTests(QtTestCase):
+    def test_whole_book_screen_counts_match_live_chapters_and_recount_on_resize(self):
+        from PySide6.QtTest import QTest
+        book = self.page.book
+        original = book.read
+        sources = {book.spine[0]: '<html><body><p>' + 'Long first chapter. ' * 1600 + '</p></body></html>',
+                   book.spine[1]: '<html><body><p>' + 'Short second. ' * 80 + '</p></body></html>'}
+        def read(path):
+            return sources[path].encode() if path in sources else original(path)
+        def counted():
+            for _ in range(40):
+                QTest.qWait(50)
+                if self.page.book_progress.pages.complete:
+                    return list(self.page.book_progress.pages.counts)
+            self.fail('Screen-page counting did not finish')
+        with patch.object(book, 'read', side_effect=read):
+            self.page.go_chapter(0)
+            before = counted()
+            self.assertGreater(before[0], before[1])
+            for chapter, expected in enumerate(before):
+                self.page.go_chapter(chapter)
+                QTest.qWait(180)
+                self.assertEqual(self.page.text.page_count, expected)
+            label = self.page.progress_label.text()
+            self.assertLess(label.index('%'), label.index('Page'))
+            self.assertLess(label.index('Page'), label.index('Chapter'))
+            self.page.resize(750, 560)
+            after = counted()
+            self.assertNotEqual(after, before)
+            self.assertIn(f'of {sum(after)}', self.page.progress_label.text())
+            self.page.close_reader()
+            self.assertIsNone(self.page.book_progress.book)
+            self.assertFalse(self.page.book_progress.counter.isActive())
+
     def test_speech_continues_to_book_end_but_selection_does_not(self):
         from commonUtils.tests.appearance.test_read_aloud import SilentEngine
         speech = self.page.speech
@@ -148,6 +181,11 @@ class ReaderTests(QtTestCase):
     def test_book_track_has_nested_markers_and_click_seeks_to_another_chapter(self):
         from PySide6.QtTest import QTest
         track = self.page.book_progress
+        for _ in range(20):
+            if track.pages.complete:
+                break
+            QTest.qWait(50)
+        self.assertTrue(track.pages.complete)
         self.assertEqual([marker[1] for marker in track.markers], [0, 1, 0])
         self.assertGreater(track.markers[1][0], track.markers[0][0])
         QTest.mouseClick(track, qt.Qt.MouseButton.LeftButton,

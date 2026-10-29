@@ -19,6 +19,7 @@
     "mobile/media_controls.py",
     "mobile/media_ios.py",
     "mobile/navigation.py",
+    "mobile/pagination.py",
     "mobile/presentation.py",
     "mobile/private_view.py",
     "mobile/provider_controller.py",

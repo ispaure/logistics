@@ -39,8 +39,8 @@ sections with the disclosure button, or tap a chapter title to read it. There is
 no search field in this list. On iPhone, iPad and Android the list floats over the page without changing its
 width or reflowing the text. Tap outside, press Back, or choose a chapter to close it. Bookmarks remain below the list. Choosing an imported chapter or
 bookmark returns directly to reading. The footer
-shows the current chapter and percentage through its text in a compact badge.
-Its slim slider jumps between chapters when released; the arrows still turn
+shows the whole-book percentage, **Page X of N**, then **Chapter X of Y** in a compact badge.
+Its slim slider jumps to a screen page when released; the arrows still turn
 pages. Page margins come
 from **Appearance…**, without an extra frame narrowing the text. Chapter headings,
 paragraphs and quotations use consistent spacing within the page.
@@ -130,9 +130,12 @@ the timer active. The timer belongs to the open speech panel, is shared by mobil
 EPUB and Markdown read-aloud, and clears when that panel is disposed.
 
 In portrait and landscape, EPUB keeps Previous/Next and whole-book progress in a
-compact footer. The percentage and scrubber cover the entire book, with chapter
-sizes used as approximate weights. Dragging the thumb seeks into the selected
-chapter; the badge also shows the current chapter number. On iOS the native top bar centers the book title, with the chapter
+compact footer. The percentage and scrubber use actual screen-page counts across
+the entire book. Two-page spreads show a page range; the percentage is the last
+displayed page divided by the total. The footer shows **Counting pages…** and
+disables seeking until counting finishes. Font and viewport changes trigger a
+recount; saved reading positions still follow the text. Counts are held only for
+the current reader session. On iOS the native top bar centers the book title, with the chapter
 browser on the left and speech and Actions on the right. **Appearance…**, chapter
 search and **Fullscreen** remain available in Actions. Comics use the same title
 bar and keep their page scrubber; neighboring-comic buttons appear when supported
