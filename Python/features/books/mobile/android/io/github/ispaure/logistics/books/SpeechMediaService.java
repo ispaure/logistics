@@ -20,6 +20,7 @@ public final class SpeechMediaService extends Service {
     private AudioManager audio;
     private AudioFocusRequest focus;
     private boolean focused;
+    private int deliveredStartId;
     private PowerManager.WakeLock wake;
     private static final String CHANNEL = "logistics-read-aloud";
     private static final int NOTICE = 8715;
@@ -48,9 +49,14 @@ public final class SpeechMediaService extends Service {
     public static synchronized void detach(Context context, Listener value) {
         if (listener != value) return;
         epoch++; playing = false; timerText = ""; title = "Read aloud"; listener = null;
-        context.stopService(new Intent(context, SpeechMediaService.class));
         SpeechMediaService service = instance;
-        if (service != null) service.cleanup();
+        if (service != null) {
+            service.cleanup();
+            // Never cancel an undelivered foreground start. Android must first
+            // receive its startup acknowledgement, even for a finished passage.
+            // An older start ID cannot stop a newer request still in flight.
+            if (service.deliveredStartId != 0) service.stopSelf(service.deliveredStartId);
+        }
     }
     private void dispatch(String action) {
         Listener value = listener;
@@ -167,6 +173,7 @@ public final class SpeechMediaService extends Service {
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         prepareForeground();
+        deliveredStartId = startId;
         if (listener == null) { stopSelf(startId); return START_NOT_STICKY; }
         if (intent != null && intent.hasExtra("command")) {
             if (intent.getLongExtra("epoch", -1) == epoch) dispatch(intent.getStringExtra("command"));

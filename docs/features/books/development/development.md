@@ -338,7 +338,11 @@ prepare the foreground session before audio focus or Python callbacks, even when
 a short passage has already detached its listener. A reused service instance
 rebuilds disposed controls and binds callbacks to the current owner. Android still
 requires that startup acknowledgement; the ownerless service then stops through
-its normal lifecycle. The native EPUB gate keeps the process alive beyond the
+its normal lifecycle. Detaching clears private controls immediately but never
+cancels an undelivered foreground start with `stopService()`: Android can treat
+that cancellation as a startup violation before calling `onCreate()`. A running
+instance stops only its last acknowledged start ID; a newer pending request
+remains eligible for startup. The native EPUB gate keeps the process alive beyond the
 startup deadline and checks service retirement after synthetic speech completes. Ordinary imported
 EPUBs, ordinary Markdown previews, public vault notes and documentation publish
 a filename alongside the timer; document passages never enter native metadata. Private
