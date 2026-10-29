@@ -7,6 +7,8 @@ from pathlib import Path
 import plistlib
 import shutil
 import subprocess
+import sys
+import tarfile
 import time
 from zipfile import ZipFile, ZIP_DEFLATED
 
@@ -122,12 +124,15 @@ def prepare(apk, workspace, *, cloud=False, rclone=None):
     return unsigned
 
 
-def run(apk, output, *, cloud=False):
+def run(apk, output, *, cloud=False, rclone=None):
     output.mkdir(parents=True, exist_ok=False)
     environment, _ = tools_environment(deployment_environment())
     tools = build_tools(environment)
     with scratch() as workspace:
-        unsigned = prepare(apk, workspace, cloud=cloud)
+        unsigned = prepare(apk, workspace, cloud=cloud, rclone=rclone)
+        provenance = workspace / 'video-cloud-fixtures/fixture-tool.json'
+        if provenance.is_file():
+            shutil.copyfile(provenance, output / 'fixture-tool.json')
         shutil.copyfile(workspace / 'payload/source.json', output / 'source.json')
         key = workspace / 'debug.jks'
         subprocess.run(['keytool', '-genkeypair', '-keystore', str(key), '-storepass', 'android', '-keypass', 'android',
@@ -175,6 +180,17 @@ def run(apk, output, *, cloud=False):
         finally:
             if record is not None:
                 try:
+                    captured = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                        'run-as', BUNDLE, 'tar', '-C', 'cache', '-cf', '-', 'video-ui'],
+                        env=emulator.environment, capture_output=True, timeout=30)
+                    if captured.returncode == 0:
+                        screens = output / 'screens'
+                        screens.mkdir(exist_ok=True)
+                        with tarfile.open(fileobj=BytesIO(captured.stdout)) as archive:
+                            for member in archive.getmembers():
+                                if member.isfile() and Path(member.name).suffix in {'.png', '.json'}:
+                                    with archive.extractfile(member) as stream:
+                                        (screens / Path(member.name).name).write_bytes(stream.read())
                     (output / 'logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', timeout=30))
                 finally:
                     emulator.cleanup()
@@ -182,21 +198,23 @@ def run(apk, output, *, cloud=False):
                 emulator.cleanup()
 
 
-def run_ios(source, output, *, cloud=False, model_name='iPad'):
+def run_ios(source, output, *, cloud=False, model_name='iPad', ui=False, duoctl=None, pose=None,
+            appearance=None, content_size=None, pose_sweep=False, rclone=None):
     from uuid import uuid4
     from build_manager.apple_simulators import AppleSimulators
     from .duo_pose_tools import prepare as prepare_app
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     runtime, model = next((runtime, row['deviceTypeIdentifier']) for runtime, rows in client.devices()['devices'].items()
-                          for row in rows if row.get('isAvailable') and model_name in row['name'])
+                          for row in rows if row.get('isAvailable') and model_name in row['name']
+                          and (model_name != 'iPhone' or 'Duo' not in row['name']))
     name, bundle = 'Build Manager Video QA ' + uuid4().hex, 'io.github.ispaure.logisticsvideoqa'
     device = None
     cache = None
     with scratch() as workspace:
         app = prepare_app(source, workspace / 'build')
         shutil.copyfile(app / 'app/fold-source.json', output / 'source.json')
-        module = 'video_cloud_probe' if cloud else 'video_probe'
+        module = 'video_ui_probe' if ui else 'video_cloud_probe' if cloud else 'video_probe'
         entrypoint = f'from tests.logisticsmobile.{module} import main\nmain().main_loop()\n'
         (app / 'app/logisticsmobile/__main__.py').write_text(entrypoint)
         tests = app / 'app/tests/logisticsmobile'
@@ -204,9 +222,10 @@ def run_ios(source, output, *, cloud=False, model_name='iPad'):
         for bytecode in (tests / '__pycache__').glob('__main__*.pyc'):
             bytecode.unlink()
         if cloud:
-            shutil.copytree(cloud_fixtures(workspace), tests / 'video-cloud-fixtures')
+            shutil.copytree(cloud_fixtures(workspace, rclone=rclone), tests / 'video-cloud-fixtures')
+            shutil.copyfile(tests / 'video-cloud-fixtures/fixture-tool.json', output / 'fixture-tool.json')
         else:
-            codec_matrix(tests / 'video-fixtures', duration=12)
+            codec_matrix(tests / 'video-fixtures', duration=60 if ui else 12)
         # Video QA does not exercise app extensions. Remove only this scratch copy's
         # extensions, whose signed identities belong to the containing production app.
         for extension_directory in ('PlugIns', 'Extensions'):
@@ -219,19 +238,43 @@ def run_ios(source, output, *, cloud=False, model_name='iPad'):
         try:
             device = client.create(name, model, runtime)
             client.boot(device)
+            if appearance:
+                client.invoke('ui', device, 'appearance', appearance)
+            if content_size:
+                client.invoke('ui', device, 'content_size', content_size)
+            if pose is not None:
+                if duoctl is None or 'Duo' not in model_name:
+                    raise ValueError('A pose requires an explicit reviewed tool and a Duo simulator.')
+                tool = [sys.executable, str(duoctl), '-d', device]
+                subprocess.run([*tool, 'hinge', str({'closed': 0, 'partial': 127, 'open': 180}[pose])], check=True, timeout=60)
+                (output / 'simulator-pose.json').write_text(subprocess.check_output([*tool, 'state'], text=True, timeout=30))
             if cloud:
                 client.invoke('keychain', device, 'add-root-cert', str(workspace / 'video-cloud-fixtures/tls/ca.pem'))
             client.invoke('install', device, str(app))
-            client.invoke('launch', device, bundle)
+            if pose_sweep and (not ui or duoctl is None or 'Duo' not in model_name):
+                raise ValueError('Pose transitions require the Duo UI probe and an explicit reviewed helper.')
+            client.invoke('launch', device, bundle, *(['--pose-transitions'] if pose_sweep else []))
             container = Path(client.invoke('get_app_container', device, bundle, 'data').strip())
             cache = container / 'Library/Caches'
             deadline = time.monotonic() + 360
+            completed_pose = None
             while time.monotonic() < deadline:
+                request = cache / 'video-ui-pose-request.json'
+                if pose_sweep and request.exists():
+                    action = json.loads(request.read_text())
+                    if action['sequence'] != completed_pose:
+                        tool = [sys.executable, str(duoctl), '-d', device]
+                        subprocess.run([*tool, 'hinge', str({'closed': 0, 'partial': 127, 'open': 180}[action['pose']])], check=True, timeout=60)
+                        state = json.loads(subprocess.check_output([*tool, 'state'], text=True, timeout=30))
+                        completed_pose = action['sequence']
+                        (cache / 'video-ui-pose-done.json').write_text(json.dumps(dict(sequence=completed_pose, state=state)))
                 paths = list(cache.rglob('video-probe-result.json'))
                 if not paths:
                     time.sleep(.5)
                     continue
                 report = json.loads(paths[0].read_text())
+                if (cache / 'video-ui').exists():
+                    shutil.copytree(cache / 'video-ui', output / 'screens', dirs_exist_ok=True)
                 frames = output / 'frames'
                 frames.mkdir(exist_ok=True)
                 for frame in cache.rglob('video-cloud-frames/*.png'):
@@ -253,11 +296,16 @@ def run_ios(source, output, *, cloud=False, model_name='iPad'):
                 return
             raise TimeoutError('Focused iPad video probe did not finish within six minutes')
         finally:
-            if cache is not None:
-                for path in cache.rglob('video-probe-result.json'):
-                    shutil.copyfile(path, output / 'device-result.json')
-            if device is not None:
-                client.remove(device, name)
+            try:
+                if cache is not None:
+                    if (cache / 'video-ui').exists():
+                        shutil.copytree(cache / 'video-ui', output / 'screens', dirs_exist_ok=True)
+                    for path in cache.rglob('video-probe-result.json'):
+                        shutil.copyfile(path, output / 'device-result.json')
+            finally:
+                if device is not None:
+                    client.remove(device, name)
+                    (output / 'cleanup.json').write_text(json.dumps(dict(device=device, simulator_removed=True)))
 
 
 if __name__ == '__main__':
@@ -266,11 +314,25 @@ if __name__ == '__main__':
     parser.add_argument('--ios-app', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cloud', action='store_true', help='Exercise real native WebDAV and crypt network ranges.')
-    parser.add_argument('--ios-model', choices=('iPad', 'iPhone'), default='iPad')
+    parser.add_argument('--rclone', type=Path, help='Explicit host fixture tool for cloud probes in frozen source snapshots.')
+    parser.add_argument('--ios-model', choices=('iPad', 'iPhone', 'iPhone Duo'), default='iPad')
+    parser.add_argument('--ui', action='store_true', help='Inspect native iOS video buttons and rotate the retained player.')
+    parser.add_argument('--duoctl', type=Path, help='Explicit reviewed simulator-only pose helper.')
+    parser.add_argument('--pose', choices=('closed', 'partial', 'open'))
+    parser.add_argument('--pose-sweep', action='store_true', help='Fold/unfold the same retained native video player during the UI check.')
+    parser.add_argument('--appearance', choices=('light', 'dark'))
+    parser.add_argument('--content-size', help='Native simctl content-size category for the owned simulator.')
     arguments = parser.parse_args()
     if bool(arguments.apk) == bool(arguments.ios_app):
         parser.error('Choose exactly one managed Android APK or iOS app.')
+    if (arguments.ui and (arguments.cloud or arguments.apk)) or (arguments.pose and not arguments.ui):
+        parser.error('UI/pose checks require an iOS app and cannot combine with cloud checks.')
+    if arguments.pose_sweep and (not arguments.ui or not arguments.duoctl or arguments.ios_model != 'iPhone Duo'):
+        parser.error('Pose transitions require --ui, --ios-model "iPhone Duo" and --duoctl.')
     if arguments.apk:
-        run(arguments.apk.resolve(), arguments.output.resolve(), cloud=arguments.cloud)
+        run(arguments.apk.resolve(), arguments.output.resolve(), cloud=arguments.cloud, rclone=arguments.rclone)
     else:
-        run_ios(arguments.ios_app.resolve(), arguments.output.resolve(), cloud=arguments.cloud, model_name=arguments.ios_model)
+        run_ios(arguments.ios_app.resolve(), arguments.output.resolve(), cloud=arguments.cloud, model_name=arguments.ios_model,
+                ui=arguments.ui, duoctl=arguments.duoctl, pose=arguments.pose,
+                appearance=arguments.appearance, content_size=arguments.content_size, pose_sweep=arguments.pose_sweep,
+                rclone=arguments.rclone)

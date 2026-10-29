@@ -65,6 +65,60 @@ async def android_frame(owner):
     return len(colors)
 
 
+async def android_controls(owner):
+    """Inspect native Android button geometry through rotations before decoding."""
+    from java import jclass
+    from .rotation_checks import rotate
+    native = owner.native.native
+    def field(name):
+        value = native.getClass().getDeclaredField(name)
+        value.setAccessible(True)
+        return value.get(native)
+    root, controls, scroll = field('root'), field('controls'), field('controlsScroll')
+    density = owner.app._impl.native.getResources().getDisplayMetrics().density
+    samples = []
+    out = Path(owner.app.paths.cache) / 'video-ui'
+    out.mkdir(exist_ok=True)
+    for orientation in ('portrait', 'landscape-left', 'landscape-right', 'portrait'):
+        await rotate(owner.app, orientation)
+        await asyncio.sleep(.3)
+        def screenshot():
+            Bitmap = jclass('android.graphics.Bitmap')
+            bitmap = Bitmap.createBitmap(root.getWidth(), root.getHeight(), Bitmap.Config.ARGB_8888)
+            root.draw(jclass('android.graphics.Canvas')(bitmap))
+            stream = jclass('java.io.ByteArrayOutputStream')()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            (out / (str(len(samples)) + '-' + orientation + '.png')).write_bytes(bytes(stream.toByteArray()))
+            bitmap.recycle()
+        screenshot()
+        pending, rows = [controls], []
+        while pending:
+            view = pending.pop(0)
+            if isinstance(view, jclass('android.widget.Button')):
+                label = str(view.getContentDescription())
+                assert view.getWidth() / density >= 47.5 and view.getHeight() / density >= 47.5, label
+                view.requestRectangleOnScreen(jclass('android.graphics.Rect')(0, 0, view.getWidth(), view.getHeight()), True)
+                await asyncio.sleep(.05)
+                location = jclass('android.graphics.Rect')()
+                assert view.getGlobalVisibleRect(location), (label, 'not visible',
+                    'scroll', scroll.getWidth(), scroll.getHeight(), scroll.getScrollY(),
+                    'controls', controls.getWidth(), controls.getHeight(),
+                    'parent', view.getParent().getLeft(), view.getParent().getTop(),
+                    view.getParent().getWidth(), view.getParent().getHeight(),
+                    'group', view.getParent().getParent().getWidth(),
+                    'params', view.getParent().getLayoutParams().width, view.getParent().getLayoutParams().weight,
+                    'button', view.getLeft(), view.getTop(), view.getWidth(), view.getHeight())
+                assert location.width() >= view.getWidth() and location.height() >= view.getHeight(), (label, 'clipped')
+                rows.append(dict(label=label, width=view.getWidth() / density, height=view.getHeight() / density))
+            if hasattr(view, 'getChildCount'):
+                pending.extend(view.getChildAt(i) for i in range(view.getChildCount()))
+        scroll.scrollTo(0, 0)
+        screenshot()
+        samples.append(dict(orientation=orientation, width=root.getWidth() / density, buttons=rows))
+    (out / 'android-controls.json').write_text(json.dumps(samples, indent=2))
+    return samples
+
+
 async def fullscreen_controls(owner, android):
     """Exercise native controls and observed system chrome, not Python mocks."""
     native = owner.native.native
@@ -93,7 +147,10 @@ async def fullscreen_controls(owner, android):
         visible = lambda: not native_value(native.controls, 'isHidden')
         tap = lambda: native.tapVideo(None)
         toggle = lambda: native.toggleFullscreen(None)
-        status_manager = native.view.window.windowScene.statusBarManager
+        view = native_value(native, 'view')
+        window = native_value(view, 'window')
+        scene = native_value(window, 'windowScene')
+        status_manager = native_value(scene, 'statusBarManager')
         bars = lambda: bool(native_value(status_manager, 'isStatusBarHidden'))
         hidden_bars = bars
     previous = bars()
@@ -103,8 +160,10 @@ async def fullscreen_controls(owner, android):
         assert root.getHeight() == decor.getHeight(), 'Fullscreen root does not fill the window'
         assert field('video').getHeight() == root.getHeight(), 'Controls shrink the video'
     else:
-        assert abs(native.movie.bounds.size.height - native.view.bounds.size.height) < 1
-        assert abs(native.movie.bounds.size.width - native.view.bounds.size.width) < 1
+        movie_bounds = native_value(native.movie, 'bounds')
+        view_bounds = native_value(view, 'bounds')
+        assert abs(movie_bounds.size.height - view_bounds.size.height) < 1
+        assert abs(movie_bounds.size.width - view_bounds.size.width) < 1
     tap()
     await until(visible)
     await until(lambda: not visible() and hidden_bars(), timeout=5)
@@ -144,6 +203,8 @@ async def exercise(app):
             assert await open_video(app, LocalFiles(root), path.name)
             owner = app.video_player
             if android:
+                if not fullscreen_checked:
+                    rows.append(dict(name='android-controls', samples=await android_controls(owner)))
                 player = android_player(owner)
                 start_playback(owner)
                 await until(lambda: player.getTime() > 500 and player.getLength() > 1000)

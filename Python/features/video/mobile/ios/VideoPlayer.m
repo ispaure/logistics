@@ -3,13 +3,17 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CallKit/CallKit.h>
 #import <VLCKit/VLCKit.h>
+#if __has_include(<UIKit/UIHingeInteraction.h>)
+#import <UIKit/UIHingeInteraction.h>
+#import <UIKit/UIViewReservedRegion.h>
+#endif
 
 @interface LGVideoController : UIViewController
     <VLCDrawable, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling,
      VLCMediaPlayerDelegate, CXCallObserverDelegate, UIGestureRecognizerDelegate>
 @property(nonatomic, copy) NSString *videoURL;
 @property(nonatomic, copy) NSString *subtitleJSON;
-@property(nonatomic) int64_t startMilliseconds;
+@property(nonatomic) int64_t startMilliseconds; // Deferred resume/paused seek; -1 means no pending seek.
 @property(nonatomic) BOOL restricted;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
 @property(nonatomic, copy) BOOL (^requestPlay)(void);
@@ -17,6 +21,10 @@
 @property(nonatomic, strong) VLCMediaPlayer *player;
 @property(nonatomic, strong) UIView *movie;
 @property(nonatomic, strong) UIStackView *controls;
+@property(nonatomic, strong) UIScrollView *controlsScroll;
+@property(nonatomic, strong) UIStackView *buttonGroups;
+@property(nonatomic, strong) UILabel *timeLabel;
+@property(nonatomic, strong) NSLayoutConstraint *controlsLeading, *controlsTrailing, *controlsTop, *controlsBottom;
 @property(nonatomic, strong) UILabel *message;
 @property(nonatomic, strong) UISlider *seek;
 @property(nonatomic, strong) UIButton *playButton;
@@ -61,48 +69,92 @@
     self.controls.backgroundColor = [UIColor colorWithWhite:0 alpha:.8];
     self.controlsVisible = YES;
     self.controls.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.controls];
+    self.controlsScroll = [[UIScrollView alloc] init];
+    self.controlsScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.controlsScroll];
+    [self.controlsScroll addSubview:self.controls];
     self.message = [[UILabel alloc] init];
     self.message.textColor = UIColor.whiteColor;
+    self.message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    self.message.adjustsFontForContentSizeCategory = YES;
     self.message.numberOfLines = 2;
     self.message.text = @"Ready. Press Play to start.";
     [self.controls addArrangedSubview:self.message];
+    self.timeLabel = [[UILabel alloc] init];
+    self.timeLabel.textColor = UIColor.whiteColor;
+    self.timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:13 weight:UIFontWeightRegular];
+    self.timeLabel.adjustsFontSizeToFitWidth = YES;
+    self.timeLabel.text = @"0:00 / 0:00";
+    self.timeLabel.accessibilityLabel = @"Playback time";
+    [self.controls addArrangedSubview:self.timeLabel];
     self.seek = [[UISlider alloc] init];
+    self.seek.minimumTrackTintColor = UIColor.whiteColor;
+    self.seek.maximumTrackTintColor = [UIColor colorWithWhite:.65 alpha:1];
+    self.seek.thumbTintColor = UIColor.whiteColor;
     self.seek.accessibilityLabel = @"Video position";
+    [self.seek.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
     [self.seek addTarget:self action:@selector(seekChanged:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
     [self.controls addArrangedSubview:self.seek];
     UIStackView *buttons = [[UIStackView alloc] init];
     buttons.distribution = UIStackViewDistributionFillEqually;
-    [self.controls addArrangedSubview:buttons];
+    buttons.spacing = 8;
+    self.buttonGroups = [[UIStackView alloc] init];
+    self.buttonGroups.axis = UILayoutConstraintAxisVertical;
+    self.buttonGroups.spacing = 8;
+    self.buttonGroups.distribution = UIStackViewDistributionFillProportionally;
+    [self.controls addArrangedSubview:self.buttonGroups];
+    [self.buttonGroups addArrangedSubview:buttons];
+    [self button:@"Back 10 seconds" selector:@selector(back:) row:buttons];
     self.playButton = [self button:@"Play" selector:@selector(togglePlay:) row:buttons];
-    [self button:@"−10s" selector:@selector(back:) row:buttons];
-    [self button:@"+10s" selector:@selector(forward:) row:buttons];
-    [self button:@"Tracks" selector:@selector(tracks:) row:buttons];
-    [self button:@"Done" selector:@selector(done:) row:buttons];
+    [self button:@"Forward 10 seconds" selector:@selector(forward:) row:buttons];
     UIStackView *display = [[UIStackView alloc] init];
     display.distribution = UIStackViewDistributionFillEqually;
-    [self.controls addArrangedSubview:display];
+    display.spacing = 8;
+    [self.buttonGroups addArrangedSubview:display];
+    [self button:@"Audio and subtitles" selector:@selector(tracks:) row:display];
     self.fullscreenButton = [self button:@"Fullscreen" selector:@selector(toggleFullscreen:) row:display];
     if (!self.restricted) {
-        UIStackView *external = [[UIStackView alloc] init];
-        external.distribution = UIStackViewDistributionFillEqually;
-        [self.controls addArrangedSubview:external];
-        [self button:@"Picture in picture" selector:@selector(pip:) row:external];
-        [self button:@"Cast…" selector:@selector(cast:) row:external];
+        UIButton *more = [self button:@"More playback options" selector:NULL row:display];
+        __weak LGVideoController *owner = self;
+        __weak UIButton *anchor = more;
+        more.menu = [UIMenu menuWithChildren:@[
+            [UIAction actionWithTitle:@"Picture in picture" image:[UIImage systemImageNamed:@"pip"] identifier:nil handler:^(UIAction *action) { [owner pip:anchor]; }],
+            [UIAction actionWithTitle:@"Cast…" image:[UIImage systemImageNamed:@"tv"] identifier:nil handler:^(UIAction *action) { [owner cast:anchor]; }]
+        ]];
+        more.showsMenuAsPrimaryAction = YES;
     }
+    [self button:@"Done" selector:@selector(done:) row:display];
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    NSLayoutConstraint *naturalHeight = [self.controlsScroll.heightAnchor constraintEqualToAnchor:self.controls.heightAnchor];
+    naturalHeight.priority = UILayoutPriorityDefaultHigh;
+    self.controlsLeading = [self.controlsScroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:12];
+    self.controlsTrailing = [self.controlsScroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12];
+    self.controlsBottom = [self.controlsScroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-8];
+    self.controlsTop = [self.controlsScroll.topAnchor constraintGreaterThanOrEqualToAnchor:safe.topAnchor constant:8];
     [NSLayoutConstraint activateConstraints:@[
         [self.movie.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [self.movie.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [self.movie.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [self.movie.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-        [self.controls.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:12],
-        [self.controls.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12],
-        [self.controls.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-8]
+        self.controlsLeading, self.controlsTrailing, self.controlsBottom, self.controlsTop,
+        naturalHeight,
+        [self.controls.leadingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.leadingAnchor],
+        [self.controls.trailingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.trailingAnchor],
+        [self.controls.topAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.topAnchor],
+        [self.controls.bottomAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.bottomAnchor],
+        [self.controls.widthAnchor constraintEqualToAnchor:self.controlsScroll.frameLayoutGuide.widthAnchor]
     ]];
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapVideo:)];
     tap.delegate = self;
     [self.view addGestureRecognizer:tap];
+#if __has_include(<UIKit/UIHingeInteraction.h>)
+    if (@available(iOS 27.1, *)) {
+        __weak LGVideoController *owner = self;
+        [self.view addInteraction:[[UIHingeInteraction alloc] initWithUpdateHandler:^(UIHingeInteraction *interaction, UIHingeInteractionUpdate *update) {
+            [owner.view setNeedsLayout];
+        }]];
+    }
+#endif
     self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--no-stats"]];
     self.player.drawable = self;
     self.player.delegate = self;
@@ -125,11 +177,12 @@
     return self.fullscreen && !self.controlsVisible && !self.pipActive ? UIRectEdgeAll : UIRectEdgeNone;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
-    return ![touch.view isDescendantOfView:self.controls];
+    return ![touch.view isDescendantOfView:self.controlsScroll];
 }
 - (void)setControlsShown:(BOOL)visible {
     self.controlsVisible = visible;
     self.controls.hidden = !visible || self.pipActive;
+    self.controlsScroll.hidden = self.controls.hidden;
     [self setNeedsStatusBarAppearanceUpdate];
     [self setNeedsUpdateOfHomeIndicatorAutoHidden];
     [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
@@ -148,7 +201,7 @@
 }
 - (void)toggleFullscreen:(id)sender {
     self.fullscreen = !self.fullscreen;
-    [self.fullscreenButton setTitle:self.fullscreen ? @"Exit fullscreen" : @"Fullscreen" forState:UIControlStateNormal];
+    [self updateButton:self.fullscreenButton label:self.fullscreen ? @"Exit fullscreen" : @"Fullscreen"];
     [self setControlsShown:!self.fullscreen];
 }
 - (void)tapVideo:(id)sender {
@@ -164,13 +217,61 @@
     [super viewDidAppear:animated];
     [self setControlsShown:YES];
 }
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
+    CGRect available = safe;
+#if __has_include(<UIKit/UIHingeInteraction.h>)
+    if (@available(iOS 27.1, *)) {
+        for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
+            CGRect fold = CGRectIntersection(available, region.frame);
+            if (CGRectIsNull(fold) || CGRectIsEmpty(fold)) continue;
+            if (fold.size.height > fold.size.width) {
+                CGFloat left = CGRectGetMinX(fold) - CGRectGetMinX(available);
+                CGFloat right = CGRectGetMaxX(available) - CGRectGetMaxX(fold);
+                if (right >= left) { available.origin.x = CGRectGetMaxX(fold); available.size.width = right; }
+                else available.size.width = left;
+            } else {
+                CGFloat bottom = CGRectGetMaxY(available) - CGRectGetMaxY(fold);
+                // A partially folded device keeps transport buttons below the crease.
+                if (bottom >= 112) { available.origin.y = CGRectGetMaxY(fold); available.size.height = bottom; }
+                else available.size.height = CGRectGetMinY(fold) - CGRectGetMinY(available);
+            }
+        }
+    }
+#endif
+    self.controlsLeading.constant = 12 + CGRectGetMinX(available) - CGRectGetMinX(safe);
+    self.controlsTrailing.constant = -12 + CGRectGetMaxX(available) - CGRectGetMaxX(safe);
+    self.controlsTop.constant = 8 + CGRectGetMinY(available) - CGRectGetMinY(safe);
+    self.controlsBottom.constant = -8 + CGRectGetMaxY(available) - CGRectGetMaxY(safe);
+    CGFloat width = available.size.width - 24;
+    // Adapt to the actual window, including outer display and system Split View.
+    UILayoutConstraintAxis axis = width >= 500 ? UILayoutConstraintAxisHorizontal : UILayoutConstraintAxisVertical;
+    if (self.buttonGroups.axis != axis) self.buttonGroups.axis = axis;
+}
+
+- (void)updateButton:(UIButton *)button label:(NSString *)label {
+    NSDictionary *symbols = @{@"Play": @"play.fill", @"Pause": @"pause.fill",
+        @"Back 10 seconds": @"gobackward.10", @"Forward 10 seconds": @"goforward.10",
+        @"Audio and subtitles": @"captions.bubble", @"Fullscreen": @"arrow.up.left.and.arrow.down.right",
+        @"Exit fullscreen": @"arrow.down.right.and.arrow.up.left", @"More playback options": @"ellipsis",
+        @"Done": @"xmark"};
+    [button setImage:[UIImage systemImageNamed:symbols[label]] forState:UIControlStateNormal];
+    button.accessibilityLabel = label;
+    button.accessibilityIdentifier = [@"video." stringByAppendingString:label];
+    button.accessibilityHint = [label isEqualToString:@"Done"] ? @"Close video player" : nil;
+}
 
 - (UIButton *)button:(NSString *)title selector:(SEL)selector row:(UIStackView *)row {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-    [button setTitle:title forState:UIControlStateNormal];
-    [button addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
+    [self updateButton:button label:title];
+    button.tintColor = UIColor.whiteColor;
+    button.backgroundColor = [UIColor colorWithWhite:1 alpha:.15];
+    button.layer.cornerRadius = 8;
+    if (selector) [button addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
     [button addTarget:self action:@selector(scheduleControls) forControlEvents:UIControlEventTouchUpInside];
-    [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+    [button.heightAnchor constraintGreaterThanOrEqualToConstant:48].active = YES;
+    [button.widthAnchor constraintGreaterThanOrEqualToConstant:48].active = YES;
     [row addArrangedSubview:button];
     return button;
 }
@@ -186,9 +287,26 @@
 - (void)togglePlay:(id)sender {
     if (self.player.isPlaying) [self pause]; else [self startByUser];
 }
-- (void)back:(id)sender { if ([self canPlay:NO]) [self.player jumpBackward:10]; }
-- (void)forward:(id)sender { if ([self canPlay:NO]) [self.player jumpForward:10]; }
-- (void)seekChanged:(UISlider *)slider { if ([self canPlay:NO]) self.player.position = slider.value; }
+- (void)seekToMilliseconds:(int64_t)target {
+    if (![self canPlay:NO] || !self.player.isSeekable) return;
+    int64_t duration = self.player.media.length.value.longLongValue;
+    target = MAX(0, target);
+    if (duration > 0) target = MIN(target, MAX(0, duration - 1));
+    // VLC may retain the old reported clock while paused. Preserve the requested
+    // position for controls/checkpoints and apply it again on explicit Play.
+    self.ended = NO;
+    self.startMilliseconds = self.player.isPlaying ? -1 : target;
+    self.player.time = [VLCTime timeWithNumber:@(target)];
+}
+- (void)skipMilliseconds:(int64_t)offset { [self seekToMilliseconds:[self positionMilliseconds] + offset]; }
+- (void)back:(id)sender { [self skipMilliseconds:-10000]; }
+- (void)forward:(id)sender { [self skipMilliseconds:10000]; }
+- (void)seekChanged:(UISlider *)slider {
+    int64_t duration = self.player.media.length.value.longLongValue;
+    if (duration <= 0) return;
+    [self seekToMilliseconds:(int64_t)(slider.value * duration)];
+    [self scheduleControls];
+}
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
     [self setControlsShown:YES];
@@ -229,6 +347,10 @@
     self.pausePending = NO;
     if (self.audioSuppressed) { self.player.audio.muted = self.resumeMuted; self.audioSuppressed = NO; }
     [self.player play];
+    if ([self.message.text isEqualToString:@"Ready. Press Play to start."]) {
+        self.message.text = @"";
+        self.message.hidden = YES;
+    }
 }
 - (void)audioInterrupted:(NSNotification *)notification {
     NSUInteger type = [notification.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
@@ -268,19 +390,30 @@
 }
 - (int64_t)positionMilliseconds {
     if (self.ended) return 0;
-    if (self.startMilliseconds > 0) return self.startMilliseconds;
+    if (self.startMilliseconds >= 0) return self.startMilliseconds;
     int64_t value = self.player.time.value.longLongValue;
     return value >= 0 ? value : self.lastPosition;
 }
 - (BOOL)completed { return self.ended; }
-- (void)showStatus:(NSString *)message { self.message.text = message; [self setControlsShown:YES]; }
+- (void)showStatus:(NSString *)message {
+    self.message.text = message;
+    self.message.hidden = message.length == 0;
+    [self setControlsShown:YES];
+}
 - (void)tick:(NSTimer *)timer {
     if (![self canPlay:NO]) [self pause];
     int64_t position = [self positionMilliseconds];
     int64_t duration = self.player.media.length.value.longLongValue;
     if (!self.seek.tracking && duration > 0) self.seek.value = (float)position / duration;
+    NSString *(^time)(int64_t) = ^NSString *(int64_t value) {
+        int64_t seconds = MAX(0, value / 1000);
+        return [NSString stringWithFormat:@"%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60];
+    };
+    self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@", time(position), time(duration)];
+    self.timeLabel.accessibilityValue = self.timeLabel.text;
+    self.seek.accessibilityValue = self.timeLabel.text;
     self.lastPosition = position;
-    [self.playButton setTitle:self.player.isPlaying ? @"Pause" : @"Play" forState:UIControlStateNormal];
+    [self updateButton:self.playButton label:self.player.isPlaying ? @"Pause" : @"Play"];
 }
 - (void)mediaPlayerStateChanged:(VLCMediaPlayerState)state {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -288,9 +421,9 @@
         if (state != VLCMediaPlayerStatePlaying) self.pausePending = NO;
         if (state == VLCMediaPlayerStatePlaying) {
             if (self.manualResumeRequired || ![self canPlay:NO]) { [self pause]; return; }
-            if (self.startMilliseconds > 0) {
+            if (self.startMilliseconds >= 0) {
                 self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
-                self.startMilliseconds = 0;
+                self.startMilliseconds = -1;
             }
             self.ended = NO;
             [self scheduleControls];

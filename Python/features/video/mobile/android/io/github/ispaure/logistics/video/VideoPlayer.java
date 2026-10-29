@@ -30,6 +30,8 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.ScrollView;
+import android.widget.PopupMenu;
 import org.json.JSONArray;
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
@@ -55,7 +57,11 @@ public final class VideoPlayer {
     private final FrameLayout root;
     private final VLCVideoLayout video;
     private final LinearLayout controls;
+    private final ScrollView controlsScroll;
+    private LinearLayout buttonGroups, transportButtons, utilityButtons;
+    private boolean controlsArranged, controlsWide;
     private final TextView message;
+    private final TextView timeLabel;
     private final SeekBar seek;
     private final Button play;
     private final Button fullscreenButton;
@@ -80,6 +86,7 @@ public final class VideoPlayer {
     private boolean audioSuppressed;
     private int previousCapturePolicy = -1;
     private AlertDialog openDialog;
+    private PopupMenu optionsMenu;
     private final AudioManager audio;
     private AudioFocusRequest focusRequest;
     private boolean focusHeld, manualResumeRequired, pausePending, lockHidden;
@@ -123,7 +130,14 @@ public final class VideoPlayer {
         options.add("--quiet");
         vlc = new LibVLC(activity, options);
         player = new MediaPlayer(vlc);
-        root = new FrameLayout(activity);
+        root = new FrameLayout(activity) {
+            @Override protected void onMeasure(int widthSpec, int heightSpec) {
+                // Choose the rows before children are measured. A change during
+                // layout would place stale full-width rows side by side.
+                arrangeControls(View.MeasureSpec.getSize(widthSpec));
+                super.onMeasure(widthSpec, heightSpec);
+            }
+        };
         root.setBackgroundColor(Color.BLACK);
         root.setClickable(true);
         video = new VLCVideoLayout(activity);
@@ -138,44 +152,77 @@ public final class VideoPlayer {
         controls = new LinearLayout(activity);
         controls.setOrientation(LinearLayout.VERTICAL);
         controls.setBackgroundColor(0xcc000000);
+        controls.setPadding(dp(8), dp(8), dp(8), dp(8));
+        controlsScroll = new ScrollView(activity);
+        controlsScroll.setFillViewport(false);
+        controlsScroll.setOnTouchListener((view, event) -> {
+            if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) handler.removeCallbacks(hideControls);
+            if (event.getActionMasked() == android.view.MotionEvent.ACTION_UP
+                    || event.getActionMasked() == android.view.MotionEvent.ACTION_CANCEL) scheduleControls();
+            return false;
+        });
+        controlsScroll.addView(controls, new ScrollView.LayoutParams(-1, -2));
         FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        root.addView(controls, bottom);
+        root.addView(controlsScroll, bottom);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
-            controls.setPadding(insets.getSystemWindowInsetLeft(), 0,
-                insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            FrameLayout.LayoutParams frame = (FrameLayout.LayoutParams) controlsScroll.getLayoutParams();
+            frame.setMargins(insets.getSystemWindowInsetLeft() + dp(8), insets.getSystemWindowInsetTop() + dp(8),
+                insets.getSystemWindowInsetRight() + dp(8), insets.getSystemWindowInsetBottom() + dp(8));
+            controlsScroll.setLayoutParams(frame);
             return insets;
         });
         message = new TextView(activity);
         message.setTextColor(Color.WHITE);
         message.setText("Ready. Press Play to start.");
         controls.addView(message);
+        timeLabel = new TextView(activity);
+        timeLabel.setTextColor(Color.WHITE);
+        timeLabel.setText("0:00 / 0:00");
+        timeLabel.setContentDescription("Playback time");
+        controls.addView(timeLabel);
         seek = new SeekBar(activity);
         seek.setMax(10000);
         seek.setContentDescription("Video position");
+        seek.setMinimumHeight(dp(48));
+        seek.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+        seek.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xffaaaaaa));
+        seek.setThumbTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onStartTrackingTouch(SeekBar bar) { }
+            public void onStartTrackingTouch(SeekBar bar) { handler.removeCallbacks(hideControls); }
             public void onProgressChanged(SeekBar bar, int value, boolean user) { }
             public void onStopTrackingTouch(SeekBar bar) {
                 if (allowed(false)) player.setPosition(bar.getProgress() / 10000f);
+                scheduleControls();
             }
         });
         controls.addView(seek);
-        LinearLayout buttons = new LinearLayout(activity);
-        controls.addView(buttons);
-        play = button(buttons, "Play", () -> {
+        buttonGroups = new LinearLayout(activity);
+        buttonGroups.setBaselineAligned(false);
+        controls.addView(buttonGroups, new LinearLayout.LayoutParams(-1, -2));
+        transportButtons = new LinearLayout(activity);
+        utilityButtons = new LinearLayout(activity);
+        buttonGroups.addView(transportButtons);
+        buttonGroups.addView(utilityButtons);
+        button(transportButtons, "−10s", "Back 10 seconds", () -> { if (allowed(false)) player.setTime(Math.max(0, player.getTime() - 10000)); });
+        play = button(transportButtons, "Play", "Play", () -> {
             if (player.isPlaying()) pause(); else startByUser();
         });
-        button(buttons, "−10s", () -> { if (allowed(false)) player.setTime(Math.max(0, player.getTime() - 10000)); });
-        button(buttons, "+10s", () -> { if (allowed(false)) player.setTime(player.getTime() + 10000); });
-        button(buttons, "Tracks", this::tracks);
-        button(buttons, "Done", listener::closed);
-        LinearLayout external = new LinearLayout(activity);
-        controls.addView(external);
-        fullscreenButton = button(external, "Fullscreen", () -> setFullscreen(!fullscreen));
+        button(transportButtons, "+10s", "Forward 10 seconds", () -> { if (allowed(false)) player.setTime(player.getTime() + 10000); });
+        button(utilityButtons, "CC", "Audio and subtitles", this::tracks);
+        fullscreenButton = button(utilityButtons, "⛶", "Fullscreen", () -> setFullscreen(!fullscreen));
         if (!restricted) {
-            button(external, "Picture in picture", this::pip);
-            button(external, "Cast…", this::cast);
+            Button more = button(utilityButtons, "⋮", "More playback options", () -> { });
+            more.setOnClickListener(view -> {
+                PopupMenu menu = optionsMenu = new PopupMenu(activity, more);
+                menu.getMenu().add("Picture in picture").setOnMenuItemClickListener(item -> { pip(); return true; });
+                menu.getMenu().add("Cast…").setOnMenuItemClickListener(item -> { cast(); return true; });
+                menu.setOnDismissListener(value -> { optionsMenu = null; scheduleControls(); });
+                handler.removeCallbacks(hideControls);
+                menu.show();
+            });
         }
+        button(utilityButtons, "×", "Close video player", listener::closed);
+        arrangeControls(activity.getResources().getDisplayMetrics().widthPixels);
         player.setEventListener(event -> {
             if (done) return;
             if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped)
@@ -184,6 +231,10 @@ public final class VideoPlayer {
                 ended = false;
                 if (manualResumeRequired || !focusHeld || !allowed(false)) { pause(); return; }
                 if (resume > 0) { player.setTime(resume); resume = 0; }
+                if ("Ready. Press Play to start.".contentEquals(message.getText())) {
+                    message.setText("");
+                    message.setVisibility(View.GONE);
+                }
                 scheduleControls();
             }
             if (event.type == MediaPlayer.Event.EndReached) { ended = true; lastPosition = 0; setControlsVisible(true); }
@@ -218,9 +269,34 @@ public final class VideoPlayer {
         return false;
     }
 
-    private Button button(LinearLayout row, String text, Runnable action) {
+    private int dp(int value) { return Math.round(value * activity.getResources().getDisplayMetrics().density); }
+
+    private void arrangeControls(int width) {
+        if (buttonGroups == null) return;
+        boolean wide = width >= dp(500);
+        if (controlsArranged && controlsWide == wide) return;
+        controlsArranged = true;
+        controlsWide = wide;
+        buttonGroups.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        buttonGroups.setWeightSum(wide ? 3 + utilityButtons.getChildCount() : 0);
+        transportButtons.setLayoutParams(new LinearLayout.LayoutParams(wide ? 0 : -1, -2, wide ? 3 : 0));
+        utilityButtons.setLayoutParams(new LinearLayout.LayoutParams(wide ? 0 : -1, -2, wide ? utilityButtons.getChildCount() : 0));
+    }
+
+    private Button button(LinearLayout row, String text, String label, Runnable action) {
         Button button = new Button(activity);
         button.setText(text);
+        button.setAllCaps(false);
+        button.setTextSize(16);
+        button.setTextColor(Color.WHITE);
+        button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff303030));
+        button.setPadding(dp(4), 0, dp(4), 0);
+        button.setMinWidth(dp(48));
+        button.setMinimumWidth(dp(48));
+        button.setMinHeight(dp(48));
+        button.setMinimumHeight(dp(48));
+        button.setContentDescription(label);
+        if (Build.VERSION.SDK_INT >= 26) button.setTooltipText(label);
         button.setOnClickListener(view -> { action.run(); scheduleControls(); });
         row.addView(button, new LinearLayout.LayoutParams(0, -2, 1));
         return button;
@@ -228,7 +304,9 @@ public final class VideoPlayer {
 
     public void setFullscreen(boolean value) {
         fullscreen = value;
-        fullscreenButton.setText(value ? "Exit fullscreen" : "Fullscreen");
+        fullscreenButton.setText(value ? "⤡" : "⛶");
+        fullscreenButton.setContentDescription(value ? "Exit fullscreen" : "Fullscreen");
+        if (Build.VERSION.SDK_INT >= 26) fullscreenButton.setTooltipText(fullscreenButton.getContentDescription());
         setControlsVisible(!value);
     }
 
@@ -249,6 +327,7 @@ public final class VideoPlayer {
         if (!attached) return;
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
         controls.setVisibility(pip || !controlsVisible ? View.GONE : View.VISIBLE);
+        controlsScroll.setVisibility(controls.getVisibility());
         View decor = activity.getWindow().getDecorView();
         boolean immersive = fullscreen && !controlsVisible && !pip;
         if (Build.VERSION.SDK_INT >= 30) {
@@ -320,12 +399,20 @@ public final class VideoPlayer {
             if (time >= 0 && !ended) lastPosition = time;
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
             play.setText(player.isPlaying() ? "Pause" : "Play");
+            play.setContentDescription(player.isPlaying() ? "Pause" : "Play");
+            timeLabel.setText(clock(time) + " / " + clock(length));
+            seek.setContentDescription("Video position: " + timeLabel.getText());
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
             if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
             if (!allowed(false)) pause();
             handler.postDelayed(this, 500);
         }
     };
+
+    private String clock(long milliseconds) {
+        long seconds = Math.max(0, milliseconds / 1000);
+        return String.format(java.util.Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60);
+    }
 
     private void tracks() {
         if (!allowed(false)) return;
@@ -428,6 +515,7 @@ public final class VideoPlayer {
     public void hide() {
         if (done || lockHidden) return;
         lockHidden = true;
+        if (optionsMenu != null) optionsMenu.dismiss();
         if (openDialog != null) { openDialog.dismiss(); openDialog = null; }
         pause();
         resume = position();
@@ -467,7 +555,11 @@ public final class VideoPlayer {
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
         if (restricted) hide(); else if (!pip && !casting) pause();
     }
-    public void status(String text) { message.setText(text); setControlsVisible(true); }
+    public void status(String text) {
+        message.setText(text);
+        message.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
+        setControlsVisible(true);
+    }
     public void dispose() {
         if (done) return;
         hide();

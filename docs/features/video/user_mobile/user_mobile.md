@@ -7,7 +7,11 @@ audio/video quality and lock timing during those modes.
 
 Enable **Video Player** in Features, then open an MP4 or MKV in Local, unlocked
 LocalCrypt or the remote/crypt Cloud browser. The native player opens
-in its own screen with Play/Pause, a seek bar, ten-second skips, **Tracks** and **Done**.
+in its own screen with Play/Pause, a seek bar, elapsed/total time, ten-second skips,
+audio/subtitle selection and a close button. Playback and utility buttons have
+screen-reader labels and at least 48-point/dp targets. They use two rows in narrow
+views and one row in wide views. On iOS, controls follow the current window's safe
+area and avoid an active Duo fold; short windows can scroll the controls.
 Choose **Fullscreen** to hide the controls and system bars. Tap the video to
 bring the controls back; tap again to hide them. While playing, revealed controls
 hide again after three seconds. Pausing, finishing or encountering an error shows
@@ -15,14 +19,14 @@ the controls. Choose **Exit fullscreen** to keep them visible. The movie fills
 the player area behind the controls, preserving the video's aspect ratio.
 Automatic hiding is disabled with VoiceOver or Android touch exploration.
 On iOS, the Video accessibility element also offers **Show video controls**.
-Use device volume buttons. Tracks lists embedded audio and subtitles, a subtitles
+Use device volume buttons. The audio/subtitles button lists embedded audio and subtitles, a subtitles
 off action, and matching external sidecars. Put UTF-8 SRT files beside the movie,
 using the same stem, for example `Movie.mkv`, `Movie.srt` and `Movie.en.srt`.
 The VLC adapters also admit matching ASS/SSA and WebVTT sidecars. At most 32
 sidecars are admitted, each limited to 8 MiB. Subtitles stay in provider streams.
 
 For ordinary Local files and mobile LocalCrypt with saved credentials, the
-adapters offer **Picture in picture** and **Cast…**. Casting uses VLC's discovered
+**More playback options** menu offers **Picture in picture** and **Cast…**. Casting uses VLC's discovered
 receivers (Chromecast); AirPlay video routing is not implemented. Receiver discovery
 may take a few seconds: reopen Cast to refresh the list. Both actions recheck
 credential policy. They are unavailable with session-only credentials.

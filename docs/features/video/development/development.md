@@ -56,6 +56,21 @@ host's bar visibility and behavior across concealment/disposal; iOS uses control
 appearance overrides and invalidates its timer on retirement/disappearance.
 This presentation state does not grant playback or bypass credential gates.
 
+Desktop transport buttons expose play/pause, ten-second skips and mute, with
+accessible labels, tooltips and keyboard equivalents. Track selectors retain
+visible labels and the controls stack below 520 pixels. Fullscreen uses the shared
+reader state owner so its button and native window state agree and maximization
+is restored. Native mobile controls use 48-point/dp targets, a separate utility
+group, elapsed/total time and a More menu for external playback. They combine the
+button groups above 500 available points/dp and otherwise stack them. iOS uses
+SF Symbols with spoken action names. Its scrollable control surface follows
+safe areas and active UIKit division regions, updating for hinge and window
+changes; video continues to preserve aspect ratio behind the controls.
+The iOS ten-second buttons and slider use bounded absolute times. Paused seeks
+retain their requested position in the existing deferred-resume state, including
+zero, and explicit Play reapplies it after authorization. This keeps controls and
+checkpoints consistent when VLC has not yet updated its paused decoder clock.
+
 ### Validation and remaining release gates
 
 Focused commands (use the documented desktop/mobile host environments):
@@ -83,6 +98,42 @@ geometry against its full controller bounds. Run this probe against newly rebuil
 native binaries after fullscreen changes; restaging Python into older binaries
 cannot validate the new native UI. API compilation and host tests alone do not
 establish immersive behavior, rotation or picture-in-picture transitions on devices.
+
+The optional `video_probe_tools --ui --ios-app ... --ios-model 'iPhone Duo'`
+checks actual button frames/hit testing and dispatch through portrait and both
+landscape directions. With an explicitly reviewed `--duoctl PATH`, `--pose open`,
+`partial` or `closed` applies a simulator pose before launch. `--appearance` and
+`--content-size` apply to that owned simulator only. Keep the helper and its cache
+inside retention-managed scratch; retain its source identity with ignored evidence.
+`--pose-sweep` additionally folds and unfolds the retained player, then checks
+portrait and both landscape directions on the outer, partial and reopened inner
+display without reopening the video.
+The probe checks fold exclusion, scroll reachability, playback/skip/track actions,
+fullscreen reveal and restoration, and saves screenshots. Simulated poses do not
+establish physical touch/VoiceOver or genuine left/right system Split View.
+
+### October 28 responsive controls validation
+
+Fresh managed Android and iOS 27.1 simulator builds passed with these native
+controls. The Android probe passed eleven cases: four rotation layouts with
+reachable 48-dp buttons, fullscreen/tap/timer/bar restoration, all eight required
+codec/container combinations with decoded test-pattern frames, and LocalCrypt
+encrypted resume/password/external-playback denial. The Duo probe passed thirteen
+states across inner, outer, partially folded and reopened displays, with portrait
+and both landscape directions. The same retained player survived folding; active
+division regions stayed clear of control hit targets. Playback, pause, ten-second
+buttons, Tracks, fullscreen and tap reveal dispatched correctly in the inner
+rotation sweep. Its paused-seek check observed the actual VLC clock advance past
+the requested target after explicit Play, rather than accepting the deferred UI
+position alone. Native screenshots were visually reviewed.
+
+Desktop button dispatch, mute/floating/fullscreen state and 360/560/1000-pixel
+layouts passed with the decoder regressions. Mobile host video/probe regressions,
+desktop privacy regressions, documentation layout and lint passed. The native
+runners saved their evidence before removing every owned test device and scratch
+tree; no personal app or data was replaced. Physical touch, audible quality/A-V
+synchronization, genuine system Split View and the complete accessibility matrix
+remain separate acceptance work.
 
 Both native adapters passed API compilation on October 28, 2026. Full managed
 Android debug APK and iOS simulator builds also passed using captured uncommitted
