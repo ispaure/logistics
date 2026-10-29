@@ -4,8 +4,11 @@ Enable **Video Player**, then open an MP4 or MKV from the file browser, or choos
 **Video Player** in Documents. The picker includes Local and unlocked LocalCrypt
 locations. Open remote/crypt cloud videos directly from the Cloud browser.
 
-Use Play/Pause, the seek bar and volume control below the video. Space toggles
-playback; Left/Right skip ten seconds. **Fullscreen** or **F** toggles fullscreen;
+Use the Play/Pause, back/forward ten-second buttons, seek bar, mute button and
+volume slider below the video. Buttons have tooltips and keyboard focus.
+The audio/subtitle selectors and secondary actions stack in narrow windows,
+including floating playback. Space toggles playback; Left/Right skip ten seconds;
+**M** toggles mute. **Full screen** or **F** toggles fullscreen;
 Escape returns to the normal window. The audio selector chooses an embedded
 audio track. The subtitle selector chooses an embedded track or turns subtitles
 off. **Load SRT…** loads a UTF-8 external SRT without a plaintext temporary file.

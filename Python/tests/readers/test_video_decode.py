@@ -12,6 +12,63 @@ from commonUtils.runtime.resources.selection import ResourceChoice
 
 @unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg fixture generator is required')
 class VideoDecodeTests(QtTestCase):
+    def test_playback_buttons_and_narrow_layout(self):
+        from logistics_build.build_retention import scratch
+        from tests.readers.video_fixtures import codec_matrix
+        from features.video.ui.player import VideoWindow
+        from PySide6.QtMultimedia import QMediaPlayer
+        with scratch() as root:
+            path = codec_matrix(root)[0][3]
+            release = Mock()
+            with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
+                window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release))
+            try:
+                window.show()
+                window.play.click()
+                self.wait_until(lambda: window.player.duration() > 1000)
+                window.player.pause()
+                window.player.setPosition(1000)
+                window.backward.click()
+                self.assertEqual(window.player.position(), 0)
+                window.forward.click()
+                self.assertLessEqual(window.player.position(), window.player.duration())
+                window.mute.click()
+                self.assertTrue(window.audio.isMuted())
+                self.assertEqual(window.mute.accessibleName(), 'Unmute')
+                window.mute.click()
+                self.assertFalse(window.audio.isMuted())
+                window.update_play(QMediaPlayer.PlaybackState.PlayingState)
+                self.assertEqual(window.play.accessibleName(), 'Pause')
+                window.update_play(QMediaPlayer.PlaybackState.PausedState)
+                output = Path(__file__).resolve().parents[3] / 'test-results/video-ui-desktop'
+                output.mkdir(parents=True, exist_ok=True)
+                for width, height in ((360, 640), (560, 420), (1000, 720)):
+                    window.resize(width, height)
+                    qt.QApplication.processEvents()
+                    self.assertLessEqual(window.width(), width)
+                    for button in (*window.action_buttons, window.play, window.backward, window.forward, window.mute):
+                        self.assertTrue(button.isVisible())
+                        point = button.mapTo(window, qt.QPoint(0, 0))
+                        self.assertGreaterEqual(point.x(), 0)
+                        self.assertLessEqual(point.x() + button.width(), window.width())
+                        self.assertLessEqual(point.y() + button.height(), window.height())
+                    window.grab().save(str(output / f'{width}x{height}.png'))
+                window.fullscreen_button.click()
+                self.assertTrue(window.isFullScreen())
+                self.assertTrue(window.fullscreen_action.isChecked())
+                window.fullscreen_button.click()
+                self.assertFalse(window.isFullScreen())
+                self.assertFalse(window.fullscreen_action.isChecked())
+                window.floating.click()
+                self.assertTrue(window.floating.isChecked())
+                self.assertTrue(window.windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint)
+                window.floating.click()
+                self.assertFalse(window.floating.isChecked())
+                self.assertFalse(window.windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint)
+            finally:
+                window.close()
+                self.wait_until(lambda: release.called, drain_deferred=True)
+
     def test_embedded_track_selection_and_external_srt(self):
         from logistics_build.build_retention import scratch
         from tests.readers.video_fixtures import codec_matrix, multitrack_movie
