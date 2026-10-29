@@ -436,7 +436,7 @@ class SettingsPage(qt.QWidget):
         with qt.QSignalBlocker(self.sidebar):
             self.sidebar.clear()
             items = {}
-            for key, title in (('features', 'Features'), ('workspaces', 'Workspaces'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
+            for key, title in (('features', 'Features'), ('reader-history', 'Reader history'), ('workspaces', 'Workspaces'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
                                ('commonutils', 'Appearance & shared controls')):
                 item = qt.QTreeWidgetItem([title])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
@@ -470,6 +470,9 @@ class SettingsPage(qt.QWidget):
         if key not in self.panels:
             if key == 'features':
                 panel = FeaturesPage(self, scope=self.scope_selector.currentData())
+            elif key == 'reader-history':
+                from desktop.settings.reader_history import ReaderHistoryPanel
+                panel = ReaderHistoryPanel(self)
             elif key == 'workspaces':
                 panel = WorkspaceSettingsPanel(self)
             elif key == 'indexing':

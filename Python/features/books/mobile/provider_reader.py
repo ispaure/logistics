@@ -27,7 +27,7 @@ class RichBookView(toga.Box):
         self.toc = toga.Selection(items=list(self.choices), value=selected,
             on_change=self.choose, style=Pack(height=44))
         self.query = toga.TextInput(placeholder='Find in chapter…', on_confirm=self.find, style=Pack(height=44, flex=1))
-        self.status = toga.Label('Private reader · position and\nbookmarks stay in this session')
+        self.status = toga.Label('Private reader · password-protected\nhistory when available')
         self.webview = chapter_view(content, PrivateWebView(style=Pack(flex=1)), offset=self.offset,
             on_event=self.event, on_link=self.link, motion_enabled=motion_enabled)
         from commonUtils.ui.native.adaptive import AdaptiveSidebar

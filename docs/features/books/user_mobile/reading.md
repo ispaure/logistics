@@ -167,7 +167,7 @@ to hide app navigation and system bars. Text retains its reading margins and saf
 areas. **Show reading controls** remains available below the text so you can restore
 Contents, Appearance, bookmarks and navigation without a gesture that interferes
 with text selection or links. Imported and provider/private EPUBs support this mode;
-private bookmarks retain their session-only lifetime. The main reader's **Back arrow**
+private bookmarks use credential-password encryption when available, with a RAM-only fallback for passwordless sessions. The main reader's **Back arrow**
 closes the reader and returns to its originating folder or screen. Android Back
 does the same after dismissing chapter/search panels; secondary screens retain
 Back to reading. Unsaved metadata edits prompt before close. Imported reading

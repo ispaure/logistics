@@ -44,10 +44,14 @@ class ReadingState:
     Changed chapters are validated by the reader before restoring a position.
     """
     def __init__(self, book_path, *, folder=None):
+        from services.documents.history_controls import PositionLease
+        self._position_lease = PositionLease()
         identifier = hashlib.sha256(str(Path(book_path).resolve()).encode()).hexdigest()
         self.path = (Path(folder) if folder else cache_directory(create=False) / 'Books') / (identifier + '.json')
 
     def load(self):
+        if not self._position_lease.valid():
+            return {}
         try:
             with self.path.open('rb') as stream:
                 content = read_up_to(stream, MAX_STATE_BYTES + 1)
@@ -64,8 +68,10 @@ class ReadingState:
             return {}
 
     def save(self, data):
+        if not self._position_lease.valid():
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        atomic_write_json(self.path, data, max_bytes=MAX_STATE_BYTES)
+        self._position_lease.publish(lambda: atomic_write_json(self.path, data, max_bytes=MAX_STATE_BYTES))
 
     def badge(self, spine=None):
         state = self.load()

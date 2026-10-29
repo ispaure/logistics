@@ -1,5 +1,7 @@
 # Using Logistics
 
+- [Reader history and saved positions](reader-history.md)
+
 Start in **File Browser** to work with any folder, or **Workspaces** for configured
 libraries, servers and remote storage. **Documents** lists open readers/editors;
 **Settings → Features** saves which tools are enabled. Required features are enabled

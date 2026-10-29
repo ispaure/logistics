@@ -1,5 +1,7 @@
 # Developing Logistics
 
+- [Private reader state and history clearing](reader-state.md)
+
 If this is your first contribution, follow [the contributor walkthrough](getting-started.md).
 It covers setup, a safe local exploration, choosing a code/test owner and checking
 one change. Use this index afterward to look up the contract for your task.

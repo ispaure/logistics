@@ -47,15 +47,15 @@ class ProviderDocumentView:
     def __init__(self, owner):
         self.owner = owner
 
-    def build(self, reader, copies, kind, content):
+    def build(self, reader, copies, kind, content, *, progress=None):
         view = ProviderView()
         try:
-            return self._build(view, reader, copies, kind, content)
+            return self._build(view, reader, copies, kind, content, progress=progress)
         except BaseException:
             view.discard()
             raise
 
-    def _build(self, view, reader, copies, kind, content):
+    def _build(self, view, reader, copies, kind, content, *, progress=None):
         owner = self.owner
         view.crypt_reader = reader
         view._crypt_reader_store = copies
@@ -65,6 +65,9 @@ class ProviderDocumentView:
         view.crypt_read_page = toga.Button('Read selected page', on_press=owner.read_crypt_page, style=Pack(height=44))
         view.crypt_bookmarks = set()
         view.epub_session_bookmarks = set()
+        if progress is not None:
+            view._provider_progress = progress
+            progress.restore(view)
         view.crypt_bookmark_button = toga.Button('Bookmark', on_press=owner.toggle_private_bookmark,
                                                 enabled=not reader.editable, style=Pack(height=44))
         view.crypt_bookmark_selector = toga.Selection(items=['Bookmarks…'],

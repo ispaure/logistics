@@ -361,6 +361,9 @@ class ProviderUI(FilesUI):
         view._provider_displayed_half = view.crypt_reader.comic_navigation.half if kind == 'spread' else 0
         previous_index = getattr(view, '_provider_displayed_index', None)
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
+        progress = getattr(view, '_provider_progress', None)
+        if progress is not None:
+            progress.capture()
         if (view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number')
                 and previous_index != view._provider_displayed_index):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
@@ -447,12 +450,18 @@ class ProviderUI(FilesUI):
             elif len(self.epub_session_bookmarks) < 200:
                 self.epub_session_bookmarks.add(value)
             self.refresh_private_bookmarks()
+            progress = getattr(self, "_provider_progress", None)
+            if progress is not None:
+                progress.capture()
             return
         if index in self.crypt_bookmarks:
             self.crypt_bookmarks.remove(index)
         elif len(self.crypt_bookmarks) < 200:
             self.crypt_bookmarks.add(index)
         self.refresh_private_bookmarks()
+        progress = getattr(self, "_provider_progress", None)
+        if progress is not None:
+            progress.capture()
 
     def select_private_bookmark(self, widget=None, **kwargs):
         if self.cloud_busy or self.crypt_reader is None:

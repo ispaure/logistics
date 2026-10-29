@@ -37,6 +37,10 @@ class ProviderDocumentSession:
         if self.closed:
             return
         owner = self.owner
+        progress = getattr(owner, '_provider_progress', None)
+        if progress is not None:
+            progress.close()
+            owner._provider_progress = None
         from .provider_ui import private_label
         for name in ('_provider_layout_task', '_provider_width_task'):
             task = getattr(owner, name, None)

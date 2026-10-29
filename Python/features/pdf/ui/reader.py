@@ -28,6 +28,10 @@ class PDFWindow(qt.QMainWindow):
             self.buffer.close()
             self.deleteLater()
             raise ValueError('Cannot open PDF. It may be damaged or password protected.')
+        self.position_state = None
+        if annotation_provider is not None:
+            from services.documents.reader_positions import desktop_state
+            self.position_state = desktop_state(annotation_provider, annotation_path, 'pdf')
         self.view = QPdfView(self)
         self.view.setDocument(self.document)
         self.view.setPageMode(QPdfView.PageMode.SinglePage)
@@ -89,7 +93,8 @@ class PDFWindow(qt.QMainWindow):
         self.setCentralWidget(root)
         self.document.pageCountChanged.connect(lambda count: self.number.setMaximum(max(1, count)))
         self.view.pageNavigator().currentPageChanged.connect(self.sync_page)
-        self.go(0)
+        saved = self.position_state.load().get('page', 0) if self.position_state else 0
+        self.go(saved if type(saved) is int and 0 <= saved < self.document.pageCount() else 0)
 
     def show_find(self):
         self.find_button.setChecked(True)
@@ -108,6 +113,11 @@ class PDFWindow(qt.QMainWindow):
 
     def sync_page(self, index):
         self.index = index
+        if self.position_state is not None:
+            try:
+                self.position_state.save(dict(page=index))
+            except (OSError, ValueError):
+                pass
         self.number.blockSignals(True)
         self.number.setValue(index + 1)
         self.number.blockSignals(False)

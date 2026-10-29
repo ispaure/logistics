@@ -288,7 +288,11 @@ class BooksPage(Bookmarks, qt.QWidget):
             self.reader_window().setWindowFilePath(str(book.path))
         if not self.private:
             self._remember(book.path)
-        self._state = None if self.private else ReadingState(book.path, folder=self._state_folder)
+        if self.private:
+            from services.documents.reader_positions import desktop_state
+            self._state = desktop_state(book.source, book.path, 'epub')
+        else:
+            self._state = ReadingState(book.path, folder=self._state_folder)
         state = self._state.load() if self._state and self._settings['remember'] else {}
         self._bookmarks = [item for item in state.get('bookmarks', [])[:50]
                            if isinstance(item, dict) and item.get('path') in book.spine

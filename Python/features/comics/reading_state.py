@@ -30,10 +30,14 @@ def _position(state, pages):
 
 class ReadingState:
     def __init__(self, comic_path, *, folder=None):
+        from services.documents.history_controls import PositionLease
+        self._position_lease = PositionLease()
         identifier = hashlib.sha256(str(Path(comic_path).resolve()).encode()).hexdigest()
         self.path = (Path(folder) if folder is not None else cache_directory(create=False) / 'Comics') / (identifier + '.json')
 
     def _load(self):
+        if not self._position_lease.valid():
+            return {}
         try:
             with self.path.open('rb') as stream:
                 content = read_up_to(stream, MAX_STATE_BYTES + 1)
@@ -48,9 +52,11 @@ class ReadingState:
         return _position(self._load(), pages)
 
     def save(self, index, pages):
+        if not self._position_lease.valid():
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        atomic_write_json(self.path, dict(page=index, name=pages[index], total=len(pages)),
-                          max_bytes=MAX_STATE_BYTES)
+        self._position_lease.publish(lambda: atomic_write_json(self.path, dict(page=index, name=pages[index], total=len(pages)),
+                          max_bytes=MAX_STATE_BYTES))
 
     def badge(self, pages=None):
         try:

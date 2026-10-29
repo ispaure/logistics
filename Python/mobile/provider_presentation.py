@@ -347,6 +347,9 @@ def prepare_epub_page(host, controller, view, content):
     content = (themed_chapter(content[0], host.preferences.values['reading_theme']), content[1])
     def position_changed(value):
         locations[book.spine[index]] = value
+        progress = getattr(view, '_provider_progress', None)
+        if progress is not None:
+            progress.capture()
         if hasattr(view, 'page_footer'):
             view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
     from .chapter_drawer import ChapterDrawer

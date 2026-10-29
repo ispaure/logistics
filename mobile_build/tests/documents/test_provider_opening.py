@@ -1,5 +1,8 @@
 """Acquired provider readers retain cleanup ownership until view admission."""
 from types import SimpleNamespace as NS
+from tempfile import TemporaryDirectory
+from pathlib import Path
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -9,7 +12,9 @@ from mobile.provider_view import ProviderView
 
 class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
     def fixture(self, *, remote=False):
-        reader = NS(editable=True, read_only=False, kind='.md', name='Note.md', source=Mock())
+        root = TemporaryDirectory()
+        self.addCleanup(root.cleanup)
+        reader = NS(editable=True, read_only=False, kind='.md', name='Note.md', labels=['Page 1'], source=NS(check=Mock(),close=Mock(),expected=(1,)))
         copies = NS(remote_storage=remote, open=Mock(return_value=reader))
         owner = NS(require_document_feature=Mock(return_value=True), cloud_busy=False, crypt_password=NS(value=''), _crypt_cancel=None,
                    private_dirty=Mock(return_value=False), set_document_busy=Mock(),
@@ -24,6 +29,8 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
                    toggle_private_preview=Mock(), show_private_markdown_editor=Mock(),
                    screen_privacy=NS(refresh=Mock()), watch_provider_layout=Mock(),
                    watch_provider_epub_width=Mock())
+        owner.private_root = Path(root.name)
+        owner.loop = asyncio.get_running_loop()
         owner.app = owner
         from mobile.reader_host import ReaderHost
         owner.document_open_failed = lambda error, **options: ReaderHost.document_open_failed(owner, error, **options)
@@ -31,6 +38,8 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
         operation = ProviderDocumentSession(owner).opening
         view = ProviderView()
         view.crypt_view, view.crypt_reader = object(), reader
+        view.crypt_page = NS(value='Page 1')
+        view.crypt_bookmark_selector = NS(items=[])
         view.crypt_text, view.crypt_image = Mock(), Mock()
         operation.view.build = Mock(return_value=view)
         return operation, owner, reader, copies

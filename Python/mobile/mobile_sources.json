@@ -145,6 +145,8 @@
     "window_scenes.py",
     "workspace.py",
     "workspace_navigation.py",
-    "workspace_policy.py"
+    "workspace_policy.py",
+    "provider_progress.py",
+    "settings/reader_history.py"
   ]
 }

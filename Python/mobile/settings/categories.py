@@ -47,6 +47,8 @@ class SettingsCategories:
             'Closes documents with no pending changes in Open documents when the app restarts. '
             'The last active document is kept when Restore last document is on. '
             'Stored documents, reading progress and unsaved drafts are kept.'))
+        from .reader_history import controls as history_controls
+        history_controls(app, box)
         box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=app.reload_preferences, style=Pack(height=48)))
         if app.scene_manager.supported:

@@ -29,6 +29,7 @@ class ProviderDocumentOpening:
         session.set_busy(True)
         reader = None
         view = None
+        progress = None
         try:
             if prepared is None:
                 from .loading_progress import opening_options
@@ -38,7 +39,16 @@ class ProviderDocumentOpening:
                 owner._provider_comic_sharing = owner.format_services.comic_sharing()
                 owner._provider_comic_seam = owner.private_comic_seam()
                 owner._provider_viewport = (max(1, owner.main_window.size.width), max(1, owner.main_window.size.height))
-                kind, content = await asyncio.to_thread(owner.provider_page_content, reader, 0)
+                from .provider_progress import ProviderProgress
+                progress = ProviderProgress(owner, copies, reader, key)
+                restored = await asyncio.to_thread(progress.load)
+                index = restored.get('page', 0)
+                if type(index) is not int or not 0 <= index < len(reader.labels):
+                    index = 0
+                navigation = getattr(reader, 'comic_navigation', None)
+                if navigation is not None:
+                    navigation.requested_half = 1 if restored.get('half') == 1 else 0
+                kind, content = await asyncio.to_thread(owner.provider_page_content, reader, index)
             else:
                 reader, kind, content = prepared
             if not owner.app.require_document_feature(reader.name):
@@ -48,7 +58,7 @@ class ProviderDocumentOpening:
             initial_preview, initial_preview_error = await self._prepare_initial_preview(
                 owner, reader, copies, content, edit=edit)
             check_cancelled(cancelled.is_set)
-            view = self.view.build(reader, copies, kind, content)
+            view = self.view.build(reader, copies, kind, content, progress=progress)
             if getattr(owner, 'privacy_gate', None) is not None:
                 view.privacy_gate = owner.privacy_gate
             handoff = (prepared is not None and getattr(owner, 'save_as_source_document', None) is owner.current
@@ -93,6 +103,13 @@ class ProviderDocumentOpening:
         owner.clear_private_reader(discard=True)
         view.adopt(owner)
         self.session.reader = reader
+        progress = getattr(owner, "_provider_progress", None)
+        if progress is not None:
+            progress.live = True
+            if progress.state.locked_state:
+                notice = getattr(owner.app, 'recovery_notice', None)
+                if notice is not None:
+                    notice.text = 'Saved reader history needs the previous ZIP password. Use Settings → App → Migrate protected reader history.'
         if reader.editable and reader.kind in {'.md', '.markdown'}:
             if edit and not getattr(reader, 'read_only', False):
                 owner.show_private_markdown_editor()

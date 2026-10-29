@@ -63,6 +63,8 @@ class Workspace:
         if not root.is_absolute():
             raise ValueError('Workspace storage must be app-private and absolute.')
         self.path = root / 'workspace.json'
+        from services.documents.history_controls import _workspaces
+        _workspaces.add(self)
         self.sessions = {}
         self.active = None
         self.error = ''
@@ -173,7 +175,8 @@ class Workspace:
         if self.path.is_symlink():
             raise ValueError('Workspace storage cannot be a symbolic link.')
         entries = [dict(id=session.id, provider=session.provider, resource=session.resource,
-                        kind=session.kind, view=view_state(session.view))
+                        kind=session.kind, view=view_state({key:value for key,value in session.view.items()
+                            if not getattr(session, '_discard_positions', False) or key not in VIEW_NUMBERS}))
                    for session in self.sessions.values()
                    if not session.transient and session.provider in PROVIDERS and uuid(session.resource)]
         ordinary = {entry['id'] for entry in entries}

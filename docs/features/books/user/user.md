@@ -192,7 +192,7 @@ saving does not upload the book. See the [LocalCrypt guide](../../rclone/user/us
 
 EPUB metadata windows opened from private storage begin their titles with **🕵️ Private -**.
 
-Desktop **Open EPUB…**, including the New Document launcher, uses the shared Local/LocalCrypt file picker with an EPUB filter. Local books keep ordinary reading history. LocalCrypt books open in separate **🕵️ Private -** readers without recent-file records or saved reading positions; bookmarks stay in the session. Metadata saves update the encrypted copy without plaintext backups.
+Desktop **Open EPUB…**, including the New Document launcher, uses the shared Local/LocalCrypt file picker with an EPUB filter. Local books keep ordinary reading history. LocalCrypt books open in separate **🕵️ Private -** readers without ordinary recent-file records. Their positions and bookmarks can persist under the owning credential ZIP password; passwordless sessions retain them only in RAM. Metadata saves update the encrypted copy without plaintext backups.
 
 Desktop private-book unlocks keep the password prompt open after a wrong attempt,
 show an inline error and clear and focus the field for retry. Enter submits once;

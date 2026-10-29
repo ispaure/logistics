@@ -39,7 +39,7 @@ class ComicReaderWindow(qt.QMainWindow):
         self.setMinimumSize(640, 420)
         self.pages = pages
         self._state_folder = state_folder
-        self._remember_position = remember_position() and not getattr(pages.document, 'private', False)
+        self._remember_position = remember_position()
         self._has_position = False
         self.save_timer = qt.QTimer(self)
         self.save_timer.setSingleShot(True)
@@ -97,7 +97,11 @@ class ComicReaderWindow(qt.QMainWindow):
         self.canvas.setFocus(qt.Qt.FocusReason.OtherFocusReason)
 
     def _configure_file(self):
-        self._state = ReadingState(self.pages.path, folder=self._state_folder)
+        if self.pages.document.private:
+            from services.documents.reader_positions import PrivateComicState
+            self._state = PrivateComicState(self.pages)
+        else:
+            self._state = ReadingState(self.pages.path, folder=self._state_folder)
         self.page_cache.set_pages(self.pages)
         self.setWindowTitle(('🕵️ Private - ' if getattr(self.pages.document, 'private', False) else '') + self.pages.path.name)
         self.setWindowFilePath(str(self.pages.path))

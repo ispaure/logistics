@@ -28,6 +28,10 @@ class LibraryStore(LibraryEdits):
         if not root.is_absolute():
             raise ValueError('The library requires an absolute private root.')
         self.root = root.resolve()
+        from services.documents.history_controls import _libraries
+        _libraries.add(self)
+        from services.documents.history_controls import PositionLease
+        self._position_lease = PositionLease(self.root.parent)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.verified = OrderedDict()
         self.archive_client = archive_client
@@ -302,8 +306,23 @@ class LibraryStore(LibraryEdits):
         while len(self.verified) > 32:
             self.verified.popitem(last=False)
 
+    def clear_positions(self):
+        """Reset checkpoints, retaining document bytes, metadata and bookmarks."""
+        with self._record_io_lock:
+            records, failures = self.items()
+            for record in records:
+                updated = dict(record, position=0, revision=record['revision'] + 1)
+                updated.pop('location', None)
+                updated.pop('comic_half', None)
+                atomic_write_json(self.path(record['id'], '.json'), updated, max_bytes=MAX_RECORD)
+            with self._record_lock:
+                self._record_cache.clear()
+                self._record_cache_bytes = 0
+            if failures:
+                raise ValueError("Some unreadable library metadata was preserved; not every position could be reset.")
+
     def progress(self, record, position, *, bookmark=False, location=None, comic_half=None):
-        current, original = self.read_record(record['id'])
+        current, original = self.read_record(record['id']) if self._position_lease.valid() else (record, b'')
         if current != record:
             raise OSError('Reading progress changed; reopen the book before saving.')
         if type(position) is not int or not 0 <= position < 5000:
@@ -344,5 +363,5 @@ class LibraryStore(LibraryEdits):
         def check():
             if self.read_record(record['id'])[1] != original:
                 raise OSError('Reading progress changed; reopen the book.')
-        atomic_write_bytes(self.path(record['id'], '.json'), data, validate=check)
+        self._position_lease.publish(lambda: atomic_write_bytes(self.path(record['id'], '.json'), data, validate=check))
         return updated

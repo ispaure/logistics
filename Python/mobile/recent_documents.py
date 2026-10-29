@@ -13,6 +13,8 @@ REFERENCE_KINDS = KINDS | {'video'}
 class RecentDocuments:
     def __init__(self, root):
         self.path = root / 'recent-documents.json'
+        from services.documents.history_controls import _recent
+        _recent.add(self)
         self.items = []
         self.private_items = []
         self.error = ''

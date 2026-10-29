@@ -1,5 +1,7 @@
 # Logistics on mobile
 
+See [reader history, clearing and credential password changes](../user/reader-history.md).
+
 Open **Settings → Help → Mobile documentation** for offline guides with
 folder navigation and built-in file/title or page-text search. A hamburger toggles browsing
 in narrow windows; wider windows show the tree and article together.
