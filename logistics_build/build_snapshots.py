@@ -25,6 +25,9 @@ def exclude_private_runtime_references(snapshot):
     if not (snapshot/'.git').is_dir():
         raise ValueError('Snapshot requires owned Git metadata.')
     rules = ['/' + (Path('mobile_build') / name).as_posix() for name in PRIVATE_RUNTIME_NAMES]
+    # Retention pins are workspace metadata, not application source. Pinning an
+    # accepted build must not make the next platform's snapshot reuse fail.
+    rules.append('.keep')
     current = excluded.read_text() if excluded.is_file() else ''
     missing = [rule for rule in rules if rule not in current.splitlines()]
     if missing:

@@ -76,6 +76,17 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'different source'):
             materialize(self.root, destination, before['logistics_commit'])
 
+    def test_retention_pin_preserves_snapshot_identity_without_hiding_source_changes(self):
+        destination = self.directory / 'pinned'
+        before = materialize(self.root, destination)
+        (destination / '.keep').write_text('Active native validation\n')
+        self.assertEqual(materialize(self.root, destination), before)
+        from logistics_build.build_snapshots import source_members
+        self.assertNotIn('.keep', source_members(destination))
+        (destination / 'source.py').write_text('unexpected source change')
+        with self.assertRaisesRegex(ValueError, 'different source'):
+            materialize(self.root, destination)
+
     def test_uncommitted_shared_edits_additions_deletions_and_ignored_files_are_isolated(self):
         (self.shared / '.gitignore').write_text('private/\n')
         (self.shared / 'removed.py').write_text('old')
