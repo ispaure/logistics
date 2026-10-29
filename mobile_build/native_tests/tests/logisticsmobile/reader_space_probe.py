@@ -61,7 +61,8 @@ class ReaderSpaceProbe(LogisticsMobile):
             assert view._reading_frame_owner.margin == 0
             assert owner.page_footer.badge.parent is footer
             assert content.layout.width >= view.layout.width - 2
-            assert footer.layout.content_height <= 50, result
+            assert owner.page_footer.row.layout.content_height == 48, result
+            assert footer.layout.content_height <= 86, result
             assert owner.previous_page.style.height >= 44
             result['zero_outer_margin_and_single_footer_row'] = True
             ios = type(self._impl).__module__.startswith('toga_iOS.')

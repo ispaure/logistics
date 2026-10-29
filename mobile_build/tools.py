@@ -49,6 +49,15 @@ APP_MODULES, DOCUMENT_MODULES = load_source_modules(Path(__file__).resolve().par
 # Explicit local-development supplements to the shared mobile allowlist.
 # Release staging still requires every member to be committed.
 SHARED_REQUIRED_MODULES = (
+    # Shared native acceptance mechanisms (also used by separate QA bundles).
+    'testing/__init__.py',
+    'testing/settings.py',
+    'testing/waiting.py',
+    'testing/rotation.py',
+    'testing/screenshots.py',
+    'testing/tasks.py',
+    'testing/stages.py',
+    'testing/event_loop.py',
     # Filesystem snapshots and local objects.
     'filesystem/index/validation.py',
     'filesystem/local_access.py',

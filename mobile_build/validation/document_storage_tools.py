@@ -21,7 +21,7 @@ SOURCE = REPO
 BUNDLE = 'io.github.ispaure.logisticsstorageqa'
 QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
-              'io.github.ispaure.logisticsreaderspaceqa'}
+              'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
 NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
                       'logistics-native-ui-fault.log', 'reader-space.png')
 
@@ -47,6 +47,9 @@ def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document
     if dependency.version != '26.3':
         raise ValueError('The probe requires the declared packaging==26.3 dependency.')
     shutil.copytree(dependency.locate_file('packaging'), target / 'packaging', dirs_exist_ok=True)
+    if entry_point.endswith('.viewer_layout_probe'):
+        from tests.readers.video_fixtures import codec_matrix
+        codec_matrix(target / 'tests/logisticsmobile/video-fixtures', duration=60)
     (target / 'logisticsmobile/__main__.py').write_text(
         f'from {entry_point} import main\nmain().main_loop()\n')
 
@@ -85,37 +88,105 @@ def notebook_lifecycle(read, write, background, launch, stop):
 
 def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             entry_point='tests.logisticsmobile.document_storage_probe',
-            result_name='document-storage-result.json', family='iPhone', increase_contrast=False):
+            result_name='document-storage-result.json', family='iPhone', increase_contrast=False, duoctl=None, source_app=None, pose=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
-    project = workspace / 'build/logisticsmobile/ios/xcode'
-    template = REPO / 'mobile_build/build/logisticsmobile/ios/xcode'
-    shutil.copytree(template, project, ignore=lambda directory, names:
-        [name for name in names if name == '__pycache__' or (Path(directory) == template and name == 'build')])
-    ios(project)
-    copy_payload(payload, project / 'LogisticsMobile/app', entry_point=entry_point)
-    for path in [project / 'Logistics Mobile.xcodeproj/project.pbxproj',
-                 *project.rglob('*Info.plist'), *project.rglob('*.entitlements')]:
-        try:
-            text = path.read_text()
-        except UnicodeError:
-            value = plistlib.loads(path.read_bytes())
-            text = plistlib.dumps(value).decode()
-        path.write_text(text.replace('io.github.ispaure.logisticsmobile', bundle))
-    command(['xcodebuild', '-project', project / 'Logistics Mobile.xcodeproj', '-scheme', 'Logistics Mobile',
-             '-sdk', 'iphonesimulator', '-configuration', 'Debug', '-derivedDataPath', workspace / 'derived',
-             'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'CODE_SIGN_STYLE=Manual', 'DEVELOPMENT_TEAM=', 'ARCHS=arm64', 'ONLY_ACTIVE_ARCH=YES', 'build'], output / 'ios-build.log', env=env)
-    app = workspace / 'derived/Build/Products/Debug-iphonesimulator/Logistics Mobile.app'
+    if source_app is None:
+        project = workspace / 'build/logisticsmobile/ios/xcode'
+        template = REPO / 'mobile_build/build/logisticsmobile/ios/xcode'
+        shutil.copytree(template, project, ignore=lambda directory, names:
+            [name for name in names if name == '__pycache__' or (Path(directory) == template and name == 'build')])
+        ios(project)
+        copy_payload(payload, project / 'LogisticsMobile/app', entry_point=entry_point)
+        for path in [project / 'Logistics Mobile.xcodeproj/project.pbxproj',
+                     *project.rglob('*Info.plist'), *project.rglob('*.entitlements')]:
+            try:
+                text = path.read_text()
+            except UnicodeError:
+                value = plistlib.loads(path.read_bytes())
+                text = plistlib.dumps(value).decode()
+            path.write_text(text.replace('io.github.ispaure.logisticsmobile', bundle))
+        command(['xcodebuild', '-project', project / 'Logistics Mobile.xcodeproj', '-scheme', 'Logistics Mobile',
+                 '-sdk', 'iphonesimulator', '-configuration', 'Debug', '-derivedDataPath', workspace / 'derived',
+                 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'CODE_SIGN_STYLE=Manual', 'DEVELOPMENT_TEAM=', 'ARCHS=arm64', 'ONLY_ACTIVE_ARCH=YES', 'build'], output / 'ios-build.log', env=env)
+        app = workspace / 'derived/Build/Products/Debug-iphonesimulator/Logistics Mobile.app'
+    else:
+        # Reuse only an exact native source build. Python and tests are restaged;
+        # a stale compiled adapter must never masquerade as current acceptance.
+        from hashlib import sha256
+        native_sources = source_app.parents[4] / 'build/logisticsmobile/ios/xcode/Support'
+        hashes = {}
+        for source in (SOURCE / 'Python/features/video/mobile/ios').glob('*.m'):
+            compiled = native_sources / source.name
+            if not compiled.is_file() or compiled.read_bytes() != source.read_bytes():
+                raise ValueError('Reusable shell has stale native video source: ' + source.name)
+            hashes[source.name] = sha256(source.read_bytes()).hexdigest()
+        app = workspace / 'Viewer Layout QA.app'
+        shutil.copytree(source_app, app, symlinks=True)
+        copy_payload(payload, app / 'app', entry_point=entry_point)
+        info = app / 'Info.plist'
+        metadata = plistlib.loads(info.read_bytes())
+        metadata['CFBundleIdentifier'] = bundle
+        info.write_bytes(plistlib.dumps(metadata))
+        for directory in ('PlugIns', 'Extensions'):
+            shutil.rmtree(app / directory, ignore_errors=True)
+        subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True, capture_output=True)
+        (output / 'native-reuse.json').write_text(json.dumps(dict(source=str(source_app), sources=hashes), indent=2))
+    if family == 'all':
+        reports = []
+        for label, device_family, pose in (('iphone', 'iPhone', None), ('ipad', 'iPad', None),
+                ('duo-closed', 'iPhone Duo', 'closed'), ('duo-open', 'iPhone Duo', 'open'),
+                ('duo-partial', 'iPhone Duo', 'partial')):
+            destination = output / label
+            destination.mkdir(exist_ok=True)
+            try:
+                reports.append(exercise_ios_app(app, destination, env, bundle=bundle,
+                    entry_point=entry_point, result_name=result_name, family=device_family,
+                    increase_contrast=increase_contrast, duoctl=duoctl, pose=pose))
+            except Exception as error:
+                reports.append(dict(success=False, family=label, error=str(error)))
+        (output / 'matrix.json').write_text(json.dumps(reports, indent=2))
+        if not all(row['success'] for row in reports):
+            raise RuntimeError('Viewer matrix has failures; inspect matrix.json')
+        return reports
+    return exercise_ios_app(app, output, env, bundle=bundle, entry_point=entry_point,
+        result_name=result_name, family=family, increase_contrast=increase_contrast, duoctl=duoctl, pose=pose)
+
+
+def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
+        entry_point='tests.logisticsmobile.document_storage_probe',
+        result_name='document-storage-result.json', family='iPhone', increase_contrast=False,
+        duoctl=None, pose=None):
     client = AppleSimulators(env)
     inventory = client.devices()['devices']
     runtime, model = next((rt, row['deviceTypeIdentifier']) for rt, rows in inventory.items()
-                          for row in rows if row.get('isAvailable') and family in row['name'])
+                          for row in rows if row.get('isAvailable') and family in row['name']
+                          and (family != 'iPhone' or 'Duo' not in row['name']))
     name = 'Build Manager Focused QA ' + str(time.time_ns())
     device = client.create(name, model, runtime)
     (output / 'ios-lease.json').write_text(json.dumps(dict(device=device, name=name)))
     cache = console = console_stream = None
     try:
         client.boot(device)
+        if pose is not None:
+            if duoctl is None:
+                raise ValueError('Duo pose matrix requires --duoctl with the reviewed simulator helper.')
+            import sys
+            tool = [sys.executable, str(duoctl), '-d', device]
+            if pose != 'closed':
+                # A freshly booted Duo can report an open hinge while its cover
+                # display is still active. Establish a real closed-to-open change.
+                subprocess.run([*tool, 'hinge', '0'], timeout=60, env=env, check=True, capture_output=True)
+            for attempt in range(3):
+                changed = subprocess.run([*tool, 'hinge', str({'closed': 0, 'open': 180, 'partial': 127}[pose])],
+                    timeout=60, env=env, capture_output=True)
+                if changed.returncode == 0:
+                    break
+                (output / f'pose-attempt-{attempt}.log').write_bytes(changed.stdout + changed.stderr)
+                if attempt == 2:
+                    changed.check_returncode()
+                time.sleep(1)
+            (output / 'pose.json').write_bytes(subprocess.check_output([*tool, 'state'], env=env, timeout=30))
         if increase_contrast:
             client.invoke('ui', device, 'increase_contrast', 'enabled')
             contrast = client.invoke('ui', device, 'increase_contrast')
@@ -146,7 +217,7 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
                 (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
                 client.invoke('io', device, 'screenshot', str(output / 'ios-final.png'))
                 if not result['success']:
-                    raise RuntimeError(result['error'])
+                    raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
                 if result_name == 'notebook-result.json':
                     result = notebook_lifecycle(
                         lambda name: (cache / name).read_bytes() if (cache / name).exists() else None,
@@ -169,6 +240,8 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
                     shutil.copyfile(cache / artifact_name, output / artifact_name)
         if cache is not None and (cache / 'notebook-ui').is_dir():
             shutil.copytree(cache / 'notebook-ui', output / 'notebook-ui', dirs_exist_ok=True)
+        if cache is not None and (cache / 'viewer-layout').is_dir():
+            shutil.copytree(cache / 'viewer-layout', output / 'viewer-layout', dirs_exist_ok=True)
         if cache is not None and (cache / result_name).exists():
             shutil.copyfile(cache / result_name, output / 'ios-result.json')
         try:
@@ -271,7 +344,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                     continue
                 (output / 'android-result.json').write_text(json.dumps(result, indent=2))
                 if not result['success']:
-                    raise RuntimeError(result['error'])
+                    raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
                 if result_name == 'notebook-result.json':
                     def read(name):
                         found = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
@@ -294,6 +367,15 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         raise TimeoutError('Android document storage probe timed out')
     finally:
         if record is not None:
+            if entry_point.endswith('.viewer_layout_probe'):
+                import io
+                import tarfile
+                archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                    'run-as', bundle, 'tar', '-cf', '-', 'cache/viewer-layout'],
+                    env=env, capture_output=True, timeout=45)
+                if archive.returncode == 0:
+                    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as evidence:
+                        evidence.extractall(output, filter='data')
             if raw_ink or hands_on:
                 for name in ('baseline.png', 'raw-final.png', 'comparison.rmdoc', 'stage.json', 'observations.json'):
                     artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
@@ -351,11 +433,16 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'reader-space', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
-    parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
+    parser.add_argument('--family', choices=('iPhone', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
+    parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
+    parser.add_argument('--pose', choices=('closed', 'open', 'partial'), help='Explicit Duo simulator posture')
+    parser.add_argument('--duoctl', type=Path, help='Reviewed external simulator-only Duo pose helper')
     parser.add_argument('--increase-contrast', action='store_true')
     args = parser.parse_args()
+    if args.pose and (args.platform != 'ios' or args.family != 'iPhone Duo'):
+        parser.error('--pose requires an iOS iPhone Duo run')
     if args.device and args.platform != 'android':
         parser.error('--device requires Android.')
     if args.probe == 'notebook-input' and args.platform != 'android':
@@ -386,6 +473,9 @@ def main():
         if args.probe == 'reader-space':
             creation_profile = dict(bundle='io.github.ispaure.logisticsreaderspaceqa',
                 entry_point='tests.logisticsmobile.reader_space_probe', result_name='reader-space-result.json')
+        if args.probe == 'viewer-layout':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsviewerlayoutqa',
+                entry_point='tests.logisticsmobile.viewer_layout_probe', result_name='viewer-layout-result.json')
         if args.probe == 'features':
             creation_profile = dict(bundle='io.github.ispaure.logisticsfeaturesqa',
                 entry_point='tests.logisticsmobile.features_probe', result_name='features-result.json')
@@ -404,6 +494,23 @@ def main():
         if args.probe == 'native-suite':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.native_suite_probe', result_name='logistics-native-ui-result.json')
+        if args.platform == 'ios' and (args.family == 'all' or args.pose) and args.duoctl is None:
+            from urllib.request import urlopen
+            from hashlib import sha256
+            # Simulator-only external helper; never copied into an app payload.
+            approved = {'duoctl': '9d9d151afb303ddec426beffadb9bfb21309e8ca9ce52fdd6cc4dcc3fd1dbf45',
+                'duoctl-helper.m': 'b2d8fb45b0abab1802316ac0c0fa953e9cf644ac54dfbf06281593d4bae28b1f'}
+            folder = workspace / 'duo-pose-tool'
+            folder.mkdir()
+            for name, expected in approved.items():
+                with urlopen('https://raw.githubusercontent.com/skarol/duoctl/caad72ec15cae2e6090a4ae2749c6fed721b275e/skills/duoctl/scripts/' + name, timeout=30) as stream:
+                    data = stream.read(256 * 1024)
+                if sha256(data).hexdigest() != expected:
+                    raise ValueError('Simulator helper differs from the previously reviewed source: ' + name)
+                (folder / name).write_bytes(data)
+            args.duoctl = folder / 'duoctl'
+            env['XDG_CACHE_HOME'] = str(workspace / 'duo-tool-cache')
+            (args.output / 'pose-tool.json').write_text(json.dumps(approved, indent=2))
         if args.platform == 'ios':
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',
@@ -411,7 +518,7 @@ def main():
             if args.probe == 'notebook-memory':
                 profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                     entry_point='tests.logisticsmobile.notebook_apple_memory_probe', result_name='notebook-memory-result.json')
-            run_ios(workspace, payload, args.output, env, family=args.family, increase_contrast=args.increase_contrast, **profile)
+            run_ios(workspace, payload, args.output, env, family=args.family, increase_contrast=args.increase_contrast, duoctl=args.duoctl, source_app=args.ios_app, pose=args.pose, **profile)
         else:
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',

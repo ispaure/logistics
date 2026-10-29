@@ -56,7 +56,11 @@ class ReaderProgressProbe(LogisticsMobile):
                 footer = owner.page_footer
                 assert footer.slider.enabled
                 assert footer.badge.parent is footer.widget
-                assert footer.widget.layout.content_height == 48
+                if footer.vertical:
+                    assert footer.slider.layout.content_height > 88
+                else:
+                    assert footer.row.layout.content_height == 48
+                    assert footer.spacer.layout.content_height > 0
                 assert footer.previous.style.width == footer.previous.style.height == 48
                 if ios:
                     native = footer.slider._impl.native
