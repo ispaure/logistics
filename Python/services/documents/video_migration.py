@@ -7,7 +7,7 @@ from pathlib import Path
 
 def retire_legacy(content, root, state, *, cleared=False, remote_cipher=None):
     if content.remote:
-        from .secure_state import RemoteProgress
+        from .video_state import RemoteProgress
 
         path = RemoteProgress(content, root, remote_cipher).path
         if path.is_symlink() or path.parent.is_symlink():

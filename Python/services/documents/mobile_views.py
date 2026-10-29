@@ -1,4 +1,4 @@
-"""Logistics document privacy policy for retiring mobile web content."""
+"""Host policy for mobile document surfaces, retirement and source navigation."""
 
 
 def retire_webview(view):
@@ -47,3 +47,14 @@ def markdown_webview(*, private=False, **options):
         if not private_webview_supported():
             raise ValueError('Private formatted Markdown is unavailable here. Use Source mode.')
     return document_webview(SimpleNamespace(policy=DocumentPolicy(not private, True)), **options)
+
+
+async def show_reader_source(app, provider, path):
+    """Admit a reader's source and reveal it through the host's file browser."""
+    from services.documents.mobile_reading import reading_capabilities
+    from services.documents.mobile_storage import document_source
+    from mobile.document_sources import show_folder_location
+    copies, key = document_source(provider, path)
+    location = (dict(remote=copies.remote, key=key) if reading_capabilities(copies).remote
+                else dict(provider=provider, key=path))
+    return await show_folder_location(app, location)

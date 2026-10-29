@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run inside the official Fedora 43 container with this repository at /workspace.
+# Run inside the selected official Fedora container with this repository at /workspace.
 dnf install -y git python3-pip mesa-libEGL mesa-libGL libxkbcommon dbus-libs \
     fontconfig dejavu-sans-fonts dejavu-sans-mono-fonts glib2 libstdc++ pulseaudio-libs \
     nspr nss alsa-lib libdrm libXcomposite libXdamage libXrandr libxkbfile \
-    libXtst libXScrnSaver cups-libs gtk3 tar gzip openssl-libs
+    libXtst libXScrnSaver cups-libs gtk3 tar gzip openssl-libs snappy minizip-ng-compat
 # Qt WebEngine runs only synthetic test pages in this disposable root container.
 export QTWEBENGINE_DISABLE_SANDBOX=1
 python3 -m pip install uv

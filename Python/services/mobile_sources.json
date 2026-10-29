@@ -35,6 +35,9 @@
     "workflow_host.py",
     "documents/credential_state.py",
     "documents/history_controls.py",
-    "documents/state_migration.py"
+    "documents/state_migration.py",
+    "documents/video_state.py",
+    "documents/video_migration.py",
+    "documents/video_settings.py"
   ]
 }

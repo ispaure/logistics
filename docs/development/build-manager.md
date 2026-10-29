@@ -172,7 +172,9 @@ including an owned grandchild in a separate process group.
 
 The guest needs working Parallels Tools, Python 3 with venv support, Git and the
 native Qt/WebEngine libraries. Ubuntu additionally needed `libsnappy1v5` and
-`libminizip1` beyond the standard headless Qt packages. The preflight reports missing
+`libminizip1` beyond the standard headless Qt packages.
+Fedora 44 requires `minizip-ng-compat` for Qt's `libminizip.so.1` ABI;
+the standalone minizip package is insufficient. The preflight reports missing
 native libraries before launching the test phase. The runner prepares Python
 3.12.2 and locked dependencies in its owned guest workspace, then runs the canonical
 platform checks and release-tooling suite. First preparation downloads public

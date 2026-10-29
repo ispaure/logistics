@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 
 from features.video.playback import SubtitleContent
-from features.video.session import FolderQueue, SettingsStore, parse_time
+from features.video.session import FolderQueue, parse_time
+from services.documents.video_settings import SettingsStore
 
 
 def native_options(options, content=None):
@@ -93,12 +94,7 @@ class PlaybackControls:
             elif name == "showInFolder":
                 if self.busy:
                     return
-                from mobile.document_sources import show_folder_location
-                from services.documents.mobile_storage import document_source
-                from services.documents.mobile_reading import reading_capabilities
-                copies, key = document_source(owner.content.provider, owner.content.path)
-                location = (dict(remote=copies.remote, key=key) if reading_capabilities(copies).remote
-                            else dict(provider=owner.content.provider, key=owner.content.path))
+                from services.documents.mobile_views import show_reader_source
                 # Keep the provider alive until the browser has acquired its own scope.
                 self.busy = True
                 self.task = asyncio.current_task()
@@ -106,7 +102,7 @@ class PlaybackControls:
                     owner.native.pause()
                     owner.native.hide()
                     owner.hidden = True
-                    await show_folder_location(owner.app, location)
+                    await show_reader_source(owner.app, owner.content.provider, owner.content.path)
                 finally:
                     try:
                         await owner.close()

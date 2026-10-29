@@ -13,13 +13,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from services.documents.video_settings import SettingsStore
 from features.video.session import (
     FolderQueue,
     PlaybackSettings,
-    SettingsStore,
     parse_time,
 )
-from features.video.secure_state import DesktopCipher, RemoteProgress
+from services.documents.video_state import DesktopCipher, RemoteProgress
 from features.video.buffering import BufferingPolicy, MemoryRanges
 
 
@@ -74,7 +74,7 @@ class VideoSessionTests(unittest.TestCase):
     def test_encrypted_progress_authentication_revision_and_revocation(self):
         with (
             TemporaryDirectory() as root,
-            patch("features.video.secure_state.desktop_key", return_value=b"x" * 32),
+            patch("services.documents.video_state.desktop_key", return_value=b"x" * 32),
         ):
             content = SimpleNamespace(
                 provider=SimpleNamespace(identity="account", remote="Secret"),

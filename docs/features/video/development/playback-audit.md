@@ -120,7 +120,7 @@ The implementation owners are [content and provider reads](../../../../Python/fe
 [mobile lifetime](../../../../Python/features/video/mobile/player.py),
 [Android player](../../../../Python/features/video/mobile/android/io/github/ispaure/logistics/video/VideoPlayer.java),
 [iOS player](../../../../Python/features/video/mobile/ios/VideoPlayer.m),
-[resume storage](../../../../Python/features/video/resume.py) and
+[resume storage](../../../../Python/services/documents/video_progress.py) and
 [native remote reads](../../../../mobile_build/rclone_bridge/remote_document.go).
 
 ## Validation scope
@@ -141,7 +141,7 @@ real cloud stall quality.
 ## Playback tools and immediate pause follow-up
 
 Shared queue, time parsing and validated preferences live in `features/video/session.py`.
-Encrypted remote progress lives in `secure_state.py` and `resume.py`; the old
+Encrypted remote progress lives in the host’s `services/documents/video_state.py` and `video_progress.py`; the old
 service path is a compatibility import. Desktop controls are in `ui/controls.py`;
 mobile routing is in `mobile/controls.py`, with native UI and transient frame holds
 in separate Objective-C/Java helpers. The [control guide](../user/controls.md) and

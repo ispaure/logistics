@@ -354,7 +354,7 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
             owner.prepare()
 
     async def test_encrypted_remote_resume_does_not_perform_network_metadata_on_controls(self):
-        from features.video.resume import VideoProgress
+        from services.documents.video_progress import VideoProgress
         content = SimpleNamespace(provider=SimpleNamespace(remote_storage=True, identity='test'),
             path='movie.mkv', source=SimpleNamespace(expected=(1,)),
             check_access=Mock(), check=Mock(side_effect=AssertionError('Network stat on control thread')))

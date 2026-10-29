@@ -4,11 +4,11 @@ from dataclasses import asdict, replace
 from time import monotonic
 
 from commonUtils.ui import pyside as qt
+from services.documents.video_settings import SettingsStore
 from features.video.session import (
     ASPECTS,
     RATES,
     FolderQueue,
-    SettingsStore,
     parse_time,
 )
 

@@ -3,7 +3,7 @@ import asyncio
 from pathlib import Path
 
 from features.video.playback import VideoContent, SubtitleContent
-from features.video.resume import VideoProgress
+from services.documents.video_progress import VideoProgress
 from features.video.transport import VideoTransport
 from services.access_policy import display_allowed
 
@@ -16,7 +16,7 @@ class MobileVideo:
         self.transport = VideoTransport(content, waiting=lambda token, active:
             app.loop.call_soon_threadsafe(self.network_waiting, token, active),
             failed=lambda category: app.loop.call_soon_threadsafe(self.stream_failed, category))
-        from features.video.secure_state import MobileCipher
+        from services.documents.video_state import MobileCipher
         from .controls import PlaybackControls
         self.progress = VideoProgress(content, Path(app.private_root) / 'Video', remote_cipher=MobileCipher(app), app=app)
         self.controls = PlaybackControls(self)

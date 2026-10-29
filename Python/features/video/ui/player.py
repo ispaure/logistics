@@ -7,7 +7,7 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QMediaMetaData
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
 from features.video.playback import VideoContent, VIDEO_EXTENSIONS, SubtitleContent
-from features.video.resume import VideoProgress
+from services.documents.video_progress import VideoProgress
 from features.video.transport import VideoTransport
 
 

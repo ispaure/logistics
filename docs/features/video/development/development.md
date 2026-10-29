@@ -6,7 +6,7 @@ differences, remaining oversights and the adjustable memory-buffer policy.
 | Change | Owner | Focused checks |
 | --- | --- | --- |
 | Provider admission and subtitles | `Python/features/video/playback.py`, `subtitles.py` | `test_video_player.py`, `test_cloud_video.py` |
-| Range transport and resume | `transport.py`, `resume.py`, `secure_state.py` | `test_video_player.py`, `test_cloud_video.py` |
+| Range transport and resume | `transport.py`, `services/documents/video_progress.py`, `video_state.py` | `test_video_player.py`, `test_cloud_video.py` |
 | Desktop controls and decoding | `ui/player.py` | `test_video_decode.py` |
 | Mobile adapters and payload | `mobile/`, `mobile_sources.json` | mobile `test_video_player.py`, packaging checks |
 
@@ -473,10 +473,11 @@ and failure hints never pause video that is still progressing.
 
 ### Playback tool ownership
 
-`session.py` owns time validation, natural folder queues and nonsecret settings.
-`resume.py` owns progress policy; `services/documents/video_progress.py` remains a
-compatibility import. `secure_state.py` encrypts remote records with authenticated
-the credential ZIP password for session-only sources, through the shared document-state owner. Non-session-only remote records retain their authenticated host encryption.
+`session.py` owns time validation, natural folder queues and preference values.
+The host service `services/documents/video_settings.py` persists nonsecret settings.
+`services/documents/video_progress.py` owns progress policy, `video_migration.py`
+retires legacy records, and `video_state.py` owns device/remote encryption adapters.
+Session-only positions use the credential ZIP password through the shared document-state owner. Non-session-only remote records retain their authenticated host encryption.
 Encrypted records have opaque hashed names and bind source identity/revision.
 There is no plaintext fallback. LocalCrypt progress continues through its provider.
 
