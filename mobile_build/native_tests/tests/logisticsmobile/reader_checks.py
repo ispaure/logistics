@@ -425,7 +425,7 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
         manager = activity.getSystemService('activity')
         service_name = 'io.github.ispaure.logistics.books.SpeechMediaService'
         assert not any(service.service.getClassName() == service_name
-                       for service in manager.getRunningServices(100))
+                       for service in manager.getRunningServices(100).toArray())
     passed.append('native_epub_reader')
     await app.toggle_bookmark()
     assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [
