@@ -25,7 +25,7 @@ async def open_provider_document(app, provider, path, *, destination=None, **opt
     if required is not None and not app.require_feature(required):
         return False
     suffix = Path(path).suffix.lower()
-    if suffix in {'.mp4', '.mkv'}:
+    if suffix in VIDEO_EXTENSIONS:
         from features.video.mobile.player import open_video
         return await open_video(app, provider, path)
     if suffix == '.rmdoc':
@@ -40,7 +40,31 @@ async def open_provider_document(app, provider, path, *, destination=None, **opt
     return await app.open_download(path=provider._locate(path), destination=destination)
 
 
+from features.video.formats import VIDEO_EXTENSIONS
 from services.documents.provider_documents import ProviderDocuments
+
+
+def remember_video(app, content):
+    """Publish reopen references through existing ordinary/encrypted history owners."""
+    history = getattr(app, 'recent_documents', None)
+    if history is None:
+        return
+    from pathlib import Path
+    from mobile.document_sources import file_source
+    from mobile.workspace import Session
+    copies, key = document_source(content.provider, content.path)
+    source = file_source(app, copies, key, session_only=True)
+    if source is None:
+        return
+    session = Session('', 'file-reference', history.reference_id(source), 'video',
+                      title=Path(content.path).name)
+    manager = getattr(app, 'credential_document_lists', None)
+    if manager is not None:
+        manager.remember(session, source, opened=False)
+    if not content.restricted:
+        history.remember_file(session, file_source(app, copies, key))
+    if manager is not None:
+        manager.queue_views()
 
 
 class TextDocumentCopies(ProviderDocuments):

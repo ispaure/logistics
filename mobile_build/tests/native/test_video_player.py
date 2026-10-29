@@ -5,7 +5,7 @@ import plistlib
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 import xml.etree.ElementTree as ET
 
 from mobile_build.build_support.video_build import configure_android, configure_ios
@@ -34,6 +34,55 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         app.video_player = owner
         return owner
 
+    async def test_show_in_folder_keeps_source_alive_until_browser_has_adopted_it(self):
+        from features.video.mobile.controls import native_options
+        owner = self.player(restricted=False)
+        owner.content.path = 'Season 1/Episode 1.mkv'
+        owner.content.remote = False
+        import json
+        options = json.loads(native_options('{}', owner.content))
+        self.assertEqual(options['video_title'], 'Episode 1.mkv')
+        self.assertEqual(options['source_label'], 'Local file')
+        async def reveal(app, location):
+            self.assertIs(app, owner.app)
+            self.assertEqual(location, dict(provider=owner.content.provider, key=owner.content.path))
+            owner.native.pause.assert_called_once()
+            owner.native.hide.assert_called_once()
+            owner.content.close.assert_not_called()
+            return True
+        with patch('mobile.document_sources.show_folder_location', side_effect=reveal), patch(
+                'services.documents.mobile_storage.document_source', return_value=(SimpleNamespace(remote=False), owner.content.path)), patch(
+                'services.documents.mobile_reading.reading_capabilities', return_value=SimpleNamespace(remote=False)):
+            # Exercise dispatch too: retirement must not wait on its own command.
+            owner.controls.dispatch('showInFolder')
+            await asyncio.sleep(0)
+            jobs = list(owner.controls.jobs)
+            await asyncio.wait_for(asyncio.gather(*jobs), 1)
+        self.assertTrue(owner.closed)
+        owner.content.close.assert_called_once()
+
+    async def test_cloud_folder_failure_still_retires_video(self):
+        owner = self.player()
+        with patch('mobile.document_sources.show_folder_location', AsyncMock(side_effect=OSError('Unavailable'))) as reveal, patch(
+                'services.documents.mobile_storage.document_source', return_value=(SimpleNamespace(remote='drive:'), 'Season/movie.mkv')), patch(
+                'services.documents.mobile_reading.reading_capabilities', return_value=SimpleNamespace(remote=True)):
+            await owner.controls.command('showInFolder', '')
+        reveal.assert_awaited_once_with(owner.app, dict(remote='drive:', key='Season/movie.mkv'))
+        self.assertTrue(owner.closed)
+        owner.content.close.assert_called_once()
+
+    async def test_title_badge_follows_source_storage_not_process_privacy(self):
+        from features.video.mobile.controls import native_options
+        import json
+        owner = self.player(restricted=True)
+        for remote, private, label in ((False, False, 'Local file'), (False, True, 'Local encrypted file'),
+                                       (True, False, 'Cloud file'), (True, True, 'Cloud file')):
+            owner.content.remote = remote
+            owner.content.provider.private = private
+            options = json.loads(native_options('{}', owner.content))
+            self.assertEqual(options['source_label'], label)
+            self.assertEqual(options['source_remote'], remote)
+
     async def test_session_lock_hides_surface_and_unlock_restores_without_autoplay(self):
         owner = self.player()
         owner.conceal()
@@ -51,6 +100,42 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(.02)
         await owner.close()
         owner.content.close.assert_called_once()
+
+    async def test_stream_failure_uses_safe_category_and_does_not_pause_playable_data(self):
+        owner = self.player()
+        owner.stream_failed('read')
+        owner.native.transport_failed.assert_called_once_with(
+            'Video data could not be read. Check the connection, then press Play to retry.')
+        owner.native.pause.assert_not_called()
+        owner.hidden = True
+        owner.stream_failed('access')
+        self.assertEqual(owner.native.transport_failed.call_count, 1)
+
+    async def test_data_ready_while_hidden_clears_native_wait_before_reveal(self):
+        owner = self.player()
+        token = object()
+        owner.network_waiting(token, True)
+        owner.conceal()
+        owner.network_waiting(token, False)
+        self.assertEqual(owner.native.network_waiting.call_count, 1)
+        owner.reveal()
+        owner.native.network_waiting.assert_called_with(False)
+        owner.native.play.assert_not_called()
+        await asyncio.sleep(.02)
+
+    async def test_overlapping_network_reads_hold_until_all_are_ready(self):
+        owner = self.player()
+        first, second = object(), object()
+        owner.network_waiting(first, True)
+        owner.network_waiting(second, True)
+        owner.network_waiting(first, False)
+        owner.network_waiting(second, False)
+        self.assertEqual([call.args[0] for call in owner.native.network_waiting.call_args_list],
+                         [True, True, True, False])
+        owner.closed = True
+        owner.network_waiting(first, True)
+        self.assertEqual(owner.native.network_waiting.call_count, 4)
+        owner.closed = False
 
     async def test_native_controls_deny_pending_resume_even_if_own_gate_is_unlocked(self):
         owner = self.player()
@@ -256,6 +341,7 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         from features.video.mobile.player import MobileVideo
         owner = object.__new__(MobileVideo)
         owner.progress = Mock(load=lambda: 1234)
+        owner.controls = SimpleNamespace()
         owner.content = SimpleNamespace(path='movie.mp4', remote=True,
             provider=Mock(list=Mock(side_effect=OSError('listing unavailable'))))
         self.assertEqual(owner.prepare(), (1234, []))
@@ -263,14 +349,17 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OSError):
             owner.prepare()
 
-    async def test_remote_memory_resume_does_not_perform_network_metadata_on_controls(self):
-        from services.documents.video_progress import VideoProgress
-        content = SimpleNamespace(provider=SimpleNamespace(remote_storage=True),
+    async def test_encrypted_remote_resume_does_not_perform_network_metadata_on_controls(self):
+        from features.video.resume import VideoProgress
+        content = SimpleNamespace(provider=SimpleNamespace(remote_storage=True, identity='test'),
+            path='movie.mkv', source=SimpleNamespace(expected=(1,)),
             check_access=Mock(), check=Mock(side_effect=AssertionError('Network stat on control thread')))
-        progress = VideoProgress(content, '/unused')
-        progress.save(3456)
-        self.assertEqual(progress.load(), 3456)
-        content.check.assert_not_called()
+        cipher = SimpleNamespace(transform=lambda data, identity, decode=False: data[6:] if decode else b'opaque' + data)
+        with TemporaryDirectory() as root:
+            progress = VideoProgress(content, root, remote_cipher=cipher)
+            progress.save(3456)
+            self.assertEqual(VideoProgress(content, root, remote_cipher=cipher).load(), 3456)
+            content.check.assert_not_called()
 
     async def test_video_feature_cannot_be_disabled_while_player_is_open(self):
         from mobile.feature_settings import set_enabled
@@ -287,11 +376,15 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
             active_host=True, navigation_generation=1, video_player=None)
         ready = AsyncMock(return_value=True)
         player = SimpleNamespace(prepare=lambda: (0, []), allowed=lambda: True, closed=False,
-            present=Mock(), native=SimpleNamespace(wait_ready=ready), close=AsyncMock())
+            present=Mock(), native=SimpleNamespace(wait_ready=ready, play=Mock()), close=AsyncMock())
         with patch('features.video.mobile.player.VideoContent'), patch(
-                'features.video.mobile.player.MobileVideo', return_value=player):
+                'features.video.mobile.player.MobileVideo', return_value=player), patch(
+                'services.documents.mobile_storage.remember_video') as remember:
             self.assertTrue(await open_video(app, Mock(), 'movie.mp4'))
+        remember.assert_called_once()
         ready.assert_awaited_once()
+        player.native.play.assert_called_once()
+        player.native.play.reset_mock()
         self.assertIs(app.video_player, player)
         app.video_player = None
         def moved():
@@ -299,8 +392,11 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
             return True
         ready.side_effect = moved
         with patch('features.video.mobile.player.VideoContent'), patch(
-                'features.video.mobile.player.MobileVideo', return_value=player):
+                'features.video.mobile.player.MobileVideo', return_value=player), patch(
+                'services.documents.mobile_storage.remember_video') as remember:
             self.assertFalse(await open_video(app, Mock(), 'movie.mp4'))
+        remember.assert_not_called()
+        player.native.play.assert_not_called()
         player.close.assert_awaited_once()
 
 
@@ -324,8 +420,10 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         from features.video.mobile.ios import IOSVideo
         adapter = object.__new__(IOSVideo)
         adapter.native = Mock()
+        adapter.container = Mock()
         pending = adapter.presentation = Mock()
         adapter.hide()
         pending.cancel.assert_called_once()
         adapter.native.suspendForLock.assert_called_once()
+        adapter.container.dismissViewControllerAnimated.assert_called_once()
         self.assertIsNone(adapter.presentation)

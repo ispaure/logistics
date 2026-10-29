@@ -39,13 +39,7 @@ def screen_awake(owner, android):
 
 def start_playback(owner):
     """Exercise the same explicit Play admission as the native controls."""
-    if type(owner.app._impl).__module__.startswith('toga_android.'):
-        native = owner.native.native
-        field = native.getClass().getDeclaredField('play')
-        field.setAccessible(True)
-        field.get(native).performClick()
-    else:
-        owner.native.native.togglePlay(None)
+    owner.native.play()
 
 
 async def android_frame(owner):
@@ -191,9 +185,13 @@ async def fullscreen_controls(owner, android):
     toggle()
     await until(lambda: visible() and bars() == previous)
     toggle()
-    await until(lambda: not visible() and hidden_bars())
+    if android:
+        await until(lambda: not visible() and hidden_bars())
+    else:
+        await until(visible)
     start_playback(owner)
     await until(awake)
+    await until(lambda: not visible() and hidden_bars(), timeout=5)
     # Caller closes while immersive, then observes restoration through saved host objects.
     return (dict(tap_reveal=True, auto_hide=True, pause_visible=True, bars_restored=True,
                  playing_keeps_screen_awake=True, pause_releases_screen=True),
@@ -215,7 +213,8 @@ async def exercise(app):
         for source in sorted(bundled.glob('*')):
             (root / source.name).write_bytes(source.read_bytes())
         assert len(list(root.glob('*.mp4'))) == 4
-        assert len(list(root.glob('*.mkv'))) == 4
+        assert len(list(root.glob('*.mkv'))) == 7
+        assert len(list(root.glob('*.avi'))) == 2
         android = type(app._impl).__module__.startswith('toga_android.')
         fullscreen_checked = False
         for path in sorted(root.iterdir()):

@@ -17,7 +17,7 @@ from features.rclone import storage
 
 
 @contextmanager
-def crypt_fixture(root, binary, *, crypt_settings=None):
+def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None):
     root = Path(root).resolve()
     plain, cloud = root / 'plain', root / 'cloud'
     plain.mkdir()
@@ -38,7 +38,8 @@ def crypt_fixture(root, binary, *, crypt_settings=None):
         extra = ''.join(f'{key}={value}\n' for key, value in (crypt_settings or {}).items())
         archive.writestr('Secret.txt', f'[Secret]\ntype=crypt\nremote=Cloud:{cloud}\npassword={obscured}\n' + extra)
     context = root / 'Accounts.session'
-    session.remember(context, session.read_package(package, 'synthetic-package-password'), package_path=package)
+    session.remember(context, session.read_package(package, 'synthetic-package-password'), package_path=package,
+                     state_password=state_password, state_identity=__import__('hashlib').sha256(package.read_bytes()).hexdigest())
     environment, source, destination = session.launch(context, plain, 'Secret:')
     run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copy', str(source), str(destination)], environment=environment, max_output=0)
     actual_sync = sync.rclone_sync

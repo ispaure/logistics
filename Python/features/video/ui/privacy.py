@@ -70,6 +70,11 @@ class VideoResumeGuard(qt.QObject):
             return
         self.blocked = True
         window = self.window
+        for name in ("tools_menu", "chapter_menu"):
+            menu = getattr(window, name, None)
+            if menu is not None:
+                menu.close()
+                menu.clear()
         self.title = window.windowTitle()
         window.setWindowTitle("Session video locked")
         window.resume_at = window.player.position() or window.resume_at

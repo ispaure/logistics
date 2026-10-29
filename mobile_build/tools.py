@@ -100,6 +100,8 @@ SHARED_REQUIRED_MODULES = (
     'ui/appearance/colors.py',
     'ui/appearance/formatting_glyphs.py',
     'ui/features/declarations.py',
+    'ui/readers/__init__.py',
+    'ui/readers/layout.py',
     'ui/native/__init__.py',
     'ui/native/adaptive.py',
     'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java',

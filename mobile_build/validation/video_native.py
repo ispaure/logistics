@@ -41,7 +41,7 @@ def android(workspace):
     extra = [ROOT / 'Python/mobile/android/io/github/ispaure/logistics/audio/AudioOutputs.java',
              ROOT / 'Python/features/books/mobile/android/io/github/ispaure/logistics/books/SpeechMediaService.java']
     subprocess.run(['javac', '-cp', str(platforms[-1]) + os.pathsep + str(workspace / 'classes.jar'),
-                    '-d', str(workspace / 'compiled'), str(source), *map(str, extra)], check=True)
+                    '-d', str(workspace / 'compiled'), *map(str, source.parent.glob('*.java')), *map(str, extra)], check=True)
 
 
 def ios(workspace):
@@ -77,6 +77,8 @@ def main():
     report.write_text(json.dumps(dict(status='passed', scope='native SDK API compile only',
         platform=args.platform, checked_at=datetime.now(timezone.utc).isoformat(),
         source_sha256=sha256(source.read_bytes()).hexdigest(),
+        sources={str(path.relative_to(ROOT)): sha256(path.read_bytes()).hexdigest()
+                 for path in sorted(source.parent.glob('*.m' if args.platform == 'ios' else '*.java'))},
         sdk=VLC_REVISION if args.platform == 'ios' else 'libvlc-all:3.7.5', scratch_removed=True), indent=2) + '\n')
     print(args.platform + ' video adapter API compile passed; scratch removed.')
 

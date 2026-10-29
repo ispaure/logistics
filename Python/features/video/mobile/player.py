@@ -3,7 +3,7 @@ import asyncio
 from pathlib import Path
 
 from features.video.playback import VideoContent, SubtitleContent
-from services.documents.video_progress import VideoProgress
+from features.video.resume import VideoProgress
 from features.video.transport import VideoTransport
 from services.access_policy import display_allowed
 
@@ -11,8 +11,15 @@ from services.access_policy import display_allowed
 class MobileVideo:
     def __init__(self, app, content):
         self.app, self.content = app, content
-        self.transport = VideoTransport(content)
-        self.progress = VideoProgress(content, Path(app.private_root) / 'Video')
+        self.buffer_waits = set()
+        self.failure_message = None
+        self.transport = VideoTransport(content, waiting=lambda token, active:
+            app.loop.call_soon_threadsafe(self.network_waiting, token, active),
+            failed=lambda category: app.loop.call_soon_threadsafe(self.stream_failed, category))
+        from features.video.secure_state import MobileCipher
+        from .controls import PlaybackControls
+        self.progress = VideoProgress(content, Path(app.private_root) / 'Video', remote_cipher=MobileCipher(app), app=app)
+        self.controls = PlaybackControls(self)
         self.native = None
         self.subtitles = []
         self.closed = False
@@ -28,6 +35,25 @@ class MobileVideo:
             lambda: (getattr(self.content, 'gate', None),),
             protected=lambda: self.content.restricted)
 
+    def network_waiting(self, token, active):
+        if active:
+            self.buffer_waits.add(token)
+        else:
+            self.buffer_waits.discard(token)
+        if not self.closed and not self.hidden and self.native is not None:
+            self.native.network_waiting(bool(self.buffer_waits))
+
+    def stream_failed(self, category):
+        messages = {
+            'access': 'Video access expired. Unlock the source, then press Play to retry.',
+            'changed': 'The video changed while it was open. Close and reopen it.',
+            'read': 'Video data could not be read. Check the connection, then press Play to retry.',
+            'busy': 'The video connection is busy. Press Play to retry.',
+        }
+        self.failure_message = messages.get(category, messages['read'])
+        if not self.closed and not self.hidden and self.native is not None:
+            self.native.transport_failed(self.failure_message)
+
     def pause_audio(self):
         if self.native is not None:
             self.native.pause()
@@ -39,6 +65,7 @@ class MobileVideo:
         if not self.allowed() or not self.audio_output.request_play():
             return False
         self.transport.resume()
+        self.failure_message = None
         return True
 
     def retire(self, *, checkpoint=None):
@@ -63,6 +90,7 @@ class MobileVideo:
     async def _finish_retirement(self, disposal, checkpoint):
         if disposal is not None:
             await asyncio.shield(disposal)
+        await self.controls.finish()
         self.native = None
         if checkpoint is not None:
             position, completed = checkpoint
@@ -111,6 +139,8 @@ class MobileVideo:
             if not self.content.remote:
                 raise
             rows = []  # Optional sidecars must not prevent cloud playback.
+        from features.video.session import FolderQueue
+        self.controls.queue = FolderQueue(self.content.path, rows)
         external = []
         for row in rows:
             if len(external) >= 32:
@@ -141,8 +171,8 @@ class MobileVideo:
             self.native = IOSVideo(self, position, external)
         else:
             raise ValueError('Native mobile video playback requires Android or iOS.')
-        if self.content.remote:
-            self.native.status('Cloud streaming may buffer or fail when seeking. Resume lasts while this player is open.')
+        import json
+        self.native.configure(self.controls.settings.json(), json.dumps(self.controls.queue.rows()))
         self.task = self.app.loop.create_task(self.watch())
         self.app.routes.sync_back()
 
@@ -163,15 +193,20 @@ class MobileVideo:
             return False
 
     async def watch(self):
+        checkpoints = 0
         try:
             while not self.closed:
-                await asyncio.sleep(5)
+                await asyncio.sleep(1)
+                checkpoints += 1
                 if self.native is not None and not self.hidden:
                     if not self.allowed():
                         self.native.pause()
                         self.transport.suspend()
                     else:
                         self.transport.resume()
+                        self.native.cached_ranges(self.content.buffered_ranges())
+                        if checkpoints % 5:
+                            continue
                         position, completed = self.native.position()
                         try:
                             await asyncio.to_thread(self.progress.save, position, completed=completed)
@@ -201,6 +236,9 @@ class MobileVideo:
         if self.hidden and self.allowed():
             self.transport.resume()
             self.hidden = False
+            self.native.network_waiting(bool(self.buffer_waits))
+            if self.failure_message:
+                self.native.transport_failed(self.failure_message)
             self.native.show()  # Authentication restores controls, never autoplay.
 
     async def close(self):
@@ -215,10 +253,14 @@ async def open_video(app, provider, path):
     if not app.require_feature('video') or not app.checkpoint():
         return False
     previous = getattr(app, 'video_player', None)
-    if previous is not None:
-        await previous.close()
     navigation = getattr(app, 'navigation_generation', None)
     content = await asyncio.to_thread(VideoContent, provider, path)
+    try:
+        if previous is not None:
+            await previous.close()
+    except BaseException:
+        content.close()
+        raise
     try:
         player = MobileVideo(app, content)
     except BaseException:
@@ -240,6 +282,21 @@ async def open_video(app, provider, path):
                 or getattr(app, 'navigation_generation', None) != navigation):
             await player.close()
             return False
+        player.native.play()
+        progress = getattr(player, 'progress', None)
+        state = getattr(progress, 'credential_state', None)
+        notice = getattr(progress, 'resume_notice', None)
+        if state is not None and state.locked_state:
+            notice = 'Saved position needs the previous ZIP password. Use Settings → App → Migrate protected reader history.'
+        if notice:
+            app.loop.call_later(1, lambda: player.native.status(notice) if not player.closed and player.native is not None else None)
+        from services.documents.mobile_storage import remember_video
+        try:
+            remember_video(app, content)
+        except (OSError, ValueError, AttributeError, KeyError):
+            manager = getattr(app, 'credential_document_lists', None)
+            if manager is not None:
+                manager.notice()
         return True
     except BaseException:
         await player.close()

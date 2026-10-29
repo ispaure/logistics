@@ -67,7 +67,7 @@ func remoteDocumentRequest(ctx context.Context, action, name, p, identity, expec
 	if action == "remote_archive" {
 		result, err = archiveContents(ctx, reader, size, password, member, 10000, 16*1024*1024)
 	} else {
-		if expected == "" || offset < 0 || count < 0 || count > 1024*1024 || offset > size || int64(count) > size-offset {
+		if expected == "" || offset < 0 || count < 0 || count > 4*1024*1024 || offset > size || int64(count) > size-offset {
 			return nil, errors.New("invalid remote read range")
 		}
 		data := make([]byte, count)

@@ -1,9 +1,12 @@
 # Video Player development
 
+See the [desktop/mobile playback audit](playback-audit.md) for functionality
+differences, remaining oversights and the adjustable memory-buffer policy.
+
 | Change | Owner | Focused checks |
 | --- | --- | --- |
 | Provider admission and subtitles | `Python/features/video/playback.py`, `subtitles.py` | `test_video_player.py`, `test_cloud_video.py` |
-| Range transport and resume | `transport.py`, `services/documents/video_progress.py` | `test_video_player.py`, `test_cloud_video.py` |
+| Range transport and resume | `transport.py`, `resume.py`, `secure_state.py` | `test_video_player.py`, `test_cloud_video.py` |
 | Desktop controls and decoding | `ui/player.py` | `test_video_decode.py` |
 | Mobile adapters and payload | `mobile/`, `mobile_sources.json` | mobile `test_video_player.py`, packaging checks |
 
@@ -15,7 +18,7 @@ remain lazy. See [feature conventions](../../../development/features.md).
 ## Video player
 
 The [brief](video-player.md) is the acceptance contract. `playback.py` admits
-Local, LocalCrypt and remote/crypt MP4/MKV sources through retained `ProviderContent` grants.
+Local, LocalCrypt and remote/crypt video sources admitted by `formats.py` through retained `ProviderContent` grants.
 Mobile LocalCrypt uses the native decoded range source rather than its ciphertext
 transfer stream. `transport.py` serves bounded HTTP byte ranges on loopback under
 per-session random capability URLs. It exposes no directories and sends no-store
@@ -27,6 +30,12 @@ Ordinary records use app-private state; private records use the encrypted
 provider's hidden `.logistics-video` directory, including native decoded reads
 when restoring. No video or subtitle is staged in a plaintext file. Resume
 metadata deliberately does not enter the workspace/recent-document projection.
+Reopen references are separate: successful mobile presentation publishes a
+`file-reference` of kind `video` through `RecentDocuments` or the existing
+credential-password encrypted document-list owner. The latter records recent
+history only, without adding video to restored open documents. Recent entry
+activation resolves current credentials again and dispatches to the native player,
+including offline encrypted copies whose stored keys have no filename extension.
 
 `ui/player.py` integrates Qt Multimedia/FFmpeg into desktop document hosting.
 It provides seeking, volume, embedded audio/subtitle selection, bounded UTF-8 SRT
@@ -54,8 +63,8 @@ VLCKit Swift package at the immutable revision in
 links the package and installs the feature-owned Objective-C controller.
 These native SDKs and their upstream notices must be retained in packaged builds.
 
-Mobile fullscreen is owned entirely by the native adapters. Controls overlay the
-video surface; Fullscreen hides them and the Android system bars or iOS status
+Mobile fullscreen is owned entirely by the native adapters. Fullscreen auto-hide
+conceals controls and the Android system bars or iOS status
 bar/home indicator. A surface tap reveals controls and a three-second timer hides
 them again during playback. Pause, completion and errors reveal controls. Timers
 defer during seeking, menus and screen-reader use. Android saves and restores the
@@ -76,18 +85,29 @@ Desktop transport buttons expose play/pause, ten-second skips and mute, with
 accessible labels, tooltips and keyboard equivalents. Track selectors retain
 visible labels and the controls stack below 520 pixels. Fullscreen uses the shared
 reader state owner so its button and native window state agree and maximization
-is restored. Native mobile controls use 48-point/dp targets, a separate utility
-group, elapsed/total time and a More menu for external playback. They combine the
-button groups above 500 available points/dp and otherwise stack them. iOS uses
-SF Symbols with spoken action names. Its scrollable control surface follows
-safe areas and active UIKit division regions, updating for hinge and window
-changes; video continues to preserve aspect ratio behind the controls.
+is restored. Android uses 48-dp targets and responsive playback/utility groups.
+iOS presents `LGVideoController` inside `LGVideoNavigationController`, with real
+`UIBarButtonItem` groups for Close, transport and utilities. UIKit owns their
+axis, edge, shared glass and overflow; no custom-view button stack substitutes
+for a native side bar. The container forwards immersive status/home-indicator
+preferences to the player. Its timeline follows safe areas and active UIKit
+division regions, updating for hinge and window changes. The timeline overlays the full movie surface. Showing or hiding controls
+does not change its bounds or vertical center.
 The iOS ten-second buttons and slider use bounded absolute times. Paused seeks
 retain their requested position in the existing deferred-resume state, including
 zero, and explicit Play reapplies it after authorization. This keeps controls and
 checkpoints consistent when VLC has not yet updated its paused decoder clock.
 
 ### Validation and remaining release gates
+
+The focused iOS `video_ui_probe.py` inspects rendered native item frames and
+hit testing, exercises selectors and fullscreen, and sweeps closed, partial and
+open Duo poses in portrait and both landscape directions. Upside-down portrait
+is also requested; a UIKit scene error 101 is recorded separately as unsupported,
+not counted as a passed orientation. The companion can inject a simulator touch
+to verify immersive control reveal. Notebook page-selection checks run in the
+same owned QA app's WKWebView; synthetic contacts do not certify physical palm
+rejection or Pencil latency.
 
 Focused commands (use the documented desktop/mobile host environments):
 
@@ -327,3 +347,152 @@ establish native desktop sleep timing or external-display capture guarantees.
 
 Resume deferred physical testing from [session video hardware acceptance](hardware-acceptance.md).
 This preserves the current-code test entry point and matrix, not an app build.
+
+## Streaming latency and viewer controls
+
+HTTP range admission checks the retained revision; remote providers validate each
+new decoded range before and after retrieval. Loopback chunks recheck local
+credential/gate access without issuing cloud stat requests twice per 256 KiB.
+Local files retain per-chunk revision checks. Streams remain seekable, so the
+demuxer can request metadata, audio and video at different byte offsets; the
+transport does not assume interleaved tracks or stage the complete movie.
+
+Both mobile engines use a 3000 ms network cache. Render progress drives a quiet
+stall indicator; background prefetch percentages are ignored because they can
+arrive while buffered video is still playing. No synthetic percentage is shown. Codec support comes from
+the existing pinned VLC SDKs, preserving automatic hardware decoding and software
+fallback, rather than a new codec dependency. `formats.py` centralizes desktop,
+mobile, import and remote activation. Representative fixtures cover MPEG-4/MP3
+and MJPEG/PCM AVI and AC-3, E-AC-3 and FLAC MKV in addition to H.264/HEVC/AAC/Opus.
+A container extension alone does not certify every codec variant.
+
+iOS mounts a center transport group, a right utility rail, and a bottom timeline
+inside current safe areas. Active fold geometry repositions controls into an
+available region. VLC rendering subviews do not participate in touch hit testing;
+a root tap remains available after auto-hide. Audio and subtitles have separate
+selectors; iOS labels combine track name, localized language, description and
+codec where present. Standalone images, comics and PDFs start with immersive
+content; tapping restores their existing controls.
+
+The viewer regression pass validated the managed iOS simulator build with 13
+codec fixtures, closed/partial/open Duo control geometry, two audio tracks and
+embedded subtitles, and synthetic WebDAV/crypt playback, seeking, authentication
+and revocation. Desktop playback covers the same codec matrix. Simulator results
+do not establish physical device touch or energy behavior. The original physical
+Duo stall session could not be recovered after its device connection dropped;
+its particular throughput, interleaving and decoder cause remain unverified.
+
+
+## Initial playback, surface geometry and remote read-ahead
+
+Opening a video starts playback after native presentation and navigation/access
+checks. Both native adapters use the same audio-consent and interruption checks
+as Play. Returning from background, authentication or an interruption remains
+paused. Desktop starts through its existing guarded playback action.
+
+iOS extends the video surface behind native bars and overlays the timeline at
+the physical window's safe bottom. Controller top/side guards remain in place;
+an adaptive side rail's inherited bottom inset does not reserve another gap.
+Fold regions still constrain the available control panel. Controls never change the movie constraints. VLCDrawable
+rendering subviews receive the movie bounds on insertion and layout, including
+rotation/fold updates. Android keeps its full-surface video and puts its timeline
+below the button rows, with no extra bottom inset beyond the system safe area.
+
+The native `remote_range` bridge admits reads up to 4 MiB, with identity and
+revision checks before and after the read. Native Go boundary tests and the
+Python integration test against the rebuilt host bridge cover the exact limit
+and oversized rejection for plain and encrypted remotes.
+
+Remote video streams use a shared, bounded 128 MiB memory LRU across HTTP
+streams, with 4 MiB provider ranges and a four-chunk, 4 MiB read-ahead queue
+per response. `buffering.py` centralizes these adjustable limits. Rewinding into
+retained ranges reuses their bytes instead of starting another download. The producer overlaps cloud
+fetches with decoder consumption; queued chunks recheck access before delivery.
+Cancellation stops and joins the producer before the provider stream closes.
+There is no decrypted disk cache. Network throughput can still cause buffering;
+these limits do not guarantee uninterrupted playback or repair damaged codecs.
+
+
+### Network starvation holds
+
+Mobile loopback readers report a readiness hint after half a second without a
+queued chunk. A hint alone never pauses playable data. Native controllers watch
+both rendered-frame counters and playback time, and
+show a quiet spinner after three seconds without either kind of progress.
+A separate six-second rendered-frame watchdog during network waits catches VLC
+clocks that free-run through a frozen picture; recovery retains the last frame
+checkpoint rather than the later audio clock. VLC statistics arrive
+in batches, so this threshold allows for their reporting interval. A real stall
+with a network hint retains the last rendered position and queues Pause while
+the producer keeps fetching. iOS recovery resumes the retained decoder without
+an automatic seek, preserving reference pictures and buffered AVI demuxer data.
+Explicit user seeks still apply. Android recovery seeks to the held position. Both resume only
+if playback is still requested and audio/access checks pass. Manual Pause wins
+over readiness, and the button reflects requested state immediately rather than
+VLC's delayed asynchronous state. Returning from a credential lock synchronizes
+readiness without restarting playback.
+
+iOS disables libavcodec hurry-up decoding and output of frames marked corrupt.
+This favors complete pictures over partial catch-up after starvation. It does
+not repair damaged source frames or guarantee that all corruption is detected.
+The physical Duo screenshot on October 29 confirmed block corruption and excess
+timeline spacing before these changes; the exact source/decoder cause and the
+fixes' effect on that movie still require physical playback acceptance.
+
+The reusable native `video_buffer_probe.py` checks playable-prefetch behavior,
+manual Pause and rotation for MP4 and AVI. `video_stall_probe.py` accepts a
+read-only host fixture and a controllable slow-read endpoint to check actual
+render starvation, held checkpoints, recovery and immediate command feedback.
+These probes do not establish physical receiver behavior or cloud throughput.
+
+
+### Chapters and Duo laptop controls
+
+Native chapter menus use VLC's chapter descriptions and seek through the same
+access-checked, paused-state-preserving path as the timeline. Desktop Qt has no
+chapter API: `chapters.py` reads Matroska ChapterAtoms and MP4 `chpl` metadata from
+seekable provider streams with a 2 MiB logical metadata budget and bounded element
+counts/depth. It skips media payloads, uses SeekHead entries when available, and
+does not spawn a decoder or stage plaintext. Unsupported chapter tracks, ordered Matroska editions and unindexed chapters
+after media clusters are omitted; chapter lookup never walks all cloud clusters. Desktop loading runs off the UI thread; closing
+cancels and joins that reader before releasing the content.
+
+On iOS 27.1, a partial hinge state plus a horizontal reserved division activates
+the Duo deck. The movie's lower constraint stops above the crease, the spinner is
+centered within that movie region, and persistent transport/utility controls sit
+below it. No split is inferred from an arbitrary screen aspect ratio. The native
+`video_fold_probe.py` and `validation/fixtures/video_fold_geometry.m` exercise the
+real controller with a QA-only reserved region; they do not certify physical hinge
+orientation or receiver behavior.
+
+Transport admission keeps four active reads and queues replacements for up to ten
+seconds instead of rejecting ordinary AVI seek bursts immediately. Failures emit
+only access/changed/read/busy categories. Native unexpected stop/error hides the
+spinner, preserves a retry position and requires explicit guarded Play. Readiness
+and failure hints never pause video that is still progressing.
+
+### Playback tool ownership
+
+`session.py` owns time validation, natural folder queues and nonsecret settings.
+`resume.py` owns progress policy; `services/documents/video_progress.py` remains a
+compatibility import. `secure_state.py` encrypts remote records with authenticated
+the credential ZIP password for session-only sources, through the shared document-state owner. Non-session-only remote records retain their authenticated host encryption.
+Encrypted records have opaque hashed names and bind source identity/revision.
+There is no plaintext fallback. LocalCrypt progress continues through its provider.
+
+`ui/controls.py` owns the Qt tools and approximate cache strip. `mobile/controls.py`
+routes native commands, retains subtitle streams and waits for outstanding
+provider work before releasing resources. Native `PlaybackControls.m/.java`
+implement options, keyboard/touch input and sizing. `PausePresentation.m/.java`
+retain volatile paused frames; they do not write screenshots. Android uses a
+TextureView so its frame can be held without waiting for asynchronous decoder
+pause. The iOS build helper stages these imported implementation files, and the
+SDK validator fingerprints every native helper.
+
+The [desktop tools](../user/controls.md) and [mobile tools](../user_mobile/controls.md)
+document current behavior. Host contracts cover durable authenticated resume,
+revocation/revision checks, queue ordering, preference bounds, time parsing and
+cached-range eviction. Actual Qt playback verifies the responsive controls.
+SDK compilation checks native interfaces; new touch/keyboard/pause/fold behavior
+has not yet received physical-device acceptance. These additions are separate
+from the baseline build/install requested before implementation.

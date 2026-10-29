@@ -26,12 +26,47 @@ class IOSVideo:
         self.closed = Block(lambda: owner.app.loop.create_task(owner.close()), None)
         self.native.allowed = self.allowed
         self.native.closed = self.closed
-        self.native.modalPresentationStyle = 0
+        from rubicon.objc import objc_id, ObjCInstance
+        self.command = Block(lambda name, value: owner.controls.dispatch(str(ObjCInstance(name)), str(ObjCInstance(value))), None, objc_id, objc_id)
+        self.native.command = self.command
+        from .controls import native_options
+        self.native.optionsJSON = native_options(owner.controls.settings.json(), owner.content)
+        self.container = ObjCClass('LGVideoNavigationController').alloc().initWithRootViewController(self.native)
+        self.container.modalPresentationStyle = 0
+        self.container.overrideUserInterfaceStyle = 2
+        self.container.view.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor')
+        self.container.navigationBar.tintColor = native_value(ObjCClass('UIColor'), 'whiteColor')
         self.native.loadViewIfNeeded()
         self.show()
 
+    def configure(self, settings, queue):
+        from .controls import native_options
+        self.native.configurePlayback(native_options(settings, self.owner.content), queue=queue)
+
+    def seek(self, position):
+        self.native.seekToMilliseconds(position)
+
+    def add_subtitle(self, url):
+        self.native.attachSubtitleURL(url)
+
+    def subtitle_browser(self, entries):
+        self.native.showSubtitleBrowser(entries)
+
+    def cached_ranges(self, value):
+        import json
+        self.native.showCachedRanges(json.dumps(value))
+
     def position(self):
         return int(self.native.positionMilliseconds()), bool(self.native.completed())
+
+    def network_waiting(self, waiting):
+        self.native.setNetworkWaiting(waiting)
+
+    def transport_failed(self, message):
+        self.native.setTransportFailure(message)
+
+    def play(self):
+        self.native.startByUser()
 
     def pause(self):
         self.native.pause()
@@ -47,7 +82,7 @@ class IOSVideo:
             self.presentation.cancel()
             self.presentation = None
         self.native.suspendForLock()
-        self.native.dismissViewControllerAnimated(False, completion=None)
+        self.container.dismissViewControllerAnimated(False, completion=None)
 
     def show(self):
         if self.disposed or self.owner.closed or self.owner.hidden or not self.owner.allowed():
@@ -58,7 +93,7 @@ class IOSVideo:
         host = self.owner.app.main_window._impl.native.rootViewController
         while host.presentedViewController:
             presented = host.presentedViewController
-            if presented == self.native:
+            if presented == self.container:
                 return
             if (native_value(presented, 'isBeingDismissed')
                     or native_value(presented, 'isBeingPresented')):
@@ -68,7 +103,7 @@ class IOSVideo:
         if native_value(host, 'isBeingDismissed') or native_value(host, 'isBeingPresented'):
             self.presentation = self.owner.app.loop.call_later(.05, self.show)
             return
-        host.presentViewController(self.native, animated=False, completion=None)
+        host.presentViewController(self.container, animated=False, completion=None)
 
     async def wait_ready(self):
         import asyncio
@@ -77,7 +112,7 @@ class IOSVideo:
                 return False
             view = native_value(self.native, 'view')
             if (self.native.player is not None and native_value(view, 'window') is not None
-                    and not native_value(self.native, 'isBeingPresented')):
+                    and not native_value(self.container, 'isBeingPresented')):
                 return True
             await asyncio.sleep(.05)
         raise RuntimeError('Video presentation did not finish. Close and reopen the video.')
@@ -101,5 +136,5 @@ class IOSVideo:
         except BaseException:
             self.disposal = None
             raise
-        self.native.dismissViewControllerAnimated(False, completion=None)
+        self.container.dismissViewControllerAnimated(False, completion=None)
         return self.disposal

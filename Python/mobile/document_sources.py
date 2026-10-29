@@ -175,7 +175,7 @@ async def opening_ready(app):
             and bool(screens) and screens[-1][0] == state['route'])
 
 
-async def reopen_file(app, source):
+async def reopen_file(app, source, *, kind=None):
     if source.get('type') == 'remote' and getattr(app, 'cloud_busy', False):
         from features.rclone.mobile.cloud_ui import explain_remote_busy
         await explain_remote_busy(app)
@@ -183,7 +183,7 @@ async def reopen_file(app, source):
     with opening_status(app, source):
         if not await opening_ready(app):
             return False
-        return await _reopen_file(app, source)
+        return await _reopen_file(app, source, kind=kind) if kind is not None else await _reopen_file(app, source)
 
 
 def local_document_path(app, path):
@@ -218,7 +218,7 @@ def local_reference_available(app, source):
         return False
 
 
-async def _reopen_file(app, source):
+async def _reopen_file(app, source, *, kind=None):
     """Resolve credentials again before constructing any encrypted provider."""
     if source['type'] == 'local':
         path = local_document_path(app, source['path'])
@@ -237,7 +237,7 @@ async def _reopen_file(app, source):
             return False
     remote, identity = source['remote'], source['identity']
     async def resume():
-        return await reopen_file(app, source)
+        return await reopen_file(app, source, kind=kind)
     cipher = source['type'] in {'crypt', 'download'}
     client = getattr(app, 'cloud_client', None)
     if cipher:
@@ -287,6 +287,22 @@ async def _reopen_file(app, source):
         copies = app.crypt_copies
         if copies.record(source['key'])['identity'] != identity:
             raise ValueError('The downloaded file connection changed.')
+    from features.video.formats import VIDEO_EXTENSIONS
+    if kind == 'video' or Path(source['key']).suffix.lower() in VIDEO_EXTENSIONS:
+        from features.video.mobile.player import open_video
+        if source['type'] == 'remote':
+            video_provider, video_key = resource, source['key']
+        elif source['type'] == 'crypt':
+            video_provider, video_key = provider, source['key']
+        else:
+            from features.rclone.localcrypt.mobile.locations import OfflineCryptLocation
+            from features.rclone.mobile.service import native_service
+            video_provider = native_service(client).localcrypt.open(OfflineCryptLocation(copies, source['key']))
+            video_key = video_provider.name
+        try:
+            return await open_video(app, video_provider, video_key)
+        finally:
+            video_provider.close()
     return await app.open_crypt(copies=copies, key=source['key'])
 
 
@@ -352,6 +368,11 @@ def folder_action(app, session, owner=None):
 
 async def show_in_folder(app, session, owner=None):
     location = folder_location(app, session, owner)
+    return await show_folder_location(app, location)
+
+
+async def show_folder_location(app, location):
+    """Reveal and select an admitted reader source in the shared file browser."""
     if location is None or not app.checkpoint():
         return False
     # Capture the source before presenting Workspaces suspends private pixels.

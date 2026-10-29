@@ -24,7 +24,7 @@ class VideoContracts(unittest.TestCase):
         binary = executable.get_rclone_path()
         if not binary.is_file():
             self.skipTest('Pinned rclone is unavailable')
-        with TemporaryDirectory() as directory, ExitStack() as cleanup, crypt_fixture(directory, binary) as fixture, patch.object(
+        with TemporaryDirectory() as directory, ExitStack() as cleanup, crypt_fixture(directory, binary, state_password='synthetic-package-password') as fixture, patch.object(
                 executable, 'get_rclone_path', return_value=binary):
             from commonUtils.filesystem.native_paths import native_path
             # The normal-root fixture proves production path handling. Retire
@@ -43,9 +43,10 @@ class VideoContracts(unittest.TestCase):
                 self.assertEqual(state.load(), 24680)
                 state.save(13579)
                 self.assertEqual(state.load(), 13579)
-                encrypted = fixture.provider.encrypted_path(state.path)
+                encrypted = state.credential_state.root / (state.credential_state.binding() + '.zip')
                 self.assertNotIn(b'position', encrypted.read_bytes())
                 self.assertFalse((Path(directory) / 'public-cache').exists())
+                self.assertEqual(VideoProgress(content, Path(directory) / 'public-cache').load(), 13579)
                 session.forget(fixture.context)
                 with self.assertRaises((ValueError, PermissionError)):
                     content.check()
@@ -145,7 +146,7 @@ class VideoContracts(unittest.TestCase):
                 state.save(24680)
                 self.assertEqual(state.load(), 24680)
                 self.assertFalse((root / 'ordinary-state').exists())
-                self.assertNotIn(b'position', (root / state.path).read_bytes())
+                self.assertFalse(list(root.glob('ReaderPositions/*.zip')))  # No owning ZIP password: RAM only.
                 state.save(123)
                 self.assertEqual(state.load(), 123)
                 with self.assertRaises(PermissionError):

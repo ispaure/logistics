@@ -101,7 +101,7 @@ async def exercise(app):
         fixtures = sorted(Path(__file__).with_name('video-cloud-fixtures').joinpath('remote/plain').glob('*'))
         for remote, folder in [('Cloud', 'plain/'), ('Secret', '')]:
             for path in fixtures:
-                if path.suffix not in {'.mp4', '.mkv'} or path.name == 'long.mp4':
+                if path.suffix not in {'.mp4', '.mkv', '.avi'} or path.name == 'long.mp4':
                     continue
                 owner = await open_movie(remote, folder + path.name)
                 player, colors = await play(owner)
@@ -158,10 +158,13 @@ async def exercise(app):
         await play(owner)
         app.cloud_client.lock()
         owner.retire_stale()
-        assert owner.closed and app.video_player is None
+        assert owner.closed and not owner.allowed()
+        await asyncio.shield(owner.retirement)
+        assert app.video_player is None
         rows.append(dict(name='Cloud browser activation and credential revocation', retired=True))
         assert not list(app.private_root.rglob('*.mp4'))
         assert not list(app.private_root.rglob('*.mkv'))
+        assert not list(app.private_root.rglob('*.avi'))
         assert server.metrics['ranges'] > 0 and server.metrics['encrypted_ranges'] > 0
         report['network'] = server.metrics
         report['no_plaintext_video_staging'] = True

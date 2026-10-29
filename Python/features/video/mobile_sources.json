@@ -9,6 +9,17 @@
     "mobile/android.py",
     "mobile/ios.py",
     "mobile/android/io/github/ispaure/logistics/video/VideoPlayer.java",
-    "mobile/ios/VideoPlayer.m"
+    "mobile/ios/VideoPlayer.m",
+    "formats.py",
+    "buffering.py",
+    "session.py",
+    "resume.py",
+    "secure_state.py",
+    "mobile/controls.py",
+    "mobile/ios/PlaybackControls.m",
+    "mobile/android/io/github/ispaure/logistics/video/PlaybackControls.java",
+    "mobile/ios/PausePresentation.m",
+    "mobile/android/io/github/ispaure/logistics/video/PausePresentation.java",
+    "legacy_progress.py"
   ]
 }

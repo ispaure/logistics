@@ -3,6 +3,7 @@
 Mobile ships selected feature modules rather than desktop registration/UI hooks.
 These device-local choices control admission, not packaging or stored data.
 """
+from features.video.formats import VIDEO_EXTENSIONS
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 import json
@@ -26,7 +27,7 @@ FEATURES = (
     MobileFeature('books', 'Books & Comics', 'Read EPUB books and comic archives and browse their libraries.', ('books', 'comics')),
     MobileFeature('pdf', 'PDF Reader', 'Read PDF documents.'),
     MobileFeature('images', 'Image Tools', 'View images and use Burst camera on supported devices.'),
-    MobileFeature('video', 'Video Player', 'Play Local, LocalCrypt and remote/crypt MP4/MKV video.'),
+    MobileFeature('video', 'Video Player', 'Play Local, LocalCrypt and remote/crypt video, including MP4, MKV and AVI.'),
     MobileFeature('lm', 'LM Chat', 'Conversations with your configured language-model server.'),
     MobileFeature('rclone', 'rclone', 'Cloud connections, network shares, encrypted storage and transfers. Local files remain available.'),
 )
@@ -62,7 +63,7 @@ def group_enabled(preferences, name):
 
 def document_feature(name='', kind=None):
     suffix = PurePosixPath(str(name)).suffix.lower()
-    if suffix in ('.mp4', '.mkv'):
+    if suffix in VIDEO_EXTENSIONS:
         return 'video'
     if suffix == '.rmdoc':
         return 'notebooks'

@@ -15,7 +15,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from build_manager.android_emulators import AndroidEmulator
 from logistics_build.build_retention import scratch
 from mobile_build.deployment.android_deploy import deployment_environment, tools_environment, build_tools
-from tests.readers.video_fixtures import codec_matrix
+from tests.readers.video_fixtures import codec_matrix, multitrack_movie
 from mobile_build.tools import stage
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -77,7 +77,7 @@ def cloud_fixtures(workspace, *, rclone=None):
 
 
 def prepare(apk, workspace, *, cloud=False, rclone=None):
-    fixtures = codec_matrix(workspace / 'fixtures', duration=12) if not cloud else []
+    fixtures = codec_matrix(workspace / 'fixtures', duration=30) if not cloud else []
     fixture_root = cloud_fixtures(workspace, rclone=rclone) if cloud else None
     with ZipFile(apk) as archive:
         if not any(b'Lio/github/ispaure/logistics/video/VideoPlayer$Listener;' in archive.read(name)
@@ -225,7 +225,9 @@ def run_ios(source, output, *, cloud=False, model_name='iPad', ui=False, duoctl=
             shutil.copytree(cloud_fixtures(workspace, rclone=rclone), tests / 'video-cloud-fixtures')
             shutil.copyfile(tests / 'video-cloud-fixtures/fixture-tool.json', output / 'fixture-tool.json')
         else:
-            codec_matrix(tests / 'video-fixtures', duration=60 if ui else 12)
+            codec_matrix(tests / 'video-fixtures', duration=60 if ui else 30)
+            if ui:
+                multitrack_movie(tests / 'video-fixtures', tests / 'video-fixtures/h264-aac.mp4')
         # Video QA does not exercise app extensions. Remove only this scratch copy's
         # extensions, whose signed identities belong to the containing production app.
         for extension_directory in ('PlugIns', 'Extensions'):
@@ -264,7 +266,10 @@ def run_ios(source, output, *, cloud=False, model_name='iPad', ui=False, duoctl=
                     action = json.loads(request.read_text())
                     if action['sequence'] != completed_pose:
                         tool = [sys.executable, str(duoctl), '-d', device]
-                        subprocess.run([*tool, 'hinge', str({'closed': 0, 'partial': 127, 'open': 180}[action['pose']])], check=True, timeout=60)
+                        if 'tap' in action:
+                            subprocess.run([*tool, 'tap', *map(str, action['tap'])], check=True, timeout=60)
+                        else:
+                            subprocess.run([*tool, 'hinge', str({'closed': 0, 'partial': 127, 'open': 180}[action['pose']])], check=True, timeout=60)
                         state = json.loads(subprocess.check_output([*tool, 'state'], text=True, timeout=30))
                         completed_pose = action['sequence']
                         (cache / 'video-ui-pose-done.json').write_text(json.dumps(dict(sequence=completed_pose, state=state)))
@@ -291,6 +296,12 @@ def run_ios(source, output, *, cloud=False, model_name='iPad', ui=False, duoctl=
                 report.update(restaged_python_probe=True, native_binary_source=str(source))
                 (output / 'result.json').write_text(json.dumps(report, indent=2))
                 if not report['success']:
+                    try:
+                        (output / 'presentation.log').write_text(client.invoke('spawn', device, 'log', 'show',
+                            '--last', '3m', '--style', 'compact', '--predicate',
+                            'eventMessage CONTAINS "resent" OR eventMessage CONTAINS "LGVideo"'))
+                    except Exception as error:
+                        (output / 'presentation-log-error.txt').write_text(str(error))
                     raise RuntimeError(report.get('error', 'Native iPad video probe failed'))
                 print(json.dumps(dict(success=True, cases=len(report['cases']))))
                 return

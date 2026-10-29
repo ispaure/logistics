@@ -1,12 +1,13 @@
 """Qt/FFmpeg video document; private media stays in revocable provider streams."""
 from pathlib import Path
+from threading import Event, Thread
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QMediaMetaData
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
 from features.video.playback import VideoContent, VIDEO_EXTENSIONS, SubtitleContent
-from services.documents.video_progress import VideoProgress
+from features.video.resume import VideoProgress
 from features.video.transport import VideoTransport
 
 
@@ -15,8 +16,14 @@ def clock(milliseconds):
     return f'{seconds // 3600}:{seconds // 60 % 60:02}:{seconds % 60:02}'
 
 
-class VideoWindow(qt.QMainWindow):
+from .controls import PlaybackTools, CachedSlider
+
+
+class VideoWindow(PlaybackTools, qt.QMainWindow):
     idle = qt.Signal()
+    queue_result = qt.Signal(object)
+    chapter_result = qt.Signal(object)
+    stream_problem = qt.Signal(str)
 
     def __init__(self, choice):
         super().__init__()
@@ -26,13 +33,23 @@ class VideoWindow(qt.QMainWindow):
         self.subtitles = None
         self.external = False
         self.ended = False
+        self.chapter_cancelled, self.chapter_worker = Event(), None
+        self.chapter_data, self.chapter_menu = None, None
+        self.transport_failure = None
         try:
             self.content = VideoContent(choice.provider, choice.path)
-            self.transport = VideoTransport(self.content)
+            self.transport = VideoTransport(self.content, failed=self.stream_problem.emit)
             from commonUtils.filesystem.storage import cache_directory
             self.progress = VideoProgress(self.content, cache_directory(create=False) / 'Video')
             self.resume_at = self.progress.load()
             self.build()
+            self.queue_result.connect(self.queue_loaded)
+            self.build_tools(cache_directory(create=False) / 'Video')
+            state = getattr(self.progress, 'credential_state', None)
+            if state is not None and state.locked_state:
+                self.status.setText('Saved position needs the previous ZIP password. Use Settings → Reader history → Migrate.')
+            elif self.progress.resume_notice:
+                self.status.setText(self.progress.resume_notice)
             self.closing = False
         except BaseException:
             if hasattr(self, 'transport'):
@@ -57,6 +74,7 @@ class VideoWindow(qt.QMainWindow):
                 self.retire_private_content()
                 self.deleteLater()
                 raise
+        qt.QTimer.singleShot(0, self.toggle_play)
 
     def build(self):
         self.player = QMediaPlayer(self)
@@ -66,13 +84,23 @@ class VideoWindow(qt.QMainWindow):
         body = qt.QWidget()
         self.setCentralWidget(body)
         layout = qt.QVBoxLayout(body)
+        from commonUtils.ui.readers.layout import READER_LAYOUT
+        layout.setContentsMargins(*READER_LAYOUT.desktop_margins)
+        layout.setSpacing(READER_LAYOUT.spacing)
         self.video = QVideoWidget()
         palette = self.video.palette()
         palette.setColor(qt.QPalette.ColorRole.Window, qt.QColor('black'))
         self.video.setPalette(palette)
         self.video.setAutoFillBackground(True)
         self.player.setVideoOutput(self.video)
-        layout.addWidget(self.video, 1)
+        self.video_viewport = qt.QScrollArea()
+        self.video_viewport.setFrameShape(qt.QFrame.Shape.NoFrame)
+        self.video_viewport.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
+        self.video_viewport.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.video_viewport.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.video_viewport.setStyleSheet("background: black;")
+        self.video_viewport.setWidget(self.video)
+        layout.addWidget(self.video_viewport, 1)
         self.caption = qt.QLabel()
         self.caption.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.caption.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
@@ -81,13 +109,13 @@ class VideoWindow(qt.QMainWindow):
         layout.addWidget(self.caption)
         self.caption.hide()
         row = qt.QHBoxLayout()
-        self.seek = qt.QSlider(qt.Qt.Orientation.Horizontal)
+        self.seek = CachedSlider(qt.Qt.Orientation.Horizontal)
         self.seek.setAccessibleName('Video position')
-        self.seek.sliderReleased.connect(lambda: self.player.setPosition(self.seek.value()))
+        self.seek.sliderReleased.connect(lambda: self.seek_to(self.seek.value()))
         row.addWidget(self.seek, 1)
         self.time = qt.QLabel('0:00:00 / 0:00:00')
         row.addWidget(self.time)
-        layout.addLayout(row)
+        timeline = row
         row = qt.QHBoxLayout()
         self.backward = self.control_button('Back 10 seconds', 'SP_MediaSeekBackward', lambda: self.skip(-10000))
         self.play = self.control_button('Play', 'SP_MediaPlay', self.toggle_play)
@@ -145,23 +173,28 @@ class VideoWindow(qt.QMainWindow):
         self.floating.setCheckable(True)
         self.floating.setEnabled(not self.content.restricted)
         self.floating.clicked.connect(self.toggle_floating)
-        self.action_buttons = (self.attach, self.fullscreen_button, self.floating)
+        self.chapters = qt.QPushButton('Chapters…')
+        self.chapters.clicked.connect(self.show_chapters)
+        self.chapter_result.connect(self.chapters_loaded)
+        self.action_buttons = (self.attach, self.chapters, self.fullscreen_button, self.floating)
         for column, button in enumerate(self.action_buttons):
             button.setMinimumHeight(32)
             self.action_layout.addWidget(button, 0, column)
         layout.addLayout(self.action_layout)
-        self.status = qt.QLabel('Cloud streaming may buffer or fail when seeking; resume is kept only while this player is open.'
+        self.status = qt.QLabel('Cloud streaming · encrypted resume. Green: cached ranges (approx.). Start over is in Playback.'
                                if self.content.remote else 'Ready. Press Play to start.')
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         self.status.setMinimumWidth(0)
         layout.addWidget(self.status)
+        layout.addLayout(timeline)
         self.player.positionChanged.connect(self.position_changed)
         self.player.durationChanged.connect(self.duration_changed)
         self.player.tracksChanged.connect(self.refresh_tracks)
         self.player.mediaStatusChanged.connect(self.media_status)
         self.player.playbackStateChanged.connect(self.update_play)
-        self.player.errorOccurred.connect(lambda *_: self.status.setText('Playback failed: ' + self.player.errorString()))
+        self.stream_problem.connect(self.transport_problem)
+        self.player.errorOccurred.connect(self.playback_error)
         self.timer = qt.QTimer(self)
         self.timer.setInterval(5000)
         self.timer.timeout.connect(self.checkpoint)
@@ -206,7 +239,7 @@ class VideoWindow(qt.QMainWindow):
             return
         try:
             self.content.check_access()
-            self.player.setPosition(max(0, min(self.player.duration(), self.player.position() + offset)))
+            self.seek_to(self.player.position() + offset)
         except (OSError, ValueError, PermissionError) as error:
             self.player.pause()
             self.status.setText(str(error))
@@ -225,7 +258,7 @@ class VideoWindow(qt.QMainWindow):
         for button in self.action_buttons:
             self.action_layout.removeWidget(button)
         for index, button in enumerate(self.action_buttons):
-            self.action_layout.addWidget(button, index if narrow else 0, 0 if narrow else index)
+            self.action_layout.addWidget(button, index // 2 if narrow else 0, index % 2 if narrow else index)
 
     def toggle_play(self):
         if self.resume_guard is not None and self.resume_guard.blocked:
@@ -241,11 +274,17 @@ class VideoWindow(qt.QMainWindow):
             self.player.pause()
             self.checkpoint()
         else:
+            if self.player.error() != QMediaPlayer.Error.NoError:
+                self.resume_at = self.player.position()
+                self.player.setSource(qt.QUrl())
+                self.player.setSource(qt.QUrl(self.transport.url))
+            self.transport_failure = None
             self.player.play()
 
     def duration_changed(self, duration):
         self.seek.setRange(0, min(duration, 2147483647))
         if self.resume_at and duration > 0:
+            self.status.setText("Resumed playback. Use Playback → Start over to restart.")
             self.player.setPosition(min(self.resume_at, max(0, duration - 1000)))
             self.resume_at = 0
 
@@ -253,12 +292,14 @@ class VideoWindow(qt.QMainWindow):
         if not self.seek.isSliderDown():
             self.seek.setValue(position)
         self.time.setText(f'{clock(position)} / {clock(self.player.duration())}')
-        self.caption.setText(self.subtitles.at(position) if self.external and self.subtitles else '')
+        self.caption.setText(self.subtitles.at(position - self.settings.subtitle_delay_ms) if self.external and self.subtitles else '')
         self.caption.setVisible(bool(self.caption.text()))
 
     def refresh_tracks(self):
         def label(track, index):
-            return str(track.stringValue(QMediaMetaData.Key.Title) or track.stringValue(QMediaMetaData.Key.Language) or f'Track {index + 1}')
+            parts = dict.fromkeys(str(track.stringValue(key)) for key in
+                (QMediaMetaData.Key.Title, QMediaMetaData.Key.Language) if track.stringValue(key))
+            return ' · '.join(parts) or f'Track {index + 1}'
         self.audio_tracks.clear()
         for index, track in enumerate(self.player.audioTracks()):
             self.audio_tracks.addItem(label(track, index), index)
@@ -307,6 +348,81 @@ class VideoWindow(qt.QMainWindow):
                 resource.close()
             choice.close()
 
+    def transport_problem(self, category):
+        messages = {
+            'access': 'Video access expired. Unlock the source, then press Play to retry.',
+            'changed': 'The video changed while it was open. Close and reopen it.',
+            'read': 'Video data could not be read. Check the connection, then press Play to retry.',
+            'busy': 'The video connection is busy. Press Play to retry.',
+        }
+        self.transport_failure = messages.get(category, messages['read'])
+
+    def playback_error(self, *args):
+        messages = {
+            QMediaPlayer.Error.FormatError: 'This video format could not be decoded.',
+            QMediaPlayer.Error.AccessDeniedError: 'Video access was denied. Unlock the source and press Play to retry.',
+            QMediaPlayer.Error.NetworkError: 'The video connection failed. Press Play to retry.',
+        }
+        self.status.setText(self.transport_failure or messages.get(self.player.error(),
+            'Playback could not continue. Press Play to retry from this position.'))
+
+    def show_chapters(self):
+        if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
+            return
+        try:
+            self.content.check_access()
+        except (OSError, ValueError, PermissionError):
+            self.status.setText('Unlock the video before opening chapters.')
+            return
+        if self.chapter_data is not None:
+            if not self.chapter_data:
+                self.status.setText('This video has no supported embedded chapters.')
+                return
+            menu = self.chapter_menu = qt.QMenu(self)
+            for chapter in self.chapter_data:
+                action = menu.addAction(f'{clock(chapter.start_ms)} · {chapter.title}')
+                action.triggered.connect(lambda checked=False, position=chapter.start_ms: self.seek_to(position))
+            menu.popup(self.chapters.mapToGlobal(qt.QPoint(0, self.chapters.height())))
+            return
+        if self.chapter_worker is not None and self.chapter_worker.is_alive():
+            return
+        self.chapters.setEnabled(False)
+        self.chapters.setText('Loading chapters…')
+        def load():
+            from features.video.chapters import read_chapters
+            try:
+                rows, error = read_chapters(self.content, cancelled=self.chapter_cancelled.is_set), False
+            except (OSError, ValueError, PermissionError):
+                rows, error = [], True
+            if not self.chapter_cancelled.is_set():
+                self.chapter_result.emit((rows, error))
+        self.chapter_worker = Thread(target=load, name='video-chapters')
+        self.chapter_worker.start()
+
+    def chapters_loaded(self, result):
+        if self.closing or self.chapter_cancelled.is_set():
+            return
+        self.chapters.setText('Chapters…')
+        self.chapters.setEnabled(True)
+        rows, error = result
+        if error:
+            self.status.setText('Could not read chapters. Check access and try again.')
+            return
+        self.chapter_data = rows
+        self.show_chapters()
+
+    def seek_to(self, position):
+        if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
+            return
+        try:
+            self.content.check_access()
+            position = max(0, min(self.player.duration(), position))
+            self.remember_seek(position)
+            self.player.setPosition(position)
+        except (OSError, ValueError, PermissionError):
+            self.player.pause()
+            self.status.setText('Unlock the video before seeking.')
+
     def toggle_fullscreen(self):
         self.fullscreen.toggle()
 
@@ -339,6 +455,8 @@ class VideoWindow(qt.QMainWindow):
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             self.ended = True
             self.checkpoint(completed=True)
+            if self.settings.autoplay_next:
+                qt.QTimer.singleShot(0, lambda: self.queue_move(1))
         elif status == QMediaPlayer.MediaStatus.BufferedMedia:
             self.ended = False
 
@@ -351,12 +469,29 @@ class VideoWindow(qt.QMainWindow):
             self.content.check_access()
             self.progress.save(self.player.position(), completed=completed or self.ended)
         except (OSError, ValueError, PermissionError) as error:
-            self.player.pause()
-            self.status.setText('Resume position: ' + str(error))
+            try:
+                self.content.check_access()
+            except (OSError, ValueError, PermissionError):
+                self.player.pause()
+            self.status.setText('Resume unavailable: ' + str(error))
         self.floating.setEnabled(not self.content.restricted)
         self.idle.emit()
 
     def retire_private_content(self):
+        self.chapter_cancelled.set()
+        if self.chapter_menu is not None:
+            self.chapter_menu.close()
+            self.chapter_menu.clear()
+        if self.chapter_worker is not None:
+            self.chapter_worker.join()
+        self.chapter_data = None
+        if getattr(self, "queue_worker", None) is not None:
+            self.queue_worker.join()
+        self.queue = None
+        if self.tools_menu is not None:
+            self.tools_menu.close()
+            self.tools_menu.clear()
+        self.cache_timer.stop()
         if self.resume_guard is not None:
             self.resume_guard.dispose()
         self.timer.stop()

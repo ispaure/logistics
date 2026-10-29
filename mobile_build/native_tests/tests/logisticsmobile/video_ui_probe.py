@@ -12,10 +12,34 @@ from .video_probe import until, fullscreen_controls
 
 def buttons(view):
     from rubicon.objc import ObjCClass
-    if view.isKindOfClass(ObjCClass('UIButton')):
+    if view.isKindOfClass(ObjCClass('UIControl')):
         yield view
     for child in native_value(view, 'subviews'):
         yield from buttons(child)
+
+
+def dispatch(item):
+    item.target.performSelector(item.action, withObject=item)
+
+
+def presented_menu(native):
+    return (native_value(native, 'presentedViewController') or
+            native_value(native_value(native, 'navigationController'), 'presentedViewController'))
+
+
+async def dismiss_menu(native):
+    from rubicon.objc import Block
+    loop = asyncio.get_running_loop()
+    done = loop.create_future()
+    completion = Block(lambda: loop.call_soon(done.set_result, None), None)
+    # With a navigation container, dismiss the presented sheet itself. Asking
+    # its child player to dismiss can dismiss the entire modal player instead.
+    menu = presented_menu(native)
+    await until(lambda: not native_value(menu, 'isBeingPresented') and
+                native_value(menu, 'transitionCoordinator') is None)
+    menu.dismissViewControllerAnimated(False, completion=completion)
+    await asyncio.wait_for(done, 5)
+    await until(lambda: presented_menu(native) is None)
 
 
 def frame(view, root):
@@ -44,29 +68,72 @@ async def record(app, native, output, name):
         window.drawViewHierarchyInRect(bounds, afterScreenUpdates=True)
     (output / (name + '.png')).write_bytes(nsdata_to_bytes(renderer.PNGDataWithActions(Block(draw, None, objc_id))))
     rows = []
+    diagnostics = [dict(kind=str(button.objc_class.name),
+                        label=str(native_value(button, 'accessibilityLabel') or ''),
+                        identifier=str(native_value(button, 'accessibilityIdentifier') or ''),
+                        hidden=bool(native_value(button, 'isHidden')), alpha=float(native_value(button, 'alpha')),
+                        frame=frame(button, window)) for button in buttons(window)]
+    (output / (name + '-native.json')).write_text(json.dumps(diagnostics, indent=2))
     folds = []
     if hasattr(view, 'reservedRegionsOfKind'):
         kind = ObjCClass('UIViewReservedRegionKind').divisionRegionKind()
         for region in view.reservedRegionsOfKind(kind, options=0):
             r = native_value(region, 'frame')
             folds.append([float(r.origin.x), float(r.origin.y), float(r.size.width), float(r.size.height)])
-    for button in buttons(native.controls):
-        native.controlsScroll.scrollRectToVisible(button.convertRect(native_value(button, 'bounds'), toView=native.controlsScroll), animated=False)
-        await asyncio.sleep(.05)
-        x, y, width, height = frame(button, view)
-        label = str(native_value(button, 'accessibilityLabel'))
-        assert width >= 47.5 and height >= 47.5, (label, width, height)
-        cx, cy, cw, ch = frame(native.controlsScroll, view)
-        assert cx - 1 <= x and x + width <= cx + cw + 1, (label, 'clipped horizontally')
-        assert cy - 1 <= y and y + height <= cy + ch + 1, (label, 'clipped vertically')
-        for fx, fy, fw, fh in folds:
-            assert x + width <= fx or fx + fw <= x or y + height <= fy or fy + fh <= y, (label, 'overlaps fold')
+    items = list(native.mediaItems)
+    assert all(item.customView is None for item in items), 'Media actions use custom views'
+    found = set()
+    for item in items:
+        label = str(item.accessibilityLabel)
+        # QA-only inspection: UIKit's bar control views do not copy the item's
+        # accessibility metadata. Production uses only public native bar APIs.
+        button = item.valueForKey('view')
+        if button is None or native_value(button, 'window') != window or native_value(button, 'isHidden'):
+            continue
+        x, y, width, height = frame(button, window)
+        if width < 1 or height < 1:
+            continue
+        assert width >= 36 and height >= 36, (label, 'collapsed native item', width, height)
         point = CGPoint(x + width / 2, y + height / 2)
-        hit = view.hitTest(point, withEvent=None)
-        assert hit == button or hit.isDescendantOfView(button), (label, 'button is not hittable')
+        hit = window.hitTest(point, withEvent=None)
+        assert hit == button or hit.isDescendantOfView(button), (label, 'native action is not hittable')
         rows.append(dict(label=label, frame=[x, y, width, height]))
+        found.add(label)
+    assert 'Done' in found and ('Play' in found or 'Pause' in found), ('Primary native actions missing', rows)
+    bar = native_value(native_value(native, 'navigationController'), 'navigationBar')
+    bar_frame = frame(bar, window)
+    traits = native_value(native, 'traitCollection')
+    edge = int(traits.verticalBarEdge) if hasattr(traits, 'verticalBarEdge') else 0
+    coordinates = [row['frame'][0 if edge else 1] for row in rows]
+    assert max(coordinates) - min(coordinates) <= 5, ('Native bar did not adopt its axis', edge, rows)
+    view.layoutIfNeeded()
+    bx, by, bw, bh = frame(native.bufferOverlay, view)
+    assert bw > 0 and bh > 0, 'Buffering indicator has no layout'
+    for fx, fy, fw, fh in folds:
+        assert bx + bw <= fx or fx + fw <= bx or by + bh <= fy or fy + fh <= by, 'Buffering indicator overlaps fold'
+    # The full surface and VLC's rendering child must survive rotation and
+    # controls changes without retaining an earlier portrait/landscape size.
+    movie = frame(native.movie, view)
+    expected = [0, 0, float(native_value(view, 'bounds').size.width), float(native_value(view, 'bounds').size.height)]
+    assert all(abs(a - b) < 1 for a, b in zip(movie, expected)), ('Movie does not fill player', movie, expected)
+    for surface in native_value(native.movie, 'subviews'):
+        rect = frame(surface, native.movie)
+        assert all(abs(a - b) < 1 for a, b in zip(rect, expected)), ('VLC retained stale bounds', rect, expected)
+    native.setControlsShown(False)
+    view.layoutIfNeeded()
+    assert frame(native.movie, view) == movie, 'Hiding controls moved/resized video'
+    native.setControlsShown(True)
+    view.layoutIfNeeded()
+    assert frame(native.movie, view) == movie, 'Showing controls moved/resized video'
+    controls = frame(native.controlsScroll, window)
+    if not native.tabletop and not folds:
+        # A side rail must not leave its former bottom inset below the timeline.
+        physical_bottom = float(bounds.origin.y + bounds.size.height - window.safeAreaInsets.bottom)
+        assert abs(controls[1] + controls[3] - physical_bottom) < 2, (
+            'Timeline retains extra bottom safe-area space', controls, physical_bottom)
     return dict(name=name, pose=pose_snapshot(app), buttons=rows, folds=folds,
-                movie=frame(native.movie, view), controls=frame(native.controlsScroll, view))
+                movie=frame(native.movie, view), controls=frame(native.controlsScroll, view),
+                buffering_frame=[bx, by, bw, bh], bar_frame=bar_frame, bar_edge=edge)
 
 
 async def exercise(app):
@@ -81,10 +148,12 @@ async def exercise(app):
         from features.video.mobile.player import open_video
         root = app.private_root / 'video-ui-fixtures'
         root.mkdir(parents=True, exist_ok=True)
-        root.joinpath('movie.mp4').write_bytes(Path(__file__).with_name('video-fixtures').joinpath('h264-aac.mp4').read_bytes())
-        assert await open_video(app, LocalFiles(root), 'movie.mp4')
+        root.joinpath('movie.mkv').write_bytes(Path(__file__).with_name('video-fixtures').joinpath('tracks.mkv').read_bytes())
+        assert await open_video(app, LocalFiles(root), 'movie.mkv')
         owner = app.video_player
         native = owner.native.native
+        recent = next(session for session, _ in app.recent_items()
+                      if session.kind == 'video' and session.title == 'movie.mkv')
         from rubicon.objc import ObjCClass
         for orientation in ('portrait', 'landscape-left', 'landscape-right', 'portrait'):
             await rotate(app, orientation)
@@ -96,10 +165,11 @@ async def exercise(app):
             await until(lambda: not native_value(native.player, 'isPlaying'))
             native.setControlsShown(True)
             row = await record(app, native, output, str(len(report['cases'])) + '-' + orientation)
+            report['active_case'] = row
             row['before_play'] = dict(playing=bool(native_value(native.player, 'isPlaying')),
                 allowed=owner.allowed(), audio=owner.audio_output.permitted(), position=owner.native.position()[0])
-            indexed = {str(native_value(button, 'accessibilityLabel')): button for button in buttons(native.controls)}
-            native.playButton.sendActionsForControlEvents(1 << 6)
+            indexed = {str(item.accessibilityLabel): item for item in native.mediaItems}
+            dispatch(native.playButton)
             try:
                 await until(lambda: 500 < player_clock(native.player) < 3000 and native_value(native.player, 'isPlaying'))
             except AssertionError:
@@ -109,14 +179,14 @@ async def exercise(app):
                     native_allowed=bool(native.canPlay(False)), state=str(native_value(native.player, 'state')))
                 report['cases'].append(row)
                 raise
-            native.playButton.sendActionsForControlEvents(1 << 6)
+            dispatch(native.playButton)
             await until(lambda: not native_value(native.player, 'isPlaying'))
             position = owner.native.position()[0]
             row['seek_admission'] = dict(before_back=bool(native.canPlay(False)))
-            indexed['Back 10 seconds'].sendActionsForControlEvents(1 << 6)
+            dispatch(indexed['Back 10 seconds'])
             await until(lambda: owner.native.position()[0] <= max(250, position - 8500))
             row['seek_admission']['before_forward'] = bool(native.canPlay(False))
-            indexed['Forward 10 seconds'].sendActionsForControlEvents(1 << 6)
+            dispatch(indexed['Forward 10 seconds'])
             try:
                 await until(lambda: owner.native.position()[0] > position + 500)
             except AssertionError:
@@ -127,7 +197,7 @@ async def exercise(app):
                 report['cases'].append(row)
                 raise
             requested = owner.native.position()[0]
-            native.playButton.sendActionsForControlEvents(1 << 6)
+            dispatch(native.playButton)
             def resumed():
                 return native_value(native.player, 'isPlaying') and player_clock(native.player) >= requested + 250
             try:
@@ -141,12 +211,38 @@ async def exercise(app):
             native.pause()
             await until(lambda: not native_value(native.player, 'isPlaying'))
             row['paused_seek_resumed_at_target'] = True
-            indexed['Audio and subtitles'].sendActionsForControlEvents(1 << 6)
-            await until(lambda: native_value(native, 'presentedViewController') is not None)
-            native.dismissViewControllerAnimated(False, completion=None)
-            await until(lambda: native_value(native, 'presentedViewController') is None)
+            dispatch(indexed['Audio tracks'])
+            await until(lambda: presented_menu(native) is not None)
+            menu = presented_menu(native)
+            labels = [str(action.title) for action in menu.actions]
+            assert len(native.player.audioTracks) == 2, 'Multiple audio tracks were lost'
+            assert any('English' in label for label in labels), labels
+            assert any('French' in label for label in labels), labels
+            row['audio_menu'] = labels
+            await dismiss_menu(native)
+            second = native.player.audioTracks[1]
+            second.selectedExclusively = True
+            await until(lambda: bool(native_value(second, 'isSelected')))
+            row['before_subtitles'] = dict(native_allowed=bool(native.canPlay(False)),
+                allowed=owner.allowed(), window=bool(native_value(native_value(native, 'view'), 'window')),
+                container_window=bool(native_value(native_value(owner.native.container, 'view'), 'window')),
+                target=str(indexed['Subtitles'].target), action=str(indexed['Subtitles'].action),
+                state=str(native_value(native.player, 'state')), retired=bool(native.retired),
+                presented=str(native_value(native, 'presentedViewController')))
+            native.subtitleTracks(indexed['Subtitles'])
+            await until(lambda: presented_menu(native) is not None)
+            menu = presented_menu(native)
+            row['subtitle_menu'] = [str(action.title) for action in menu.actions]
+            assert 'Subtitles off' in row['subtitle_menu'] and len(native.player.textTracks) == 1
+            await dismiss_menu(native)
             native.toggleFullscreen(None)
-            await until(lambda: native_value(native.controls, 'isHidden'))
+            assert not native_value(native.controls, 'isHidden'), 'Fullscreen entry hides paused controls'
+            native.setControlsShown(False)
+            # VLC rendering subviews must never steal the root tap target.
+            from rubicon.objc import CGPoint
+            surface = native_value(native, 'view')
+            hit = surface.hitTest(CGPoint(10, 10), withEvent=None)
+            assert not hit.isDescendantOfView(native.movie), 'VLC consumes surface touches'
             native.tapVideo(None)
             await until(lambda: not native_value(native.controls, 'isHidden'))
             native.toggleFullscreen(None)
@@ -164,23 +260,68 @@ async def exercise(app):
                 await until(done, timeout=90)
                 await asyncio.sleep(.6)
                 assert app.video_player is owner and not owner.closed, 'Folding discarded the video'
-                for orientation in ('portrait', 'landscape-left', 'landscape-right'):
-                    await rotate(app, orientation)
+                for orientation in ('portrait', 'landscape-left', 'landscape-right', 'portrait-upside-down'):
+                    try:
+                        await rotate(app, orientation, settle=1)
+                    except AssertionError as error:
+                        if orientation != 'portrait-upside-down' or 'UISceneErrorDomain Code=101' not in str(error):
+                            raise
+                        report.setdefault('unsupported_orientations', []).append(dict(
+                            pose=pose, orientation=orientation, error=str(error),
+                            child_mask=int(native_value(native, 'supportedInterfaceOrientations')),
+                            container_mask=int(native_value(owner.native.container, 'supportedInterfaceOrientations'))))
+                        continue
                     native.setControlsShown(True)
                     row = await record(app, native, output, pose + '-' + orientation)
                     row['device_state'] = json.loads(cache.joinpath('video-ui-pose-done.json').read_text())['state']
                     report['cases'].append(row)
         native.seekToMilliseconds(0)
         native.togglePlay(None)
-        await until(lambda: native_value(native.player, 'isPlaying'))
+        await until(lambda: native_value(native.player, 'isPlaying') and player_clock(native.player) > 500)
+        # Decoder percentages can describe background prefetch. They must not
+        # create a buffering HUD while rendered video is progressing.
+        native.mediaPlayerBufferingChanged(.42)
+        await asyncio.sleep(.3)
+        assert native_value(native.bufferOverlay, 'isHidden')
+        assert native_value(native.bufferLabel, 'isHidden')
         state, restored = await fullscreen_controls(owner, False)
-        indexed['Done'].sendActionsForControlEvents(1 << 6)
+        if '--pose-transitions' in arguments:
+            window = native_value(native_value(native, 'view'), 'window')
+            x, y, w, h = frame(native.movie, window)
+            cache.joinpath('video-ui-pose-request.json').write_text(json.dumps(
+                dict(sequence=1000, tap=[x + w / 2, y + h / 2])))
+            await until(lambda: not native_value(native.controls, 'isHidden'), timeout=90)
+            state['simulator_touch_reveal'] = True
+        native.audioTracks(indexed['Audio tracks'])
+        await until(lambda: presented_menu(native) is not None)
+        await asyncio.sleep(3.3)
+        assert not native_value(native.controls, 'isHidden'), 'Controls hid under track selector'
+        await dismiss_menu(native)
+        await until(lambda: native_value(native.controls, 'isHidden'), timeout=4.5)
+        state['track_menu_resumes_auto_hide'] = True
+        state['prefetch_hud_suppressed'] = True
+        dispatch(indexed['Done'])
         await until(lambda: owner.closed)
         await until(restored)
         report['fullscreen'] = state
+        await app.recent_opener(recent)()
+        reopened = app.video_player
+        assert reopened is not None and reopened is not owner and not reopened.closed
+        await until(lambda: native_value(reopened.native.native.player, 'isPlaying'))
+        assert reopened.native.position()[0] > 0, 'Recent video lost its saved resume position'
+        assert len([entry for entry in app.recent_documents.sessions() if entry.identity == recent.identity]) == 1
+        await reopened.close()
+        report['recent_video_reopened_playing'] = True
         report['success'] = True
     except Exception:
         report['error'] = traceback.format_exc()
+        owner = getattr(app, 'video_player', None)
+        if owner is not None and owner.native is not None:
+            report['presentation_failure'] = dict(
+                child=str(native_value(owner.native.native, 'presentedViewController')),
+                container=str(native_value(owner.native.container, 'presentedViewController')),
+                child_orientations=int(native_value(owner.native.native, 'supportedInterfaceOrientations')),
+                container_orientations=int(native_value(owner.native.container, 'supportedInterfaceOrientations')))
         traceback.print_exc()
     finally:
         owner = getattr(app, 'video_player', None)

@@ -17,8 +17,10 @@ resume to the start. Errors must leave a usable close/retry path.
 
 Use retained resource providers and seekable, bounded reads. Never materialise
 a decrypted LocalCrypt movie or subtitle in a temporary file, export it to an
-external player, or persist its URL, credentials, title or position in ordinary
-workspace/history storage. Revalidate credential grants and source revisions
+external player. URLs, credentials and private playback positions stay out of
+ordinary workspace/history storage. Session-only reopen references and titles use
+the existing credential-password encrypted recent list; ordinary recent references
+require a matching explicitly saved connection. Revalidate credential grants and source revisions
 while streaming. Closing or revoking access retires the decoder and transport.
 
 Ordinary local resume records may use app-private storage. LocalCrypt resume
@@ -38,10 +40,12 @@ supported floating/cast mode; ordinary inline playback pauses.
 
 Local playback and rclone network ranges share the retained-provider transport.
 Both crypt and non-crypt cloud playback are best effort and must not expose
-remote credentials to a decoder or receiver. Cloud resume stays in memory for
+remote credentials to a decoder or receiver. Historical cloud checks used memory-only resume for
 the current player because remote sources are read-only.
 
 Native mobile packaging, codec decoding, subtitle rendering, lock/unlock,
 picture in picture and receiver playback require native acceptance. Host tests
 alone cannot establish those capabilities. Keep the implemented status and
 remaining acceptance work in the [development guide](development.md).
+
+Session-only persisted state now follows the shared [credential-password and clearing policy](../../../development/reader-state.md).

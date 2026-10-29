@@ -39,7 +39,7 @@ class CloudVideoTests(unittest.TestCase):
         if not binary.is_file():
             self.skipTest('Pinned rclone is unavailable')
         raw = bytes(range(256)) * 9000
-        with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as fixture, patch.object(
+        with TemporaryDirectory() as directory, crypt_fixture(directory, binary, state_password='synthetic-package-password') as fixture, patch.object(
                 executable, 'get_rclone_path', return_value=binary):
             # Publish through the actual crypt remote, not the offline LocalCrypt copy.
             from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
@@ -49,7 +49,8 @@ class CloudVideoTests(unittest.TestCase):
             run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copyto', str(source), str(destination)],
                       environment=environment, max_output=0)
             values = session.credentials(fixture.context)
-            session.remember(fixture.context, dict(values, Plain=dict(type='alias', remote=str(fixture.plain))))
+            session.remember(fixture.context, dict(values, Plain=dict(type='alias', remote=str(fixture.plain))),
+                             state_password='synthetic-package-password', state_identity='a'*64)
             for remote, key in [('Plain', 'movie.mkv'), ('Secret', 'movie.mkv')]:
                 with self.subTest(remote=remote):
                     provider = RemoteResources(fixture.context, remote, binary=binary)
@@ -61,9 +62,14 @@ class CloudVideoTests(unittest.TestCase):
                         progress = VideoProgress(content, fixture.root / 'forbidden-cache')
                         progress.save(12345)
                         self.assertEqual(progress.load(), 12345)
+                        self.assertEqual(VideoProgress(content, fixture.root / 'forbidden-cache').load(), 12345)
+                        state_path = progress.credential_state.root / (progress.credential_state.binding() + '.zip')
+                        state = state_path.read_bytes()
+                        self.assertNotIn(b'position', state)
+                        self.assertNotIn(b'movie.mkv', state)
                         progress.save(1, completed=True)
                         self.assertEqual(progress.load(), 0)
-                        self.assertFalse((fixture.root / 'forbidden-cache').exists())
+                        self.assertTrue(state_path.exists())
                         self.assertTrue(content.restricted)
                         with self.assertRaises(PermissionError):
                             content.require_external()
@@ -117,7 +123,7 @@ class CloudVideoTests(unittest.TestCase):
             self.assertTrue(content.restricted)
             requests = [values for action, values in client.calls if action == 'remote_range']
             self.assertTrue(requests)
-            self.assertTrue(all(values['count'] <= 1024 * 1024 for values in requests))
+            self.assertTrue(all(values['count'] <= 4 * 1024 * 1024 for values in requests))
             client.revision = 'replacement'
             with self.assertRaisesRegex(ValueError, 'changed'):
                 content.check()

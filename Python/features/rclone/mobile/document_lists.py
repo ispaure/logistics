@@ -140,6 +140,8 @@ class CredentialDocumentLists:
                 raise ValueError('Encrypted document list exceeds limits.')
             for item in state[field]:
                 self.references.validate_reference(item)
+                if field == 'open' and item['kind'] == 'video':
+                    raise ValueError('Videos belong in recent history, not restored open documents.')
                 if item['source']['type'] == 'local':
                     raise ValueError('Credential cache contains an unrelated local file.')
         return state
@@ -301,7 +303,7 @@ class CredentialDocumentLists:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         atomic_write_bytes(path, encrypted)
 
-    def remember(self, session, source=None):
+    def remember(self, session, source=None, *, opened=True):
         self.refresh()
         source = source or getattr(session, 'cache_source', None)
         key = next((key for key, record in self.records().items() if self.belongs(source, record)), None)
@@ -316,7 +318,8 @@ class CredentialDocumentLists:
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
         self.references.validate_reference(item)
         state = self.states[key]
-        for field, limit in (('recent', self.max_recent), ('open', 32)):
+        fields = (('recent', self.max_recent), ('open', 32)) if opened else (('recent', self.max_recent),)
+        for field, limit in fields:
             state[field] = [item, *(old for old in state[field] if old['resource'] != item['resource'])][:limit]
         try:
             self.queue_write(key)

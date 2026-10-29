@@ -9,7 +9,7 @@ from .appearance import template_icon
 from .appearance import surface, accessible_name
 from .recent_documents import MAX_RECENT
 
-DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics', 'pdf': 'PDF documents'}
+DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics', 'pdf': 'PDF documents', 'video': 'Videos'}
 
 
 def text_document_kind(name):
@@ -286,7 +286,10 @@ class HubUI:
             if source is not None:
                 from .document_sources import reopen_file
                 try:
-                    await reopen_file(self.app, source)
+                    if session.kind == 'video':
+                        await reopen_file(self.app, source, kind='video')
+                    else:
+                        await reopen_file(self.app, source)
                 except (OSError, ValueError, KeyError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
                     self.refresh_document_list()

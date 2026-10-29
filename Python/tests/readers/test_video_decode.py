@@ -24,14 +24,17 @@ class VideoDecodeTests(QtTestCase):
                 window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release))
             try:
                 window.show()
+                self.wait_until(lambda: window.player.duration() > 1000
+                    and window.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+                    and window.player.position() > 100)
                 window.play.click()
-                self.wait_until(lambda: window.player.duration() > 1000)
-                window.player.pause()
+                self.wait_until(lambda: window.player.playbackState() == QMediaPlayer.PlaybackState.PausedState)
                 window.player.setPosition(1000)
                 window.backward.click()
                 self.assertEqual(window.player.position(), 0)
                 window.forward.click()
                 self.assertLessEqual(window.player.position(), window.player.duration())
+                self.assertFalse(window.undo_button.isVisible())  # The whole clip is shorter than a large seek.
                 window.mute.click()
                 self.assertTrue(window.audio.isMuted())
                 self.assertEqual(window.mute.accessibleName(), 'Unmute')
@@ -52,6 +55,8 @@ class VideoDecodeTests(QtTestCase):
                         self.assertGreaterEqual(point.x(), 0)
                         self.assertLessEqual(point.x() + button.width(), window.width())
                         self.assertLessEqual(point.y() + button.height(), window.height())
+                        timeline = window.seek.mapTo(window, qt.QPoint(0, 0))
+                        self.assertGreaterEqual(timeline.y(), point.y() + button.height())
                     window.grab().save(str(output / f'{width}x{height}.png'))
                 window.fullscreen_button.click()
                 self.assertTrue(window.isFullScreen())
@@ -69,6 +74,30 @@ class VideoDecodeTests(QtTestCase):
                 window.close()
                 self.wait_until(lambda: release.called, drain_deferred=True)
 
+    def test_embedded_chapter_menu_seeks_without_resuming_pause(self):
+        from logistics_build.build_retention import scratch
+        from tests.readers.video_fixtures import chapter_movie
+        from features.video.ui.player import VideoWindow
+        from PySide6.QtMultimedia import QMediaPlayer
+        with scratch() as root:
+            path = chapter_movie(root)
+            release = Mock()
+            with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
+                window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release))
+            try:
+                self.wait_until(lambda: window.player.duration() > 10000 and window.player.position() > 100)
+                window.player.pause()
+                window.chapters.click()
+                self.wait_until(lambda: window.chapter_data is not None)
+                self.assertEqual([row.title for row in window.chapter_data], ['Opening', 'Second scene'])
+                self.assertIsNotNone(window.chapter_menu)
+                window.chapter_menu.actions()[1].trigger()
+                self.wait_until(lambda: window.player.position() >= 5900)
+                self.assertEqual(window.player.playbackState(), QMediaPlayer.PlaybackState.PausedState)
+            finally:
+                window.close()
+                self.wait_until(lambda: release.called, drain_deferred=True)
+
     def test_embedded_track_selection_and_external_srt(self):
         from logistics_build.build_retention import scratch
         from tests.readers.video_fixtures import codec_matrix, multitrack_movie
@@ -82,7 +111,8 @@ class VideoDecodeTests(QtTestCase):
                 window = VideoWindow(ResourceChoice(provider, path.name, release))
             captions = []
             window.video.videoSink().videoFrameChanged.connect(
-                lambda frame: captions.append(frame.subtitleText()) if frame.isValid() and frame.subtitleText() else None)
+                lambda frame: captions.append(frame.subtitleText()) if frame.isValid() and frame.subtitleText() else None,
+                qt.Qt.ConnectionType.QueuedConnection)
             try:
                 window.toggle_play()
                 self.wait_until(lambda: len(window.player.audioTracks()) == 2 and len(window.player.subtitleTracks()) == 1)
@@ -192,13 +222,16 @@ class VideoDecodeTests(QtTestCase):
             self.skipTest('Pinned rclone is unavailable')
         with scratch() as root, crypt_fixture(root, binary) as fixture, patch.object(
                 executable, 'get_rclone_path', return_value=binary):
-            movie = codec_matrix(root)[0][3]
-            environment, source, destination = session.launch(fixture.context, movie, 'Secret:movie.mp4')
-            run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copyto', str(source), str(destination)],
-                      environment=environment, max_output=0)
+            fixtures = codec_matrix(root)
+            movies = [fixtures[0][3], next(path for container, video, audio, path in fixtures
+                                         if container == 'avi' and video == 'mpeg4')]
+            for movie in movies:
+                environment, source, destination = session.launch(fixture.context, movie, 'Secret:' + movie.name)
+                run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copyto', str(source), str(destination)],
+                          environment=environment, max_output=0)
             values = session.credentials(fixture.context)
             session.remember(fixture.context, dict(values, Plain=dict(type='alias', remote=str(movie.parent))))
-            for remote, key in [('Plain', movie.name), ('Secret', 'movie.mp4')]:
+            for remote, key in [(remote, movie.name) for movie in movies for remote in ('Plain', 'Secret')]:
                 with self.subTest(remote=remote):
                     provider = RemoteResources(fixture.context, remote, binary=binary)
                     content = VideoContent(provider, key)

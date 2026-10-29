@@ -7,6 +7,7 @@ from hashlib import sha256
 
 MAX_RECENT = 10
 MAX_HISTORY_BYTES = 64 * 1024
+REFERENCE_KINDS = KINDS | {'video'}
 
 
 class RecentDocuments:
@@ -72,7 +73,7 @@ class RecentDocuments:
     @staticmethod
     def validate_reference(item):
         if (not {'provider', 'resource', 'kind', 'title', 'source'} <= set(item) <= {'provider', 'resource', 'kind', 'title', 'source', 'opened'}
-                or item['kind'] not in KINDS or not isinstance(item['title'], str)
+                or item['kind'] not in REFERENCE_KINDS or not isinstance(item['title'], str)
                 or len(item['title']) > 1024 or not isinstance(item['source'], dict) or not RecentDocuments.valid_time(item)):
             raise ValueError('Invalid recent file reference.')
         source = item['source']
