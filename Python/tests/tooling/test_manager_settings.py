@@ -116,13 +116,6 @@ class ManagerSettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'identity'):
             settings.distribution(self.root, 'firebase', original)
 
-    def test_tracked_version_edit_is_explicit_and_preserves_bundle_identity(self):
-        settings.set_app_version(self.root, '0.2.3')
-        self.assertEqual(settings.app_version(self.root), '0.2.3')
-        self.assertIn('bundle = "io.github.ispaure"', (self.root / 'pyproject.toml').read_text())
-        with self.assertRaises(ValueError):
-            settings.set_app_version(self.root, 'execute something')
-
     def test_historical_version_comes_from_selected_commit_not_live_checkout(self):
         import os
         import subprocess

@@ -56,6 +56,10 @@ class IncomingBuildTests(unittest.TestCase):
             configured = plistlib.loads(pbx.read_bytes())['objects']
             targets = [o for o in configured.values() if o.get('productType') == 'com.apple.product-type.app-extension']
             self.assertEqual(len(targets), 1)
+            extension_configs = configured[targets[0]['buildConfigurationList']]['buildConfigurations']
+            for key in extension_configs:
+                self.assertEqual(configured[key]['buildSettings']['MARKETING_VERSION'], '1.0')
+                self.assertEqual(configured[key]['buildSettings']['CURRENT_PROJECT_VERSION'], '123')
             self.assertTrue(configured['app']['dependencies'])
             self.assertTrue(any(configured[key]['isa'] == 'PBXCopyFilesBuildPhase' for key in configured['app']['buildPhases']))
             self.assertEqual(plistlib.loads(entitlements.read_bytes()),

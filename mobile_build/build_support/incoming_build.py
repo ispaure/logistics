@@ -119,8 +119,8 @@ def configure_ios(project):
             IPHONEOS_DEPLOYMENT_TARGET='15.0', TARGETED_DEVICE_FAMILY='1,2', SDKROOT='iphoneos',
             LD_RUNPATH_SEARCH_PATHS=['$(inherited)', '@executable_path/Frameworks', '@executable_path/../../Frameworks'],
             OTHER_LDFLAGS=['-framework', 'UIKit', '-framework', 'UniformTypeIdentifiers'],
-            MARKETING_VERSION=str(metadata.get('CFBundleShortVersionString', '0.1.9')),
-            CURRENT_PROJECT_VERSION=str(metadata.get('CFBundleVersion', '1')))
+            MARKETING_VERSION=str(metadata['CFBundleShortVersionString']),
+            CURRENT_PROJECT_VERSION=str(metadata['CFBundleVersion']))
         for name in ('DEVELOPMENT_TEAM', 'CODE_SIGN_STYLE', 'CODE_SIGN_IDENTITY'):
             if name in base:
                 build[name] = base[name]

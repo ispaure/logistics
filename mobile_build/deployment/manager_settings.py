@@ -171,17 +171,6 @@ def app_version(root, *, revision=None, check_project=True):
     return version
 
 
-def set_app_version(root, version):
-    if not re.fullmatch(r'\d+\.\d+\.\d+', version):
-        raise ValueError('Use a three-component numeric app version.')
-    path = Path(root) / 'pyproject.toml'
-    text = path.read_text()
-    changed, count = re.subn(r'(?m)^version = "[^"]+"$', 'version = "' + version + '"', text)
-    if count != 1:
-        raise ValueError('Cannot uniquely identify the tracked app version.')
-    path.write_text(changed)
-
-
 def record_prepared_artifact(record):
     destination = os.environ.get('LOGISTICS_MANAGER_ARTIFACT_REPORT')
     if not destination:
