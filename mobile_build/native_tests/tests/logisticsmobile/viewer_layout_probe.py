@@ -102,13 +102,25 @@ class ViewerLayoutProbe(LogisticsMobile):
                 row['caption'] = geometry(self, footer.spacer)
                 if not 44 <= row['transport'][3] <= 50:
                     row['errors'].append('Horizontal footer lost its compact touch row')
-                if row['caption'][1] < row['transport'][1] + row['transport'][3] - 1:
-                    row['errors'].append('Progress caption is not below the track')
+                from commonUtils.ui.readers.layout import READER_LAYOUT
+                thumb_bottom = row['slider'][1] + row['slider'][3] / 2 + READER_LAYOUT.thumb_extent / 2
+                row['caption_thumb_gap'] = row['caption'][1] - thumb_bottom
+                if not 4 <= row['caption_thumb_gap'] <= 8:
+                    row['errors'].append('Progress caption is not close to and clear of the thumb')
                 if row['caption'][2] < width - 2:
                     row['errors'].append('Progress caption does not span the footer for centered text')
                 label = footer.spacer._impl.native
                 if sys.platform == 'ios':
                     from mobile.screen_privacy import native_value
+                    from rubicon.objc import CGPoint
+                    slider = footer.slider._impl.native
+                    sx, sy, sw, sh = row['slider']
+                    hit = self.main_window._impl.native.hitTest(
+                        CGPoint(sx + sw / 2, sy + sh - 2), withEvent=None)
+                    row['slider_lower_hit'] = bool(hit is not None and
+                        (hit == slider or hit.isDescendantOfView(slider)))
+                    if not row['slider_lower_hit']:
+                        row['errors'].append('Caption blocks the lower slider touch area')
                     intrinsic = native_value(label, 'intrinsicContentSize')
                     row['caption_font'] = float(label.font.pointSize)
                     row['caption_required'] = [float(intrinsic.width), float(intrinsic.height)]

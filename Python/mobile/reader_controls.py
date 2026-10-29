@@ -150,7 +150,12 @@ class PageFooter:
         self.spacer = toga.Label('', style=Pack(width=92 if vertical else 1, flex=0 if vertical else 1,
             text_align='center', font_size=10))
         self.badge = toga.Box(children=[self.spacer], style=Pack(direction=COLUMN if vertical else ROW,
-            **(dict(width=104, height=28, align_items='center', justify_content='center', margin_left=6, margin_right=2) if vertical else {})))
+            **(dict(width=104, height=28, align_items='center', justify_content='center', margin_left=6, margin_right=2)
+               if vertical else dict(margin_top=-10))))
+        # Reclaim the blank lower portion of the transport's 48-point hit row.
+        # The caption remains below the thumb and cannot intercept its touches.
+        if not vertical and type(self.badge._impl).__module__.startswith('toga_iOS.'):
+            self.badge._impl.native.userInteractionEnabled = False
         from .appearance import surface
         surface(self.spacer, background='transparent', foreground='text' if vertical else 'muted')
         if vertical:
