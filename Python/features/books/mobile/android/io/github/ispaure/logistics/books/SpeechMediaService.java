@@ -97,6 +97,10 @@ public final class SpeechMediaService extends Service {
             }
         });
         session.setActive(true);
+        // A short passage can detach before Android delivers onCreate. Fulfil
+        // startForegroundService even then, before focus or listener dispatch.
+        // onStartCommand will retire an ownerless service normally.
+        publish(true);
     }
     private PendingIntent action(String action, int code) {
         Intent intent = new Intent(this, SpeechMediaService.class).setAction("speech." + epoch + "." + action)
@@ -128,7 +132,7 @@ public final class SpeechMediaService extends Service {
         publish(true);
     }
     private void publish(boolean foreground) {
-        if (listener == null || session == null) return;
+        if (session == null) return;
         String subtitle = timerText.isEmpty() ? "Logisticks" : timerText;
         session.setMetadata(new MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, title)

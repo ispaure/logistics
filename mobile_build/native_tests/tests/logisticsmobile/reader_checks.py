@@ -414,6 +414,18 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
             assert 'first' in speech.engine.calls[0] and 'second' in speech.engine.calls[1]
         finally:
             owner.close_read_aloud()
+    from toga.platform import get_factory
+    if get_factory().WebView.__module__.startswith('toga_android.'):
+        # Completion above can detach before Android creates the service.
+        # Keep the process alive past its foreground-start deadline and
+        # verify the short-lived service actually retired.
+        await asyncio.sleep(6)
+        from org.beeware.android import MainActivity
+        activity = MainActivity.singletonThis
+        manager = activity.getSystemService('activity')
+        service_name = 'io.github.ispaure.logistics.books.SpeechMediaService'
+        assert not any(service.service.getClassName() == service_name
+                       for service in manager.getRunningServices(100))
     passed.append('native_epub_reader')
     await app.toggle_bookmark()
     assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [

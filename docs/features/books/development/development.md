@@ -333,7 +333,12 @@ passage bounds and preserve pause state. Stop/disposal clear text and word offse
 remote commands and Now Playing metadata; the host declares the audio
 background mode. `media_android.py` connects to the non-exported
 `SpeechMediaService`, which owns a media-playback foreground service, MediaSession,
-MediaStyle notification, audio focus and a bounded wake lock. Ordinary imported
+MediaStyle notification, audio focus and a bounded wake lock. Service creation
+publishes the foreground notification before audio focus or Python callbacks,
+even when a short passage has already detached its listener. Android still
+requires that startup acknowledgement; the ownerless service then stops through
+its normal lifecycle. The native EPUB gate keeps the process alive beyond the
+startup deadline and checks service retirement after synthetic speech completes. Ordinary imported
 EPUBs, ordinary Markdown previews, public vault notes and documentation publish
 a filename alongside the timer; document passages never enter native metadata. Private
 sources publish only generic metadata and timer information, even with background
