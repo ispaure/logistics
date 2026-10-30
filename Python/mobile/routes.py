@@ -28,6 +28,10 @@ class MobileRoutes(Routes):
         super().__init__(*args, **kwargs)
 
     def uninstall(self):
+        volume = getattr(self, 'volume_pages', None)
+        if volume is not None:
+            volume.dispose()
+            self.volume_pages = None
         task = self.folders.task
         if task is not None and not task.done():
             task.cancel()
@@ -169,6 +173,8 @@ class MobileRoutes(Routes):
 
         self.listener = Listener(self)
         self.back_callback = NavigationBack.install(self.host.adapter.impl._native_activity, self.listener)
+        from .android_volume_pages import VolumePages
+        self.volume_pages = VolumePages(self.app)
         self.selection_changed()
         if self.on_render is not None:
             self.on_render()

@@ -14,7 +14,7 @@ DEFAULTS = {'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16',
             'workspace_local_group': 'Others', 'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
             'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false', 'session_trusted_wifi': 'false', 'trusted_wifi_networks': '[]',
-            'approved_bluetooth_devices': '[]', 'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
+            'approved_bluetooth_devices': '[]', 'speech_voice': '', 'magnifier_zoom': '190', 'epub_volume_pages': 'false', 'comic_volume_pages': 'false', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
 
 
 class Preferences:
@@ -100,6 +100,9 @@ class Preferences:
         validate_camera(values)
         if values['magnifier_zoom'] not in {str(value) for value in range(150, 251, 20)}:
             raise ValueError('Choose magnifier zoom from 150–250%, in 20% steps.')
+        for key in ('epub_volume_pages', 'comic_volume_pages'):
+            if values[key] not in {'true', 'false'}:
+                raise ValueError('Invalid volume-button page preference.')
         if values['comic_split_wide'] not in {'true', 'false'}:
             raise ValueError('Invalid wide comic page preference.')
         if values['comic_layout'] not in {'single', 'auto', 'double'}:

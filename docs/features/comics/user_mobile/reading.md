@@ -1,5 +1,12 @@
 # Comics mobile workflows
 
+On Android, **Appearance → Volume buttons turn pages** enables volume down for
+next page and volume up for previous page. It is off by default and saved
+separately for books and comics. Tap **Apply and return** to save. Each press
+turns one page; holding a button does not repeat. Volume control resumes outside
+the reading view, including its Appearance screen. The setting also applies to
+remote and encrypted readers.
+
 ## Mobile development builds
 
 The independent native app has private EPUB and PNG/JPEG CBZ/ZIP reading,

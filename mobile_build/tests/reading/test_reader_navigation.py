@@ -64,6 +64,47 @@ class ReaderNavigationTests(unittest.TestCase):
                 app.main_window.close()
                 app.loop.close()
 
+    def test_volume_paging_uses_real_library_owner_and_stops_on_appearance_route(self):
+        from mobile.android_volume_pages import VolumePages, target
+        from commonUtils.runtime.resources.documents import LocalDocuments
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                fixtures = root / 'fixtures'
+                fixtures.mkdir()
+                _, comic = make_books(fixtures)
+                async def exercise():
+                    store = app.reader_manager().catalog.library_store
+                    record = store.import_book(LocalDocuments(), comic)
+                    app.preferences.save(comic_volume_pages='true', comic_layout='single')
+                    await app.open_book(record['id'])
+                    owner = app.readers.active
+                    handler = VolumePages.__new__(VolumePages)
+                    handler.app, handler.task = app, None
+                    self.assertIs(target(app)[0], owner)
+                    self.assertTrue(handler.press(1))
+                    await handler.task
+                    self.assertEqual(owner.book_record['position'], 1)
+                    self.assertTrue(handler.press(-1))
+                    await handler.task
+                    self.assertEqual(owner.book_record['position'], 0)
+                    owner.show_reader_appearance()
+                    self.assertIsNone(target(app))
+                    self.assertFalse(handler.press(1))
+                    owner.show_library()
+                    self.assertIs(target(app)[0], owner)
+                    app.show_home()
+                    self.assertIsNone(target(app))
+                    await app.readers.catalog.metadata_task
+                    await app.readers.catalog.library_scan_task
+                app.loop.run_until_complete(exercise())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
     def test_all_documents_from_home_reader_keeps_session_and_can_resume(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -235,3 +276,116 @@ class ReaderNavigationTests(unittest.TestCase):
             begin_page_slide(content, 1, {})
         window.drawViewHierarchyInRect.assert_called_once()
         self.assertIs(impl._ios_page_slide.snapshot, picture)
+
+
+class VolumePageTests(unittest.IsolatedAsyncioTestCase):
+    """Volume paging follows the visible document, preferences and privacy."""
+
+    def fixture(self, *, private=False, kind='epub'):
+        from types import SimpleNamespace as NS
+        from unittest.mock import AsyncMock
+        from mobile.android_volume_pages import VolumePages
+        surface = NS(children=[], _reader_session_id='book')
+        owner = NS(session=NS(kind=kind), book_busy=False, cloud_busy=False,
+                   library_view=surface, crypt_view=surface,
+                   previous_book_page=AsyncMock(), next_book_page=AsyncMock(),
+                   previous_private_page=AsyncMock(), next_private_page=AsyncMock())
+        manager = NS(controllers={'book': owner})
+        app = NS(active_host=True, body=surface,
+                 screen_privacy=NS(inactive=False, resume_locked=False),
+                 preferences=NS(values={'epub_volume_pages': 'false', 'comic_volume_pages': 'false'}),
+                 visible_reader=lambda: 'book', reader_tool_back=lambda view: None,
+                 readers=None if private else manager, private_sessions=manager if private else None,
+                 loop=__import__('asyncio').get_running_loop())
+        handler = VolumePages.__new__(VolumePages)
+        handler.app, handler.task = app, None
+        return app, owner, handler
+
+    async def test_defaults_and_independent_book_comic_mapping(self):
+        for private in (False, True):
+            for kind in ('epub', 'comic'):
+                with self.subTest(private=private, kind=kind):
+                    app, owner, handler = self.fixture(private=private, kind=kind)
+                    self.assertFalse(handler.press(1))
+                    other = 'comic' if kind == 'epub' else 'epub'
+                    app.preferences.values[other + '_volume_pages'] = 'true'
+                    self.assertFalse(handler.press(1))
+                    app.preferences.values[kind + '_volume_pages'] = 'true'
+                    self.assertTrue(handler.press(1))
+                    await handler.task
+                    self.assertTrue(handler.press(-1))
+                    await handler.task
+                    prefix = 'private' if private else 'book'
+                    getattr(owner, 'next_' + prefix + '_page').assert_awaited_once()
+                    getattr(owner, 'previous_' + prefix + '_page').assert_awaited_once()
+
+    async def test_hidden_tools_locked_background_and_other_formats_keep_volume(self):
+        from types import SimpleNamespace as NS
+        for state in ('hidden', 'tool', 'locked', 'background', 'inactive', 'reset', 'pdf'):
+            with self.subTest(state=state):
+                app, owner, handler = self.fixture()
+                app.preferences.values['epub_volume_pages'] = 'true'
+                if state == 'hidden':
+                    app.body = NS(children=[])
+                elif state == 'tool':
+                    app.reader_tool_back = lambda view: lambda: None
+                elif state == 'locked':
+                    app.screen_privacy.resume_locked = True
+                elif state == 'background':
+                    app.active_host = False
+                elif state == 'inactive':
+                    app.screen_privacy.inactive = True
+                elif state == 'reset':
+                    app._reset_scheduled = True
+                else:
+                    owner.session.kind = 'pdf'
+                self.assertFalse(handler.press(1))
+                self.assertIsNone(handler.task)
+
+    async def test_busy_and_queued_presses_do_not_double_turn_or_change_volume(self):
+        app, owner, handler = self.fixture()
+        app.preferences.values['epub_volume_pages'] = 'true'
+        owner.book_busy = True
+        self.assertTrue(handler.press(1))
+        self.assertIsNone(handler.task)
+        owner.book_busy = False
+        self.assertTrue(handler.press(1))
+        first = handler.task
+        self.assertTrue(handler.press(1))
+        self.assertIs(handler.task, first)
+        await first
+        owner.next_book_page.assert_awaited_once()
+        self.assertTrue(handler.press(-1))
+        app.screen_privacy.resume_locked = True
+        await handler.task
+        owner.previous_book_page.assert_not_awaited()
+
+    async def test_android_options_persist_separately_and_ios_hides_them(self):
+        from mobile.preferences import Preferences
+        from features.books.mobile.appearance import ReaderAppearance
+        with TemporaryDirectory() as folder:
+            prefs = Preferences(Path(folder).resolve())
+            self.assertEqual(prefs.values['epub_volume_pages'], 'false')
+            self.assertEqual(prefs.values['comic_volume_pages'], 'false')
+            with patch('features.books.mobile.appearance.sys.platform', 'android'):
+                book = ReaderAppearance(prefs.values, lambda widget: None)
+                comic = ReaderAppearance(prefs.values, lambda widget: None, kind='comic')
+                self.assertFalse(book.volume_pages.value)
+                self.assertFalse(comic.volume_pages.value)
+                book.volume_pages.value = True
+                prefs.save(**book.settings())
+                saved = Preferences(Path(folder).resolve())
+                self.assertEqual(saved.values['epub_volume_pages'], 'true')
+                self.assertEqual(saved.values['comic_volume_pages'], 'false')
+                comic.volume_pages.value = True
+                prefs.save(**comic.settings())
+                self.assertEqual(prefs.values['epub_volume_pages'], 'true')
+                self.assertEqual(prefs.values['comic_volume_pages'], 'true')
+            with patch('features.books.mobile.appearance.sys.platform', 'ios'):
+                book = ReaderAppearance(prefs.values, lambda widget: None)
+                self.assertIsNone(book.volume_pages)
+                self.assertNotIn('epub_volume_pages', book.settings())
+            with self.assertRaises(ValueError):
+                prefs.save(epub_volume_pages='yes')
+            with self.assertRaises(ValueError):
+                prefs.save(comic_volume_pages='yes')

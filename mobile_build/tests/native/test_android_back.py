@@ -512,7 +512,8 @@ class AndroidBackTests(unittest.TestCase):
         host = self.app.native_host
         callback = Mock()
         bridge = SimpleNamespace(install=Mock(return_value=callback), Listener=object)
-        java = SimpleNamespace(dynamic_proxy=lambda base: object)
+        volume_bridge = Mock(Listener=object)
+        java = SimpleNamespace(dynamic_proxy=lambda base: object, jclass=lambda name: volume_bridge)
         host.adapter = SimpleNamespace(impl=SimpleNamespace(_native_activity=object()))
         self.addCleanup(setattr, host, 'adapter', None)
         with patch.dict('sys.modules', {'java': java,
@@ -520,6 +521,8 @@ class AndroidBackTests(unittest.TestCase):
             with patch.object(self.routes, 'on_render', None), patch.object(self.routes, 'changed'):
                 self.routes.install()
             self.addCleanup(self.routes.uninstall)
+            volume_bridge.assert_called_once_with(host.adapter.impl._native_activity, self.routes.volume_pages.listener)
+            self.assertFalse(self.routes.volume_pages.listener.onVolumeKey(1))
             with patch.object(MobileRoutes, 'system_back', return_value=True) as back:
                 self.assertTrue(self.routes.listener.onBackRequested())
                 back.assert_called_once_with()

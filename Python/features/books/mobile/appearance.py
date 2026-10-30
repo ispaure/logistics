@@ -1,4 +1,5 @@
 """Shared native Books & Comics appearance form; hosts persist preferences."""
+import sys
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
@@ -7,6 +8,13 @@ from toga.style.pack import COLUMN
 class ReaderAppearance(toga.ScrollContainer):
     def __init__(self, values, on_apply, *, kind='epub'):
         self.kind = kind
+        self.volume_pages = None
+        volume_controls = []
+        if sys.platform == 'android':
+            self.volume_pages = toga.Switch('Volume buttons turn pages',
+                value=values.get(kind + '_volume_pages', 'false') == 'true', style=Pack(height=48))
+            volume_controls = [self.volume_pages,
+                toga.Label('Volume down: next page. Volume up: previous page. Only while reading.')]
         def select(key, items):
             return toga.Selection(items=items, value=values[key], style=Pack(height=44))
         if kind == 'comic':
@@ -17,7 +25,7 @@ class ReaderAppearance(toga.ScrollContainer):
             content = toga.Box(children=[toga.Label('Comic page layout'), self.layout_choice,
                 toga.Label('Auto: one page in portrait; two pages when the reading area is wider than tall. Comic metadata controls reading direction.'),
                 self.split_wide, toga.Label('Swipe through overlapping halves in reading order. Landscape shows the whole wide page.'),
-                self.status, toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
+                *volume_controls, self.status, toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, margin=12))
             super().__init__(horizontal=False, content=content, style=Pack(flex=1))
             return
@@ -38,7 +46,7 @@ class ReaderAppearance(toga.ScrollContainer):
             self.justify_choice,
             toga.Label('Line spacing (%)'), self.spacing_choice, toga.Label('Maximum width (0 = automatic)'), self.width_choice,
             toga.Label('Page margins'), self.margin_choice, toga.Label('Theme (system follows device)'), self.theme_choice,
-            self.status,
+            *volume_controls, self.status,
             toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
             style=Pack(direction=COLUMN, margin=12))
         super().__init__(horizontal=False, content=content, style=Pack(flex=1))
@@ -56,7 +64,9 @@ class ReaderAppearance(toga.ScrollContainer):
         return values
 
     def settings(self):
+        volume = ({self.kind + '_volume_pages': 'true' if self.volume_pages.value else 'false'}
+                  if self.volume_pages is not None else {})
         if self.kind == 'comic':
-            return dict(comic_layout=self.layout_choice.value, comic_split_wide='true' if self.split_wide.value else 'false')
-        return dict(epub_font_size=self.font_choice.value, reading_margin=self.margin_choice.value,
+            return dict(**volume, comic_layout=self.layout_choice.value, comic_split_wide='true' if self.split_wide.value else 'false')
+        return dict(**volume, epub_font_size=self.font_choice.value, reading_margin=self.margin_choice.value,
                     reading_theme=self.theme_choice.value, **self.typography())
