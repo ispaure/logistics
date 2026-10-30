@@ -200,6 +200,29 @@ function geometry(target, p, family, beforePoint = null) {
   } else ribbon(target, p);
 }
 
+const filteredInkBounds = new WeakMap();
+function clipPaintbrush(target, points) {
+  // Bound filtered paint work to actual ink, including when operations queue
+  // on a software/emulated GPU. Stored geometry is immutable: weak ownership
+  // preserves the path cache's cheap redraws without retaining retired pages.
+  let bounds = filteredInkBounds.get(points);
+  if (!bounds) {
+    bounds = points.reduce((b, p) => {
+      const radius = p[3] / 2;
+      return [Math.min(b[0], p[0] - radius), Math.min(b[1], p[1] - radius),
+        Math.max(b[2], p[0] + radius), Math.max(b[3], p[1] + radius)]
+    }, [Infinity, Infinity, -Infinity, -Infinity]);
+    filteredInkBounds.set(points, bounds)
+  }
+  const matrix = target.getTransform(),
+    scale = Math.max(1e-6, Math.min(Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d))),
+    fringe = 4 + 2 / scale;
+  target.beginPath();
+  target.rect(bounds[0] - fringe, bounds[1] - fringe,
+    bounds[2] - bounds[0] + 2 * fringe, bounds[3] - bounds[1] + 2 * fringe);
+  target.clip();
+}
+
 function line(s, target = ctx) {
   let p = s.points;
   if (!p.length) return;
@@ -228,7 +251,12 @@ function line(s, target = ctx) {
     target.globalAlpha *= .85
   }
   if (family === 'marker') target.globalAlpha *= .9;
-  geometry(target, p, family);
+  if (family === 'paintbrush') {
+    target.save();
+    clipPaintbrush(target, p);
+    geometry(target, p, family);
+    target.restore()
+  } else geometry(target, p, family);
   if (selected.has(s.id)) {
     target.globalAlpha = 1;
     target.globalCompositeOperation = 'source-over';
@@ -324,7 +352,10 @@ function preview(samples) {
   maskCtx.fillStyle = maskCtx.strokeStyle = 'white';
   maskCtx.lineCap = family === 'highlighter' ? 'butt' : 'round';
   maskCtx.lineJoin = 'round';
-  if (family === 'paintbrush') maskCtx.filter = 'blur(.4px)';
+  if (family === 'paintbrush') {
+    maskCtx.filter = 'blur(.4px)';
+    clipPaintbrush(maskCtx, pending)
+  }
   geometry(maskCtx, pending, family, beforePoint);
   if (family === 'highlighter' && draftCount >= 2) {
     let p = pending[0];

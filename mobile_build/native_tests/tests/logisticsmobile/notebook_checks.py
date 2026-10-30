@@ -119,13 +119,16 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert metrics == expected, metrics
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:durable-stroke')
     await panel.web.evaluate_javascript("send({op:'stroke',points:[[100,100,.2],[120,130,.8]],tool:12,color:6,width:3})")
+    log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:stroke-command-returned')
     for _ in range(100):
         if panel.editor.notebook.page(0).strokes:
             break
         await asyncio.sleep(.1)
     assert len(panel.editor.notebook.page(0).strokes) == 1, 'Native WebView did not deliver editable ink'
+    log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:stroke-received')
     while panel.busy:
         await asyncio.sleep(.1)
+    log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:stroke-saved')
     assert len(panel.repository.open(panel.key).page(0).strokes) == 1
     await panel.web.evaluate_javascript("send({op:'add-page'})")
     for _ in range(100):
@@ -133,12 +136,14 @@ async def exercise_notebooks(app, *, return_to_home=True):
             break
         await asyncio.sleep(.1)
     assert len(panel.editor.notebook.pages) == 2
+    log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:page-added')
     await panel.web.evaluate_javascript("send({op:'rename',name:'Native notebook'});document.getElementById('layerName').value='Details';document.getElementById('addLayer').click()")
     for _ in range(100):
         if panel.editor.notebook.name == 'Native notebook' and len(panel.editor.notebook.page(1).layers) == 2 and not panel.busy:
             break
         await asyncio.sleep(.1)
     assert panel.editor.notebook.name == 'Native notebook'
+    log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:renamed')
     assert panel.editor.notebook.page(1).layers[-1][1] == 'Details'
     recovered = panel.repository.open(panel.key)
     assert len(recovered.pages) == 2 and len(recovered.page(0).strokes) == 1

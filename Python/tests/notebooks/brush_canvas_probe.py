@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
+from commonUtils.runtime.diagnostics import Severity, log
 from features.notebooks.brushes import BRUSHES, stroke_points
 from features.notebooks.canvas import editor_html
 from features.notebooks.notebook import Notebook
@@ -58,6 +59,20 @@ line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,2)},targe
 signatures.push(surface.toDataURL());
 }
 check(new Set(signatures).size===9,'Brush renderings must be distinct');
+// Bounded filtered ink must preserve the established full-surface raster,
+// including transformed and edge-clipped strokes. Readback forces completion.
+const boundedPaintbrush=clipPaintbrush;
+try{
+  for(const scale of [.5,1,2]){
+    const ink={tool:12,color:0,points:strokePoints(samples,12,3)};
+    reset();target.save();target.scale(scale,scale);clipPaintbrush=()=>{};
+    line(ink,target);target.restore();const reference=surface.toDataURL();
+    reset();target.save();target.scale(scale,scale);clipPaintbrush=boundedPaintbrush;
+    line(ink,target);target.restore();
+    check(surface.toDataURL()===reference,'Bounded paintbrush changed pixels at scale '+scale);
+  }
+}finally{clipPaintbrush=boundedPaintbrush}
+
 reset();const red={tool:17,color:7,scale:9,points:[[30,60,.5,4],[240,60,.5,4]]};
 line(red,target);let colorPixel=pixel(80,60);check(colorPixel[0]>colorPixel[1],'Color preview lost red');
 check(pixel(80,66)[0]===255,'Point width was multiplied by thickness scale');
@@ -153,7 +168,7 @@ let y=70+row*180;g.fillStyle='#fff';g.fillRect(10,y,1080,170);g.fillStyle='#222'
 for(let width=1;width<=3;width++){g.save();g.translate(195+(width-1)*290,y+30);line({tool,...nativeColor(tool,tool===18?13:tool===23?1:0),points:strokePoints(samples,tool,width)},g);g.restore()}
 row++}
 choose(17);$('zoom').value='fit';resize();
-return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,eraser_controls:true,eraser_pointer_path:true,shader_blending:true,previewErrors,previewWork,committedBrushes,frame_batching:true,sheet:sheet.toDataURL()});
+return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,eraser_controls:true,eraser_pointer_path:true,shader_blending:true,bounded_filter_raster:true,previewErrors,previewWork,committedBrushes,frame_batching:true,sheet:sheet.toDataURL()});
 }catch(error){return JSON.stringify({success:false,error:String(error),stack:error.stack})}})()
 '''
 
@@ -219,7 +234,7 @@ def main(output):
     if failed:
         raise RuntimeError('; '.join(failed))
     (output / 'brush-checks.json').write_text(json.dumps(results, indent=2) + '\n')
-    print('Desktop and both mobile scheduling modes passed palettes, widths, model/preview parity, distinct pixels, grayscale and native RGBA checks.')
+    log(Severity.INFO, 'Notebook brush acceptance', 'Desktop and both mobile scheduling modes passed palettes, widths, model/preview parity, bounded-filter raster, distinct pixels, grayscale and native RGBA checks.')
 
 
 if __name__ == '__main__':

@@ -993,6 +993,14 @@ presentations. Physical stylus acceptance remains separate.
 
 ## Canvas memory bounds
 
+Paintbrush filtering clips each canonical and preview-mask draw to the stroke's
+ink bounds plus a blur fringe. The fringe accounts for the context transform,
+so filtered work does not need the entire page surface for a small stroke.
+Stored geometry, page resolution and selection outlines are unchanged. The
+real-WebEngine brush probe compares clipped and unclipped paintbrush pixels at
+multiple scales, alongside its existing all-brush live-preview checks.
+
+
 The shared viewport reuses the page, draft and mask bitmaps when their backing
 dimensions stay the same. Assigning canvas width/height, even to their existing
 values, discards storage; ordinary page changes now redraw without reallocating
