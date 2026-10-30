@@ -171,3 +171,5 @@ which needs the interpreter lock. Qt's native audio output has no Python virtual
 callback on that worker. The decoder regression verifies native ownership,
 repeated audio/subtitle changes, preserved volume/mute and output destruction;
 the existing real codec, embedded-caption and external-SRT checks remain required.
+`test_video_audio_output.py` also checks construction and retirement on desktops
+without the optional FFmpeg fixture generator.
