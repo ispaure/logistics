@@ -1,5 +1,12 @@
 # Mobile playback tools
 
+On iOS, a newly opened video starts with controls visible and hides them after
+three seconds of active playback. Tap the picture to fade controls back in or
+out. Pausing, seeking, opening a menu, VoiceOver, and the Duo laptop deck keep
+controls available. Playback options use a scrollable alert on iPhone, including
+Duo, and an anchored sheet on iPad. System bars are removed after the fade so safe-area changes
+do not move visible controls. Reduce Motion uses an immediate transition.
+
 Choose **Playback** in the iOS navigation controls or Duo's lower fold deck.
 On Android choose **More playback options → Playback…**. The menu includes exact
 time entry, Start over, speed, picture size, subtitles, folder navigation, mute

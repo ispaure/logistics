@@ -63,6 +63,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, strong) UIBarButtonItem *fullscreenButton;
 @property(nonatomic) BOOL fullscreen;
 @property(nonatomic) BOOL controlsVisible;
+@property(nonatomic) BOOL systemChromeHidden;
 @property(nonatomic, strong) UIStackView *videoHeader;
 @property(nonatomic, strong) UILabel *videoTitle, *sourceLabel;
 @property(nonatomic, strong) UIImageView *sourceIcon;
@@ -156,6 +157,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.controls.axis = UILayoutConstraintAxisVertical;
     self.controls.spacing = 4;
     self.controlsVisible = YES;
+    self.fullscreen = YES;
     self.controls.translatesAutoresizingMaskIntoConstraints = NO;
     self.controlsScroll = [[UIScrollView alloc] init];
     // Constraints already handle safe regions; automatic scroll insets would
@@ -195,7 +197,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     UIBarButtonItem *chapters = [self item:@"Chapters" selector:@selector(chapters:)];
     UIBarButtonItem *audio = [self item:@"Audio tracks" selector:@selector(audioTracks:)];
     UIBarButtonItem *subtitles = [self item:@"Subtitles" selector:@selector(subtitleTracks:)];
-    self.fullscreenButton = [self item:@"Fullscreen" selector:@selector(toggleFullscreen:)];
+    self.fullscreenButton = [self item:@"Exit fullscreen" selector:@selector(toggleFullscreen:)];
     UIBarButtonItem *tools = [self item:@"Playback" selector:@selector(playbackTools:)];
     NSMutableArray<UIBarButtonItem *> *utilities = [NSMutableArray arrayWithArray:@[audio, subtitles, chapters, self.fullscreenButton, tools]];
     if (!self.restricted) {
@@ -339,11 +341,11 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self.callObserver setDelegate:self queue:dispatch_get_main_queue()];
 }
 
-- (BOOL)prefersStatusBarHidden { return self.fullscreen && !self.controlsVisible && !self.pipActive; }
+- (BOOL)prefersStatusBarHidden { return self.fullscreen && self.systemChromeHidden && !self.pipActive; }
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations { return UIInterfaceOrientationMaskAll; }
-- (BOOL)prefersHomeIndicatorAutoHidden { return self.fullscreen && !self.controlsVisible && !self.pipActive; }
+- (BOOL)prefersHomeIndicatorAutoHidden { return self.fullscreen && self.systemChromeHidden && !self.pipActive; }
 - (UIRectEdge)preferredScreenEdgesDeferringSystemGestures {
-    return self.fullscreen && !self.controlsVisible && !self.pipActive ? UIRectEdgeAll : UIRectEdgeNone;
+    return self.fullscreen && self.systemChromeHidden && !self.pipActive ? UIRectEdgeAll : UIRectEdgeNone;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
     return ![touch.view isDescendantOfView:self.controlsScroll];
@@ -352,6 +354,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     if (self.tabletop) visible = YES;
     if (self.controlsLocked) visible = NO;
     self.controlsVisible = visible;
+    [self.controlsTimer invalidate]; self.controlsTimer = nil;
     BOOL shown = visible && !self.pipActive;
     BOOL hideBar = !shown || self.tabletop;
     NSUInteger generation = ++self.chromeGeneration;
@@ -362,7 +365,14 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         view.accessibilityElementsHidden = !shown;
     }
     UINavigationBar *bar = self.navigationController.navigationBar;
+    if (shown) {
+        // Resolve safe-area changes while the incoming controls are transparent.
+        self.systemChromeHidden = NO;
+        [self setNeedsStatusBarAppearanceUpdate];
+    }
     if (!hideBar) [self.navigationController setNavigationBarHidden:NO animated:NO];
+    [self.view layoutIfNeeded];
+    [bar layoutIfNeeded];
     bar.userInteractionEnabled = !hideBar;
     bar.accessibilityElementsHidden = hideBar;
     [UIView animateWithDuration:immediate ? 0 : .2 delay:0
@@ -375,21 +385,28 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
             if (generation != self.chromeGeneration) return;
             self.controlsScroll.hidden = !shown;
             self.videoHeader.hidden = !shown;
+            // Changing status/navigation visibility earlier shrinks the safe
+            // area and moves still-visible controls during their fade.
+            self.systemChromeHidden = !shown;
             [self.navigationController setNavigationBarHidden:hideBar animated:NO];
+            [self setNeedsStatusBarAppearanceUpdate];
+            [self setNeedsUpdateOfHomeIndicatorAutoHidden];
+            [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
         }];
     self.bufferOverlay.hidden = !self.buffering || self.lockHidden || self.pipActive;
-    [self setNeedsStatusBarAppearanceUpdate];
-    [self setNeedsUpdateOfHomeIndicatorAutoHidden];
-    [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
     [self scheduleControls];
 }
 - (void)scheduleControls {
-    [self.controlsTimer invalidate]; self.controlsTimer = nil;
-    if (!self.tabletop && self.fullscreen && self.controlsVisible && !self.pipActive && !self.retired && self.view.window && !self.buffering && self.player.isPlaying) {
+    BOOL eligible = !self.tabletop && self.fullscreen && self.controlsVisible && !self.pipActive &&
+        !self.retired && !self.lockHidden && self.view.window && !self.buffering && self.player.isPlaying;
+    if (!eligible) { [self.controlsTimer invalidate]; self.controlsTimer = nil; return; }
+    // Decoder notifications must not continually postpone an existing deadline.
+    if (!self.controlsTimer.valid) {
         self.controlsTimer = [NSTimer scheduledTimerWithTimeInterval:3 target:self selector:@selector(hideControls:) userInfo:nil repeats:NO];
     }
 }
 - (void)hideControls:(NSTimer *)timer {
+    self.controlsTimer = nil;
     if (self.player.isPlaying && !self.seek.tracking && !self.presentedViewController &&
         !self.navigationController.presentedViewController && !UIAccessibilityIsVoiceOverRunning())
         [self setControlsShown:NO];
@@ -591,6 +608,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     int64_t duration = self.player.media.length.value.longLongValue;
     if (duration <= 0) return;
     [self seekToMilliseconds:(int64_t)(slider.value * duration)];
+    [self.controlsTimer invalidate]; self.controlsTimer = nil;
     [self scheduleControls];
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
@@ -874,7 +892,12 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)mediaPlayerLengthChanged:(int64_t)length { [self.pipController invalidatePlaybackState]; }
 
 - (UIAlertController *)menu:(NSString *)title sender:(id)sender {
-    UIAlertController *menu = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    // Phone-sized Duo windows can offer less height than a long popover's
+    // minimum size. Use UIKit's scrollable alert there; reserve anchored sheets
+    // for iPad, whose popover has room for the playback option list.
+    UIAlertControllerStyle style = self.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomPhone
+        ? UIAlertControllerStyleAlert : UIAlertControllerStyleActionSheet;
+    UIAlertController *menu = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:style];
     BOOL anchoredToOverflow = NO;
     if (@available(iOS 16.0, *)) {
         if ([sender isKindOfClass:UIBarButtonItem.class] &&

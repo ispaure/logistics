@@ -158,7 +158,6 @@
         NSString *title = [NSString stringWithFormat:@"%@%@", [row[@"current"] boolValue] ? @"✓ " : @"", row[@"name"]];
         [menu addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"queue" value:row[@"path"]]; }]];
     }
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [self presentPlaybackDialog:menu];
 }
 - (void)pictureOptions:(id)sender {
@@ -168,14 +167,12 @@
         NSString *key = keys[i];
         [menu addAction:[UIAlertAction actionWithTitle:labels[i] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"aspect" value:key]; }]];
     }
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [self presentPlaybackDialog:menu];
 }
 - (void)speedOptions:(id)sender {
     UIAlertController *menu = [self menu:@"Speed · pitch preserved" sender:sender];
     for (NSNumber *rate in @[@.5,@.75,@1.,@1.25,@1.5,@1.75,@2.])
         [menu addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"%@×",rate] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"rate" value:rate]; }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [self presentPlaybackDialog:menu];
 }
 - (void)subtitleOptions:(id)sender {
@@ -185,7 +182,6 @@
         [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self promptValue:entry[0] key:entry[1] numeric:[entry[1] hasSuffix:@"_ms"]]; }]];
     for (NSNumber *scale in @[@.75,@1.,@1.25,@1.5,@2.])
         [menu addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Subtitle size %@×",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"subtitle_scale" value:scale]; }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [self presentPlaybackDialog:menu];
 }
 - (void)playbackTools:(id)sender {
@@ -203,7 +199,6 @@
     [menu addAction:[UIAlertAction actionWithTitle:@"Start over" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self seekToMilliseconds:0]; }]];
     BOOL autoNext = [[self playbackOptions][@"autoplay_next"] boolValue];
     [menu addAction:[UIAlertAction actionWithTitle:autoNext ? @"✓ Play next automatically" : @"Play next automatically" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"autoplay_next" value:@(!autoNext)]; }]];
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [self presentPlaybackDialog:menu];
 }
 - (void)attachSubtitleURL:(NSString *)url { if ([self canPlay:NO]) [self.player addPlaybackSlave:[NSURL URLWithString:url] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES]; }
@@ -215,7 +210,6 @@
         NSString *label = [NSString stringWithFormat:@"%@%@", [row[@"directory"] boolValue] ? @"▸ " : @"", row[@"name"]];
         [menu addAction:[UIAlertAction actionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:[row[@"directory"] boolValue] ? @"subtitleBrowse" : @"subtitleAttach" value:row[@"path"]]; }]];
     }
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [self presentPlaybackDialog:menu];
 }
 - (void)showCachedRanges:(NSString *)json {

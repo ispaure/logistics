@@ -158,7 +158,7 @@ async def fullscreen_controls(owner, android):
                         if modern else int(decor.getSystemUiVisibility()) & 6)
         hidden_bars = lambda: bars() == (0 if modern else 6)
     else:
-        visible = lambda: not native_value(native.controls, 'isHidden')
+        visible = lambda: not native_value(native.controlsScroll, 'isHidden')
         tap = lambda: native.tapVideo(None)
         toggle = lambda: native.toggleFullscreen(None)
         view = native_value(native, 'view')
@@ -167,8 +167,13 @@ async def fullscreen_controls(owner, android):
         status_manager = native_value(scene, 'statusBarManager')
         bars = lambda: bool(native_value(status_manager, 'isStatusBarHidden'))
         hidden_bars = bars
+    if not android:
+        native.setControlsShown(True)
+        await until(visible)
+        await asyncio.sleep(.3)
     previous = bars()
-    toggle()
+    if android or not bool(native_value(native, 'fullscreen')):
+        toggle()
     await until(lambda: not visible() and hidden_bars())
     if android:
         assert root.getHeight() == decor.getHeight(), 'Fullscreen root does not fill the window'

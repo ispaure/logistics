@@ -497,3 +497,24 @@ cached-range eviction. Actual Qt playback verifies the responsive controls.
 SDK compilation checks native interfaces; new touch/keyboard/pause/fold behavior
 has not yet received physical-device acceptance. These additions are separate
 from the baseline build/install requested before implementation.
+
+### iOS control fade and playback menu regression
+
+`mobile_build/validation/video_chrome_tools.py` compiles the current native controller against
+an explicitly supplied, existing VLCKit simulator framework and runs the UIKit
+fixture `mobile_build/validation/fixtures/video_chrome_checks.m` on a manager-owned disposable
+simulator. Supply `--framework`, a fresh `--output` under `test-results/`, and
+`--model` (`iPhone Duo`, `iPhone`, or `iPad`). `--orientation landscape` requests
+a real scene rotation; the result retains the resulting orientation and bounds.
+The runner selects the newest installed runtime compatible with the model. Compiler output lives in a leased
+scratch workspace; the simulator is removed even on failure.
+
+The probe starts a synthetic local movie, observes the initial auto-hide and
+intermediate presentation-layer opacity, checks that status-bar visibility and
+header position remain stable during the fade, then opens Playback and its
+related option sheets. The shared menu factory owns their single Cancel action. Phone option lists use
+scrollable alerts to avoid overflowing a compact Duo popover; iPad keeps anchored
+action sheets.
+The auto-hide timer retains its deadline across decoder notifications; explicit
+control interactions reset it. Status/navigation removal commits only after the
+control fade. These checks establish simulator behavior, not physical Duo touch.
