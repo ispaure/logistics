@@ -21,6 +21,23 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativeReportTests(unittest.TestCase):
+    def test_host_memory_identifies_process_pressure_without_reading_private_arguments(self):
+        with TemporaryDirectory() as directory:
+            proc = Path(directory)
+            (proc / 'meminfo').write_text('MemTotal: 16384 kB\nMemAvailable: 1024 kB\nSwapFree: 0 kB\n')
+            (proc / 'vmstat').write_text('oom_kill 2\n')
+            for pid, name, rss in ((11, 'qemu-system', 8192), (12, 'java', 2048)):
+                entry = proc / str(pid)
+                entry.mkdir()
+                (entry / 'status').write_text(f'Name: {name}\nVmRSS: {rss} kB\n')
+                # Deliberately no cmdline or environ: only public status is needed.
+            (proc / '13').mkdir()  # A process disappearing during sampling is harmless.
+            row = ui_tools.linux_host_memory(proc)
+            self.assertEqual(row['oom_kill'], 2)
+            self.assertEqual(row['memory_mib']['MemAvailable'], 1)
+            self.assertEqual(row['processes'], [dict(pid=11, name='qemu-system', rss_kib=8192),
+                                                dict(pid=12, name='java', rss_kib=2048)])
+
     def test_direct_owned_cleanup_bootstraps_real_manager_without_pythonpath(self):
         import sys, shutil
         import build_manager

@@ -113,22 +113,47 @@ def simulator_report(device, started_ns, *, diagnostics=None):
     return json.loads(raw)
 
 
+def linux_host_memory(proc=Path('/proc')):
+    """Read public memory counters and process names, never command lines/env."""
+    values = {line.split(':', 1)[0]: int(line.split()[1])
+              for line in (proc / 'meminfo').read_text().splitlines()
+              if line.startswith(('MemTotal:', 'MemAvailable:', 'SwapFree:'))}
+    counters = dict(line.split() for line in (proc / 'vmstat').read_text().splitlines())
+    processes = []
+    for entry in proc.iterdir():
+        if not entry.name.isdecimal():
+            continue
+        try:
+            status = dict(line.split(':', 1) for line in (entry / 'status').read_text().splitlines() if ':' in line)
+            rss = int(status.get('VmRSS', '0').split()[0])
+            processes.append(dict(pid=int(entry.name), name=status.get('Name', '').strip(), rss_kib=rss))
+        except (OSError, ValueError, IndexError):
+            continue  # Processes may exit between directory and status reads.
+    return dict(memory_mib={key: value // 1024 for key, value in values.items()},
+                oom_kill=int(counters.get('oom_kill', 0)),
+                processes=sorted(processes, key=lambda row: row['rss_kib'], reverse=True)[:8])
+
+
+def record_host_memory(path):
+    if not (sys.platform.startswith('linux') and os.environ.get('GITHUB_ACTIONS') == 'true'):
+        return
+    try:
+        row = dict(time=time.time(), **linux_host_memory())
+        print('Native host memory: ' + json.dumps(row), flush=True)
+        with path.with_name('native-host-memory.jsonl').open('a') as stream:
+            stream.write(json.dumps(row) + '\n')
+    except (OSError, ValueError, IndexError):
+        pass  # Diagnostics must never change native test acceptance.
+
+
 def _progress(path, stopped):
     """Tail immutable checkpoint strings only; never inspect live native frames."""
     last_memory = 0
     with path.open(errors='replace') as stream:
         while True:
-            if (sys.platform.startswith('linux') and os.environ.get('GITHUB_ACTIONS') == 'true'
-                    and time.monotonic() - last_memory >= 30):
+            if time.monotonic() - last_memory >= 30:
                 last_memory = time.monotonic()
-                try:
-                    values = {line.split(':', 1)[0]: int(line.split()[1])
-                              for line in Path('/proc/meminfo').read_text().splitlines()
-                              if line.startswith(('MemTotal:', 'MemAvailable:', 'SwapFree:'))}
-                    print('Native host memory MiB: ' + json.dumps(
-                        {key: value // 1024 for key, value in values.items()}), flush=True)
-                except (OSError, ValueError):
-                    pass  # Diagnostics must not change native test acceptance.
+                record_host_memory(path)
             line = stream.readline()
             if not line:
                 if stopped.wait(.1):
@@ -136,6 +161,8 @@ def _progress(path, stopped):
                 continue
             if 'LOGISTICS_NATIVE_CASE=' in line:
                 print('Native checkpoint: '+line.split('LOGISTICS_NATIVE_CASE=',1)[1].strip(),flush=True)
+            elif 'LOGISTICS_NATIVE_DETAIL=' in line:
+                print('Native detail: '+line.split('LOGISTICS_NATIVE_DETAIL=',1)[1].strip(),flush=True)
             elif 'LOGISTICS_NATIVE_TIMING=' in line:
                 try:
                     row = json.loads(line.split('LOGISTICS_NATIVE_TIMING=',1)[1])
@@ -215,6 +242,7 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
         finally:
             stopped.set()
             if progress:progress.join(timeout=2)
+            record_host_memory(path)
     output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
     manifest = Path('payload/source.json') if local else None
     report = None

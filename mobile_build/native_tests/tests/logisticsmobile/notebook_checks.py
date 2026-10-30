@@ -14,6 +14,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert 'notebooks' not in DESTINATIONS
     app.set_feature_enabled('notebooks', True, refresh=False)
     app.show_home()
+    print('LOGISTICS_NATIVE_DETAIL=notebook:create', flush=True)
     await app.choose_document_type()
     form = app.editor_picker()
     form.save_as_name.value = 'Notebook QA'
@@ -35,18 +36,23 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert panel.session.provider == 'notebook', picker.save_as_status.value
     assert panel.session.id in app.workspace.sessions
     assert app.native_host.state.destination == 'home'
+    print('LOGISTICS_NATIVE_DETAIL=notebook:initial-web-ready', flush=True)
     await wait_for_text(panel.web, 'Notebook')
     result = await panel.web.evaluate_javascript("JSON.stringify({canvas:!!document.getElementById('paper'),pen:typeof PointerEvent,tools:document.getElementById('tool').options.length})")
     properties = json.loads(result)
     assert properties['canvas'] and properties['pen'] == 'function' and properties['tools'] == len(panel.editor.state()['tools'])
     retired = panel.web
+    print('LOGISTICS_NATIVE_DETAIL=notebook:reload', flush=True)
     assert await panel.load(lambda: panel.repository.open(panel.key), panel.key)
+    print('LOGISTICS_NATIVE_DETAIL=notebook:initial-web-ready', flush=True)
     await wait_for_text(panel.web, 'Notebook')
     assert retired.on_navigation_starting._raw is None
     panel.navigate(retired, panel.bridge.url + '?command=ignored')
     assert panel.bridge.sequence == 0
+    print('LOGISTICS_NATIVE_DETAIL=notebook:oversized-command', flush=True)
     status = await panel.web.evaluate_javascript("send({op:'stroke',points:[],padding:'x'.repeat(8*1024*1024)});document.getElementById('status').textContent")
     assert 'too large' in status
+    print('LOGISTICS_NATIVE_DETAIL=notebook:mobile-controls', flush=True)
     await panel.web.evaluate_javascript("document.querySelector('#mobileNotice button').click()")
     sizes = json.loads(await panel.web.evaluate_javascript("JSON.stringify({body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight,overflow:document.body.scrollWidth>innerWidth,targets:[...document.querySelectorAll('.mobile-tools button')].every(b=>b.getBoundingClientRect().width>=44&&b.getBoundingClientRect().height>=44)})"))
     assert sizes['page'] >= sizes['body'] * .95 and not sizes['overflow'] and sizes['targets'], sizes
@@ -60,8 +66,10 @@ async def exercise_notebooks(app, *, return_to_home=True):
     await panel.web.evaluate_javascript("document.getElementById('restoreTools').click()")
     assert await panel.web.evaluate_javascript("!document.body.classList.contains('tools-hidden')")
     from .notebook_pointer_checks import exercise_pointer_input
+    print('LOGISTICS_NATIVE_DETAIL=notebook:pointer-input', flush=True)
     pointer_report = await exercise_pointer_input(panel)
     app._notebook_pointer_report = pointer_report
+    print('LOGISTICS_NATIVE_DETAIL=notebook:populated-page-render', flush=True)
     # Measure work on a populated page: pointer motion must not replay old ink.
     await panel.web.evaluate_javascript(r"""(()=>{
         const saved=state.strokes, capture=canvas.setPointerCapture;
@@ -103,10 +111,12 @@ async def exercise_notebooks(app, *, return_to_home=True):
             break
         await asyncio.sleep(.05)
     assert metrics is not None and 'error' not in metrics, metrics
+    print('LOGISTICS_NATIVE_DETAIL=notebook:populated-page-complete', flush=True)
     expected = dict(clears=0, segments=0 if metrics['batched'] else 400, samples=401,
                     afterFrame=1 if metrics['batched'] else 400, batched=metrics['batched'],
                     cancelled=True, cancelClears=1)
     assert metrics == expected, metrics
+    print('LOGISTICS_NATIVE_DETAIL=notebook:durable-stroke', flush=True)
     await panel.web.evaluate_javascript("send({op:'stroke',points:[[100,100,.2],[120,130,.8]],tool:12,color:6,width:3})")
     for _ in range(100):
         if panel.editor.notebook.page(0).strokes:
@@ -136,6 +146,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
     imported = Notebook.read(exported)
     assert not imported.page(0).warning and imported.page(0).strokes[0].tool == 12
     key, session_id = panel.key, panel.session.id
+    print('LOGISTICS_NATIVE_DETAIL=notebook:reopen', flush=True)
     assert app.close_session(session_id)
     assert session_id not in app.workspace.sessions
     assert panel.web is None
