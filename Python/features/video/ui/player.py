@@ -3,7 +3,7 @@ from pathlib import Path
 from threading import Event, Thread
 
 from commonUtils.ui import pyside as qt
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QMediaMetaData
+from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
 from features.video.playback import VideoContent, VIDEO_EXTENSIONS, SubtitleContent
@@ -17,6 +17,7 @@ def clock(milliseconds):
 
 
 from .controls import PlaybackTools, CachedSlider
+from .audio_output import audio_output
 
 
 class VideoWindow(PlaybackTools, qt.QMainWindow):
@@ -78,7 +79,7 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
 
     def build(self):
         self.player = QMediaPlayer(self)
-        self.audio = QAudioOutput(self)
+        self.audio = audio_output(self)
         self.audio.setVolume(.8)
         self.player.setAudioOutput(self.audio)
         body = qt.QWidget()

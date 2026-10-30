@@ -156,3 +156,18 @@ Renderer-startup snapshot failure, PiP/cast timing, actual Duo touch/fold behavi
 and Android TextureView output require physical acceptance.
 
 Session-only checkpoints now use the shared [password-bound reader-state owner](../../../development/reader-state.md), with independent clear actions and explicit previous-password migration. Device-key and credential-settings-only encryption are no longer used for session-only video progress.
+
+## Desktop track-switch lock ordering
+
+The desktop player constructs its audio output through the fixed native Qt
+Multimedia declaration in `ui/audio_output.py`. The output and its declaration
+engine belong to the video window and retire with it. Audio volume, mute, track
+selection and subtitle decoding continue through the normal Qt APIs.
+
+This avoids a captured PySide lock inversion: a track setter holds Python's
+interpreter lock while waiting for Qt's connection mutex, while an FFmpeg audio
+worker holds that mutex and enters `QAudioOutputWrapper::disconnectNotify`,
+which needs the interpreter lock. Qt's native audio output has no Python virtual
+callback on that worker. The decoder regression verifies native ownership,
+repeated audio/subtitle changes, preserved volume/mute and output destruction;
+the existing real codec, embedded-caption and external-SRT checks remain required.

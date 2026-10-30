@@ -139,6 +139,41 @@ class VideoDecodeTests(QtTestCase):
                 window.close()
                 self.wait_until(lambda: release.called, drain_deferred=True)
 
+    def test_repeated_track_changes_retire_native_audio_without_python_callbacks(self):
+        import shiboken6
+        from logistics_build.build_retention import scratch
+        from tests.readers.video_fixtures import codec_matrix, multitrack_movie
+        from features.video.ui.player import VideoWindow
+        with scratch() as root:
+            path = multitrack_movie(root, codec_matrix(root)[0][3])
+            for cycle in range(8):
+                with self.subTest(cycle=cycle):
+                    release = Mock()
+                    with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
+                        window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release))
+                    audio = window.audio
+                    try:
+                        # A Python-created wrapper overrides disconnectNotify
+                        # on the audio worker and can deadlock the track setter.
+                        self.assertFalse(shiboken6.createdByPython(audio))
+                        self.wait_until(lambda: len(window.player.audioTracks()) == 2
+                                        and len(window.player.subtitleTracks()) == 1)
+                        audio.setVolume(.35)
+                        audio.setMuted(True)
+                        for track in (1, 0, 1, 0):
+                            window.player.setActiveAudioTrack(track)
+                            window.select_subtitle(window.subtitle_tracks.findData(0))
+                            self.wait_until(lambda: window.player.activeAudioTrack() == track
+                                            and window.player.activeSubtitleTrack() == 0)
+                            window.select_subtitle(window.subtitle_tracks.findData(-1))
+                            self.assertEqual(window.player.activeSubtitleTrack(), -1)
+                            self.assertAlmostEqual(audio.volume(), .35, places=5)
+                            self.assertTrue(audio.isMuted())
+                    finally:
+                        window.close()
+                        self.wait_until(lambda: release.called, drain_deferred=True)
+                    self.assertFalse(shiboken6.isValid(audio))
+
     def test_requested_codec_matrix_decodes_video_and_audio(self):
         from PySide6.QtMultimedia import QAudioBufferOutput, QMediaPlayer, QVideoSink
         from logistics_build.build_retention import scratch
