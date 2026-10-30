@@ -21,6 +21,20 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativeReportTests(unittest.TestCase):
+    def test_hosted_emulator_records_sdk_revision_and_current_software_backend(self):
+        import os
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'emulator').mkdir()
+            (root / 'emulator/source.properties').write_text('Pkg.Revision = 37.2.12\n')
+            logs = root / 'logs'
+            logs.mkdir()
+            with patch.dict(os.environ, {'ANDROID_HOME': str(root)}):
+                ui_tools.record_android_emulator(logs)
+            self.assertEqual(json.loads((logs / 'android-emulator.json').read_text()),
+                             dict(revision='37.2.12', renderer='software'))
+
     def test_host_memory_identifies_process_pressure_without_reading_private_arguments(self):
         with TemporaryDirectory() as directory:
             proc = Path(directory)

@@ -411,3 +411,16 @@ Boox/browser proportion contracts have host coverage. Physical Boox validation
 requires a connected device; after testing, remove temporary QA/probe packages
 and verify the main `io.github.ispaure.logisticsmobile` package and its data are
 preserved.
+
+## Hosted Android graphics diagnostics
+
+Hosted native UI validation uses the emulator's current `-gpu software` backend
+selection instead of the deprecated `swiftshader_indirect` path. Android's
+[graphics acceleration guide](https://developer.android.com/studio/run/emulator-acceleration)
+documents these software modes. This changes the host rendering backend; the
+application, native test inventory, screenshot checks and time budgets stay the same.
+The runner retains the configured emulator revision, process RSS, host available
+memory and kernel OOM counter with the native logs. Process telemetry contains
+public names and memory counters, without command lines or environments.
+A passing native run does not itself establish acceptable memory use: compare
+notebook checkpoints and emulator RSS when investigating intermittent disconnects.

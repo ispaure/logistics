@@ -148,6 +148,26 @@ def record_host_memory(path):
         pass  # Diagnostics must never change native test acceptance.
 
 
+def record_android_emulator(logs):
+    """Retain the configured SDK revision alongside hosted renderer diagnostics."""
+    sdk = os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT')
+    if not sdk:
+        return
+    try:
+        properties = Path(sdk) / 'emulator/source.properties'
+        values = {key.strip(): value.strip() for key, value in
+                  (line.split('=', 1) for line in properties.read_text().splitlines() if '=' in line)}
+        revision = values.get('Pkg.Revision', '').strip()
+        if not revision:
+            raise ValueError('Emulator revision is missing')
+        row = dict(revision=revision, renderer='software')
+        (logs / 'android-emulator.json').write_text(json.dumps(row) + '\n')
+        log(Severity.INFO, 'Android emulator', json.dumps(row))
+        sys.stdout.flush()
+    except (OSError, ValueError) as error:
+        log(Severity.WARNING, 'Android emulator diagnostics', str(error))
+
+
 def _progress(path, stopped):
     """Tail immutable checkpoint strings only; never inspect live native frames."""
     last_memory = 0
@@ -202,10 +222,12 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
         command.append('--no-update')
     if target == 'android' and not local:
         command.extend(['--Xemulator=-no-window', '--Xemulator=-no-audio', '--Xemulator=-no-snapshot-load', '--Xemulator=-gpu',
-                        '--Xemulator=swiftshader_indirect', '--shutdown-on-exit'])
+                        '--Xemulator=software', '--shutdown-on-exit'])
     logs = Path('logs')
     logs.mkdir(exist_ok=True)
     clear_run_reports(logs, target)
+    if target == 'android' and not local:
+        record_android_emulator(logs)
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
     if target == 'ios':
@@ -246,6 +268,8 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
             stopped.set()
             if progress:progress.join(timeout=2)
             record_host_memory(path)
+            if target == 'android' and not local:
+                record_android_emulator(logs)
     output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
     manifest = Path('payload/source.json') if local else None
     report = None
