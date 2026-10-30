@@ -11,6 +11,7 @@ from unittest.mock import Mock
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.rclone import session
+from features.rclone.document_protection import DesktopDocumentProtection
 from services.documents.ui.private_views import protect_private_view
 
 
@@ -32,6 +33,7 @@ class StorageTransitionTests(QtTestCase):
             protect_private_view(window, window.choice.provider)
             window.show()
             window.choice = SimpleNamespace(provider=SimpleNamespace(private=True, context=context))
+            window.choice.provider.document_protection = DesktopDocumentProtection(window.choice.provider)
             window.idle.emit()
             self.assertIs(window._private_view_guard.provider, window.choice.provider)
             session.forget(context)
@@ -47,6 +49,7 @@ class StorageTransitionTests(QtTestCase):
             self.addCleanup(session.forget, context)
             provider = SimpleNamespace(private=True, context=context, _check_active=Mock())
             window = qt.QMainWindow()
+            provider.document_protection = DesktopDocumentProtection(provider)
             protect_private_view(window, provider)
             window.show()
             provider._check_active.side_effect = ValueError('Stale credential generation')
@@ -60,6 +63,7 @@ class StorageTransitionTests(QtTestCase):
         with TemporaryDirectory() as directory:
             window = qt.QMainWindow()
             provider = SimpleNamespace(private=True, context=Path(directory) / 'already-locked.session')
+            provider.document_protection = DesktopDocumentProtection(provider)
             protect_private_view(window, provider)
             self.assertTrue(window._private_view_guard.locked)
             self.assertFalse(window.isEnabled())
@@ -76,6 +80,7 @@ class StorageTransitionTests(QtTestCase):
             provider.private, provider.context = True, Path(directory) / 'first-save.session'
             session.remember(provider.context, {'view': {'type': 'local'}})
             self.addCleanup(session.forget, provider.context)
+            provider.document_protection = DesktopDocumentProtection(provider)
             window = NotebookWindow()
             panel = NotebookWorkspace(window, library=False)
             window.setCentralWidget(panel)

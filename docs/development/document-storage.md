@@ -146,9 +146,29 @@ descriptor. Legacy text editing retains its 1 MiB text contract. Existing file
 streams continue using the streamed descriptor transfer path. No plaintext
 intermediate file is required.
 
+Desktop providers expose a `document_protection` capability described by
+`services.documents.protection.DocumentProtection`: access validation, revocation
+subscription, requested-lock matching and resume authorization. Generic private
+view guards and video authorization consume this capability across provider
+wrappers without inspecting rclone contexts, config suffixes or credential ZIPs.
+Repeated capabilities are deduplicated; every distinct wrapper restriction applies.
+Combined resume proofs verify established credentials before configuring temporary
+passwords, and expose an unconfigured gate when confirmation is required.
+`features.rclone.document_protection.DesktopDocumentProtection` adapts the existing
+session registry and exact-package resume proof. A document without a provider
+resume proof needs a temporary session password. Read/write grant checks remain
+at provider I/O boundaries; resume authorization does not restore a revoked grant.
+
 Desktop hosts register provider guards even for ordinary editors, so Save As
 into LocalCrypt starts revocation protection immediately. Guards also validate the
 retained credential generation, including a revocation that precedes UI handoff.
+A guard disables and conceals the window and redacts its title before invoking
+owner cleanup. Reentrant retirement cannot run disposal twice; successful cleanup
+is idempotent and failed cleanup stays locked for retry. Provider handoff failures
+also deny display. Unsubscription attempts every wrapped source, retains failed
+release handles and reports the first error so cleanup can be retried. Revocation
+checks validate declared protection capabilities, not source-file availability;
+an ordinary source disappearing must not retire its retained unsaved draft.
 Revoked Markdown clears its source, formatted view and cached baselines; late save
 acknowledgements cannot revive its content. Failed notebook opening releases the
 resource and retires the incomplete window.
@@ -166,7 +186,9 @@ covers notebook draft/recovery adapters. The
 and credential policy. Reusable resource API documentation remains in
 [commonUtils](../../Python/commonUtils/docs/development/reference/ui/resource-providers.md).
 
-Focused host contracts live in `Python/tests/resources/test_document_storage.py`,
+Focused host contracts include backend-independent revocation and wrapped resume
+proofs in `Python/tests/resources/test_document_protection.py`,
+`Python/tests/resources/test_document_storage.py`,
 `Python/tests/resources/test_local_crypt.py` and the mobile document-storage tests.
 Native bridge tests cover binary round trips, limits, cancellation and rejection
 of nonempty output descriptors. Host tests do not establish native widget or

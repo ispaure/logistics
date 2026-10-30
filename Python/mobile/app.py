@@ -39,7 +39,6 @@ from mobile.storage_controller import StorageController
 @composed_workflow('transfer_controller', TransferController)
 @composed_workflow('folder_controller', FolderController)
 @composed_workflow('hub_controller', HubController)
-@composed_workflow('locations_controller', LocationsController)
 @composed_workflow('storage_controller', StorageController)
 class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
@@ -94,7 +93,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
     def locations_controller(self) -> LocationsController:
         """Return the retained owner of this workflow."""
         if "_locations_controller" not in self.__dict__:
-            self._locations_controller = LocationsController(self)
+            from .composition.locations import locations_host
+            self._locations_controller = LocationsController(locations_host(self))
         return self._locations_controller
 
     def storage_controller(self) -> StorageController:
@@ -584,7 +584,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.show_folder_picker()
 
     async def show_local_location(self, widget=None, **kwargs):
-        await self.show_files()
+        return await self.show_files()
 
     async def show_home_files(self, widget=None, **kwargs):
         # A local shortcut must not wait for credentials or reuse a previous

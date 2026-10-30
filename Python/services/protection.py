@@ -12,12 +12,35 @@ def unique_gates(gates):
 
 
 class ProtectionScope:
-    def __init__(self, credentials):
+    def __init__(self, credentials=lambda: ()):
         self._lock = RLock()
-        self.credentials = credentials
+        self._credential_sources = {None: (None, credentials)}
         self.windows = WeakSet()
         self.listeners = WeakSet()
         self.active = bool(credentials())
+        self._revision = 0
+
+    def credentials(self):
+        with self._lock:
+            sources = tuple(self._credential_sources.values())
+        return unique_gates(gate for _, source in sources for gate in source())
+
+    def register_credentials(self, owner, gates):
+        """Register a credential source without giving it ownership of this scope."""
+        key = id(owner)
+        entry = (owner, gates)
+        with self._lock:
+            self._credential_sources[key] = entry
+        self.changed()
+        def release():
+            with self._lock:
+                if self._credential_sources.get(key) is entry:
+                    self._credential_sources.pop(key)
+            self.changed()
+        return release
+
+    def credentials_changed(self):
+        self.changed()
 
     def window(self):
         window = WindowProtection(self)
@@ -37,11 +60,15 @@ class ProtectionScope:
         return bool(self.credentials()) or any(window.retained_protected() for window in tuple(self.windows))
 
     def changed(self):
-        # Credential publication can originate on a worker; UI effects run after
-        # the snapshot lock is released. Callbacks always consult current facts.
+        # Suppliers may acquire credential locks. Never call them while holding
+        # the scope lock: credential publication can enter here in the opposite
+        # order. A newer publication supersedes a slow older snapshot.
         with self._lock:
-            active = self.protected()
-            if active == self.active:
+            self._revision += 1
+            revision = self._revision
+        active = self.protected()
+        with self._lock:
+            if revision != self._revision or active == self.active:
                 return
             self.active = active
             listeners = tuple(self.listeners)

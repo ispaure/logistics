@@ -210,7 +210,7 @@ class ProviderMarkdownTests(unittest.TestCase):
                 self.check_late_render(lambda owner: setattr(client, 'generation', 2), failure=failure)
 
     def test_unrelated_connection_change_keeps_local_document_available(self):
-        self.app.cloud_client = SimpleNamespace(generation=10)
+        self.app.cloud_client = SimpleNamespace(generation=10, cancel=lambda: None)
         self.assertTrue(self.app.private_sessions.available(self.owner.session.id))
         self.app.cloud_client.generation += 1
         self.assertTrue(self.app.private_sessions.available(self.owner.session.id))

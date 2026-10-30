@@ -93,7 +93,7 @@ class RemoteResources:
         self.encrypted = values[remote].get('type') == 'crypt'
         self.storage_label = ('Home Server' if self.config_path.stem.casefold()
                               in {'network shares', 'session network shares'} else 'Cloud')
-        from services.local_storage import install_local_storage_policy
+        from features.rclone.storage import install_local_storage_policy
         install_local_storage_policy()
         self.context = self.config_path.with_name('remote-' + uuid4().hex + '.session')
         session.remember(self.context, values, private=True,
@@ -108,6 +108,8 @@ class RemoteResources:
         self.closed = False
         self._cancellation = WorkerCancellation()
         self._leases = ResourceLeases(validate=self._check_active, close=self.close)
+        from .document_protection import DesktopDocumentProtection
+        self.document_protection = DesktopDocumentProtection(self)
         with _providers_lock:
             _providers.add(self)
 

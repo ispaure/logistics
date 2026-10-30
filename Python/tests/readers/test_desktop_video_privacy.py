@@ -28,7 +28,10 @@ class DesktopVideoPrivacyTests(QtTestCase):
         window = qt.QMainWindow()
         window.setCentralWidget(qt.QWidget())
         window.setWindowTitle("private.mp4")
-        window.content = SimpleNamespace(provider=Mock(), check_access=Mock())
+        from features.rclone.desktop_credentials import SessionResumeProof
+        proof = SessionResumeProof(package)
+        window.content = SimpleNamespace(provider=SimpleNamespace(
+            document_protection=SimpleNamespace(resume_authorization=lambda: proof)), check_access=Mock())
         window.player = Mock(position=lambda: 1234)
         window.audio = Mock()
         window.transport = Mock(url="http://127.0.0.1/test")
@@ -36,7 +39,6 @@ class DesktopVideoPrivacyTests(QtTestCase):
         window.resume_at = 0
         app = AppState()
         with (
-            patch("features.video.ui.privacy.credential_package", return_value=package),
             patch(
                 "features.video.ui.privacy.qt.QApplication.instance", return_value=app
             ),
@@ -91,12 +93,11 @@ class DesktopVideoPrivacyTests(QtTestCase):
         self.assertTrue(guard.blocked)
         window.transport.resume.assert_not_called()
 
-    def test_package_resolution_uses_the_video_owner(self):
-        from features.video.ui.privacy import credential_package
-
-        owner = SimpleNamespace(connection=SimpleNamespace(package=Path("/owner.zip")))
-        with patch("services.documents.video_authorization.document_sources", return_value=[owner]):
-            self.assertEqual(credential_package(object()), Path("/owner.zip"))
+    def test_resume_authorization_comes_from_the_retained_provider(self):
+        from services.documents.video_authorization import resume_authorization
+        proof = object()
+        owner = SimpleNamespace(document_protection=SimpleNamespace(resume_authorization=lambda: proof))
+        self.assertIs(resume_authorization(SimpleNamespace(provider=owner)), proof)
 
     def test_encrypted_owner_password_and_replaced_package_fail_closed(self):
         import pyzipper

@@ -152,6 +152,59 @@ class Derived(Base): pass
             self.assertEqual(result.returncode, 2)
             self.assertEqual(rejected['modules'], [])
 
+    def test_order_audit_replays_seed_and_preserves_stage_and_class_fixtures(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, stage in [('test_a.py', 'REGRESSION'), ('test_b.py', 'REGRESSION'),
+                                ('test_z.py', 'SMOKE')]:
+                source = '# TEST_STAGE = TestStage.' + stage + '\nimport unittest\n'
+                for owner in ('First', 'Second'):
+                    source += (f'class {owner}(unittest.TestCase):\n'
+                               ' starts = 0\n'
+                               ' @classmethod\n'
+                               ' def setUpClass(cls):\n'
+                               '  cls.starts += 1\n'
+                               '  if cls.starts != 1: raise RuntimeError("class fixture restarted")\n'
+                               ' def test_a(self): pass\n'
+                               ' def test_b(self): pass\n'
+                               ' def test_c(self): pass\n')
+                (root / name).write_text(source)
+            orders = []
+            for options in [(), ('--order', 'reverse'), ('--order', 'random', '--seed', '7'),
+                            ('--order', 'random', '--seed', '7'), ('--order', 'random', '--seed', '99')]:
+                result, report = self.run_fixture(root, *options)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(report['coverage_complete'])
+                self.assertEqual(report['modules'][0]['stage'], 'smoke')
+                self.assertEqual(report['planned_modules'], [
+                    dict(path=row['path'], stage=row['stage']) for row in report['modules']])
+                orders.append([row['id'] for row in report['tests']])
+            self.assertEqual(orders[2], orders[3])
+            self.assertNotEqual(orders[0], orders[1])
+            self.assertNotEqual(orders[2], orders[4])
+            for order in orders:
+                self.assertEqual(set(order), set(orders[0]))
+                self.assertEqual(len(order), 18)
+            self.assertEqual(report['order'], 'random')
+            self.assertEqual(report['seed'], 99)
+
+    def test_order_audit_exposes_a_case_state_leak_and_preserves_failure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'test_leak.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\nstate = []\n'
+                'class Cases(unittest.TestCase):\n'
+                ' def test_a_requires_clean(self): self.assertEqual(state, [])\n'
+                ' def test_b_leaks_state(self): state.append("leaked")\n')
+            normal, baseline = self.run_fixture(root)
+            self.assertEqual(normal.returncode, 0, normal.stderr)
+            reverse, report = self.run_fixture(root, '--order', 'reverse')
+            self.assertEqual(reverse.returncode, 1, reverse.stderr)
+            self.assertTrue(report['coverage_complete'])
+            self.assertEqual([row['id'] for row in report['tests']],
+                             [row['id'] for row in baseline['tests']][::-1])
+            self.assertEqual(report['tests'][-1]['outcome'], 'failed')
+
     def test_project_inventory_rejects_malformed_roots_and_never_imports_sources(self):
         from logistics_build.test_structure import inventory
         with TemporaryDirectory() as directory:

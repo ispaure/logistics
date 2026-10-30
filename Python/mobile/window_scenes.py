@@ -333,6 +333,7 @@ def workspace_class():
     class OrdinaryWindowWorkspace(LogisticsMobile):
         def show_cloud(self, widget=None, **kwargs):
             self.show_window_boundary()
+            return False
         def show_cloud_connections(self, widget=None, **kwargs):
             self.show_window_boundary()
         def show_smb_connection(self, widget=None, **kwargs):
@@ -344,6 +345,7 @@ def workspace_class():
         async def show_local_location(self, widget=None, **kwargs):
             # The primary host owns local mutations and connection workers.
             self.show_window_boundary()
+            return False
         def show_window_boundary(self):
             import toga
             from toga.style import Pack

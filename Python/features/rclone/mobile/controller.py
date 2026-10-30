@@ -231,7 +231,6 @@ class CloudController(CloudUI):
     open_crypt = HostService("open_crypt")
     open_document = HostAttribute("open_document")
     open_local_document = HostService("open_local_document")
-    pin_remote_folder = HostService("pin_remote_folder")
     populate_file_browser = HostAttribute("populate_file_browser")
     preferences = HostAttribute("preferences")
     private_root = HostAttribute("private_root")

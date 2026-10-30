@@ -117,10 +117,18 @@ class RetentionTests(unittest.TestCase):
 
     def test_clear_attempts_vault_erasure_even_when_native_lock_observer_fails(self):
         client = object.__new__(CloudClient)
-        client.credential_state = SimpleNamespace(lock=RLock())
-        client.lock = Mock(side_effect=OSError('Observer failed after revocation'))
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        client.credential_state = NativeCredentialState()
+        class Observer:
+            def credentials_changed(self):
+                raise OSError('Observer failed after revocation')
+        observer = Observer()
+        client.credential_state.observers.add(observer)
+        def clear(action):
+            client.credential_state.publish(action, {}, {})
+        client._request = clear
         client.vault = SimpleNamespace(forget=Mock())
-        with self.assertRaises(OSError):
+        with self.assertRaisesRegex(OSError, 'Observer failed after revocation'):
             client.clear()
         client.vault.forget.assert_called_once()
 

@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from features.rclone import session
+from features.rclone.document_protection import DesktopDocumentProtection
 from features.rclone.desktop_service import service
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
@@ -49,6 +50,7 @@ class RcloneServiceTests(QtTestCase):
             window.editor = qt.QPlainTextEdit()
             window.editor.document().setModified(True)
             provider = type('Provider', (), dict(private=True, context=child))()
+            provider.document_protection = DesktopDocumentProtection(provider)
             protect_private_view(window, provider)
             window.show()
             self.addCleanup(window.deleteLater)
@@ -74,6 +76,7 @@ class RcloneServiceTests(QtTestCase):
             window.editor = qt.QPlainTextEdit()
             window.editor.document().setModified(True)
             provider = type('Provider', (), dict(private=True, context=other))()
+            provider.document_protection = DesktopDocumentProtection(provider)
             protect_private_view(window, provider)
             self.addCleanup(window.deleteLater)
             with patch.object(qt.QMessageBox, 'question', side_effect=AssertionError('Unrelated prompt')):

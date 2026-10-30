@@ -1,37 +1,23 @@
-"""Owned workflow state and explicit application services."""
+"""Pinned-folder commands over explicit storage and navigation capabilities."""
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from pathlib import Path
+from .locations_ui import LocationsUI
 
-from services.workflow_host import HostService
-from mobile.locations_ui import LocationsUI
+
+@dataclass(frozen=True)
+class LocationHost:
+    private_root: Callable[[], Path]
+    local_folder: Callable[[], str]
+    remote_folder: Callable[[], Awaitable[tuple[str, str] | None]]
+    local_status: Callable[[str], None]
+    remote_status: Callable[[str], None]
+    open_local: Callable[[str], Awaitable[None]]
+    open_remote: Callable[[str, str], Awaitable[None]]
+    show_locations: Callable[[], None]
 
 
 class LocationsController(LocationsUI):
-    METHODS = (
-        "pinned_locations",
-        "pin_local_folder",
-        "pin_remote_folder",
-        "pinned_opener",
-        "pinned_remover",
-    )
-    FIELDS = ("location_error", "locations")
-
-    def __init__(self, app):
-        self.app = app
-
-    active_host = HostService("active_host")
-    browser_cloud_location = HostService("browser_cloud_location")
-    browser_file_location = HostService("browser_file_location")
-    cloud_busy = HostService("cloud_busy")
-    cloud_client = HostService("cloud_client")
-    cloud_crypt_remotes = HostService("cloud_crypt_remotes")
-    cloud_open_remote = HostService("cloud_open_remote")
-    cloud_path = HostService("cloud_path")
-    cloud_remote = HostService("cloud_remote")
-    cloud_restore_task = HostService("cloud_restore_task")
-    cloud_status = HostService("cloud_status")
-    file_path = HostService("file_path")
-    file_status = HostService("file_status")
-    file_storage = HostService("file_storage")
-    private_root = HostService("private_root")
-    show_cloud = HostService("show_cloud")
-    show_local_location = HostService("show_local_location")
-    show_locations = HostService("show_locations")
+    def __init__(self, host: LocationHost):
+        self.host = host
+        self.location_error = ''

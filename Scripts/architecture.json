@@ -1,5 +1,12 @@
 {
   "schema": 1,
+  "backend_neutral_modules": [
+    "services.protection",
+    "services.local_storage",
+    "services.documents.protection",
+    "services.documents.video_authorization",
+    "services.documents.ui.private_views"
+  ],
   "host_adapter_policy": "Existing desktop presentation adapters; new dependencies require review. Mobile features must not import the mobile application.",
   "host_adapters": [
     [

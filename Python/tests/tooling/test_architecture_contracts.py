@@ -27,6 +27,25 @@ class ArchitectureTests(unittest.TestCase):
             self.assertIn('desktop.dialogs', found)
             self.assertIn('mobile.module', found)
 
+    def test_backend_neutral_services_reject_even_deferred_feature_imports(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        import json
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'Python/features').mkdir(parents=True)
+            (root / 'Python/services').mkdir()
+            (root / 'Scripts').mkdir()
+            policy = dict(host_adapters=[], feature_dependencies=[],
+                          backend_neutral_modules=['services.protection'])
+            (root / 'Scripts/architecture.json').write_text(json.dumps(policy))
+            (root / 'Python/services/protection.py').write_text(
+                'def proof():\n    from features.rclone import session\n')
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(check(root), 1)
+            self.assertIn('Backend-neutral module services.protection imports feature', output.getvalue())
+
     def test_current_tree_obeys_reviewed_boundaries(self):
         self.assertEqual(check(ROOT), 0)
 
@@ -163,6 +182,8 @@ class OwnershipTests(unittest.TestCase):
                 ('mobile', 'test_remote_service.py'),
             ],
             'text_editor': [('desktop', 'test_editor_resource_picker.py'), ('mobile', 'test_provider_opening.py')],
+            'document-services': [('desktop', 'test_document_protection.py'),
+                                  ('mobile', 'test_protection_scope.py')],
             'mobile-host': [('mobile', 'test_application_lifecycle.py')],
             'mobile-storage': [('mobile', 'test_storage_location.py')],
         }

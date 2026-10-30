@@ -115,3 +115,18 @@ class CompositionContractTests(unittest.TestCase):
         replacement = App()
         self.assertEqual(replacement.state, 1)
         self.assertEqual(app.state, 7)
+
+    def test_app_and_native_scenarios_do_not_call_retired_location_forwarders(self):
+        import ast
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[3]
+        retired = {'pin_local_folder', 'pin_remote_folder', 'pinned_locations',
+                   'pinned_opener', 'pinned_remover'}
+        stale = []
+        for folder in ('Python/mobile', 'mobile_build/native_tests'):
+            for path in (root / folder).rglob('*.py'):
+                for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+                    if (isinstance(node, ast.Attribute) and node.attr in retired
+                            and isinstance(node.value, ast.Name) and node.value.id == 'app'):
+                        stale.append(f'{path.relative_to(root)}:{node.lineno}: app.{node.attr}')
+        self.assertEqual(stale, [], 'Use the retained locations_controller() owner')

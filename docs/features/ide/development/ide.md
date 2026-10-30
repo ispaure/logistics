@@ -16,11 +16,14 @@ to commonUtils search; the dialog owns project selection and result navigation. 
 Editor baseline reads and reviewed hunk staging use the executable configured in
 Git settings, independently of Git page activation or repository registration.
 ProjectGitStatus reads bounded, cancellable porcelain-v2 snapshots on an executor,
-including individual untracked files, and polls completion on the GUI thread.
+including individual untracked files and matching ignored paths, and polls completion on the GUI thread.
 ProjectFilter supplies filename foreground colors and status tooltips from those
 snapshots without changing names, filtering or ordering. Status is confined to
-the project subtree of its containing repository; folder colors aggregate child
-changes. Closing the workspace cancels status reads. Non-Git/unavailable status
+the project subtree of its containing repository. Folders retain their normal
+foreground when children change, including dirty submodule folders. Git-ignored
+files and folders use olive foregrounds with an Ignored tooltip; ignored directory
+status also applies to its descendants without enumerating them in Git.
+Closing the workspace cancels status reads. Non-Git/unavailable status
 clears the decorations without interrupting browsing. Worker submission failures
 also clear stale decorations and leave the periodic refresh available for retry.
 Dirty submodule statuses are read from their own indexes, bounded to 16 repositories

@@ -460,7 +460,7 @@ tag pushes publish only after they pass. Mobile gates cover the prototype and
 portable core, not unported desktop features or physical-device interactions.
 Standalone branch checks cannot cancel a release's mobile jobs, and tag runs
 retain their validation.
-Native app UI runs allow 25 minutes per iOS device, including Briefcase's cold
+Native app UI runs allow 30 minutes per iOS device, including Briefcase's cold
 simulator startup and installation, and 40 minutes on Android. Hosted Android
 software rendering has reached the dark-theme audit after all 32 core cases at
 the former 25-minute deadline; the complete run also checks light appearance and
@@ -468,6 +468,9 @@ native Back. Each native build job has a 60-minute overall budget. The large 256
 LocalCrypt seeding fixture allows four minutes for review revalidation and
 transfer; smaller reviews retain their 30-second budget. Complete native case
 reports and exact source identity are required before a gate can pass.
+Unhandled handler, task and callback errors in the native run log also fail the
+gate, even when every declared case passed. This applies to stdout and fresh
+iOS simulator-cache reports, so a successful result cannot hide those errors.
 The iOS host retains each fresh cache result as `ios-native-ui-cached.json` before
 validation, along with its fresh `ios-native-ui-error.txt` traceback. These are
 diagnostics, not passing evidence. Failure diagnostics target the device recorded
@@ -500,6 +503,34 @@ the private storage/config environment; tests spawning other processes must stil
 supply explicit private fixtures for APIs that resolve the OS home independently.
 Both single-process and isolated-module modes clean their private storage.
 The runner does not replace `HOME` or disable filesystem errors.
+
+For an order-dependence audit, invoke the same regression runner with
+`--order reverse`, or `--order random --seed 7`, and an explicit `--report` path
+under ignored `test-results/`. For example:
+
+```sh
+PYTHONPATH=Python:. .venv/bin/python Python/tests/run_regressions.py Python/tests --isolate-modules --order random --seed 7 --report test-results/order-audit.json
+```
+
+These options reorder files, classes and methods within each execution stage.
+Smoke and later stages keep their declared order, each file retains its isolated
+process, and each class stays contiguous so class fixtures run once per stage.
+The report records the order, seed, planned modules and actual case outcomes.
+Random order requires an explicit seed and uses a private random generator;
+it does not seed application code. Timing-based order cannot be combined with
+an order audit. Replay with the same source, interpreter, dependencies and backend;
+the seed reproduces the order, not thread scheduling, filesystem notifications or
+external service responses. Reordered passes increase confidence but do not prove
+that every possible ordering is independent. Test discovery imports still follow
+the normal unittest discovery order.
+
+An order audit needs fresh execution: disable verified-result reuse before
+preparing a build-manager plan, and bind its final runner arguments before
+computing evidence identities. A labelled reused result is useful prior evidence,
+but it is not another execution. Keep editable external dependencies fixed too;
+a captured Logistics snapshot does not freeze a separately edited manager
+installation. Use the declared manager pin in disposable managed storage when
+that checkout is changing concurrently.
 
 Platform release checks with `--install` provision the platform’s pinned rclone
 using archive and executable SHA-256 verification, then require the real synthetic

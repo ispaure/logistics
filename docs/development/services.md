@@ -87,3 +87,25 @@ the mobile source allowlist and has no GUI or feature imports at module load.
 [Document storage sessions](document-storage.md) retain provider lifetimes, bounded
 reads, revision baselines and safe publication. Hosts own destination/privacy
 policy; format editors own document semantics and checkpoint callbacks.
+
+## Provider protection boundary
+
+`services.documents.protection` declares backend-independent protection and resume
+capabilities. Private window guards and video resume authorization consume these
+ports; rclone supplies its adapter under its own feature. `services.local_storage`
+requires an explicit protected root. Selecting the LocalCrypt root belongs to
+`features.rclone.storage.install_local_storage_policy`, called by desktop host
+composition and the backend. Editors receive that setup through their existing
+dialog-host installation rather than importing rclone storage themselves.
+
+The architecture check rejects feature imports from the reviewed neutral policy,
+filesystem-guard and document-protection modules. Its focused contracts cover
+alternate providers, wrapper restrictions, source replacement and independent
+credential registrations. See [access and privacy](access-privacy.md) and
+[document storage](document-storage.md) for lifecycle details. These host checks do
+not replace native device acceptance.
+
+Run `python3 dev.py test-owner document-services` for the document storage,
+protection, desktop resume, mobile screen/audio and payload contracts. This owner
+includes the backend-independent protection regressions as well as publication
+and provider-wrapper checks.

@@ -5,7 +5,8 @@ ctypes transport and widgets, so publication and identity resolution can be test
 without loading the native library.
 """
 import weakref
-from threading import RLock
+from threading import RLock, local
+from contextlib import contextmanager
 
 
 class NativeCredentialState:
@@ -18,16 +19,26 @@ class NativeCredentialState:
         self.package_privacy = {}
         self.epoch = -1
         self.lock = RLock()
-        self._protection = None
+        self._publication_local = local()
+        # Application composition subscribes its scope; credentials own no process policy.
+        self.protection_observers = weakref.WeakSet()
 
-    @property
-    def protection(self):
-        # The feature-only Qt proof does not compose application services.
-        with self.lock:
-            if self._protection is None:
-                from services.protection import ProtectionScope
-                self._protection = ProtectionScope(self.privacy_gates)
-            return self._protection
+    @contextmanager
+    def publication(self, *, blocking=True):
+        """Defer callbacks until the outermost credential/storage transaction ends."""
+        from features.rclone.credential_loading import CredentialBusyError
+        if not self.lock.acquire(blocking=blocking):
+            raise CredentialBusyError()
+        previous = getattr(self._publication_local, 'observers', None)
+        observers = [] if previous is None else previous
+        self._publication_local.observers = observers
+        try:
+            yield observers
+        finally:
+            self.lock.release()
+            if previous is None:
+                del self._publication_local.observers
+                self.notify(observers)
 
     def privacy_gates(self):
         with self.lock:
@@ -57,6 +68,10 @@ class NativeCredentialState:
         return name  # Native identity checks refuse unavailable/ambiguous accounts.
 
     def publish(self, action, values, info):
+        self.notify(self.commit(action, values, info))
+
+    def commit(self, action, values, info):
+        """Commit under the native publication lock; return observers for after unlock."""
         records = tuple(info.get('packages', ())) if isinstance(info, dict) else ()
         label = values.get('package_name') or ('Session network shares' if values.get('session_only') else 'Network shares')
         gate = None
@@ -66,7 +81,7 @@ class NativeCredentialState:
         with self.lock:
             epoch = info.get('epoch') if isinstance(info, dict) else None
             if epoch is not None and epoch <= self.epoch:
-                return
+                return ()
             if epoch is not None:
                 self.epoch = epoch
             if action == 'clear':
@@ -84,9 +99,14 @@ class NativeCredentialState:
                     self.package_privacy = {name: gate for name, gate in self.package_privacy.items() if name in labels}
             self.session_privacy = next(iter(self.package_privacy.values()), None)
             self.generation += 1
-            observers = (*tuple(self.observers), *tuple(self.document_observers))
-        if self._protection is not None:
-            self._protection.changed()
+            return (*tuple(self.protection_observers), *tuple(self.observers), *tuple(self.document_observers))
+
+    def notify(self, observers):
+        """Queue within a transaction, otherwise fan out after its outer lock exits."""
+        pending = getattr(self._publication_local, 'observers', None)
+        if pending is not None:
+            pending.extend(observers)
+            return
         failure = None
         for observer in observers:
             try:

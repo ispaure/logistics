@@ -51,7 +51,7 @@ class CryptResources(LocalFiles):
         # The public root is a decoded document/URL namespace. Extended Windows
         # paths belong only to ciphertext I/O, not Markdown file URLs.
         self.root = item.data
-        from services.local_storage import install_local_storage_policy
+        from features.rclone.storage import install_local_storage_policy
         install_local_storage_policy(item.root)
         self.storage_id = str(item.data.resolve())
         self.context = configuration.get_rclone_config_dir() / ('private-' + uuid4().hex + '.session')
@@ -67,6 +67,8 @@ class CryptResources(LocalFiles):
         self._unsubscribe = session.on_forget(self.context, self.close)
         from features.rclone.desktop_service import service
         self.credential_grant = service.credentials.capture(self.context)
+        from features.rclone.document_protection import DesktopDocumentProtection
+        self.document_protection = DesktopDocumentProtection(self)
 
     @property
     def closed(self):

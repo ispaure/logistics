@@ -147,7 +147,7 @@ def present(app, panel, *, destination=None):
     if panel.web is None:
         panel.mount_canvas()
     from mobile.document_location import install_document_location
-    install_document_location(panel.view, copies=panel.document.resource)
+    install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
     app.save_workspace()
     app.refresh_document_list()
 

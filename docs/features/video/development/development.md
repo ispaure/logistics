@@ -518,3 +518,12 @@ action sheets.
 The auto-hide timer retains its deadline across decoder notifications; explicit
 control interactions reset it. Status/navigation removal commits only after the
 control fade. These checks establish simulator behavior, not physical Duo touch.
+
+The iOS video identity uses the navigation item's title view, with a centered
+filename and storage caption inside a glass effect (dark material on older iOS).
+Side-bar layouts move that title to the physical top safe area, matching document
+viewers. Compact horizontal bars that omit UIKit's title view retain the identity
+in the top-row gap between Done and the transport controls. Cached ranges are a noninteractive slider subview measured from
+`trackRectForBounds:`, with 60% of the previous vertical gap and no additional
+stack row beneath the seek control. The chrome probe checks endpoint alignment
+and spacing and saves a synthetic-video screenshot before its menu checks.

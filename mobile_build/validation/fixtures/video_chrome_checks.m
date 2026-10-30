@@ -31,6 +31,7 @@
     self.video.startMilliseconds = 0;
     self.video.subtitleJSON = @"[]";
     self.video.queueJSON = @"[]";
+    self.video.optionsJSON = @"{\"video_title\":\"A long video filename for title alignment.mp4\",\"source_label\":\"Cloud file\",\"source_remote\":true}";
     self.video.allowed = ^BOOL(BOOL external) { return YES; };
     self.video.requestPlay = ^BOOL { return YES; };
     self.window.rootViewController = [[LGVideoNavigationController alloc] initWithRootViewController:self.video];
@@ -53,9 +54,10 @@
     LGVideoController *v = self.video;
     CGFloat opacity = ((CALayer *)v.controlsScroll.layer.presentationLayer).opacity;
     CGFloat barOpacity = ((CALayer *)v.navigationController.navigationBar.layer.presentationLayer).opacity;
+    CGRect headerFrame = [v.videoHeader convertRect:v.videoHeader.bounds toView:self.window];
     [self.samples addObject:@{@"time": @(NSProcessInfo.processInfo.systemUptime-self.started),
         @"opacity": @(opacity), @"barOpacity": @(barOpacity), @"visible": @(v.controlsVisible),
-        @"systemHidden": @(v.systemChromeHidden), @"headerY": @(v.videoHeader.frame.origin.y),
+        @"systemHidden": @(v.systemChromeHidden), @"headerY": @(CGRectGetMinY(headerFrame)),
         @"statusHidden": @(self.window.windowScene.statusBarManager.statusBarHidden),
         @"playing": @(v.player.isPlaying)}];
     if (NSProcessInfo.processInfo.systemUptime-self.started > 15) { [self finish:@"Initial playback did not auto-hide controls"]; return; }
@@ -89,6 +91,38 @@
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self menus:0]; });
 }
 - (void)menus:(NSUInteger)index {
+    if (index == 0) {
+        LGVideoController *v = self.video;
+        CGRect track = [v.seek trackRectForBounds:v.seek.bounds];
+        CGRect strip = v.cacheStrip.frame;
+        if (fabs(CGRectGetMinX(track) - CGRectGetMinX(strip)) > .5 ||
+            fabs(CGRectGetMaxX(track) - CGRectGetMaxX(strip)) > .5) {
+            [self finish:@"Cached ranges do not align with the native seek track"]; return;
+        }
+        CGFloat expectedGap = .6 * (CGRectGetHeight(v.seek.bounds) - CGRectGetMaxY(track) + 4);
+        if (fabs(CGRectGetMinY(strip) - CGRectGetMaxY(track) - expectedGap) > .5) {
+            [self finish:@"Cached ranges did not move 40 percent closer"]; return;
+        }
+        if ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view) || !v.videoHeader.window ||
+            v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != NSTextAlignmentCenter) {
+            [self finish:@"Video identity is not centered in the native title area"]; return;
+        }
+        [v showCachedRanges:@"{\"ranges\":[[0,0.3],[0.5,0.65],[0.8,1]]}"];
+        CGRect title = [v.videoHeader convertRect:v.videoHeader.bounds toView:self.window];
+        CGRect filename = [v.videoTitle convertRect:v.videoTitle.bounds toView:self.window];
+        UIView *source = v.sourceLabel.superview;
+        CGRect details = [source convertRect:source.bounds toView:self.window];
+        if (fabs(CGRectGetMidX(filename) - CGRectGetMidX(details)) > .5) {
+            [self finish:@"Storage details are not centered beneath the filename"]; return;
+        }
+        [self.samples addObject:@{@"titleFrame": NSStringFromCGRect(title),
+            @"trackFrame": NSStringFromCGRect(track), @"cacheFrame": NSStringFromCGRect(strip)}];
+        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithBounds:self.window.bounds];
+        UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+            [self.window drawViewHierarchyInRect:self.window.bounds afterScreenUpdates:YES];
+        }];
+        [UIImagePNGRepresentation(image) writeToFile:[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/controls.png"] atomically:YES];
+    }
     NSString *progress = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/progress.json"];
     [[NSJSONSerialization dataWithJSONObject:@{@"fadePassed": @YES, @"menuIndex": @(index)} options:0 error:nil]
         writeToFile:progress atomically:YES];

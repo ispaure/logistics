@@ -79,7 +79,7 @@ class Connection:
 
     @serialize_mutation
     def publish(self):
-        from services.local_storage import install_local_storage_policy
+        from features.rclone.storage import install_local_storage_policy
         install_local_storage_policy(self.root)
         if is_linked(self.record.parent):
             raise ValueError('LocalCrypt credential mappings cannot be stored through a link.')

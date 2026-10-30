@@ -80,7 +80,7 @@ class _PrivateBrowserLocation:
 
 
 def _browser_view(path=None, *, root_path=None, filesystem_scope=False):
-    from services.local_storage import install_local_storage_policy
+    from features.rclone.storage import install_local_storage_policy
     install_local_storage_policy()
     initial = path or root_path or Path.home()
     from features.rclone.ui.remote_browser import RemoteLocation, RemoteBrowserView

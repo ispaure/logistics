@@ -59,9 +59,7 @@ class ProjectBrowserTests(QtTestCase):
             git('init')
             for name in ('edited.py', 'clean.py'):
                 (root / name).write_text('original\n')
-            # Keep the ignore rule outside the visible tree: Windows includes
-            # dotfiles that Unix QFileSystemModel hides by default.
-            (root / '.git' / 'info' / 'exclude').write_text('ignored.py\n')
+            (root / '.gitignore').write_text('ignored.py\nignored_folder/\n')
             (root / 'deleted_folder').mkdir()
             (root / 'deleted_folder' / 'gone.py').write_text('gone\n')
             git('add', '.')
@@ -71,12 +69,21 @@ class ProjectBrowserTests(QtTestCase):
             new = root / 'new_folder' / 'new.py'
             new.write_text('new\n')
             (root / 'ignored.py').write_text('ignored\n')
+            ignored = root / 'ignored_folder'
+            (ignored / 'nested').mkdir(parents=True)
+            (ignored / 'nested' / 'child.py').write_text('ignored child\n')
             (root / 'deleted_folder' / 'gone.py').unlink()
             owner = qt.QWidget()
             browser = ProjectBrowser(Project('test', str(root)), owner)
             self.wait_until(lambda: root / 'edited.py' in browser.proxy.git_changes)
-            self.wait_for_names(browser, root,
-                                ['deleted_folder', 'new_folder', 'clean.py', 'edited.py', 'ignored.py'])
+            names = ['deleted_folder', 'ignored_folder', 'new_folder', 'clean.py', 'edited.py', 'ignored.py']
+            if browser.model.index(str(root / '.gitignore')).isValid():
+                # Match the filesystem model's platform-specific hidden-file policy.
+                source = browser.model.index(str(root))
+                if any(browser.model.fileName(browser.model.index(row, 0, source)) == '.gitignore'
+                       for row in range(browser.model.rowCount(source))):
+                    names.insert(3, '.gitignore')
+            self.wait_for_names(browser, root, names)
             def data(path, role):
                 index = browser.proxy.mapFromSource(browser.model.index(str(path)))
                 self.assertTrue(index.isValid(), path)
@@ -91,9 +98,12 @@ class ProjectBrowserTests(QtTestCase):
                 self.assertEqual(data(path, qt.Qt.ItemDataRole.DisplayRole), path.name)
             self.assertEqual(data(new, foreground).color().name(), '#009e73')
             self.assertIn('untracked', data(new, tooltip))
-            self.assertEqual(data(root / 'new_folder', foreground).color().name(), '#009e73')
-            self.assertEqual(data(root / 'deleted_folder', foreground).color().name(), '#d55e00')
-            self.assertNotIn(root / 'ignored.py', browser.proxy.git_changes)
+            for folder in (root, root / 'new_folder', root / 'deleted_folder'):
+                self.assertNotIn(folder, browser.proxy.git_changes)
+                self.assertIsNone(data(folder, foreground))
+            for path in (ignored, ignored / 'nested', ignored / 'nested' / 'child.py', root / 'ignored.py'):
+                self.assertEqual(data(path, foreground).color().name(), '#848504')
+                self.assertIn('Git: Ignored', data(path, tooltip))
             self.assertNotIn(root / 'clean.py', browser.proxy.git_changes)
             git('add', str(new))
             self.wait_until(lambda: 'staged' in browser.proxy.git_changes[new][1])
@@ -236,5 +246,55 @@ class ProjectBrowserTests(QtTestCase):
             changes = read_status(root, Event())
             self.assertEqual(changes[path][0], 'modify')
             self.assertEqual(changes[new][0], 'add')
+            self.assertNotIn(root, changes)
+            self.assertNotIn(root / 'lib', changes)
             self.assertIn('untracked', changes[new][1])
             self.assertEqual(read_status(path.parent, Event())[path][0], 'modify')
+
+    def test_ignored_project_root_and_tracked_exception_refresh(self):
+        from features.ide.ui.git_status import read_status
+        from threading import Event
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            def git(*args):
+                subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True)
+            git('init')
+            (root / '.gitignore').write_text('ignored/\n')
+            project_root = root / 'ignored' / 'project'
+            project_root.mkdir(parents=True)
+            tracked = project_root / 'tracked.py'
+            tracked.write_text('tracked\n')
+            ignored = project_root / 'ignored.py'
+            ignored.write_text('ignored\n')
+            self.assertEqual(read_status(project_root, Event()), {project_root: ('ignored', 'Ignored')})
+            git('add', '-f', str(tracked))
+            git('-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'tracked exception')
+            changes = read_status(project_root, Event())
+            self.assertNotIn(project_root, changes)
+            self.assertNotIn(tracked, changes)
+            self.assertEqual(changes[ignored], ('ignored', 'Ignored'))
+            tracked.write_text('modified\n')
+            self.assertEqual(read_status(project_root, Event())[tracked][0], 'modify')
+            (root / '.gitignore').write_text('')
+            self.assertEqual(read_status(project_root, Event())[ignored][0], 'add')
+
+    def test_modified_directory_symlink_keeps_file_status(self):
+        from features.ide.ui.git_status import read_status
+        from threading import Event
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            def git(*args):
+                subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True)
+            git('init')
+            for name in ('first', 'second'):
+                (root / name).mkdir()
+            link = root / 'link'
+            try:
+                link.symlink_to('first', target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f'Directory symlinks unavailable: {error}')
+            git('add', str(link))
+            git('-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'symlink')
+            link.unlink()
+            link.symlink_to('second', target_is_directory=True)
+            self.assertEqual(read_status(root, Event())[link][0], 'modify')

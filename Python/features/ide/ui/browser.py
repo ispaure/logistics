@@ -22,13 +22,22 @@ class ProjectFilter(ByteSortModel):
                 qt.Qt.ItemDataRole.ForegroundRole, qt.Qt.ItemDataRole.ToolTipRole):
             path = Path(self.sourceModel().filePath(self.mapToSource(index)))
             status = self.git_changes.get(path)
+            if status is None:
+                # Git reports ignored directories once, without enumerating
+                # their contents. Only that status inherits down the tree.
+                for parent in path.parents:
+                    if not parent.is_relative_to(self.project.root):
+                        break
+                    if self.git_changes.get(parent, (None,))[0] == 'ignored':
+                        status = self.git_changes[parent]
+                        break
             if path in self.unsaved_paths:
                 status = (status[0], status[1] + '; unsaved changes') if status else ('modify', 'Unsaved changes')
             if status:
                 if role == qt.Qt.ItemDataRole.ForegroundRole:
                     from features.ide.ui.git_status import COLORS
                     return qt.QBrush(qt.QColor(COLORS[status[0]]))
-                return str(path) + '\n' + ('Git: ' if path in self.git_changes else '') + status[1]
+                return str(path) + '\n' + ('Git: ' if status[0] == 'ignored' or path in self.git_changes else '') + status[1]
         return super().data(index, role)
 
     def flags(self, index):

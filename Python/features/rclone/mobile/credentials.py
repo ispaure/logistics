@@ -53,6 +53,10 @@ class NativeCredentials:
         # All native scenes share credential state. Hold its publication lock
         # through storage work so a different scene cannot restore/retain midway.
         state = getattr(self.client, 'credential_state', None)
+        if state is not None and hasattr(state, 'publication'):
+            with state.publication(blocking=blocking):
+                yield
+            return
         lock = state.lock if state is not None else None
         if lock is not None and not lock.acquire(blocking=blocking):
             raise CredentialBusyError()

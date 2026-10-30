@@ -7,6 +7,7 @@ import json
 import math
 import os
 import platform
+import random
 from pathlib import Path
 import subprocess
 import sys
@@ -24,8 +25,30 @@ from runner_settings import ISOLATED_FILE_TIMEOUT, PROGRESS_INTERVAL
 from commonUtils.testing.stages import TestStage, STAGE_ORDER, PROFILES, validate
 
 
+def reordered(rows, order, seed, *, group=None):
+    """Use a private RNG; keep class fixtures contiguous when ordering cases."""
+    rows = list(rows)
+    if order == 'default':
+        return rows
+    if order == 'reverse':
+        return rows[::-1]
+    rng = random.Random(seed)
+    if group is None:
+        rng.shuffle(rows)
+        return rows
+    groups = {}
+    for row in rows:
+        groups.setdefault(group(row), []).append(row)
+    batches = list(groups.values())
+    rng.shuffle(batches)
+    for batch in batches:
+        rng.shuffle(batch)
+    return [row for batch in batches for row in batch]
+
+
 def run_isolated(directory, pattern, interval, include_patterns=(), report=None, *,
-                 stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None):
+                 stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None,
+                 order='default', seed=None):
     """Validate first, then run isolated files by stage and known duration."""
     modules = sorted(path for path in directory.rglob(pattern)
                      if path.is_file() and all(fnmatchcase(path.name, extra) for extra in include_patterns))
@@ -52,13 +75,17 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                     or not math.isfinite(seconds) or seconds < 0):
                 raise ValueError('Invalid successful module duration in timing report.')
             durations[row['path'], row.get('stage')] = seconds
-    plan = [(level, row) for level in stages for row in sorted(classified, key=lambda r: (
-                durations.get((str(r.path.relative_to(directory)), level.value), 0), str(r.path)))
-            if level in {value for _, value, _ in row.cases} or not row.cases and row.default is level]
+    plan = [(level, row) for level in stages for row in reordered(
+                [r for r in sorted(classified, key=lambda r: (
+                    durations.get((str(r.path.relative_to(directory)), level.value), 0), str(r.path)))
+                 if level in {value for _, value, _ in r.cases} or not r.cases and r.default is level],
+                order, seed)]
     if not plan:
         raise ValueError('No tests selected for the requested execution stages.')
     if report is not None:
         report.data.update(stages=[s.value for s in stages], mode=mode, fail_fast=fail_fast,
+                           order=order, seed=seed,
+                           planned_modules=[dict(path=str(r.path.relative_to(directory)), stage=s.value) for s, r in plan],
                            classified_files=[dict(path=str(r.path.relative_to(directory)), stage=r.default.value,
                                                   cases=r.inventory()) for r in classified], not_run=[], coverage_complete=True)
     failed, stop_reason, active_stage, stage_failed = [], '', None, False
@@ -83,7 +110,10 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
         print(f'Running isolated test file: {relative_file} [stage={level.value}]', flush=True)
         emit_progress('file_started', name=relative_file, stage=level.value)
         command = [sys.executable, str(Path(__file__).resolve()), str(path.parent),
-                   '--pattern', path.name, '--single-file', '--traceback-after', str(interval), '--stage', level.value]
+                   '--pattern', path.name, '--single-file', '--traceback-after', str(interval), '--stage', level.value,
+                   '--order', order]
+        if seed is not None:
+            command.extend(['--seed', str(seed)])
         if fail_fast:
             command.append('--fail-fast')
         with TemporaryDirectory(prefix='logistics-test-timing-') as temporary:
@@ -158,6 +188,9 @@ def main():
     parser.add_argument('--fail-fast', action='store_true')
     parser.add_argument('--inventory', action='store_true', help='Validate and list classification without importing tests')
     parser.add_argument('--timings', type=Path, help='Prior report for deterministic duration ordering on this environment')
+    parser.add_argument('--order', choices=('default', 'reverse', 'random'), default='default',
+                        help='Reorder files, classes and methods within each stage; class fixtures stay contiguous')
+    parser.add_argument('--seed', type=int, help='Required reproducible seed for --order random')
     parser.add_argument('--single-file', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--isolate-modules', action='store_true',
                         help='Run each matching test file in a fresh process, including nested directories')
@@ -172,6 +205,10 @@ def main():
         parser.error('--traceback-after must be positive')
     if args.include_pattern and not args.isolate_modules:
         parser.error('--include-pattern requires --isolate-modules')
+    if (args.order == 'random') != (args.seed is not None):
+        parser.error('--order random requires --seed; --seed is only valid with --order random')
+    if args.timings and args.order != 'default':
+        parser.error('--timings cannot be combined with an order audit')
     for name in args.require_module:
         try:
             available = importlib.util.find_spec(name) is not None
@@ -192,6 +229,7 @@ def main():
     report = TimingReport(args.report or default_report(args.directory), args.directory,
                           args.pattern, args.isolate_modules, args.junit)
     report.data['include_patterns'] = args.include_pattern
+    report.data.update(order=args.order, seed=args.seed)
     report.save()
     try:
         code = run_with_report(args, report)
@@ -214,7 +252,7 @@ def run_with_report(args, report):
     if args.isolate_modules:
         return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after,
                             args.include_pattern, report, stages=args.stages, mode=args.mode,
-                            fail_fast=args.fail_fast, timings=args.timings)
+                            fail_fast=args.fail_fast, timings=args.timings, order=args.order, seed=args.seed)
     validate(args.directory.rglob(args.pattern))
     # Keep default storage and preferences away from the contributor's live data,
     # including during test discovery. Children running isolated modules create
@@ -309,6 +347,9 @@ def run_suite(args, report):
         if not cases:
             raise ValueError('No tests selected for the requested execution stages.')
         cases.sort(key=lambda row: (STAGE_ORDER.index(row[0]), row[1].id()))
+        cases = [row for level in args.stages for row in reordered(
+            (row for row in cases if row[0] is level), args.order, args.seed,
+            group=lambda row: type(row[1]))]
         stage_by_id.update((test.id(), level.value) for level, test in cases)
         report.data.update(stages=[s.value for s in args.stages], not_run=[],
                            planned_tests=[dict(id=t.id(), stage=s.value) for s, t in cases])

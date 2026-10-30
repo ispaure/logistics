@@ -133,6 +133,11 @@ def check(root=ROOT):
     except (ValueError, SyntaxError) as error:
         documents = 0
         errors.append(f'Document storage scope: {error}')
+    for name in policy.get('backend_neutral_modules', []):
+        path = root / 'Python' / Path(*name.split('.')).with_suffix('.py')
+        for module in references(path, root / 'Python'):
+            if module == 'features' or module.startswith('features.'):
+                errors.append(f'Backend-neutral module {name} imports feature: {module}')
     for error in errors:
         print(error)
     print(f'Architecture: {len(host)} host adapters, {len(feature)} feature edges, {len(portable)} portable modules, {documents} document modules; {len(errors)} violations.')

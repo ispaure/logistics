@@ -205,14 +205,14 @@ class ResumeLockTests(unittest.TestCase):
         self.app.cloud_client = SimpleNamespace(session_privacy=self.gate)
         from mobile.protection import for_app
         scope = for_app(self.app)
-        previous = scope.process.credentials
-        self.addCleanup(setattr, scope.process, 'credentials', previous)
-        scope.process.credentials = lambda: tuple(dict.fromkeys(gate for gate in
-            (*previous(), getattr(self.app.cloud_client, 'session_privacy', None)) if gate is not None))
+        self.addCleanup(scope.process.register_credentials(self, lambda: tuple(gate for gate in
+            (getattr(self.app.cloud_client, 'session_privacy', None),) if gate is not None)))
         # These tests replace real managers with small retained-draft fixtures.
         scope.register(self, lambda: tuple(getattr(owner, 'privacy_gate', None)
             for owner in getattr(getattr(self.app, 'private_sessions', None), 'controllers', {}).values()))
         self.original = self.app.main_window.content
+        import asyncio
+        self.app.loop.run_until_complete(asyncio.sleep(0))
 
     def unlock(self, password):
         self.privacy.lock_password.value = password

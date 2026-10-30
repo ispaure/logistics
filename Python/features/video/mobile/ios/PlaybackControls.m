@@ -5,11 +5,11 @@
 @implementation LGVideoCachedRanges
 - (void)drawRect:(CGRect)rect {
     [UIColor.systemMintColor setFill];
-    CGFloat width = MAX(0, self.bounds.size.width - 32);
+    CGFloat width = MAX(0, self.bounds.size.width);
     for (NSArray *range in self.ranges) {
         if (![range isKindOfClass:NSArray.class] || range.count != 2) continue;
         CGFloat start = [range[0] doubleValue], stop = [range[1] doubleValue];
-        UIRectFill(CGRectMake(16 + start * width, 0, MAX(0, (stop-start) * width), 3));
+        UIRectFill(CGRectMake(start * width, 0, MAX(0, (stop-start) * width), self.bounds.size.height));
     }
 }
 @end
@@ -229,20 +229,33 @@
     self.sourceIcon.accessibilityLabel = self.sourceLabel.text;
 }
 - (void)installPlaybackTools {
-    self.videoHeader = [[UIStackView alloc] init];
-    self.videoHeader.axis = UILayoutConstraintAxisVertical;
-    self.videoHeader.spacing = 4;
-    self.videoHeader.layoutMarginsRelativeArrangement = YES;
-    self.videoHeader.layoutMargins = UIEdgeInsetsMake(8, 12, 8, 12);
-    self.videoHeader.backgroundColor = [UIColor colorWithWhite:0 alpha:.65];
-    self.videoHeader.layer.cornerRadius = 8;
-    self.videoHeader.translatesAutoresizingMaskIntoConstraints = NO;
+    UIVisualEffect *effect;
+    if (@available(iOS 26.0, *)) effect = [UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular];
+    else effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterialDark];
+    UIVisualEffectView *header = [[UIVisualEffectView alloc] initWithEffect:effect];
+    header.frame = CGRectMake(0, 0, 320, 48);
+    header.userInteractionEnabled = NO;
+    header.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    header.layer.cornerRadius = 16;
+    header.clipsToBounds = YES;
+    self.videoHeader = header;
+    UIStackView *identity = [[UIStackView alloc] init];
+    identity.axis = UILayoutConstraintAxisVertical;
+    identity.alignment = UIStackViewAlignmentCenter;
+    identity.spacing = 2;
+    identity.translatesAutoresizingMaskIntoConstraints = NO;
+    [header.contentView addSubview:identity];
+    [NSLayoutConstraint activateConstraints:@[
+        [identity.leadingAnchor constraintEqualToAnchor:header.contentView.leadingAnchor constant:12],
+        [identity.trailingAnchor constraintEqualToAnchor:header.contentView.trailingAnchor constant:-12],
+        [identity.centerYAnchor constraintEqualToAnchor:header.contentView.centerYAnchor]]];
     self.videoTitle = [[UILabel alloc] init];
     self.videoTitle.textColor = UIColor.whiteColor;
     self.videoTitle.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
     self.videoTitle.adjustsFontForContentSizeCategory = YES;
     self.videoTitle.lineBreakMode = NSLineBreakByTruncatingMiddle;
-    [self.videoHeader addArrangedSubview:self.videoTitle];
+    self.videoTitle.textAlignment = NSTextAlignmentCenter;
+    [identity addArrangedSubview:self.videoTitle];
     self.sourceIcon = [[UIImageView alloc] init];
     self.sourceIcon.tintColor = UIColor.whiteColor;
     self.sourceIcon.contentMode = UIViewContentModeScaleAspectFit;
@@ -256,20 +269,16 @@
     UIStackView *source = [[UIStackView alloc] initWithArrangedSubviews:@[self.sourceIcon, self.sourceLabel]];
     source.spacing = 6;
     source.alignment = UIStackViewAlignmentCenter;
-    [self.videoHeader addArrangedSubview:source];
-    [self.view addSubview:self.videoHeader];
-    [NSLayoutConstraint activateConstraints:@[
-        [self.videoHeader.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:12],
-        [self.videoHeader.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-12],
-        [self.videoHeader.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8]]];
+    [identity addArrangedSubview:source];
+    self.navigationItem.titleView = header;
     [self updateVideoHeader];
     LGVideoCachedRanges *strip = [[LGVideoCachedRanges alloc] init];
-    strip.backgroundColor = UIColor.clearColor; strip.translatesAutoresizingMaskIntoConstraints = NO;
+    strip.backgroundColor = UIColor.clearColor;
+    strip.userInteractionEnabled = NO;
     strip.isAccessibilityElement = YES;
     strip.accessibilityLabel = @"Approximate cached byte ranges; variable bitrate can shift time mapping";
-    [strip.heightAnchor constraintEqualToConstant:3].active = YES;
     self.cacheStrip = strip;
-    [self.controls addArrangedSubview:strip];
+    [self.seek addSubview:strip];
     self.undoSeekButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.undoSeekButton setTitle:@"Undo seek" forState:UIControlStateNormal];
     [self.undoSeekButton addTarget:self action:@selector(undoSeek:) forControlEvents:UIControlEventTouchUpInside];
@@ -291,5 +300,53 @@
     for (UIGestureRecognizer *gesture in self.view.gestureRecognizers)
         if ([gesture isKindOfClass:UITapGestureRecognizer.class]) [gesture requireGestureRecognizerToFail:doubleTap];
     [self.view addGestureRecognizer:doubleTap];
+}
+- (void)layoutPlaybackTools {
+    // Measure UIKit's actual track instead of guessing its horizontal padding.
+    // Keep 60% of the former gap (half the slider height plus stack spacing).
+    CGRect track = [self.seek trackRectForBounds:self.seek.bounds];
+    CGFloat gap = .6 * (CGRectGetHeight(self.seek.bounds) - CGRectGetMaxY(track) + 4);
+    self.cacheStrip.frame = CGRectMake(CGRectGetMinX(track), CGRectGetMaxY(track) + gap,
+                                      CGRectGetWidth(track), 3);
+    [self.cacheStrip setNeedsDisplay];
+    if (self.tabletop) {
+        // Tabletop hides the navigation rail; retain identity over the movie.
+        if (self.videoHeader.superview != self.view) {
+            self.navigationItem.titleView = nil;
+            [self.view addSubview:self.videoHeader];
+        }
+        CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
+        CGFloat width = MIN(440, MAX(0, safe.size.width - 24));
+        self.videoHeader.frame = CGRectMake(CGRectGetMidX(safe) - width / 2,
+                                           CGRectGetMinY(safe) + 6, width, 48);
+        return;
+    }
+    UINavigationBar *bar = self.navigationController.navigationBar;
+    if (bar.bounds.size.width > bar.bounds.size.height && self.view.bounds.size.width < 500) {
+        // UIKit omits titleView entirely beside compact transport groups.
+        // Use their remaining top-row gap without moving the native buttons.
+        if (self.videoHeader.superview != self.view) {
+            self.navigationItem.titleView = nil;
+            [self.view addSubview:self.videoHeader];
+        }
+        CGRect barFrame = [bar convertRect:bar.bounds toView:self.view];
+        CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
+        self.videoHeader.frame = CGRectMake(CGRectGetMinX(safe) + 68,
+            CGRectGetMidY(barFrame) - 24, MAX(44, safe.size.width - 304), 48);
+        return;
+    }
+    if (self.navigationItem.titleView != self.videoHeader) {
+        [self.videoHeader removeFromSuperview];
+        self.navigationItem.titleView = self.videoHeader;
+    }
+    if (bar.bounds.size.height > bar.bounds.size.width && self.videoHeader.superview && self.view.window) {
+        // A side rail still leaves a horizontal title area above the movie.
+        // Align it to the top row, as for the other mobile document viewers.
+        UIWindow *window = self.view.window;
+        CGPoint center = [self.videoHeader.superview convertPoint:
+            CGPointMake(CGRectGetMidX(window.bounds), window.safeAreaInsets.top + 6 + self.videoHeader.bounds.size.height / 2)
+            fromView:window];
+        self.videoHeader.center = CGPointMake(self.videoHeader.center.x, center.y);
+    }
 }
 @end

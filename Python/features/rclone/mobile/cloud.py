@@ -74,13 +74,8 @@ class CloudClient:
         if action in {'import', 'clear', 'vault_open', 'add_smb', 'forget_package'}:
             # Serialize publication with the native commit across iPad scenes;
             # local reads and transfers keep their independent native scopes.
-            blocking = action in {'clear', 'forget_package'}
-            if not self.credential_state.lock.acquire(blocking=blocking):
-                raise CredentialBusyError()
-            try:
+            with self.credential_state.publication(blocking=action in {'clear', 'forget_package'}):
                 return self._request(action, **values)
-            finally:
-                self.credential_state.lock.release()
         return self._request(action, **values)
 
     def _request(self, action, **values):
@@ -188,7 +183,7 @@ class CloudClient:
 
     def clear(self):
         # Another scene must not reattach the vault between clear and erasure.
-        with self.credential_state.lock:
+        with self.credential_state.publication():
             try:
                 self.lock()
             finally:
@@ -197,7 +192,7 @@ class CloudClient:
 
     def forget_package(self, name):
         # Read a locked vault without restoring its other packages into memory.
-        with self.credential_state.lock:
+        with self.credential_state.publication():
             values = self.vault.unlock() if self.vault is not None else None
             info = self.request('forget_package', package_name=name, **(values or {}))
             self.package_name = info['package_name']

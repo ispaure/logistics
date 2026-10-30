@@ -49,6 +49,17 @@ def verify(path, target, output, *, local_manifest=None):
     return verify_report(read_report(path), target, output, local_manifest=local_manifest)
 
 
+def verify_native_diagnostics(path):
+    markers = ('Error in handler:', 'Error in handler cleanup:',
+               'Error in async handler:', 'Error in async handler cleanup:',
+               'Task exception was never retrieved', 'Task was destroyed but it is pending',
+               'Exception in callback ')
+    with Path(path).open(errors='replace') as stream:
+        for number, line in enumerate(stream, 1):
+            if any(marker in line for marker in markers):
+                raise ValueError(f'Unhandled native app error in {path}:{number}: {line.strip()[:500]}')
+
+
 def verify_report(report, target, output, *, local_manifest=None):
     source = report.get('source', {})
     if not isinstance(source, dict):
@@ -104,8 +115,20 @@ def simulator_report(device, started_ns, *, diagnostics=None):
 
 def _progress(path, stopped):
     """Tail immutable checkpoint strings only; never inspect live native frames."""
+    last_memory = 0
     with path.open(errors='replace') as stream:
         while True:
+            if (sys.platform.startswith('linux') and os.environ.get('GITHUB_ACTIONS') == 'true'
+                    and time.monotonic() - last_memory >= 30):
+                last_memory = time.monotonic()
+                try:
+                    values = {line.split(':', 1)[0]: int(line.split()[1])
+                              for line in Path('/proc/meminfo').read_text().splitlines()
+                              if line.startswith(('MemTotal:', 'MemAvailable:', 'SwapFree:'))}
+                    print('Native host memory MiB: ' + json.dumps(
+                        {key: value // 1024 for key, value in values.items()}), flush=True)
+                except (OSError, ValueError):
+                    pass  # Diagnostics must not change native test acceptance.
             line = stream.readline()
             if not line:
                 if stopped.wait(.1):
@@ -164,7 +187,7 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
     timeout = 2400 if target == 'android' else 1800
     with path.open('w') as stream:
         stopped = Event()
-        progress = Thread(target=_progress,args=(path,stopped),daemon=True) if local else None
+        progress = Thread(target=_progress,args=(path,stopped),daemon=True)
         if progress:progress.start()
         process = None
         try:
@@ -229,6 +252,7 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
         raise ValueError('This run did not verify independent system windows.')
     if require_duo:
         verify_duo_rotation(report)
+    verify_native_diagnostics(path)
     return report
 
 

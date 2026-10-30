@@ -75,6 +75,8 @@ def run(framework, output, model, orientation='portrait'):
                 if cache.exists():
                     report = json.loads(cache.read_text())
                     (output / 'result.json').write_text(json.dumps(report, indent=2))
+                    for screenshot in cache.parent.glob('*.png'):
+                        shutil.copyfile(screenshot, output / screenshot.name)
                     if not report['success']:
                         raise RuntimeError(report['error'])
                     print(json.dumps(dict(success=True, model=model, samples=len(report['samples']))))

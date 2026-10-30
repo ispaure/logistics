@@ -132,7 +132,7 @@ def library_host(app):
     return LibraryHost(
         presentation=app.presentation,
         folder_visible=lambda record: app.library_folder_visible(record),
-        show_locations=app.locations_controller().show_locations,
+        show_locations=app.show_locations,
         open_folder=open_folder,
         snapshot=lambda: (
             getattr(app, "cloud_client", None),

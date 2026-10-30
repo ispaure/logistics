@@ -373,11 +373,11 @@ class FolderSourceTabTests(unittest.TestCase):
         app.loop.run_until_complete(app.browser_file_location(('Shared files', 'Local/Managed')))
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_path, 'Managed')
-        app.pin_local_folder()
-        pin = app.pinned_locations().items[0]
+        app.locations_controller().pin_local_folder()
+        pin = app.locations_controller().pinned_locations().items[0]
         self.assertEqual(pin['path'], 'Managed')
         app.loop.run_until_complete(app.browser_file_location(('Shared files', '')))
-        app.loop.run_until_complete(app.pinned_opener(pin)())
+        app.loop.run_until_complete(app.locations_controller().pinned_opener(pin)())
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_path, 'Managed')
 

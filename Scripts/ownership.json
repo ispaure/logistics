@@ -396,6 +396,30 @@
         ]
       }
     },
+    "document-services": {
+      "sources": [
+        "Python/services/documents",
+        "Python/services/protection.py",
+        "Python/services/session_auth.py",
+        "Python/services/access_policy.py",
+        "Python/services/local_storage.py"
+      ],
+      "guide": "docs/development/services.md",
+      "tests": {
+        "desktop": [
+          "test_document_protection.py",
+          "test_document_storage*.py",
+          "test_desktop_video_privacy.py",
+          "test_mobile_packaging.py"
+        ],
+        "mobile": [
+          "test_protection_scope.py",
+          "test_screen_privacy.py",
+          "test_audio_output.py"
+        ]
+      },
+      "mobile_manifest": "Python/services/mobile_sources.json"
+    },
     "mobile-host": {
       "sources": [
         "Python/mobile"

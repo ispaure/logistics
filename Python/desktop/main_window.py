@@ -62,7 +62,7 @@ class _ToastStatusGuard(pyside.QObject):
 class MainWindow(pyside.Window):
     def __init__(self):
         super().__init__('Logistics', main_window=True)
-        from services.local_storage import install_local_storage_policy
+        from features.rclone.storage import install_local_storage_policy
         install_local_storage_policy()
         from services.documents.ui.editors import install_editor_dialogs
         install_editor_dialogs()

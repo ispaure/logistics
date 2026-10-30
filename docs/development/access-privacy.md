@@ -59,12 +59,20 @@ playback. Document persistence and provider I/O grants remain separate.
 
 ## Explicit retained protection sources
 
-The native credential store owns a lazy process `ProtectionScope`. Loaded
-credential gates contribute directly, before any scene or player exists.
-`mobile.protection.for_app` gives composition one window scope. Private-session
-managers, EditorPicker, NotebookPanel and ComicBatchController register their
-own gate suppliers; ScreenPrivacy asks the scope instead of inspecting feature
-attributes. Suppliers are synchronous snapshots with no I/O. Notebook disposal
+Application composition in `mobile.protection` owns a process `ProtectionScope`
+for each shared native credential runtime. `for_credentials` registers the
+runtime's gate supplier and subscribes the scope to credential publication;
+the rclone credential store neither constructs nor exposes a protection scope.
+Registration and subscription share the credential publication lock. Loaded
+gates apply before any scene or player exists. Additional credential sources can
+register independently through `ProtectionScope.register_credentials`; removing
+one source cannot release another source or a retained document.
+`mobile.protection.for_app` creates one window scope in that process scope.
+Private-session managers, EditorPicker, NotebookPanel and ComicBatchController
+register their own gate suppliers; ScreenPrivacy asks the scope instead of inspecting feature
+attributes. Suppliers are synchronous snapshots with no I/O. Process protection evaluates
+them outside its snapshot lock to avoid credential/scope lock inversion; revision
+checks prevent a slow older evaluation from replacing a newer publication. Notebook disposal
 releases its registration; host disposal clears its window sources. Asynchronous
 native teardown holds a separate process resource scope until completion, even
 when its window has already closed. A retained
@@ -82,10 +90,16 @@ lifecycle lock. Wi-Fi holds only the pending request snapshot, not another globa
 lock-provenance dictionary. Network preference changes while a read is pending
 reject its waiver. Multiple passwords remain separate challenges.
 
-Credential publication snapshots observers under the credential lock and calls
-them after releasing it. UI callbacks return to their scene loop. Native screen
-shielding stays synchronous; asynchronous verification cannot reveal content
-after rebackgrounding or credential replacement. These callbacks never revive a
+Credential publication commits metadata and snapshots observers under the
+credential lock, then calls them after releasing it. Native `CloudClient.request`
+uses the same commit/notify split, so its outer native-publication lock is also
+released before callbacks. Nested credential-service, clear and package-forget
+transactions share a thread-local callback queue; only the outermost transaction
+notifies, after vault work and client metadata updates finish and its lock exits.
+Application protection observers run before ordinary
+UI/document observers; notification fanout attempts every observer even if one
+fails. UI callbacks return to their scene loop. Native screen shielding stays
+synchronous; asynchronous verification cannot reveal content after rebackgrounding or credential replacement. These callbacks never revive a
 revoked I/O grant.
 
 ## Shared presentation and playback questions

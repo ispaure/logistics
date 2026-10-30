@@ -22,8 +22,6 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
 
     def __init__(self, *, history_path=None, preferences_path=None, service=None, create_blank=True):
         super().__init__()
-        from services.local_storage import install_local_storage_policy
-        install_local_storage_policy()
         from services.documents.ui.editors import install_editor_dialogs
         install_editor_dialogs()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)

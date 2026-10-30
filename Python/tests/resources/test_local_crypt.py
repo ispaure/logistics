@@ -107,6 +107,8 @@ class LocalCryptTests(QtTestCase):
             second = SimpleNamespace(private=True, context=Path(directory) / 'second.session')
             for provider in (first, second):
                 session.remember(provider.context, {'view': {'type': 'local'}})
+                from features.rclone.document_protection import DesktopDocumentProtection
+                provider.document_protection = DesktopDocumentProtection(provider)
                 self.addCleanup(session.forget, provider.context)
             window = qt.QMainWindow()
             window.choice = SimpleNamespace(provider=first)

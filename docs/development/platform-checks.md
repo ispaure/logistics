@@ -113,6 +113,13 @@ commonUtils commit before launch; the resulting report must still pass the full
 native case and source checks. The Duo job additionally requires its rotation
 matrix. Android builds and validates independently of the iOS jobs.
 
+Native checkpoints stream on hosted runners as well as local runs. Linux CI
+also records available host memory while the native child runs, so an abruptly
+terminated runner does not leave the entire UI phase opaque. The Android build
+disables persistent Gradle daemons before emulator validation; this avoids keeping
+an idle build JVM alongside the emulator. These diagnostics do not relax native
+case inventories or time budgets.
+
 Every iOS validation run requires all three device families, including iPad
 independent-window checks. An iPad failure blocks the run. Device jobs use
 fresh simulators created through the build manager, matching the selected SDK

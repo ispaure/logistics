@@ -56,3 +56,65 @@ class CredentialLoadingTests(unittest.TestCase):
         self.assertEqual(client.call.call_args.args[0], b'import')
         client.free.assert_called_once()
         client.publish_credentials.assert_not_called()
+
+    def test_real_request_notifies_after_releasing_the_credential_publication_lock(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        from mobile.protection import for_credentials
+        client = CloudClient.__new__(CloudClient)
+        state = client.credential_state = NativeCredentialState()
+        scope = for_credentials(state)
+        payload = ctypes.create_string_buffer(json.dumps(dict(ok=True, result=[], credential_state=dict(
+            epoch=1, packages=[dict(package_name='Fixture.zip', saved=False)]))).encode())
+        client.call, client.free = Mock(return_value=ctypes.addressof(payload)), Mock()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            class Observer:
+                def credentials_changed(self):
+                    self.gates = pool.submit(state.privacy_gates).result(timeout=2)
+                    self.protected = scope.active
+            observer = Observer()
+            state.observers.add(observer)
+            client.request('import', package='synthetic', package_name='Fixture.zip',
+                           password='fixture', session_only=True)
+            self.assertEqual(observer.gates, state.privacy_gates())
+            self.assertTrue(observer.protected)
+
+    def test_clear_and_package_forget_notify_after_outer_lock_and_vault_work(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from types import SimpleNamespace
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        for operation in ('clear', 'forget_package', 'service_clear', 'service_forget_package'):
+            with self.subTest(operation=operation):
+                client = CloudClient.__new__(CloudClient)
+                state = client.credential_state = NativeCredentialState()
+                client.vault = SimpleNamespace(unlock=Mock(return_value={}), forget=Mock())
+                payload = ctypes.create_string_buffer(json.dumps(dict(ok=True,
+                    result=dict(package_name='Remaining.zip'),
+                    credential_state=dict(epoch=1, packages=[]))).encode())
+                client.call, client.free = Mock(return_value=ctypes.addressof(payload)), Mock()
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    class Observer:
+                        def credentials_changed(self):
+                            self.gates = pool.submit(state.privacy_gates).result(timeout=.5)
+                            self.name = client.package_name
+                            self.erased = client.vault.forget.called
+                    observer = Observer()
+                    state.observers.add(observer)
+                    from features.rclone.mobile.service import native_service
+                    from features.rclone.mobile.credential_retention import NativeCredentialForget
+                    if operation in ('clear', 'service_clear'):
+                        if operation == 'clear':
+                            client.clear()
+                        else:
+                            native_service(client).credentials.forget()
+                        self.assertTrue(observer.erased)
+                        self.assertEqual(observer.name, '')
+                    else:
+                        if operation == 'forget_package':
+                            client.forget_package('Fixture.zip')
+                        else:
+                            from pathlib import Path
+                            native_service(client).credentials.forget(NativeCredentialForget(
+                                lambda: None, Path('.'), 'Fixture.zip'))
+                        self.assertEqual(observer.name, 'Remaining.zip')
+                    self.assertEqual(observer.gates, ())

@@ -1,21 +1,30 @@
-"""Compose document sources with the owning credential resume-proof service."""
-from pathlib import Path
-from features.rclone.desktop_credentials import SessionResumeProof, session_package
-from .storage import document_sources
+"""Ask document providers for resume proof without inspecting credential storage."""
+from .protection import TemporaryResumeAuthorization, document_protections
 
 
-def credential_package(provider):
-    for source in document_sources(provider):
-        connection = getattr(source, 'connection', None)
-        if connection is not None and getattr(connection, 'package', None):
-            return Path(connection.package)
-        key = getattr(source, 'config_path', None) or getattr(source, 'context', None)
-        if key is not None:
-            package = session_package(key)
-            if package is not None:
-                return Path(package)
-    return None
+def resume_authorization(provider):
+    protections = tuple(document_protections(provider))
+    if not protections:
+        return TemporaryResumeAuthorization()
+    # All wrapped sources must authorize; none may hide an inner restriction.
+    authorizations = tuple(protection.resume_authorization() for protection in protections)
+    if len(authorizations) == 1:
+        return authorizations[0]
+    return CombinedResumeAuthorization(authorizations)
 
 
-def resume_authorization(package):
-    return SessionResumeProof(package)
+class CombinedResumeAuthorization:
+    def __init__(self, authorizations):
+        self.authorizations = authorizations
+        gates = tuple(proof.password_gate for proof in authorizations if proof.password_gate is not None)
+        self.password_gate = next((gate for gate in gates if gate.proof is None), gates[0] if gates else None)
+
+    def verify(self, secret):
+        pending, established = [], []
+        for proof in self.authorizations:
+            gate = proof.password_gate
+            (pending if gate is not None and gate.proof is None else established).append(proof)
+        # Configuration is a side effect. A wrong existing credential must not
+        # set a new temporary password and prevent the next valid attempt.
+        return (all(proof.verify(secret) for proof in established)
+                and all(proof.verify(secret) for proof in pending))

@@ -1,12 +1,13 @@
 """Read-only Git status snapshots for the project tree, without Git UI ownership."""
 from concurrent.futures import ThreadPoolExecutor
+import os
 from threading import Event
 from time import monotonic
 from commonUtils.ui import pyside as qt
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='ide-git-status')
 COLORS = {'add': '#009e73', 'modify': '#408bd6', 'delete': '#d55e00',
-          'rename': '#a778cf', 'conflict': '#d88928'}
+          'rename': '#a778cf', 'conflict': '#d88928', 'ignored': '#848504'}
 STATUS_CODES = {'add': 'A', 'modify': 'M', 'delete': 'D', 'rename': 'R', 'conflict': '!'}
 
 
@@ -16,7 +17,7 @@ def read_status(project_root, cancel):
     from features.git.models import parse_status, status_label
     runner = editor_runner(5, cancel)
     root = Repository(project_root, runner=runner).root()
-    pending, records, visited = [root], [], set()
+    pending, records, visited, changes = [root], [], set(), {}
     deadline = monotonic() + 5
     while pending:
         current = pending.pop()
@@ -26,10 +27,20 @@ def read_status(project_root, cancel):
             break
         visited.add(current)
         result = runner.run(['--no-optional-locks', 'status', '--porcelain=v2', '-z',
-                             '--untracked-files=all'], cwd=current,
+                             '--untracked-files=all', '--ignored=matching'], cwd=current,
                             timeout=max(.1, deadline - monotonic()))
         if result.truncated:
             raise ValueError('Git status exceeds the project tree limit')
+        status_records = iter(result.stdout.split(b'\0'))
+        for record in status_records:
+            if record.startswith(b'2 '):
+                next(status_records, None)  # Rename source is a path, not a status record.
+            if record.startswith(b'! '):
+                path = current / os.fsdecode(record[2:])
+                if path.is_relative_to(project_root):
+                    changes[path] = 'ignored', 'Ignored'
+                elif project_root.is_relative_to(path):
+                    changes[project_root] = 'ignored', 'Ignored'
         for change in parse_status(result.stdout).changes:
             path = current / change.path
             records.append((path, change))
@@ -38,10 +49,8 @@ def read_status(project_root, cancel):
             if (change.submodule.startswith('S') and path.is_relative_to(project_root)
                     and (path / '.git').exists() and not path.is_symlink()):
                 pending.append(path)
-    changes = {}
-    priorities = {'add': 0, 'rename': 1, 'delete': 2, 'modify': 3, 'conflict': 4}
     for path, change in records:
-        if not path.is_relative_to(project_root):
+        if not path.is_relative_to(project_root) or (path.is_dir() and not path.is_symlink()):
             continue
         codes = change.index + change.worktree
         kind = ('conflict' if change.conflict else 'delete' if 'D' in codes else
@@ -53,14 +62,6 @@ def read_status(project_root, cancel):
             label += ' (staged and unstaged)' if change.staged and change.unstaged else \
                      ' (staged)' if change.staged else ' (unstaged)'
         changes[path] = kind, label
-        parent = path.parent
-        while parent.is_relative_to(project_root):
-            previous = changes.get(parent)
-            if previous is None or priorities[kind] > priorities[previous[0]]:
-                changes[parent] = kind, 'Contains Git changes'
-            if parent == project_root:
-                break
-            parent = parent.parent
     return changes
 
 

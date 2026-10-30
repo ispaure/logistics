@@ -57,9 +57,9 @@ class CloudUI(LocalCryptUI):
 
     def show_cloud(self, widget=None, *, present=True, **kwargs):
         if present and not self.app.require_feature('rclone', destination='files'):
-            return
+            return False
         if getattr(self, '_storage_changing', False):
-            return
+            return False
         self.prepare_cloud()
         if not hasattr(self, 'cloud_view'):
             self.downloads = Downloads(self.private_root / 'Downloads')
@@ -77,7 +77,8 @@ class CloudUI(LocalCryptUI):
             self.set_loaded_remote_names(self.loaded_remote_names())
             self.cloud_package.text = self.loaded_package_label()
         if present:
-            self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Cloud File Browser')
+            return self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Cloud File Browser')
+        return True
 
     def _build_cloud_controls(self, error):
         """Construct retained connection, browser and download controls."""

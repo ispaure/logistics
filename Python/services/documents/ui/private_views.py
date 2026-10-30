@@ -1,6 +1,6 @@
 """Retire displayed private views when their credential generation is revoked."""
 from commonUtils.ui import pyside as qt
-from features.rclone import session
+from services.documents.protection import document_protections
 from weakref import WeakSet
 
 _guards = WeakSet()
@@ -22,10 +22,7 @@ def prepare_credential_lock(paths):
     paths = tuple(paths)
     for guard in tuple(_guards):
         guard.follow_provider()
-        context = getattr(guard.provider, 'context', None)
-        config = getattr(guard.provider, 'config_path', None)
-        affected = (context is not None and any(session.registry.depends_on(context, path) for path in paths))
-        affected = affected or (config is not None and any(config == path.with_suffix('.conf') for path in paths))
+        affected = any(protection.affected_by(paths) for protection in guard.protections)
         if affected:
             if not guard.prepare_lock():
                 return False
@@ -38,22 +35,42 @@ class PrivateViewGuard(qt.QObject):
     def __init__(self, window, provider):
         super().__init__(window)
         self.window, self.locked, self.provider = window, False, provider
-        self.unsubscribe = lambda: None
+        self.subscriptions = []
+        self.protections = ()
+        self._retiring = self._retired = False
         self.revoked.connect(self.check_revocation)
         window.installEventFilter(self)
         self.bind(provider)
         _guards.add(self)
         window.destroyed.connect(lambda: _guards.discard(self))
-        window.destroyed.connect(lambda: self.unsubscribe())
+        window.destroyed.connect(self.unsubscribe)
         idle = getattr(window, 'idle', None)
         if idle is not None:
             idle.connect(self.check_revocation)
 
+    def unsubscribe(self, *_):
+        subscriptions, self.subscriptions = self.subscriptions, []
+        failure = None
+        for release in subscriptions:
+            try:
+                release()
+            except Exception as error:
+                self.subscriptions.append(release)
+                failure = failure or error
+        if failure is not None:
+            raise failure
+
     def bind(self, provider):
-        self.unsubscribe()
-        self.provider = provider
-        self.unsubscribe = (session.on_forget(provider.context, self.invalidate)
-                            if getattr(provider, 'private', False) and hasattr(provider, 'context') else lambda: None)
+        try:
+            self.unsubscribe()
+            self.provider = provider
+            self.protections = tuple(document_protections(provider))
+            for protection in self.protections:
+                self.subscriptions.append(protection.on_revoke(self.invalidate))
+        except Exception:
+            # A failed handoff must not leave newly private content interactive.
+            self.retire()
+            raise
 
     def current_provider(self):
         resolve = getattr(self.window, 'resource_provider', None)
@@ -66,21 +83,21 @@ class PrivateViewGuard(qt.QObject):
         return getattr(storage, 'provider', self.provider)
 
     def follow_provider(self):
-        current = self.current_provider()
+        try:
+            current = self.current_provider()
+        except Exception:
+            self.retire()
+            raise
         if current is not self.provider:
             self.bind(current)
 
     def check_revocation(self):
         self.follow_provider()
-        if getattr(self.provider, 'private', False) and hasattr(self.provider, 'context'):
-            try:
-                if session.credentials(self.provider.context) is None:
-                    raise ValueError('The credential session is locked.')
-                validate = getattr(self.provider, '_check_active', None)
-                if validate is not None:
-                    validate()
-            except (OSError, ValueError):
-                self.retire()
+        try:
+            for protection in self.protections:
+                protection.check()
+        except (OSError, ValueError):
+            self.retire()
 
     def invalidate(self):
         self.revoked.emit()
@@ -103,16 +120,27 @@ class PrivateViewGuard(qt.QObject):
         return True
 
     def retire(self):
-        self.locked = True
-        self.window.hide()
-        retire = getattr(self.window, 'retire_private_content', None)
-        if retire is not None:
-            retire()
-        self.window.setEnabled(False)
-        self.window.setWindowTitle('Private session locked')
-        changed = getattr(self.window, 'title_changed', None)
-        if changed is not None:
-            changed.emit('Private session locked')
+        if self._retiring:
+            return
+        self._retiring = True
+        try:
+            first = not self.locked
+            self.locked = True
+            self.window.hide()
+            self.window.setEnabled(False)
+            self.window.setWindowTitle('Private session locked')
+            if first:
+                changed = getattr(self.window, 'title_changed', None)
+                if changed is not None:
+                    changed.emit('Private session locked')
+            if not self._retired:
+                retire = getattr(self.window, 'retire_private_content', None)
+                if retire is not None:
+                    retire()
+                self._retired = True
+        finally:
+            # Failed cleanup remains locked and can be retried after recovery.
+            self._retiring = False
 
     def eventFilter(self, watched, event):
         if self.locked and event.type() == qt.QEvent.Type.WindowTitleChange:

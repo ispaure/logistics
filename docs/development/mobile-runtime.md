@@ -1156,6 +1156,36 @@ payload allowlists include all moved modules and explicitly stage new shared
 modules in dirty local development payloads. See the
 [ownership audit and implementation status](ownership-audit.md).
 
+## Pinned-folder workflow capabilities
+
+`LogisticsMobile.locations_controller()` retains one `LocationsController`, with
+an immutable `LocationHost` supplied by `composition/locations.py`. The host passes
+only folder selection, status, storage-root and navigation callbacks. The
+controller owns its pin catalogue and errors and has no application reference,
+`HostService` descriptors or app-level method/field forwarding. File menus call
+this owner directly. The remaining composed workflows retain their compatibility
+accessors; this is an incremental reduction, not a replacement of every controller.
+
+Pinned navigation asks the application to reveal local/cloud Files before
+addressing its browser controller. An explicit `False` result means a scene,
+feature or checkpoint guard refused navigation; no pinned path is applied.
+Secondary iPad windows keep their existing original-window boundary, and retired
+hosts cannot resume the pending local navigation after an await.
+
+The composition adapter captures the current cloud controller, client generation,
+selector and folder before asynchronous identity lookup. Replaced controllers,
+clients, selectors or retired windows cannot publish stale navigation. Encrypted
+folders remain ineligible for persistent pins. `test_locations.py` checks injected
+capabilities and stale results; `test_folder_source_tabs.py` covers the real app's
+local pin and browser navigation. Native folder-pin acceptance calls the same
+retained controller directly; composition contracts scan app/native scenarios for
+retired app-level pin methods.
+
+Pinned remote navigation shields the shared startup credential-restore task from
+cancellation of an individual open request. It captures the navigation generation
+after presenting Files and discards delayed identity lookups when the user has
+navigated elsewhere, even if the credential client and generation remain current.
+
 ## Application shutdown and disposable resources
 
 `application_lifecycle.HostLifecycle` owns application exit vetoes, host replacement

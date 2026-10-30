@@ -20,6 +20,7 @@
     "documents/mobile_storage.py",
     "documents/mobile_views.py",
     "documents/provider_documents.py",
+    "documents/protection.py",
     "documents/readers.py",
     "documents/storage.py",
     "documents/video_progress.py",

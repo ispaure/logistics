@@ -395,6 +395,16 @@ class ChapterBridge:
         self.view.evaluate_javascript('window.reader && window.reader.dispose()')
 
 
+def _bind_chapter_navigation(view, handler, backend):
+    view.on_navigation_starting = handler
+    if backend.startswith('toga_iOS.'):
+        from toga.handlers import wrapped_handler
+        # WKWebView consumes the returned decision itself. Toga's generic
+        # cleanup also assigns WebView.url, rejecting the internal about:blank
+        # bootstrap even though WebKit has already allowed that navigation.
+        view._on_navigation_starting = wrapped_handler(view, handler)
+
+
 def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, motion_enabled=True):
     if view is None:
         view = toga.WebView(style=Pack(flex=1))
@@ -423,7 +433,7 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, m
     root = 'https://logistics.invalid/' + uuid4().hex + '/'
     bridge = ChapterBridge(view, root=root, offset=offset, on_event=on_event, on_link=on_link, motion_enabled=motion_enabled)
     view._chapter_bridge = bridge
-    view.on_navigation_starting = bridge.navigation
+    _bind_chapter_navigation(view, bridge.navigation, backend)
     view.on_webview_load = bridge.loaded
     content = content.replace('</head>', '<meta name="logistics-reader-root" content="' + root + '"></head>', 1)
     set_inline_html(view, root, content)

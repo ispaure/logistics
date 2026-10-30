@@ -108,14 +108,14 @@ class FilesUI:
         # Files can be opened directly from Home/Documents on a cold launch.
         # Ordinary local browsing does not depend on saved credentials.
         if not self.active_host or getattr(self, '_storage_changing', False):
-            return
+            return False
         try:
             collection_path(self.private_root)
         except (OSError, ValueError) as error:
             await self.main_window.dialog(toga.InfoDialog('Collection drive unavailable', str(error)))
-            return
+            return False
         if self.cloud_busy and not self.can_browse_local():
-            return
+            return False
         if (hasattr(self, 'files_view') and self.file_provider is not None
                 and not self.file_browser.closed):
             if local_read_available(self, private=True):
@@ -154,13 +154,15 @@ class FilesUI:
             if getattr(self.app, 'vault_browser', None) is not previous_notes:
                 return opened
             self.refresh_file_source_tabs()
-            self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
+            if self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser') is False:
+                return False
             return opened
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
         self._build_file_browser(location)
         self.refresh_file_source_tabs()
-        self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
+        if self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser') is False:
+            return False
         opened = await self.browse_files()
         self.file_storage.on_change = self.change_file_storage
         return opened
@@ -219,7 +221,7 @@ class FilesUI:
             [('New folder…', lambda: self.show_file_actions(operation='new')),
              ('Rename…', lambda: self.show_file_actions(operation='rename')),
              ('Move…', lambda: self.show_file_actions(operation='move')),
-             ('Pin current folder', self.pin_local_folder),
+             ('Pin current folder', self.locations_controller().pin_local_folder),
              ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
         self.file_browser.attach_location_header(self.file_status,
@@ -332,7 +334,7 @@ class FilesUI:
         selected = self.file_rows.get(self.file_selection.value)
         commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
         if self.file_storage.value == 'Local files':
-            commands.append(('Pin this folder', self.pin_local_folder))
+            commands.append(('Pin this folder', self.locations_controller().pin_local_folder))
         if selected:
             commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
                          ('Rename…', lambda: self.show_file_actions(operation='rename')),

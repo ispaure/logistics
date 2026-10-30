@@ -18,7 +18,7 @@ def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=Fal
     from features.rclone.localcrypt.mapping import connections
     from features.rclone.desktop_service import service
     from features.rclone.localcrypt.ui.views import ensure_session
-    from services.local_storage import install_local_storage_policy
+    from features.rclone.storage import install_local_storage_policy
     install_local_storage_policy()
     locations = []
     if provider is not None:
@@ -181,6 +181,8 @@ def open_linked_text(path, parent=None):
 
 
 def install_editor_dialogs():
+    from features.rclone.storage import install_local_storage_policy
+    install_local_storage_policy()
     app = qt.QApplication.instance()
     if app:
         app._commonutils_markdown_resource_action = markdown_action

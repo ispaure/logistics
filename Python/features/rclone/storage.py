@@ -19,3 +19,9 @@ def local_records(local_root):
     destination = application_root() / 'Connections' / 'Local'
     relocate_directory(Path(local_root).parent / '.local-connections', destination)
     return destination
+
+
+def install_local_storage_policy(root=None):
+    """Compose the host filesystem guard with this backend's ciphertext root."""
+    from services.local_storage import install_local_storage_policy as install
+    return install(crypt_root() if root is None else root)

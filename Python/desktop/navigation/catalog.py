@@ -4,7 +4,7 @@ from features.contributions import DocumentLauncherContribution
 
 
 def _open_markdown(parent):
-    from services.local_storage import install_local_storage_policy
+    from features.rclone.storage import install_local_storage_policy
     install_local_storage_policy()
     from services.documents.ui.editors import install_editor_dialogs
     install_editor_dialogs()
@@ -21,7 +21,7 @@ def _open_markdown(parent):
 
 
 def _new_markdown(parent):
-    from services.local_storage import install_local_storage_policy
+    from features.rclone.storage import install_local_storage_policy
     install_local_storage_policy()
     from services.documents.ui.editors import install_editor_dialogs
     install_editor_dialogs()

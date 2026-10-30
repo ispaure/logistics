@@ -193,39 +193,41 @@ class EpubUXTests(unittest.TestCase):
             def clear_private_content(self):
                 self.set_content('about:blank', '')
 
-        with TemporaryDirectory() as directory:
-            epub, _ = make_books(Path(directory))
-            book = EPUBBook(epub)
-            for view_type in (TextBookView, RichBookView):
-                with self.subTest(view=view_type.__name__), patch(
-                    'features.books.mobile.provider_reader.PrivateWebView', MemoryWebView
-                ):
-                    on_position = Mock()
-                    panel = view_type(book, 0, offset=7, on_chapter=Mock(), on_position=on_position)
-                    self.assertNotIn(panel.tools.panel, panel.tools.widget.children)
-                    panel.tools.toggle()
-                    self.assertEqual(panel.offset, 7)
-                    if isinstance(panel, RichBookView):
-                        panel.show_find()
-                    panel.query.value = 'no such passage exists'
-                    panel.find()
-                    if isinstance(panel, RichBookView):
-                        self.assertIn(panel.find_box, panel.children)
-                        self.assertTrue(panel.sidebar.sidebar_open is False)
-                    else:
-                        self.assertIn(panel.tools.panel, panel.tools.widget.children)
-                    self.assertIn('No matching', panel.status.text)
-                    panel.query.value = 'Native'
-                    panel.find()
-                    self.assertNotIn(panel.tools.panel, panel.tools.widget.children)
-                    on_position.assert_called_with(panel.offset)
-                    offset = panel.offset
-                    panel.tools.toggle()
-                    panel.tools.toggle()
-                    self.assertEqual(panel.offset, offset)
-                    panel.dispose()
-                    self.assertEqual(panel.query.value, '')
-                    self.assertEqual(list(panel.toc.items), [])
+        async def exercise():
+            with TemporaryDirectory() as directory:
+                epub, _ = make_books(Path(directory))
+                book = EPUBBook(epub)
+                for view_type in (TextBookView, RichBookView):
+                    with self.subTest(view=view_type.__name__), patch(
+                        'features.books.mobile.provider_reader.PrivateWebView', MemoryWebView
+                    ):
+                        on_position = Mock()
+                        panel = view_type(book, 0, offset=7, on_chapter=Mock(), on_position=on_position)
+                        self.assertNotIn(panel.tools.panel, panel.tools.widget.children)
+                        panel.tools.toggle()
+                        self.assertEqual(panel.offset, 7)
+                        if isinstance(panel, RichBookView):
+                            panel.show_find()
+                        panel.query.value = 'no such passage exists'
+                        panel.find()
+                        if isinstance(panel, RichBookView):
+                            self.assertIn(panel.find_box, panel.children)
+                            self.assertTrue(panel.sidebar.sidebar_open is False)
+                        else:
+                            self.assertIn(panel.tools.panel, panel.tools.widget.children)
+                        self.assertIn('No matching', panel.status.text)
+                        panel.query.value = 'Native'
+                        panel.find()
+                        self.assertNotIn(panel.tools.panel, panel.tools.widget.children)
+                        on_position.assert_called_with(panel.offset)
+                        offset = panel.offset
+                        panel.tools.toggle()
+                        panel.tools.toggle()
+                        self.assertEqual(panel.offset, offset)
+                        panel.dispose()
+                        self.assertEqual(panel.query.value, '')
+                        self.assertEqual(list(panel.toc.items), [])
+        asyncio.run(exercise())
 
     def test_imported_chapter_and_bookmark_return_to_reading_with_progress(self):
         with TemporaryDirectory() as directory:

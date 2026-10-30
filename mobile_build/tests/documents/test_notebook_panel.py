@@ -183,8 +183,12 @@ class NotebookPanelTests(unittest.TestCase):
         panel.editor.apply(dict(op='stroke',points=[[100,100,.4],[130,140,.7]],tool=12,width=3))
         app.select_destination('home')
         app.native_host.activate('home')
+        previous = asyncio.all_tasks(app.loop)
         app.session_opener(panel.session.id)()
-        app.loop.run_until_complete(asyncio.sleep(.01))
+        opening = [task for task in asyncio.all_tasks(app.loop) - previous
+                   if task.get_coro().__name__ == 'open_notebook']
+        self.assertEqual(len(opening), 1)
+        self.assertTrue(app.loop.run_until_complete(opening[0]))
         self.assertIs(app.notebook_panel.editor.notebook,book)
         restored=panel.repository.open(panel.key)
         self.assertEqual(len(restored.page(0).strokes),1)

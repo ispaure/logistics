@@ -429,6 +429,36 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             finally:
                 os.chdir(previous)
 
+    def test_successful_native_reports_do_not_hide_unhandled_errors(self):
+        import os
+        from unittest.mock import patch
+        markers = ('Error in handler: fixture', 'Error in handler cleanup: fixture',
+                   'Error in async handler: fixture', 'Error in async handler cleanup: fixture',
+                   'Task exception was never retrieved', 'Task was destroyed but it is pending',
+                   'Exception in callback fixture')
+        with TemporaryDirectory() as directory:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                for target, transport in (('ios', 'stdout'), ('ios', 'simulator-file'), ('android', 'stdout')):
+                    for marker in markers:
+                        with self.subTest(target=target, transport=transport, marker=marker):
+                            report = self.report()
+                            report.update(target=target, backend='toga_iOS.app' if target == 'ios' else 'toga_android.app')
+                            def launch(command, *, stdout, **kwargs):
+                                if transport == 'stdout':
+                                    stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
+                                stdout.write('native-log: ' + marker + '\n')
+                                stdout.flush()
+                                return SimpleNamespace(wait=lambda **kwargs: 0)
+                            with patch.object(ui_tools.subprocess, 'Popen', side_effect=launch), \
+                                    patch.object(ui_tools, 'simulator_report', return_value=report), \
+                                    patch.object(ui_tools, 'verify_report', return_value=report):
+                                with self.assertRaisesRegex(ValueError, 'Unhandled native app error'):
+                                    ui_tools.run(target, 'device')
+            finally:
+                os.chdir(previous)
+
     def test_failed_stdout_preserves_assertion_without_accepting_failed_exit(self):
         import os
         from unittest.mock import patch

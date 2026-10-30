@@ -2,7 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from commonUtils.ui import pyside as qt
-from services.documents.video_authorization import credential_package, resume_authorization
+from services.documents.video_authorization import resume_authorization
 
 
 class VideoResumeGuard(qt.QObject):
@@ -16,8 +16,7 @@ class VideoResumeGuard(qt.QObject):
         self.closed = False
         self.busy = False
         self.password_gate = None
-        self.package = credential_package(window.content.provider)
-        self.authorization = resume_authorization(self.package)
+        self.authorization = resume_authorization(window.content.provider)
         self.password_gate = self.authorization.password_gate
         original = window.takeCentralWidget()
         self.stack = qt.QStackedWidget()

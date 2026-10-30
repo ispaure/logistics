@@ -64,7 +64,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic) BOOL fullscreen;
 @property(nonatomic) BOOL controlsVisible;
 @property(nonatomic) BOOL systemChromeHidden;
-@property(nonatomic, strong) UIStackView *videoHeader;
+@property(nonatomic, strong) UIView *videoHeader;
 @property(nonatomic, strong) UILabel *videoTitle, *sourceLabel;
 @property(nonatomic, strong) UIImageView *sourceIcon;
 @property(nonatomic) NSUInteger chromeGeneration;
@@ -102,6 +102,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)installPlaybackTools;
 - (void)applyPlaybackOptions;
 - (void)applyPictureSize;
+- (void)layoutPlaybackTools;
 - (NSDictionary *)playbackOptions;
 - (void)emitCommand:(NSString *)name value:(NSString *)value;
 - (void)playbackTools:(id)sender;
@@ -527,6 +528,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.controlsBottom.constant = CGRectGetMaxY(available) - CGRectGetMaxY(safe);
     self.bufferCenterX.constant = CGRectGetMidX(spinnerArea) - CGRectGetMidX(safe);
     self.bufferCenterY.constant = CGRectGetMidY(spinnerArea) - CGRectGetMidY(safe);
+    [self layoutPlaybackTools];
 }
 
 - (void)updateItem:(UIBarButtonItem *)button label:(NSString *)label {

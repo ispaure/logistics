@@ -26,8 +26,18 @@ class FolderLocationTests(unittest.TestCase):
         button = icon_button('back', 'Back', on_press=parent)
         browser = FileBrowser()
         browser.attach_location_header(toga.Label('Folder'), button)
-        with patch.object(self.app, 'routes', SimpleNamespace(apple=True)):
+        # This detached control needs an Apple route context; the real host's
+        # queued desktop renders must keep their complete, non-Apple routes.
+        button.app = SimpleNamespace(routes=SimpleNamespace(apple=True))
+        errors = []
+        previous = self.app.loop.get_exception_handler()
+        self.app.loop.set_exception_handler(lambda loop, context: errors.append(context))
+        try:
             self.run_async(button.on_press(event='native-press'))
+        finally:
+            self.app.loop.set_exception_handler(previous)
+            button.app = None
+        self.assertEqual(errors, [])
         self.assertEqual(calls, [(button, 'native-press')])
 
     def test_header_replaces_source_identity_when_location_changes(self):

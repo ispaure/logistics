@@ -104,6 +104,8 @@ jobs:
     if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
     runs-on: ${{ needs.environment.outputs.android_runner }}
     timeout-minutes: 60
+    env:
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
