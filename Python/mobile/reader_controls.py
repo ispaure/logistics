@@ -164,6 +164,7 @@ class PageFooter:
         self.widget = toga.Box(style=Pack(direction=COLUMN, width=56 if vertical else toga.style.pack.NONE,
             **(dict(align_items='center') if vertical else {}),
             margin_left=READER_LAYOUT.progress_margin, margin_right=READER_LAYOUT.progress_margin))
+        self.widget._reader_page_footer = self
         if not vertical:
             self.widget.add(self.row, self.badge)
             from .reader_edges import style_progress_caption

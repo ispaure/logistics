@@ -58,11 +58,10 @@ def css(size, margin, theme, *, font_family='system', line_spacing=150, reading_
     width = 'none' if reading_width == 'auto' else str(reading_width) + 'px'
     # Native title and progress controls already separate the page from chrome.
     # Keep the chosen horizontal gutter without spending it again vertically.
-    vertical_margin = min(margin, 8)
     result = (f'html{{background:{background};color-scheme:{"light dark" if theme == "system" else "dark" if theme in ("dark", "slate") else "light"};'
         '-webkit-text-size-adjust:100%;text-size-adjust:100%}'
         f'body{{background:{background};color:{foreground};font-family:{family};font-size:{size}px;'
-        f'line-height:{line_spacing / 100};margin:0 auto;padding:{vertical_margin}px {margin}px;max-width:{width};'
+        f'line-height:{line_spacing / 100};margin:0 auto;padding:0 {margin}px;max-width:{width};'
         'box-sizing:border-box;overflow-wrap:anywhere}'
         f'p,li{{text-align:var(--logistics-text-align,{"justify" if justify else "start"})}}'
         'p{margin:0 0 1em}h1,h2,h3,h4,h5,h6{line-height:1.25;margin:1.25em 0 .65em;overflow-wrap:break-word}'

@@ -86,9 +86,9 @@ const {chromium} = require('playwright');
      return {top:view.top,bottom:view.bottom,height:innerHeight,heading:document.querySelector('h1').getBoundingClientRect().top,left:parseFloat(css.paddingLeft),
        right:parseFloat(css.paddingRight),font:parseFloat(css.fontSize),line:parseFloat(css.lineHeight)};
     });
-    assert.equal(box.top,8,'The page must begin close to the native header');
-    assert.equal(box.heading,8,'Pagination must not restore the chapter heading top margin');
-    assert.equal(box.bottom,box.height-8,'The page must use the height above the native footer');
+    assert.equal(box.top,0,'The page must begin close to the native header');
+    assert.equal(box.heading,0,'Pagination must not restore the chapter heading top margin');
+    assert.equal(box.bottom,box.height,'The page must use the height above the native footer');
     assert.equal(box.left,fixture.compactMargin);assert.equal(box.right,fixture.compactMargin);
     assert.equal(box.font,24);assert.equal(box.line,36);
     await checkMeasurement();

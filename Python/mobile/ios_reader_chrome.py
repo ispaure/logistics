@@ -83,6 +83,8 @@ def install():
             else:
                 from .ios_content_background import expand_preview
                 changed = expand_preview(container)
+                from .reader_edges import compact_apple_reader
+                changed = compact_apple_reader(container) or changed
             if changed and container.content is not None:
                 container.content.interface.refresh()
             # Observe effective geometry, not the intermediate safe layout.

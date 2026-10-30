@@ -219,7 +219,9 @@ def reserve_navigation(app, *, view=None):
     home_bottom = float(window.safeAreaInsets.bottom)
     safe_bottom = float(window.bounds.size.height) - home_bottom
     from commonUtils.ui.readers.layout import remaining_clearance
-    extra = max(extra, remaining_clearance(bottom, safe_bottom))
+    from .reader_edges import passive_caption_tail
+    extension = min(passive_caption_tail(view), max(0, home_bottom - 4))
+    extra = max(extra, remaining_clearance(bottom - extension, safe_bottom))
     margin = view._navigation_margin + extra
     if view.style.margin_bottom != margin:
         view.style.margin_bottom = margin

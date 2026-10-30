@@ -404,6 +404,13 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, m
     from toga.platform import get_factory
     backend = get_factory().WebView.__module__ if native is not None else ''
     if backend.startswith('toga_iOS.'):
+        # The reader host owns safe/title/footer clearances, including compact
+        # vertical bars. WebKit must not reserve that space a second time.
+        native.scrollView.contentInsetAdjustmentBehavior = 2  # never
+        from rubicon.objc import SEL
+        for edge in ('topEdgeEffect', 'bottomEdgeEffect'):
+            if native.scrollView.respondsToSelector(SEL(edge)):
+                getattr(native.scrollView, edge).hidden = True
         native.scrollView.scrollEnabled = False
         native.scrollView.bounces = False
     elif backend.startswith('toga_android.'):

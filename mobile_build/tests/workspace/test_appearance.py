@@ -280,6 +280,22 @@ class AppearanceTests(unittest.TestCase):
         view._impl.container.bottom_inset = 34
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 16)
+        # A passive caption may use the home strip; the transport row may not.
+        footer = NS(vertical=False, widget=NS(layout=NS(content_height=69)),
+                    row=NS(layout=NS(content_height=48)))
+        view.children = [NS(_reader_page_footer=footer)]
+        view._impl.container.bottom_inset = 0
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 29)  # 16 frame + 13 home.
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 29)
+        view._impl.container.bottom_inset = 13
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 16)
+        footer.vertical = True
+        view._impl.container.bottom_inset = 0
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 50)
         view._comic_fullscreen = True
         view.style.margin = 0
         reserve_navigation(app)

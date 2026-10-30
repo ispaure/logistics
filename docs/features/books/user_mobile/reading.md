@@ -50,8 +50,8 @@ shows the whole-book percentage, **Page X of N**, then **Chapter X of Y** center
 below the progress bar in muted text matching the storage description.
 Its slim slider jumps to a screen page when released; the arrows still turn
 pages. Side margins come
-from **Appearance…**, without an extra frame narrowing the text. Top and bottom
-page padding is limited to 8 points so the text uses more of the available height.
+from **Appearance…**, without an extra frame narrowing the text. The page has no extra
+top or bottom padding; the header and progress controls provide the separation.
 Chapter headings, paragraphs and quotations use consistent spacing within the page.
 
 Enable **Settings → EPUB → Justify text** or **Appearance… → Justify text** to

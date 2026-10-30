@@ -92,13 +92,33 @@ class ViewerLayoutProbe(LogisticsMobile):
             x, y, width, height = row['footer']
             left, top, right, bottom = row['safe']
             row['bottom_gap'] = bottom - y - height
+            from mobile.reader_edges import passive_caption_tail
+            extension = (min(passive_caption_tail(view),
+                max(0, float(self.main_window._impl.native.safeAreaInsets.bottom) - 4))
+                if sys.platform == 'ios' else 0)
+            row['passive_caption_extension'] = extension
             row['edge_clearance'] = footer.widget.style.margin_bottom
-            if abs(row['bottom_gap'] - row['edge_clearance']) > 2:
+            if abs(row['bottom_gap'] + extension - row['edge_clearance']) > 2:
                 row['errors'].append('Footer is not at the safe bottom')
             if x < left - 2 or x + width > right + 2 or y < top - 2:
                 row['errors'].append('Footer extends beyond safe bounds')
             if not footer.vertical:
                 row['transport'] = geometry(self, footer.row)
+                if row['transport'][1] + row['transport'][3] > bottom + 1:
+                    row['errors'].append('Reader transport enters the home-gesture strip')
+                if sys.platform == 'ios':
+                    from mobile.ios_toolbar import vertical_edge
+                    controller = self.native_host.adapter.content_controller(self.native_host.state.destination)
+                    title = controller.navigationItem.titleView
+                    if vertical_edge(controller) and title is not None and row['pose'].get('hinge_status') != 2:
+                        window = self.main_window._impl.native
+                        rect = title.convertRect(title.bounds, toView=window)
+                        row['title_frame'] = [float(rect.origin.x), float(rect.origin.y),
+                            float(rect.size.width), float(rect.size.height)]
+                        row['title_top_gap'] = float(rect.origin.y - window.safeAreaInsets.top)
+                        row['title_content_gap'] = row['view'][1] - float(rect.origin.y + rect.size.height)
+                        if not 4 <= row['title_top_gap'] <= 8 or not 4 <= row['title_content_gap'] <= 8:
+                            row['errors'].append('Reader title retains excessive outer/content spacing')
                 row['caption'] = geometry(self, footer.spacer)
                 if not 44 <= row['transport'][3] <= 50:
                     row['errors'].append('Horizontal footer lost its compact touch row')
@@ -146,14 +166,16 @@ class ViewerLayoutProbe(LogisticsMobile):
         if 'epub' in name:
             row['epub'] = await self.epub_metrics(owner)
             dom = row['epub']
-            if dom['padding'] != [8, 32, 8, 32]:
+            if dom['padding'] != [0, 32, 0, 32]:
                 row['errors'].append('EPUB padding differs from compact vertical/chosen horizontal gutters')
-            if abs(dom['viewport_height'] - (dom['inner_height'] - 16)) > 1:
+            if abs(dom['viewport_height'] - dom['inner_height']) > 1:
                 row['errors'].append('EPUB viewport loses height beyond its vertical gutters')
             if before and before['anchor'] != dom['anchor']:
                 row['errors'].append('EPUB rotation lost the retained passage anchor')
             if dom.get('native_adjusted_inset', [0, 0, 0, 0]) != [0, 0, 0, 0]:
                 row['errors'].append('EPUB WebView applies another native content inset')
+            if not all(dom.get('native_edge_effects', {}).values()):
+                row['errors'].append('A native scroll-edge effect can obscure the EPUB text')
             if orientation == 'portrait' and dom['index'] == 0 and dom['count'] > 1:
                 web = self.epub_web(owner)
                 await web.evaluate_javascript('window.reader.turn(1)')
@@ -203,8 +225,13 @@ class ViewerLayoutProbe(LogisticsMobile):
                 f' bridge_ready={bridge.ready} bridge_closed={bridge.closed} root={bridge.root}; forced={forced}')
         value['native_frame'] = geometry(self, web)
         if sys.platform == 'ios':
+            from rubicon.objc import SEL
+            from mobile.screen_privacy import native_value
             inset = web._impl.native.scrollView.adjustedContentInset
             value['native_adjusted_inset'] = [float(inset.top), float(inset.right), float(inset.bottom), float(inset.left)]
+            scroll = web._impl.native.scrollView
+            value['native_edge_effects'] = {edge: bool(native_value(getattr(scroll, edge), 'isHidden'))
+                for edge in ('topEdgeEffect', 'bottomEdgeEffect') if scroll.respondsToSelector(SEL(edge))}
         return value
 
     async def check(self):
