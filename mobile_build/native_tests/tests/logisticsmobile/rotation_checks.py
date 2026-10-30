@@ -112,6 +112,25 @@ def safe_geometry(app):
     window = app.main_window._impl.native
     window_rect = native.convertRect(native.bounds, toView=window)
     safe = window.safeAreaInsets
+    minimum_top = float(insets.top)
+    from mobile.reader_edges import page_footer
+    from mobile.ios_toolbar import vertical_edge
+    footer = page_footer(view)
+    controller = (app.native_host.adapter.content_controller(app.native_host.state.destination)
+                  if footer is not None else None)
+    title = controller.navigationItem.titleView if controller is not None else None
+    if (title is not None and vertical_edge(controller)
+            and title.superview is not None and not controller.navigationItem.prompt
+            and getattr(app, '_hinge_status', 0) != 2):
+        title_rect = title.convertRect(title.bounds, toView=window)
+        title_bottom = float(title_rect.origin.y + title_rect.size.height)
+        title_gap = float(title_rect.origin.y - safe.top)
+        content_gap = float(window_rect.origin.y) - title_bottom
+        result.update(reader_title_top_gap=title_gap, reader_title_content_gap=content_gap)
+        assert 4 <= title_gap <= 8, result
+        assert 4 <= content_gap <= 8, result
+        origin = container.native.convertRect(container.native.bounds, toView=window).origin
+        minimum_top = title_bottom + 4 - float(origin.y)
     assert window_rect.origin.x >= (0 if edge == 1 else safe.left) - 1, result
     assert window_rect.origin.x + window_rect.size.width <= window.bounds.size.width - (0 if edge == 2 else safe.right) + 1, result
     assert window_rect.origin.y >= safe.top - 1, result
@@ -121,7 +140,7 @@ def safe_geometry(app):
     assert result['view_width'] > 0 and result['view_height'] > 0, result
     assert rect.origin.x >= (0 if edge == 1 else insets.left) - 1, result
     assert rect.origin.x + rect.size.width <= size.width - (0 if edge == 2 else insets.right) + 1, result
-    assert rect.origin.y >= insets.top - 1, result
+    assert rect.origin.y >= minimum_top - 1, result
     assert rect.origin.y + rect.size.height <= size.height + 1, result
     return result
 

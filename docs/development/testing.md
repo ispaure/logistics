@@ -251,6 +251,9 @@ durations and feature-specific readiness checks stay beside their scenario.
 assertions around the shared native rotation mechanism. Repeated native startup
 callbacks use `start_native_check` so activity recreation cannot duplicate a run.
 Shared screenshot mechanics remain behind the Logistics timing wrapper.
+Compact reader clearance is measured against the actual native title, including
+its top and content gaps. Hardware, side-rail and fixed-control bounds remain
+independent checks; other panels retain the standard navigation inset.
 
 State the full viewport when testing adaptive layout. A patched width alone does
 not specify portrait/landscape or whether the window is compact; the workspace
