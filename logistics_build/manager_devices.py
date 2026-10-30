@@ -1,5 +1,6 @@
 """Project-owned saved recipients and exact-artifact, reviewed device installation."""
 import argparse
+from dataclasses import replace
 import hashlib
 import json
 import os
@@ -38,6 +39,38 @@ def read_json(path, default=None):
     return json.loads(path.read_text())
 
 
+def android_signing_policy(value):
+    if (not isinstance(value, dict) or set(value) != {'mode', 'certificate'}
+            or not isinstance(value['mode'], str) or value['mode'] not in {'debug', 'beta'}
+            or not isinstance(value['certificate'], str)
+            or re.fullmatch(r'[0-9a-f]{64}', value['certificate']) is None):
+        raise ValueError('Saved Android signing policy needs an existing mode and SHA-256 certificate.')
+    return dict(value)
+
+
+def save_android_signing(root, device, mode, certificate):
+    """Persist explicit public identity metadata; never create or move a key."""
+    policy = android_signing_policy(dict(mode=mode, certificate=certificate))
+    path = Path(root) / 'mobile_build/.tools/test-devices.json'
+    rows = read_json(path)
+    if not isinstance(rows, list):
+        raise ValueError('Saved device inventory must be a list.')
+    selected = [row for row in rows if row.get('platform') == 'Android' and row.get('id') == device]
+    if len(selected) != 1:
+        raise ValueError('Choose one existing saved Android device for signing policy.')
+    selected[0]['android_signing'] = policy
+    save_json(path, rows)
+
+
+def validate_android_identity(data):
+    certificate = data.get('identity', {}).get('certificate')
+    for target in data['targets']:
+        if 'android_signing' in target:
+            policy = android_signing_policy(target['android_signing'])
+            if certificate != policy['certificate']:
+                raise ValueError('Prepared Android certificate differs from saved signing policy for ' + target['name'])
+
+
 def saved_devices(root, only=None):
     """Read only local saved metadata. Never discover, connect, wake or pair devices."""
     mobile = Path(root) / 'mobile_build'
@@ -56,6 +89,8 @@ def saved_devices(root, only=None):
         key = row.get('id'); selection_ids(json.dumps([key]))
         connection = row.get('connection', key); selection_ids(json.dumps([connection]))
         result[platform][key] = dict(id=key, name=str(row.get('name') or key), connection=connection)
+        if platform == 'android' and 'android_signing' in row:
+            result[platform][key]['android_signing'] = android_signing_policy(row['android_signing'])
     for key in ios_ids:
         selection_ids(json.dumps([key]))
         result['ios'].setdefault(key, dict(id=key, name=key, connection=key))
@@ -101,6 +136,32 @@ def android_connections(value):
 def make_plan(project, platform, targets, context, revision, *, shared=None):
     from logistics_build.build_snapshots import materialize, PRIVATE_RUNTIME_NAMES
     source = context.source(project, revision)
+    signing_mode = None
+    if platform == 'android':
+        if not targets:
+            raise ValueError('Choose at least one saved Android recipient.')
+        fallback = 'beta' if shared is not None else source.get('run_overrides', {}).get('devices.android_signing', 'debug')
+        groups = {}
+        for target in targets:
+            policy = android_signing_policy(target['android_signing']) if 'android_signing' in target else None
+            mode = policy['mode'] if policy else fallback
+            if mode not in {'debug', 'beta'}:
+                raise ValueError('Unknown Android device signing mode.')
+            groups.setdefault(mode, []).append(target)
+        if len(groups) > 1:
+            plans = []
+            for mode, recipients in groups.items():
+                plan = make_plan(project, platform, recipients, context, revision, shared=shared)
+                names = {phase.id: 'signing-' + mode + '.' + phase.id for phase in plan.phases}
+                plans.append(replace(plan, phases=tuple(replace(phase, id=names[phase.id],
+                    dependencies=tuple(names[dep] for dep in phase.dependencies)) for phase in plan.phases)))
+            return replace(plans[0], phases=tuple(phase for plan in plans for phase in plan.phases),
+                resource_locks=tuple(dict.fromkeys(lock for plan in plans for lock in plan.resource_locks)))
+        signing_mode = next(iter(groups))
+        # A saved Debug recipient cannot consume the Beta-signed Firebase APK.
+        # Prepare its own development package; never silently replace a key.
+        if signing_mode == 'debug':
+            shared = None
     snapshot = project.private / 'snapshots' / source['fingerprint']
     materialize(project.root, snapshot, revision, expected=source)
     for name in PRIVATE_RUNTIME_NAMES:
@@ -111,6 +172,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
     workspace = project.private / 'workspaces' / 'devices' / platform / uuid4().hex
     workspace.mkdir(parents=True, exist_ok=True)
     recipe = dict(schema=1, platform=platform, source=source, root=str(snapshot), workspace=str(workspace), targets=targets)
+    if signing_mode is not None:
+        recipe['android_signing_mode'] = signing_mode
     if shared is not None:
         recipe['shared_report'] = shared.artifacts[0]
     if platform == 'ios':
@@ -139,6 +202,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
             ('Development build with explicitly authorized Apple provisioning updates; no device registration'
              if platform == 'ios' and source.get('run_overrides', {}).get('devices.ios_provisioning') == 'update'
              else 'Development variant · separate from Release'))
+    if signing_mode is not None:
+        prepare = replace(prepare, description=prepare.description + ' · signing: ' + signing_mode)
     phases = [prepare]
     for index, target in enumerate(targets):
         receipt = workspace / ('device-' + str(index) + '.json')
@@ -152,7 +217,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
             '--device', target['id'], '--receipt', str(receipt)), str(snapshot), dependencies=(prepare.id, ready_id),
             environment=env, effect='deploy', kind='distribution', approval_required=False, timeout=600, artifacts=(str(receipt),),
             resources={'device:' + platform + ':' + target['id']: 1, 'host.device-install': 1},
-            label='Install on ' + target['name'], description='Install the prepared app on this selected device.'))
+            label='Install on ' + target['name'], description='Install the prepared app on this selected device.' +
+                (' Signing: ' + signing_mode + ' · ' + target.get('android_signing', {}).get('certificate', 'certificate checked before install') if signing_mode else '')))
     return Plan('Logistics', 'Prepare and install device app', source, tuple(phases), str(workspace),
         backend='This Mac', resource_locks=(str(project.mobile / '.deploy-workspaces/deploy.lock'),))
 
@@ -200,6 +266,8 @@ def prepare(path, digest):
         package = workspace / 'app.zip'
         subprocess.run(['/usr/bin/ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(ios.APP), str(package)], check=True)
     else:raise ValueError('Unsupported device platform.')
+    if platform == 'android':
+        validate_android_identity(data)
     data.update(package=str(package), package_sha256=file_sha256(package), bundle_id=BUNDLE)
     check_source(data); save_json(workspace / 'prepared.json', data)
     return data
@@ -210,7 +278,7 @@ def sign_android_debug(data, package):
     from mobile_build.deployment import android_deploy as android
     env, _ = android.tools_environment(android.deployment_environment())
     tools = android.build_tools(env)
-    mode = data['source'].get('run_overrides', {}).get('devices.android_signing', 'debug')
+    mode = data.get('android_signing_mode', data['source'].get('run_overrides', {}).get('devices.android_signing', 'debug'))
     if mode == 'debug':
         return android.apk_certificate(package, tools, env)
     if mode != 'beta':
@@ -428,11 +496,18 @@ def install(report, device, receipt):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'ready', 'install'])
+    parser.add_argument('action', choices=['prepare', 'ready', 'install', 'save-signing'])
     for name in ('recipe', 'report', 'receipt'):parser.add_argument('--' + name, type=Path)
     parser.add_argument('--sha256'); parser.add_argument('--device')
+    parser.add_argument('--root', type=Path)
+    parser.add_argument('--mode', choices=['debug', 'beta'])
+    parser.add_argument('--certificate')
     args = parser.parse_args()
-    if args.action == 'prepare':
+    if args.action == 'save-signing':
+        if not args.root or not args.device or not args.mode or not args.certificate:
+            parser.error('Saving signing policy needs root, saved device, mode and public certificate.')
+        save_android_signing(args.root, args.device, args.mode, args.certificate)
+    elif args.action == 'prepare':
         if not args.recipe or not args.sha256:parser.error('Preparation needs a recipe and its hash.')
         prepare(args.recipe, args.sha256)
     elif args.action == 'ready':

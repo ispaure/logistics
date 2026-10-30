@@ -3,7 +3,6 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -55,6 +54,54 @@ class ManagerDeviceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Choose at least one'):
             devices.selected_devices(self.root, 'android', {})
         self.assertEqual(devices.selected_devices(self.root, 'android', {'devices.android':'["hardware-1"]'})[0]['connection'], 'usb-1')
+
+    def test_saved_signing_overrides_global_mode_and_survives_selection(self):
+        devices.save_android_signing(self.root, 'hardware-1', 'debug', 'a' * 64)
+        targets = devices.selected_devices(self.root, 'android',
+            {'devices.android': '["hardware-1"]', 'devices.android_signing': 'beta'})
+        self.assertEqual(targets[0]['android_signing'], dict(mode='debug', certificate='a' * 64))
+        self.assertEqual(devices.saved_devices(self.root)['android']['hardware-1']['android_signing'], targets[0]['android_signing'])
+        devices.validate_android_identity(dict(targets=targets, identity=dict(certificate='a' * 64)))
+        with self.assertRaisesRegex(ValueError, 'differs from saved signing policy'):
+            devices.validate_android_identity(dict(targets=targets, identity=dict(certificate='b' * 64)))
+        for mode, certificate in [('automatic', 'a' * 64), ('debug', 'bad')]:
+            with self.assertRaises(ValueError):
+                devices.save_android_signing(self.root, 'hardware-1', mode, certificate)
+        with self.assertRaisesRegex(ValueError, 'existing saved'):
+            devices.save_android_signing(self.root, 'other', 'debug', 'a' * 64)
+
+    def test_mixed_saved_signers_get_distinct_reviewed_packages_including_release_journey(self):
+        from build_manager import Phase
+        project = LogisticsProject(self.root)
+        source = dict(fingerprint='source', dirty=False,
+            run_overrides={'devices.android_signing': 'beta'},
+            effective_settings=dict(values={'tools.mobile_python': sys.executable}))
+        context = PlanningContext(str(project.root), 'HEAD', json.dumps(source))
+        targets = [dict(id='boox', name='Boox', connection='one',
+                        android_signing=dict(mode='beta', certificate='b' * 64)),
+                   dict(id='samsung', name='Samsung', connection='two',
+                        android_signing=dict(mode='debug', certificate='a' * 64))]
+        shared = Phase('release', (sys.executable, '-V'), str(self.root), artifacts=(str(self.report),))
+        def snapshot(*args, **kwargs):
+            (project.private / 'snapshots/source/mobile_build').mkdir(parents=True, exist_ok=True)
+        with patch('logistics_build.build_snapshots.materialize', side_effect=snapshot):
+            for release in (None, shared):
+                with self.subTest(shared=release is not None):
+                    plan = devices.make_plan(project, 'android', targets, context, 'HEAD', shared=release)
+                    builds = [phase for phase in plan.phases if phase.effect == 'build']
+                    self.assertEqual(len(builds), 2)
+                    recipes = {json.loads(Path(phase.argv[phase.argv.index('--recipe') + 1]).read_text())['android_signing_mode']:
+                               json.loads(Path(phase.argv[phase.argv.index('--recipe') + 1]).read_text()) for phase in builds}
+                    self.assertEqual(recipes['debug']['targets'], [targets[1]])
+                    self.assertEqual(recipes['beta']['targets'], [targets[0]])
+                    self.assertNotEqual(recipes['debug']['workspace'], recipes['beta']['workspace'])
+                    self.assertNotIn('shared_report', recipes['debug'])
+                    self.assertEqual('shared_report' in recipes['beta'], release is not None)
+                    names = {phase.id for phase in plan.phases}
+                    self.assertTrue(all(set(phase.dependencies) <= names for phase in plan.phases))
+                    installs = [phase for phase in plan.phases if phase.effect == 'deploy']
+                    self.assertEqual(len(installs), 2)
+                    self.assertTrue(all('Signing:' in phase.description for phase in installs))
 
     def test_selected_device_requires_review_and_exact_package_and_never_falls_back(self):
         from mobile_build.deployment import android_deploy as android

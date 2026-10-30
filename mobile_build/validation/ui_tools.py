@@ -21,6 +21,7 @@ REPO = Path(__file__).resolve().parents[2]
 # The pinned external manager imports commonUtils from its consumer checkout.
 sys.path.insert(0, str(REPO / 'Python'))
 sys.path.insert(0, str(REPO))
+from commonUtils.runtime.diagnostics import Severity, log
 spec = importlib.util.spec_from_file_location('native_ui_contract',
     Path(__file__).resolve().parents[1] / 'native_tests/tests/logisticsmobile/__init__.py')
 contract = importlib.util.module_from_spec(spec)
@@ -139,7 +140,8 @@ def record_host_memory(path):
         return
     try:
         row = dict(time=time.time(), **linux_host_memory())
-        print('Native host memory: ' + json.dumps(row), flush=True)
+        log(Severity.INFO, 'Native host memory', json.dumps(row))
+        sys.stdout.flush()
         with path.with_name('native-host-memory.jsonl').open('a') as stream:
             stream.write(json.dumps(row) + '\n')
     except (OSError, ValueError, IndexError):
@@ -160,16 +162,17 @@ def _progress(path, stopped):
                     return
                 continue
             if 'LOGISTICS_NATIVE_CASE=' in line:
-                print('Native checkpoint: '+line.split('LOGISTICS_NATIVE_CASE=',1)[1].strip(),flush=True)
+                log(Severity.INFO, 'Native checkpoint', line.split('LOGISTICS_NATIVE_CASE=',1)[1].strip())
             elif 'LOGISTICS_NATIVE_DETAIL=' in line:
-                print('Native detail: '+line.split('LOGISTICS_NATIVE_DETAIL=',1)[1].strip(),flush=True)
+                log(Severity.INFO, 'Native detail', line.split('LOGISTICS_NATIVE_DETAIL=',1)[1].strip())
             elif 'LOGISTICS_NATIVE_TIMING=' in line:
                 try:
                     row = json.loads(line.split('LOGISTICS_NATIVE_TIMING=',1)[1])
                 except ValueError:
                     continue
                 if row.get('name') in {'navigation','documents','readers','scenes','chat','connections','localcrypt','ui-review','rotation-panel'}:
-                    print('Native section: '+row['name']+' '+json.dumps(row.get('details',{}))+' '+str(round(row['elapsed_s'],2))+'s',flush=True)
+                    log(Severity.INFO, 'Native section', row['name']+' '+json.dumps(row.get('details',{}))+' '+str(round(row['elapsed_s'],2))+'s')
+            sys.stdout.flush()
 
 
 def clear_run_reports(logs, target):
@@ -267,13 +270,15 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
                 detail = incoming.get('error') or 'process failed after reporting'
                 raise RuntimeError(f'Native app UI run failed ({code}): {detail}')
             if incoming.get('error'):
-                print('Native iOS report error: ' + str(incoming['error']), flush=True)
+                log(Severity.ERROR, 'Native iOS report', str(incoming['error']))
+                sys.stdout.flush()
             report = verify_report(incoming, target, output, local_manifest=manifest)
             (logs / 'ios-report-transport.json').write_text(json.dumps(dict(
                 transport=transport, device=device, briefcase_exit_code=code)) + '\n')
     if report is None:
         if code:
-            print(path.read_text(errors='replace')[-10000:])
+            log(Severity.ERROR, 'Native app output', path.read_text(errors='replace')[-10000:])
+            sys.stdout.flush()
             raise RuntimeError(f'Native app UI run failed ({code}); see retained logs.')
         report = verify(path, target, output, local_manifest=manifest)
     if require_independent_windows and report.get('independent_windows_tested') is not True:

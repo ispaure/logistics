@@ -72,7 +72,9 @@ def inventory():
     for label, discover in [('Android', android_devices), ('iOS', ios_devices)]:
         try:
             for device in discover():
-                known[device['platform'], device['id']] = device
+                key = (device['platform'], device['id'])
+                # Refresh transport/availability without erasing explicit saved signing policy.
+                known[key] = dict(known.get(key, {}), **device)
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
             errors.append(label + ': ' + str(error))
     # iOS membership is owned by .device.json, not this Android discovery cache.

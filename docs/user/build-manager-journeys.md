@@ -202,13 +202,29 @@ with owned emulator cleanup. Device installation updates the main app in place.
 After Boox testing, verify its Logistics packages and remove temporary QA/probe
 apps, preserving `io.github.ispaure.logisticsmobile` and its data.
 
-Choose `devices.android_signing=beta` when updating an app signed with the existing
-Logistics Beta key. Debug compilation remains separate from Release; the selected
-key signs the package before review, without device discovery. The default
-`debug` signing mode uses the ordinary Android Debug key. New prepared reports
-retain the certificate; installation checks it against the installed app before
-recording an attempt. A mismatch requires a new preparation, never an uninstall
-or automatic signing fallback. Release packages retain their existing signature.
+Saved Android recipients can each declare an existing signing mode and public
+certificate fingerprint in the project's local device registry. Save a verified
+identity with the project helper (use the existing device ID and SHA-256 certificate):
+
+```sh
+python -m logistics_build.manager_devices save-signing --root . \
+  --device DEVICE_ID --mode beta --certificate CERTIFICATE_SHA256
+```
+
+Use `debug` for a recipient whose installed app uses the existing Android Debug
+key, or `beta` for the existing Logistics Beta key. Saved per-device policy takes
+precedence over the preset's global `devices.android_signing` fallback. Device
+refresh preserves it. Mixed selections prepare separate, explicitly labelled
+packages and show the signing mode and fingerprint for each recipient in review.
+A Debug recipient cannot reuse the Beta-signed Firebase Release APK; it gets a
+separate development package. No key is created, relocated or rotated.
+
+Recipients without saved policy retain the existing global choice for Debug
+builds and the existing signature for shared Release packages. Before review,
+preparation verifies every saved certificate against the actual APK. Installation
+also checks the installed app's certificate before recording an attempt. A
+mismatch blocks delivery, preserving app data; there is no uninstall or automatic
+signing fallback.
 
 The complete local Android gate measured about 17 minutes on this Mac: roughly
 7 minutes for host checks, 90 seconds for APK build/emulator startup, 8 minutes for

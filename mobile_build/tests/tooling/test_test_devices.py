@@ -14,6 +14,25 @@ from mobile_build.deployment import firebase_deploy as firebase, testflight_depl
 
 
 class TestDeviceDeployment(unittest.TestCase):
+    def test_inventory_refresh_preserves_saved_android_signing_policy(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        import json
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'devices.json'
+            policy = dict(mode='beta', certificate='b' * 64)
+            path.write_text(json.dumps([dict(platform='Android', id='boox', name='Old',
+                connection='old', android_signing=policy)]))
+            with patch.object(devices, 'REGISTRY', path), \
+                    patch.object(devices, 'android_devices', return_value=[dict(platform='Android', id='boox', name='Boox', connection='usb', online=True)]), \
+                    patch.object(devices, 'ios_devices', return_value=[]), \
+                    patch.object(devices.ios, 'CONFIG', Path(directory) / 'missing.json'):
+                rows, errors = devices.inventory()
+            self.assertFalse(errors)
+            self.assertEqual(rows[0]['android_signing'], policy)
+            self.assertEqual(rows[0]['connection'], 'usb')
+            self.assertEqual(json.loads(path.read_text())[0]['android_signing'], policy)
+
     def test_single_android_target_excludes_other_platform_and_devices(self):
         targets = [dict(platform='Android', id='s8', name='S8+', connection='usb', online=True),
                    dict(platform='Android', id='boox', name='Boox', connection='wifi', online=True),
