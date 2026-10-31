@@ -429,23 +429,21 @@ class HubDocumentTests(unittest.TestCase):
         rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
         self.assertEqual({row.session_id for row in rows}, {first.id, active.id})
 
-    def test_folder_hub_live_transfer_banner_precedes_credential_and_actions_share_row(self):
+    def test_folder_hub_sync_shortcut_precedes_credential_without_transfer_headers(self):
         app = self.app
         app.transfer_busy = True
         app.show_locations()
         app.change_folder_source('rclone')
         view = app.body.children[0]
         frame = view._workspace_frame
-        self.assertIs(view.children[0], view.transfer_banner)
-        self.assertEqual(view.transfer_banner.notice.text, 'Transfer in progress · Details')
-        self.assertFalse(view.transfer_banner.dismiss.enabled)
+        self.assertIsNone(view.transfer_banner)
+        self.assertIs(frame.main.children[0], app._sync_status_controls['files'][1])
         credential_row = app.folder_credential.parent
-        self.assertIs(frame.main.children[0], app.folder_source_tabs)
+        self.assertIs(frame.main.children[1], app.folder_source_tabs)
         self.assertFalse(app.folder_local_header.children)
         self.assertIn(app.folder_picker_header, frame.main.children)
         self.assertEqual(list(app.folder_picker_header.children), [credential_row])
-        actions = app.folder_transfers_button.parent
-        self.assertEqual(list(actions.children), [app.folder_transfers_button])
+        self.assertIsNone(app.folder_transfers_button.parent)
         app.transfer_busy = False
         app.transfer_notification = True
         app.transfer_complete = True

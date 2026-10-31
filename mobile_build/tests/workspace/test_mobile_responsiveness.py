@@ -142,7 +142,8 @@ class ResponsivenessTests(unittest.TestCase):
         self.assertIs(app.folder_list.children[0], rows)
         self.assertEqual(app.folder_credential.value, 'First')
         self.assertEqual(set(app.folder_buttons), {'One'})
-        self.assertEqual(app.folder_source_actions.children, [app.folder_transfers_button])
+        self.assertEqual(app.folder_source_actions.children, [])
+        self.assertIsNotNone(app._sync_status_controls['files'][1].parent)
         app.transfer_busy = False
         app.loop.run_until_complete(app.refresh_folder_hub())
         self.assertEqual(app.folder_source_actions.children, [])

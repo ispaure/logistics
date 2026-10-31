@@ -46,7 +46,7 @@ def status_host(app, destination):
     return getattr(getattr(app, 'settings_navigation', None), '_menu', None), False
 
 
-def refresh(app):
+def refresh(app, destination=None):
     pending = getattr(app, '_sync_status_tick', None)
     if pending is not None:
         pending.cancel()
@@ -55,7 +55,7 @@ def refresh(app):
         return
     busy = bool(getattr(app, 'transfer_busy', False))
     visible = busy or getattr(app, 'transfer_notification', False)
-    destination = app.native_host.state.destination
+    destination = destination or app.native_host.state.destination
     controls = app.__dict__.setdefault('_sync_status_controls', {})
     # Remove every hidden control as well, so no timers or stale status survive
     # navigation into a document or replacement of a lazy root.

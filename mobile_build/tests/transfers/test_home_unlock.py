@@ -57,7 +57,9 @@ class HomeUnlockTests(unittest.TestCase):
             app.show_legacy_session = False
             self.assertEqual(app.home_unlock_candidates(), [])
             app.show_home()
-            self.assertIsInstance(app.home_content.children[0], toga.Label)
+            self.assertIs(app.home_content.children[0], app._home_status_row)
+            self.assertEqual(len(app._home_status_row.children), 1)
+            self.assertIsInstance(app._home_status_row.children[0], toga.Label)
             app.show_legacy_session = True
             self.assertEqual([item['zip'] for _, item in app.home_unlock_candidates()], ['Legacy.zip'])
 
