@@ -802,3 +802,19 @@ The manager's base commit and its own commonUtils dependency must still match th
 project's committed pin. Default transfers remain strict committed-source
 transfers. Working manager source cannot authorize delivery or GitHub execution;
 its results are local development evidence and do not update any release pin.
+
+
+## Shared manager integration APIs
+
+The adapter reads operation/backend choices from build-project.json through
+build_manager.adapter_sdk. VM plan submission, evidence collection/conditional
+cleanup and Windows pinned-tool preparation use build_manager.guest_workload.
+Logistics retains source membership, container/platform setup, dependency pins,
+application gates and storage policy. The descriptor explicitly lists optional
+adapter actions so the manager can expose supported storage and verification UI.
+
+These source changes require a manager version containing adapter_sdk and
+guest_workload. Candidate compatibility tests use the explicit local manager;
+the dependency pin must be updated to the reviewed committed revision before
+fresh hosted installation. No hosted dispatch or native VM acceptance is implied
+by portable contract results.

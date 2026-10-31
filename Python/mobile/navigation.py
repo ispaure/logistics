@@ -220,6 +220,7 @@ def install_apple_destination_layout(host):
                 # Preserve reader/fullscreen and keyboard-owned hidden states.
                 adapter.controller.setTabBarHidden(True, animated=False)
                 adapter.controller.setTabBarHidden(False, animated=False)
+            restore_apple_selection(host)
         finally:
             host.changing = changing
 
@@ -252,33 +253,62 @@ def refresh_apple_tab_items(host):
     adapter.impl.refresh_tabs()
 
 
-def install_apple_selection(app):
-    """Read UIKit selection after its tab-bar callback has finished switching.
+def apple_destination(host, controller):
+    """A tab can expose a workspace wrapper, not its inner navigation stack."""
+    return next((key for key, container in zip(host.destinations, host.adapter.impl.sub_containers)
+        if container.controller.ptr.value == controller.ptr.value), None)
 
-    Toga 0.5.7 reports tabBar:didSelectItem: before selectedViewController is
-    necessarily updated. Programmatic activate() already owns its selection.
+
+def restore_apple_selection(host):
+    """Reapply the committed route through the host's current tab controllers."""
+    changing = host.changing
+    try:
+        host.activate(host.state.destination)
+    finally:
+        host.changing = changing
+
+
+def install_apple_selection(app):
+    """Commit user navigation only after UIKit has selected its controller.
+
+    Toga's tab-bar callback can precede selection by more than a Python loop
+    turn. UITabBarControllerDelegate is authoritative on iPhone and iPad;
+    programmatic activate() already owns its selection.
     """
     host = app.native_host
     if host.adapter is None or not hasattr(host.adapter, 'navigation'):
         return
     pending = None
+    native_notifications = hasattr(host.adapter, 'controller')
 
-    def selected(widget, **kwargs):
+    def selected(widget, *, native_selection=False, native_destination=None, **kwargs):
         nonlocal pending
+        if host.changing:
+            return
+        if native_notifications and not native_selection:
+            # The tab-bar signal can report the previous controller. Only the
+            # controller delegate supplies an authoritative user selection.
+            return
         if pending is not None:
             pending.cancel()
             pending = None
-        if host.changing:
+        current = widget.current_tab
+        destination = native_destination or (host.destinations[current.index] if current is not None else None)
+        if destination is None:
             return
+        generation = app.navigation_generation
 
         def complete():
             nonlocal pending
             pending = None
-            if not app.active_host:
+            if not app.active_host or app.navigation_generation != generation:
                 return
-            host._selected(widget)
-            # Pack and toolbar ownership must use the newly visible controller,
-            # after the host has also committed its destination state.
+            # Capture the chosen destination in the native callback. A delayed
+            # layout can rebuild items before Python runs; rereading current_tab
+            # here would navigate back to Home and consume the first tap.
+            if host.on_select is None or host.on_select(destination) is not False:
+                host.state.select(destination)
+            restore_apple_selection(host)
             if host.adapter is not None:
                 host.adapter.controller.view.setNeedsLayout()
                 host.adapter.controller.view.layoutIfNeeded()
@@ -286,9 +316,9 @@ def install_apple_selection(app):
         pending = app.loop.call_soon(complete)
 
     host.root.on_select = selected
-    if getattr(host.adapter, 'sidebar_used', False):
-        # iPad's modern tabs can switch native controllers without invoking
-        # Toga 0.5.7's tabBar:didSelectItem:. Keep Python route state in sync too.
+    if native_notifications:
+        # Both phone bars and iPad sidebars report committed selections here.
+        # Keep the delegate alive independently of UIKit's weak reference.
         delegate = apple_selection_delegate().alloc().init()
         delegate.owner = app
         host.adapter.controller.delegate = delegate
@@ -300,7 +330,7 @@ _apple_selection_delegate = None
 
 
 def apple_selection_delegate():
-    """iPad's unified tabs/sidebar use UITabBarControllerDelegate callbacks."""
+    """Authoritative post-selection callbacks for phone tabs and iPad sidebars."""
     global _apple_selection_delegate
     if _apple_selection_delegate is None:
         from rubicon.objc import ObjCClass, objc_method, objc_property, SEL
@@ -312,10 +342,13 @@ def apple_selection_delegate():
             def tabBarController_didSelectViewController_(self, controller, selected) -> None:
                 app = self.owner
                 if app is not None:
-                    # Preserve Toga's layout refresh, then coalesce both old
-                    # tab-bar and modern sidebar notifications through one path.
+                    # Preserve Toga's layout refresh. The legacy tab-bar event
+                    # is deliberately ignored because its selection can be old.
                     controller.performSelector(SEL('refreshContent'), withObject=None, afterDelay=0)
-                    app.native_host.root.on_select()
+                    host = app.native_host
+                    destination = apple_destination(host, selected)
+                    if destination is not None:
+                        host.root.on_select(native_selection=True, native_destination=destination)
 
         _apple_selection_delegate = LogisticsTabSelectionDelegate
     return _apple_selection_delegate

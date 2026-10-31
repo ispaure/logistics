@@ -39,6 +39,7 @@ class LogisticsProject:
         self.root = Path(root).resolve()
         descriptor = self.root / 'build-project.json'
         metadata = json.loads(descriptor.read_text()) if descriptor.is_file() else {}
+        self.descriptor = metadata
         self.test_suites = metadata.get('test_suites', [])
         self.run_fields = metadata.get('run_fields', [])
         try:
@@ -55,20 +56,12 @@ class LogisticsProject:
         self.results_directory = self.root / 'test-results/build-manager'
 
     def backend_options(self, target, operation='Test'):
-        host={'darwin':'macos','linux':'linux','win32':'windows'}.get(sys.platform)
-        label={'macos':'This Mac','linux':'This Linux host','windows':'This Windows host'}.get(host,'Unsupported host')
-        if target=='ios' and operation=='Test':
-            return (('This Mac — iOS Simulators', 'GitHub') if host=='macos' else ('GitHub',))
-        if target=='android' and operation=='Test':
-            return (label+' — Android Emulator','GitHub')
-        if target==host:return (label,'GitHub')
-        if target in ('linux','windows') and host=='macos':return ('Local Parallels VM','GitHub')
-        return ((label,'GitHub') if target=='android' else ('This Mac','GitHub') if target=='ios' and host=='macos' else ('GitHub',))
+        from build_manager.adapter_sdk import backend_options
+        return backend_options(self.descriptor, target, operation)
 
     def operations_for(self, target):
-        if target in ('macos','linux','windows'):return ('Test','Release')
-        if target=='ios':return ('Test','Build','Prepare TestFlight','Reviewed TestFlight workflow','Release')
-        return ('Test','Build','Prepare Firebase','Reviewed Firebase workflow','Release')
+        from build_manager.adapter_sdk import operations_for
+        return operations_for(self.descriptor, target)
 
     def settings_view(self):
         values, sources = manager_settings.settings(self.mobile)

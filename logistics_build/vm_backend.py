@@ -169,9 +169,11 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
                 environment=env, dependencies=('environment',)),)
         plan = Plan('Logistics', 'Focused Linux contracts' if args.pattern else 'Full local Linux platform checks', args.source_identity, phases,
                     workspace + '/operation', backend='Parallels ' + args.distribution)
-        client.write_owned(vm, workspace, token, 'plan.json', json.dumps(plan.data()).encode(),
-                           account['uid'], account['gid'])
-        code = execute([guest_python, '-m', 'build_manager', workspace + '/plan.json', '--output', reports + '/manager'], env, 3400)
+        from build_manager.guest_workload import execute_plan
+        code = execute_plan(plan=plan, python=guest_python,
+            write=lambda data: client.write_owned(vm, workspace, token, 'plan.json', data, account['uid'], account['gid']),
+            execute=execute, plan_path=workspace + '/plan.json', reports=reports + '/manager',
+            environment=env, timeout=3400)
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
         return int(code != 0)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:

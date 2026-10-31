@@ -190,7 +190,8 @@ class CloudUI(LocalCryptUI):
             return await self.open_remote_document(row)
         password.on_confirm = open_item
         if not password_required:
-            actions = [('Open folder' if row['directory'] else 'Open preview', open_item)]
+            actions = [('Open folder' if row['directory'] else 'Open preview', open_item),
+                       ('Download locally…', lambda: self.download_remote_item(row))]
             if not row['directory'] and Path(row['path']).suffix.lower() in {'.cbz', '.zip', '.epub'}:
                 actions.append(('Archive password…', lambda: self.show_remote_item_actions(row, password_required=True)))
             return self.remote_browser.show_item_menu(actions)
@@ -207,6 +208,19 @@ class CloudUI(LocalCryptUI):
         self.show_view(self.remote_item_view, destination='files', route='remote-item', title=Path(row['path']).name)
         if password_required:
             password.focus()
+
+    async def download_remote_item(self, row):
+        if self.cloud_busy or getattr(self.app, 'transfer_busy', False):
+            return
+        resource = self.browser_state.resource
+        if resource is None or resource.remote != self.cloud_open_remote:
+            self.cloud_status.value = 'Browse the source again before downloading.'
+            return
+        from .remote_downloads import RemoteDownload
+        from commonUtils.runtime.resources.paths import resource_path
+        path = resource_path(row['path'])
+        request = RemoteDownload(resource, path, bool(row['directory']))
+        await self.app.editor_picker().show_destination(Path(path).name, request)
 
     def show_cloud_connections(self, widget=None, **kwargs):
         if not self.app.require_feature('rclone'):

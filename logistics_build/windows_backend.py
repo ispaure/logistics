@@ -25,42 +25,16 @@ PREPARE = WINDOWS_PREPARE
 
 
 def prepare(vm, output):
-    client = Parallels()
-    guest = client.start(vm)
+    from build_manager.guest_workload import prepare_windows
     catalog = json.loads(Path(__file__).with_name('build_manager_tools.json').read_text())['windows_arm64']
     from logistics_build.test_environments import load
-    catalog['runtime']['python'] = 'cpython-' + load()['python_version'] + '-windows-x86_64'
-    token = uuid4().hex
-    parameters = windows_parameters(token, catalog, **catalog['runtime'])
-    record = dict(token=token, vm=guest['uuid'], status='preparing', tests_run=False)
-    output = Path(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(record, indent=2) + '\n')
-    try:
-        prepared = json.loads(client.powershell(guest['uuid'], PREPARE, parameters, timeout=360))
-        record.update(prepared, status='prepared', original_state=guest['status'])
-        return record
-    except (OSError, ValueError, RuntimeError) as error:
-        record.update(status='failed', error=str(error))
-        raise
-    finally:
-        output.write_text(json.dumps(record, indent=2) + '\n')
+    runtime = dict(catalog['runtime'], python='cpython-' + load()['python_version'] + '-windows-x86_64')
+    return prepare_windows(Parallels(), vm, output, catalog, **runtime)
 
 
 def source_zip(snapshot):
-    stream = io.BytesIO()
-    with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as archive:
-        for name in source_members(snapshot):
-            path = snapshot / name
-            if path.is_symlink():
-                raise ValueError('Windows source transfer cannot flatten a symbolic link: '+name)
-            files = sorted(path.rglob('*')) if path.is_dir() else [path]
-            for file in files:
-                if file.is_symlink():
-                    raise ValueError('Windows source transfer cannot flatten a symbolic link: '+str(file.relative_to(snapshot)))
-                if file.is_file():
-                    archive.write(file, file.relative_to(snapshot).as_posix())
-    return stream.getvalue()
+    from build_manager.guest_workload import source_zip as encode
+    return encode(snapshot, source_members(snapshot))
 
 
 def run(args):
@@ -164,11 +138,13 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
         plan = Plan('Logistics', 'Focused Windows contracts' if args.pattern else 'Full local Windows platform checks',
                     args.source_identity, phases, str(root / ('operation-' + operation)), backend='Parallels Windows')
         plan_name = 'plan-' + operation + '.json'
-        guest.write(plan_name, json.dumps(plan.data(), indent=2).encode())
-        argv = ['-m', 'build_manager', str(root / plan_name), '--output', str(root / reports / 'manager'),
-                '--cancel-file', str(root / ('cancel-' + operation))]
-        code = guest.run(python, argv, source, reports, environment, cancelled, timeout=6000,
-                         progress=waiting_progress('Windows', 'selected checks'))
+        from build_manager.guest_workload import execute_plan
+        code = execute_plan(plan=plan, python=python,
+            write=lambda data: guest.write(plan_name, data),
+            execute=lambda argv, env, timeout: guest.run(argv[0], argv[1:], source, reports,
+                env, cancelled, timeout=timeout, progress=waiting_progress('Windows', 'selected checks')),
+            plan_path=str(root / plan_name), reports=str(root / reports / 'manager'),
+            environment=environment, timeout=6000, cancel_file=str(root / ('cancel-' + operation)))
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))

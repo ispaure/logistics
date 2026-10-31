@@ -94,6 +94,8 @@ func executeRequest(ctx context.Context, action string, request bridgeRequest) (
 		ctx = context.WithValue(ctx, transferOptionsKey{}, transferOptions{TrackRenames: request.TrackRenames, Excludes: request.Excludes})
 		if store.failure() {
 			err = errors.New("credentials could not be saved securely; sync was not started")
+		} else if request.Download {
+			result, err = downloadSync(ctx, request)
 		} else {
 			result, err = mirrorSync(ctx, request.Remote, request.Path, request.Identity, request.LocalPath, request.Run, request.Push, request.BWLimit)
 		}

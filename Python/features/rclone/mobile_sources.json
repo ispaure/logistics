@@ -59,6 +59,7 @@
     "transfers/scope.py",
     "transfers/service.py",
     "transfers/transfer_options.py",
-    "localcrypt/mobile/content.py"
+    "localcrypt/mobile/content.py",
+    "mobile/remote_downloads.py"
   ]
 }

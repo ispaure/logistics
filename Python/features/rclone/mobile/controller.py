@@ -24,6 +24,7 @@ class CloudController(CloudUI):
         "browse_cloud_path",
         "show_cloud_actions",
         "show_remote_item_actions",
+        "download_remote_item",
         "show_cloud_connections",
         "begin_cloud_import",
         "show_cloud_import",

@@ -31,7 +31,22 @@ for connection scopes, encrypted storage, cancellation and credential persistenc
 
 An entry's three-dot button offers its remote commands in place using the host's
 native popup or action sheet. Open folder/preview acts on the selected entry;
-archive-capable files also offer **Archive password…**. Only choosing the password
+**Download locally…** opens a destination picker for the selected file or folder.
+Choose Local, Received Files, another folder within Logisticks, or an unlocked
+LocalCrypt. Choose or create the destination folder, keep or change the item's
+name, then choose **Download here**. An ordinary destination requires confirmation
+because its decrypted copy remains readable after the connection locks.
+
+The download runs a Pull through the embedded rclone engine, including SMB/network
+shares and crypt remotes. Only the selected file or folder is downloaded; a file
+selection never pulls its parent folder. LocalCrypt destinations receive encrypted
+names and contents directly. Existing destination names are rejected rather than
+overwritten, and unrelated local files and the remote source are preserved.
+Transfer details provide progress and cancellation. This is one selected-item pull;
+it does not add a recurring workspace mapping. Reopen the remote menu to pull it
+again under a new name or choose a fresh destination.
+
+Archive-capable files also offer **Archive password…**. Only choosing the password
 command (or encountering an encrypted archive) opens the password form.
 
 Cloud folders open in **Cloud File Browser**. Open documents and Recent display

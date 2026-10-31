@@ -166,6 +166,19 @@ the generated assets. Mobile has no Qt runtime dependency. Material and UIKit
 own selection/theme tinting; iOS retains the artwork in each Toga OptionItem so
 native tab reconstruction preserves it.
 
+On iOS, destination changes use `UITabBarControllerDelegate` after UIKit commits
+the selected controller on both iPhone and iPad. Destination identity follows the
+current top-level option controller, including wide Workspaces' wrapper around
+its retained navigation stack. The earlier Toga tab-bar signal
+is ignored: even a queued Python callback can run while it still reports the
+previous screen, consuming the first tap. Programmatic navigation retains its
+own selection ownership. After first-root rendering, the committed destination
+is reapplied through the normal navigation host so a controller rebuild cannot
+leave UIKit showing Home with a different active route. Android's Material listener uses the tapped menu item
+directly before its checked state changes. The focused `first-tap` native probe
+checks cold and retained destination roots across portrait/landscape transitions;
+its UIKit callbacks exercise event ordering, rather than physical touch delivery.
+
 On Onyx/Boox devices, `BooxWindow.java` explicitly hides the unpainted status
 strip at startup. The existing activity inset listener still reserves real
 display cutouts and navigation space; keyboard resizing remains enabled. Other

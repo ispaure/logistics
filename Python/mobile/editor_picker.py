@@ -301,8 +301,17 @@ class EditorPicker:
         self.editor_storage_roots = ({'All files': ordinary['Shared files'], 'Local': None,
             'Received Files': ordinary['Received Files']} if creation is not None else {'Local files': None})
         if destination_action is not None:
-            self.editor_storage_roots = dict(self.app.file_roots)
-        self.editor_storage_roots.update(self.existing_crypt_locations() if self.app.feature_enabled('rclone') else {})
+            self.editor_storage_roots = dict(ordinary if getattr(destination_action, 'kind', '') == 'download' else self.app.file_roots)
+        if self.app.feature_enabled('rclone'):
+            if getattr(destination_action, 'kind', '') == 'download':
+                unlocked = {}
+                existing = self.existing_crypt_locations(roots=unlocked)
+                # A loaded cipher is also a valid destination before its first
+                # local file exists. Resolution creates that LocalCrypt lazily.
+                self.editor_storage_roots.update({label: location[0] for label, location in unlocked.items()})
+            else:
+                existing = self.existing_crypt_locations()
+            self.editor_storage_roots.update(existing)
         self.editor_linked_roots = self.linked_crypt_locations() if self.app.feature_enabled('rclone') else {}
         self.editor_storage_roots.update(self.editor_linked_roots)
         source_store = getattr(getattr(self.operation.origin, 'owner', None), '_crypt_reader_store', None)
@@ -344,8 +353,8 @@ class EditorPicker:
         self.save_as_name.on_change = self.update_effective_name
         self.update_effective_name()
         self.save_as_status = PickerMessage(self.app.main_window.size.width)
-        title = 'Move' if destination_action is not None else 'New document' if creation is not None else 'Open file' if mode == 'open' else 'Save As'
-        primary = 'Move here' if destination_action is not None else 'Create document' if creation is not None else 'Open file' if mode == 'open' else 'Save here'
+        title = getattr(destination_action, 'title', 'Move') if destination_action is not None else 'New document' if creation is not None else 'Open file' if mode == 'open' else 'Save As'
+        primary = getattr(destination_action, 'primary', 'Move here') if destination_action is not None else 'Create document' if creation is not None else 'Open file' if mode == 'open' else 'Save here'
         self.picker_parent = icon_button('up', 'Parent folder', on_press=self.parent_editor_folder)
         self.picker_header = self.editor_browser.attach_location_header(
             self.editor_browser.status_label(''), self.picker_parent)
@@ -518,7 +527,7 @@ class EditorPicker:
                 self.picker_primary.enabled = self.picker_primary.enabled and self._creation_name_valid
             virtual_root = ready and isinstance(provider, DeviceFiles) and not self.picker_folder.value
             self.picker_primary.text = ('Choose a folder first' if virtual_root and self.operation.creation is None else
-                'Move here' if self.operation.destination_action is not None else
+                getattr(self.operation.destination_action, 'primary', 'Move here') if self.operation.destination_action is not None else
                 'Create document' if self.operation.creation is not None else 'Save here')
             if virtual_root:
                 self.save_as_status.value = ('Choose a folder below to save your new document.'
@@ -563,6 +572,8 @@ class EditorPicker:
     async def complete_destination(self):
         if self.cloud_busy or self.editor_picker_location != (self.save_as_storage.value, self.picker_folder.value):
             return
+        if getattr(self.operation.destination_action, 'kind', '') == 'download':
+            return await self.complete_download()
         work = self._begin_work()
         plan = None
         try:
@@ -600,6 +611,39 @@ class EditorPicker:
             if plan is not None:
                 plan.release()
             self._finish_work(work)
+
+    async def complete_download(self):
+        operation = self.operation
+        work = self._begin_work()
+        destination = None
+        owned = False
+        try:
+            name = resource_name(self.save_as_name.value)
+            target = '/'.join(p for p in (self.picker_folder.value, name) if p)
+            provider = self.editor_provider(self.save_as_storage.value)
+            if not provider.private:
+                confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
+                    'Download to unencrypted storage?',
+                    'The selected item will remain readable locally after the connection locks. Continue?'))
+                if not confirmed:
+                    return False
+            if not self._accepts(work):
+                return False
+            destination = provider.reopen() if hasattr(provider, 'reopen') else provider
+            owned = destination is not provider
+            self._finish_work(work)
+            self.clear()
+            return await operation.destination_action.complete(self.app, destination, target)
+        except Exception as error:
+            if operation is self.operation:
+                self.save_as_status.value = 'Download failed: ' + str(error)[:250]
+            else:
+                self.app.cloud_status.value = 'Download failed: ' + str(error)[:250]
+            return False
+        finally:
+            self._finish_work(work)
+            if owned:
+                destination.close()
 
     def browser_editor_selected(self, row):
         if row is None:
@@ -644,12 +688,13 @@ class EditorPicker:
         if self.cloud_busy:
             return False
         label, folder = location
-        if self.operation.creation is not None and label == 'All files':
+        download = getattr(self.operation.destination_action, 'kind', '') == 'download'
+        if (self.operation.creation is not None and label == 'All files') or (download and label == 'Shared files'):
             # Collection roots have their own providers, just as in Workspaces.
             # In particular, iOS protects the shared Local directory itself.
             from services.documents.locations import collection_path
             from .incoming_files import inbox_path
-            for name, root in (('Local', collection_path(self.app.private_root)),
+            for name, root in (('Local files' if download else 'Local', collection_path(self.app.private_root)),
                                ('Received Files', inbox_path(self.app.private_root))):
                 if folder == root.name or folder.startswith(root.name + '/'):
                     location = name, folder.removeprefix(root.name).lstrip('/')

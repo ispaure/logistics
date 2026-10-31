@@ -75,9 +75,44 @@ def assert_cold_iphone_tab_labels(app):
     assert seen == expected, ('Missing cold-start tab labels', seen)
 
 
+async def exercise_first_selection(app):
+    """One native selection per destination, with UIKit's slow event ordering."""
+    samples = []
+    host = app.native_host
+    for round in range(2):
+        for destination in ('files', 'documents', 'chat', 'settings'):
+            app.show_home()
+            await asyncio.sleep(.05)
+            index = host.destinations.index(destination)
+            if get_os() is OS.IOS:
+                adapter = host.adapter
+                generation = app.navigation_generation
+                target = adapter.impl.sub_containers[index].controller
+                adapter.controller.tabBar_didSelectItem_(
+                    adapter.controller.tabBar, target.tabBarItem)
+                # Let the early signal reach Python while UIKit still shows Home.
+                await asyncio.sleep(.1)
+                assert host.state.destination == 'home'
+                assert app.navigation_generation == generation, 'Early signal navigated to stale Home'
+                adapter.controller.selectedViewController = target
+                app._apple_tab_selection_delegate.tabBarController_didSelectViewController_(
+                    adapter.controller, target)
+            else:
+                # Material passes the tapped item before changing its checked state.
+                host.adapter.impl.native_navigationview.setSelectedItemId(index + 1)
+            await asyncio.sleep(.15)
+            assert host.state.destination == destination, ('First selection lost', destination)
+            assert host.root.current_tab.index == index, ('Native tab disagrees', destination)
+            assert app.body is app.routes.body(destination), ('Visible root disagrees', destination)
+            assert app.body.children, ('First selection left an empty page', destination)
+            samples.append(dict(round=round, destination=destination))
+    app.show_home()
+    return samples
+
+
 async def exercise_navigation(app):
+    await exercise_first_selection(app)
     original = app.main_window.content
-    original_widgets = set(app.widgets.keys())
     def descendants(widget):
         result = {widget.id}
         for child in getattr(widget, 'children', ()):

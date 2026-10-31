@@ -23,7 +23,8 @@ class GuestToolPreparationTests(unittest.TestCase):
         with TemporaryDirectory() as directory, patch.object(windows_backend, 'Parallels') as transport:
             client = transport.return_value
             client.start.return_value = dict(uuid='test-vm', status='stopped')
-            client.powershell.return_value = json.dumps(dict(workspace='owned', python='python', uv='uv', git='git',
+            client.powershell.side_effect = lambda vm, script, parameters, **kwargs: json.dumps(dict(
+                token=parameters['token'], workspace='owned', python='python', uv='uv', git='git',
                 runtime={'version': '3.12.2'}, guestArchitecture='ARM64', session=1))
             output = Path(directory) / 'prepared.json'
             result = windows_backend.prepare('selected-vm', output)

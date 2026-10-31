@@ -103,7 +103,7 @@ class TransferOutcome:
                 or self.status != "updated"
             ):
                 raise ValueError("Invalid Push outcome.")
-        elif self.operation in ("pull", "create"):
+        elif self.operation in ("pull", "create", "download"):
             if self.files is not None or self.status not in (
                 "updated",
                 "complete",

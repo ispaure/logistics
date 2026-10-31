@@ -30,7 +30,8 @@ class NavigationTests(unittest.TestCase):
         edge = [0]
         async def exercise():
             with patch('mobile.ios_toolbar.vertical_edge', side_effect=lambda controller: edge[0]), \
-                    patch('mobile.navigation.refresh_apple_tab_items') as refresh:
+                    patch('mobile.navigation.refresh_apple_tab_items') as refresh, \
+                    patch('mobile.navigation.restore_apple_selection'):
                 install_apple_destination_layout(host)
                 await asyncio.sleep(0)
                 refresh.assert_not_called()
@@ -127,6 +128,18 @@ class NavigationTests(unittest.TestCase):
         self.assertEqual(host.root.current_tab.text, 'Home')
         selected.assert_not_called()
         refresh.assert_called_once_with()
+
+    def test_apple_selection_resolves_wrapped_destination_controllers(self):
+        from mobile.navigation import apple_destination
+        home = SimpleNamespace(ptr=SimpleNamespace(value=1))
+        inner = SimpleNamespace(ptr=SimpleNamespace(value=2))
+        wrapper = SimpleNamespace(ptr=SimpleNamespace(value=3))
+        host = SimpleNamespace(destinations=('home', 'files'), adapter=SimpleNamespace(
+            navigation=(home, inner), impl=SimpleNamespace(sub_containers=(
+                SimpleNamespace(controller=home), SimpleNamespace(controller=wrapper)))))
+        self.assertEqual(apple_destination(host, wrapper), 'files')
+        self.assertEqual(apple_destination(host, home), 'home')
+        self.assertIsNone(apple_destination(host, inner))
 
     def test_back_is_destination_local_and_preserves_screen_and_guard(self):
         host = NativeNavigationHost(DESTINATION_ITEMS)

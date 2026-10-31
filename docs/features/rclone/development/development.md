@@ -116,3 +116,23 @@ metadata refresh; credential-service tests cover one-use admissions and revocati
 Real CLI tests require the pinned executable. Go bridge tests, native-library
 integration tests and physical-device checks are separate validation scopes.
 Historical passing results do not validate a new change.
+
+## Selected remote-item downloads on mobile
+
+`mobile/remote_downloads.py` captures a selected remote path and kind, then uses
+`mobile.editor_picker` for an ordinary app-owned or unlocked LocalCrypt destination.
+The captured connection generation and identities are checked before native I/O
+and publication. It uses the existing transfer execution/progress/cancellation owner.
+`mirror_sync` requests with `download=true` select `download_sync.go`: folder Pull
+uses rclone Sync, while file Pull copies only that named object. Native staging
+must be empty and independent. LocalCrypt wraps that staging folder with the
+selected destination cipher, so no decrypted staging files are written.
+
+The Python owner exclusively renames the completed staged item into its requested
+name; it rejects collisions and never removes the source. Failure/cancellation
+cleans only the operation's staging folder. No persistent mirror mapping is added.
+`test_remote_downloads.py` covers selection, picker roots, confirmation, collision,
+credential change, cancellation and owned cleanup. Native `TestDownload*` fixtures
+cover the wire request, single-item scope, crypt sources/encrypted destinations and
+rejection of changed identities or nonempty staging. Portable checks do not replace
+physical-device interaction with an actual network share.

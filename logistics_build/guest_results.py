@@ -8,64 +8,7 @@ import time
 from build_manager.profiles import save_json
 
 
-class GuestResultLifecycle:
-    def __init__(self, result, directory, backend, workspace_key):
-        self.result, self.directory = result, Path(directory)
-        if result.get('backend', backend) != backend:
-            raise ValueError('Guest result backend differs from its lifecycle owner.')
-        result['backend'] = backend
-        self.backend, self.workspace_key = backend, workspace_key
-        self.started = time.monotonic()
-        self.collected = False
-        # Persist ownership before any transfer/worker can outlive this wrapper.
-        # An interrupted running record is recovery evidence, never a test pass.
-        save_json(self.directory / 'result.json', self.result)
-
-    def collect(self, collect, evidence, cleanup):
-        """Collect before cleanup; preserve remote evidence if transfer fails.
-
-        Collection success and evidence validity are distinct: an invalid report
-        is retained locally for diagnosis, allowing the owned remote copy to be
-        removed just as before. Transport admission/retry stays with each backend.
-        """
-        try:
-            collect()
-            self.collected = True
-            evidence = Path(evidence)
-            if evidence.is_file():
-                report = json.loads(evidence.read_text())
-                if report['source'] != self.result['source'] or report['backend'] != self.backend:
-                    raise ValueError('Retrieved guest report belongs to different source/backend.')
-                self.result['phases'] = report['phases']
-                self.result['guest_result'] = str(evidence)
-                if self.result['status'] == 'passed' and report['status'] != 'passed':
-                    raise ValueError('Guest exit status disagrees with its required test result.')
-            elif self.result['status'] == 'passed':
-                raise ValueError('A passing guest process did not produce its required result.')
-        except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
-            self.result.update(status='failed', retrieval_error=str(error))
-        if self.collected:
-            try:
-                cleanup()
-                self.result[self.workspace_key + '_removed'] = True
-            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
-                self.result.update(status='failed', cleanup_error=str(error))
-        else:
-            self.result[self.workspace_key + '_preserved_for_recovery'] = True
-
-    def finish(self):
-        self.result['seconds'] = time.monotonic() - self.started
-        save_json(self.directory / 'result.json', self.result)
-        print(json.dumps(self.result), flush=True)
-
-
-
-def waiting_progress(backend, stage):
-    """Describe a headless wait without claiming observed guest test progress."""
-    def present(event):
-        state = 'reconciling worker receipt' if event['state'] == 'reconciling' else 'waiting for worker result'
-        print(f"{backend} · {stage} · {state} · {event['seconds']:.0f}s (headless)", flush=True)
-    return present
+from build_manager.guest_workload import GuestResultLifecycle, waiting_progress
 
 
 def verified_manager_completion(directory, source, backend, manager_commit, source_plan_identity=''):

@@ -433,7 +433,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -491,6 +491,9 @@ def main():
         if args.probe == 'localcrypt':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.localcrypt_probe', result_name='localcrypt-result.json')
+        if args.probe == 'first-tap':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.first_tap_probe', result_name='first-tap-result.json')
         if args.probe == 'native-suite':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.native_suite_probe', result_name='logistics-native-ui-result.json')

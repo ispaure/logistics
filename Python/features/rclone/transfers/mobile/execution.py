@@ -103,6 +103,8 @@ class TransferPresentation(Protocol):
 def completion_message(operation, result):
     """Format one validated outcome, accepting legacy programmatic worker results."""
     outcome = TransferOutcome.from_result(operation, result)
+    if outcome.operation == 'download':
+        return 'Download complete. The selected item is saved locally.'
     if outcome.operation == 'push':
         return f'Push sync verified: {outcome.files} file(s) sent. Destination-only entries were removed.'
     return ('Files changed during the operation; inspect the local destination.'

@@ -678,7 +678,9 @@
         "existing": "Use existing signing assets",
         "update": "Authorize Apple provisioning updates"
       },
-      "destinations": ["ios-devices"],
+      "destinations": [
+        "ios-devices"
+      ],
       "description": "Explicitly permit Apple profile and capability updates for a Debug device build using the configured API key. Does not register devices. Release exports use existing profiles."
     },
     {
@@ -694,5 +696,17 @@
       "description": "Explicit local validation only. Captures current manager source/tests with a verified content identity; releases and delivery retain the committed pin."
     }
   ],
-  "dynamic_run_inputs": true
+  "dynamic_run_inputs": true,
+  "adapter_actions": [
+    "plan",
+    "journey_plan",
+    "settings",
+    "save_settings",
+    "verification",
+    "run_defaults",
+    "run_choices",
+    "set_app_version",
+    "storage_inventory",
+    "delete_storage"
+  ]
 }

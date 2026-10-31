@@ -22,6 +22,18 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class ManagerSuiteTests(unittest.TestCase):
+    def setUp(self):
+        temporary = TemporaryDirectory(prefix='manager-suite-contracts-')
+        self.addCleanup(temporary.cleanup)
+        initialize = LogisticsProject.__init__
+        def isolated(project, root):
+            initialize(project, root)
+            from uuid import uuid4
+            project.private = Path(temporary.name) / uuid4().hex
+        initialization = patch.object(LogisticsProject, '__init__', isolated)
+        initialization.start()
+        self.addCleanup(initialization.stop)
+
     def test_host_report_plan_declares_files_without_running_discovery(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -198,6 +210,7 @@ class ManagerSuiteTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'build-tests.json').write_text((ROOT / 'build-tests.json').read_text())
+            (root / 'build-project.json').write_text((ROOT / 'build-project.json').read_text())
             project = LogisticsProject(root)
             source = dict(logistics_commit='a', commonUtils_commit='b', fingerprint='fixed', dirty=False)
             build = Phase('prepare-verified-artifact', (sys.executable, '-c', 'pass'), str(root), kind='build', artifacts=(str(root/'prepared.json'),))
@@ -233,6 +246,7 @@ class ManagerSuiteTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'build-tests.json').write_text((ROOT / 'build-tests.json').read_text())
+            (root / 'build-project.json').write_text((ROOT / 'build-project.json').read_text())
             project = LogisticsProject(root)
             source = dict(logistics_commit='a', commonUtils_commit='b', fingerprint='fixed', dirty=False)
             build = Phase('prepare-verified-artifact', (sys.executable,'-c','pass'),str(root),kind='build',artifacts=(str(root/'prepared.json'),))

@@ -7,7 +7,7 @@ from features.rclone.transfers.transfer_options import TransferOptions, DEFAULT_
 
 
 def sync_copy(
-    job, client, *, check, local_path, push, cancelled, progress, options=None
+    job, client, *, check, local_path, push, cancelled, progress, options=None, download=None
 ):
     check(client, job, cancelled)
     run = uuid4().hex
@@ -53,6 +53,7 @@ def sync_copy(
             local_path=str(local_path().resolve()),
             run=run,
             push=push,
+            **(download or {}),
             **(options or TransferOptions(excludes=DEFAULT_EXCLUDES)).bridge_arguments(
                 push=push
             ),

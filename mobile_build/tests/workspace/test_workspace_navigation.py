@@ -376,7 +376,97 @@ class WorkspaceNavigationTests(unittest.TestCase):
             screens.clear()
             self.app.native_host.adapter = original
 
-    def test_apple_tab_signal_reads_selection_after_native_switch(self):
+    def test_first_apple_tap_waits_for_committed_selection_on_phone_and_ipad(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from mobile.navigation import install_apple_selection
+        app = self.app
+        original = app.native_host.adapter
+        for sidebar in (False, True):
+            for destination in ('files', 'documents', 'chat', 'settings'):
+                with self.subTest(sidebar=sidebar, destination=destination):
+                    app.native_host.adapter = original
+                    app.show_home()
+                    controller = SimpleNamespace(view=Mock())
+                    delegate = SimpleNamespace(owner=None)
+                    factory = Mock()
+                    factory.alloc.return_value.init.return_value = delegate
+                    app.native_host.adapter = SimpleNamespace(
+                        navigation=[], controller=controller, sidebar_used=sidebar)
+                    try:
+                        with patch('mobile.navigation.apple_selection_delegate', return_value=factory):
+                            install_apple_selection(app)
+                        # Only the bridge is native in this portable fixture;
+                        # queued application layout still uses the dummy host.
+                        app.native_host.adapter = original
+                        with patch.object(app, 'select_destination', wraps=app.select_destination) as callback:
+                            app.native_host.on_select = callback
+                            # The legacy tab-bar callback can run a whole Python
+                            # loop turn before UIKit commits the selected screen.
+                            app.native_host.root.on_select()
+                            app.loop.run_until_complete(asyncio.sleep(0))
+                            callback.assert_not_called()
+                            self.assertIs(controller.delegate, delegate)
+                            app.native_host.root._impl._set_value(
+                                'current_tab_index', app.native_host.destinations.index(destination))
+                            app.native_host.root.on_select(native_selection=True)
+                            # A duplicate legacy notification must not cancel
+                            # the authoritative post-selection notification.
+                            app.native_host.root.on_select()
+                            app.native_host.adapter = original
+                            app.loop.run_until_complete(asyncio.sleep(0))
+                            callback.assert_called_once_with(destination)
+                            self.assertEqual(app.native_host.state.destination, destination)
+                            self.assertIs(app.body, app.routes.body(destination))
+                    finally:
+                        app.native_host.adapter = original
+                        app.native_host.on_select = app.select_destination
+
+    def test_apple_selection_keeps_intent_when_layout_resets_before_queued_commit(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from mobile.navigation import install_apple_selection
+        app = self.app
+        app.show_home()
+        original = app.native_host.adapter
+        app.native_host.adapter = SimpleNamespace(navigation=[], controller=SimpleNamespace(view=Mock()))
+        with patch('mobile.navigation.apple_selection_delegate'):
+            install_apple_selection(app)
+        app.native_host.adapter = original
+        index = app.native_host.destinations.index('files')
+        app.native_host.root._impl._set_value('current_tab_index', index)
+        app.native_host.root.on_select(native_selection=True, native_destination='files')
+        # A bar-axis rebuild runs after didSelect but before Python's callback.
+        app.native_host.root._impl._set_value('current_tab_index', 0)
+        app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(app.native_host.state.destination, 'files')
+        self.assertEqual(app.native_host.root.current_tab.index, index)
+        self.assertIs(app.body, app.routes.body('files'))
+
+    def test_newer_programmatic_navigation_wins_over_a_queued_native_selection(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from mobile.navigation import install_apple_selection
+        app = self.app
+        app.show_home()
+        original = app.native_host.adapter
+        app.native_host.adapter = SimpleNamespace(navigation=[], controller=SimpleNamespace(view=Mock()))
+        with patch('mobile.navigation.apple_selection_delegate'):
+            install_apple_selection(app)
+        app.native_host.adapter = original
+        app.native_host.root._impl._set_value('current_tab_index', 1)
+        app.native_host.root.on_select(native_selection=True, native_destination='files')
+        app.show_settings()
+        app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(app.native_host.state.destination, 'settings')
+        self.assertEqual(app.native_host.root.current_tab.text, 'Settings')
+        self.assertIs(app.body, app.routes.body('settings'))
+
+    def test_first_apple_selection_survives_root_render_resetting_native_tab(self):
+        import asyncio
         from types import SimpleNamespace
         from unittest.mock import Mock
         from mobile.navigation import install_apple_selection
@@ -385,20 +475,26 @@ class WorkspaceNavigationTests(unittest.TestCase):
         original = app.native_host.adapter
         app.native_host.adapter = SimpleNamespace(navigation=[], controller=SimpleNamespace(view=Mock()))
         try:
-            install_apple_selection(app)
-            with patch.object(app, 'select_destination', wraps=app.select_destination) as callback:
-                app.native_host.on_select = callback
-                # UIKit signals the tab item while current_tab still says Home.
-                app.native_host.root.on_select()
-                self.assertEqual(app.native_host.state.destination, 'home')
-                # Its selected controller changes before the queued callback.
-                app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('documents'))
-                app.native_host.adapter = original
-                app.loop.run_until_complete(__import__('asyncio').sleep(0))
-                self.assertEqual(app.native_host.state.destination, 'documents')
-                self.assertEqual(callback.call_args.args, ('documents',))
+            with patch('mobile.navigation.apple_selection_delegate'):
+                install_apple_selection(app)
+            app.native_host.adapter = original
+            def render(destination):
+                result = app.select_destination(destination)
+                # UIKit can reset selectedViewController while the first lazy
+                # destination root is attached/rebuilds its native tab items.
+                app.native_host.root._impl._set_value('current_tab_index', 0)
+                return result
+            app.native_host.on_select = render
+            index = app.native_host.destinations.index('files')
+            app.native_host.root._impl._set_value('current_tab_index', index)
+            app.native_host.root.on_select(native_selection=True)
+            app.loop.run_until_complete(asyncio.sleep(0))
+            self.assertEqual(app.native_host.state.destination, 'files')
+            self.assertEqual(app.native_host.root.current_tab.index, index)
+            self.assertIs(app.body, app.routes.body('files'))
         finally:
             app.native_host.adapter = original
+            app.native_host.on_select = app.select_destination
 
     def test_ipad_tab_delegate_keeps_native_and_route_destinations_in_sync(self):
         from types import SimpleNamespace
@@ -419,8 +515,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertIs(delegate.owner, app)
             # A modern iPad tab selected Home without the legacy tab-bar event.
             app.native_host.root._impl._set_value('current_tab_index', 0)
-            app.native_host.root.on_select()
-            app.native_host.root.on_select()  # Coalesce an accompanying legacy notification.
+            app.native_host.root.on_select(native_selection=True)
+            app.native_host.root.on_select()  # Ignore an accompanying legacy notification.
             app.native_host.adapter = original
             app.loop.run_until_complete(__import__('asyncio').sleep(0))
             self.assertEqual(app.native_host.state.destination, 'home')
@@ -431,16 +527,19 @@ class WorkspaceNavigationTests(unittest.TestCase):
     def test_queued_first_chat_tap_initializes_and_return_keeps_the_draft(self):
         import asyncio
         from types import SimpleNamespace
+        from unittest.mock import Mock
         from mobile.navigation import install_apple_selection
         app = self.app
         app.show_home()
         original = app.native_host.adapter
-        app.native_host.adapter = SimpleNamespace(navigation=[])
-        install_apple_selection(app)
+        app.native_host.adapter = SimpleNamespace(navigation=[], controller=SimpleNamespace(view=Mock()))
+        with patch('mobile.navigation.apple_selection_delegate'):
+            install_apple_selection(app)
         app.native_host.adapter = original
         self.assertFalse(hasattr(app, 'chat_view'))
         app.native_host.root.on_select()
         app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('chat'))
+        app.native_host.root.on_select(native_selection=True)
         app.loop.run_until_complete(asyncio.sleep(0))
         self.assertEqual(app.native_host.state.destination, 'chat')
         self.assertIn(app.chat_view, app.body.children)
@@ -450,6 +549,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.show_home()
         app.native_host.root.on_select()
         app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('chat'))
+        app.native_host.root.on_select(native_selection=True)
         app.loop.run_until_complete(asyncio.sleep(0))
         self.assertEqual(app.native_host.state.destination, 'chat')
         self.assertIs(app.chat_view, view)

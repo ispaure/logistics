@@ -94,7 +94,12 @@ async def exercise_workspace(app):
         # A setter-driven test only covers the opposite event order.
         adapter = app.native_host.adapter
         adapter.controller.tabBar_didSelectItem_(adapter.controller.tabBar, adapter.navigation[app.native_host.destinations.index('chat')].tabBarItem)
-        adapter.controller.selectedIndex = app.native_host.destinations.index('chat')
+        previous = app.native_host.state.destination
+        await asyncio.sleep(.1)
+        assert app.native_host.state.destination == previous, 'Early signal must not navigate'
+        target = adapter.navigation[app.native_host.destinations.index('chat')]
+        adapter.controller.selectedViewController = target
+        app._apple_tab_selection_delegate.tabBarController_didSelectViewController_(adapter.controller, target)
         await asyncio.sleep(.3)
         assert app.native_host.state.destination == 'chat', 'Chat must open on the first native item signal'
         assert app.chat_messages in app.chat_workspace.children
