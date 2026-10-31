@@ -47,3 +47,18 @@ class ReleaseEvidenceTests(unittest.TestCase):
         request = Mock(side_effect=AssertionError('Fresh debug policy must not reuse prior runs'))
         self.assertEqual(select(request, 'fixture/repo', self.sha, now=self.now, reuse_allowed=False), {})
         request.assert_not_called()
+
+
+class ReleasePublicationWorkflowTests(unittest.TestCase):
+    def test_publish_survives_reused_validation_but_requires_successful_package(self):
+        from pathlib import Path
+        workflow = (Path(__file__).resolve().parents[1] / 'workflows/release.yml').read_text()
+        publish = workflow.split('\n  publish:\n', 1)[1]
+        condition = publish.split('    if: >-\n', 1)[1].split('    runs-on:', 1)[0]
+        # An explicit status check suppresses implicit success() propagation
+        # from deliberately skipped validation ancestors. Packaging still gates publication.
+        self.assertIn('always()', condition)
+        self.assertIn('!cancelled()', condition)
+        self.assertIn("needs.package.result == 'success'", condition)
+        self.assertIn("github.event_name == 'push'", condition)
+        self.assertIn("startsWith(github.ref, 'refs/tags/v')", condition)
