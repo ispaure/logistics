@@ -117,7 +117,7 @@ class EditorPickerTests(unittest.TestCase):
         picker.save_as_data = b'Keep this draft'
         name.value = 'Retained.txt'
         picker.fit_keyboard(True)
-        self.assertEqual(list(panel.children), [picker.save_as_storage, form, picker.picker_actions])
+        self.assertEqual(list(panel.children), [form, picker.picker_actions])
         self.assertIs(name.parent, parent)
         self.assertIs(form.content, picker.save_as_view)
         self.assertEqual(form.style.height, 'none')
@@ -141,6 +141,31 @@ class EditorPickerTests(unittest.TestCase):
         self.assertEqual(picker.save_as_data, b'Keep this draft')
         self.assertIs(picker._listed_provider, provider)
         self.assertGreater(form.style.height, 0)
+
+    def test_apple_location_dropdown_keeps_its_first_responder_attached(self):
+        picker = self.app.editor_picker()
+        native = SimpleNamespace(isFirstResponder=True)
+        name = SimpleNamespace(isFirstResponder=False)
+        backend = type('IOSApp', (), {'__module__': 'toga_iOS.app', 'loop': self.app.loop})()
+        adapter = SimpleNamespace(keyboard_inset=236)
+        with patch.object(self.app, '_impl', backend), patch.object(self.app.native_host, 'adapter', adapter), \
+                patch.object(picker.save_as_storage._impl, 'native', native, create=True), \
+                patch.object(picker.save_as_name._impl, 'native', name, create=True):
+            picker.fit_keyboard(True)
+            self.assertIs(picker.save_as_storage.parent, picker.panel)
+            picker.fit_keyboard(True)
+            self.assertIs(picker.save_as_storage.parent, picker.panel)
+            native.isFirstResponder = False
+            picker.fit_keyboard(True)
+            self.assertIs(picker.save_as_storage.parent, picker.panel)
+            picker.fit_keyboard(False)
+            picker.fit_keyboard(True)  # Rotation may briefly report chrome with no first responder.
+            self.assertIs(picker.save_as_storage.parent, picker.panel)
+            name.isFirstResponder = True
+            picker.fit_keyboard(True)
+            self.assertIsNone(picker.save_as_storage.parent)
+            picker.fit_keyboard(False)
+            self.assertIs(picker.save_as_storage.parent, picker.panel)
 
     def test_apple_keyboard_uses_visible_height_without_moving_the_focused_input(self):
         picker = self.app.editor_picker()

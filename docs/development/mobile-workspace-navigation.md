@@ -1604,8 +1604,10 @@ through the shared native navigation-bar projection.
 
 ### Storage selector keyboard lifetime
 
-The shared destination picker keeps its storage selector mounted while compacting
-the browser for a keyboard. On iOS, a Selection uses a text field with a picker
+The shared destination picker keeps its storage selector mounted while that
+selector owns the input view, including brief focus loss while its location is
+loading. Filename entry can compact it to preserve the
+short landscape typing viewport. On iOS, a Selection uses a text field with a picker
 input view; removing that field during keyboard layout resigns focus and closes
 the location picker immediately. Folder listing can still disable the selector
 until the newly selected location has loaded.

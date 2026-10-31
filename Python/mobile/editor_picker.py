@@ -393,6 +393,7 @@ class EditorPicker:
                      primary_symbol=None if creation is not None else 'checkmark')
         self.panel = panel
         self._compact_keyboard = False
+        self._naming_keyboard_active = False
         self.show_view(panel, route='text-destination', title=title)
         self.save_as_storage.on_change = self.change_editor_storage
         # Cold-start credential restoration can replace the client and then
@@ -415,14 +416,22 @@ class EditorPicker:
         self._fitting_keyboard = True
         try:
             self._compact_keyboard = compact
+            apple = type(self.app._impl).__module__.startswith('toga_iOS.')
+            def focused(control):
+                return bool(getattr(getattr(control._impl, 'native', None), 'isFirstResponder', False))
+            if not compact or not apple or focused(self.save_as_storage):
+                self._naming_keyboard_active = False
+            elif focused(self.save_as_name) or focused(self.new_folder_name):
+                self._naming_keyboard_active = True
             controls = self._browse_controls if compact else reversed(self._browse_controls)
             for control in controls:
                 # iOS Selection opens a keyboard inputView. Removing its text
                 # field here immediately resigns focus and closes that picker.
-                # Keep the location selector attached on every mobile layout.
-                if control is self.save_as_storage:
-                    continue
-                _tuck_control(control, compact)
+                # A location read briefly disables the field and drops focus;
+                # preserve its input-view session until typing or keyboard hide.
+                preserve_selector = (control is self.save_as_storage and apple
+                    and not self._naming_keyboard_active)
+                _tuck_control(control, compact and not preserve_selector)
             # A landscape keyboard can leave only ~100 logical pixels.
             # Put full-size completion buttons beside the scrollable form;
             # stacking both areas would squash the native buttons to a sliver.
