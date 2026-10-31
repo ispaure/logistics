@@ -178,7 +178,7 @@ def android():
         (destination / 'liblogisticscloud.h').unlink()
 
 
-def ios(project=None):
+def ios(project=None, *, include_watch=False):
     project = Path(project) if project is not None else output_root(ROOT) / 'build/logisticsmobile/ios/xcode'
     icon_build.configure_ios(project)
     scene_build.configure(project)
@@ -218,7 +218,7 @@ def ios(project=None):
     incoming_build.configure_ios(project)
     wifi_build.configure_ios(project)
     video_build.configure_ios(project)
-    widget_build.configure_ios(project)
+    widget_build.configure_ios(project, include_watch=include_watch)
     lm_build.configure_ios(project)
 
 

@@ -115,8 +115,11 @@ account instead of passing the configured API key to Xcode.
 Manual TestFlight signing needs the exact App Store
 profiles for all products: `--inbox-profile`, `--widget-profile`,
 `--widget-actions-profile`, `--watch-profile` and `--watch-widget-profile`, alongside
-`--profile`. Each must authorize the same
-app group. Build/version updates apply to all embedded extensions.
+`--profile`. Both Watch profile arguments explicitly enable the companion and
+complication targets in the production archive builder. Neither argument keeps
+phone-only builds available; supplying only one fails before creating an archive.
+Each profile must authorize the same app group. Build/version updates apply to
+all embedded extensions.
 
 Swift sources are explicit members of the mobile manifests and payload hashes.
 commonUtils' mobile staging includes native Swift sources and rejects uncommitted

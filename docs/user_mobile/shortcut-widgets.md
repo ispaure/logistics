@@ -58,9 +58,10 @@ name alone cannot create one.
 
 ## Apple Watch
 
-The Watch companion is retained in source but omitted from current builds while
-its Apple signing profiles are unavailable. The setup below applies only to a
-build that explicitly includes the companion for watchOS 10 or later.
+The Watch companion requires watchOS 10 or later. Signed TestFlight/Release builds
+include it when both Watch provisioning profiles are configured in the build
+manager (`signing.watch_profile` and `signing.watch_widget_profile`). Builds without
+those profiles omit the companion; supplying only one profile is an error.
 Install it through the iPhone's Watch app, then open Logistics on the Watch once.
 Keep your existing **Set Widget Value** action and `DuoFoldCount` name. Add
 Logistics' **Sync Widget Values to Watch** immediately after it in the same

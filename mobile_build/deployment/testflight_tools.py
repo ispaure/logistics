@@ -151,6 +151,9 @@ def archive_fingerprint(app):
 
 
 def archive_release(args, workspace, identity, env):
+    watch_profiles = (getattr(args, 'watch_profile', None), getattr(args, 'watch_widget_profile', None))
+    if any(watch_profiles) and not all(watch_profiles):
+        raise ValueError('Watch signing requires both --watch-profile and --watch-widget-profile.')
     if workspace.exists():
         raise ValueError('Release workspace already exists; select a new build number. Existing archives are preserved.')
     workspace.mkdir(parents=True)
@@ -161,7 +164,7 @@ def archive_release(args, workspace, identity, env):
         run([sys.executable, '-m', 'briefcase', 'create', 'iOS', '--no-input'], workspace, env, workspace / 'logs/create.log')
         project = workspace / 'build/logisticsmobile/ios/xcode'
         cloud_build.run('go', 'test', './...', env=env)
-        cloud_build.ios(project)
+        cloud_build.ios(project, include_watch=all(watch_profiles))
         pbx = project / 'Logistics Mobile.xcodeproj/project.pbxproj'
         data = signing_settings(json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(pbx)])), identity['team_id'])
         profile = None

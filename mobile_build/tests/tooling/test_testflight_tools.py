@@ -13,6 +13,37 @@ class TestFlightWorkflowTests(unittest.TestCase):
     identity = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', application_identifier='ABCDEFGHIJ.' + BUNDLE,
                     keychain_access_groups=[])
 
+    def test_archive_includes_watch_only_with_both_explicit_signing_profiles(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from types import SimpleNamespace
+        from mobile_build.deployment import testflight_tools as tools
+        for profiles, expected in (((None, None), False), (('watch', 'widget'), True)):
+            with self.subTest(profiles=profiles), TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'pyproject.toml').write_text('fixture')
+                args = SimpleNamespace(watch_profile=profiles[0], watch_widget_profile=profiles[1])
+                with patch.object(tools, 'ROOT', root), patch.object(tools, 'stage'), \
+                        patch.object(tools.cloud_build, 'licenses'), patch.object(tools.cloud_build, 'run'), \
+                        patch.object(tools, 'run'), \
+                        patch.object(tools.cloud_build, 'ios', side_effect=RuntimeError('stop before signing')) as configure:
+                    with self.assertRaisesRegex(RuntimeError, 'stop before signing'):
+                        tools.archive_release(args, root / 'archive', self.identity, {})
+                    self.assertEqual(configure.call_args.kwargs, {'include_watch': expected})
+
+    def test_partial_watch_signing_is_rejected_before_archive_creation(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from types import SimpleNamespace
+        from mobile_build.deployment import testflight_tools as tools
+        for profiles in (('watch', None), (None, 'widget')):
+            with self.subTest(profiles=profiles), TemporaryDirectory() as directory:
+                workspace = Path(directory) / 'archive'
+                args = SimpleNamespace(watch_profile=profiles[0], watch_widget_profile=profiles[1])
+                with self.assertRaisesRegex(ValueError, 'both --watch-profile'):
+                    tools.archive_release(args, workspace, self.identity, {})
+                self.assertFalse(workspace.exists())
+
     def test_archive_lock_does_not_precreate_release_directory(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
