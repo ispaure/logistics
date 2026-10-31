@@ -5,7 +5,7 @@ import AppIntents
 struct SyncWidgetValuesToWatch: AppIntent {
     static var title: LocalizedStringResource = "Sync Widget Values to Watch"
     static var description = IntentDescription(
-        "Send saved Shortcut widget values to your paired Apple Watch. Place after Set Widget Value."
+        "Send saved Shortcut widget values to your paired Watch. Place after Set Widget Value."
     )
     static var openAppWhenRun: Bool = false
     static var authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed
