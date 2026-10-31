@@ -59,6 +59,76 @@ class ObsidianTests(unittest.TestCase):
         self.assertIsNone(vault_root(self.provider, 'Vault', [dict(path='Vault/.obsidian', directory=False)]))
         self.assertEqual(vault_root(LocalFiles(self.vault), '', LocalFiles(self.vault).list('')), '')
 
+    def test_library_owns_screen_and_nested_editor_returns_to_library(self):
+        from mobile.reader_lifecycle import document_route, session_route
+        owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
+        route = 'notes-library:' + owner.session.id
+        self.assertTrue(document_route(route))
+        self.assertFalse(session_route(route))
+        self.assertTrue(self.app._document_tabs_hidden)
+        self.assertFalse(hasattr(owner.view, '_workspace_frame'))
+        self.assertTrue(self.run_async(owner.open_note('Vault/Home.md')))
+        self.assertTrue(self.run_async(owner.open_editor()))
+        editor = self.app.private_sessions.active
+        self.assertEqual(self.app._reader_returns[editor.session.id], ('files', route, False))
+        self.app.request_close_session(editor.session.id)
+        self.assertEqual(self.app.visible_reader(), owner.session.id)
+        owner.close()
+        self.assertEqual(self.app.native_host.state.destination, 'home')
+        self.assertFalse(self.app.routes.screens['files'])
+        self.assertFalse(self.app._document_tabs_hidden)
+
+    def test_close_during_transfer_and_pending_note_read_keeps_transfer_running(self):
+        from unittest.mock import Mock
+        app = self.app
+        app.show_cloud(present=False)
+        app.show_locations()
+        owner = self.run_async(open_vault(app, self.provider, 'Vault', 'files'))
+        key = owner.session.id
+        entered, released = Event(), Event()
+        original = self.provider.open
+        def delayed(path):
+            entered.set()
+            if not released.wait(5):
+                raise RuntimeError('Note read fixture timed out')
+            return original(path)
+        async def exercise():
+            restore = getattr(app, 'cloud_restore_task', None)
+            if restore is not None:
+                await restore
+            app.cloud_client = SimpleNamespace(generation=1, cancel=Mock(), package_records=[])
+            app.transfer_busy = True
+            app.set_cloud_busy(True)
+            generation = app.cloud_client.generation
+            with patch.object(self.provider, 'open', side_effect=delayed), \
+                    patch.object(app.cloud_client, 'cancel', new=Mock()) as cancel, \
+                    patch.object(owner.web, 'set_content') as publish:
+                task = asyncio.create_task(owner.open_note('Vault/Home.md'))
+                try:
+                    for _ in range(100):
+                        if entered.is_set():
+                            break
+                        await asyncio.sleep(.01)
+                    self.assertTrue(entered.is_set())
+                    self.assertTrue(owner.close_button.enabled)
+                    owner.close_button.on_press()
+                    self.assertNotIn(key, app.workspace.sessions)
+                    self.assertFalse(app.routes.screens['files'])
+                    self.assertEqual(app.native_host.state.destination, 'files')
+                    self.assertFalse(app._document_tabs_hidden)
+                    self.assertTrue(app.transfer_busy)
+                    self.assertTrue(app.cloud_busy)
+                    self.assertEqual(app.cloud_client.generation, generation)
+                    cancel.assert_not_called()
+                    publish.reset_mock()  # Disposing clears the page; late reads must not replace it.
+                finally:
+                    released.set()
+                    await task
+                    app.transfer_busy = False
+                    app.set_cloud_busy(False)
+                publish.assert_not_called()
+        self.run_async(exercise())
+
     def test_file_browser_has_no_vault_action(self):
         browser = FileBrowser()
         try:

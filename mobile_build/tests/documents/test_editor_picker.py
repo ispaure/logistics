@@ -117,7 +117,7 @@ class EditorPickerTests(unittest.TestCase):
         picker.save_as_data = b'Keep this draft'
         name.value = 'Retained.txt'
         picker.fit_keyboard(True)
-        self.assertEqual(list(panel.children), [form, picker.picker_actions])
+        self.assertEqual(list(panel.children), [picker.save_as_storage, form, picker.picker_actions])
         self.assertIs(name.parent, parent)
         self.assertIs(form.content, picker.save_as_view)
         self.assertEqual(form.style.height, 'none')

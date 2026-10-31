@@ -116,11 +116,11 @@ class WorkspaceColumns:
         height = float(bounds.size.height)
         if width <= 0 or height <= 0:
             return
-        from .reader_lifecycle import session_route
+        from .reader_lifecycle import document_route
         # Readers share the folder navigation stack, but not its browser column.
         # Include loading and reader child routes so opening tools never brings
         # the workspace sidebar back over an active document.
-        document = any(session_route(route) for route, _, _ in self.app.routes.screens['files'])
+        document = any(document_route(route) for route, _, _ in self.app.routes.screens['files'])
         self.sidebar.controller.view.hidden = document
         # Fold queries use the full owning container, before allocating panes.
         impl = type('ColumnsImpl', (), {'__module__': 'toga_iOS.container'})()

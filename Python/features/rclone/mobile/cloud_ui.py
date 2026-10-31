@@ -334,7 +334,7 @@ class CloudUI(LocalCryptUI):
         self.cloud_cancel.enabled = value
         # Request controls take no list space while the browser is idle.
         header = self.remote_browser.location_bar
-        if value:
+        if value and not getattr(self.app, 'transfer_busy', False):
             if self.cloud_cancel not in header.children:
                 header.add(self.cloud_cancel)
             if self.cloud_transfer_progress.parent is None:

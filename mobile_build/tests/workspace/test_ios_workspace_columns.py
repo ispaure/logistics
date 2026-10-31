@@ -121,7 +121,7 @@ class WorkspaceColumnsTests(TestCase):
             browser_frame = columns.navigation.view.frame
             self.assertGreater(browser_frame.origin.x, 20)
             self.assertEqual(browser_frame.origin.x + browser_frame.size.width, 900)
-            for route in ('file-loading:comic', 'reader:comic', 'editor', 'private:pdf', 'notebook:notes'):
+            for route in ('file-loading:comic', 'reader:comic', 'editor', 'private:pdf', 'notebook:notes', 'notes-library:vault'):
                 with self.subTest(route=route):
                     screens[:] = [('folder:books', None, ''), (route, None, ''), ('reader-tools', None, '')]
                     for width, height in ((900, 600), (650, 980)):

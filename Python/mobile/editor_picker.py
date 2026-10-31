@@ -417,6 +417,11 @@ class EditorPicker:
             self._compact_keyboard = compact
             controls = self._browse_controls if compact else reversed(self._browse_controls)
             for control in controls:
+                # iOS Selection opens a keyboard inputView. Removing its text
+                # field here immediately resigns focus and closes that picker.
+                # Keep the location selector attached on every mobile layout.
+                if control is self.save_as_storage:
+                    continue
                 _tuck_control(control, compact)
             # A landscape keyboard can leave only ~100 logical pixels.
             # Put full-size completion buttons beside the scrollable form;

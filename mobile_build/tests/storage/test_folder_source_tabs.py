@@ -113,7 +113,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
         app.transfer_busy = True
         app.refresh_transfer_status()
-        self.assertEqual(list(app.folder_source_actions.children), [app.folder_transfers_button])
+        self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertEqual(app.folder_source_actions.style.margin_bottom, 12)
         app.transfer_busy = False
@@ -166,6 +166,38 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertFalse(app.folder_local_header.children)
         app.change_folder_source('Local')
         self.assertTrue(app.folder_local_header.children)
+
+    def test_local_rclone_credential_filters_offline_copies_and_defaults_to_all(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        app = self.app
+        app.cloud_client = SimpleNamespace(generation=0, cancel=lambda: None, package_records=[
+            dict(package_name='Personal.zip', remotes=['Drive']),
+            dict(package_name='Work.zip', remotes=['Vault'])])
+        app.show_locations()
+        personal = dict(source='Local', kind='job', remote='Drive', value='personal')
+        work = dict(source='LocalCrypt', kind='crypt', remote='Vault', value='work')
+        ordinary = dict(source='Local', kind='local', value='Notes')
+        choices = {'Drive': dict(personal, copies=[personal]),
+                   'Vault': dict(work, copies=[work]), 'Notes': ordinary}
+        with patch.object(app.folder_controller(), 'folder_choices', return_value=choices):
+            app.update_folder_list(choices)
+            app.folder_local_buttons['Rclone'].on_press()
+            self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
+            self.assertEqual(app.folder_credential.value, 'All')
+            self.assertEqual(set(app.folder_buttons), {'Drive', 'Vault'})
+            app.folder_credential.value = 'Personal'
+            self.assertEqual(set(app.folder_buttons), {'Drive'})
+            app.folder_local_buttons['Rclone'].on_press()
+            self.assertEqual(app.folder_credential.value, 'Personal')
+            app.folder_credential.value = 'Work'
+            self.assertEqual(set(app.folder_buttons), {'Vault'})
+            app.folder_local_buttons['Others'].on_press()
+            self.assertFalse(app.folder_picker_header.children)
+            self.assertEqual(set(app.folder_buttons), {'Notes'})
+            app.folder_local_buttons['Rclone'].on_press()
+            self.assertEqual(app.folder_credential.value, 'All')
+            self.assertEqual(set(app.folder_buttons), {'Drive', 'Vault'})
 
     def test_loaded_network_share_packages_never_enter_cloud_credential_filter(self):
         from types import SimpleNamespace

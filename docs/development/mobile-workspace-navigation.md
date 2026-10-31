@@ -584,8 +584,8 @@ route in Chat.
 
 `WorkspaceFrame` keeps each original editor/browser Box as its route view. Its
 existing children move into a retained content Box, with a top-left hamburger
-and a horizontal content area. Transfer banners retain their original registered
-parent. Compact drawers retain the main content at its original width and insert a
+and a horizontal content area. Sync status belongs to the main destination roots;
+reader views never mount a transfer banner. Compact drawers retain the main content at its original width and insert a
 browser up to 320 points/dp wide, leaving at least 64 points/dp of the page visible.
 The row clips overflow. UIKit animates a snapshot of the previous row to reveal
 the new layout, respecting Reduce Motion; the actual editor retains its owner.
@@ -641,7 +641,10 @@ uses each local copy's remote association, including mapped LocalCrypt copies;
 Others owns ordinary copies and Browse All Files. Mixed catalog entries keep
 only the selected group's copies, while managed entries retain their remote
 actions. Others renders literal folder names; remote naming groups remain
-available in Rclone. Picker destinations include existing encrypted copies and
+available in Rclone. Local → Rclone also shows the Credential filter, defaulting
+to All when entering from another source or local subtab. It filters managed
+plaintext and LocalCrypt copies by their credential association, including
+offline copies; Local → Others remains unfiltered. Picker destinations include existing encrypted copies and
 linked pull targets, without synthesizing empty roots for every loaded remote.
 Android's virtual location root disables publication and explains the required
 folder choice. Picker status uses a fitted label mounted only when nonempty.
@@ -1049,8 +1052,8 @@ fold seam geometry (local artifact `test-results/mobile-evidence/2026-10-15-duo-
 `ReadingFrame` marks all immersive readers with `_reader_fullscreen` and only comic
 images with `_comic_fullscreen`. The shared navigation chrome hides bars on both
 platforms; only comic images extend beyond UIKit safe areas. EPUB text keeps its
-normal margins and a 48-point Show reading controls action. Transfer banners stay
-hidden during either immersive mode without pausing transfers.
+normal margins and a 48-point Show reading controls action. Sync continues without
+progress controls inside either reader mode.
 
 `ios_reader_chrome` installs a pinned-backend outer navigation-controller subclass
 before window construction. A weak window-to-host map scopes status-bar preferences
@@ -1598,3 +1601,17 @@ The Android E Ink threshold remains 516 points. Native iOS folder Search joins
 the leading group on vertical bars, immediately following system Back; UIKit
 owns safe positioning around the Dynamic Island. Other panel actions continue
 through the shared native navigation-bar projection.
+
+### Storage selector keyboard lifetime
+
+The shared destination picker keeps its storage selector mounted while compacting
+the browser for a keyboard. On iOS, a Selection uses a text field with a picker
+input view; removing that field during keyboard layout resigns focus and closes
+the location picker immediately. Folder listing can still disable the selector
+until the newly selected location has loaded.
+
+`storage_selector_probe.py`, run through
+`mobile_build.validation.document_storage_tools --probe storage-selector`, checks
+opening the native selector and changing local locations across portrait and
+landscape. The iOS `--family all` matrix includes iPhone, iPad, and closed, open
+and partly open Duo postures; Android uses the owned disposable emulator.

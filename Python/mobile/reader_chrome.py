@@ -8,57 +8,17 @@ from .reader_controls import ReadingFrame, PageFooter, ComicHeader, comic_action
 
 
 def refresh_transfer_chrome(app):
-    """Update live toolbar labels; rebuild native groups only on appearance/removal."""
-    def update(view):
-        if hasattr(view, '_native_reader_buttons'):
-            transfer_control(app, view)
-        for child in view.children:
-            update(child)
-    if not hasattr(app, 'routes'):
-        return
-    update(app.routes.body())
-    visible = getattr(app, 'transfer_busy', False) or getattr(app, 'transfer_notification', False)
-    if visible != getattr(app, '_transfer_chrome_visible', False):
-        app._transfer_chrome_visible = visible
-        app.adaptive.render()
+    """Sync status belongs to main tabs, never individual document viewers."""
+    from .transfer_status import refresh
+    refresh(app)
 
 
 def transfer_control(app, view):
-    """A window-owned transfer shortcut, outside the document's reading area."""
-    visible = (getattr(app, 'transfer_busy', False) or getattr(app, 'transfer_notification', False))
-    visible = visible and not (getattr(view, '_reader_fullscreen', False)
-                              or getattr(view, '_comic_fullscreen', False))
-    if not visible:
-        return None
-    button = getattr(view, '_reader_transfer_button', None)
-    if button is None:
-        button = view._reader_transfer_button = toga.Button('', on_press=app.show_transfers,
-            style=Pack(width=44, height=44, font_size=12))
-    button._toolbar_group = 'transfer-status'
-    button._toolbar_priority = True
-    busy = getattr(app, 'transfer_busy', False)
-    percentage = getattr(app, 'transfer_percentage', None)
-    if busy:
-        text = f'{percentage:.0f}%' if percentage is not None else '⇅'
-        label = (f'Transfer: {percentage:.0f}% of known work. Open details' if percentage is not None
-                 else 'Transfer in progress. Open details')
-    else:
-        complete = getattr(app, 'transfer_complete', False)
-        text = '✓' if complete else '!'
-        label = 'Transfer finished. Open details' if complete else 'Transfer stopped. Open details'
-    if button.text != text:
-        button.text = text
-    from .appearance import accessible_name
-    accessible_name(button, label)
-    return button
+    return None
 
 
 def reader_buttons(app, view):
-    buttons = list(view._native_reader_buttons())
-    transfer = transfer_control(app, view)
-    if transfer is not None:
-        buttons.insert(0, transfer)
-    return buttons
+    return list(view._native_reader_buttons())
 
 
 def sync_comic_chrome(app, view, *, destination=None):
@@ -100,7 +60,7 @@ def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
     Keyboard snapshots must also use the current route's visibility so dismissing
     the keyboard cannot reveal destinations over an open document.
     """
-    from .reader_lifecycle import session_route
+    from .reader_lifecycle import document_route
     destination = destination or app.native_host.state.destination
     screens = app.routes.screens[destination]
     details = app.adaptive.detail_routes if destination == 'documents' else ()
@@ -115,7 +75,7 @@ def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
                 or any(document(child) for child in widget.children))
 
     hidden = fullscreen or document(view) or any(
-        session_route(route) for route, *_ in (*screens, *details))
+        document_route(route) for route, *_ in (*screens, *details))
     app._document_tabs_hidden = hidden
     adapter = app.native_host.adapter
     if adapter is None:

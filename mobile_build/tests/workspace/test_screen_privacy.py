@@ -82,7 +82,21 @@ class ScreenPrivacyTests(unittest.TestCase):
         with patch.dict(sys.modules, {'rubicon.objc': SimpleNamespace(ObjCClass=classes.__getitem__)}):
             privacy.refresh()
             self.assertIsNone(privacy.shield)
+            app.video_player = SimpleNamespace(conceal=Mock(), reveal=Mock(), retire_changed_policy=Mock())
+            privacy.interrupt()
+            self.assertIs(privacy.shield.parent, window)
+            self.assertFalse(gate.locked)
+            self.assertFalse(privacy.inactive)
+            privacy.refresh()  # A progress/credential refresh while Control Center is up.
+            self.assertFalse(gate.locked)
+            app.video_player.conceal.assert_not_called()
+            privacy.reveal()
+            self.assertIsNone(privacy.shield)
+            self.assertFalse(gate.locked)
+            privacy.interrupt()
             privacy.conceal()
+            self.assertTrue(gate.locked)
+            app.video_player.conceal.assert_called()
             privacy.app.retire_private_comic_batch.assert_called_once_with()
             self.assertIs(privacy.shield.parent, window)
             privacy.shield.parent = None

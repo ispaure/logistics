@@ -329,15 +329,15 @@ class HubUI:
         if not native_destination_titles(self.app):
             box.add(toga.Label('Home', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)))
         intro = toga.Label('Open a file or start a new document.', style=Pack(flex=1))
+        status_row = toga.Box(children=[intro],
+            style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
+        self.app._home_status_row = status_row
         if self._home_content_state[1]:
             unlock = surface(icon_button('storage_crypt', 'Unlock credentials',
                 on_press=self.app.show_home_unlock), foreground='text')
             unlock.style.margin_left = 8
-            box.add(toga.Box(children=[intro, unlock],
-                style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12)))
-        else:
-            intro.style.margin_bottom = 12
-            box.add(intro)
+            status_row.add(unlock)
+        box.add(status_row)
         self.home_continue = None
         self.home_actions = toga.Box(children=[
             toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1, margin_right=8)),

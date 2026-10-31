@@ -266,8 +266,8 @@ rclone's crypt filesystem for automatic encryption/decryption.
 **Workspaces → Transfers** opens **Transfer details**: **From** and **To** folders
 for the current or most recent transfer, live progress, completed/known
 file counts and transferred/known megabytes (MB), cancellation, active review, and completion or error
-messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection. The transfer banner
-also opens these details; the remote browser reflects the same progress. If a
+messages, wrapped to fit the phone screen. It does not list remotes or offer folder selection.
+The sync icon on each main tab opens these details. If a
 remote folder matches several local mappings, Pull opens a focused destination
 chooser for those matches.
 
@@ -279,10 +279,11 @@ Local document menus remain available during transfers. Opening a cloud preview
 that needs the connection shows a **Transfer in progress** explanation; wait for
 completion or open a Local copy.
 
-On Workspaces itself, the transfer banner appears only on **rclone**, while a
-transfer is running or an interrupted/failed transfer needs attention. Successful
-completion stays available in **Transfers** without keeping a banner on Workspaces.
-Local and Network shares never show this banner.
+While syncing, main tabs show one sync icon with a circular progress indicator at
+the top right, beside the unlock key on Home. Unknown totals show activity. Tap
+the icon to open details; switching tabs dismisses details without stopping sync.
+Returning to a tab does not reopen them. Individual document viewers contain no
+transfer headers or sync buttons.
 
 Folder action pages offer **Delete local folder…** and, for managed copies,
 **Remove mapping (keep files)**. Delete local folder requires confirmation and

@@ -282,7 +282,7 @@ class FolderLocationTests(unittest.TestCase):
         browser.close_search_button.on_press()
         self.assertNotIn(browser.search_panel, browser.widget.children)
 
-    def test_hub_transfer_banner_only_reports_relevant_rclone_work(self):
+    def test_hub_has_no_transfer_banner_for_any_source_or_completion_state(self):
         self.app.show_cloud(present=False)
         self.app.folder_source = 'rclone'
         view = self.app.build_folder_picker()
@@ -290,16 +290,18 @@ class FolderLocationTests(unittest.TestCase):
         self.app.transfer_notification = False
         self.app.transfer_busy = True
         self.app.refresh_transfer_status()
-        self.assertIn(bar, view.children)
+        self.assertIsNone(bar)
+        self.assertNotIn(bar, view.children)
         for source in ('Local', 'Network shares', 'rclone'):
             self.app.change_folder_source(source)
-            self.assertEqual(bar in view.children, source == 'rclone')
+            self.assertNotIn(bar, view.children)
         self.app.transfer_busy = False
         self.app.transfer_notification = self.app.transfer_complete = True
         self.app.refresh_transfer_status()
         self.assertNotIn(bar, view.children)
         self.app.transfer_complete = False
         self.app.refresh_transfer_status()
-        self.assertIn(bar, view.children)
+        self.assertIsNone(bar)
+        self.assertNotIn(bar, view.children)
         self.app.dismiss_transfer_status()
         self.assertNotIn(bar, view.children)

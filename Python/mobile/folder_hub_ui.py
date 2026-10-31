@@ -197,6 +197,11 @@ class FolderHubUI:
         self.folder_local_buttons = {}
         for group in ('Rclone', 'Others'):
             def select_local(widget=None, selected=group, **kwargs):
+                if self.folder_local_group != selected:
+                    self.folder_credential_name = 'All'
+                    self.folder_credential.on_change = None
+                    self.folder_credential.value = 'All'
+                    self.folder_credential.on_change = self.change_folder_credential
                 self.folder_local_group = selected
                 self.update_folder_list(self.folder_all_choices)
                 try:
@@ -212,7 +217,8 @@ class FolderHubUI:
         self.folder_tab_views = {}
         self.folder_tab_snapshot = None
         self.folder_collapsed = getattr(self, 'folder_collapsed', set())
-        self.folder_credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
+        self.folder_credentials = self.credential_groups(source_choices(choices,
+            'Local' if self.folder_source == 'Local' else 'rclone', self.network_share_remotes(), local_group='Rclone'))
         selected = getattr(self, 'folder_credential_name', 'All')
         self.folder_credential = toga.Selection(items=list(self.folder_credentials),
             value=selected if selected in self.folder_credentials else 'All',
@@ -274,7 +280,9 @@ class FolderHubUI:
             self.folder_configured_sources.add('Network shares')
         if configured - network_remotes:
             self.folder_configured_sources.add('rclone')
-        credentials = self.credential_groups(source_choices(choices, 'rclone', network_remotes), loaded_remotes=loaded_remotes)
+        credentials = self.credential_groups(source_choices(choices,
+            'Local' if self.folder_source == 'Local' else 'rclone', network_remotes, local_group='Rclone'),
+            loaded_remotes=loaded_remotes)
         if credentials != self.folder_credentials:
             self.folder_credentials = credentials
             selected = self.selected_folder_credential()
@@ -298,16 +306,17 @@ class FolderHubUI:
                 self.folder_local_styled = local_group
         elif self.folder_local_header.children:
             self.folder_local_header.remove(self.folder_local_tabs)
-        if self.folder_source == 'rclone' and selected is not None:
+        credential_filter = self.folder_source == 'rclone' or local_group == 'Rclone'
+        if credential_filter and selected is not None:
             visible = credential_choices(visible, selected)
         if self.folder_source_styled != self.folder_source:
             for source, button in self.folder_source_buttons.items():
                 source_tab(button, source == self.folder_source)
                 accessible_name(button, SOURCE_LABELS[source] + (' selected' if source == self.folder_source else ''))
             self.folder_source_styled = self.folder_source
-        if self.folder_source == 'rclone' and not self.folder_picker_header.children:
+        if credential_filter and not self.folder_picker_header.children:
             self.folder_picker_header.add(self.folder_credential_row)
-        elif self.folder_source != 'rclone' and self.folder_picker_header.children:
+        elif not credential_filter and self.folder_picker_header.children:
             self.folder_picker_header.remove(self.folder_credential_row)
         source_actions(self.app)
         visible = {name: entry for name, entry in visible.items()

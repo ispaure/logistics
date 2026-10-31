@@ -333,7 +333,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self applyPlaybackOptions];
     self.timer = [NSTimer scheduledTimerWithTimeInterval:.5 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
-    [center addObserver:self selector:@selector(backgroundNotification:) name:UIApplicationWillResignActiveNotification object:nil];
+    [center addObserver:self selector:@selector(backgroundNotification:) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [center addObserver:self selector:@selector(protectedData:) name:UIApplicationProtectedDataWillBecomeUnavailable object:nil];
     [center addObserver:self selector:@selector(captureChanged:) name:UIScreenCapturedDidChangeNotification object:nil];
     [center addObserver:self selector:@selector(audioInterrupted:) name:AVAudioSessionInterruptionNotification object:nil];
@@ -577,7 +577,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 
 - (BOOL)canPlay:(BOOL)external {
     if (self.retired || self.interrupted || [self hasActiveCall] || (external && self.restricted)) return NO;
-    if (self.restricted && (self.lockHidden || UIApplication.sharedApplication.applicationState != UIApplicationStateActive)) return NO;
+    if (self.restricted && (self.lockHidden || UIApplication.sharedApplication.applicationState == UIApplicationStateBackground)) return NO;
     if (!UIApplication.sharedApplication.protectedDataAvailable) return NO;
     if (self.restricted && (self.view.window.screen.isCaptured || [self hasExternalAudio])) return NO;
     return self.allowed && self.allowed(external);

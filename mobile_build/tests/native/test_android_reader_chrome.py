@@ -91,28 +91,17 @@ class AndroidReaderChromeTests(unittest.TestCase):
         self.detach.assert_any_call(self.frame.header)
         self.detach.assert_any_call(self.view._native_reader_toolbar)
 
-    def test_transfer_control_mounts_in_native_bar_and_releases_after_dismissal(self):
+    def test_sync_never_adds_a_control_to_the_native_reader_bar(self):
         transfer = widget()
-        transfer.text = ''
         self.view._reader_transfer_button = transfer
-        self.app.transfer_busy = self.app.transfer_notification = True
-        self.app.transfer_percentage = 42
-        sync(self.app, self.view, 'documents')
-        self.assertIn(transfer, self.adapter._reader_action_bar_buttons)
-        self.assertEqual(transfer.text, '42%')
-        self.app.transfer_percentage = 73
-        sync(self.app, self.view, 'documents')
-        self.assertEqual(transfer.text, '73%')
-        self.bar.setCustomView.assert_called_once()
-        self.view._reader_fullscreen = True
-        sync(self.app, self.view, 'documents')
-        self.assertIsNone(transfer._impl.native.parent)
-        self.view._reader_fullscreen = False
-        sync(self.app, self.view, 'documents')
-        self.assertIsNotNone(transfer._impl.native.parent)
-        self.app.transfer_busy = self.app.transfer_notification = False
-        sync(self.app, self.view, 'documents')
-        self.assertIsNone(transfer._impl.native.parent)
+        for busy, percentage, fullscreen in ((True, 42, False), (True, 73, True),
+                                              (True, None, False), (False, 100, False)):
+            self.app.transfer_busy = self.app.transfer_notification = busy
+            self.app.transfer_percentage = percentage
+            self.view._reader_fullscreen = fullscreen
+            sync(self.app, self.view, 'documents')
+            self.assertNotIn(transfer, self.adapter._reader_action_bar_buttons)
+            self.assertIsNone(transfer._impl.native.parent)
 
     def test_title_refresh_does_not_rebuild_buttons_and_fullscreen_hides_bar(self):
         sync(self.app, self.view, 'documents')

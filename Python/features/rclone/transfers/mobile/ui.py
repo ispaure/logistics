@@ -12,21 +12,8 @@ from features.rclone.transfers.mobile.review_ui import TransferReviewUI
 
 class MirrorUI(TransferReviewUI):
     def register_transfer_status(self, view, *, visible_when=lambda: True):
-        import weakref
-        button = toga.Button('Transfer details', on_press=self.show_transfers, style=Pack(height=48, flex=1))
-        accessible_name = self.rclone_ui.accessible_name
-        dismiss = accessible_name(toga.Button('×', on_press=self.dismiss_transfer_status, style=Pack(width=48, height=48)),
-                                  'Dismiss transfer notification')
-        progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4))
-        bar = toga.Box(children=[toga.Box(children=[button, dismiss], style=Pack(direction=ROW)), progress],
-                       style=Pack(direction=COLUMN, margin_bottom=4))
-        bar.notice, bar.progress, bar.dismiss = button, progress, dismiss
-        bar.visible_when = visible_when
-        view.transfer_banner = bar
-        if not hasattr(self, 'transfer_banners'):
-            self.transfer_banners = []
-        self.transfer_banners.append((weakref.ref(view), weakref.ref(bar)))
-        self.refresh_transfer_status()
+        # Compatibility for existing feature callers; status belongs to main tabs.
+        view.transfer_banner = None
 
     def dismiss_transfer_status(self, widget=None, **kwargs):
         if not getattr(self, 'transfer_busy', False):
@@ -35,52 +22,6 @@ class MirrorUI(TransferReviewUI):
 
     def refresh_transfer_status(self):
         self.rclone_ui.refresh_folder_source_actions()
-        live = []
-        busy = getattr(self, 'transfer_busy', False)
-        visible = busy or getattr(self, 'transfer_notification', False)
-        for parent_ref, bar_ref in getattr(self, 'transfer_banners', ()):
-            parent, bar = parent_ref(), bar_ref()
-            if parent is None or bar is None:
-                continue
-            live.append((parent_ref, bar_ref))
-            if hasattr(parent, '_native_reader_buttons'):
-                # Native title bars own reader status; keep document content clear.
-                if bar in parent.children:
-                    bar.progress.stop()
-                    parent.remove(bar)
-                continue
-            # Immersive comics use the full reading area. Transfer work and
-            # its notification state continue; show the banner with controls.
-            if visible and bar.visible_when() and not (getattr(parent, '_comic_fullscreen', False)
-                                or getattr(parent, '_reader_fullscreen', False)):
-                if bar not in parent.children:
-                    parent.insert(0, bar)
-                notice = 'Transfer in progress · Details' if busy else 'Transfer finished · 100% · Details'
-                percentage = getattr(self, 'transfer_percentage', None)
-                if busy and percentage is not None:
-                    notice = f'Transfer · {percentage:.0f}% of known work · Details'
-                if not busy and not getattr(self, 'transfer_complete', False):
-                    notice = 'Transfer stopped · Details'
-                if bar.notice.text != notice:
-                    bar.notice.text = notice
-                if bar.dismiss.enabled != (not busy):
-                    bar.dismiss.enabled = not busy
-                source = getattr(self, 'transfer_progress', None)
-                if busy and source is not None and source.max is None:
-                    if bar.progress.max is not None:
-                        bar.progress.max = None
-                        bar.progress.start()
-                else:
-                    if bar.progress.max is None:
-                        bar.progress.stop()
-                        bar.progress.max = 100
-                    value = source.value if source is not None else 0
-                    if bar.progress.value != value:
-                        bar.progress.value = value
-            elif bar in parent.children:
-                bar.progress.stop()
-                parent.remove(bar)
-        self.transfer_banners = live
         refresh_chrome = getattr(self.rclone_ui, 'refresh_transfer_chrome', None)
         if refresh_chrome is not None:
             refresh_chrome()
@@ -406,6 +347,7 @@ class TransferExecutionPresentation:
         self.controller = controller
 
     async def ready(self):
+        self.origin = self.controller.navigation_generation
         return await self.controller.mirror_connection_ready()
 
     def connection(self):
@@ -418,12 +360,14 @@ class TransferExecutionPresentation:
 
     def unavailable(self):
         owner = self.controller
-        owner.show_transfers(present=owner.native_host.state.destination == 'files')
+        owner.show_transfers(present=(owner.native_host.state.destination == 'files'
+            and owner.navigation_generation == getattr(self, 'origin', None)))
 
     def started(self):
         owner = self.controller
         owner.set_cloud_busy(True)
-        owner.show_transfers(present=owner.native_host.state.destination == 'files')
+        owner.show_transfers(present=(owner.native_host.state.destination == 'files'
+            and owner.navigation_generation == getattr(self, 'origin', None)))
         owner.refresh_transfer_status()
 
     def progress(self, epoch, values):

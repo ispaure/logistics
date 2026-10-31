@@ -389,6 +389,13 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
     def select_destination(self, destination):
         if not self.checkpoint(save_workspace=False):
             return False
+        origin = self.native_host.state.destination
+        if destination != origin:
+            screens = self.routes.screens[origin]
+            transfer = next((i for i, (route, *_) in enumerate(screens) if route == 'transfers'), None)
+            if transfer is not None:
+                self.routes.trim(origin, transfer)
+                self.routes.render(origin)
         if destination != 'files':
             self.retire_private_comic_batch()
         self.mark_navigation()

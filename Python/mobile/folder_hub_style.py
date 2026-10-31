@@ -177,11 +177,8 @@ def source_actions(host):
     """Only reserve toolbar space when the source has a useful action."""
     if not hasattr(host, 'folder_source_actions'):
         return
-    transfer = (getattr(host, 'transfer_busy', False) or
-                (getattr(host, 'transfer_notification', False) and not getattr(host, 'transfer_complete', False)))
     configured = getattr(host, 'folder_configured_sources', set())
-    action = (host.folder_transfers_button if host.folder_source == 'rclone' and transfer else
-              host.folder_add_share_button if host.folder_source == 'Network shares' and 'Network shares' not in configured else
+    action = (host.folder_add_share_button if host.folder_source == 'Network shares' and 'Network shares' not in configured else
               host.folder_add_remote_button if host.folder_source == 'rclone' and 'rclone' not in configured else None)
     actions = [action] if action is not None else []
     if list(host.folder_source_actions.children) != actions:

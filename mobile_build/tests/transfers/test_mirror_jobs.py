@@ -572,5 +572,5 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         self.assertEqual(app.transfer_progress.value, 42)
         MirrorUI.refresh_transfer_status(app)
         refresh_folder.assert_called_once_with()
-        self.assertIn('42% of known work', banner.notice.text)
-        self.assertEqual(banner.progress.value, 42)
+        self.assertNotIn(banner, parent.children)
+        self.assertEqual(app.transfer_progress.value, 42)

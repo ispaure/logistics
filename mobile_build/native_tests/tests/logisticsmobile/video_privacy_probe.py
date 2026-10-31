@@ -237,6 +237,21 @@ async def exercise(app):
                     await privacy.unlock()
                     await until(lambda: not owner.hidden)
             await start(owner)
+            if not android:
+                from rubicon.objc import ObjCClass
+                center = ObjCClass('NSNotificationCenter').defaultCenter
+                center.postNotificationName('UIApplicationWillResignActiveNotification', object=None)
+                await asyncio.sleep(1.2)  # Include more than two native playback policy ticks.
+                assert playing(owner), 'Temporary inactivity paused playback'
+                assert not app.screen_privacy.resume_locked, 'Temporary inactivity locked credentials'
+                if app.screen_privacy.sensitive():
+                    assert app.screen_privacy.shield is not None
+                center.postNotificationName('UIApplicationDidBecomeActiveNotification', object=None)
+                await asyncio.sleep(.3)
+                assert playing(owner)
+                assert not app.screen_privacy.resume_locked
+                report['cases'].append(dict(context=context, injected_temporary_inactivity=True,
+                    playback_continued=True, no_password_challenge=True))
             interruption(owner, True)
             await until(lambda: not playing(owner))
             interruption(owner, True)

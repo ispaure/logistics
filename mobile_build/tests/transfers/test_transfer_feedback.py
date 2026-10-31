@@ -27,69 +27,70 @@ class TransferFeedbackTests(TestCase):
         self.app.cloud_client = RemoteClient()
         self.app.show_cloud(present=False)
 
-    def test_reader_progress_uses_toolbar_and_fullscreen_hides_it(self):
-        from mobile.reader_chrome import reader_buttons
+    def test_readers_never_show_sync_status(self):
+        from mobile.reader_chrome import reader_buttons, transfer_control
         app = self.app
         app.show_documents(destination='documents')
         view = app.editor_view.document_view
         app.transfer_busy = app.transfer_notification = True
         app.transfer_percentage = 42
         app.refresh_transfer_status()
-        self.assertNotIn(view.transfer_banner, view.children)
-        button = reader_buttons(app, view)[0]
-        self.assertEqual(button.text, '42%')
-        self.assertIn('known work', button.accessible_name)
-        button.on_press()
-        self.assertEqual(app.routes.screens['documents'][-1][0], 'transfers')
-        app.routes.back()
-        view._reader_fullscreen = True
-        self.assertNotIn(button, reader_buttons(app, view))
-        view._reader_fullscreen = False
-        app.transfer_percentage = 73
-        app.refresh_transfer_status()
-        self.assertIs(reader_buttons(app, view)[0], button)
-        self.assertEqual(button.text, '73%')
-        app.transfer_busy = False
-        app.transfer_complete = True
-        app.refresh_transfer_status()
-        self.assertEqual(button.text, '✓')
-        app.dismiss_transfer_status()
-        self.assertNotIn(button, reader_buttons(app, view))
+        self.assertIsNone(view.transfer_banner)
+        self.assertIsNone(transfer_control(app, view))
+        self.assertEqual(reader_buttons(app, view), list(view._native_reader_buttons()))
+        self.assertFalse(any(button.parent is not None for _, _, button, _ in
+                             getattr(app, '_sync_status_controls', {}).values()))
 
-    def test_main_screen_progress_stays_above_content(self):
+    def test_main_tabs_have_one_sync_icon_and_navigation_never_reopens_details(self):
         app = self.app
-        app.show_home()
-        view = app.home_sections.content
-        app.transfer_busy = True
-        app.refresh_transfer_status()
-        self.assertIs(view.children[0], view.transfer_banner)
-
-    def test_same_visible_progress_does_not_rewrite_banner_or_relayout_source_actions(self):
-        from contextlib import ExitStack
-        app = self.app
-        app.show_home()
-        app.show_transfers(present=False)
         app.transfer_busy = True
         app.transfer_percentage = 42
-        app.transfer_progress.value = 42
+        app._transfer_cancel = Mock()
+        for destination in ('home', 'files', 'documents', 'chat', 'settings'):
+            with self.subTest(destination=destination):
+                app.routes.return_to(destination)
+                app.refresh_transfer_status()
+                _, _, button, _ = app._sync_status_controls[destination]
+                self.assertIsNotNone(button.parent)
+                self.assertIn('42%', button.accessible_name)
+                self.assertEqual(sum((control if inline else row).parent is not None
+                                     for _, row, control, inline in app._sync_status_controls.values()), 1)
+                button.on_press()
+                self.assertEqual(app.routes.screens[destination][-1][0], 'transfers')
+                other = 'files' if destination == 'home' else 'home'
+                app.routes.return_to(other)
+                app.routes.return_to(destination)
+                self.assertFalse(app.routes.screens[destination])
+                self.assertTrue(app.transfer_busy)
+                app._transfer_cancel.set.assert_not_called()
+        app.routes.return_to('home')
+        button = app._sync_status_controls['home'][2]
+        self.assertIs(button.parent, app._home_status_row)
+        self.assertIsNone(app.home_sections.content.transfer_banner)
+
+    def test_same_progress_does_not_repaint_and_indeterminate_timer_stops_in_viewer(self):
+        app = self.app
+        app.show_home()
+        app.transfer_busy = True
+        app.transfer_percentage = 42
         app.refresh_transfer_status()
-        banner = app.home_sections.content.transfer_banner
-        with ExitStack() as stack:
-            writes = [stack.enter_context(patch.object(impl, method)) for impl, method in (
-                (banner.notice._impl, 'set_text'),
-                (banner.dismiss._impl, 'set_enabled'),
-                (banner.progress._impl, 'set_value'),
-                (app.folder_source_actions._impl, 'refresh'),
-            )]
+        button = app._sync_status_controls['home'][2]
+        with patch.object(button.renderer, 'apply') as paint:
             for _ in range(5):
                 app.refresh_transfer_status()
-            for write in writes:
-                write.assert_not_called()
-        app.transfer_percentage = 43
-        app.transfer_progress.value = 43
+            paint.assert_not_called()
+        app.transfer_percentage = 73
         app.refresh_transfer_status()
-        self.assertIn('43%', banner.notice.text)
-        self.assertEqual(banner.progress.value, 43)
+        self.assertIn('73%', button.accessible_name)
+        app.transfer_percentage = None
+        app.refresh_transfer_status()
+        pending = app._sync_status_tick
+        self.assertIsNotNone(pending)
+        app.show_documents(destination='documents')
+        self.assertTrue(pending.cancelled())
+        self.assertIsNone(app._sync_status_tick)
+        app.transfer_busy = False
+        app.transfer_notification = False
 
     def test_completion_timeout_clears_notice_but_cannot_dismiss_a_later_transfer(self):
         app = self.app

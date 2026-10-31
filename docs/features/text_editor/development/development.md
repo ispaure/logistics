@@ -335,6 +335,14 @@ serialization; a native screenshot driver must verify visible frame changes.
 
 ## Notes Library ownership
 
+On mobile, `notes-library:` routes own the full content area, including iPad and
+Duo layouts. The outer Workspaces folder column and app destination bar stay
+hidden until the library closes; the library retains its own adaptive note tree,
+history and editing actions. Child tools retain that presentation. This is a
+presentation policy separate from reader-return trimming, so closing a nested
+note editor returns to its library. `notes_fullscreen_probe.py` checks native
+geometry through rotation and verifies that closing restores the folder browser.
+
 `notes.py` provides toolkit-independent marker detection, rooted paths, bounded
 reads and immediate-child filtering. Note reads complete short provider reads
 through EOF or the 2 MiB ceiling plus one using `runtime.streams.read_up_to`, then

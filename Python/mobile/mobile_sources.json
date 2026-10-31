@@ -114,6 +114,7 @@
     "reader_lifecycle.py",
     "reader_memory.py",
     "reader_progress.py",
+    "transfer_status.py",
     "reader_sessions.py",
     "reader_ui.py",
     "reading/__init__.py",

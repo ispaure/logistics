@@ -607,12 +607,12 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(app.folder_source_actions.children, [])
                 app.transfer_busy = True
                 app.refresh_transfer_status()
-                self.assertEqual(app.folder_source_actions.children, [app.folder_transfers_button])
+                self.assertEqual(app.folder_source_actions.children, [])
                 app.transfer_busy = False
                 app.transfer_notification = True
                 app.transfer_complete = False
                 app.refresh_transfer_status()
-                self.assertEqual(app.folder_source_actions.children, [app.folder_transfers_button])
+                self.assertEqual(app.folder_source_actions.children, [])
                 app.transfer_complete = True
                 app.refresh_transfer_status()
                 self.assertEqual(app.folder_source_actions.children, [])

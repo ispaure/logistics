@@ -49,7 +49,7 @@ class SceneManager:
             privacy.reveal()
             host.main_window.on_gain_focus()
         else:
-            privacy.conceal()
+            privacy.interrupt()
             host.checkpoint()
 
     def bind_workspace(self, key, host):
@@ -224,6 +224,9 @@ class SceneManager:
             @objc_method
             def sceneDidEnterBackground_(self, scene) -> None:
                 if hasattr(self, 'host'):
+                    privacy = getattr(self.host, 'screen_privacy', None)
+                    if privacy is not None:
+                        privacy.conceal()
                     self.host.checkpoint()
 
             @objc_method

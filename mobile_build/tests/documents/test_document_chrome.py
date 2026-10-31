@@ -23,7 +23,7 @@ class DocumentChromeTests(TestCase):
         self.view = toga.Box()
 
     def test_document_and_secondary_routes_hide_destinations_until_back_to_browser(self):
-        for route in ('editor', 'reader:book', 'private:pdf', 'file-loading:remote'):
+        for route in ('editor', 'reader:book', 'private:pdf', 'file-loading:remote', 'notes-library:vault'):
             with self.subTest(route=route):
                 self.app.routes.screens['files'] = [(route, None, None), ('appearance', None, None)]
                 sync_document_tabs(self.app, self.view)

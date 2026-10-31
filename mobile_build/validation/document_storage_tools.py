@@ -23,7 +23,7 @@ QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaur
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
 NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
-                      'logistics-native-ui-fault.log', 'reader-space.png')
+                      'logistics-native-ui-fault.log', 'reader-space.png', 'notes-fullscreen.png', 'sync-portrait.png', 'sync-landscape-left.png')
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -47,7 +47,7 @@ def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document
     if dependency.version != '26.3':
         raise ValueError('The probe requires the declared packaging==26.3 dependency.')
     shutil.copytree(dependency.locate_file('packaging'), target / 'packaging', dirs_exist_ok=True)
-    if entry_point.endswith('.viewer_layout_probe'):
+    if entry_point.endswith(('.viewer_layout_probe', '.control_center_probe')):
         from tests.readers.video_fixtures import codec_matrix
         codec_matrix(target / 'tests/logisticsmobile/video-fixtures', duration=60)
     (target / 'logisticsmobile/__main__.py').write_text(
@@ -367,7 +367,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         raise TimeoutError('Android document storage probe timed out')
     finally:
         if record is not None:
-            if entry_point.endswith('.viewer_layout_probe'):
+            if entry_point.endswith(('.viewer_layout_probe', '.control_center_probe')):
                 import io
                 import tarfile
                 archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
@@ -433,7 +433,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -491,6 +491,18 @@ def main():
         if args.probe == 'localcrypt':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.localcrypt_probe', result_name='localcrypt-result.json')
+        if args.probe == 'control-center':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.control_center_probe', result_name='control-center-result.json')
+        if args.probe == 'sync-status':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.sync_status_probe', result_name='sync-status-result.json')
+        if args.probe == 'notes-fullscreen':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.notes_fullscreen_probe', result_name='notes-fullscreen-result.json')
+        if args.probe == 'storage-selector':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.storage_selector_probe', result_name='storage-selector-result.json')
         if args.probe == 'first-tap':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.first_tap_probe', result_name='first-tap-result.json')

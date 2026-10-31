@@ -7,7 +7,9 @@ an in-memory embedded rclone session, browse supported remotes and preview suppo
 Push with progress while ordinary writing or reading continues. Transfer details
 show the transfer's **From** and **To** folders during and after the transfer,
 alongside a numeric percentage of known work and transferred/known totals in
-megabytes (MB) on both platforms. The transfer banner also shows the percentage.
+megabytes (MB) on both platforms. Main tabs show a compact sync icon with a
+progress ring at the top right (beside the Home unlock key). Tap it to reopen
+transfer details. Document viewers have no transfer headers or sync controls.
 Progress uses bytes when available, or completed/known file counts otherwise;
 unknown totals show activity without a percentage. Totals can grow as rclone
 discovers files. Live progress stays below 100% until completion is verified,
@@ -20,7 +22,8 @@ participate in the mobile review and its final recheck.
 Progress displays the latest reported totals, without queuing older updates
 ahead of browsing when native rendering is busy.
 Transfer details include **Back** and stay in the tab from which they were opened;
-leaving the screen keeps the transfer running. Progress counters appear on separate
+leaving the screen keeps the transfer running. Switching tabs dismisses transfer
+details, so returning to a tab never reopens them automatically. Progress counters appear on separate
 lines with labels for copying, discovery and comparison. Cloud previews requiring
 the connection show a dialog while transfers are running, including when opened
 from Recent or an open document. Local reader menus remain available.

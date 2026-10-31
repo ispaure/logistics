@@ -484,14 +484,14 @@ class MirrorUITests(unittest.TestCase):
         app.transfer_busy = True
         app.transfer_notification = True
         app.register_transfer_status(view)
-        self.assertIn(view.transfer_banner, view.children)
+        self.assertNotIn(view.transfer_banner, view.children)
         view._comic_fullscreen = True
         app.refresh_transfer_status()
         self.assertNotIn(view.transfer_banner, view.children)
         self.assertTrue(app.transfer_busy and app.transfer_notification)
         view._comic_fullscreen = False
         app.refresh_transfer_status()
-        self.assertIn(view.transfer_banner, view.children)
+        self.assertNotIn(view.transfer_banner, view.children)
 
     def test_native_confirmation_cancel_accept_and_changed_connection(self):
         class Client(MirrorClient):

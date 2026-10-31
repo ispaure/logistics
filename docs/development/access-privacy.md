@@ -32,6 +32,13 @@ Paths in the table are relative to `mobile_build/tests/` unless noted. See
 Device sleep is an environment/lifecycle event; the speech timer counts listening
 time and is not a credential gate.
 
+iOS temporary inactivity (including Control Center) immediately covers protected
+pixels without issuing a lifecycle password challenge or pausing video. Actual
+application/scene backgrounding and protected-data unavailability still conceal
+playback and lock eligible sessions. Call, audio interruption, capture and output
+route safeguards remain independent. Returning from temporary inactivity removes
+the cover without starting previously paused playback.
+
 ## Baseline and migration
 
 The starting source is `2fa216af`, with commonUtils `b9c7f78a`. It includes the

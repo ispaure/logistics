@@ -23,12 +23,12 @@ class WindowOwnerTests(unittest.TestCase):
         self.assertFalse(host.scene_active)
         host.main_window.on_gain_focus.assert_not_called()
         host.checkpoint.assert_not_called()
-        host.screen_privacy = SimpleNamespace(reveal=Mock(), conceal=Mock())
+        host.screen_privacy = SimpleNamespace(reveal=Mock(), interrupt=Mock())
         SceneManager.scene_activity(host, True)
         host.screen_privacy.reveal.assert_called_once()
         host.main_window.on_gain_focus.assert_called_once()
         SceneManager.scene_activity(host, False)
-        host.screen_privacy.conceal.assert_called_once()
+        host.screen_privacy.interrupt.assert_called_once()
         host.checkpoint.assert_called_once()
 
     def test_independent_host_callbacks_and_restoration(self):

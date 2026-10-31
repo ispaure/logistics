@@ -19,6 +19,7 @@ class ScreenPrivacy:
         self.ui_thread = get_ident()
         self.disposed = False
         self.inactive = False
+        self.interrupted = False
         self.captured = False
         self.observers = []
         self.blocks = []
@@ -39,7 +40,8 @@ class ScreenPrivacy:
             from rubicon.objc import ObjCClass, Block, objc_id
             self.center = ObjCClass('NSNotificationCenter').defaultCenter
             for name, callback in (
-                ('UIApplicationWillResignActiveNotification', self.conceal),
+                ('UIApplicationWillResignActiveNotification', self.interrupt),
+                ('UIApplicationDidEnterBackgroundNotification', self.conceal),
                 ('UIApplicationProtectedDataWillBecomeUnavailable', self.conceal),
                 ('UIApplicationDidBecomeActiveNotification', self.reveal),
                 ('UIScreenCapturedDidChangeNotification', self.refresh),
@@ -146,6 +148,11 @@ class ScreenPrivacy:
         from .protection import for_app
         return for_app(self.app).process.protected()
 
+    def interrupt(self):
+        """Cover snapshots during Control Center without revoking the session."""
+        self.interrupted = True
+        self.prepare_native_protection()
+
     def conceal(self):
         self.inactive = True  # Deny reentrant playback before native/UI effects.
         self.prepare_native_protection()
@@ -223,6 +230,7 @@ class ScreenPrivacy:
         if hasattr(self, 'wifi_resume'):
             self.wifi_resume.resume(self.app, self.gates(), self.credential_gates(), ssid)
         self.inactive = False
+        self.interrupted = False
         self.refresh()
         self.resume_reader()
         from .ios_content_background import sync
@@ -256,7 +264,7 @@ class ScreenPrivacy:
             self.captured = captured
             scene = window.windowScene
             scene_inactive = scene is not None and native_value(scene, 'activationState') != 0
-            hidden = protected and (self.inactive or scene_inactive or captured)
+            hidden = protected and (self.inactive or getattr(self, 'interrupted', False) or scene_inactive or captured)
             self.set_ios_shield(hidden or (transitioning and protected and self.resume_locked))
             return hidden
         if self.backend.startswith('toga_android.'):

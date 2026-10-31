@@ -5,6 +5,11 @@ def session_route(route):
     return route == 'editor' or (route or '').startswith(('private:', 'reader:', 'notebook:', 'file-loading:'))
 
 
+def document_route(route):
+    """Own the screen without changing a nested editor's return destination."""
+    return session_route(route) or (route or '').startswith('notes-library:')
+
+
 def scroll_position(widget):
     if widget is None:
         return None
@@ -73,7 +78,7 @@ class ReaderLifecycle:
     def bind_reader_exit(self, view, route, destination):
         """Main documents use Close; secondary screens keep route Back."""
         key = None
-        if route and route.startswith(('private:', 'reader:', 'notebook:')) and route.count(':') == 1:
+        if route and route.startswith(('private:', 'reader:', 'notebook:', 'notes-library:')) and route.count(':') == 1:
             key = route.split(':')[1]
         elif route in ('editor', 'preview'):
             session = getattr(self.editor_view, 'session', None)

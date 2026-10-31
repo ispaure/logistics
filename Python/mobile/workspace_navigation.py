@@ -427,6 +427,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 self.app.reflow_home()
             if hasattr(self.app, 'documents_sections'):
                 self.app.reflow_documents_hub()
+            from .transfer_status import refresh as refresh_sync_status
+            refresh_sync_status(self.app)
             from .browser_ui import sync_browser_population
             sync_browser_population(self.app, body)
         finally:
