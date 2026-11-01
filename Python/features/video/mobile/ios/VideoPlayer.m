@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <CallKit/CallKit.h>
+#import <math.h>
 #import <VLCKit/VLCKit.h>
 #if __has_include(<UIKit/UIHingeInteraction.h>)
 #import <UIKit/UIHingeInteraction.h>
@@ -376,6 +377,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     if (self.tabletop) visible = YES;
     if (self.controlsLocked) visible = NO;
     self.controlsVisible = visible;
+    // The video drawable must not extend beneath the on-screen seek controls.
+    [self.view setNeedsLayout];
     [self.controlsTimer invalidate]; self.controlsTimer = nil;
     BOOL shown = visible && !self.pipActive;
     BOOL hideBar = !shown || self.tabletop;
@@ -507,7 +510,25 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 #endif
     BOOL poseChanged = self.tabletop != tabletop;
     self.tabletop = tabletop;
-    self.movieBottom.constant = CGRectGetMaxY(movieArea) - CGRectGetMaxY(self.view.bounds);
+    // VLCKit composites its subtitles inside the drawable. When playback controls
+    // are shown, give the drawable the space above them instead of letting cues
+    // render behind the seek bar. Preserve the independent upper movie panel in
+    // tabletop posture. Use the last laid-out control frame, then request a second
+    // layout pass if its geometry changed; this avoids a constraint cycle.
+    CGFloat movieBottomY = CGRectGetMaxY(movieArea);
+    if (!tabletop && self.controlsVisible && !self.pipActive && !self.controlsLocked) {
+        CGRect deck = self.controlsScroll.frame;
+        CGFloat top = CGRectGetMinY(deck);
+        if (CGRectGetHeight(deck) > 0 && isfinite(top) && top > CGRectGetMinY(movieArea) + 80 &&
+            top < movieBottomY) {
+            movieBottomY = top - 4;
+        }
+    }
+    CGFloat newMovieBottom = movieBottomY - CGRectGetMaxY(self.view.bounds);
+    if (fabs(self.movieBottom.constant - newMovieBottom) > 0.5) {
+        self.movieBottom.constant = newMovieBottom;
+        [self.view setNeedsLayout];
+    }
     self.tabletopTransport.hidden = !tabletop;
     self.tabletopUtilities.hidden = !tabletop;
     self.controls.spacing = tabletop ? 2 : 4;
