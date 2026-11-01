@@ -49,7 +49,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic) BOOL hingePartiallyOpen, tabletop;
 @property(nonatomic, strong) UIStackView *tabletopTransport, *tabletopUtilities;
 @property(nonatomic, strong) UIButton *tabletopPlay;
-@property(nonatomic, strong) NSLayoutConstraint *movieBottom, *deckCenterY, *controlsHeightLimit;
+@property(nonatomic, strong) NSLayoutConstraint *movieWidth, *movieHeight, *movieCenterY, *deckCenterY, *controlsHeightLimit;
 
 @property(nonatomic) BOOL networkWaiting, networkResumePending, playRequested;
 @property(nonatomic) int64_t bufferPosition;
@@ -100,6 +100,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, strong) UIButton *unlockButton, *undoSeekButton;
 @property(nonatomic, strong) UIView *cacheStrip, *pauseSnapshot;
 @property(nonatomic, copy) NSString *languageSignature;
+@property(nonatomic) CGSize lastVideoSize;
 @property(nonatomic) CGFloat sessionSubtitleScale; // Zero means use configured preference.
 @end
 
@@ -313,12 +314,14 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.controlsHeightLimit.active = YES;
     self.bufferCenterX = [self.bufferOverlay.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor];
     self.bufferCenterY = [self.bufferOverlay.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor];
-    self.movieBottom = [self.movie.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor];
+    // Size VLC's drawable to the fitted picture, rather than asking VLC to
+    // letterbox internally (where it can draw subtitles outside the image).
+    self.movieWidth = [self.movie.widthAnchor constraintEqualToConstant:0];
+    self.movieHeight = [self.movie.heightAnchor constraintEqualToConstant:0];
+    self.movieCenterY = [self.movie.centerYAnchor constraintEqualToAnchor:self.view.topAnchor];
     [NSLayoutConstraint activateConstraints:@[
-        [self.movie.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [self.movie.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [self.movie.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        self.movieBottom,
+        [self.movie.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        self.movieCenterY, self.movieWidth, self.movieHeight,
         self.controlsLeading, self.controlsTrailing, self.controlsBottom, self.controlsTop,
         naturalHeight,
         self.bufferCenterX, self.bufferCenterY,
@@ -367,7 +370,10 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations { return UIInterfaceOrientationMaskAll; }
 - (BOOL)prefersHomeIndicatorAutoHidden { return (self.tabletop || (self.fullscreen && self.systemChromeHidden)) && !self.pipActive; }
 - (UIRectEdge)preferredScreenEdgesDeferringSystemGestures {
-    return (self.tabletop || (self.fullscreen && self.systemChromeHidden)) && !self.pipActive ? UIRectEdgeAll : UIRectEdgeNone;
+    // Allow Control Center and Notification Center with one top-edge swipe,
+    // even in immersive fullscreen. Keep bottom-edge protection to avoid
+    // accidentally leaving the video during playback gestures.
+    return (self.tabletop || (self.fullscreen && self.systemChromeHidden)) && !self.pipActive ? UIRectEdgeBottom : UIRectEdgeNone;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
     return ![touch.view isDescendantOfView:self.controlsScroll];
@@ -465,8 +471,6 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [super viewDidLayoutSubviews];
     // VLCKit installs its surface through VLCDrawable, not a UIView drawable.
     // Explicitly resize that surface after rotations, folds and bar changes.
-    for (UIView *surface in self.movie.subviews) surface.frame = self.movie.bounds;
-    [self configureVideoDynamicRange:self.movie.layer];
     CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
     NSDictionary *layout = [self playbackOptions][@"reader_layout"];
     CGFloat margin = layout[@"margin"] ? [layout[@"margin"] doubleValue] : 12;
@@ -509,13 +513,33 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 #endif
     BOOL poseChanged = self.tabletop != tabletop;
     self.tabletop = tabletop;
-    // Keep the video drawable centred in the whole viewport even when the
-    // transport controls are visible. Clipping it at the seek bar shifted the
-    // picture upward and made fullscreen/non-fullscreen framing inconsistent.
-    // Tabletop mode still reserves its dedicated upper panel.
-    CGFloat newMovieBottom = CGRectGetMaxY(movieArea) - CGRectGetMaxY(self.view.bounds);
-    if (fabs(self.movieBottom.constant - newMovieBottom) > 0.5)
-        self.movieBottom.constant = newMovieBottom;
+    // Fit the drawable itself to the decoded image, with letterboxing supplied
+    // by our black parent view. VLC subtitles then have the image's bounds as
+    // their layout surface. Only do this for Fit: Fill/Original retain their
+    // existing VLC-specific crop/scale semantics.
+    CGSize viewport = movieArea.size;
+    CGSize decoded = self.player.videoSize;
+    NSString *pictureMode = [self playbackOptions][@"aspect"] ?: @"fit";
+    BOOL fit = [pictureMode isEqualToString:@"fit"];
+    if (fit && decoded.width > 0 && decoded.height > 0 &&
+        isfinite(decoded.width) && isfinite(decoded.height) &&
+        viewport.width > 0 && viewport.height > 0) {
+        CGFloat factor = MIN(viewport.width / decoded.width, viewport.height / decoded.height);
+        viewport = CGSizeMake(decoded.width * factor, decoded.height * factor);
+    }
+    CGFloat centerY = CGRectGetMidY(movieArea);
+    if (fabs(self.movieWidth.constant - viewport.width) > 0.5 ||
+        fabs(self.movieHeight.constant - viewport.height) > 0.5 ||
+        fabs(self.movieCenterY.constant - centerY) > 0.5) {
+        self.movieWidth.constant = viewport.width;
+        self.movieHeight.constant = viewport.height;
+        self.movieCenterY.constant = centerY;
+        // VLC's drawable subviews are managed by the VLCDrawable callback.
+        // The next layout pass updates them after Auto Layout sizes movie.
+        [self.view setNeedsLayout];
+    }
+    for (UIView *surface in self.movie.subviews) surface.frame = self.movie.bounds;
+    [self configureVideoDynamicRange:self.movie.layer];
     self.tabletopTransport.hidden = !tabletop;
     self.tabletopUtilities.hidden = !tabletop;
     self.controls.spacing = tabletop ? 2 : 4;
@@ -893,6 +917,12 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     }
     if (![self canPlay:NO]) [self pause];
     [self updatePlaybackProgress];
+    CGSize videoSize = self.player.videoSize;
+    if (fabs(videoSize.width - self.lastVideoSize.width) > 0.5 ||
+        fabs(videoSize.height - self.lastVideoSize.height) > 0.5) {
+        self.lastVideoSize = videoSize;
+        [self.view setNeedsLayout];
+    }
     [self applyPictureSize];
     if (NSProcessInfo.processInfo.systemUptime > self.undoUntil) self.undoSeekButton.hidden = YES;
     if (self.controlsLocked) [self.view bringSubviewToFront:self.unlockButton];
