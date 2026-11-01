@@ -33,7 +33,8 @@ class MobileUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
             self.assertEqual(app.native_host.state.destination, 'home')
-            self.assertEqual(app.body.children[0].content.children[0].text, 'Home')
+            self.assertEqual(app._home_status_row.children[0].text, 'Open a file or start a new document.')
+            self.assertEqual(app.home_actions.children[0].text, 'Open file…')
             app.show_settings()
             app.settings_navigation.sections['App']
             app.settings_navigation.sections['Text']
