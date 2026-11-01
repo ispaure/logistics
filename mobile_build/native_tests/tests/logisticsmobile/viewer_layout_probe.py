@@ -71,14 +71,14 @@ class ViewerLayoutProbe(LogisticsMobile):
             await asyncio.sleep(.1)
         raise AssertionError('Reader did not settle')
 
-    async def sample(self, owner, name, orientation, output):
+    async def sample(self, owner, name, orientation, output, *, opening=False):
         await self.settled(owner)
         before = None
         if 'epub' in name:
             before = await self.epub_metrics(owner)
-        await rotate(self, orientation, settle=.5)
-        await self.settled(owner)
-        self.adaptive.render()
+        if not opening:
+            await rotate(self, orientation, settle=.5)
+            await self.settled(owner)
         await asyncio.sleep(.4)
         view = getattr(owner, 'library_view', None) or owner.crypt_view
         row = dict(viewer=name, orientation=orientation, pose=pose_snapshot(self),
@@ -102,23 +102,27 @@ class ViewerLayoutProbe(LogisticsMobile):
                 row['errors'].append('Footer is not at the safe bottom')
             if x < left - 2 or x + width > right + 2 or y < top - 2:
                 row['errors'].append('Footer extends beyond safe bounds')
+            if sys.platform == 'ios':
+                from mobile.document_location import side_title_reader
+                from mobile.ios_toolbar import vertical_edge
+                controller = self.native_host.adapter.content_controller(self.native_host.state.destination)
+                reader = side_title_reader(view)
+                title = reader._document_title_view if reader is not None else controller.navigationItem.titleView
+                if vertical_edge(controller) and title is not None:
+                    window = self.main_window._impl.native
+                    rect = title.convertRect(title.bounds, toView=window)
+                    row['title_frame'] = [float(rect.origin.x), float(rect.origin.y),
+                        float(rect.size.width), float(rect.size.height)]
+                    row['title_top_gap'] = float(rect.origin.y - window.safeAreaInsets.top)
+                    content = geometry(self, reader._reading_frame_owner.content) if reader is not None else row['view']
+                    row['title_content_gap'] = content[1] - float(rect.origin.y + rect.size.height)
+                    row['title_in_reader'] = reader is not None
+                    if not 4 <= row['title_top_gap'] <= 8 or not 4 <= row['title_content_gap'] <= 8:
+                        row['errors'].append('Reader title overlaps content or is not at the safe top')
             if not footer.vertical:
                 row['transport'] = geometry(self, footer.row)
                 if row['transport'][1] + row['transport'][3] > bottom + 1:
                     row['errors'].append('Reader transport enters the home-gesture strip')
-                if sys.platform == 'ios':
-                    from mobile.ios_toolbar import vertical_edge
-                    controller = self.native_host.adapter.content_controller(self.native_host.state.destination)
-                    title = controller.navigationItem.titleView
-                    if vertical_edge(controller) and title is not None and row['pose'].get('hinge_status') != 2:
-                        window = self.main_window._impl.native
-                        rect = title.convertRect(title.bounds, toView=window)
-                        row['title_frame'] = [float(rect.origin.x), float(rect.origin.y),
-                            float(rect.size.width), float(rect.size.height)]
-                        row['title_top_gap'] = float(rect.origin.y - window.safeAreaInsets.top)
-                        row['title_content_gap'] = row['view'][1] - float(rect.origin.y + rect.size.height)
-                        if not 4 <= row['title_top_gap'] <= 8 or not 4 <= row['title_content_gap'] <= 8:
-                            row['errors'].append('Reader title retains excessive outer/content spacing')
                 row['caption'] = geometry(self, footer.spacer)
                 if not 44 <= row['transport'][3] <= 50:
                     row['errors'].append('Horizontal footer lost its compact touch row')
@@ -183,7 +187,8 @@ class ViewerLayoutProbe(LogisticsMobile):
                 turned = await self.epub_metrics(owner)
                 if turned['index'] <= dom['index'] or turned['anchor'] <= dom['anchor']:
                     row['errors'].append('EPUB page turn did not advance its passage')
-        await capture_window(self, output / f'{name}-{orientation}.png')
+        suffix = '-opening' if opening else ''
+        await capture_window(self, output / f'{name}-{orientation}{suffix}.png')
         return row
 
     def epub_web(self, owner):
@@ -237,7 +242,7 @@ class ViewerLayoutProbe(LogisticsMobile):
     async def check(self):
         output = Path(self.paths.cache) / 'viewer-layout'
         output.mkdir(exist_ok=True)
-        report = dict(success=False, platform=sys.platform, samples=[], errors=[])
+        report = dict(success=False, platform=sys.platform, samples=[], opening_samples=[], errors=[])
         try:
             startup = getattr(self, 'startup_task', None)
             if startup is not None:
@@ -277,6 +282,9 @@ class ViewerLayoutProbe(LogisticsMobile):
                      ('pdf', pdf, False), ('image', image, False), ('text', text, False)]
             for name, path, imported in cases:
                 try:
+                    # Opening directly in landscape must work without a later
+                    # rotation or test-triggered render repairing its title.
+                    await rotate(self, 'landscape-left', settle=.5)
                     if imported:
                         record = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), path)
                         assert await self.open_book(record['id'])
@@ -287,6 +295,9 @@ class ViewerLayoutProbe(LogisticsMobile):
                         owner = self.private_sessions.active
                         if getattr(owner, 'crypt_immersive', False):
                             owner.toggle_private_reading_mode()
+                    row = await self.sample(owner, name, 'landscape-left', output, opening=True)
+                    report['opening_samples'].append(row)
+                    (output / 'progress.json').write_text(json.dumps(report, indent=2))
                     for orientation in ('portrait', 'landscape-left', 'landscape-right', 'portrait'):
                         row = await self.sample(owner, name, orientation, output)
                         report['samples'].append(row)
@@ -304,7 +315,7 @@ class ViewerLayoutProbe(LogisticsMobile):
             if not report['errors']:
                 await self.video_samples(output, report)
             report['success'] = len(report['samples']) == (len(cases) + 2) * 4 and not report['errors'] and not any(
-                row['errors'] for row in report['samples'])
+                row['errors'] for row in (*report['samples'], *report['opening_samples']))
         except Exception:
             report['errors'].append(dict(error=traceback.format_exc()))
         (output / 'result.json').write_text(json.dumps(report, indent=2))

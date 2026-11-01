@@ -3,8 +3,9 @@ from commonUtils.ui.readers.layout import READER_LAYOUT, rounded_clearance, rema
 
 
 def page_footer(view):
+    """Find reader progress controls regardless of their current layout axis."""
     footer = getattr(view, '_reader_page_footer', None)
-    if footer is not None and not footer.vertical:
+    if footer is not None:
         return footer
     for child in getattr(view, 'children', ()):
         footer = page_footer(child)
@@ -16,50 +17,35 @@ def page_footer(view):
 def passive_caption_tail(view):
     """Only the noninteractive caption may enter the home-gesture strip."""
     footer = page_footer(view)
-    if footer is None:
+    if footer is None or footer.vertical:
         return 0
     return max(0, footer.widget.layout.content_height - footer.row.layout.content_height)
 
 
-def compact_apple_reader(container, *, settled=False):
-    """Use the measured title height when UIKit puts reader actions on a side."""
+def compact_apple_reader(container):
+    """The reader owns the title row; keep only the hardware inset above it."""
     if container.content is None:
         return False
     app = container.content.interface.app
     if app is None or not getattr(app, 'body', None) or not app.body.children:
         return False
     view = app.body.children[0]
-    if view._impl.container is not container or page_footer(view) is None:
+    if view._impl.container is not container:
         return False
-    if not settled and not getattr(container, '_reader_title_settle_pending', False):
-        # UIKit can finish positioning its title after the content layout,
-        # particularly when the side bar swaps edges without changing size.
-        container._reader_title_settle_pending = True
-        def finish():
-            container._reader_title_settle_pending = False
-            if compact_apple_reader(container, settled=True) and container.content is not None:
-                container.content.interface.refresh()
-        app.loop.call_later(.05, finish)
+    from .document_location import side_title_reader
+    reader = side_title_reader(view)
+    if reader is None and page_footer(view) is None:
+        return False
     from .screen_privacy import native_value
     window = native_value(container.native, 'window')
     if window is None:
         return False
-    from .ios_toolbar import vertical_edge
-    controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
-    title = controller.navigationItem.titleView
     changed = False
-    if (vertical_edge(controller) and title is not None and title.superview is not None
-            and not controller.navigationItem.prompt and getattr(app, '_hinge_status', 0) != 2):
-        from rubicon.objc import CGPoint
-        rect = title.convertRect(title.bounds, toView=window)
+    if reader is not None:
         origin = container.native.convertRect(container.native.bounds, toView=window).origin
-        top = max(float(window.safeAreaInsets.top), float(origin.y)) + 6
-        delta = top - float(rect.origin.y)
-        if abs(delta) > .5:
-            title.center = CGPoint(title.center.x, title.center.y + delta)
-        inset = max(0, top + float(rect.size.height) + 6 - float(origin.y))
-        if inset < container.top_inset:
-            container.top_inset = inset
+        top = max(0, float(window.safeAreaInsets.top) - float(origin.y))
+        if abs(container.top_inset - top) > .5:
+            container.top_inset = top
             changed = True
     home = float(window.safeAreaInsets.bottom)
     extension = min(passive_caption_tail(view), max(0, home - 4))

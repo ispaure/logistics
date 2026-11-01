@@ -218,7 +218,8 @@ existing footer. All iOS readers and text editors publish `_native_reader_title`
 and their supported action buttons through the same title-bar contract. The
 host's `ios_reader_chrome.reader_title` centers the label relative to the native
 window during UIKit layout, allowing asymmetric action groups without shifting
-the visible title. Fullscreen continues to hide the entire native bar.
+the visible title. Readers with a storage subtitle and side actions use the
+reader row described below. Fullscreen hides the title and navigation actions.
 UIKit owns navigation-button backgrounds: `ios_reader_chrome.bar_control` marks
 mounted controls so surface/trait refreshes keep their backgrounds clear, remove
 app outlines and avoid a second button configuration inside the system glass.
@@ -587,6 +588,16 @@ centered, horizontally scrollable subtitle as folder headers (12-point icons,
 caption text at 75% of the title size), including when UIKit narrows the title
 beside a vertical bar. Native mounting removes the content row from fullscreen
 restoration so it cannot return as a duplicate.
+When UIKit places reader actions along a side, the reader puts the filename and
+storage subtitle in its first row, with six points above and below. The document
+starts after that row regardless of the progress control’s axis. The container
+keeps the hardware’s top safe inset without reserving a second navigation-title
+strip. Fullscreen hides the row; returning to a horizontal navigation bar moves
+the title back to UIKit. Only a horizontal footer’s passive caption may extend
+toward the home indicator.
+`viewer_layout_probe.py` measures clearance after opening and rotating.
+The `--probe reader-title` scenario checks imported and provider comics and EPUBs, including
+fullscreen restoration and optional simulator hinge transitions.
 iOS reader footers retain the full home-gesture safe inset. The complete page
 button and slider hit areas stay above the indicator, even when the visible
 slider track would fit closer. Container layout and floating-bar fallback honor

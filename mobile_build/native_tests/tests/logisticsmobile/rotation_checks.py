@@ -118,19 +118,25 @@ def safe_geometry(app):
     footer = page_footer(view)
     controller = (app.native_host.adapter.content_controller(app.native_host.state.destination)
                   if footer is not None else None)
-    title = controller.navigationItem.titleView if controller is not None else None
+    from mobile.document_location import side_title_reader
+    reader = side_title_reader(view)
+    title = (reader._document_title_view if reader is not None else
+             controller.navigationItem.titleView if controller is not None else None)
     if (title is not None and vertical_edge(controller)
-            and title.superview is not None and not controller.navigationItem.prompt
-            and getattr(app, '_hinge_status', 0) != 2):
+            and title.superview is not None and not controller.navigationItem.prompt):
         title_rect = title.convertRect(title.bounds, toView=window)
         title_bottom = float(title_rect.origin.y + title_rect.size.height)
         title_gap = float(title_rect.origin.y - safe.top)
-        content_gap = float(window_rect.origin.y) - title_bottom
+        body_rect = window_rect
+        if reader is not None:
+            content = reader._reading_frame_owner.content._impl.native
+            body_rect = content.convertRect(content.bounds, toView=window)
+        content_gap = float(body_rect.origin.y) - title_bottom
         result.update(reader_title_top_gap=title_gap, reader_title_content_gap=content_gap)
         assert 4 <= title_gap <= 8, result
         assert 4 <= content_gap <= 8, result
         origin = container.native.convertRect(container.native.bounds, toView=window).origin
-        minimum_top = title_bottom + 4 - float(origin.y)
+        minimum_top = (float(safe.top) if reader is not None else title_bottom + 4) - float(origin.y)
     assert window_rect.origin.x >= (0 if edge == 1 else safe.left) - 1, result
     assert window_rect.origin.x + window_rect.size.width <= window.bounds.size.width - (0 if edge == 2 else safe.right) + 1, result
     assert window_rect.origin.y >= safe.top - 1, result

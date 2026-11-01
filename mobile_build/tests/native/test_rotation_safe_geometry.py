@@ -8,10 +8,43 @@ import unittest
 from unittest.mock import patch
 
 from mobile_build.native_tests.tests.logisticsmobile import rotation_checks
+from mobile.reader_edges import compact_apple_reader
 
 
 def rectangle(x, y, width, height):
     return NS(origin=NS(x=x, y=y), size=NS(width=width, height=height))
+
+
+class ReaderTitleLayoutTests(unittest.TestCase):
+    def fixture(self, *, vertical, side, safe_top):
+        footer = NS(vertical=vertical, widget=NS(layout=NS(content_height=64)),
+                    row=NS(layout=NS(content_height=44)))
+        window = NS(safeAreaInsets=NS(top=safe_top, bottom=34))
+        native = NS(window=window, bounds=rectangle(0, 0, 900, 600),
+                    safeAreaInsets=NS(bottom=34),
+                    convertRect=lambda *a, **kw: rectangle(0, 0, 900, 600))
+        container = NS(native=native, top_inset=82, bottom_inset=34)
+        view = NS(_reader_page_footer=footer, _impl=NS(container=container), children=[])
+        if side:
+            view._document_title_header = NS(parent=view)
+        container.content = NS(interface=NS(app=NS(body=NS(children=[view]))))
+        return container
+
+    def test_reader_header_reclaims_the_bar_strip_but_preserves_hardware_clearance(self):
+        for vertical in (False, True):
+            for safe_top in (0, 24):
+                with self.subTest(vertical=vertical, safe_top=safe_top):
+                    container = self.fixture(vertical=vertical, side=True, safe_top=safe_top)
+                    with patch('mobile.appearance.reserve_navigation'):
+                        compact_apple_reader(container)
+                    self.assertEqual(container.top_inset, safe_top)
+                    self.assertEqual(container.bottom_inset, 34 if vertical else 14)
+
+    def test_horizontal_navigation_retains_its_system_inset(self):
+        container = self.fixture(vertical=False, side=False, safe_top=0)
+        with patch('mobile.appearance.reserve_navigation'):
+            compact_apple_reader(container)
+        self.assertEqual(container.top_inset, 82)
 
 
 class RotationSafeGeometryTests(unittest.TestCase):
