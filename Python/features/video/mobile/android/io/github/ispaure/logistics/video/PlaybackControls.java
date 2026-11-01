@@ -197,20 +197,30 @@ final class PlaybackControls {
     }
     void mute() { owner.toggleMute(); }
     void cached(String json) {
-        try { JSONObject value = new JSONObject(json); cacheApproximate = !value.optBoolean("local"); cache.ranges = value.optBoolean("local") ? new JSONArray("[[0,1]]") : value.optJSONArray("ranges"); cache.invalidate(); }
+        try { JSONObject value = new JSONObject(json); cacheApproximate = value.optBoolean("approximate", true); cache.ranges = value.optBoolean("local") ? new JSONArray("[[0,1]]") : value.optJSONArray("ranges"); cache.setContentDescription(cacheApproximate ? "Approximate cached file ranges" : "Timestamp indexed cached ranges"); cache.invalidate(); }
         catch (Exception ignored) { cache.ranges = null; cache.invalidate(); }
     }
     private final class CacheStrip extends View {
         JSONArray ranges;
-        final Paint paint = new Paint();
+        final Paint paint = new Paint(3);
         CacheStrip() { super(owner.activity); paint.setColor(0xff72c3ad); setContentDescription("Approximate cached byte ranges; variable bitrate can shift time mapping"); }
         @Override protected void onDraw(Canvas canvas) {
+            // Draw the whole timeline grey, with only cached ranges green.
+            // SeekBar progress travels between its padded thumb centres.
+            float left = owner.seek.getX() + owner.seek.getPaddingLeft() - getX();
+            float right = owner.seek.getX() + owner.seek.getWidth() - owner.seek.getPaddingRight() - getX();
+            if (right <= left) { left = 0; right = getWidth(); }
+            float width = right - left;
+            paint.setColor(0xff888888);
+            canvas.drawRect(left, 0, right, getHeight(), paint);
+            paint.setColor(0xff35bf77);
             if (ranges == null) return;
-            float width = Math.max(0, getWidth() - owner.dp(32));
             for (int i=0;i<ranges.length();i++) {
                 JSONArray range = ranges.optJSONArray(i); if (range == null || range.length() != 2) continue;
-                canvas.drawRect(owner.dp(16)+(float)range.optDouble(0)*width, 0,
-                    owner.dp(16)+(float)range.optDouble(1)*width, getHeight(), paint);
+                double start = range.optDouble(0, Double.NaN), end = range.optDouble(1, Double.NaN);
+                if (!Double.isFinite(start) || !Double.isFinite(end) || end < start) continue;
+                canvas.drawRect(left+(float)Math.max(0, Math.min(1, start))*width, 0,
+                    left+(float)Math.max(0, Math.min(1, end))*width, getHeight(), paint);
             }
         }
     }

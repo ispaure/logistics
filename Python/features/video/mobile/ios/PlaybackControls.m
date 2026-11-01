@@ -1,14 +1,21 @@
+#import <math.h>
 // Feature-owned controls layered over the decoder/lifecycle controller.
 @interface LGVideoCachedRanges : UIView
 @property(nonatomic, strong) NSArray *ranges;
 @end
 @implementation LGVideoCachedRanges
 - (void)drawRect:(CGRect)rect {
-    [UIColor.systemMintColor setFill];
     CGFloat width = MAX(0, self.bounds.size.width);
+    [[UIColor colorWithWhite:.48 alpha:.80] setFill];
+    UIRectFill(CGRectMake(0, 0, width, self.bounds.size.height));
+    [UIColor.systemGreenColor setFill];
     for (NSArray *range in self.ranges) {
         if (![range isKindOfClass:NSArray.class] || range.count != 2) continue;
-        CGFloat start = [range[0] doubleValue], stop = [range[1] doubleValue];
+        if (![range[0] respondsToSelector:@selector(doubleValue)] || ![range[1] respondsToSelector:@selector(doubleValue)]) continue;
+        CGFloat rawStart = [range[0] doubleValue], rawStop = [range[1] doubleValue];
+        if (!isfinite(rawStart) || !isfinite(rawStop) || rawStop < rawStart) continue;
+        CGFloat start = MAX(0, MIN(1, rawStart));
+        CGFloat stop = MAX(start, MIN(1, rawStop));
         UIRectFill(CGRectMake(start * width, 0, MAX(0, (stop-start) * width), self.bounds.size.height));
     }
 }
@@ -43,7 +50,12 @@
     if (rate >= .5 && rate <= 2.) self.player.rate = rate;
     self.player.currentVideoSubTitleDelay = [options[@"subtitle_delay_ms"] longLongValue] * 1000;
     self.player.currentAudioPlaybackDelay = [options[@"audio_delay_ms"] longLongValue] * 1000;
-    if (options[@"subtitle_scale"]) self.player.currentSubTitleFontScale = [options[@"subtitle_scale"] floatValue];
+    // A live pinch or subtitle-menu adjustment wins over later settings refreshes.
+    // A new controller starts with zero and therefore uses the configured default.
+    float configuredScale = [options[@"subtitle_scale"] floatValue];
+    float subtitleScale = self.sessionSubtitleScale > 0 ? self.sessionSubtitleScale : configuredScale;
+    if (subtitleScale > 0 && isfinite(subtitleScale))
+        self.player.currentSubTitleFontScale = MAX(.5f, MIN(3.f, subtitleScale));
     [self applyPictureSize];
     NSString *audio = options[@"audio_language"] ?: @"", *subtitle = options[@"subtitle_language"] ?: @"";
     NSString *signature = [NSString stringWithFormat:@"%@:%@:%lu:%lu", audio, subtitle, (unsigned long)self.player.audioTracks.count, (unsigned long)self.player.textTracks.count];
@@ -126,6 +138,21 @@
     [self setControlsShown:!self.controlsLocked];
     [self.view bringSubviewToFront:self.unlockButton];
 }
+- (void)pinchSubtitleSize:(UIPinchGestureRecognizer *)pinch {
+    if (self.controlsLocked || self.presentedViewController || ![self canPlay:NO]) return;
+    if (pinch.state == UIGestureRecognizerStateBegan) {
+        self.subtitlePinchStart = self.player.currentSubTitleFontScale;
+        if (self.subtitlePinchStart <= 0) self.subtitlePinchStart = 1;
+    } else if (pinch.state == UIGestureRecognizerStateChanged || pinch.state == UIGestureRecognizerStateEnded) {
+        // Session-only: do not emit a settings command. The persistent preference
+        // remains unchanged; the next media session restores its own default.
+        CGFloat scale = MAX(.5, MIN(3., self.subtitlePinchStart * pinch.scale));
+        self.sessionSubtitleScale = scale;
+        self.player.currentSubTitleFontScale = (float)scale;
+        if (pinch.state == UIGestureRecognizerStateEnded)
+            [self showStatus:[NSString stringWithFormat:@"Subtitle size %.0f%% (session)", scale * 100]];
+    }
+}
 - (void)doubleTapVideo:(UITapGestureRecognizer *)tap {
     if (self.controlsLocked || ![self canPlay:NO]) return;
     CGFloat x = [tap locationInView:self.movie].x, width = self.movie.bounds.size.width;
@@ -180,8 +207,18 @@
     [menu addAction:[UIAlertAction actionWithTitle:@"Choose subtitle file…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"subtitleBrowse" value:@""]; }]];
     for (NSArray *entry in @[@[@"Subtitle delay (ms; positive = later)", @"subtitle_delay_ms"], @[@"Audio delay (ms; positive = later)", @"audio_delay_ms"], @[@"Preferred audio language (e.g. fr)", @"audio_language"], @[@"Preferred subtitle language (e.g. en)", @"subtitle_language"]])
         [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self promptValue:entry[0] key:entry[1] numeric:[entry[1] hasSuffix:@"_ms"]]; }]];
-    for (NSNumber *scale in @[@.75,@1.,@1.25,@1.5,@2.])
-        [menu addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Subtitle size %@×",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"subtitle_scale" value:scale]; }]];
+    for (NSNumber *scale in @[@.75,@1.,@1.25,@1.5,@2.]) {
+        [menu addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Subtitle size %@× (session)",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            self.sessionSubtitleScale = scale.doubleValue;
+            self.player.currentSubTitleFontScale = scale.floatValue;
+            [self showStatus:[NSString stringWithFormat:@"Subtitle size %.0f%% (session)", scale.doubleValue * 100]];
+        }]];
+    }
+    [menu addAction:[UIAlertAction actionWithTitle:@"Reset subtitle size (session)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        self.sessionSubtitleScale = 0;
+        [self applyPlaybackOptions];
+        [self showStatus:@"Subtitle size reset"];
+    }]];
     [self presentPlaybackDialog:menu];
 }
 - (void)playbackTools:(id)sender {
@@ -215,9 +252,12 @@
 - (void)showCachedRanges:(NSString *)json {
     if (![self canPlay:NO]) return;
     NSDictionary *value = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
-    self.cacheApproximate = ![value[@"local"] boolValue];
+    if (![value isKindOfClass:NSDictionary.class]) return;
+    self.cacheApproximate = [value[@"approximate"] boolValue];
     LGVideoCachedRanges *strip = (LGVideoCachedRanges *)self.cacheStrip;
-    strip.ranges = [value[@"local"] boolValue] ? @[@[@0,@1]] : value[@"ranges"];
+    id suppliedRanges = value[@"ranges"];
+    strip.ranges = [value[@"local"] boolValue] ? @[@[@0,@1]] : ([suppliedRanges isKindOfClass:NSArray.class] ? suppliedRanges : @[]);
+    strip.accessibilityLabel = [value[@"approximate"] boolValue] ? @"Approximate cached file ranges" : @"Timestamp indexed cached ranges";
     [strip setNeedsDisplay];
 }
 - (void)showInFolder:(id)sender { [self emitCommand:@"showInFolder" value:@""]; }
@@ -279,7 +319,7 @@
     strip.isAccessibilityElement = YES;
     strip.accessibilityLabel = @"Approximate cached byte ranges; variable bitrate can shift time mapping";
     self.cacheStrip = strip;
-    [self.seek addSubview:strip];
+    [self.seek insertSubview:strip atIndex:0];
     self.undoSeekButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.undoSeekButton setTitle:@"Undo seek" forState:UIControlStateNormal];
     [self.undoSeekButton addTarget:self action:@selector(undoSeek:) forControlEvents:UIControlEventTouchUpInside];
@@ -301,16 +341,25 @@
     for (UIGestureRecognizer *gesture in self.view.gestureRecognizers)
         if ([gesture isKindOfClass:UITapGestureRecognizer.class]) [gesture requireGestureRecognizerToFail:doubleTap];
     [self.view addGestureRecognizer:doubleTap];
+    UIPinchGestureRecognizer *subtitlePinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(pinchSubtitleSize:)];
+    subtitlePinch.delegate = self;
+    [self.view addGestureRecognizer:subtitlePinch];
 }
 - (void)layoutPlaybackTools {
-    // Measure UIKit's actual track instead of guessing its horizontal padding.
-    // Keep 60% of the former gap (half the slider height plus stack spacing).
+    // The centre of the thumb (not its edge) defines the timeline endpoints.
+    // UIKit's trackRect and thumbRect incorporate the platform's thumb inset.
     CGRect track = [self.seek trackRectForBounds:self.seek.bounds];
-    CGFloat gap = .6 * (CGRectGetHeight(self.seek.bounds) - CGRectGetMaxY(track) + 4);
-    self.cacheStrip.frame = CGRectMake(CGRectGetMinX(track), CGRectGetMaxY(track) + gap,
-                                      CGRectGetWidth(track), 3);
+    CGRect low = [self.seek thumbRectForBounds:self.seek.bounds trackRect:track value:self.seek.minimumValue];
+    CGRect high = [self.seek thumbRectForBounds:self.seek.bounds trackRect:track value:self.seek.maximumValue];
+    CGFloat left = CGRectGetMidX(low), right = CGRectGetMidX(high);
+    if (right <= left) { left = CGRectGetMinX(track); right = CGRectGetMaxX(track); }
+    // Remain inside the UISlider bounds (rather than drawing below and risking clipping).
+    CGFloat y = MIN(MAX(0, CGRectGetMaxY(track) + 3), MAX(0, self.seek.bounds.size.height - 4));
+    self.cacheStrip.frame = CGRectMake(left, y, MAX(0, right-left), 4);
+    [self.seek sendSubviewToBack:self.cacheStrip];
     [self.cacheStrip setNeedsDisplay];
-    if (self.tabletop) {
+    if (self.tabletop || self.view.bounds.size.width < 500) {
+        // On compact phones keep the title above playback controls, away from navigation actions.
         // Keep the upper display for video. Identity belongs with the controls
         // on the lower panel, independent of the hidden navigation rail's inset.
         if (self.videoHeader.superview != self.controls) {

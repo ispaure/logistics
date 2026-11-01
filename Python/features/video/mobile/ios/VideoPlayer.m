@@ -99,6 +99,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, strong) UIButton *unlockButton, *undoSeekButton;
 @property(nonatomic, strong) UIView *cacheStrip, *pauseSnapshot;
 @property(nonatomic, copy) NSString *languageSignature;
+@property(nonatomic) CGFloat subtitlePinchStart;
+@property(nonatomic) CGFloat sessionSubtitleScale; // Zero means use configured preference.
 @end
 
 @interface LGVideoController (PlaybackControls)

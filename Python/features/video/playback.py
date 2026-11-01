@@ -7,7 +7,7 @@ from services.documents.storage import document_remote, document_sources
 from services.access_policy import session_only
 
 from .formats import VIDEO_EXTENSIONS
-from .buffering import DEFAULT_BUFFERING, MemoryRanges
+from .buffering import DEFAULT_BUFFERING, MemoryRanges, map_cached_ranges_to_time
 
 
 
@@ -28,6 +28,7 @@ class VideoContent:
         self.remote = document_remote(self.provider)
         self.closed = False
         self.buffering, self.memory = buffering, None
+        self.timestamp_byte_anchors = None  # Session-only; externally verified MP4/MKV index, if available.
         try:
             self._restricted = session_only(self.provider)
             self.gate = next((source.privacy_gate for source in document_sources(self.provider)
@@ -84,7 +85,10 @@ class VideoContent:
 
     def buffered_ranges(self):
         self.check_access()
-        return dict(local=not self.remote,approximate=True,ranges=self.memory.ranges() if self.memory else [])
+        ranges = self.memory.ranges() if self.memory else []
+        mapped = map_cached_ranges_to_time(ranges, self.timestamp_byte_anchors) if self.remote else None
+        return dict(local=not self.remote, approximate=mapped is None,
+                    ranges=mapped if mapped is not None else ranges)
 
     def close(self):
         if not self.closed:
