@@ -16,6 +16,7 @@ from services.documents.storage import (
 class VideoProgress:
     def __init__(self, content, root, *, remote_cipher=None, app=None):
         self.content, self.root = content, Path(root)
+        self.duration = 0
         self.private = not DocumentPolicy.for_provider(content.provider).persistent
         from services.documents.history_controls import PositionLease
 
@@ -59,6 +60,7 @@ class VideoProgress:
         self.memory = {}
 
     def load(self):
+        self.duration = 0
         if not self._position_lease.valid():
             return 0
         self.content.check_access() if self.remote else self.content.check()
@@ -77,10 +79,14 @@ class VideoProgress:
                 except (OSError, ValueError):
                     self.resume_notice = "Older saved position could not be upgraded; it was preserved. Playback can continue."
                 self.legacy_retired = True
-            value = self.credential_state.load().get("position", 0)
+            record = self.credential_state.load()
+            self.duration = self.valid_duration(record.get("duration", 0))
+            value = record.get("position", 0)
             return value if type(value) is int and 0 <= value <= 10**10 else 0
         if self.remote:
-            return self.remote_store.load()
+            position = self.remote_store.load()
+            self.duration = self.remote_store.duration
+            return position
         try:
             if self.private:
                 from commonUtils.runtime.resources.content import ProviderContent
@@ -117,10 +123,15 @@ class VideoProgress:
                 and isfinite(position)
                 and 0 <= position <= 10**10
             ):
+                self.duration = self.valid_duration(record.get("duration", 0))
                 return int(position)
         except (OSError, ValueError, TypeError, AttributeError):
             pass
         return 0
+
+    @staticmethod
+    def valid_duration(value):
+        return value if type(value) is int and 0 <= value <= 10**10 else 0
 
     def save(self, milliseconds, *, completed=False):
         return self._position_lease.publish(
@@ -139,16 +150,18 @@ class VideoProgress:
             raise ValueError("Invalid video position.")
         position = 0 if completed else int(milliseconds)
         if self.credential_state is not None:
-            self.credential_state.save(dict(position=position))
+            self.credential_state.save(dict(position=position, duration=self.valid_duration(self.duration)))
             return
         if self.remote:
             self.memory = dict(position=position)
+            self.remote_store.duration = self.valid_duration(self.duration)
             self.remote_store.save(position)
             return
         record = dict(
             schema=1,
             revision=self.revision,
             position=position,
+            duration=self.valid_duration(self.duration),
             generation=self._position_lease.generation,
         )
         self.memory = record

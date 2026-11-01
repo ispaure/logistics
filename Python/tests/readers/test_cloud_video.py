@@ -64,8 +64,10 @@ class CloudVideoTests(unittest.TestCase):
                         self.assertEqual(content.size, len(raw))
                         self.ranges(content, raw)
                         progress = VideoProgress(content, fixture.root / 'forbidden-cache')
+                        progress.duration = 90000
                         progress.save(12345)
                         self.assertEqual(progress.load(), 12345)
+                        self.assertEqual(progress.duration, 90000)
                         self.assertEqual(VideoProgress(content, fixture.root / 'forbidden-cache').load(), 12345)
                         state_path = progress.credential_state.root / (progress.credential_state.binding() + '.zip')
                         state = state_path.read_bytes()

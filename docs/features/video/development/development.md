@@ -426,7 +426,7 @@ Python integration test against the rebuilt host bridge cover the exact limit
 and oversized rejection for plain and encrypted remotes.
 
 Remote video streams use a shared, bounded 128 MiB memory LRU across HTTP
-streams, with 4 MiB provider ranges and a four-chunk, 4 MiB read-ahead queue
+streams, with 1 MiB provider ranges and a four-chunk, 4 MiB read-ahead queue
 per response. `buffering.py` centralizes these adjustable limits. Rewinding into
 retained ranges reuses their bytes instead of starting another download. The producer overlaps cloud
 fetches with decoder consumption; queued chunks recheck access before delivery.
@@ -549,3 +549,33 @@ in the top-row gap between Done and the transport controls. Cached ranges are a 
 `trackRectForBounds:`, with 60% of the previous vertical gap and no additional
 stack row beneath the seek control. The chrome probe checks endpoint alignment
 and spacing and saves a synthetic-video screenshot before its menu checks.
+
+### Resume timeline, remote startup and HDR verification
+
+Mobile checkpoints retain duration beside position under the same storage and
+encryption policy. Native controls use it before metadata arrives; an unknown
+duration hides the seek track instead of displaying a misleading zero position.
+iOS seeks on Opening, with a Playing fallback. Do not use VLC 4's `start-time`
+media option: it clips duration and resets the clock origin. Keep the pending
+resume position until the native clock acknowledges it. Android supplies its
+VLC 3 initial media seek and verifies the position on Playing.
+
+Remote video starts before optional folder/subtitle discovery. Retirement retains
+the provider until that discovery finishes. Aligned range fetches default to
+1 MiB, avoiding a 4 MiB minimum fetch for a cold seek; the bridge ceiling remains
+4 MiB. Metadata/index reads can still be required before a decoder can seek.
+
+The chrome probe accepts `--resume 15000 --fold` to verify the initial half-way
+slider, first decoded timestamp, original 30-second duration, and the title in
+the lower Duo control deck. Fold geometry is injected; it is not physical hinge
+acceptance. Host tests cover encrypted duration round trips and remote discovery
+lifetime. Android's decode-only probe seeds 15-second checkpoints for SDR/PQ/HLG.
+
+`video_hdr_device_tools.py` measures physical HDR using the supplied signed app's
+identity and pinned device framework. It temporarily installs a native fixture
+under the same bundle ID, preserves app data, removes its unique QA cache and
+restores the supplied app in `finally`. Supply `--app`, `--framework`, `--device`
+and a fresh ignored `--output`. The physical Duo check observed a displayed
+10-bit `x420` buffer with PQ/BT.2020 attachments and active screen EDR headroom of
+8. Simulator HDR metadata alone is not evidence that a physical screen entered
+HDR. Headroom varies with device, brightness and system conditions.

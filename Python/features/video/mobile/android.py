@@ -30,6 +30,7 @@ class AndroidVideo:
         self.native = jclass('io.github.ispaure.logistics.video.VideoPlayer')(
             owner.app._impl.native, owner.transport.url, position,
             owner.restricted, json.dumps(subtitles), self.callbacks)
+        self.native.setKnownDuration(owner.progress.duration)
         self.native.show()
 
     def configure(self, settings, queue):
@@ -64,6 +65,7 @@ class AndroidVideo:
         self.native.background()
 
     def position(self):
+        self.owner.progress.duration = int(self.native.durationMilliseconds())
         return int(self.native.position()), bool(self.native.completed())
 
     def status(self, message):

@@ -9,6 +9,27 @@ from features.video.buffering import BufferingPolicy, MemoryRanges
 
 
 class VideoMemoryTests(unittest.TestCase):
+    def test_resume_fetches_target_block_without_reading_the_prefix(self):
+        from features.video.buffering import DEFAULT_BUFFERING
+        from commonUtils.runtime.resources.range_reader import RangeReader
+        policy = DEFAULT_BUFFERING
+        size, offset = 64 * 1024 * 1024, 48 * 1024 * 1024 + 128
+        calls = []
+        class Source:
+            def seek(self, position): self.position = position
+            def read(self, count):
+                calls.append((self.position, count))
+                return b'x' * count
+        cache, source = MemoryRanges(size, policy, lambda: None), Source()
+        with RangeReader(size, lambda start, count: cache.read(start, count, source),
+                         block_size=policy.range_bytes, cache_blocks=0) as reader:
+            reader.seek(offset)
+            self.assertEqual(reader.read(256), b'x' * 256)
+        self.assertEqual(len(calls), 1)
+        self.assertGreaterEqual(calls[0][0], 48 * 1024 * 1024)
+        self.assertLessEqual(calls[0][1], 1024 * 1024)
+        cache.close()
+
     def policy(self):
         return BufferingPolicy(memory_bytes=24, range_bytes=8, chunk_bytes=4)
 

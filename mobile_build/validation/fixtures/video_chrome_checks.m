@@ -6,8 +6,16 @@
 @property(nonatomic, strong) NSTimer *sampler;
 @property(nonatomic) NSTimeInterval started;
 @property(nonatomic) BOOL completed;
+@property(nonatomic) int64_t firstVideoClock;
+@property(nonatomic) float initialTimeline;
 @end
 @implementation LGVideoChromeChecks
+- (NSString *)outputPath:(NSString *)name {
+    NSString *folder = [NSBundle.mainBundle objectForInfoDictionaryKey:@"QAOutputDirectory"] ?: @"Documents";
+    NSString *root = [NSHomeDirectory() stringByAppendingPathComponent:folder];
+    [NSFileManager.defaultManager createDirectoryAtPath:root withIntermediateDirectories:YES attributes:nil error:nil];
+    return [root stringByAppendingPathComponent:name];
+}
 - (AVSampleBufferDisplayLayer *)videoLayer:(CALayer *)layer {
     if ([layer isKindOfClass:AVSampleBufferDisplayLayer.class]) return (AVSampleBufferDisplayLayer *)layer;
     for (CALayer *child in layer.sublayers) {
@@ -19,10 +27,27 @@
 - (void)finish:(NSString *)error {
     if (self.completed) return;
     self.completed = YES;
+    int64_t resume = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAResume"] longLongValue];
+    if (!error && resume > 0 && (fabs(self.initialTimeline - resume / 30000.0) > .01 || self.firstVideoClock < resume - 1500
+            || llabs(self.video.player.media.length.value.longLongValue - 30000) > 100))
+        error = @"Resume timeline or first decoded timestamp started before the saved position";
     AVSampleBufferDisplayLayer *layer = [self videoLayer:self.video.movie.layer];
     BOOL hdrEnabled = NO;
     BOOL ready = NO;
     if (@available(iOS 17.4, *)) ready = layer.readyForDisplay;
+    NSMutableDictionary *pixelEvidence = [NSMutableDictionary dictionary];
+    if (@available(iOS 17.4, *)) {
+        CVPixelBufferRef pixels = [layer.sampleBufferRenderer copyDisplayedPixelBuffer];
+        if (pixels) {
+            pixelEvidence[@"format"] = @(CVPixelBufferGetPixelFormatType(pixels));
+            for (NSString *key in @[(__bridge NSString *)kCVImageBufferTransferFunctionKey,
+                                     (__bridge NSString *)kCVImageBufferColorPrimariesKey]) {
+                CFTypeRef value = CVBufferGetAttachment(pixels, (__bridge CFStringRef)key, NULL);
+                if (value) pixelEvidence[key] = (__bridge id)value;
+            }
+            CVPixelBufferRelease(pixels);
+        }
+    }
     if (@available(iOS 26.0, *)) hdrEnabled = [layer.preferredDynamicRange isEqualToString:CADynamicRangeHigh];
     else if (@available(iOS 17.0, *)) hdrEnabled = layer.wantsExtendedDynamicRangeContent;
     if (!error && [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDR"] boolValue] &&
@@ -30,24 +55,45 @@
         error = @"HDR fixture did not reach an EDR-enabled sample-buffer display";
     [self.sampler invalidate];
     NSDictionary *report = @{@"success": @(!error), @"error": error ?: @"", @"samples": self.samples ?: @[],
-        @"scope": @"Real UIKit controller and VLC; synthetic local movie; simulator only"};
+        @"scope": [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]
+            ? @"Physical device; real UIKit controller and VLC; synthetic local HDR movie"
+            : @"Real UIKit controller and VLC; synthetic local movie; simulator only"};
     NSMutableDictionary *details = [report mutableCopy];
     details[@"bounds"] = NSStringFromCGRect(self.window.bounds);
     details[@"orientation"] = @(self.window.windowScene.interfaceOrientation);
     details[@"idiom"] = @(self.video.traitCollection.userInterfaceIdiom);
     details[@"hdrLayerEnabled"] = @(hdrEnabled);
     details[@"videoReadyForDisplay"] = @(ready);
+    details[@"displayedPixelBuffer"] = pixelEvidence;
+    details[@"hdrActiveObserved"] = @(ready && hdrEnabled && self.window.screen.currentEDRHeadroom > 1
+        && [pixelEvidence[(__bridge NSString *)kCVImageBufferTransferFunctionKey] isEqual:(__bridge NSString *)kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ]
+        && [pixelEvidence[@"format"] unsignedIntValue] == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange);
+    details[@"currentEDRHeadroom"] = @(self.window.screen.currentEDRHeadroom);
+    details[@"potentialEDRHeadroom"] = @(self.window.screen.potentialEDRHeadroom);
+    details[@"initialTimeline"] = @(self.initialTimeline);
+    details[@"firstVideoClock"] = @(self.firstVideoClock);
     report = details;
-    NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/result.json"];
+    NSString *path = [self outputPath:@"result.json"];
     [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:path atomically:YES];
+    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) {
+        NSData *encoded = [NSJSONSerialization dataWithJSONObject:report options:0 error:nil];
+        printf("LOGISTICS_HDR_RESULT=%s\n", [[NSString alloc] initWithData:encoded encoding:NSUTF8StringEncoding].UTF8String);
+        fflush(stdout);
+        exit(0);
+    }
 }
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options { return YES; }
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
     self.samples = [NSMutableArray array];
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+#ifdef LG_VIDEO_FOLD_QA
+    self.video = [LGVideoPoseQAController new];
+#else
     self.video = [LGVideoController new];
+#endif
     self.video.videoURL = [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
-    self.video.startMilliseconds = 0;
+    self.video.startMilliseconds = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAResume"] longLongValue];
+    self.video.knownDuration = 30000;
     self.video.subtitleJSON = @"[]";
     self.video.queueJSON = @"[]";
     self.video.optionsJSON = @"{\"video_title\":\"A long video filename for title alignment.mp4\",\"source_label\":\"Cloud file\",\"source_remote\":true}";
@@ -55,6 +101,8 @@
     self.video.requestPlay = ^BOOL { return YES; };
     self.window.rootViewController = [[LGVideoNavigationController alloc] initWithRootViewController:self.video];
     [self.window makeKeyAndVisible];
+    [self.video tick:nil];
+    self.initialTimeline = self.video.seek.value;
     if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAOrientation"] isEqualToString:@"landscape"]) {
         UIWindowSceneGeometryPreferencesIOS *geometry = [[UIWindowSceneGeometryPreferencesIOS alloc]
             initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscapeLeft];
@@ -66,11 +114,20 @@
         self.video.player.audio.muted = YES;
         [self.video startByUser];
         self.started = NSProcessInfo.processInfo.systemUptime;
+        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                [self.video.player pause];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self finish:nil]; });
+            });
+            return;
+        }
         self.sampler = [NSTimer scheduledTimerWithTimeInterval:1.0/60 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
     });
 }
 - (void)sample:(NSTimer *)timer {
     LGVideoController *v = self.video;
+    if (!self.firstVideoClock && v.player.media.statistics.displayedPictures > 0 && v.player.time.value.longLongValue > 0)
+        self.firstVideoClock = v.player.time.value.longLongValue;
     CGFloat opacity = ((CALayer *)v.controlsScroll.layer.presentationLayer).opacity;
     CGFloat barOpacity = ((CALayer *)v.navigationController.navigationBar.layer.presentationLayer).opacity;
     CGRect headerFrame = [v.videoHeader convertRect:v.videoHeader.bounds toView:self.window];
@@ -78,7 +135,8 @@
         @"opacity": @(opacity), @"barOpacity": @(barOpacity), @"visible": @(v.controlsVisible),
         @"systemHidden": @(v.systemChromeHidden), @"headerY": @(CGRectGetMinY(headerFrame)),
         @"statusHidden": @(self.window.windowScene.statusBarManager.statusBarHidden),
-        @"playing": @(v.player.isPlaying)}];
+        @"playing": @(v.player.isPlaying), @"decoderClock": v.player.time.value ?: @(-1),
+        @"shownClock": @([v positionMilliseconds]), @"nativeDuration": v.player.media.length.value ?: @(-1), @"nativePosition": @(v.player.position), @"slider": @(v.seek.value)}];
     if (NSProcessInfo.processInfo.systemUptime-self.started > 15) { [self finish:@"Initial playback did not auto-hide controls"]; return; }
     if (!v.controlsScroll.hidden) return;
     [timer invalidate];
@@ -106,6 +164,9 @@
     }
     if (!faded && !UIAccessibilityIsReduceMotionEnabled()) { [self finish:@"Controls disappeared without intermediate opacity"]; return; }
     if (!v.fullscreen || !v.systemChromeHidden) { [self finish:@"Initial fullscreen chrome did not commit"]; return; }
+#ifdef LG_VIDEO_FOLD_QA
+    [(LGVideoPoseQAController *)v applyTestFold:YES];
+#endif
     [v setControlsShown:YES];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self menus:0]; });
 }
@@ -122,12 +183,20 @@
         if (fabs(CGRectGetMinY(strip) - CGRectGetMaxY(track) - expectedGap) > .5) {
             [self finish:@"Cached ranges did not move 40 percent closer"]; return;
         }
-        if ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view) || !v.videoHeader.window ||
+        if ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls) || !v.videoHeader.window ||
             v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != NSTextAlignmentCenter) {
             [self finish:@"Video identity is not centered in the native title area"]; return;
         }
         [v showCachedRanges:@"{\"ranges\":[[0,0.3],[0.5,0.65],[0.8,1]]}"];
         CGRect title = [v.videoHeader convertRect:v.videoHeader.bounds toView:self.window];
+        if (v.tabletop) {
+            CGRect deck = [v.controlsScroll convertRect:v.controlsScroll.bounds toView:self.window];
+            CGRect movie = [v.movie convertRect:v.movie.bounds toView:self.window];
+            if (!CGRectContainsRect(deck, title) || CGRectGetMinY(title) < CGRectGetMaxY(movie) ||
+                fabs(CGRectGetMidX(title) - CGRectGetMidX(deck)) > 1) {
+                [self finish:@"Laptop title is not centered inside the lower control deck"]; return;
+            }
+        }
         CGRect filename = [v.videoTitle convertRect:v.videoTitle.bounds toView:self.window];
         UIView *source = v.sourceLabel.superview;
         CGRect details = [source convertRect:source.bounds toView:self.window];
@@ -140,9 +209,9 @@
         UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
             [self.window drawViewHierarchyInRect:self.window.bounds afterScreenUpdates:YES];
         }];
-        [UIImagePNGRepresentation(image) writeToFile:[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/controls.png"] atomically:YES];
+        [UIImagePNGRepresentation(image) writeToFile:[self outputPath:@"controls.png"] atomically:YES];
     }
-    NSString *progress = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/progress.json"];
+    NSString *progress = [self outputPath:@"progress.json"];
     [[NSJSONSerialization dataWithJSONObject:@{@"fadePassed": @YES, @"menuIndex": @(index)} options:0 error:nil]
         writeToFile:progress atomically:YES];
     NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"pictureOptions:", @"subtitleOptions:", @"queueVideos:"];
@@ -166,5 +235,13 @@
 }
 @end
 int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "--cleanup-video-qa") == 0) {
+        @autoreleasepool {
+            NSString *folder = [NSBundle.mainBundle objectForInfoDictionaryKey:@"QAOutputDirectory"];
+            if ([folder hasPrefix:@"Library/Caches/LogisticsVideoQA-"])
+                [NSFileManager.defaultManager removeItemAtPath:[NSHomeDirectory() stringByAppendingPathComponent:folder] error:nil];
+            return 0;
+        }
+    }
     @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(LGVideoChromeChecks.class)); }
 }

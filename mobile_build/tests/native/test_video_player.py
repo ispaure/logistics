@@ -259,6 +259,21 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.content.close.assert_called_once()
         self.assertFalse(owner.protection.process.protected())
 
+    async def test_close_retains_source_until_remote_discovery_finishes(self):
+        owner = self.player()
+        barrier = asyncio.Event()
+        owner.discovery = asyncio.create_task(barrier.wait())
+        close = asyncio.create_task(owner.close())
+        try:
+            await asyncio.sleep(.02)
+            owner.native.dispose.assert_called_once()
+            owner.content.close.assert_not_called()
+            self.assertFalse(close.done())
+        finally:
+            barrier.set()
+            await close
+        owner.content.close.assert_called_once()
+
     async def test_checkpoint_finishes_before_protected_source_disposal(self):
         owner = self.player()
         owner.content.close.side_effect = lambda: owner.progress.save.assert_called_once_with(12000, completed=False)
@@ -349,6 +364,8 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         owner.content = SimpleNamespace(path='movie.mp4', remote=True,
             provider=Mock(list=Mock(side_effect=OSError('listing unavailable'))))
         self.assertEqual(owner.prepare(), (1234, []))
+        owner.content.provider.list.assert_not_called()
+        self.assertEqual(owner.prepare_sidecars(), [])
         owner.content.remote = False
         with self.assertRaises(OSError):
             owner.prepare()
@@ -380,11 +397,14 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
             active_host=True, navigation_generation=1, video_player=None)
         ready = AsyncMock(return_value=True)
         player = SimpleNamespace(prepare=lambda: (0, []), allowed=lambda: True, closed=False,
-            present=Mock(), native=SimpleNamespace(wait_ready=ready, play=Mock()), close=AsyncMock())
+            present=Mock(), native=SimpleNamespace(wait_ready=ready, play=Mock()), close=AsyncMock(),
+            discover_sidecars=AsyncMock())
         with patch('features.video.mobile.player.VideoContent'), patch(
                 'features.video.mobile.player.MobileVideo', return_value=player), patch(
                 'services.documents.mobile_storage.remember_video') as remember:
             self.assertTrue(await open_video(app, Mock(), 'movie.mp4'))
+        await player.discovery
+        player.discover_sidecars.assert_awaited_once()
         remember.assert_called_once()
         ready.assert_awaited_once()
         player.native.play.assert_called_once()

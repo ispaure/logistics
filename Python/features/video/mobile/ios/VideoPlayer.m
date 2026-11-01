@@ -30,6 +30,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, copy) NSString *videoURL;
 @property(nonatomic, copy) NSString *subtitleJSON;
 @property(nonatomic) int64_t startMilliseconds; // Deferred resume/paused seek; -1 means no pending seek.
+@property(nonatomic) int64_t knownDuration;
+@property(nonatomic) BOOL resumeSeekSubmitted;
 @property(nonatomic) BOOL restricted;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
 @property(nonatomic, copy) BOOL (^requestPlay)(void);
@@ -65,6 +67,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic) BOOL controlsVisible;
 @property(nonatomic) BOOL systemChromeHidden;
 @property(nonatomic, strong) UIView *videoHeader;
+@property(nonatomic, strong) NSLayoutConstraint *deckHeaderHeight;
 @property(nonatomic, strong) UILabel *videoTitle, *sourceLabel;
 @property(nonatomic, strong) UIImageView *sourceIcon;
 @property(nonatomic) NSUInteger chromeGeneration;
@@ -335,6 +338,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self installPlaybackTools];
     [self applyPlaybackOptions];
     self.timer = [NSTimer scheduledTimerWithTimeInterval:.5 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    [self tick:nil];
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center addObserver:self selector:@selector(backgroundNotification:) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [center addObserver:self selector:@selector(protectedData:) name:UIApplicationProtectedDataWillBecomeUnavailable object:nil];
@@ -657,6 +661,9 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (VLCMedia *)playbackMedia {
     VLCMedia *media = [VLCMedia mediaWithURL:[NSURL URLWithString:self.videoURL]];
+    self.resumeSeekSubmitted = NO;
+    // VLC 4 start-time clips the timeline and duration. Seek the opening
+    // input instead so timestamps and later seeks retain the original origin.
     [media addOption:@":network-caching=3000"];
     [media addOption:@":file-caching=1500"];
     // Cloud starvation makes software-decoded interframe AVI arrive late.
@@ -703,9 +710,11 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     if (self.audioSuppressed) { self.player.audio.muted = self.resumeMuted; self.audioSuppressed = NO; }
     self.playRequested = YES;
     [self clearPausePresentation];
+    // Resume an already-open paused input immediately. Fresh inputs are
+    // positioned as soon as the native Opening event arrives.
     if (self.startMilliseconds >= 0 && self.player.isPlaying) {
         self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
-        self.startMilliseconds = -1;
+        self.resumeSeekSubmitted = YES;
     }
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
     [self updateItem:self.playButton label:@"Pause"];
@@ -814,6 +823,11 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     int64_t value = self.player.time.value.longLongValue;
     return value >= 0 ? value : self.lastPosition;
 }
+- (int64_t)durationMilliseconds {
+    int64_t duration = self.player.media.length.value.longLongValue;
+    if (duration > 0) self.knownDuration = duration;
+    return MAX(0, self.knownDuration);
+}
 - (BOOL)completed { return self.ended; }
 - (NSString *)playbackDiagnosticJSON {
     VLCMediaStats stats = self.player.media.statistics;
@@ -832,6 +846,12 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self setControlsShown:YES];
 }
 - (void)tick:(NSTimer *)timer {
+    // Keep the resume target visible until the decoder acknowledges that seek.
+    if (self.resumeSeekSubmitted && self.startMilliseconds >= 0 && self.player.isPlaying &&
+        llabs(self.player.time.value.longLongValue - self.startMilliseconds) < 1500) {
+        self.startMilliseconds = -1;
+        self.resumeSeekSubmitted = NO;
+    }
     if (![self canPlay:NO]) [self pause];
     [self updatePlaybackProgress];
     [self applyPictureSize];
@@ -839,15 +859,16 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     if (self.controlsLocked) [self.view bringSubviewToFront:self.unlockButton];
     [self updateScreenAwake];
     int64_t position = [self positionMilliseconds];
-    int64_t duration = self.player.media.length.value.longLongValue;
+    int64_t duration = [self durationMilliseconds];
     if (!self.seek.tracking && duration > 0) self.seek.value = (float)position / duration;
+    self.seek.hidden = duration <= 0;
     NSString *(^time)(int64_t) = ^NSString *(int64_t value) {
         int64_t seconds = MAX(0, value / 1000);
         return [NSString stringWithFormat:@"%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60];
     };
     [self.view bringSubviewToFront:self.controlsScroll];
     [self.view bringSubviewToFront:self.bufferOverlay];
-    self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), time(duration), self.cacheApproximate ? @" · Cache ≈" : @""];
+    self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), duration > 0 ? time(duration) : @"—", self.cacheApproximate ? @" · Cache ≈" : @""];
     self.timeLabel.accessibilityValue = self.timeLabel.text;
     self.seek.accessibilityValue = self.timeLabel.text;
     self.pauseSnapshot.frame = self.movie.frame;
@@ -863,13 +884,16 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         if (state == VLCMediaPlayerStatePaused && self.playRequested &&
             !self.manualResumeRequired && !self.networkResumePending &&
             [self canPlay:self.casting || self.pipActive]) [self.player play];
+        if (state == VLCMediaPlayerStateOpening && self.startMilliseconds > 0) {
+            self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
+        }
         if (state == VLCMediaPlayerStatePlaying) {
             self.hasPlayed = YES;
             [self applyPlaybackOptions];
             if (self.manualResumeRequired || ![self canPlay:NO]) { [self pause]; return; }
             if (self.startMilliseconds >= 0) {
                 self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
-                self.startMilliseconds = -1;
+                self.resumeSeekSubmitted = YES;
             }
             self.ended = NO;
             [self scheduleControls];

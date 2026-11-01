@@ -25,7 +25,7 @@ The green cached-range strip follows the seek track's endpoints directly beneath
 The movie stays centered in the full player surface when controls appear or hide. Android retains its responsive
 48-dp playback buttons.
 On a partially folded Duo with a horizontal hinge, the player uses the upper
-panel for the movie and keeps a control deck on the lower panel. Large round
+panel for the movie and keeps the title, source caption and control deck on the lower panel. Large round
 ten-second skip buttons flank a larger Play/Pause button; the timeline and
 Audio, Subtitles, Chapters and Done controls stay accessible below the hinge.
 Unfolding restores the full video surface. The split follows the system's hinge
@@ -107,3 +107,9 @@ Remote playback retains up to 128 MiB in memory per open video so recent backwar
 seeks can reuse downloaded data. This is roughly one minute at 18 Mbit/s; higher
 bitrates or long jumps may need more buffering. Closing the player clears this
 cache. It does not create a decrypted file on disk.
+
+Saved video duration keeps the resume timestamp and seek bar aligned while the
+movie opens. Older checkpoints without a duration show the timestamp with an
+unknown total and reveal the seek bar once the decoder knows the duration.
+Remote folder/subtitle discovery runs after opening playback, so directory
+listing latency does not delay the first video request.

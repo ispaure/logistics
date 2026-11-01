@@ -239,6 +239,7 @@
     header.layer.cornerRadius = 16;
     header.clipsToBounds = YES;
     self.videoHeader = header;
+    self.deckHeaderHeight = [header.heightAnchor constraintEqualToConstant:56];
     UIStackView *identity = [[UIStackView alloc] init];
     identity.axis = UILayoutConstraintAxisVertical;
     identity.alignment = UIStackViewAlignmentCenter;
@@ -310,16 +311,23 @@
                                       CGRectGetWidth(track), 3);
     [self.cacheStrip setNeedsDisplay];
     if (self.tabletop) {
-        // Tabletop hides the navigation rail; retain identity over the movie.
-        if (self.videoHeader.superview != self.view) {
+        // Keep the upper display for video. Identity belongs with the controls
+        // on the lower panel, independent of the hidden navigation rail's inset.
+        if (self.videoHeader.superview != self.controls) {
             self.navigationItem.titleView = nil;
-            [self.view addSubview:self.videoHeader];
+            [self.videoHeader removeFromSuperview];
+            self.videoHeader.translatesAutoresizingMaskIntoConstraints = NO;
+            [self.controls insertArrangedSubview:self.videoHeader atIndex:0];
+            self.deckHeaderHeight.active = YES;
         }
-        CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
-        CGFloat width = MIN(440, MAX(0, safe.size.width - 24));
-        self.videoHeader.frame = CGRectMake(CGRectGetMidX(safe) - width / 2,
-                                           CGRectGetMinY(safe) + 6, width, 48);
         return;
+    }
+    if (self.videoHeader.superview == self.controls) {
+        [self.controls removeArrangedSubview:self.videoHeader];
+        [self.videoHeader removeFromSuperview];
+        self.deckHeaderHeight.active = NO;
+        self.videoHeader.translatesAutoresizingMaskIntoConstraints = YES;
+        self.videoHeader.frame = CGRectMake(0, 0, 320, 48);
     }
     UINavigationBar *bar = self.navigationController.navigationBar;
     if (bar.bounds.size.width > bar.bounds.size.height && self.view.bounds.size.width < 500) {

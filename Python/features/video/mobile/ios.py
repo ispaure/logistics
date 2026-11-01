@@ -18,6 +18,7 @@ class IOSVideo:
         self.native = ObjCClass('LGVideoController').alloc().init()
         self.native.videoURL = owner.transport.url
         self.native.startMilliseconds = position
+        self.native.knownDuration = owner.progress.duration
         self.native.restricted = owner.restricted
         self.native.subtitleJSON = json.dumps(subtitles)
         self.allowed = Block(lambda external: owner.playback_allowed(bool(external)), c_bool, c_bool)
@@ -57,6 +58,7 @@ class IOSVideo:
         self.native.showCachedRanges(json.dumps(value))
 
     def position(self):
+        self.owner.progress.duration = int(self.native.durationMilliseconds())
         return int(self.native.positionMilliseconds()), bool(self.native.completed())
 
     def network_waiting(self, waiting):

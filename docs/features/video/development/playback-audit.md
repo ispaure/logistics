@@ -105,7 +105,7 @@ validation; physical interaction acceptance is still outstanding.
 ## Buffer policy and ownership
 
 `Python/features/video/buffering.py` owns `DEFAULT_BUFFERING` and
-`BufferingPolicy`: `memory_bytes` (128 MiB), `range_bytes` (4 MiB),
+`BufferingPolicy`: `memory_bytes` (128 MiB), `range_bytes` (1 MiB),
 `read_ahead_chunks` (4), `chunk_bytes` (1 MiB) and `stall_seconds` (0.5).
 `range_bytes` must not exceed the Go bridge's 4 MiB limit. Cache allocation grows
 only as data is read. Closing clears it; it is not a disk cache or an offline

@@ -11,7 +11,7 @@ from threading import Condition
 @dataclass(frozen=True)
 class BufferingPolicy:
     memory_bytes: int = 128 * 1024 * 1024
-    range_bytes: int = 4 * 1024 * 1024  # Also the native bridge's maximum range.
+    range_bytes: int = 1024 * 1024  # Bound first-read/seek latency; native maximum is 4 MiB.
     read_ahead_chunks: int = 4
     chunk_bytes: int = 1024 * 1024
     stall_seconds: float = .5

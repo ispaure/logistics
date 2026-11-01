@@ -238,6 +238,17 @@ async def exercise(app):
                 'h264-aac.mp4', 'hevc-hdr-pq.mp4', 'hevc-hdr-hlg.mp4')]
         for path in paths:
             closed_chrome = None
+            resume = 15000 if decode_only else 0
+            if resume:
+                from features.video.playback import VideoContent
+                from services.documents.video_progress import VideoProgress
+                content = VideoContent(LocalFiles(root), path.name)
+                try:
+                    progress = VideoProgress(content, app.private_root / 'Video', app=app)
+                    progress.duration = 30000
+                    progress.save(resume)
+                finally:
+                    content.close()
             assert await open_video(app, LocalFiles(root), path.name)
             owner = app.video_player
             if android:
@@ -253,7 +264,9 @@ async def exercise(app):
                     if not states or states[-1] != state:
                         states.append(state)
                         del states[:-20]
-                    return state['time'] > 500 and state['length'] > 1000
+                    if resume and state['time'] > 0:
+                        assert state['time'] >= resume - 1500, f'Resume decoded the beginning: {state}'
+                    return state['time'] > max(500, resume) and state['length'] > 1000
                 try:
                     await until(decoded, timeout=30)
                 except AssertionError:
@@ -291,7 +304,7 @@ async def exercise(app):
             if closed_chrome is not None:
                 await until(closed_chrome)
                 rows[-1]['close_restored_bars'] = True
-            rows.append(dict(name=path.name, played=True, rendered_colors=colors, position=position))
+            rows.append(dict(name=path.name, played=True, rendered_colors=colors, position=position, resume_target=resume))
             print('VIDEO_PROBE_CASE=' + path.name, flush=True)
         # Reuse the shipped synthetic crypt fixture; never touch user remotes.
         fixture = json.loads(Path(__file__).with_name('localcrypt_fixture.json').read_text())

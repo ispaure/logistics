@@ -27,6 +27,7 @@ class MobileVideo:
         self.native_restricted = None
         self.task = None
         self.retirement = None
+        self.discovery = None
         self._release_retirement = None
         self.audio_output = app.audio_output
         self.audio_output.register(self, self.pause_audio)
@@ -90,6 +91,8 @@ class MobileVideo:
     async def _finish_retirement(self, disposal, checkpoint):
         if disposal is not None:
             await asyncio.shield(disposal)
+        if self.discovery is not None:
+            await asyncio.shield(self.discovery)
         await self.controls.finish()
         self.native = None
         if checkpoint is not None:
@@ -131,6 +134,12 @@ class MobileVideo:
 
     def prepare(self):
         position = self.progress.load()
+        # Remote directory enumeration and optional sidecar stats must not sit
+        # in front of the first video request. Keep the retained source until
+        # background discovery finishes, including when the viewer closes.
+        return position, [] if self.content.remote else self.prepare_sidecars()
+
+    def prepare_sidecars(self):
         folder, _, name = self.content.path.rpartition('/')
         stem = Path(name).stem
         try:
@@ -143,6 +152,8 @@ class MobileVideo:
         self.controls.queue = FolderQueue(self.content.path, rows)
         external = []
         for row in rows:
+            if self.closed:
+                break
             if len(external) >= 32:
                 break
             if (not row['directory'] and Path(row['name']).suffix.lower() in SubtitleContent.extensions
@@ -158,7 +169,18 @@ class MobileVideo:
                     continue
                 self.subtitles.append(subtitle)
                 external.append(dict(name=row['name'], url=self.transport.add_subtitle(subtitle)))
-        return position, external
+        return external
+
+    async def discover_sidecars(self):
+        try:
+            external = await asyncio.to_thread(self.prepare_sidecars)
+            if not self.closed and self.native is not None and self.allowed():
+                import json
+                self.native.configure(self.controls.settings.json(), json.dumps(self.controls.queue.rows()))
+                for subtitle in external:
+                    self.native.add_subtitle(subtitle['url'])
+        except (OSError, ValueError):
+            pass  # Optional discovery must not interrupt an already playing video.
 
     def present(self, position, external):
         self.native_restricted = self.restricted
@@ -283,6 +305,8 @@ async def open_video(app, provider, path):
             await player.close()
             return False
         player.native.play()
+        if content.remote:
+            player.discovery = asyncio.create_task(player.discover_sidecars())
         progress = getattr(player, 'progress', None)
         state = getattr(progress, 'credential_state', None)
         notice = getattr(progress, 'resume_notice', None)

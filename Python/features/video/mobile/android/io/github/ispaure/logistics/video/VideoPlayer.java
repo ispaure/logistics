@@ -96,6 +96,8 @@ public final class VideoPlayer {
     private final ArrayList<RendererItem> renderers = new ArrayList<>();
     private boolean done, ended, attached, casting, wasSecure;
     private long resume, lastPosition;
+    private long knownDuration;
+    private boolean mediaStartsAtResume, resumeSeekSubmitted;
     private int resumeVolume = 100;
     private boolean audioSuppressed;
     private int previousCapturePolicy = -1;
@@ -313,7 +315,11 @@ public final class VideoPlayer {
                 if (tools != null) tools.apply();
                 ended = false;
                 if (manualResumeRequired || !focusHeld || !allowed(false)) { pause(); return; }
-                if (resume >= 0) { player.setTime(resume); resume = -1; }
+                if (resume >= 0) {
+                    if (Math.abs(player.getTime() - resume) >= 1500) player.setTime(resume);
+                    mediaStartsAtResume = false;
+                    resumeSeekSubmitted = true;
+                }
                 if ("Ready. Press Play to start.".contentEquals(message.getText())) {
                     message.setText("");
                     message.setVisibility(View.GONE);
@@ -564,12 +570,15 @@ public final class VideoPlayer {
         boolean requested = playRequested;
         long position = position();
         optionsReloadPending = true;
-        player.stop(); installMedia(); resume = position;
+        player.stop(); resume = position; installMedia();
         if (requested && !manualResumeRequired && allowed(false)) startByUser();
     }
 
     private void installMedia() {
         Media media = new Media(vlc, Uri.parse(sourceURL));
+        mediaStartsAtResume = resume > 0;
+        resumeSeekSubmitted = false;
+        if (mediaStartsAtResume) media.addOption(String.format(java.util.Locale.ROOT, ":start-time=%.3f", resume / 1000.0));
         media.setHWDecoderEnabled(true, false);
         media.addOption(":network-caching=3000");
         media.addOption(":file-caching=1500");
@@ -637,7 +646,7 @@ public final class VideoPlayer {
         if (audioSuppressed) { player.setVolume(resumeVolume); audioSuppressed = false; }
         playRequested = true;
         pausePresentation.clear();
-        if (resume >= 0 && player.isPlaying()) { player.setTime(resume); resume = -1; }
+        if (resume >= 0 && player.isPlaying()) { player.setTime(resume); resumeSeekSubmitted = true; }
         lastPlaybackProgress = lastFrameProgress = android.os.SystemClock.elapsedRealtime();
         play.setText("Pause");
         play.setContentDescription("Pause");
@@ -706,12 +715,17 @@ public final class VideoPlayer {
             if (done) return;
             updatePlaybackProgress();
             updateScreenAwake();
-            long time = position(), length = player.getLength();
+            if (resumeSeekSubmitted && resume >= 0 && player.isPlaying() && Math.abs(player.getTime() - resume) < 1500) {
+                resume = -1;
+                resumeSeekSubmitted = false;
+            }
+            long time = position(), length = durationMilliseconds();
             if (time >= 0 && !ended) lastPosition = time;
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
+            seek.setVisibility(length > 0 ? View.VISIBLE : View.GONE);
             play.setText(playRequested ? "Pause" : "Play");
             play.setContentDescription(playRequested ? "Pause" : "Play");
-            timeLabel.setText(clock(time) + " / " + clock(length) + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
+            timeLabel.setText(clock(time) + " / " + (length > 0 ? clock(length) : "—") + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
             seek.setContentDescription("Video position: " + timeLabel.getText());
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
             if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
@@ -874,6 +888,18 @@ public final class VideoPlayer {
         if (resume >= 0) return resume;
         long value = player.getTime();
         return value >= 0 ? value : lastPosition;
+    }
+    public void setKnownDuration(long value) {
+        knownDuration = Math.max(0, value);
+        long time = position();
+        if (knownDuration > 0) seek.setProgress((int)(time * 10000 / knownDuration));
+        seek.setVisibility(knownDuration > 0 ? View.VISIBLE : View.GONE);
+        timeLabel.setText(clock(time) + " / " + (knownDuration > 0 ? clock(knownDuration) : "—"));
+    }
+    public long durationMilliseconds() {
+        long duration = player.getLength();
+        if (duration > 0) knownDuration = duration;
+        return knownDuration;
     }
     public boolean completed() { return ended; }
     public void pause() {
