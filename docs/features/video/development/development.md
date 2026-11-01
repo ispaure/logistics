@@ -15,6 +15,9 @@ The owned `video_chrome_tools --hdr` probe generates 10-bit BT.2020/PQ HEVC,
 records its stream metadata, and checks decoded frames on an EDR-enabled iOS
 sample-buffer layer alongside the native controls. Simulator evidence verifies
 the rendering path, not physical display luminance or color accuracy.
+The Android `video_probe_tools --apk … --decode-only` mode exercises the codec
+matrix plus PQ/HLG samples, rendered surface frames and protected playback without
+the separately reported chrome checks. The normal probe includes those UI checks.
 
 Platform references: [Android HDR playback](https://developer.android.com/media/grow/hdr-playback)
 and [Apple HDR video metadata](https://developer.apple.com/documentation/technotes/tn3145-hdr-video-metadata).

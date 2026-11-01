@@ -76,7 +76,7 @@ def cloud_fixtures(workspace, *, rclone=None):
     return root
 
 
-def prepare(apk, workspace, *, cloud=False, rclone=None):
+def prepare(apk, workspace, *, cloud=False, rclone=None, decode_only=False):
     fixtures = codec_matrix(workspace / 'fixtures', duration=30) if not cloud else []
     if not cloud:
         fixtures += hdr_movies(workspace / 'fixtures')
@@ -107,6 +107,8 @@ def prepare(apk, workspace, *, cloud=False, rclone=None):
                 if path.is_file() and '__pycache__' not in path.parts and path.name != '__main__.py':
                     result.writestr('tests/logisticsmobile/' + path.relative_to(native_tests).as_posix(), path.read_bytes())
             result.writestr('tests/logisticsmobile/__main__.py', entrypoint)
+            if decode_only:
+                result.writestr('tests/logisticsmobile/video-decode-only', 'Decoder/privacy coverage; no chrome assertions.\n')
             for _, _, _, path in fixtures:
                 result.writestr('tests/logisticsmobile/video-fixtures/' + path.name, path.read_bytes())
             if fixture_root is not None:
@@ -126,12 +128,12 @@ def prepare(apk, workspace, *, cloud=False, rclone=None):
     return unsigned
 
 
-def run(apk, output, *, cloud=False, rclone=None):
+def run(apk, output, *, cloud=False, rclone=None, decode_only=False):
     output.mkdir(parents=True, exist_ok=False)
     environment, _ = tools_environment(deployment_environment())
     tools = build_tools(environment)
     with scratch() as workspace:
-        unsigned = prepare(apk, workspace, cloud=cloud, rclone=rclone)
+        unsigned = prepare(apk, workspace, cloud=cloud, rclone=rclone, decode_only=decode_only)
         provenance = workspace / 'video-cloud-fixtures/fixture-tool.json'
         if provenance.is_file():
             shutil.copyfile(provenance, output / 'fixture-tool.json')
@@ -342,6 +344,7 @@ if __name__ == '__main__':
     parser.add_argument('--ios-app', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cloud', action='store_true', help='Exercise real native WebDAV and crypt network ranges.')
+    parser.add_argument('--decode-only', action='store_true', help='Android decoder/render/privacy checks without chrome assertions.')
     parser.add_argument('--rclone', type=Path, help='Explicit host fixture tool for cloud probes in frozen source snapshots.')
     parser.add_argument('--ios-model', choices=('iPad', 'iPhone', 'iPhone Duo'), default='iPad')
     parser.add_argument('--ui', action='store_true', help='Inspect native iOS video buttons and rotate the retained player.')
@@ -353,12 +356,15 @@ if __name__ == '__main__':
     arguments = parser.parse_args()
     if bool(arguments.apk) == bool(arguments.ios_app):
         parser.error('Choose exactly one managed Android APK or iOS app.')
+    if arguments.decode_only and (not arguments.apk or arguments.cloud):
+        parser.error('--decode-only requires an APK and cannot combine with cloud checks.')
     if (arguments.ui and (arguments.cloud or arguments.apk)) or (arguments.pose and not arguments.ui):
         parser.error('UI/pose checks require an iOS app and cannot combine with cloud checks.')
     if arguments.pose_sweep and (not arguments.ui or not arguments.duoctl or arguments.ios_model != 'iPhone Duo'):
         parser.error('Pose transitions require --ui, --ios-model "iPhone Duo" and --duoctl.')
     if arguments.apk:
-        run(arguments.apk.resolve(), arguments.output.resolve(), cloud=arguments.cloud, rclone=arguments.rclone)
+        run(arguments.apk.resolve(), arguments.output.resolve(), cloud=arguments.cloud, rclone=arguments.rclone,
+            decode_only=arguments.decode_only)
     else:
         run_ios(arguments.ios_app.resolve(), arguments.output.resolve(), cloud=arguments.cloud, model_name=arguments.ios_model,
                 ui=arguments.ui, duoctl=arguments.duoctl, pose=arguments.pose,

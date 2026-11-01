@@ -211,7 +211,9 @@ async def fullscreen_controls(owner, android):
 
 async def exercise(app):
     rows = []
+    decode_only = Path(__file__).with_name('video-decode-only').exists()
     report = dict(success=False, cases=rows, scope='focused native video; no receiver or physical lock acceptance')
+    report['chrome_checks'] = not decode_only
     try:
         startup = getattr(app, 'startup_task', None)
         if startup is not None:
@@ -235,7 +237,7 @@ async def exercise(app):
             assert await open_video(app, LocalFiles(root), path.name)
             owner = app.video_player
             if android:
-                if not fullscreen_checked:
+                if not fullscreen_checked and not decode_only:
                     rows.append(dict(name='android-controls', samples=await android_controls(owner)))
                 player = android_player(owner)
                 start_playback(owner)
@@ -266,7 +268,7 @@ async def exercise(app):
                 assert native_value(player, 'hasVideoOut')
                 colors = None
                 player.pause()
-            if not fullscreen_checked:
+            if not fullscreen_checked and not decode_only:
                 # Longer focused fixtures leave time to observe the real timer.
                 owner.native.native.pause()
                 start_playback(owner)
