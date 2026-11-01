@@ -41,3 +41,25 @@ button{-webkit-appearance:none;appearance:none}
 #mobileSheet[data-panel=brush] .sheet-heading{padding:14px 18px}
 #mobileSheet[data-panel=brush] .swatches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
 #mobileSheet[data-panel=brush] .swatch{width:100%}
+
+/* The real horizontal hinge reserves upper settings and lower drawing space. */
+body.notebook-laptop header.mobile-head{top:4px;max-width:calc(100% - 8px)}
+body.notebook-laptop #viewport{position:fixed;top:var(--fold-bottom);bottom:0;left:0;right:0;padding:4px}
+#laptopTools{position:fixed;top:56px;bottom:calc(100% - var(--fold-top));left:0;right:0;overflow:auto;overscroll-behavior:contain;padding:8px 12px;display:grid;grid-template-columns:minmax(300px,2fr) minmax(180px,1fr);gap:16px;background:var(--paper);text-align:left}
+#laptopTools .sheet-panel:first-child{grid-row:span 2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;align-content:start}
+#laptopTools .sheet-panel:first-child>h3{margin:0;align-self:end}
+#laptopTools .brush-grid{grid-column:1;grid-row:2/7;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start}
+#laptopTools .brush-card{min-height:48px;padding:4px 2px;gap:2px}
+#laptopTools .brush-card svg{width:24px;height:24px}
+#laptopTools .sheet-panel:first-child>h3:nth-of-type(2),#laptopTools .widths,#laptopTools .sheet-panel:first-child>h3:nth-of-type(3),#laptopTools .swatches{grid-column:2}
+#laptopTools .swatches{gap:4px}
+#laptopTools .swatch{width:44px;height:44px}
+#laptopTools .sheet-panel{min-width:0}
+#laptopTools .sheet-panel h3{margin:8px 0}
+#laptopTools .field{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+#laptopTools select,#laptopTools input{min-width:0;max-width:60%}
+#laptopTools .sheet-panel>label{display:flex;gap:8px;align-items:center;white-space:normal}
+#laptopTools .sheet-panel p{margin:6px 0}
+body.notebook-laptop #mobileSheet,body.notebook-laptop #eraserDialog{top:56px!important;bottom:auto;max-height:calc(var(--fold-top) - 64px)}
+body.notebook-laptop #mobileBackdrop{bottom:calc(100% - var(--fold-top))}
+@media(max-width:600px){#laptopTools{grid-template-columns:1fr}}

@@ -9,6 +9,22 @@ messages use the shared `StatusLine` at the bottom of the listing.
 
 ## Brief elaboration and scope
 
+The iOS notebook panel subscribes to host layout changes and converts an active
+horizontal reserved region into normalized WebView coordinates. The mobile
+canvas keeps its existing controls and input engine: brush, view and layer panels
+move into the upper scrollable tool area, while the viewport begins below the
+reserved hinge band. Layout changes wait for the current pen contact to finish.
+Unfolding restores sheet ownership and the prior zoom; flat and vertical folds
+retain the ordinary presentation. Subscriptions and pending updates retire with
+the canvas, including protected notebooks.
+
+`notebook_mobile_ui_probe.py --laptop-only` checks three viewport sizes, tool
+selection, lower-canvas coordinate mapping and unfold restoration. The managed
+`document_storage_tools ios --probe notebook-laptop` test exercises the same
+checks in real WebKit through the host geometry bridge using an injected
+horizontal reserved region. This validates layout and input mapping, rather
+than physical pen or hinge accuracy.
+
 The four RMDOC briefs originally proposed one-way Android/Boox native-ink export.
 The October 25 request extends that scope to notebook import/editing, iOS, desktop
 and page transfers. The later October 25 clarification makes notebooks ordinary document types,

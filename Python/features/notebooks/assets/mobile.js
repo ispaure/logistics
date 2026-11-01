@@ -313,6 +313,7 @@
   legacyName.append(control('notebookName'));
   dp.append(legacyName);
   let vp = panels.view;
+  control('zoom').add(new Option('Fit page', 'page'));
   field(vp, 'Zoom', control('zoom'));
   let fingerLabel = document.createElement('label');
   fingerLabel.append(control('finger'), document.createTextNode('Draw with finger'));
@@ -339,11 +340,58 @@
 
   const documentDropdown = new WebDropdown(sheet, more, {items: dp, close: () => closeSheet()});
 
+  const laptopTools = document.createElement('section');
+  laptopTools.id = 'laptopTools';
+  laptopTools.setAttribute('aria-label', 'Notebook drawing settings');
+  laptopTools.hidden = true;
+  document.body.append(laptopTools);
+  let fold = null, foldFrame = null, unfoldedZoom = null;
+  function applyFold() {
+    foldFrame = null;
+    // Never move the paper underneath a live pen contact.
+    if (active !== null) { foldFrame = requestAnimationFrame(applyFold); return; }
+    const enabled = !!fold;
+    if (enabled && unfoldedZoom === null) {
+      unfoldedZoom = control('zoom').value;
+      control('zoom').value = 'page';
+    } else if (!enabled && unfoldedZoom !== null) {
+      control('zoom').value = unfoldedZoom;
+      unfoldedZoom = null;
+    }
+    closeSheet(false);
+    if (eraserDialog.open) eraserDialog.close();
+    document.body.classList.toggle('notebook-laptop', enabled);
+    document.body.classList.remove('tools-hidden');
+    restore.hidden = true;
+    hideTools.hidden = enabled;
+    laptopTools.hidden = !enabled;
+    for (let key of ['brush', 'view', 'layers']) {
+      (enabled ? laptopTools : sheet.lastChild).append(panels[key]);
+      panels[key].hidden = !enabled;
+    }
+    if (enabled) {
+      document.body.style.setProperty('--fold-top', (fold[0] * innerHeight) + 'px');
+      document.body.style.setProperty('--fold-bottom', (fold[1] * innerHeight) + 'px');
+    }
+    resize();
+  }
+  window.notebookFold = geometry => {
+    fold = Array.isArray(geometry) && geometry.length === 2 &&
+      geometry.every(Number.isFinite) && geometry[0] > 0 && geometry[1] >= geometry[0] && geometry[1] < 1 ? geometry : null;
+    if (foldFrame === null) foldFrame = requestAnimationFrame(applyFold);
+  };
+
   function openSheet(key, opener) {
     if (active !== null) return;
+    if (fold && ['brush', 'layers', 'view'].includes(key)) {
+      closeSheet(false);
+      panels[key].scrollIntoView({block: 'nearest'});
+      panels[key].querySelector('button,select,input')?.focus({preventScroll: true});
+      return;
+    }
     if (eraserDialog.open) eraserDialog.close();
     returnFocus = opener || document.activeElement;
-    for (let k of Object.keys(panels)) panels[k].hidden = k !== key;
+    for (let k of Object.keys(panels)) panels[k].hidden = k !== key && !(fold && panels[k].parentElement === laptopTools);
     $('sheetTitle').textContent = names[key];
     sheet.dataset.panel = key;
     const menu = key === 'document', floating = key === 'brush', nonmodal = menu || floating;
@@ -449,6 +497,7 @@
     startPointer(e)
   };
   window.addEventListener('resize', () => {
+    if (fold) window.notebookFold(fold);
     if (!sheet.hidden && sheet.dataset.panel === 'brush') positionPanel(sheet, brushToggle);
     if (eraserDialog.open) positionPanel(eraserDialog, control('erase'))
   });

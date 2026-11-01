@@ -32,6 +32,12 @@ are no permanent title, save-status or page-navigation rows. Choose
 leave only a **Show tools** button on the canvas (the native iOS X stays available); showing the tools again preserves your brush,
 color, width and view.
 
+In iPhone Duo laptop posture, the upper screen keeps brushes, stroke widths,
+colors, view/input settings and layers open in a scrollable tool area. The lower
+screen holds the drawing canvas, with the hinge kept clear. The page initially
+fits the lower screen; use Zoom above it for closer work. Drawing does not dismiss
+the tools. Unfolding restores the floating toolbar and the previous zoom.
+
 Tap the current brush icon to open **Writing tools**: choose an instrument card,
 then a **Thin**, **Medium** or **Thick** stroke sample, then an ink color.
 Brushes and available colors each use a three-column grid. The panel

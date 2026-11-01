@@ -435,7 +435,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -487,6 +487,9 @@ def main():
         if args.probe == 'pdf-annotation':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.pdf_annotation_probe', result_name='pdf-annotation-result.json')
+        if args.probe == 'notebook-laptop':
+            creation_profile = dict(entry_point='tests.logisticsmobile.notebook_laptop_probe',
+                                    result_name='notebook-laptop-result.json')
         if args.probe == 'editor-keyboard':
             creation_profile = dict(entry_point='tests.logisticsmobile.editor_keyboard_probe',
                                     result_name='editor-keyboard-evidence/result.json')

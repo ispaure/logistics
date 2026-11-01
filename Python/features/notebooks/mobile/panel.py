@@ -1,5 +1,6 @@
 """Installed Android/iOS notebook library and offline canvas workflow."""
 import asyncio
+import json
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -154,7 +155,13 @@ class NotebookPanel:
         self.bridge = Bridge()
         from services.documents.mobile_views import document_webview
         resource = self.document.resource if self.document else None
-        self.web = document_webview(resource, on_navigation_starting=self.navigate, style=Pack(flex=1))
+        self.web = document_webview(resource, on_navigation_starting=self.navigate,
+                                    on_webview_load=self.canvas_loaded, style=Pack(flex=1))
+        from mobile.layout_participants import participants
+        self._fold_subscription = participants(self.app).register(('notebook-fold', id(self)), self,
+            lambda owner, frame: owner.refresh_fold())
+        self._fold_signature = ()
+        self._canvas_ready = False
         if type(self.web._impl).__module__.startswith('toga_android.'):
             from java import jclass
             self.boox_refresh = jclass('io.github.ispaure.logistics.notebooks.BooxRefresh').attach(self.web._impl.native)
@@ -167,6 +174,35 @@ class NotebookPanel:
         if location is not None:
             self.view.insert(0, location)
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
+
+    async def canvas_loaded(self, widget=None, **kwargs):
+        if widget is not self.web:
+            return
+        self._canvas_ready = True
+        self._fold_signature = ()
+        self.refresh_fold()
+
+    def refresh_fold(self):
+        if self.web is None or not getattr(self, '_canvas_ready', False) or getattr(self, '_fold_pending', None) is not None:
+            return
+        web = self.web
+        async def update():
+            try:
+                from mobile.fold_layout import division
+                region = division(self.app, web)
+                geometry = None
+                if region is not None and not region.vertical:
+                    height = float(web._impl.native.bounds.size.height)
+                    geometry = [region.y / height, (region.y + region.height) / height]
+                signature = tuple(geometry) if geometry else None
+                if self.web is web and signature != self._fold_signature:
+                    await web.evaluate_javascript('window.notebookFold?.(' + json.dumps(geometry) + ')')
+                    if self.web is web:
+                        self._fold_signature = signature
+            finally:
+                if getattr(self, '_fold_pending', None) is asyncio.current_task():
+                    self._fold_pending = None
+        self._fold_pending = self.app.loop.create_task(update())
 
     def navigate(self, widget, url, **kwargs):
         if self.busy or self.closed or not self.app.active_host or widget is not self.web:
@@ -343,6 +379,15 @@ class NotebookPanel:
         self.view.add(toga.ScrollContainer(content=box, horizontal=False, style=Pack(flex=1)))
 
     def retire_canvas(self):
+        self._canvas_ready = False
+        subscription = getattr(self, '_fold_subscription', None)
+        if subscription is not None:
+            subscription.dispose()
+            self._fold_subscription = None
+        pending = getattr(self, '_fold_pending', None)
+        if pending is not None:
+            pending.cancel()
+            self._fold_pending = None
         bridge = getattr(self, 'bridge', None)
         if bridge is not None:
             bridge.retire()

@@ -26,7 +26,7 @@ from features.notebooks.previews import page_previews
 from mobile.palette import EINK_CSS
 
 
-def main(output, *, palm_only=False):
+def main(output, *, palm_only=False, laptop_only=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
@@ -84,6 +84,27 @@ def main(output, *, palm_only=False):
         view.setHtml(mobile_editor_html(editor.state(), bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
+        if laptop_only:
+            from mobile_build.native_tests.tests.logisticsmobile.notebook_laptop_checks import LAPTOP_CHECKS
+            reports = []
+            for width, height in [(466, 678), (951, 669), (820, 1180)]:
+                view.resize(width, height)
+                js('window.notebookFold([.48,.52])')
+                QTest.qWait(150)
+                reports.append(json.loads(js(LAPTOP_CHECKS)))
+                QTest.qWait(150)
+                view.grab().save(str(output / f'laptop-{width}x{height}.png'))
+                js('window.notebookFold(null)')
+                QTest.qWait(100)
+                assert js("$('laptopTools').hidden && $('viewport').clientHeight===innerHeight")
+                js("$('brushToggle').click()")
+                assert js("!$('mobileSheet').hidden && $('mobileSheet').contains($('tool'))")
+                js("document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
+            (output / 'laptop-result.json').write_text(json.dumps(dict(success=True, layouts=reports), indent=2))
+            view.close()
+            view.deleteLater()
+            qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            return
         assert js("getComputedStyle(canvas).userSelect") == 'none'
         assert js("(()=>{let event=new Event('contextmenu',{bubbles:true,cancelable:true});canvas.dispatchEvent(event);return event.defaultPrevented})()")
         assert js("(()=>{active=99;let event=new PointerEvent('pointerdown',{pointerId:100,pointerType:'touch',bubbles:true,cancelable:true});canvas.dispatchEvent(event);let blocked=event.defaultPrevented&&active===99;active=null;return blocked})()")
@@ -297,5 +318,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--palm-only', action='store_true', help='Only check canvas selection and extra-contact handling.')
+    parser.add_argument('--laptop-only', action='store_true', help='Check split tools, drawing coordinates and unfold restoration.')
     args = parser.parse_args()
-    main(args.output, palm_only=args.palm_only)
+    main(args.output, palm_only=args.palm_only, laptop_only=args.laptop_only)
