@@ -50,12 +50,14 @@
     if (rate >= .5 && rate <= 2.) self.player.rate = rate;
     self.player.currentVideoSubTitleDelay = [options[@"subtitle_delay_ms"] longLongValue] * 1000;
     self.player.currentAudioPlaybackDelay = [options[@"audio_delay_ms"] longLongValue] * 1000;
-    // A live pinch or subtitle-menu adjustment wins over later settings refreshes.
+    // A session subtitle-menu adjustment wins over later settings refreshes.
     // A new controller starts with zero and therefore uses the configured default.
-    float configuredScale = [options[@"subtitle_scale"] floatValue];
-    float subtitleScale = self.sessionSubtitleScale > 0 ? self.sessionSubtitleScale : configuredScale;
-    if (subtitleScale > 0 && isfinite(subtitleScale))
-        self.player.currentSubTitleFontScale = MAX(.5f, MIN(3.f, subtitleScale));
+    // 20/22 is approximately two points smaller than the former 22 pt
+    // baseline. VLCKit exposes a *relative scale*, not a point-size setter.
+    float configuredScale = options[@"subtitle_scale"] ? [options[@"subtitle_scale"] floatValue] : 1.f;
+    if (!isfinite(configuredScale) || configuredScale <= 0) configuredScale = 1.f;
+    float subtitleScale = self.sessionSubtitleScale > 0 ? self.sessionSubtitleScale : configuredScale * (20.f / 22.f);
+    self.player.currentSubTitleFontScale = MAX(.5f, MIN(3.f, subtitleScale));
     [self applyPictureSize];
     NSString *audio = options[@"audio_language"] ?: @"", *subtitle = options[@"subtitle_language"] ?: @"";
     NSString *signature = [NSString stringWithFormat:@"%@:%@:%lu:%lu", audio, subtitle, (unsigned long)self.player.audioTracks.count, (unsigned long)self.player.textTracks.count];
@@ -138,21 +140,6 @@
     [self setControlsShown:!self.controlsLocked];
     [self.view bringSubviewToFront:self.unlockButton];
 }
-- (void)pinchSubtitleSize:(UIPinchGestureRecognizer *)pinch {
-    if (self.controlsLocked || self.presentedViewController || ![self canPlay:NO]) return;
-    if (pinch.state == UIGestureRecognizerStateBegan) {
-        self.subtitlePinchStart = self.player.currentSubTitleFontScale;
-        if (self.subtitlePinchStart <= 0) self.subtitlePinchStart = 1;
-    } else if (pinch.state == UIGestureRecognizerStateChanged || pinch.state == UIGestureRecognizerStateEnded) {
-        // Session-only: do not emit a settings command. The persistent preference
-        // remains unchanged; the next media session restores its own default.
-        CGFloat scale = MAX(.5, MIN(3., self.subtitlePinchStart * pinch.scale));
-        self.sessionSubtitleScale = scale;
-        self.player.currentSubTitleFontScale = (float)scale;
-        if (pinch.state == UIGestureRecognizerStateEnded)
-            [self showStatus:[NSString stringWithFormat:@"Subtitle size %.0f%% (session)", scale * 100]];
-    }
-}
 - (void)doubleTapVideo:(UITapGestureRecognizer *)tap {
     if (self.controlsLocked || ![self canPlay:NO]) return;
     CGFloat x = [tap locationInView:self.movie].x, width = self.movie.bounds.size.width;
@@ -207,11 +194,15 @@
     [menu addAction:[UIAlertAction actionWithTitle:@"Choose subtitle file…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"subtitleBrowse" value:@""]; }]];
     for (NSArray *entry in @[@[@"Subtitle delay (ms; positive = later)", @"subtitle_delay_ms"], @[@"Audio delay (ms; positive = later)", @"audio_delay_ms"], @[@"Preferred audio language (e.g. fr)", @"audio_language"], @[@"Preferred subtitle language (e.g. en)", @"subtitle_language"]])
         [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self promptValue:entry[0] key:entry[1] numeric:[entry[1] hasSuffix:@"_ms"]]; }]];
+    [self presentPlaybackDialog:menu];
+}
+- (void)subtitleSizeOptions:(id)sender {
+    UIAlertController *menu = [self menu:@"Subtitle size · current session" sender:sender];
     for (NSNumber *scale in @[@.75,@1.,@1.25,@1.5,@2.]) {
         [menu addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Subtitle size %@× (session)",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            self.sessionSubtitleScale = scale.doubleValue;
-            self.player.currentSubTitleFontScale = scale.floatValue;
-            [self showStatus:[NSString stringWithFormat:@"Subtitle size %.0f%% (session)", scale.doubleValue * 100]];
+            self.sessionSubtitleScale = MAX(.5f, MIN(3.f, scale.floatValue * (20.f / 22.f)));
+            self.player.currentSubTitleFontScale = self.sessionSubtitleScale;
+            [self showStatus:[NSString stringWithFormat:@"Subtitle size %.0f%% (session)", self.sessionSubtitleScale * 100]];
         }]];
     }
     [menu addAction:[UIAlertAction actionWithTitle:@"Reset subtitle size (session)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
@@ -225,7 +216,7 @@
     if (![self canPlay:NO] || self.controlsLocked) return;
     UIAlertController *menu = [self menu:@"Playback" sender:sender];
     for (NSArray *entry in @[@[@"Go to time…", @"goToTime:"], @[@"Speed…", @"speedOptions:"],
-        @[@"Picture size…", @"pictureOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
+        @[@"Picture size…", @"pictureOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
         @[@"Show in folder", @"showInFolder:"], @[@"Current folder…", @"queueVideos:"], @[@"Previous episode", @"previousVideo:"],
         @[@"Next episode", @"nextVideo:"], @[@"Mute / unmute", @"toggleMute:"], @[@"Lock controls", @"toggleControlLock:"]]) {
         [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
@@ -341,9 +332,7 @@
     for (UIGestureRecognizer *gesture in self.view.gestureRecognizers)
         if ([gesture isKindOfClass:UITapGestureRecognizer.class]) [gesture requireGestureRecognizerToFail:doubleTap];
     [self.view addGestureRecognizer:doubleTap];
-    UIPinchGestureRecognizer *subtitlePinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(pinchSubtitleSize:)];
-    subtitlePinch.delegate = self;
-    [self.view addGestureRecognizer:subtitlePinch];
+
 }
 - (void)layoutPlaybackTools {
     // The centre of the thumb (not its edge) defines the timeline endpoints.

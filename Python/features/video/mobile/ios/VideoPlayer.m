@@ -100,7 +100,6 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, strong) UIButton *unlockButton, *undoSeekButton;
 @property(nonatomic, strong) UIView *cacheStrip, *pauseSnapshot;
 @property(nonatomic, copy) NSString *languageSignature;
-@property(nonatomic) CGFloat subtitlePinchStart;
 @property(nonatomic) CGFloat sessionSubtitleScale; // Zero means use configured preference.
 @end
 
@@ -510,25 +509,13 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 #endif
     BOOL poseChanged = self.tabletop != tabletop;
     self.tabletop = tabletop;
-    // VLCKit composites its subtitles inside the drawable. When playback controls
-    // are shown, give the drawable the space above them instead of letting cues
-    // render behind the seek bar. Preserve the independent upper movie panel in
-    // tabletop posture. Use the last laid-out control frame, then request a second
-    // layout pass if its geometry changed; this avoids a constraint cycle.
-    CGFloat movieBottomY = CGRectGetMaxY(movieArea);
-    if (!tabletop && self.controlsVisible && !self.pipActive && !self.controlsLocked) {
-        CGRect deck = self.controlsScroll.frame;
-        CGFloat top = CGRectGetMinY(deck);
-        if (CGRectGetHeight(deck) > 0 && isfinite(top) && top > CGRectGetMinY(movieArea) + 80 &&
-            top < movieBottomY) {
-            movieBottomY = top - 4;
-        }
-    }
-    CGFloat newMovieBottom = movieBottomY - CGRectGetMaxY(self.view.bounds);
-    if (fabs(self.movieBottom.constant - newMovieBottom) > 0.5) {
+    // Keep the video drawable centred in the whole viewport even when the
+    // transport controls are visible. Clipping it at the seek bar shifted the
+    // picture upward and made fullscreen/non-fullscreen framing inconsistent.
+    // Tabletop mode still reserves its dedicated upper panel.
+    CGFloat newMovieBottom = CGRectGetMaxY(movieArea) - CGRectGetMaxY(self.view.bounds);
+    if (fabs(self.movieBottom.constant - newMovieBottom) > 0.5)
         self.movieBottom.constant = newMovieBottom;
-        [self.view setNeedsLayout];
-    }
     self.tabletopTransport.hidden = !tabletop;
     self.tabletopUtilities.hidden = !tabletop;
     self.controls.spacing = tabletop ? 2 : 4;
