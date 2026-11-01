@@ -198,3 +198,23 @@ The focused host validation passed 350 tests across these owners, including the 
 Automated home gestures, including a paused drag, did not establish genuine two-app Split View. The QA window stayed full-width, and the run correctly failed its width/edge assertion. **Left and right system Split View remain unverified**; internal paired documents and a left-edge bar on the rotated outer display do not satisfy this gate. The user deferred hands-on simulator assistance, so this requires a later actual system-window check.
 
 Native live-provider operations, physical touch/VoiceOver, minimum iOS 15 behavior and the complete Reduce Motion/Reduce Transparency/RTL matrix also remain separate checks. Synthetic provider presentations and focused host regressions protect the changed ownership paths without claiming live-service or physical-device acceptance. Android collection-drive relocation is not an iOS panel and remains under its Android owner.
+
+## Dynamic system occlusions
+
+An external media activity can change the Dynamic Island's occupied region
+without changing the window size, rectangular safe-area insets or preferred bar
+edge. Read UIKit's active [reserved occlusion regions](https://developer.apple.com/documentation/uikit/uiview/reservedregion)
+during native layout and include their frames in viewport invalidation. UIKit
+tracks these reads during layout and invalidates layout when the regions change.
+The shared leading/trailing action cache and the additional reader projection
+cache also include this geometry. Changed regions reproject the existing bar
+items through UIKit; unchanged regions retain groups and open-menu ownership.
+There are no device-model offsets or guessed Dynamic Island dimensions.
+
+This applies to the shared navigation used by browser, reader, chat and settings
+panels. iOS versions without the reserved-region API retain their existing native
+safe-area behavior. The toolbar conventions probe records the system regions and
+rejects native action frames that intersect them. Host regressions separately
+cover region expansion/removal without a size change and retained actions/menus.
+Ordinary simulator panel sweeps do not establish physical-device acceptance of
+another app's expanded media island.

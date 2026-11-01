@@ -131,9 +131,10 @@ def notify_viewport(container):
     if app is None or not getattr(app, 'active_host', False):
         return
     from .ios_toolbar import vertical_edge
+    regions = occlusion_geometry(getattr(container, 'native', None))
     geometry = (float(container.width), float(container.height),
                 container.top_inset, container.bottom_inset, container.left_inset, container.right_inset,
-                vertical_edge(getattr(container, 'controller', None)))
+                vertical_edge(getattr(container, 'controller', None)), regions)
     if geometry == getattr(container, '_logistics_viewport', None):
         return
     container._logistics_viewport = geometry
@@ -145,3 +146,20 @@ def notify_viewport(container):
         if app.active_host:
             app.resize_workspace()
     app.loop.call_soon(resized)
+
+
+def occlusion_geometry(native):
+    """Read during UIKit layout so reserved-region changes invalidate it again.
+
+    A changing Dynamic Island need not change the rectangular safe area, window
+    dimensions or bar edge. Keep that system-owned geometry in the viewport key.
+    """
+    if native is None:
+        return ()
+    from rubicon.objc import ObjCClass, SEL
+    if not native.respondsToSelector(SEL('reservedRegionsOfKind:options:')):
+        return ()
+    kind = ObjCClass('UIViewReservedRegionKind').occlusionRegionKind()
+    return tuple((float(r.frame.origin.x), float(r.frame.origin.y),
+                  float(r.frame.size.width), float(r.frame.size.height))
+                 for r in native.reservedRegionsOfKind(kind, options=0))

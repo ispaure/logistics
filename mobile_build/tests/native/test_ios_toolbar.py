@@ -154,6 +154,27 @@ class ToolbarTests(TestCase):
         self.assertFalse(close._ios_action_item.enabled)
         self.assertIsNot(self.controller.navigationItem.leftBarButtonItems, original)
 
+    def test_system_occlusion_changes_reproject_both_sides_without_replacing_actions(self):
+        close, find = Button('close', 'Close'), Button('find', 'Search')
+        nav = self.controller.navigationItem
+        with patch('mobile.ios_toolbar.system_occlusions', return_value=((867, 0, 84, 120),)) as regions:
+            mount_leading(self.controller, [close], replaces_back=True)
+            mount_actions(self.controller, self.owner, [find])
+            leading, trailing = nav.leadingItemGroups, nav.trailingItemGroups
+            close_item, find_item = close._ios_action_item, find._ios_action_item
+            regions.return_value = ((867, 0, 84, 212),)
+            mount_leading(self.controller, [close], replaces_back=True)
+            mount_actions(self.controller, self.owner, [find])
+            self.assertIsNot(nav.leadingItemGroups, leading)
+            self.assertIsNot(nav.trailingItemGroups, trailing)
+            self.assertIs(close._ios_action_item, close_item)
+            self.assertIs(find._ios_action_item, find_item)
+            leading, trailing = nav.leadingItemGroups, nav.trailingItemGroups
+            mount_leading(self.controller, [close], replaces_back=True)
+            mount_actions(self.controller, self.owner, [find])
+            self.assertIs(nav.leadingItemGroups, leading)
+            self.assertIs(nav.trailingItemGroups, trailing)
+
     def test_status_and_explicit_groups_remain_separate(self):
         status, find, save, close = [Button(icon, icon) for icon in (None, 'find', 'save', 'close')]
         status._toolbar_group = 'transfer-status'

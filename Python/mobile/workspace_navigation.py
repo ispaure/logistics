@@ -66,7 +66,7 @@ def sync_reader_toolbar(app, view, destination=None):
             from .android_reader_chrome import sync
             sync(app, view, destination or app.native_host.state.destination)
         return
-    from .ios_toolbar import mount_actions, mount_leading, vertical_edge, clear_actions, action_state
+    from .ios_toolbar import mount_actions, mount_leading, vertical_edge, clear_actions, action_state, system_occlusions
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
     controller = adapter.content_controller(destination)
@@ -102,7 +102,8 @@ def sync_reader_toolbar(app, view, destination=None):
         detach(control)
     from .reader_chrome import reader_buttons
     buttons = [] if getattr(view, '_reader_fullscreen', False) else reader_buttons(app, view)
-    state = (action_state(buttons), vertical_edge(controller))
+    occlusions = system_occlusions(controller)
+    state = (action_state(buttons), vertical_edge(controller), occlusions)
     for button in buttons:
         detach(button)
         button.app, button.window = app, app.main_window
@@ -140,7 +141,7 @@ def sync_reader_toolbar(app, view, destination=None):
             detach(menu)
             menu.app, menu.window = app, app.main_window
             leading.append(menu)
-        leading_state = action_state(leading)
+        leading_state = (action_state(leading), occlusions)
         if projections.get((key, 'leading')) != leading_state:
             mount_leading(controller, leading, replaces_back=True)
             projections[key, 'leading'] = leading_state

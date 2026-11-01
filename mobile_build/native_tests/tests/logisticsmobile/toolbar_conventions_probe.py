@@ -42,8 +42,39 @@ def native_geometry(app):
         for child in children(view, 'subviews'):
             views(child, hidden)
     views(window)
+    from rubicon.objc import SEL
+    occlusions = []
+    if window.respondsToSelector(SEL('reservedRegionsOfKind:options:')):
+        kind = ObjCClass('UIViewReservedRegionKind').occlusionRegionKind()
+        for region in window.reservedRegionsOfKind(kind, options=0):
+            r = region.frame
+            occlusions.append([float(r.origin.x), float(r.origin.y), float(r.size.width), float(r.size.height)])
+    navigation = app.native_host.adapter.navigation_for(app.native_host.state.destination)
+    nav = navigation.topViewController.navigationItem
+    groups = [*nav.leadingItemGroups, *nav.trailingItemGroups]
+    if nav.pinnedTrailingGroup is not None:
+        groups.append(nav.pinnedTrailingGroup)
+    if navigation.isNavigationBarHidden():
+        groups = []
+    items = []
+    for group in groups:
+        for item in group.barButtonItems:
+            # QA-only inspection of UIKit's view for the public bar item.
+            view = item.valueForKey('view')
+            if view is None or view.window is None or view.isHidden():
+                continue
+            bounds = rect(view)
+            if bounds[2] <= 0 or bounds[3] <= 0:
+                continue
+            items.append(dict(label=str(item.accessibilityLabel or item.title or ''), frame=bounds))
+    for item in items:
+        x, y, width, height = item['frame']
+        for left, top, w, h in occlusions:
+            overlap = (min(x + width, left + w) - max(x, left),
+                       min(y + height, top + h) - max(y, top))
+            assert min(overlap) <= 1, ('Native action overlaps system UI', item, occlusions)
     return dict(controllers=controller(window.rootViewController), buttons=buttons,
-                pose=pose_snapshot(app))
+                items=items, occlusions=occlusions, pose=pose_snapshot(app))
 
 
 class ConventionsProbe(ToolbarProbe):

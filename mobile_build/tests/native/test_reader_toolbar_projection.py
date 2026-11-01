@@ -15,28 +15,36 @@ class ReaderToolbarProjectionTests(unittest.TestCase):
         menu, image = NS(ptr=NS(value=201)), NS(ptr=NS(value=202))
         native = NS(menu=menu, imageForState=lambda state: image)
         button = NS(enabled=True, text='', accessible_name='Document actions',
-                    control_icon='more', _impl=NS(native=native))
+                    control_icon='more', _impl=NS(native=native), _ios_action_item=object())
         controller = NS(ptr=NS(value=101), navigationItem=NS(title='Reader', titleView=None))
         app = NS(refresh_reader_exit=Mock(), routes=NS(apple=True), main_window=object(),
                  native_host=NS(state=NS(destination='documents'),
                                 adapter=NS(content_controller=lambda destination: controller)))
         view = NS(_native_reader_buttons=lambda: [button], _native_reader_toolbar=object(),
-                  _native_reader_title='Reader')
+                  _native_reader_title='Reader', _reader_close_button=button)
         with patch('mobile.workspace_navigation.detach'), \
                 patch('mobile.reader_chrome.reader_buttons', return_value=[button]), \
                 patch('mobile.ios_toolbar.vertical_edge', return_value=0), \
+                patch('mobile.ios_toolbar.system_occlusions', return_value=()) as occlusions, \
+                patch('mobile.ios_toolbar.mount_leading') as leading, \
                 patch('mobile.ios_toolbar.mount_actions') as mount:
             sync_reader_toolbar(app, view)
             sync_reader_toolbar(app, view)
             self.assertEqual(mount.call_count, 1)
+            self.assertEqual(leading.call_count, 1)
             native.menu = NS(ptr=NS(value=203))
             sync_reader_toolbar(app, view)
             self.assertEqual(mount.call_count, 2)
             button.enabled = False
             sync_reader_toolbar(app, view)
             self.assertEqual(mount.call_count, 3)
+            occlusions.return_value = ((867, 0, 84, 212),)
             sync_reader_toolbar(app, view)
-            self.assertEqual(mount.call_count, 3)
+            self.assertEqual(mount.call_count, 4)
+            self.assertEqual(leading.call_count, 4)
+            sync_reader_toolbar(app, view)
+            self.assertEqual(mount.call_count, 4)
+            self.assertEqual(leading.call_count, 4)
 
 
 if __name__ == '__main__':

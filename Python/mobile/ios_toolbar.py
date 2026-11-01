@@ -15,6 +15,11 @@ def vertical_edge(controller):
     return int(traits.verticalBarEdge) if traits.respondsToSelector(SEL('verticalBarEdge')) else 0
 
 
+def system_occlusions(controller):
+    from .ios_reader_chrome import occlusion_geometry
+    return occlusion_geometry(getattr(controller, 'view', None))
+
+
 def bar_item(button, *, prominent=False, symbol=None):
     """Forward to the retained button's handler/menu without a custom view."""
     from rubicon.objc import ObjCClass, SEL
@@ -110,7 +115,7 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
     grouped = bool(nav.respondsToSelector(SEL('setTrailingItemGroups:')))
     pointer = getattr(controller, 'ptr', None)
     signature = (pointer.value if pointer is not None else id(controller),
-                 action_state(buttons), edge, overflow)
+                 action_state(buttons), edge, overflow, system_occlusions(controller))
     mounted = getattr(owner, '_ios_toolbar_mount', None)
     if grouped and mounted is not None and mounted[0] == signature:
         _, groups, pinned, additional = mounted
@@ -167,7 +172,7 @@ def mount_leading(controller, buttons, *, replaces_back=False):
     nav = controller.navigationItem
     buttons = list(buttons)
     grouped = bool(nav.respondsToSelector(SEL('setLeadingItemGroups:')))
-    signature = (action_state(buttons), replaces_back, grouped)
+    signature = (action_state(buttons), replaces_back, grouped, system_occlusions(controller))
     mounted = getattr(controller, '_ios_leading_mount', None)
     if mounted is not None and mounted[0] == signature:
         current = nav.leadingItemGroups if grouped else nav.leftBarButtonItems

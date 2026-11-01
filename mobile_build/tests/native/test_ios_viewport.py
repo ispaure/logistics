@@ -11,6 +11,28 @@ from mobile.ios_reader_chrome import notify_viewport
 
 
 class ViewportTests(unittest.TestCase):
+    def test_occlusion_changes_refresh_without_size_inset_or_edge_changes(self):
+        from unittest.mock import patch
+        loop = asyncio.new_event_loop()
+        self.addCleanup(loop.close)
+        app = SimpleNamespace(active_host=True, loop=loop, resize_workspace=Mock())
+        container = SimpleNamespace(content=SimpleNamespace(interface=SimpleNamespace(app=app)),
+            width=951, height=669, top_inset=0, bottom_inset=0, left_inset=0, right_inset=84)
+        async def exercise():
+            with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=((867, 0, 84, 120),)) as regions:
+                notify_viewport(container)
+                await asyncio.sleep(0)
+                notify_viewport(container)
+                await asyncio.sleep(0)
+                self.assertEqual(app.resize_workspace.call_count, 1)
+                for value in (((867, 0, 84, 212),), ((867, 0, 84, 120),), ()):
+                    regions.return_value = value
+                    notify_viewport(container)
+                    notify_viewport(container)
+                    await asyncio.sleep(0)
+                self.assertEqual(app.resize_workspace.call_count, 4)
+        loop.run_until_complete(exercise())
+
     def test_bar_edge_change_refreshes_actions_without_a_size_change(self):
         from unittest.mock import patch
         loop = asyncio.new_event_loop()
