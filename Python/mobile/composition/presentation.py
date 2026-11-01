@@ -171,6 +171,7 @@ def notes_host(app):
     from ..markdown_speech import MarkdownSpeech
     from ..action_menu import FeatureCommands
     from .. import obsidian
+    from ..notes_drawers import NotesDrawers
 
     async def open_editor(provider, path, destination):
         from services.documents.mobile_storage import document_source
@@ -185,6 +186,7 @@ def notes_host(app):
 
     from services.documents.mobile_storage import NotesDocumentAccess
     return NotesHost(
+        drawers=lambda files, article, links: NotesDrawers(files, article, links, app=app),
         storage=lambda provider: NotesDocumentAccess(provider,
             client=lambda: getattr(app, 'cloud_client', None), active=lambda: app.active_host,
             privacy_gate=lambda: getattr(app.cloud_client, 'session_privacy', None),

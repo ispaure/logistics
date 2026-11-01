@@ -23,7 +23,7 @@ QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaur
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
 NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
-                      'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-fullscreen.png', 'sync-portrait.png', 'sync-landscape-left.png')
+                      'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-fullscreen.png', 'notes-links-landscape-left.png', 'notes-links-portrait.png', 'notes-files-landscape-left.png', 'notes-files-portrait.png', 'sync-portrait.png', 'sync-landscape-left.png')
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):

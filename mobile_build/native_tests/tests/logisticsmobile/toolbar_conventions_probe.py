@@ -211,6 +211,19 @@ class ConventionsProbe(ToolbarProbe):
             show()
             await self.record(name)
             assert_visible_controls(self)
+        # Exercise the failed-unlock form from the reported screenshot without
+        # touching a real credential package or submitting a password.
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        self.prepare_cloud()
+        self.show_locations()
+        cache = SimpleNamespace(items={'toolbar-qa': {'zip': 'Synthetic.zip'}})
+        with patch.object(self, 'retained_packages', return_value=cache):
+            self.show_retained_unlock('toolbar-qa')
+        self.credential_unlock_status.text = 'Unlock failed: invalid password or credential ZIP'
+        self.main_window._impl.native.endEditing(True)
+        await self.record('credential-unlock-error')
+        assert_visible_controls(self)
         self.report['checks'].append('extended-panel-inventory')
         self.report['not_applicable'] = ['Collection drive relocation is Android-only; iOS uses system document storage.']
 

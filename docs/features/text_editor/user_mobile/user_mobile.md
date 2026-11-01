@@ -170,15 +170,25 @@ creation, renaming or moving. Notes editing and file organization belong to
 Logistics' Notes Library.
 
 
-From a Local, LocalCrypt or Remote location's actions page, choose **Open as Notes
-Library** when the root contains an `.obsidian` directory. The reader opens in
-Documents with a folder/page sidebar, note history and read-aloud controls.
-Folder and file icons identify each sidebar entry; the selected row is highlighted.
-When the sidebar and page appear side by side, navigation, edit and read-aloud
-controls sit above the Markdown page.
-Remote libraries have no filename filter or recursive index; browser folders load only
-when expanded. Local filtering searches only loaded note names. Reading is
-limited to 2 MiB. Hidden configuration is excluded and links stay inside the library.
+From a Local or unlocked LocalCrypt location, choose **Open as Notes Library**
+when the folder contains an `.obsidian` directory. Cloud folders never offer
+library mode; download or sync a local copy first. Individual cloud Markdown
+files can still be opened in the standalone read-only viewer.
+
+The library opens with **Files** over the full-width document. Use the upper-left
+Files button or swipe right from the document's left edge to browse; swipe left
+in the drawer or tap outside it to return to reading. Choose a note to close the
+drawer. The upper-right Links button, or a left swipe from the document's right
+edge, opens **Backlinks** and **Outgoing links**. Swipe right in that drawer to
+close it. These floating panels work on phones, tablets and Duo in both orientations.
+Horizontal tables, selected text and zoomed pages retain their ordinary gestures.
+
+Connections are scanned locally when opening Links, with progress feedback,
+clickable note paths, unresolved links and word/character counts. Scans are
+cancelled when the panel closes or the library locks. The scan is limited to
+5,000 notes, 10,000 entries and 64 MiB; an exceeded limit shows an error instead
+of incomplete backlinks. No plaintext index is saved. File filtering searches
+loaded names. Hidden configuration is excluded and links stay inside the library.
 
 Links such as `[[Tech]]` can open `Tech.md` in an unloaded subfolder. The current
 folder and library root take priority; otherwise following the link searches for
@@ -191,8 +201,8 @@ Markdown file in the current note’s folder. Existing names are never overwritt
 Choose **Return to Notes Library** from the editor’s actions to return to the same
 note; unsaved edits offer Save, Discard changes and Cancel. A failed save keeps the draft.
 The library refreshes the saved note and retains its reading position. Cloud
-remotes, including encrypted remotes, remain read-only in both the library and
-standalone Markdown viewer. Source inspection does not enable editing.
+remotes, including encrypted remotes, remain read-only in the standalone
+Markdown viewer and cannot open as libraries. Source inspection does not enable editing.
 
 On iOS, opening the keyboard preserves the document’s native title and actions
 while resizing the writing area. Keyboard dismissal restores the previous

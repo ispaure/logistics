@@ -127,6 +127,9 @@ class NotesLibraryTests(unittest.TestCase):
                         self.app.show_view(box, destination='files', route='encrypted-notes-action')
                         entry = dict(source=source, kind=kind, value=value, name='Secret')
                         await offer_notes(self.app, entry, box, button, status)
+                        if kind == 'remote':
+                            self.assertNotIn(button, box.children)
+                            continue
                         self.assertIn(button, box.children, status.text)
                         await button.on_press()
                         owner = self.app.vault_browser
@@ -195,23 +198,8 @@ class NotesLibraryTests(unittest.TestCase):
             self.app.show_view(box, destination='files', route='notes-action')
             entry = dict(source='Remote', kind='remote', value=('remote', ''), name='Remote')
             await offer_notes(self.app, entry, box, button, status)
-            self.assertIn(button, box.children)
-            self.assertEqual(client.calls, [('list', '')])
-            await button.on_press()
-            owner = self.app.vault_browser
-            self.assertIsNone(owner.search)
-            self.assertEqual([call for call in client.calls if call[0] == 'list'], [('list', ''), ('list', '')])
-            await owner.open_note('Home.md')
-            self.assertEqual([(action, path) for action, path in client.calls if path.startswith('Projects')],
-                             [('remote_stat', 'Projects/Projects.md')])
-            await owner.toggle_folder('Projects')
-            self.assertIn(('list', 'Projects'), client.calls)
-            await owner.open_note('Projects/Plan.MD')
-            self.assertEqual(owner.path, 'Projects/Plan.MD')
-            client.generation += 1
-            self.assertFalse(await owner.open_note('Home.md'))
-            self.app.clear_private_catalog()
-            self.assertIsNone(owner.path)
+            self.assertNotIn(button, box.children)
+            self.assertEqual(client.calls, [])
         self.run_async(exercise())
 
     def test_missing_or_file_marker_does_not_offer_and_stale_probe_cannot_present(self):
@@ -236,11 +224,10 @@ class NotesLibraryTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_shared_bounds_and_links_are_enforced_for_remote(self):
-        library = NotesLibrary(RemoteNotes(Client(self.vault), 'remote'))
-        for target in ('../outside.md', '.obsidian/private.md', 'https://example.invalid/note.md', '%2e%2e/outside.md'):
-            with self.assertRaises(ValueError):library.link('Home.md', target)
-        (self.vault / 'Huge.md').write_bytes(b'x' * (2 * 1024 * 1024 + 1))
-        with self.assertRaises(ValueError):library.read('Huge.md')
+        client = Client(self.vault)
+        with self.assertRaisesRegex(ValueError, 'local copy'):
+            NotesLibrary(RemoteNotes(client, 'remote'))
+        self.assertEqual(client.calls, [])
 
     def test_expanded_private_html_is_refused_without_replacing_note(self):
         from types import SimpleNamespace

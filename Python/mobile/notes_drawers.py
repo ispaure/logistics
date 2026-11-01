@@ -1,0 +1,150 @@
+"""Two floating Notes Library drawers over a retained full-width document."""
+from types import SimpleNamespace
+import toga
+from toga.style import Pack
+from .speech_overlay import SpeechOverlay
+
+
+class NotesDrawers:
+    expanded = False
+
+    def __init__(self, files, article, links, *, app):
+        self.app, self.sidebar, self.detail, self.links = app, files, article, links
+        self.view = toga.Box(children=[article], style=Pack(flex=1))
+        self.policy = SimpleNamespace(sidebar_width=320, gap=0)
+        self.overlay = None
+        self.side = None
+        self.gestures = []
+        self.on_close = lambda: None
+        for panel in (files, links):
+            panel.hide = self.show_detail
+            panel.overlay = None
+            panel.overlay_height = 480
+
+    @property
+    def sidebar_open(self):
+        return self.side is not None
+
+    def reflow(self, width):
+        self.policy.sidebar_width = min(320, max(1, width - 24))
+        self.sidebar.style.width = max(1, self.policy.sidebar_width - 24)
+        self.links.style.width = max(1, self.policy.sidebar_width - 24)
+        if self.overlay is not None:
+            self.overlay.reposition()
+
+    def toggle(self, widget=None, **kwargs):
+        self.show_detail() if self.side == 'files' else self.show_sidebar()
+
+    def show_sidebar(self):
+        self.show('files')
+
+    def show_links(self):
+        self.show('links')
+
+    def show(self, side):
+        if self.side == side:
+            return
+        self.show_detail()
+        self.side = side
+        panel = self.sidebar if side == 'files' else self.links
+        self.overlay = SpeechOverlay(panel, self.view, self.app, leading=side == 'files',
+                                     full_height=True, label='Files' if side == 'files' else 'Links',
+                                     passthrough_controls=True)
+        self.overlay.chapter_owner = self.view
+        panel.overlay = self.overlay
+        self.install_swipe(panel)
+        # Animate the native overlay container, not Toga's flattened Box layer.
+        if (type(panel._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
+                and self.app.preferences.values.get('android_eink') != 'true'):
+            from commonUtils.ui.native.transitions import begin_page_slide, finish_page_slide
+            native = (self.overlay.container.native if self.overlay.container is not None
+                      and hasattr(self.overlay.container, 'native') else panel._impl.native)
+            proxy_impl = type('DrawerImpl', (), {'__module__': type(panel._impl).__module__})()
+            proxy_impl.native = native
+            proxy = SimpleNamespace(_impl=proxy_impl)
+            begin_page_slide(proxy, -1 if side == 'files' else 1)
+            finish_page_slide(proxy, -1 if side == 'files' else 1)
+
+    def swipe(self, direction):
+        if (self.side == 'files' and direction < 0) or (self.side == 'links' and direction > 0):
+            self.show_detail()
+
+    def install_swipe(self, panel):
+        backend = type(panel._impl).__module__
+        if backend.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass, SEL, objc_method
+            # An overlay owns its recognizer target; release both on dismissal.
+            global _swipe_class
+            if _swipe_class is None:
+                class LogisticsNotesDrawerSwipe(ObjCClass('NSObject')):
+                    @objc_method
+                    def swipe_(self, gesture) -> None:
+                        if self.owner is not None:
+                            self.owner.swipe(1 if int(gesture.direction) == 1 else -1)
+                _swipe_class = LogisticsNotesDrawerSwipe
+            target = _swipe_class.alloc().init()
+            target.owner = self
+            native = self.overlay.container.native
+            gesture = ObjCClass('UISwipeGestureRecognizer').alloc().initWithTarget(target, action=SEL('swipe:'))
+            gesture.direction = 2 if self.side == 'files' else 1
+            native.addGestureRecognizer(gesture)
+            self.gestures.append((native, gesture, target))
+        elif backend.startswith('toga_android.'):
+            from android.view import View
+            from java import dynamic_proxy
+            owner = self
+            class Touch(dynamic_proxy(View.OnTouchListener)):
+                start = None
+                def onTouch(self, view, event):
+                    action = event.getActionMasked()
+                    if action == 0:
+                        self.start = (event.getRawX(), event.getRawY(), event.getEventTime())
+                    elif action == 1 and self.start is not None:
+                        x, y, time = self.start
+                        self.start = None
+                        dx, dy = event.getRawX()-x, event.getRawY()-y
+                        density = view.getContext().getResources().getDisplayMetrics().density
+                        if abs(dx)>60*density and abs(dx)>2*abs(dy) and event.getEventTime()-time<800:
+                            owner.swipe(1 if dx>0 else -1)
+                            return True
+                    elif action in (3, 5):
+                        self.start = None
+                    return False
+            def attach(widget):
+                native = widget._impl.native
+                listener = Touch()
+                native.setOnTouchListener(listener)
+                self.gestures.append((native, None, listener))
+                for child in widget.children:
+                    attach(child)
+                content = getattr(widget, 'content', None)
+                if content is not None and content not in widget.children:
+                    attach(content)
+            attach(panel)
+
+    def clear_gestures(self):
+        for native, gesture, target in self.gestures:
+            if gesture is not None:
+                native.removeGestureRecognizer(gesture)
+                target.owner = None
+            else:
+                native.setOnTouchListener(None)
+        self.gestures.clear()
+
+    def refresh_gestures(self):
+        if self.overlay is not None:
+            self.clear_gestures()
+            self.install_swipe(self.sidebar if self.side == 'files' else self.links)
+
+    def show_detail(self):
+        if self.side is not None:
+            self.on_close()
+        self.side = None
+        self.clear_gestures()
+        overlay, self.overlay = self.overlay, None
+        if overlay is not None:
+            overlay.panel.overlay = None
+            overlay.close()
+
+
+_swipe_class = None

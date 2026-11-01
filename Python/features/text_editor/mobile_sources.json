@@ -11,10 +11,12 @@
     "mobile/markdown_script.py",
     "mobile/markdown_style.py",
     "mobile/notes_library.py",
+    "mobile/notes_swipe.py",
     "mobile/provider_markdown.py",
     "mobile/ui.py",
     "names.py",
     "notes.py",
+    "notes_links.py",
     "resources.py"
   ]
 }

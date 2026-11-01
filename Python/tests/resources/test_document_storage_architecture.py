@@ -77,8 +77,6 @@ class StorageArchitectureBehaviorTests(unittest.TestCase):
         from features.text_editor.notes import NotesLibrary
         provider = LocalFiles(self.root)
         provider.provider = SimpleNamespace(remote_storage=True)
-        library = NotesLibrary(provider)
-        self.assertFalse(library.writable)
-        with self.assertRaisesRegex(ValueError, 'read-only'):
-            library.create('Forbidden')
+        with self.assertRaisesRegex(ValueError, 'local copy'):
+            NotesLibrary(provider)
         self.assertFalse((self.root / 'Forbidden.md').exists())

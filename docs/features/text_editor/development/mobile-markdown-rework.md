@@ -116,18 +116,18 @@ may move into a reachable menu rather than simply disappear.
 ## Notes Library redesign
 
 Use the same reading surface, typography, actions and access rules as standalone
-Markdown. Give the library a clear location title and Local, LocalCrypt or Remote
+Markdown. Give the local-only library a clear location title and Local or LocalCrypt
 context, a legible folder/note list, selected-note state and useful empty, loading,
-locked and error states. On phones, use focused list-to-note navigation; on wider
-panes, use a resizable or appropriately bounded sidebar and detail view.
+locked and error states. Mobile uses floating Files and Links drawers over a
+retained full-width document, including on tablets and Duo.
 
 Preserve navigation history, list position, note position and active filename
 when opening an editor and returning. Refresh the rendered note and relevant list
 entry after a successful save. Test unsaved navigation through Save, Discard and
 Cancel. Provide note creation for writable local libraries; show no mutation
-commands for cloud libraries. Keep filename filtering distinct from searching the
-open note, and retain bounded, on-demand remote traversal rather than introducing
-an unrequested full-vault scan.
+library entry for cloud folders. Keep filename filtering distinct from searching
+the open note. Backlinks and outgoing connections scan bounded local libraries
+on demand without writing an index. Standalone cloud Markdown remains read-only.
 
 ## Implementation sequence and refactoring
 

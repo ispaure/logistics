@@ -253,16 +253,15 @@ changes must be resolved first. Existing destinations are never overwritten.
 Links in other notes are not rewritten when files move.
 
 
-From a Local, LocalCrypt or Remote location's actions page, choose **Open as Notes
+From a Local or unlocked LocalCrypt location's actions page, choose **Open as Notes
 Library** when the root contains an `.obsidian` directory. The reader opens in
 Documents with a folder/page sidebar, note history and read-aloud controls.
-Remote libraries have no search or recursive index; browser folders load only when
-expanded. Local filtering searches only loaded note names. The desktop workspace
-action opens only the selected Local or Cloud context, without a storage choice.
-Local and LocalCrypt libraries start in edit mode, support Formatted and Source
-editing, and save into that same local copy. Unsaved changes are checked before
-switching notes or closing. Cloud libraries remain read-only. Notes are limited
-to 2 MiB. Hidden configuration is excluded and links stay inside the library.
+Library mode is local-only on every platform: download or sync a cloud folder
+first. Individual remote Markdown files remain available in the read-only viewer.
+Local filtering searches loaded note names. Local and LocalCrypt libraries start
+in edit mode, support Formatted and Source editing, and save into that same local
+copy. Unsaved changes are checked before switching notes or closing. Notes are
+limited to 2 MiB. Hidden configuration is excluded and links stay inside the library.
 
 Links such as `[[Tech]]` can open `Tech.md` in a subfolder. The current folder
 and library root take priority; otherwise the app looks for a unique match across

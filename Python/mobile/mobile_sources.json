@@ -94,6 +94,7 @@
     "navigation.py",
     "notebook_mutations.py",
     "notes_actions.py",
+    "notes_drawers.py",
     "obsidian.py",
     "page_animation.py",
     "palette.py",

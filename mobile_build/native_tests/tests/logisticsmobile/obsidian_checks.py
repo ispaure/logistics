@@ -63,11 +63,9 @@ async def exercise_obsidian(app, encrypted):
         else:
             raise AssertionError('Native vault Markdown did not render')
         owner.reflow(app.adaptive.content_width(owner.destination, margin=0))
-        if owner.sidebar.expanded:
-            assert list(owner.sidebar.view.children) == [owner.tree, owner.article]
-        else:
-            owner.menu.on_press()
-            assert list(owner.sidebar.view.children) == [owner.tree]
+        owner.menu.on_press()
+        assert owner.sidebar.side == 'files'
+        assert list(owner.sidebar.view.children) == [owner.article]
         await capture_window(app, output / (label + '-tree.png'))
         owner.sidebar.show_detail()
         await asyncio.sleep(.3)

@@ -26,6 +26,10 @@ class RemoteFiles(LocalFiles):
     def close(self):self.closed=True
 
 
+class PrivateFiles(RemoteFiles):
+    remote_storage = False
+
+
 class NotesLibraryDesktopTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
@@ -66,6 +70,11 @@ class NotesLibraryDesktopTests(QtTestCase):
                     window = NotesLibraryWindow(factory, 'Encrypted fixture', remote=remote)
                     window.show()
                     self.wait_until(lambda: not window.progress.busy)
+                    if remote:
+                        self.assertIsNone(window.library)
+                        self.assertIn('local copy', window.progress.message.text())
+                        window.close()
+                        continue
                     self.assertIsNotNone(window.library, window.progress.message.text())
                     self.assertEqual(window.viewer.allow_edit, not remote)
                     self.assertEqual(window.viewer.edit_button.isChecked(), not remote)
@@ -127,11 +136,9 @@ class NotesLibraryDesktopTests(QtTestCase):
                 remote.assert_not_called()
                 self.assertEqual([action.name for action in local_actions], ['Open as Notes Library'])
                 cloud_actions = actions(replace(entry, storage_scope='remote'))
-                remote.assert_called_once()
-                self.assertEqual([action.name for action in cloud_actions], ['Open as Notes Library'])
+                remote.assert_not_called()
+                self.assertEqual(cloud_actions, [])
                 with patch('features.text_editor.ui.notes_library.open_notes') as opened:
-                    cloud_actions[0].callback()
-                    self.assertTrue(opened.call_args.kwargs['remote'])
                     local_actions[0].callback()
                     self.assertFalse(opened.call_args.kwargs['remote'])
             self.assertEqual([item[0] for item in sources(replace(entry, local=None, storage_scope='local'))], [])
@@ -237,20 +244,11 @@ class NotesLibraryDesktopTests(QtTestCase):
             provider=RemoteFiles(root)
             window=NotesLibraryWindow(lambda:provider,'Remote',remote=True)
             window.show();self.wait_until(lambda:not window.progress.busy)
-            self.assertIsNone(window.search)
-            self.assertFalse(window.viewer.find_action.isVisible())
-            self.assertFalse(window.viewer.find_action.isEnabled())
-            self.assertEqual(provider.calls,[''])
-            self.assertNotIn('Nested/Next.md',window.items)
-            window.items['Nested'].setExpanded(True)
-            self.wait_until(lambda:not window.progress.busy)
-            self.assertEqual(provider.calls,['','Nested'])
-            window.open_note('Nested/Next.md');self.wait_until(lambda:not window.progress.busy)
-            self.assertIn('nested note',window.viewer.browser.toPlainText())
-            window.retire()
-            self.assertEqual(window.storage.data,b'')
-            self.assertIsNone(window.viewer.document_state.source_bytes)
+            self.assertIsNone(window.library)
+            self.assertIn('local copy', window.progress.message.text())
+            self.assertEqual(provider.calls, [])
             self.assertTrue(provider.closed)
+            window.close()
 
     def test_marker_file_and_escape_never_open(self):
         with self.temporary_directory() as directory:
@@ -270,7 +268,7 @@ class NotesLibraryDesktopTests(QtTestCase):
         from shiboken6 import isValid
         with self.temporary_directory() as directory:
             root = Path(directory);self.fixture(root)
-            provider = RemoteFiles(root)
+            provider = PrivateFiles(root)
             entered, released = Event(), Event()
             original = provider.list
             def blocked(path='', **kwargs):
@@ -278,7 +276,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 if not released.wait(5):raise RuntimeError('Fixture timed out')
                 return original(path, **kwargs)
             with patch.object(provider, 'list', side_effect=blocked):
-                window = NotesLibraryWindow(lambda: provider, 'Slow remote', remote=True)
+                window = NotesLibraryWindow(lambda: provider, 'Slow private local')
                 window.show()
                 try:
                     self.wait_until(entered.is_set)
@@ -294,8 +292,8 @@ class NotesLibraryDesktopTests(QtTestCase):
         from contextlib import contextmanager
         with self.temporary_directory() as directory:
             root = Path(directory);self.fixture(root)
-            provider = RemoteFiles(root)
-            window = NotesLibraryWindow(lambda: provider, 'Remote', remote=True)
+            provider = PrivateFiles(root)
+            window = NotesLibraryWindow(lambda: provider, 'Private local')
             window.show();self.wait_until(lambda:not window.progress.busy)
             original = provider.open
             @contextmanager
@@ -328,8 +326,8 @@ class NotesLibraryDesktopTests(QtTestCase):
                 source = '\n\n'.join(embeds) + '\n\nFollowing text'
                 path = root / 'Nested/Next.md'
                 path.write_text(source)
-                provider = RemoteFiles(root) if remote else LocalFiles(root)
-                window = NotesLibraryWindow(lambda: provider, 'Images', remote=remote)
+                provider = PrivateFiles(root) if remote else LocalFiles(root)
+                window = NotesLibraryWindow(lambda: provider, 'Images')
                 window.show()
                 self.wait_until(lambda: not window.progress.busy)
                 window.open_note('Nested/Next.md')

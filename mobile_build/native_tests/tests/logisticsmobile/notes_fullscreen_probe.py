@@ -29,12 +29,14 @@ class NotesFullscreenProbe(LogisticsMobile):
         try:
             root = (Path(self.paths.cache) / 'notes-fixture').resolve()
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
-            (root / 'Welcome.md').write_text('# Welcome\n\nThe library owns this screen.\n')
+            (root / 'Welcome.md').write_text('# Welcome\n\nThe library owns this screen. [[Projects/Projects]]\n')
             (root / 'Projects').mkdir(exist_ok=True)
             (root / 'Projects/Projects.md').write_text('# Projects\n\nFolder landing note.\n')
             self.show_locations()
             await asyncio.sleep(.5)
             owner = await open_vault(self, LocalFiles(root), '', 'files')
+            assert owner.sidebar.side == 'files'
+            assert owner.sidebar.overlay is not None
             folder = next(row for row in owner.rows.children if row.children[-1].vault_path == 'Projects')
             assert folder.children[1].browser_entry_kind == 'folder_document'
             await folder.children[-1].on_press()
@@ -98,6 +100,44 @@ class NotesFullscreenProbe(LogisticsMobile):
                     bounds = columns.controller.view.bounds.size
                     frame = columns.navigation.view.frame
                     assert abs(frame.origin.x) < 1 and abs(frame.size.width - bounds.width) < 1
+                # Exercise the installed DOM gesture handler through WebView
+                # navigation, not just the Python drawer callbacks.
+                await owner.web.evaluate_javascript('''(function(){
+                    function event(type,x){const e=new Event(type,{bubbles:true});
+                      Object.defineProperty(e,'touches',{value:[{clientX:x,clientY:160}]});
+                      Object.defineProperty(e,'changedTouches',{value:[{clientX:x,clientY:160}]});
+                      document.body.dispatchEvent(e);}
+                    event('touchstart',innerWidth-5);event('touchend',innerWidth-100);
+                })();''')
+                for _ in range(100):
+                    if owner.sidebar.side == 'links' and any(
+                            getattr(row, 'text', '') == 'Outgoing links (1)' for row in owner.link_rows.children):
+                        break
+                    await asyncio.sleep(.05)
+                assert owner.sidebar.side == 'links'
+                assert any(getattr(row, 'text', '') == 'Outgoing links (1)' for row in owner.link_rows.children)
+                assert list(owner.sidebar.view.children) == [owner.article]
+                await asyncio.sleep(.3)
+                overlay = owner.sidebar.overlay
+                if type(self._impl).__module__.startswith('toga_iOS.'):
+                    frame = overlay.container.native.frame
+                    bounds = overlay.window.bounds
+                    assert frame.origin.x >= 0 and frame.origin.y >= 0
+                    assert frame.origin.x + frame.size.width <= bounds.size.width + 1
+                    assert frame.origin.y + frame.size.height <= bounds.size.height + 1
+                    from mobile.ios_reader_chrome import occlusion_geometry
+                    for x, y, width, height in occlusion_geometry(overlay.window):
+                        assert not (frame.origin.x < x + width and frame.origin.x + frame.size.width > x
+                                    and frame.origin.y < y + height and frame.origin.y + frame.size.height > y)
+                await capture_window(self, Path(self.paths.cache) / ('notes-links-' + orientation + '.png'))
+                owner.sidebar.swipe(1)
+                assert owner.sidebar.overlay is None
+                owner.menu.on_press()
+                assert owner.sidebar.side == 'files'
+                await asyncio.sleep(.3)
+                await capture_window(self, Path(self.paths.cache) / ('notes-files-' + orientation + '.png'))
+                owner.sidebar.swipe(-1)
+                assert owner.sidebar.overlay is None
                 report['samples'].append(dict(orientation=orientation, pose=pose_snapshot(self),
                     native_columns=columns is not None, full_screen=True))
             await capture_window(self, Path(self.paths.cache) / 'notes-fullscreen.png')

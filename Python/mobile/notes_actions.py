@@ -2,7 +2,7 @@
 import asyncio
 from contextlib import contextmanager
 from pathlib import Path
-from features.text_editor.notes import vault_root
+from features.text_editor.notes import vault_root, local_library
 from commonUtils.runtime.operations import OperationCancelled
 
 
@@ -83,6 +83,8 @@ def resolve_source(app, entry):
 
 async def offer_notes(app, entry, box, button, status):
     """A single immediate-root listing, only for the currently selected action page."""
+    if entry['kind'] in ('remote', 'job-remote'):
+        return
     origin = app.navigation_generation
     client = getattr(app, 'cloud_client', None)
     generation = getattr(client, 'generation', None)
@@ -95,6 +97,9 @@ async def offer_notes(app, entry, box, button, status):
         if not current():
             return None
         provider, root = resolve_source(app, entry)
+        if not local_library(provider):
+            provider.close()
+            return None
         rows = provider.list(root, cancelled=lambda: not current())
         return (provider, root) if vault_root(provider, root, rows) is not None else None
     try:

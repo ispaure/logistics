@@ -29,6 +29,8 @@ def apple_dismissal_class():
                 while view is not None:
                     if view == native or (anchor is not None and view == anchor):
                         return False
+                    if self.overlay.passthrough_controls and view.isKindOfClass(ObjCClass('UIControl')):
+                        return False
                     view = native_value(view.superview)
                 return True
 
@@ -37,8 +39,12 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app, *, anchor=None, leading=False):
+    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False):
         self.leading = leading
+        self.full_height = full_height or leading
+        self.label = label
+        self.passthrough_controls = passthrough_controls
+        self.owner = owner
         self.anchor = anchor
         self.panel = panel
         self.reposition = lambda: None
@@ -68,18 +74,41 @@ class SpeechOverlay:
         native.layer.cornerRadius = 16
         native.layer.shadowOpacity = .25
         native.layer.shadowRadius = 8
-        native.accessibilityLabel = 'Chapters' if self.leading else 'Read aloud controls'
+        native.accessibilityLabel = self.label or ('Chapters' if self.leading else 'Read aloud controls')
 
         self.last_size = None
 
         def layout(container):
             bounds = window.bounds.size
             insets = window.safeAreaInsets
-            width = min(320, bounds.width - insets.left - insets.right - 24)
-            height = (max(1, bounds.height - insets.top - insets.bottom - 76)
-                      if self.leading else self.panel.overlay_height)
-            x = insets.left + 12 if self.leading else bounds.width - insets.right - width - 12
-            frame = CGRect((x, insets.top + 52), (width, height))
+            left, top = float(insets.left), float(insets.top + 52)
+            right, bottom = float(bounds.width - insets.right), float(bounds.height - insets.bottom - 12)
+            if self.full_height:
+                # Window safe areas do not include a child navigation bar. Use
+                # the actual document allocation so drawers avoid Duo's shared
+                # status/actions strip as well as the ordinary top/bottom bars.
+                owner = self.owner._impl.native
+                frame = owner.convertRect(owner.bounds, toView=window)
+                safe = owner.safeAreaInsets
+                if frame.size.width > 0 and frame.size.height > 0:
+                    left = max(left, float(frame.origin.x + safe.left))
+                    right = min(right, float(frame.origin.x + frame.size.width - safe.right))
+                    top = max(top, float(frame.origin.y + safe.top))
+                    bottom = min(bottom, float(frame.origin.y + frame.size.height - safe.bottom))
+                from .ios_reader_chrome import occlusion_geometry
+                # UIKit observes this read during layout, including live-activity
+                # growth that leaves the window's rectangular safe area unchanged.
+                for x, y, width, height in occlusion_geometry(window):
+                    if y < bottom and y + height > top:
+                        if x >= (left + right) / 2:
+                            right = min(right, x)
+                        elif x + width <= (left + right) / 2:
+                            left = max(left, x + width)
+            width = max(1, min(320, right - left - 24))
+            height = (max(1, bottom - top - 12)
+                      if self.full_height else self.panel.overlay_height)
+            x = left + 12 if self.leading else right - width - 12
+            frame = CGRect((x, top), (width, height))
             if native.frame != frame:
                 native.frame = frame
             size = (width, height)
@@ -115,10 +144,10 @@ class SpeechOverlay:
         self.container = Container()
         self.container.init_container(root)
         width = min(self.container.scale_in(320),
-                    (owner._impl.native.getRootView().getWidth() if self.leading else
+                    (owner._impl.native.getRootView().getWidth() if self.full_height else
                      context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(24))
         height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
-                  if self.leading else self.container.scale_in(self.panel.overlay_height))
+                  if self.full_height else self.container.scale_in(self.panel.overlay_height))
         self.container.set_content(self.panel._impl)
         self.container.resize_content(width, height)
         self.popup = PopupWindow(root, width, height, True)
@@ -147,10 +176,10 @@ class SpeechOverlay:
             if self.container is None:
                 return
             width = min(self.container.scale_in(320),
-                    (owner._impl.native.getRootView().getWidth() if self.leading else
+                    (owner._impl.native.getRootView().getWidth() if self.full_height else
                      context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(24))
             height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
-                      if self.leading else self.container.scale_in(self.panel.overlay_height))
+                      if self.full_height else self.container.scale_in(self.panel.overlay_height))
             self.container.resize_content(width, height)
             self.popup.update(width, height)
         self.reposition = reposition

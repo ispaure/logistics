@@ -59,14 +59,10 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
         self.provider.remote_storage = True
         async def exercise():
             library = await open_vault(self.app, self.provider, 'Vault', 'files')
-            await library.open_note('Vault/Home.md')
-            self.assertFalse(library.edit.enabled)
-            self.assertIsNone(library.edit.parent)
-            self.assertNotIn('New note…', dict(library.reader_actions.actions))
-            self.assertFalse(await library.open_editor())
-            self.assertFalse(library.new_note())
-            with self.assertRaisesRegex(ValueError, 'read-only'):
-                library.library.create('Cloud mutation')
+            self.assertIsNone(library)
+            from features.text_editor.notes import NotesLibrary
+            with self.assertRaisesRegex(ValueError, 'local copy'):
+                NotesLibrary(self.provider, 'Vault')
         self.run_async(exercise())
 
     def test_create_is_contained_and_never_overwrites_an_existing_note(self):

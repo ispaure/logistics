@@ -2,7 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
-from features.text_editor.notes import operation, vault_root
+from features.text_editor.notes import operation, vault_root, local_library
 
 
 class NotesFolderOffer(qt.QWidget):
@@ -61,7 +61,7 @@ class NotesFolderOffer(qt.QWidget):
         def check(report, cancelled):
             owner = factory()
             with operation(owner, cancelled):
-                found = vault_root(owner, root, owner.list(root, cancelled=cancelled)) is not None
+                found = local_library(owner) and vault_root(owner, root, owner.list(root, cancelled=cancelled)) is not None
             return location, factory, root, found
         self.progress.start(check, message='Checking notes folder…', show_progress=False)
 

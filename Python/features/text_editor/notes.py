@@ -13,7 +13,14 @@ def operation(provider, cancelled):
     return document_operation(provider, cancelled)
 
 
+def local_library(provider):
+    from services.documents.storage import document_remote
+    return not document_remote(provider)
+
+
 def vault_root(provider, directory, rows):
+    if not local_library(provider):
+        return None
     provider = getattr(provider, 'provider', provider)
     if not callable(getattr(provider, 'relative', None)):
         return None
@@ -24,6 +31,8 @@ def vault_root(provider, directory, rows):
 
 class NotesLibrary:
     def __init__(self, provider, root=''):
+        if not local_library(provider):
+            raise ValueError('Notes Library requires a local copy. Download or sync this folder first.')
         self.provider, self.root = provider, provider.relative(root)
 
     @property

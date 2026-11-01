@@ -1,7 +1,7 @@
 """Host routing and compatibility constructor for feature-owned Notes Libraries."""
 from uuid import uuid4
 from .preview import markdown_preview
-from features.text_editor.notes import vault_root
+from features.text_editor.notes import vault_root, local_library
 from features.text_editor.mobile.notes_library import VaultBrowser as _VaultBrowser
 
 
@@ -21,6 +21,8 @@ class VaultBrowser(_VaultBrowser):
 
 
 async def open_vault(app, provider, root, destination=None, *, title='', rows=None):
+    if not local_library(provider):
+        return None
     destination = destination or app.native_host.state.destination
     if not app.checkpoint():
         return None
@@ -43,6 +45,7 @@ async def open_vault(app, provider, root, destination=None, *, title='', rows=No
     if app.show_view(owner.view, destination=destination, route='notes-library:' + owner.session.id, title=owner.session.title) is False:
         owner.dispose()
         return None
+    owner.sidebar.show_sidebar()
     await owner.load_folder(owner.root, rows=None if rows is None else owner.library.visible_rows(rows))
     return owner
 

@@ -75,7 +75,7 @@ class NotesLibraryModeTests(unittest.TestCase):
             self.assertTrue(contains(self.app.body, owner.view))
         self.run_async(exercise())
 
-    def test_cloud_folder_choice_reuses_listing_and_opens_read_only_notes(self):
+    def test_cloud_folder_does_not_offer_library_or_scan_children(self):
         from mobile_build.tests.documents.test_notes_library import Client
         from mobile.routes import contains
         self.app.show_cloud(present=False)
@@ -89,10 +89,8 @@ class NotesLibraryModeTests(unittest.TestCase):
             self.app.cloud_location.value = ''
             with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='notes')):
                 await self.app.browse_cloud_path()
-            owner = self.app.vault_browser
-            self.assertFalse(owner.library.writable)
-            self.assertTrue(contains(self.app.body, owner.view))
-            self.assertEqual(self.app.cloud_client.calls, [('list', ''), ('remote_stat', 'Projects/Projects.md')])
+            self.assertIsNone(getattr(self.app, 'vault_browser', None))
+            self.assertEqual(self.app.cloud_client.calls, [('list', '')])
         self.run_async(exercise())
 
     def test_same_workspace_prompts_again_after_back_and_library_close(self):

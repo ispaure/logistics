@@ -337,7 +337,7 @@ serialization; a native screenshot driver must verify visible frame changes.
 
 On mobile, `notes-library:` routes own the full content area, including iPad and
 Duo layouts. The outer Workspaces folder column and app destination bar stay
-hidden until the library closes; the library retains its own adaptive note tree,
+hidden until the library closes; the library retains its own floating Files/Links drawers,
 history and editing actions. Child tools retain that presentation. This is a
 presentation policy separate from reader-return trimming, so closing a nested
 note editor returns to its library. `notes_fullscreen_probe.py` checks native
@@ -354,12 +354,14 @@ emits the Qt revocation signal, because the session registry holds observers wit
 `weakref.WeakMethod`; a Qt signal's built-in `emit` method cannot be registered
 directly. The workspace action entry carries `storage_scope` while retaining both
 local and remote endpoints for transfer contributions. Notes probes only that
-scope. Local viewers enable editing by default; Cloud viewers remain read-only.
+local scope only. `NotesLibrary` rejects remote providers through wrapper-aware
+`document_remote` before any listing or note reads. Cloud Markdown remains a
+standalone read-only document. Local viewers enable editing by default.
 `PageStorage` publishes local saves on a worker through `ResourceTextSession`,
 checks original bytes and revisions, and retains drafts on failure. Navigation
 and closing resolve unsaved changes before retiring the current note.
 `test_notes_library_desktop.py` exercises real rclone LocalCrypt and
-crypt-remote listing, nested note reads and revocation. Mobile's
+crypt-remote rejection, nested local note reads and revocation. Mobile's
 `test_notes_library.py` covers both encrypted sources with the host native bridge
 when `LOGISTICS_MOBILE_BRIDGE` points to its shared library, using only synthetic
 credentials and an in-memory remote. Mobile resolves the same location scopes in
@@ -369,6 +371,28 @@ reader. `mobile/notes_library.py` owns that presentation through a declared
 provider resolution and credential lifetimes. The shared native private WebView
 supplies memory-only rendering; Notes Library containment and URL policy remain
 feature-owned.
+
+`mobile/notes_drawers.py` hosts retained Files and Links panels with the shared
+native floating-surface owner. The article stays mounted at full width; overlays
+are dismissed on editing, closing and privacy retirement. Document edge swipes
+exclude horizontal scrolling, zoom and selection; drawer reverse swipes dismiss.
+Native pane buttons use UIKit's horizontal axis preference for header placement.
+Floating drawers measure their owner's safe allocation and active UIKit occlusion
+regions rather than the window alone, keeping them out of the status/action strip.
+
+`notes_links.py` builds connections on a worker only when Links opens. It uses the
+same Markdown/wiki-link parser as preview, resolves relative/root/unique suffix
+paths, excludes hidden and host-filtered folders, and never saves an index.
+Cancellation and generation checks prevent late private results publishing after
+closing or changing notes. Scan limits are 5,000 notes, 10,000 entries and 64 MiB;
+exceeding them reports an error rather than presenting partial backlinks.
+`test_notes_drawers.py` covers connection syntax, navigation, remote wrappers and
+late-result retirement; `notes_fullscreen_probe.py` checks native overlay layout
+and note history across rotations. Validation covers iPhone, iPad, closed/open/partial
+Duo and Android; the Duo and Android gesture probe dispatches document touch events
+through the WebView navigation handler. The shared toolbar audit also covers the
+failed credential-unlock form. Expanded external-app Live Activities still need
+physical-device verification; simulator screenshots do not reproduce that activity.
 
 Mobile libraries publish separate Close and page-history controls to the native
 toolbar. The **×** calls `NotesHost.close_session` through the host's session-close
@@ -481,7 +505,7 @@ and supplies local note creation, provider-scoped images and editing handoff.
 `mobile/library_editing.py` resolves Save/Discard/Cancel before returning to the
 retained browser. It refreshes the saved note and restores its reading position.
 Creation uses the provider’s exclusive create operation; remote libraries reject
-creation and editor invocation in handlers as well as hiding their controls.
+all library entry, including direct construction, before any indexing.
 
 Focused checks include the Markdown editing/font/image/search/speech suites,
 `test_provider_markdown.py`, `test_markdown_access.py`,

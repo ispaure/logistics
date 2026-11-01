@@ -68,6 +68,8 @@ def bar_item(button, *, prominent=False, symbol=None):
     item.style = 2 if prominent else 0
     if item.respondsToSelector(SEL('setSharesBackground:')):
         item.sharesBackground = not prominent and getattr(button, 'control_icon', None) != 'close'
+    if item.respondsToSelector(SEL('setAxisBehavior:')):
+        item.axisBehavior = 1 if getattr(button, '_toolbar_horizontal', False) else 0
     if item.respondsToSelector(SEL('setVisibilityPriority:')):
         # Status and primary actions survive ordinary tools in system overflow.
         item.visibilityPriority = 1000 if prominent or getattr(button, '_toolbar_priority', False) else 0
@@ -101,6 +103,7 @@ def action_state(buttons):
                   getattr(button, 'accessible_name', None), getattr(button, 'control_icon', None),
                   getattr(button, '_toolbar_symbol', None), getattr(button, '_toolbar_group', None),
                   getattr(button, '_toolbar_prominent', False), getattr(button, '_toolbar_priority', False),
+                  getattr(button, '_toolbar_horizontal', False),
                   identity(button._impl.native.menu), identity(button._impl.native.imageForState(0)))
                  for button in buttons)
 

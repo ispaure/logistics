@@ -1,6 +1,6 @@
 """Notes Library commands for the desktop location actions page."""
 from features.contributions import UIAction
-from features.text_editor.notes import vault_root
+from features.text_editor.notes import vault_root, local_library
 
 
 def sources(entry):
@@ -16,10 +16,12 @@ def available(entry):
 def actions(entry):
     found = []
     for label, factory, remote in sources(entry):
+        if remote:
+            continue
         provider = None
         try:
             provider = factory()
-            if vault_root(provider, '', provider.list('')) is not None:found.append((label, factory, remote))
+            if local_library(provider) and vault_root(provider, '', provider.list('')) is not None:found.append((label, factory, remote))
         except (OSError, ValueError, KeyError):
             continue
         finally:

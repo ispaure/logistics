@@ -17,7 +17,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from features.text_editor.notes import NotesLibrary, MAX_NOTE, MARKDOWN
 from commonUtils.runtime.operations import OperationCancelled
-from commonUtils.ui.native.adaptive import AdaptiveSidebar, allocated_width
+from commonUtils.ui.native.adaptive import allocated_width
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,7 @@ class NotesHost:
     entry_icon: Callable
     highlight_entry: Callable
     preview: Callable
+    drawers: Callable
 
 
 class VaultBrowser:
@@ -70,7 +71,7 @@ class VaultBrowser:
         self.notice = toga.Label("", style=Pack(font_size=12))
         self.tree = toga.Box(
             children=[
-                toga.Label("Notes Library", style=Pack(font_size=20, font_weight='bold', margin_bottom=4)),
+                toga.Label("Files", style=Pack(font_size=20, font_weight='bold', margin_bottom=4)),
                 toga.Label(self.access.label
                            + (' · Editable' if self.library.writable else ' · Read-only'),
                            style=Pack(font_size=12, margin_bottom=12)),
@@ -104,12 +105,31 @@ class VaultBrowser:
             valid=self.valid,
         )
         self.speech.button.enabled = False
-        self.sidebar = AdaptiveSidebar(
-            self.tree, self.article, label="Vault folders and Markdown notes"
+        self.link_rows = toga.Box(style=Pack(direction=COLUMN))
+        self.links = toga.Box(children=[
+            toga.Label('Links', style=Pack(font_size=20, font_weight='bold')),
+            toga.ScrollContainer(content=self.link_rows, horizontal=False, style=Pack(flex=1)),
+        ], style=Pack(direction=COLUMN, flex=1, margin=12))
+        self.links_generation = 0
+        self.sidebar = host.drawers(self.tree, self.article, self.links)
+        self.sidebar.on_close = self.cancel_links
+        for panel, label in ((self.tree, 'Files'), (self.links, 'Links')):
+            heading = panel.children[0]
+            panel.remove(heading)
+            heading.style.flex = 1
+            close_drawer = self.host.presentation.icon_button(
+                'close', 'Close ' + label, on_press=lambda widget, **kw: self.sidebar.show_detail())
+            panel.insert(0, toga.Box(children=[heading, close_drawer],
+                style=Pack(direction=ROW, align_items=CENTER)))
+        self.links_button = self.host.presentation.icon_button(
+            'notes_links', 'Backlinks and outgoing links', on_press=self.show_links
         )
+        self.links_button._toolbar_priority = True
+        self.links_button._toolbar_horizontal = True
         self.menu = host.presentation.menu_button(
             self.sidebar.toggle, label="Browse Notes Library"
         )
+        self.menu._toolbar_horizontal = True
         self.back_button = self.host.presentation.icon_button(
             "back",
             "Previous note",
@@ -125,14 +145,12 @@ class VaultBrowser:
         self.up_button = self.host.presentation.icon_button(
             "up", "Browse parent folder", on_press=self.browse_parent, enabled=False
         )
-        self.search = None
-        if self.library.writable:
-            self.search = toga.TextInput(
-                placeholder="Filter loaded file names",
-                on_change=lambda w: self.render_tree(),
-                style=Pack(height=48),
-            )
-            self.tree.insert(2, self.search)
+        self.search = toga.TextInput(
+            placeholder="Filter loaded file names",
+            on_change=lambda w: self.render_tree(),
+            style=Pack(height=48),
+        )
+        self.tree.insert(2, self.search)
         self.toolbar = toga.Box(
             children=[
                 self.menu,
@@ -157,7 +175,7 @@ class VaultBrowser:
         )
         self.toolbar.remove(self.up_button)
         self.toolbar.remove(self.speech.button)
-        self.toolbar.add(self.reader_actions_button)
+        self.toolbar.add(self.reader_actions_button, self.links_button)
         self.close_button = self.host.presentation.icon_button(
             "close", "Close Notes Library", on_press=self.close
         )
@@ -180,10 +198,10 @@ class VaultBrowser:
                 else []
             ),
             self.reader_actions_button,
+            self.links_button,
         ]
         self.refresh_reader_actions()
         self.reflow(host.content_width(destination))
-        self.sidebar.show_sidebar()
 
     def valid(self):
         return not self.cancelled.is_set() and self.access.valid()
@@ -202,9 +220,9 @@ class VaultBrowser:
                 self.toolbar.parent.remove(self.toolbar)
             parent.insert(0, self.toolbar)
         self.rows.style.width = (
-            max(0, self.sidebar.policy.sidebar_width - 24) if self.sidebar.expanded else max(0, available - 24)
+            max(0, self.sidebar.policy.sidebar_width - 24)
         )
-        self.menu.enabled = self.host.apple or not self.sidebar.expanded
+        self.menu.enabled = True
 
     def refresh_reader_actions(self):
         if hasattr(self, "reader_actions"):
@@ -353,6 +371,7 @@ class VaultBrowser:
             )
         elif not flattened:
             self.rows.add(toga.Label("No Markdown notes in this folder."))
+        self.sidebar.refresh_gestures()
 
     async def open_note(self, path, *, remember=True, fragment="", resolve_link=False):
         if not self.valid():
@@ -362,6 +381,7 @@ class VaultBrowser:
             self.page_loading = PageLoading(self.article)
         self.page_loading.start()
         self.sidebar.show_detail()
+        self.links_generation += 1
         self.epoch += 1
         epoch = self.epoch
         current = self.path
@@ -430,6 +450,12 @@ class VaultBrowser:
     def follow_link(self, widget, url, **kwargs):
         if not self.valid() or self.path is None:
             return False
+        if url == self.base + '?drawer=files':
+            self.sidebar.show_sidebar()
+            return False
+        if url == self.base + '?drawer=links':
+            self.host.loop.create_task(self.show_links())
+            return False
         parsed = urlsplit(url)
         if not parsed.scheme and not parsed.netloc:
             target = url
@@ -470,6 +496,8 @@ class VaultBrowser:
         )
 
     def page_loaded(self, widget=None, url=None, **kwargs):
+        from .notes_swipe import document_swipes
+        self.web.evaluate_javascript(document_swipes(self.base))
         self.page_search.loaded(reveal=not bool(self.pending_fragment))
         if self.pending_fragment:
             fragment, self.pending_fragment = self.pending_fragment, ""
@@ -540,9 +568,67 @@ class VaultBrowser:
                 title=self.session.title,
             )
 
+    def cancel_links(self):
+        self.links_generation += 1
+
+    async def show_links(self, widget=None, **kwargs):
+        if not self.valid():
+            return
+        if self.sidebar.side == 'links':
+            self.sidebar.show_detail()
+            self.links_generation += 1
+            return
+        self.sidebar.show_links()
+        self.link_rows.clear()
+        if self.path is None:
+            self.link_rows.add(toga.Label('Open a note to see its connections.'))
+            return
+        self.links_generation += 1
+        generation, path = self.links_generation, self.path
+        cancelled = lambda: not self.valid() or generation != self.links_generation
+        self.link_rows.add(toga.Label('Finding local connections…'))
+        spinner = toga.ActivityIndicator()
+        self.link_rows.add(spinner)
+        spinner.start()
+        try:
+            from features.text_editor.notes_links import connections
+            result = await asyncio.to_thread(connections, self.library, path,
+                cancelled=cancelled, visible=self.host.folder_visible)
+            if cancelled():
+                return
+            self.link_rows.clear()
+            self.link_rows.add(toga.Label(PurePosixPath(path).name),
+                toga.Label(f"{result['words']:,} words · {result['characters']:,} characters",
+                           style=Pack(font_size=12, margin_bottom=12)))
+            for key, title in (('incoming', 'Backlinks'), ('outgoing', 'Outgoing links')):
+                self.link_rows.add(toga.Label(f'{title} ({len(result[key])})',
+                    style=Pack(font_weight='bold', margin_top=12)))
+                if not result[key]:
+                    self.link_rows.add(toga.Label('No ' + title.lower() + '.'))
+                for target in result[key]:
+                    async def choose(widget=None, target=target, **kwargs):
+                        await self.open_note(target)
+                    label = str(PurePosixPath(target).relative_to(self.root or '.'))
+                    self.link_rows.add(self.host.list_button(toga.Button(label,
+                        on_press=choose, style=Pack(height=48))))
+            if result['unresolved']:
+                self.link_rows.add(toga.Label('Unresolved links', style=Pack(font_weight='bold', margin_top=12)))
+                for target in result['unresolved']:
+                    self.link_rows.add(toga.Label(target))
+        except OperationCancelled:
+            pass
+        except (OSError, ValueError, UnicodeError) as error:
+            if not cancelled():
+                self.link_rows.clear()
+                self.link_rows.add(toga.Label(fill(str(error)[:180], width=30)))
+        finally:
+            spinner.stop()
+            self.sidebar.refresh_gestures()
+
     async def open_editor(self, widget=None, **kwargs):
         if not self.valid() or self.path is None or not self.library.writable:
             return False
+        self.sidebar.show_detail()
         await self.remember_position()
         return await self.host.open_editor(
             self.provider, self.path, self.destination
@@ -651,6 +737,9 @@ class VaultBrowser:
             self.page_search.show()
 
     def dispose(self):
+        self.sidebar.show_detail()
+        self.links_generation += 1
+        self.link_rows.clear()
         if hasattr(self, 'page_loading'):
             self.page_loading.finish()
         self.page_search.dispose()
