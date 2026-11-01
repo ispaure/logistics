@@ -57,8 +57,12 @@ async def exercise(app):
         assert report['controls'][1] >= midpoint + 6
         assert abs(report['controls'][0] + report['controls'][2]/2 - report['movie'][2]/2) < 1, 'Deck is not centered across the lower panel'
         report['buttons'] = []
-        for row in (native.tabletopTransport, native.tabletopUtilities):
+        rows = [native.tabletopTransport, *native_value(native.tabletopUtilities, 'arrangedSubviews')]
+        chapter_button = None
+        for row in rows:
             for button in native_value(row, 'arrangedSubviews'):
+                if str(button.accessibilityLabel) == 'Chapters':
+                    chapter_button = button
                 x,y,w,h = frame(button, window)
                 assert min(w,h) >= 44, ('Small touch target', w,h)
                 hit = window.hitTest(CGPoint(x+w/2,y+h/2),withEvent=None)
@@ -74,7 +78,8 @@ async def exercise(app):
         chapters = native.player.chapterDescriptionsOfTitle(int(native_value(native.player,'currentTitleIndex')))
         assert len(chapters) == 2
         report['chapters'] = [str(item.name) for item in chapters]
-        native.chapters(native_value(native.tabletopUtilities, 'arrangedSubviews')[2])
+        assert chapter_button is not None
+        native.chapters(chapter_button)
         await until(lambda: presented_menu(native) is not None)
         report['chapter_menu'] = [str(action.title) for action in native_value(presented_menu(native),'actions')]
         assert any('Second scene' in title for title in report['chapter_menu'])

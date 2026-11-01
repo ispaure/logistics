@@ -602,3 +602,15 @@ simulator are removed by their owners. This does not access a Dropbox account.
 The controlled baseline reached resume plus one second in 17.3 seconds; indexed
 seeking took 6.6 seconds and skipped the intervening ranges. These timings are
 fixture evidence, not a promise about a user's network or file index.
+
+### Immersive Duo laptop controls
+
+Tabletop posture owns status-bar hiding independently of control visibility.
+The lower deck remains visible while the upper movie area uses immersive system
+chrome; leaving tabletop returns to the ordinary fullscreen/control policy.
+Its compact two-row quick settings reuse existing Speed, Picture, Audio,
+Subtitles, Chapters, Go to time, Playback and Done actions, with 44-point minimum
+touch targets. The chrome probe with `--fold` checks actual status-bar visibility,
+all eight button bounds, menu presentation from deck anchors and restoration
+when leaving the injected fold. A synthetic division tests geometry, not a
+physical hinge transition.

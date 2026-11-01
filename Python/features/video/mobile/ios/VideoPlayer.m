@@ -247,17 +247,29 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self.controls insertArrangedSubview:self.tabletopTransport atIndex:0];
     self.tabletopTransport.hidden = YES;
     self.tabletopUtilities = [[UIStackView alloc] init];
-    self.tabletopUtilities.distribution = UIStackViewDistributionFillEqually;
-    for (NSArray *entry in @[@[@"Audio", @"speaker.wave.2", @"audioTracks:"],
+    self.tabletopUtilities.axis = UILayoutConstraintAxisVertical;
+    self.tabletopUtilities.spacing = 4;
+    UIStackView *utilityRow = nil;
+    NSUInteger utilityIndex = 0;
+    for (NSArray *entry in @[@[@"Speed", @"speedometer", @"speedOptions:"],
+                            @[@"Picture", @"arrow.up.left.and.arrow.down.right", @"pictureOptions:"],
+                            @[@"Audio", @"speaker.wave.2", @"audioTracks:"],
                             @[@"Subtitles", @"captions.bubble", @"subtitleTracks:"],
                             @[@"Chapters", @"list.bullet", @"chapters:"],
+                            @[@"Go to time", @"clock", @"goToTime:"],
                             @[@"Playback", @"slider.horizontal.3", @"playbackTools:"],
                             @[@"Done", @"xmark", @"done:"]]) {
+        if (utilityIndex++ % 4 == 0) {
+            utilityRow = [[UIStackView alloc] init];
+            utilityRow.distribution = UIStackViewDistributionFillEqually;
+            [self.tabletopUtilities addArrangedSubview:utilityRow];
+        }
         UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
         UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
         config.image = [UIImage systemImageNamed:entry[1]];
         config.title = entry[0]; config.imagePlacement = NSDirectionalRectEdgeTop;
-        config.imagePadding = 6; config.baseForegroundColor = UIColor.whiteColor;
+        config.imagePadding = 3;
+        config.contentInsets = NSDirectionalEdgeInsetsMake(2, 2, 2, 2); config.baseForegroundColor = UIColor.whiteColor;
         config.titleLineBreakMode = NSLineBreakByTruncatingTail;
         config.titleTextAttributesTransformer = ^NSDictionary<NSAttributedStringKey,id> *(NSDictionary<NSAttributedStringKey,id> *attributes) {
             NSMutableDictionary *result = [attributes mutableCopy];
@@ -267,8 +279,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         button.configuration = config;
         button.accessibilityLabel = entry[0];
         [button addTarget:self action:NSSelectorFromString(entry[2]) forControlEvents:UIControlEventTouchUpInside];
-        [button.heightAnchor constraintGreaterThanOrEqualToConstant:52].active = YES;
-        [self.tabletopUtilities addArrangedSubview:button];
+        [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+        [utilityRow addArrangedSubview:button];
     }
     [self.controls addArrangedSubview:self.tabletopUtilities];
     self.tabletopUtilities.hidden = YES;
@@ -349,11 +361,11 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self.callObserver setDelegate:self queue:dispatch_get_main_queue()];
 }
 
-- (BOOL)prefersStatusBarHidden { return self.fullscreen && self.systemChromeHidden && !self.pipActive; }
+- (BOOL)prefersStatusBarHidden { return (self.tabletop || (self.fullscreen && self.systemChromeHidden)) && !self.pipActive; }
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations { return UIInterfaceOrientationMaskAll; }
-- (BOOL)prefersHomeIndicatorAutoHidden { return self.fullscreen && self.systemChromeHidden && !self.pipActive; }
+- (BOOL)prefersHomeIndicatorAutoHidden { return (self.tabletop || (self.fullscreen && self.systemChromeHidden)) && !self.pipActive; }
 - (UIRectEdge)preferredScreenEdgesDeferringSystemGestures {
-    return self.fullscreen && self.systemChromeHidden && !self.pipActive ? UIRectEdgeAll : UIRectEdgeNone;
+    return (self.tabletop || (self.fullscreen && self.systemChromeHidden)) && !self.pipActive ? UIRectEdgeAll : UIRectEdgeNone;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
     return ![touch.view isDescendantOfView:self.controlsScroll];
@@ -375,7 +387,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     UINavigationBar *bar = self.navigationController.navigationBar;
     if (shown) {
         // Resolve safe-area changes while the incoming controls are transparent.
-        self.systemChromeHidden = NO;
+        self.systemChromeHidden = self.tabletop;
         [self setNeedsStatusBarAppearanceUpdate];
     }
     if (!hideBar) [self.navigationController setNavigationBarHidden:NO animated:NO];
@@ -395,7 +407,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
             self.videoHeader.hidden = !shown;
             // Changing status/navigation visibility earlier shrinks the safe
             // area and moves still-visible controls during their fade.
-            self.systemChromeHidden = !shown;
+            self.systemChromeHidden = self.tabletop || !shown;
             [self.navigationController setNavigationBarHidden:hideBar animated:NO];
             [self setNeedsStatusBarAppearanceUpdate];
             [self setNeedsUpdateOfHomeIndicatorAutoHidden];
@@ -496,9 +508,9 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.movieBottom.constant = CGRectGetMaxY(movieArea) - CGRectGetMaxY(self.view.bounds);
     self.tabletopTransport.hidden = !tabletop;
     self.tabletopUtilities.hidden = !tabletop;
-    self.controls.spacing = tabletop ? 10 : 4;
+    self.controls.spacing = tabletop ? 2 : 4;
     self.controls.layoutMarginsRelativeArrangement = tabletop;
-    self.controls.layoutMargins = tabletop ? UIEdgeInsetsMake(16, 16, 16, 16) : UIEdgeInsetsZero;
+    self.controls.layoutMargins = tabletop ? UIEdgeInsetsMake(4, 12, 4, 12) : UIEdgeInsetsZero;
     if (tabletop && self.view.window) {
         // A hidden navigation rail may retain controller safe-area insets.
         // The lower deck uses physical window insets, not that retired rail.
@@ -529,7 +541,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.controlsBottom.active = !tabletop;
     self.deckCenterY.active = tabletop;
     self.deckCenterY.constant = CGRectGetMidY(available) - CGRectGetMidY(safe);
-    self.controlsHeightLimit.constant = MAX(44, available.size.height - 24);
+    self.controlsHeightLimit.constant = MAX(44, available.size.height - (tabletop ? 8 : 24));
     self.controlsLeading.constant = margin + CGRectGetMinX(available) - CGRectGetMinX(safe);
     self.controlsTrailing.constant = -margin + CGRectGetMaxX(available) - CGRectGetMaxX(safe);
     self.controlsTop.constant = 8 + CGRectGetMinY(available) - CGRectGetMinY(safe);
@@ -561,15 +573,15 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (UIButton *)deckButton:(NSString *)label symbol:(NSString *)symbol selector:(SEL)selector primary:(BOOL)primary {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     UIButtonConfiguration *config = primary ? [UIButtonConfiguration filledButtonConfiguration] : [UIButtonConfiguration tintedButtonConfiguration];
-    config.image = [UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:primary ? 36 : 28 weight:UIImageSymbolWeightSemibold]];
+    config.image = [UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:primary ? 28 : 24 weight:UIImageSymbolWeightSemibold]];
     config.baseForegroundColor = primary ? UIColor.blackColor : UIColor.whiteColor;
     config.baseBackgroundColor = primary ? UIColor.whiteColor : [UIColor colorWithWhite:.25 alpha:1];
     config.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
     button.configuration = config;
     button.accessibilityLabel = label;
     button.accessibilityIdentifier = [@"video.deck." stringByAppendingString:label];
-    [button.widthAnchor constraintEqualToConstant:primary ? 88 : 64].active = YES;
-    [button.heightAnchor constraintEqualToConstant:primary ? 88 : 64].active = YES;
+    [button.widthAnchor constraintEqualToConstant:primary ? 56 : 48].active = YES;
+    [button.heightAnchor constraintEqualToConstant:primary ? 56 : 48].active = YES;
     [button addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
     return button;
 }

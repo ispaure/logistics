@@ -187,8 +187,8 @@
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self menus:0]; });
 }
 - (void)menus:(NSUInteger)index {
+    LGVideoController *v = self.video;
     if (index == 0) {
-        LGVideoController *v = self.video;
         CGRect track = [v.seek trackRectForBounds:v.seek.bounds];
         CGRect strip = v.cacheStrip.frame;
         if (fabs(CGRectGetMinX(track) - CGRectGetMinX(strip)) > .5 ||
@@ -208,6 +208,22 @@
         if (v.tabletop) {
             CGRect deck = [v.controlsScroll convertRect:v.controlsScroll.bounds toView:self.window];
             CGRect movie = [v.movie convertRect:v.movie.bounds toView:self.window];
+            if (!v.prefersStatusBarHidden || !self.window.windowScene.statusBarManager.statusBarHidden || !v.navigationController.navigationBarHidden) {
+                [self finish:@"Laptop upper screen still shows system chrome"]; return;
+            }
+            NSMutableSet *labels = [NSMutableSet set];
+            for (UIStackView *row in v.tabletopUtilities.arrangedSubviews) {
+                for (UIButton *button in row.arrangedSubviews) {
+                    [labels addObject:button.accessibilityLabel];
+                    CGRect frame = [button convertRect:button.bounds toView:self.window];
+                    if (!CGRectContainsRect(CGRectInset(deck, -1, -1), frame) || frame.size.height < 44 || frame.size.width < 44) {
+                        [self finish:[NSString stringWithFormat:@"Laptop setting clipped: %@ %@ inside %@", button.accessibilityLabel, NSStringFromCGRect(frame), NSStringFromCGRect(deck)]]; return;
+                    }
+                }
+            }
+            if (![labels containsObject:@"Speed"] || ![labels containsObject:@"Picture"] || labels.count != 8) {
+                [self finish:@"Laptop quick settings missing"]; return;
+            }
             if (!CGRectContainsRect(deck, title) || CGRectGetMinY(title) < CGRectGetMaxY(movie) ||
                 fabs(CGRectGetMidX(title) - CGRectGetMidX(deck)) > 1) {
                 [self finish:@"Laptop title is not centered inside the lower control deck"]; return;
@@ -231,12 +247,30 @@
     [[NSJSONSerialization dataWithJSONObject:@{@"fadePassed": @YES, @"menuIndex": @(index)} options:0 error:nil]
         writeToFile:progress atomically:YES];
     NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"pictureOptions:", @"subtitleOptions:", @"queueVideos:"];
-    if (index >= selectors.count) { [self finish:nil]; return; }
+    if (index >= selectors.count) {
+#ifdef LG_VIDEO_FOLD_QA
+        [(LGVideoPoseQAController *)v applyTestFold:NO];
+        [v setControlsShown:YES];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if (v.tabletop || v.prefersStatusBarHidden || self.window.windowScene.statusBarManager.statusBarHidden)
+                [self finish:@"Leaving laptop mode did not restore normal visible chrome"];
+            else [self finish:nil];
+        });
+#else
+        [self finish:nil];
+#endif
+        return;
+    }
     @try {
-        UIBarButtonItem *sender = nil;
+        id sender = nil;
         for (UIBarButtonItem *item in self.video.mediaItems)
             if ([item.accessibilityLabel isEqualToString:@"More playback options"]) sender = item;
         SEL selector = NSSelectorFromString(selectors[index]);
+        if (self.video.tabletop) {
+            for (UIStackView *row in self.video.tabletopUtilities.arrangedSubviews)
+                for (UIButton *button in row.arrangedSubviews)
+                    if ([[button actionsForTarget:self.video forControlEvent:UIControlEventTouchUpInside] containsObject:selectors[index]]) sender = button;
+        }
         void (*invoke)(id,SEL,id) = (void (*)(id,SEL,id))[self.video methodForSelector:selector];
         invoke(self.video, selector, sender);
         UIAlertController *menu = (UIAlertController *)self.video.presentedViewController;

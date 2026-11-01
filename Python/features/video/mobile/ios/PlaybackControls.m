@@ -239,7 +239,7 @@
     header.layer.cornerRadius = 16;
     header.clipsToBounds = YES;
     self.videoHeader = header;
-    self.deckHeaderHeight = [header.heightAnchor constraintEqualToConstant:56];
+    self.deckHeaderHeight = [header.heightAnchor constraintEqualToConstant:44];
     UIStackView *identity = [[UIStackView alloc] init];
     identity.axis = UILayoutConstraintAxisVertical;
     identity.alignment = UIStackViewAlignmentCenter;

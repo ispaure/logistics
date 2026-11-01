@@ -27,7 +27,10 @@ The movie stays centered in the full player surface when controls appear or hide
 On a partially folded Duo with a horizontal hinge, the player uses the upper
 panel for the movie and keeps the title, source caption and control deck on the lower panel. Large round
 ten-second skip buttons flank a larger Play/Pause button; the timeline and
-Audio, Subtitles, Chapters and Done controls stay accessible below the hinge.
+Speed, Picture (Fit/Fill crop/Original), Audio, Subtitles, Chapters, Go to time,
+Playback and Done controls stay accessible below the hinge in two rows. The upper
+panel hides the status bar, including time, connection and battery indicators,
+even while the lower controls remain visible.
 Unfolding restores the full video surface. The split follows the system's hinge
 state and reserved division; physical-pose acceptance is separate from layout tests.
 
