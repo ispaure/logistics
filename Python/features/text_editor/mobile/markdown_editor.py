@@ -162,8 +162,11 @@ class FormattedMarkdownInput:
         self._revision = 0
         self.scroll_top = 0
         self.bridge = 'logistics-editor://' + uuid4().hex + '/'
+        from mobile.keyboard import install_editor_accessory_policy
+        install_editor_accessory_policy()
         self.view = markdown_webview(private=private, on_navigation_starting=self.navigate,
                                     on_webview_load=self.loaded, style=Pack(flex=1))
+        self.view._document_editor = True
         self._viewport_lock = None
         from commonUtils.ui.native.text_size import native_backend
         if native_backend(self.view).startswith('toga_android.'):

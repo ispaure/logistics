@@ -1,6 +1,31 @@
 """Logistics keyboard-viewport policy over shared native dismissal."""
 from commonUtils.ui.native.keyboard import install as install_dismissal
 
+_editor_accessory_installed = False
+
+
+def install_editor_accessory_policy():
+    """Keep WebKit's form navigation accessory out of document editors."""
+    global _editor_accessory_installed
+    from toga.platform import get_factory
+    if _editor_accessory_installed or not get_factory().WebView.__module__.startswith('toga_iOS.'):
+        return
+    from rubicon.objc import ObjCInstance, objc_id, objc_method, send_super
+    import toga_iOS.widgets.webview as webviews
+
+    class LogisticsEditorWebView(webviews.TogaWebView):
+        @objc_method
+        def inputAccessoryView(self) -> objc_id:
+            if getattr(self.interface, '_document_editor', False):
+                return None
+            result = send_super(__class__, self, 'inputAccessoryView', restype=objc_id)
+            return ObjCInstance(result) if result else None
+
+    # Both ordinary and memory-only WebViews construct through this symbol.
+    # Only explicitly marked editing surfaces suppress the system accessory.
+    webviews.TogaWebView = LogisticsEditorWebView
+    _editor_accessory_installed = True
+
 
 def prepare_picker_input(control):
     """Keep filename/folder completion in the app during landscape typing."""

@@ -163,6 +163,10 @@ document.documentElement.dataset.editorReady = 'true';
 let caretFrame = null;
 function revealCaret() {
     caretFrame = null;
+    // WebKit can retain the pre-keyboard layout height and pan the whole page
+    // toward a contenteditable caret. Only our document pane should scroll.
+    document.documentElement.style.height = innerHeight + 'px';
+    if (scrollX || scrollY) window.scrollTo(0, 0);
     const selection = getSelection();
     if (!root.contains(document.activeElement) || !selection.rangeCount || !selection.isCollapsed) return;
     const range = selection.getRangeAt(0).cloneRange();
@@ -200,6 +204,7 @@ root.addEventListener('keyup', event => {
     if (/^(Arrow|Home|End|Page)/.test(event.key)) scheduleCaretReveal();
 });
 window.addEventListener('resize', scheduleCaretReveal);
+window.addEventListener('scroll', scheduleCaretReveal);
 window.visualViewport?.addEventListener('resize', scheduleCaretReveal);
 root.addEventListener('paste', event => {
     event.preventDefault();

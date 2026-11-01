@@ -43,10 +43,24 @@ platform keyboard behavior. Unchanged status and line-count captions no longer
 cause form relayout on every key; the filename field uses its available flex
 width instead of a one-point fixed width.
 
+On iOS, formatted document editors suppress WebKit's form-navigation accessory
+(previous field, next field and Done). This frees writing space above the
+keyboard, including the upper panel in Duo laptop posture. The editor retains
+its formatting commands and the app's outside-tap keyboard dismissal. A marked
+Toga WebView subclass overrides the public `inputAccessoryView` getter; ordinary
+WebViews keep their default accessory, and memory-only LocalCrypt editors use
+the same policy without changing their storage configuration.
+The formatted page also tracks the keyboard-resized viewport height and resets
+outer-page panning; caret reveal continues to scroll only the document pane.
+
 Validation uses the disposable `editor_keyboard_probe` with a long Markdown
 document, followed by long plain-text and Markdown Source inputs. It checks
 caret bounds through repeated typing, stable toolbar position, zero outer-page
 scroll and unchanged WebView ownership. The iOS software-keyboard check requires
+a missing form accessory for Markdown and native plain/source editing. Run it
+through `document_storage_tools ios --probe editor-keyboard --family 'iPhone Duo'
+--pose partial --output test-results/editor-keyboard` for an owned folded simulator.
+The software-keyboard check also requires
 a nonzero native keyboard inset; screenshots/reports are retained locally under
 `mobile_build/logs/editor-keyboard/`. The Android probe also exercises native IME
 composition, plain/source caret bounds, new documents and the last blank

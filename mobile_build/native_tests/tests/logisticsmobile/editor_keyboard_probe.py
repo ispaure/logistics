@@ -93,18 +93,23 @@ class Probe(LogisticsMobile):
             await asyncio.sleep(.8)
             if type(self._impl).__module__.startswith('toga_iOS.'):
                 report['markdown_keyboard_inset'] = self.native_host.adapter.keyboard_inset
+                assert native_value(web._impl.native.inputAccessoryView) is None, 'Form navigation accessory remains in Markdown'
                 assert report['markdown_keyboard_inset'] > 100, 'Markdown software keyboard did not open'
                 assert bool(controller.isTabBarHidden()), 'Destination tabs stayed above the keyboard'
-                # No floating-tab clearance may remain after the tabs disappear.
+                # Hidden tabs add no clearance; Duo's vertical layout may still
+                # reserve the window's independent Home-indicator safe area.
                 view = self.routes.body().children[0]
                 report['writing_area'] = dict(height=json.loads(await web.evaluate_javascript(MEASURE))['height'],
                     bottom_margin=view.style.margin_bottom, base_margin=view._navigation_margin)
-                assert abs(view.style.margin_bottom - view._navigation_margin) < .5, report['writing_area']
+                clearance = view.style.margin_bottom - view._navigation_margin
+                assert -.5 <= clearance <= float(self.main_window._impl.native.safeAreaInsets.bottom) + .5, report['writing_area']
             (output / 'progress.json').write_text(json.dumps(dict(phase='markdown-typing')))
             for index in range(16):
                 await web.evaluate_javascript("document.execCommand('insertText', false, ' typing continues');")
                 await asyncio.sleep(.08)
                 sample = json.loads(await web.evaluate_javascript(MEASURE))
+                if ios:
+                    assert self.native_host.adapter.keyboard_inset > 100, 'Keyboard closed while typing'
                 report['markdown'].append(sample)
                 assert sample['focused'] and abs(sample['outer_scroll']) < 1, sample
                 assert sample['caret_top'] >= sample['top'] - 2, sample
@@ -135,6 +140,7 @@ class Probe(LogisticsMobile):
                     native = owner.editor._impl.native
                     from rubicon.objc import NSRange
                     native.becomeFirstResponder()
+                    assert native_value(native.inputAccessoryView) is None, (name, 'Unexpected source editing accessory')
                     native.selectedRange = NSRange(len(owner.document.text), 0)
                     native.scrollRangeToVisible(native.selectedRange)
                     await asyncio.sleep(.7)
@@ -163,6 +169,16 @@ class Probe(LogisticsMobile):
                             break
                         await asyncio.sleep(.05)
                     assert bool(controller.isTabBarHidden()) == tabs_before, (name, 'Destination tabs did not restore')
+            if ios:
+                from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+                protected = FormattedMarkdownInput(lambda text: None, private=True)
+                try:
+                    assert protected.view.private_configured
+                    assert not protected.view._impl.native.configuration.websiteDataStore.isPersistent()
+                    assert native_value(protected.view._impl.native.inputAccessoryView) is None
+                    report['private_accessory_hidden'] = True
+                finally:
+                    protected.dispose()
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()

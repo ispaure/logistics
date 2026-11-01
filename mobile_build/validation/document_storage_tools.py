@@ -242,6 +242,8 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
             shutil.copytree(cache / 'notebook-ui', output / 'notebook-ui', dirs_exist_ok=True)
         if cache is not None and (cache / 'viewer-layout').is_dir():
             shutil.copytree(cache / 'viewer-layout', output / 'viewer-layout', dirs_exist_ok=True)
+        if cache is not None and (cache / 'editor-keyboard-evidence').is_dir():
+            shutil.copytree(cache / 'editor-keyboard-evidence', output / 'editor-keyboard-evidence', dirs_exist_ok=True)
         if cache is not None and (cache / result_name).exists():
             shutil.copyfile(cache / result_name, output / 'ios-result.json')
         try:
@@ -433,7 +435,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -485,6 +487,9 @@ def main():
         if args.probe == 'pdf-annotation':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.pdf_annotation_probe', result_name='pdf-annotation-result.json')
+        if args.probe == 'editor-keyboard':
+            creation_profile = dict(entry_point='tests.logisticsmobile.editor_keyboard_probe',
+                                    result_name='editor-keyboard-evidence/result.json')
         if args.probe == 'documents':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.document_workspace_probe', result_name='document-workspace-result.json')
