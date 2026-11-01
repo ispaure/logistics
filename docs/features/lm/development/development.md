@@ -4,6 +4,22 @@ The feature's lazy `register()` contributes `lm.chat`, the `lm` rail glyph and
 typed chat defaults. Registration/page construction never make network requests.
 The [user guide](../user/user.md) describes available workflows and limits.
 
+Mobile `laptop.py` retains the existing transcript, draft, primary action and
+history controls while allocating them around active horizontal UIKit reserved
+regions. The transcript occupies the upper panel and the lower panel owns the
+composer or history. When keyboard occlusion leaves insufficient lower space,
+both visible panes fit above the crease with a compact composer. The host's
+existing resize pass updates allocations; normal and vertical-fold layouts
+continue through the ordinary chat workspace. No layout transition sends a
+request or rebuilds conversation state.
+
+`test_chat_ui.py` covers retained draft/transcript ownership, history, unfolding,
+keyboard allocation and the existing Send/Stop contracts. The managed
+`document_storage_tools ios --probe chat-laptop` acceptance uses a real UIKit
+keyboard and WebKit transcript, an injected horizontal reserved region, and a
+synthetic loopback streaming server. Physical hinge geometry and personal model
+servers are outside that test's scope.
+
 | Module | Ownership |
 | --- | --- |
 | `domain.py` | Version-one records, validation, generation defaults, context budgeting |

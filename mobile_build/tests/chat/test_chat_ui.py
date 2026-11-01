@@ -35,6 +35,43 @@ class ChatUITests(unittest.TestCase):
         self.app.chat_url.value = url
         self.app.chat_model.value = 'fixture-model'
 
+    def test_laptop_preserves_transcript_and_draft_through_history_and_unfold(self):
+        app = self.app
+        owner = app.chat_controller()
+        transcript = app.chat_transcript
+        app.chat_prompt.value = 'Keep this draft'
+        previous_drawer = app.chat_drawer_open
+        with patch('features.lm.mobile.laptop.chat_region', return_value=(600, 280, 20)):
+            app.render_chat_workspace()
+            self.assertTrue(owner.laptop.active)
+            self.assertIs(app.chat_transcript_card.parent, app.chat_workspace)
+            self.assertIs(app.chat_composer.parent, owner.laptop.deck)
+            app.toggle_chat_conversations()
+            self.assertIs(app.chat_sidebar.parent, owner.laptop.deck)
+            self.assertIs(app.chat_transcript_card.parent, app.chat_workspace)
+            app.toggle_chat_conversations()
+            self.assertEqual(app.chat_prompt.value, 'Keep this draft')
+        app.render_chat_workspace()
+        self.assertFalse(owner.laptop.active)
+        self.assertEqual(app.chat_drawer_open, previous_drawer)
+        self.assertIs(app.chat_transcript, transcript)
+        self.assertIs(app.chat_composer.parent, app.chat_messages)
+
+    def test_laptop_keyboard_keeps_compact_composer_above_hinge(self):
+        from features.lm.mobile.laptop import allocation
+        for height, seam, gap, status in [(600, 280, 20, 0), (300, 280, 20, 48), (200, 280, 20, 0)]:
+            upper, reserved, deck, prompt, tools = allocation(height, seam, gap, status)
+            self.assertGreaterEqual(prompt, 44)
+            self.assertLessEqual(upper + reserved + deck, height)
+            if tools:
+                self.assertLess(upper, seam)
+                self.assertGreater(upper + reserved, seam + gap)
+            else:
+                self.assertLessEqual(upper + deck, seam)
+        with patch('features.lm.mobile.laptop.chat_region', return_value=(220, 280, 20)):
+            self.app.render_chat_workspace()
+            self.assertNotIn(self.app.chat_controller().laptop.tools, self.app.chat_controller().laptop.deck.children)
+
     def test_rotation_header_uses_current_safe_width_instead_of_previous_layout(self):
         app = self.app
         with patch.object(app.adaptive, 'content_width') as available:

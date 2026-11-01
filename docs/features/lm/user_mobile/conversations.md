@@ -5,6 +5,14 @@ navigation bar. Eligible controls move to the side on iPhone Duo; extra actions
 join the system overflow menu. Send/Stop stays beside the message field, and the
 conversation sidebar keeps its own settings control.
 
+In Duo laptop posture, the conversation stays above the hinge. The lower screen
+provides a larger draft area, Send/Stop and direct controls for Conversations,
+New chat and Model & settings. Conversations opens in that lower panel without
+replacing the transcript; Back to draft restores the same draft. If the keyboard
+leaves too little room below the hinge, chat uses a compact composer above the
+keyboard and crease. Unfolding restores the normal layout without reloading the
+conversation or clearing the draft.
+
 ## On-device models
 
 Open **Chat → ••• → Model & server settings** and choose a **Chat provider**.

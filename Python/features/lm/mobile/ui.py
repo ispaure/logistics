@@ -196,6 +196,8 @@ class ChatUI:
         self.chat_view._ios_toolbar_buttons = [self.chat_header_new, self.chat_actions_button]
         self.chat_view._ios_toolbar_leading = [self.chat_menu_button]
         self.chat_view._ios_toolbar_hidden = [self.chat_header_actions]
+        from .laptop import LaptopChat
+        self.laptop = LaptopChat(self)
 
     def toggle_chat_conversations(self, widget=None, **kwargs):
         self.chat_drawer_open = not self.chat_drawer_open
@@ -203,6 +205,14 @@ class ChatUI:
 
     def render_chat_workspace(self):
         if not hasattr(self, 'chat_workspace'):
+            return
+        self.update_chat_readiness()
+        self.reserve_chat_navigation()
+        if self.laptop.reflow(self):
+            self.sync_chat_navigation()
+            self.sync_chat_appearance()
+            self.update_chat_header()
+            self.resize_chat_composer()
             return
         compact_drawer = self.chat_drawer_open and self.adaptive.width() < 640
         sidebar_children = self.chat_sidebar_content.children
@@ -292,7 +302,7 @@ class ChatUI:
             self.chat_view.style.margin_bottom = margin
 
     def update_chat_header(self):
-        sidebar = self.chat_drawer_open and self.adaptive.width() < 640
+        sidebar = self.chat_drawer_open and self.adaptive.width() < 640 and not self.laptop.active
         title = (self.state.current or {}).get('title', 'New conversation')
         # Native ellipsis and explicit bounds stop long titles pushing the
         # action capsule outside the safe-area allocation on iPad and Duo.
@@ -311,7 +321,7 @@ class ChatUI:
         if not hasattr(self, 'chat_messages'):
             return
         width = self.adaptive.content_width('chat')
-        if self.chat_drawer_open and self.adaptive.width() >= 640:
+        if self.chat_drawer_open and self.adaptive.width() >= 640 and not self.laptop.active:
             width /= 2
         inset = max(0, int((width - 780) / 2))
         self.chat_composer.style.margin_left = self.chat_composer.style.margin_right = inset
@@ -320,6 +330,8 @@ class ChatUI:
         available_height = container.height if container is not None else 0
         self.chat_prompt.style.height = composer_height(self.chat_prompt.value, min(width, 780) - 84,
             int(self.preferences.values['font_size']), available_height=available_height or None)
+        if self.laptop.active:
+            self.chat_prompt.style.height = self.laptop.prompt_height
 
     def sync_chat_appearance(self):
         """Match the navigation/status area to Chat without moving its menu."""
@@ -349,6 +361,8 @@ class ChatUI:
                 box.add(status)
             elif not value and status in box.children:
                 box.remove(status)
+        if hasattr(self, 'laptop') and self.laptop.active:
+            self.render_chat_workspace()
 
     def show_chat_actions(self, widget=None, **kwargs):
         box = toga.Box(children=[
@@ -371,7 +385,7 @@ class ChatUI:
             self.loop.create_task(result)
 
     def show_chat_messages(self):
-        if self.adaptive.width() < 640:
+        if self.adaptive.width() < 640 or self.laptop.active:
             self.chat_drawer_open = False
         self.render_chat_workspace()
 
