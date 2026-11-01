@@ -64,6 +64,11 @@ memory-only context; native LocalCrypt derives the declaration at its owning
 credential boundary. Unknown private providers conservatively refuse external
 playback. Document persistence and provider I/O grants remain separate.
 
+Desktop and mobile document titles do not append `Session-Only`. The storage
+descriptor below the title retains that label and its security icons for all
+provider-backed document formats. This presentation rule does not change privacy,
+locking or credential lifetime.
+
 ## Explicit retained protection sources
 
 Application composition in `mobile.protection` owns a process `ProtectionScope`

@@ -17,8 +17,7 @@ class LocationContext:
 
     @property
     def suffix(self):
-        session = ' (🕵️ Session-Only)' if self.session_only else ''
-        return f'[{self.storage}: {self.name}{session}]'
+        return f'[{self.storage}: {self.name}]'
 
     @property
     def status(self):
@@ -116,8 +115,8 @@ def document_title(window, original=None):
         return original
     context = location_context(path, provider)
     modified = ' *' if ' *' in original or window.isWindowModified() else ''
-    suffix = (' (🕵️ Session-Only)' if context.session_only else
-              f' {context.suffix}' if context.name and context.storage != 'Remote' else '')
+    suffix = (f' {context.suffix}' if context.name and context.storage != 'Remote'
+              and not context.session_only else '')
     return f'{Path(path).name}{modified}{suffix}'
 
 

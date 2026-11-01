@@ -102,6 +102,8 @@ class ReaderLifecycle:
                              or (not drawer and session_route(screens[count - 1][0]))):
                 count -= 1
             returns[key] = origin, screens[count - 1][0] if count else None, drawer
+        if route.startswith('notes-library:'):
+            returns[key] = 'files', None, False
         view._reader_session_id = key
         if not hasattr(view, '_reader_close_button'):
             from .control_icons import icon_button

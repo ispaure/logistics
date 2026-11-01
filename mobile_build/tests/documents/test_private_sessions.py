@@ -135,6 +135,7 @@ class PrivateSessionTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_nested_document_headers_show_filename_and_keep_source_path(self):
+        self.copies.provider.session_only = True
         (self.local / 'nested').mkdir()
         with patch.object(self.app, 'show_view', wraps=self.app.show_view) as present:
             owner = self.open('nested/First.md', b'# First')
@@ -143,6 +144,8 @@ class PrivateSessionTests(unittest.TestCase):
             self.assertIn('First.md', owner.crypt_title.text)
             self.assertNotIn('nested/', owner.crypt_title.text)
             self.assertEqual(owner.crypt_reader.key, 'nested/First.md')
+            self.assertEqual(owner.crypt_view._native_reader_title(), 'First.md')
+            self.assertIn('Session-Only', owner.crypt_view._document_storage_status)
             self.app.private_sessions.activate(owner.session.id)
             self.assertEqual(present.call_args.kwargs['title'], 'First.md')
 

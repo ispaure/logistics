@@ -79,7 +79,7 @@ class ImageDocumentTests(unittest.TestCase):
                 owner = app.private_sessions.active
                 self.assertEqual(owner.crypt_view._document_storage_status,
                                  'Home Server · 🕵️ Session-Only · (Read-Only)')
-                self.assertEqual(owner.crypt_view._native_reader_title(), 'image2.png (🕵️ Session-Only)')
+                self.assertEqual(owner.crypt_view._native_reader_title(), 'image2.png')
                 app.loop.run_until_complete(owner.image_file_buttons[1].on_press())
                 owner = app.private_sessions.active
                 self.assertEqual(owner.crypt_reader.key, 'image10.png')

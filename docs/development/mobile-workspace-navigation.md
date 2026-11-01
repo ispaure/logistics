@@ -517,14 +517,29 @@ checks discard stale results.
 `mobile.obsidian` retains the native adaptive folder/page reader and
 owns a transient `notes-library` Documents session. Its hamburger, history,
 parent navigation and read-aloud controls stay with the reader. Closing the
-library removes its session; private catalog revocation clears its tree, speech
+library removes its session and returns to the Workspaces overview, including
+when opened from a file browser. Leaving a folder or closing its library resets
+the opening choice, so revisiting the same `.obsidian` folder prompts again;
+refreshing within the same visit does not. Private catalog revocation clears its tree, speech
 and preview. iOS private previews use a nonpersistent WebView and Android disables
 browser disk caching/storage. Private HTML above 2 MiB is refused before toolkit
 loading. No plaintext staging directory is created.
 
+Previous/Next note buttons bind async handlers directly so both iOS and Android
+native taps schedule the history read. Tests must dispatch button presses without
+awaiting their return value; directly awaiting a synchronous callback's returned
+coroutine can hide a native no-op.
+
+Mobile folder rows use the documentation folder-with-page icon when a direct
+metadata check finds `Folder/Folder.md`. Tapping the name opens that note; the
+separate arrow expands the folder. The landing note remains an ordinary visible
+child, and renaming it removes the association when the tree refreshes.
+
 Remote adapters advertise `remote_storage`; neither UI creates a search field
 for them. Root detection and explicit folder expansion use immediate listings,
-with no recursive enumeration, prefetch or remote search. Local name filtering
+with no recursive enumeration, note-content prefetch or remote search. Landing
+icons probe only the same-named `.md` path of each visible immediate folder.
+Local name filtering
 only examines loaded rows. `mobile_build/tests/documents/test_notes_library.py` and desktop
 `test_notes_library_desktop.py` cover action placement, Documents ownership,
 remote call bounds, containment, cancellation and credential retirement. Native

@@ -88,6 +88,12 @@ class NotesLibraryDesktopTests(QtTestCase):
                     window.viewer.follow_link(qt.QUrl('Tech.md'))
                     self.wait_until(lambda: not window.progress.busy)
                     self.assertEqual(window.storage.path, (window.provider.root / 'Nested/Tech.md').resolve(), window.viewer.status.text())
+                    window.back.click()
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertEqual(window.history[window.index], 'note.md')
+                    window.forward.click()
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertEqual(window.history[window.index], 'Nested/Tech.md')
                     window.open_note('Nested/Next.md')
                     self.wait_until(lambda: not window.progress.busy)
                     if not remote:

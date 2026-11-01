@@ -85,6 +85,14 @@ class MobileRoutes(Routes):
 
     def trim(self, destination, count, *, native=True):
         removed = [screen[0] for screen in self.screens[destination][count:]]
+        if any(route in ('browser', 'remote-browser', 'workspace-browser')
+               or route.startswith(('folder:', 'notes-library:')) for route in removed):
+            # A retained browser may reopen the same folder after Back. Its
+            # Notes choice belongs to the visit, not the browser's lifetime.
+            for name in ('file_browser', 'remote_browser'):
+                browser = getattr(self.app, name, None)
+                if browser is not None:
+                    browser._notes_location = None
         super().trim(destination, count, native=native)
         for route in removed:
             self.origins.pop((destination, route), None)

@@ -60,6 +60,7 @@ class VaultBrowser:
         self.access = host.storage(provider)
         self.cancelled = Event()
         self.folders, self.expanded, self.loading = {}, {self.root}, set()
+        self.folder_pages = {}
         self.path = None
         self.selected_path = None
         self.epoch = 0
@@ -112,13 +113,13 @@ class VaultBrowser:
         self.back_button = self.host.presentation.icon_button(
             "back",
             "Previous note",
-            on_press=lambda w: self.navigate_history(-1),
+            on_press=self.previous_note,
             enabled=False,
         )
         self.forward_button = self.host.presentation.icon_button(
             "forward",
             "Next note",
-            on_press=lambda w: self.navigate_history(1),
+            on_press=self.next_note,
             enabled=False,
         )
         self.up_button = self.host.presentation.icon_button(
@@ -224,18 +225,23 @@ class VaultBrowser:
             self.reader_actions_button, actions, self.browse_parent
         )
 
-    async def load_folder(self, path):
+    async def load_folder(self, path, *, rows=None):
         if not self.valid() or path in self.loading:
             return False
         self.loading.add(path)
         self.notice.text = "Loading notes…"
         try:
             path = self.contained(path)
-            rows = await asyncio.to_thread(
-                self.library.folders, path, cancelled=lambda: not self.valid()
-            )
+            def listing():
+                entries = self.library.folders(path, cancelled=lambda: not self.valid()) if rows is None else rows
+                pages = {row['path']: self.library.folder_page(row['path'], cancelled=lambda: not self.valid())
+                         for row in entries if row['directory'] and not row['name'].startswith('.')
+                         and self.host.folder_visible(row['path'], directory=True)}
+                return entries, pages
+            rows, pages = await asyncio.to_thread(listing)
             if not self.valid():
                 return False
+            self.folder_pages.update(pages)
             self.folders[path] = sorted(
                 (
                     row
@@ -303,16 +309,17 @@ class VaultBrowser:
         ]
         for entry, depth in flattened[: self.shown]:
             path, directory = entry["path"], entry["directory"]
+            page = self.folder_pages.get(path) if directory else None
 
-            async def choose(widget=None, path=path, directory=directory, **kwargs):
-                if directory:
+            async def choose(widget=None, path=path, directory=directory, page=page, **kwargs):
+                if page is not None:
+                    await self.open_note(page)
+                elif directory:
                     await self.toggle_folder(path)
                 else:
                     await self.open_note(path)
 
-            label = (
-                ("▾ " if path in self.expanded else "▸ ") if directory else ""
-            ) + entry["name"]
+            label = entry["name"]
             button = self.host.list_button(
                 toga.Button(label, on_press=choose, style=Pack(height=48, flex=1))
             )
@@ -321,11 +328,17 @@ class VaultBrowser:
             row = toga.Box(
                 children=[
                     toga.Box(style=Pack(width=depth * 20)),
-                    self.host.entry_icon(directory),
+                    self.host.entry_icon(directory, landing_page=page is not None),
                     button,
                 ],
                 style=Pack(direction=ROW, align_items=CENTER),
             )
+            if directory:
+                async def expand(widget=None, path=path, **kwargs):
+                    await self.toggle_folder(path)
+                row.insert(2, toga.Button('▾' if path in self.expanded else '▸',
+                    on_press=expand,
+                    style=Pack(width=48, height=48)))
             self.host.highlight_entry(row, path == self.selected_path)
             self.host.highlight_entry(button, path == self.selected_path)
             self.rows.add(row)
@@ -473,8 +486,14 @@ class VaultBrowser:
         if not self.sidebar.expanded and self.sidebar.sidebar_open and self.path is not None:
             return self.sidebar.show_detail
         if self.history_index > 0:
-            return lambda: self.navigate_history(-1)
+            return self.previous_note
         return None
+
+    async def previous_note(self, widget=None, **kwargs):
+        await self.navigate_history(-1)
+
+    async def next_note(self, widget=None, **kwargs):
+        await self.navigate_history(1)
 
     async def navigate_history(self, offset):
         index = self.history_index + offset
@@ -631,6 +650,7 @@ class VaultBrowser:
             self.search.value = ""
         self.epoch += 1
         self.folders.clear()
+        self.folder_pages.clear()
         self.expanded.clear()
         self.rows.clear()
         self.path = self.selected_path = None

@@ -43,11 +43,7 @@ async def open_vault(app, provider, root, destination=None, *, title='', rows=No
     if app.show_view(owner.view, destination=destination, route='notes-library:' + owner.session.id, title=owner.session.title) is False:
         owner.dispose()
         return None
-    if rows is None:
-        await owner.load_folder(owner.root)
-    else:
-        owner.folders[owner.root] = owner.library.visible_rows(rows)
-        owner.render_tree()
+    await owner.load_folder(owner.root, rows=None if rows is None else owner.library.visible_rows(rows))
     return owner
 
 

@@ -61,6 +61,17 @@ class NotesLibrary:
             return dict(size=info['Size'], directory=info['IsDir'], revision=self.provider._revision(info))
         return self.provider.entry(path)
 
+    def folder_page(self, folder, *, cancelled=lambda: False):
+        """Probe only the conventional landing note, without listing descendants."""
+        folder = self.contained(folder)
+        path = self.contained(posixpath.join(folder, PurePosixPath(folder).name + '.md'))
+        try:
+            with operation(self.provider, cancelled):
+                info = self.entry(path)
+            return None if info.get('directory', False) else path
+        except (OSError, ValueError):
+            return None
+
     def read(self, path, *, cancelled=lambda: False):
         path = self.contained(path)
         if PurePosixPath(path).suffix.lower() not in MARKDOWN:

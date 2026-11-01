@@ -38,12 +38,12 @@ class ImageViewerTests(QtTestCase):
         self.assertFalse(window.previous.isEnabled())
         self.assertTrue(window.following.isEnabled())
         pane = page.records[window]['container']
-        self.assertEqual(pane.view_title, 'image2.png (🕵️ Session-Only)')
+        self.assertEqual(pane.view_title, 'image2.png')
         self.assertIn('Cloud · Photos · 🕵️ Session-Only · (Read-Only)', pane.storage_location.label.text())
         window.following.click()
         self.wait_until(lambda: not window.operation.busy)
         self.assertEqual(window.choice.path, 'image10.png')
-        self.assertEqual(pane.view_title, 'image10.png (🕵️ Session-Only)')
+        self.assertEqual(pane.view_title, 'image10.png')
         pixels = window.pixmap.cacheKey()
         with patch.object(qt.QMessageBox, 'warning') as warning:
             window.following.click()

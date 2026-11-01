@@ -74,7 +74,7 @@ class ObsidianTests(unittest.TestCase):
         self.app.request_close_session(editor.session.id)
         self.assertEqual(self.app.visible_reader(), owner.session.id)
         owner.close()
-        self.assertEqual(self.app.native_host.state.destination, 'home')
+        self.assertEqual(self.app.native_host.state.destination, 'files')
         self.assertFalse(self.app.routes.screens['files'])
         self.assertFalse(self.app._document_tabs_hidden)
 
@@ -184,12 +184,36 @@ class ObsidianTests(unittest.TestCase):
         owner.follow_link(owner.web, owner.base + '?target=Projects%2FPlan.MD')
         self.run_async(asyncio.sleep(.05))
         self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+
         for target in ('../../outside.md', '/tmp/outside.md', '../.obsidian/private.md', 'https://example.com/note.md'):
             self.assertFalse(owner.follow_link(owner.web, target))
         self.assertFalse(self.run_async(owner.open_note('Vault/attachment.txt')))
         self.assertFalse(self.run_async(owner.open_note('Vault/.obsidian/private.md')))
         self.assertFalse(self.run_async(owner.open_note('outside.md')))
         self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+
+    def test_folder_landing_note_opens_directly_and_remains_a_manageable_child(self):
+        landing = self.vault / 'Projects/Projects.md'
+        landing.write_text('# Projects\n')
+        owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
+        def folder_row():
+            return next(row for row in owner.rows.children
+                        if getattr(row.children[-1], 'vault_path', None) == 'Vault/Projects')
+        self.assertEqual(folder_row().children[1].browser_entry_kind, 'folder_document')
+        self.run_async(folder_row().children[-1].on_press())
+        self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
+        self.run_async(folder_row().children[2].on_press())
+        self.assertIn('Vault/Projects/Projects.md', [row.children[-1].vault_path for row in owner.rows.children])
+        self.assertEqual(owner.selected_path, 'Vault/Projects')
+        child = next(row.children[-1] for row in owner.rows.children
+                     if row.children[-1].vault_path == 'Vault/Projects/Projects.md')
+        self.run_async(child.on_press())
+        self.assertEqual(owner.selected_path, 'Vault/Projects/Projects.md')
+        owner.library.move('Vault/Projects/Projects.md', 'Vault/Projects/Overview.md')
+        self.run_async(owner.load_folder('Vault'))
+        self.run_async(owner.load_folder('Vault/Projects'))
+        self.assertEqual(folder_row().children[1].browser_entry_kind, 'folder')
+        self.assertIn('Vault/Projects/Overview.md', [row.children[-1].vault_path for row in owner.rows.children])
 
     def test_oversized_and_linked_notes_do_not_replace_the_current_preview(self):
         owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))

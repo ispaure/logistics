@@ -92,7 +92,35 @@ class NotesLibraryModeTests(unittest.TestCase):
             owner = self.app.vault_browser
             self.assertFalse(owner.library.writable)
             self.assertTrue(contains(self.app.body, owner.view))
-            self.assertEqual(self.app.cloud_client.calls, [('list', '')])
+            self.assertEqual(self.app.cloud_client.calls, [('list', ''), ('remote_stat', 'Projects/Projects.md')])
+        self.run_async(exercise())
+
+    def test_same_workspace_prompts_again_after_back_and_library_close(self):
+        import shutil
+        from services.documents.locations import collection_path
+        from mobile.routes import contains
+        shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
+        async def exercise():
+            self.app.show_locations()
+            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as dialog:
+                await self.app.show_files(location=('Local files', 'Notes'))
+                self.assertEqual(dialog.await_count, 1)
+                await self.app.browse_files()
+                self.assertEqual(dialog.await_count, 1)  # Refresh is the same visit.
+                self.app.routes.back()
+                await self.app.show_files(location=('Local files', 'Notes'))
+                self.assertEqual(dialog.await_count, 2)
+                self.app.routes.back()
+            for _ in range(2):
+                with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='notes')) as dialog:
+                    await self.app.show_files(location=('Local files', 'Notes'))
+                    self.assertEqual(dialog.await_count, 1)
+                owner = self.app.vault_browser
+                self.assertTrue(contains(self.app.body, owner.view))
+                owner.close()
+                self.assertEqual(self.app.native_host.state.destination, 'files')
+                self.assertFalse(self.app.routes.screens['files'])
+                self.assertFalse(contains(self.app.body, self.app.files_view))
         self.run_async(exercise())
 
     def test_notes_keep_an_independent_provider_when_browser_access_closes(self):

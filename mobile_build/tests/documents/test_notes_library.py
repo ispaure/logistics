@@ -3,6 +3,7 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
 import base64
 import json
 import os
@@ -62,15 +63,27 @@ class NotesLibraryTests(unittest.TestCase):
                     self.assertFalse(owner.back_button.enabled)
                     self.assertFalse(owner.forward_button.enabled)
                     await owner.open_note('Vault/Home.md')
-                    await owner.open_note('Vault/Projects/Plan.MD')
+                    owner.follow_link(owner.web, owner.base + '?target=Projects%2FPlan.MD')
+                    for _ in range(100):
+                        if owner.path == 'Vault/Projects/Plan.MD':
+                            break
+                        await asyncio.sleep(.01)
                     self.assertTrue(owner.back_button.enabled)
                     self.assertFalse(owner.forward_button.enabled)
-                    await owner.back_button.on_press()
+                    owner.back_button.on_press()  # Native taps do not await returned coroutines.
+                    for _ in range(100):
+                        if owner.path == 'Vault/Home.md':
+                            break
+                        await asyncio.sleep(.01)
                     self.assertEqual(owner.path, 'Vault/Home.md')
                     self.assertFalse(owner.back_button.enabled)
                     self.assertTrue(owner.forward_button.enabled)
                     self.assertIs(self.app.body, panel)
-                    await owner.forward_button.on_press()
+                    owner.forward_button.on_press()
+                    for _ in range(100):
+                        if owner.path == 'Vault/Projects/Plan.MD':
+                            break
+                        await asyncio.sleep(.01)
                     self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
                     owner.sidebar.show_sidebar()
                     owner.close_button.on_press()
@@ -121,7 +134,11 @@ class NotesLibraryTests(unittest.TestCase):
                         self.assertTrue(await owner.open_note('Home.md'), owner.notice.text)
                         await owner.toggle_folder('Nested')
                         self.assertTrue(await owner.open_note('Nested/Next.md'), owner.notice.text)
-                        await owner.navigate_history(-1)
+                        owner.back_button.on_press()
+                        for _ in range(100):
+                            if owner.path == 'Home.md':
+                                break
+                            await asyncio.sleep(.01)
                         self.assertEqual(owner.path, 'Home.md')
                 client.clear()
                 self.assertFalse(await owner.open_note('Home.md'))
@@ -185,7 +202,8 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertIsNone(owner.search)
             self.assertEqual([call for call in client.calls if call[0] == 'list'], [('list', ''), ('list', '')])
             await owner.open_note('Home.md')
-            self.assertFalse(any(path.startswith('Projects') for _, path in client.calls))
+            self.assertEqual([(action, path) for action, path in client.calls if path.startswith('Projects')],
+                             [('remote_stat', 'Projects/Projects.md')])
             await owner.toggle_folder('Projects')
             self.assertIn(('list', 'Projects'), client.calls)
             await owner.open_note('Projects/Plan.MD')
