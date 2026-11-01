@@ -340,7 +340,7 @@ public final class VideoPlayer {
             else if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped
                     || event.type == MediaPlayer.Event.EndReached || event.type == MediaPlayer.Event.EncounteredError) {
                 playbackActive = false;
-                if (!networkWaiting) {
+                if (!playRequested || event.type != MediaPlayer.Event.Paused) {
                     buffering = false;
                     bufferingOverlay.setVisibility(View.GONE);
                 }
@@ -580,7 +580,7 @@ public final class VideoPlayer {
         resumeSeekSubmitted = false;
         if (mediaStartsAtResume) media.addOption(String.format(java.util.Locale.ROOT, ":start-time=%.3f", resume / 1000.0));
         media.setHWDecoderEnabled(true, false);
-        media.addOption(":network-caching=3000");
+        media.addOption(":network-caching=6000");
         media.addOption(":file-caching=1500");
         if (tools != null) tools.mediaOptions(media);
         player.setMedia(media);
@@ -651,22 +651,16 @@ public final class VideoPlayer {
         play.setText("Pause");
         play.setContentDescription("Pause");
         networkResumePending = false;
+        android.util.Log.d("VideoPlayback", "play target=" + resume + " current=" + player.getTime());
         player.play();
     }
 
     public void setNetworkWaiting(boolean waiting) {
-        if (done) return;
+        if (done || networkWaiting == waiting) return;
         networkWaiting = waiting;
-        if (!waiting && networkResumePending) {
-            networkResumePending = false;
-            lastPlaybackProgress = lastFrameProgress = android.os.SystemClock.elapsedRealtime();
-            boolean external = casting || (Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode());
-            if (playRequested && !manualResumeRequired && focusHeld && allowed(external)) {
-                resume = bufferPosition;
-                player.setTime(bufferPosition);
-                player.play();
-            }
-        }
+        // Network chunks are not a guarantee of decoded frames. Do not force
+        // a pause, seek, or decoder restart when the read-ahead queue refills.
+        android.util.Log.d("VideoPlayback", "networkWait=" + waiting + " clock=" + player.getTime());
     }
 
     private void updatePlaybackProgress() {
@@ -675,16 +669,20 @@ public final class VideoPlayer {
         try {
             if (media != null && media.getStats() != null) frames = media.getStats().displayedPictures;
         } finally { if (media != null) media.release(); }
-        boolean progressed = frames != observedFrames || clock != observedClock;
-        if (progressed) lastPlaybackProgress = now;
-        if (frames != observedFrames || (frames == 0 && clock != observedClock)) {
-            lastRenderedClock = clock; lastFrameProgress = now;
-        }
+        boolean newFrame = frames > observedFrames;
+        boolean statsReset = frames < observedFrames;
+        if (newFrame) { lastRenderedClock = clock; lastFrameProgress = now; }
+        if (newFrame || clock != observedClock) lastPlaybackProgress = now;
+        if (statsReset) lastFrameProgress = now; // VLC stats reset on a new input.
         observedFrames = frames;
         observedClock = clock;
-        boolean renderStalled = frames > 0 && now - lastFrameProgress >= 6000;
-        boolean stalled = playRequested && !manualResumeRequired && !ended &&
-            (frames == 0 || now - lastPlaybackProgress >= 3000 || (networkWaiting && renderStalled));
+        // Some devices never report displayedPictures: use a guarded fallback.
+        boolean missingFrames = frames == 0 && observedFrames == 0;
+        boolean frameStall = !missingFrames && now - lastFrameProgress >= 2500;
+        boolean fallbackStall = missingFrames && (now - lastPlaybackProgress >= 3000 ||
+            (networkWaiting && now - lastFrameProgress >= 3000));
+        boolean stalled = playRequested && !manualResumeRequired && !ended && !pausePending &&
+            (frameStall || fallbackStall);
         if (stalled && transportFailure != null) {
             String failure = transportFailure;
             playbackFailed = true;
@@ -692,16 +690,16 @@ public final class VideoPlayer {
             status(failure);
             return;
         }
-        if (stalled && frames > 0 && resume < 0 && networkWaiting && !networkResumePending) {
-            bufferPosition = Math.max(0, lastRenderedClock);
-            networkResumePending = true;
-            if (player.isPlaying()) player.pause();
-        }
         boolean changed = buffering != stalled;
         buffering = stalled;
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
         bufferingOverlay.setVisibility(stalled && !pip && !lockHidden ? View.VISIBLE : View.GONE);
-        if (changed) { if (stalled) setControlsVisible(true); else scheduleControls(); }
+        if (changed) {
+            android.util.Log.d("VideoPlayback", (stalled ? "stalled" : "recovered") +
+                " clock=" + clock + " renderedClock=" + lastRenderedClock +
+                " frames=" + frames + " waiting=" + networkWaiting);
+            if (stalled) setControlsVisible(true); else scheduleControls();
+        }
     }
 
     private void updateScreenAwake() {
@@ -906,7 +904,13 @@ public final class VideoPlayer {
     public boolean completed() { return ended; }
     public void pause() {
         if (done) return;
-        if (resume < 0) resume = position();
+        if (resume < 0) {
+            long target = position();
+            if (observedFrames > 0 && android.os.SystemClock.elapsedRealtime() - lastFrameProgress >= 2000 && lastRenderedClock >= 0)
+                target = lastRenderedClock;
+            resume = Math.max(0, target);
+        }
+        android.util.Log.d("VideoPlayback", "pause target=" + resume + " waiting=" + networkWaiting);
         pausePresentation.hold();
         root.setKeepScreenOn(false);
         setControlsVisible(true);

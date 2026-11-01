@@ -12,7 +12,7 @@ from threading import Condition
 class BufferingPolicy:
     memory_bytes: int = 128 * 1024 * 1024
     range_bytes: int = 1024 * 1024  # Bound first-read/seek latency; native maximum is 4 MiB.
-    read_ahead_chunks: int = 4
+    read_ahead_chunks: int = 12
     chunk_bytes: int = 1024 * 1024
     stall_seconds: float = .5
 

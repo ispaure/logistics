@@ -638,6 +638,16 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self holdPausePresentation];
     [self setScreenAwake:NO];
     [self setControlsShown:YES];
+    // Capture the displayed position before VLC processes an asynchronous pause.
+    // Never use a free-running audio clock as the resume target during a render stall.
+    if (self.startMilliseconds < 0) {
+        NSTimeInterval age = NSProcessInfo.processInfo.systemUptime - self.lastFrameProgress;
+        int64_t position = [self positionMilliseconds];
+        if (self.observedFrames > 0 && age >= 2.0 && self.lastRenderedClock >= 0)
+            position = self.lastRenderedClock;
+        self.startMilliseconds = MAX(0, position);
+    }
+    NSLog(@"[VideoPlayback] pause target=%lld waiting=%d frames=%llu", self.startMilliseconds, self.networkWaiting, (unsigned long long)self.observedFrames);
     // VLCKit pause is an explicit pause, but coalesce duplicate OS/lifecycle events.
     self.manualResumeRequired = YES;
     self.playRequested = NO;
@@ -680,7 +690,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         [media addOption:@":demux=mkv_trusted,mkv"];
     // VLC 4 start-time clips the timeline and duration. Seek the opening
     // input instead so timestamps and later seeks retain the original origin.
-    [media addOption:@":network-caching=3000"];
+    [media addOption:@":network-caching=6000"];
     [media addOption:@":file-caching=1500"];
     // Cloud starvation makes software-decoded interframe AVI arrive late.
     // Decode complete frames instead of catching up with partial pictures, and
@@ -735,6 +745,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
     [self updateItem:self.playButton label:@"Pause"];
     self.networkResumePending = NO;
+    NSLog(@"[VideoPlayback] play target=%lld current=%lld", self.startMilliseconds, self.player.time.value.longLongValue);
     [self.player play];
     [self tick:nil];
     if ([self.message.text isEqualToString:@"Ready. Press Play to start."]) {
@@ -742,55 +753,55 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         self.message.hidden = YES;
     }
 }
-// A slow prefetch is only a hint. Hold playback only after the renderer
-// actually stops progressing; VLC may still have seconds of playable data.
+// A slow prefetch is only a hint. VLC owns decoder recovery; do not
+// pause or seek merely because the producer delivered another chunk.
 - (void)setNetworkWaiting:(BOOL)waiting {
-    if (self.retired) return;
+    if (self.retired || _networkWaiting == waiting) return;
     _networkWaiting = waiting;
-    if (!waiting && self.networkResumePending) {
-        self.networkResumePending = NO;
-        self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
-        if (self.playRequested && !self.manualResumeRequired && [self canPlay:self.casting || self.pipActive]) {
-            // Pause retains the demuxer and its reference pictures. Seeking on
-            // every refill flushes them and forces another remote AVI seek.
-            // An explicit user seek already owns startMilliseconds separately.
-            [self.player play];
-        }
-    }
+    // HTTP read-ahead availability is not decoded-video readiness. In particular,
+    // do not pause VLC or restart it when a single chunk arrives.
+    NSLog(@"[VideoPlayback] networkWait=%d clock=%lld frames=%llu", waiting,
+          self.player.time.value.longLongValue, (unsigned long long)self.observedFrames);
 }
 - (void)updatePlaybackProgress {
     NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
     int64_t clock = self.player.time.value.longLongValue;
     uint64_t frames = self.player.media.statistics.displayedPictures;
-    // VLC publishes statistics in batches. Advancing playback time is also
-    // progress; stale counters must never put a spinner over moving video.
-    BOOL progressed = frames != self.observedFrames || clock != self.observedClock;
-    if (progressed) self.lastPlaybackProgress = now;
-    if (frames != self.observedFrames || (frames == 0 && clock != self.observedClock)) {
-        self.lastRenderedClock = clock; self.lastFrameProgress = now;
+    BOOL newFrame = frames > self.observedFrames;
+    BOOL statsReset = frames < self.observedFrames;
+    if (newFrame) {
+        self.lastRenderedClock = clock;
+        self.lastFrameProgress = now;
     }
+    if (newFrame || clock != self.observedClock) self.lastPlaybackProgress = now;
+    if (statsReset) self.lastFrameProgress = now; // New input resets VLC counters.
     self.observedFrames = frames;
     self.observedClock = clock;
-    // The audio clock may free-run through a blocked input. A network hold
-    // also watches rendered frames, allowing six seconds for batched stats.
-    BOOL renderStalled = frames > 0 && now - self.lastFrameProgress >= 6.0;
+    // When VLC does not expose picture stats, fall back to clock progress and
+    // transport starvation rather than leaving the spinner stuck forever.
+    BOOL missingFrames = frames == 0 && self.observedFrames == 0;
+    BOOL frameStall = !missingFrames && (now - self.lastFrameProgress >= 2.5);
+    BOOL fallbackStall = missingFrames && (now - self.lastPlaybackProgress >= 3.0 ||
+        (self.networkWaiting && now - self.lastFrameProgress >= 3.0));
     BOOL stalled = self.playRequested && !self.manualResumeRequired && !self.ended &&
-        (frames == 0 || now - self.lastPlaybackProgress >= 3.0 || (self.networkWaiting && renderStalled));
+        !self.pausePending && (frameStall || fallbackStall);
     if (stalled && self.transportFailure) { [self playbackFailed]; return; }
-    if (stalled && frames > 0 && self.startMilliseconds < 0 && self.networkWaiting && !self.networkResumePending) {
-        self.bufferPosition = MAX(0, self.lastRenderedClock);
-        self.networkResumePending = YES;
-        if (self.player.isPlaying) [self.player pause];
-    }
     BOOL changed = self.buffering != stalled;
     self.buffering = stalled;
     self.bufferOverlay.hidden = !stalled || self.lockHidden || self.pipActive;
     if (stalled) {
         [self.bufferSpinner startAnimating];
-        if (changed) [self setControlsShown:YES];
+        if (changed) {
+            NSLog(@"[VideoPlayback] stalled clock=%lld renderedClock=%lld frames=%llu waiting=%d",
+                  clock, self.lastRenderedClock, (unsigned long long)frames, self.networkWaiting);
+            [self setControlsShown:YES];
+        }
     } else {
         [self.bufferSpinner stopAnimating];
-        if (changed) [self scheduleControls];
+        if (changed) {
+            NSLog(@"[VideoPlayback] recovered clock=%lld frames=%llu", clock, (unsigned long long)frames);
+            [self scheduleControls];
+        }
     }
 }
 - (void)audioInterrupted:(NSNotification *)notification {
@@ -911,7 +922,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
             [self applyPlaybackOptions];
             if (self.manualResumeRequired || ![self canPlay:NO]) { [self pause]; return; }
             if (self.startMilliseconds >= 0) {
-                self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
+                if (llabs(self.player.time.value.longLongValue - self.startMilliseconds) >= 1500)
+                    self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
                 self.resumeSeekSubmitted = YES;
             }
             self.ended = NO;
@@ -926,7 +938,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
             if (notify) [self emitCommand:@"ended" value:@""];
             [self setControlsShown:YES];
         }
-        if (!self.networkWaiting && (state == VLCMediaPlayerStateError || state == VLCMediaPlayerStateStopped || state == VLCMediaPlayerStatePaused)) {
+        if (!self.playRequested || state == VLCMediaPlayerStateError || state == VLCMediaPlayerStateStopped) {
             self.buffering = NO; self.bufferOverlay.hidden = YES;
             [self.bufferSpinner stopAnimating];
         }
