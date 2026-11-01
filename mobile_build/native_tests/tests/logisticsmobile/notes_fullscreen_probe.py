@@ -7,6 +7,7 @@ from pathlib import Path
 import traceback
 from uuid import uuid4
 from unittest.mock import AsyncMock, patch
+from threading import Event
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 from mobile.obsidian import open_vault
@@ -26,7 +27,7 @@ class NotesFullscreenProbe(LogisticsMobile):
     async def probe(self):
         report = dict(success=False, samples=[])
         try:
-            root = Path(self.paths.cache) / 'notes-fixture'
+            root = (Path(self.paths.cache) / 'notes-fixture').resolve()
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Welcome.md').write_text('# Welcome\n\nThe library owns this screen.\n')
             (root / 'Projects').mkdir(exist_ok=True)
@@ -62,6 +63,28 @@ class NotesFullscreenProbe(LogisticsMobile):
                     await asyncio.sleep(.05)
                 assert owner.path == expected, (owner.path, expected)
             report['native_history_buttons'] = True
+            entered, released = Event(), Event()
+            original_read = owner.library.read
+            def slow_note(path, **kwargs):
+                entered.set()
+                if not released.wait(10):
+                    raise RuntimeError('Slow note fixture timed out')
+                return original_read(path, **kwargs)
+            with patch.object(owner.library, 'read', side_effect=slow_note):
+                task = asyncio.create_task(owner.navigate_history(-1))
+                try:
+                    for _ in range(100):
+                        if entered.is_set():
+                            break
+                        await asyncio.sleep(.05)
+                    assert entered.is_set() and owner.page_loading.active
+                    assert owner.page_loading.row.parent is owner.article
+                    await asyncio.sleep(.3)
+                finally:
+                    released.set()
+                    await task
+            assert not owner.page_loading.active
+            report['notes_loading_feedback'] = True
             for orientation in ('landscape-left', 'portrait', 'landscape-left'):
                 await rotate(self, orientation, settle=.5)
                 await owner.open_note('Welcome.md')
@@ -104,6 +127,35 @@ class NotesFullscreenProbe(LogisticsMobile):
                 await asyncio.sleep(.2)
                 assert not self.routes.screens['files']
             report['repeat_folder_choices'] = 4
+            from mobile.documentation_ui import show_documentation
+            docs = show_documentation(self, root, root / 'Welcome.md')
+            await docs.load_task
+            assert docs.speech.button.enabled
+            entered, released = Event(), Event()
+            original_read = docs._read_page
+            def slow_page(path):
+                entered.set()
+                if not released.wait(10):
+                    raise RuntimeError('Slow documentation fixture timed out')
+                return original_read(path)
+            with patch.object(docs, '_read_page', side_effect=slow_page):
+                docs.open_page(root / 'Projects/Projects.md')
+                try:
+                    for _ in range(100):
+                        if entered.is_set():
+                            break
+                        await asyncio.sleep(.05)
+                    assert entered.is_set() and docs.page_loading.active
+                    assert docs.path == root / 'Welcome.md'
+                    await asyncio.sleep(.3)
+                finally:
+                    released.set()
+                    await docs.load_task
+            assert not docs.page_loading.active
+            docs.back()
+            await docs.load_task
+            assert docs.path == root / 'Welcome.md'
+            report['documentation_loading_feedback'] = True
             report['success'] = True
         except Exception:
             report['error'] = traceback.format_exc()

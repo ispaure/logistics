@@ -530,6 +530,11 @@ native taps schedule the history read. Tests must dispatch button presses withou
 awaiting their return value; directly awaiting a synchronous callback's returned
 coroutine can hide a native no-op.
 
+Notes reads show the shared `PageLoading` spinner and caption above the article,
+including link and history reads. Completion, failure and library disposal clear
+it; stale reads cannot clear a newer request's indicator. Desktop Notes places
+its existing cancellable operation progress immediately below the page controls.
+
 Mobile folder rows use the documentation folder-with-page icon when a direct
 metadata check finds `Folder/Folder.md`. Tapping the name opens that note; the
 separate arrow expands the folder. The landing note remains an ordinary visible

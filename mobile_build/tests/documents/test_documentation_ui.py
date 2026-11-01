@@ -20,6 +20,53 @@ def widgets(root):
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_background_page_feedback_history_and_failed_read(self):
+        import asyncio
+        from threading import Event
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            first, second = root / 'first.md', root / 'second.md'
+            first.write_text('# First')
+            second.write_text('# Second')
+            owner = MarkdownWikiView(root, first)
+            owner.background_loading = True
+            async def exercise():
+                entered, released = Event(), Event()
+                original = owner._read_page
+                def slow(path):
+                    entered.set()
+                    if not released.wait(5):
+                        raise RuntimeError('Slow page timed out')
+                    return original(path)
+                with patch.object(owner, '_read_page', side_effect=slow):
+                    owner.open_page(second)
+                    try:
+                        for _ in range(100):
+                            if entered.is_set():
+                                break
+                            await asyncio.sleep(.01)
+                        self.assertTrue(entered.is_set())
+                        self.assertTrue(owner.page_loading.active)
+                        self.assertEqual(owner.path, first)
+                    finally:
+                        released.set()
+                        await owner.load_task
+                self.assertEqual(owner.path, second)
+                self.assertFalse(owner.page_loading.active)
+                owner.back()
+                self.assertTrue(owner.page_loading.active)
+                await owner.load_task
+                self.assertEqual(owner.path, first)
+                self.assertEqual(owner.history_index, 0)
+                with patch.object(owner, '_read_page', side_effect=OSError('Unavailable')):
+                    owner.forward()
+                    await owner.load_task
+                self.assertEqual(owner.path, first)
+                self.assertEqual(owner.history_index, 0)
+                self.assertFalse(owner.page_loading.active)
+                self.assertIn('Unavailable', owner.notice.text)
+            self.app.loop.run_until_complete(exercise())
+
     def test_bundled_settings_guide_renders_real_tables(self):
         root = Path(__file__).resolve().parents[3] / 'docs/user_mobile'
         html = markdown_preview((root / 'user_mobile.md').read_text(), local_links=True)

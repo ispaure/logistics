@@ -139,6 +139,40 @@ class ObsidianTests(unittest.TestCase):
         finally:
             self.run_async(browser.close())
 
+    def test_slow_note_and_history_reads_show_loading_and_clear_on_failure(self):
+        owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
+        async def exercise():
+            await owner.open_note('Vault/Home.md')
+            await owner.open_note('Vault/Projects/Plan.MD')
+            entered, released = Event(), Event()
+            original = owner.library.read
+            def slow(path, **kwargs):
+                entered.set()
+                if not released.wait(5):
+                    raise RuntimeError('Slow read timed out')
+                return original(path, **kwargs)
+            with patch.object(owner.library, 'read', side_effect=slow):
+                task = asyncio.create_task(owner.navigate_history(-1))
+                try:
+                    for _ in range(100):
+                        if entered.is_set():
+                            break
+                        await asyncio.sleep(.01)
+                    self.assertTrue(entered.is_set())
+                    self.assertTrue(owner.page_loading.active)
+                    self.assertIs(owner.page_loading.row.parent, owner.article)
+                    self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+                finally:
+                    released.set()
+                    await task
+            self.assertFalse(owner.page_loading.active)
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            with patch.object(owner.library, 'read', side_effect=OSError('Offline')):
+                self.assertFalse(await owner.open_note('Vault/Projects/Plan.MD'))
+            self.assertFalse(owner.page_loading.active)
+            self.assertIn('Offline', owner.notice.text)
+        self.run_async(exercise())
+
     def test_nested_markdown_preview_and_adaptive_tree_keep_provider_identity(self):
         owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
         def paths():

@@ -357,13 +357,20 @@ class VaultBrowser:
     async def open_note(self, path, *, remember=True, fragment="", resolve_link=False):
         if not self.valid():
             return False
-        await self.remember_position()
-        self.speech.close()
+        from commonUtils.ui.native.page_loading import PageLoading
+        if not hasattr(self, 'page_loading'):
+            self.page_loading = PageLoading(self.article)
+        self.page_loading.start()
+        self.sidebar.show_detail()
         self.epoch += 1
         epoch = self.epoch
         current = self.path
         cancelled = lambda: not self.valid() or epoch != self.epoch
         try:
+            await self.remember_position()
+            if cancelled():
+                return False
+            self.speech.close()
             if not resolve_link:
                 path = self.contained(path)
             if not resolve_link and PurePosixPath(path).suffix.lower() not in MARKDOWN:
@@ -416,6 +423,9 @@ class VaultBrowser:
             if self.valid() and epoch == self.epoch:
                 self.notice.text = fill(str(error)[:180], width=28)
             return False
+        finally:
+            if epoch == self.epoch:
+                self.page_loading.finish()
 
     def follow_link(self, widget, url, **kwargs):
         if not self.valid() or self.path is None:
@@ -641,6 +651,8 @@ class VaultBrowser:
             self.page_search.show()
 
     def dispose(self):
+        if hasattr(self, 'page_loading'):
+            self.page_loading.finish()
         self.page_search.dispose()
         self.reader_actions.dispose()
         self.speech.close()

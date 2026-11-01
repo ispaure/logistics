@@ -130,7 +130,10 @@ class DocumentationReader(MarkdownWikiView):
     def open_page(self, *args, **kwargs):
         if self.speech is not None:
             self.speech.close()
-        opened = super().open_page(*args, **kwargs)
+        return super().open_page(*args, **kwargs)
+
+    def _show_page(self, *args, **kwargs):
+        opened = super()._show_page(*args, **kwargs)
         if self.speech is not None:
             self.speech.button.enabled = self.path is not None
         if hasattr(self, 'reader_actions_button'):

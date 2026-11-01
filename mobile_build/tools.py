@@ -132,6 +132,7 @@ SHARED_REQUIRED_MODULES = (
     'ui/native/image_canvas.py',
     'ui/native/keyboard.py',
     'ui/native/markdown.py',
+    'ui/native/page_loading.py',
     'formats/markdown/image_sources.py',
     'ui/native/markdown_preview.py',
     'ui/native/markdown_search.py',
