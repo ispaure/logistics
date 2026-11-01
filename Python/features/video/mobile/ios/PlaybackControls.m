@@ -212,11 +212,31 @@
     }]];
     [self presentPlaybackDialog:menu];
 }
+- (void)hdrDisplayOptions:(id)sender {
+    if (![self canPlay:NO]) return;
+    UIAlertController *menu = [self menu:@"HDR display mode (session)" sender:sender];
+    if (@available(iOS 26.0, *)) {
+        BOOL forced = self.forceMaximumHDR;
+        [menu addAction:[UIAlertAction actionWithTitle:forced ? @"System-managed HDR" : @"✓ System-managed HDR"
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                [self setForcedMaximumHDRForSession:NO];
+                [self showStatus:@"HDR: system-managed (session)"];
+            }]];
+        [menu addAction:[UIAlertAction actionWithTitle:forced ? @"✓ Maximum HDR (previous behavior)" : @"Maximum HDR (previous behavior)"
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                [self setForcedMaximumHDRForSession:YES];
+                [self showStatus:@"HDR: maximum (session)"];
+            }]];
+    } else {
+        menu.message = @"This iOS version does not support the system-managed HDR selector. The existing HDR output remains enabled.";
+    }
+    [self presentPlaybackDialog:menu];
+}
 - (void)playbackTools:(id)sender {
     if (![self canPlay:NO] || self.controlsLocked) return;
     UIAlertController *menu = [self menu:@"Playback" sender:sender];
     for (NSArray *entry in @[@[@"Go to time…", @"goToTime:"], @[@"Speed…", @"speedOptions:"],
-        @[@"Picture size…", @"pictureOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
+        @[@"Picture size…", @"pictureOptions:"], @[@"HDR display mode…", @"hdrDisplayOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
         @[@"Show in folder", @"showInFolder:"], @[@"Current folder…", @"queueVideos:"], @[@"Previous episode", @"previousVideo:"],
         @[@"Next episode", @"nextVideo:"], @[@"Mute / unmute", @"toggleMute:"], @[@"Lock controls", @"toggleControlLock:"]]) {
         [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {

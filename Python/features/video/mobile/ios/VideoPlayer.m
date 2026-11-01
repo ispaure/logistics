@@ -102,6 +102,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, copy) NSString *languageSignature;
 @property(nonatomic) CGSize lastVideoSize;
 @property(nonatomic) CGFloat sessionSubtitleScale; // Zero means use configured preference.
+@property(nonatomic) BOOL forceMaximumHDR; // Session-only diagnostic; default uses automatic HDR.
 @end
 
 @interface LGVideoController (PlaybackControls)
@@ -1136,12 +1137,28 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self configureVideoDynamicRange:view.layer];
 }
 - (void)configureVideoDynamicRange:(CALayer *)layer {
-    // Only the video layer requests display headroom; subtitles/chrome stay SDR.
+    // This changes only the requested display headroom, never the source HDR metadata.
+    // System-managed HDR is the default on iOS 26; the old forced mode is available
+    // through Playback for A/B comparison without changing decoder or video output.
     if ([layer isKindOfClass:AVSampleBufferDisplayLayer.class]) {
-        if (@available(iOS 26.0, *)) layer.preferredDynamicRange = CADynamicRangeHigh;
-        else if (@available(iOS 17.0, *)) layer.wantsExtendedDynamicRangeContent = YES;
+        if (@available(iOS 26.0, *)) {
+            layer.preferredDynamicRange = self.forceMaximumHDR ? CADynamicRangeHigh : CADynamicRangeAutomatic;
+        } else if (@available(iOS 17.0, *)) {
+            // Older systems lack the new automatic selector. Preserve HDR output.
+            layer.wantsExtendedDynamicRangeContent = YES;
+        }
     }
     for (CALayer *child in layer.sublayers) [self configureVideoDynamicRange:child];
+}
+- (void)setForcedMaximumHDRForSession:(BOOL)forced {
+    if (self.forceMaximumHDR == forced) return;
+    self.forceMaximumHDR = forced;
+    // VLCKit may insert or recreate the sample-buffer layer at runtime.
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    [self configureVideoDynamicRange:self.movie.layer];
+    [CATransaction commit];
+    NSLog(@"[VideoHDR] requestedMode=%@ (effective on iOS 26+)", forced ? @"high" : @"automatic");
 }
 - (CGRect)bounds { return self.movie.bounds; }
 - (void)play { if ([self canPlay:YES]) [self startByUser]; }
