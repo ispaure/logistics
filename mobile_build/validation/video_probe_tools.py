@@ -15,7 +15,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from build_manager.android_emulators import AndroidEmulator
 from logistics_build.build_retention import scratch
 from mobile_build.deployment.android_deploy import deployment_environment, tools_environment, build_tools
-from tests.readers.video_fixtures import codec_matrix, multitrack_movie, orientation_fixtures
+from tests.readers.video_fixtures import codec_matrix, hdr_movies, multitrack_movie, orientation_fixtures
 from mobile_build.tools import stage
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -78,6 +78,8 @@ def cloud_fixtures(workspace, *, rclone=None):
 
 def prepare(apk, workspace, *, cloud=False, rclone=None):
     fixtures = codec_matrix(workspace / 'fixtures', duration=30) if not cloud else []
+    if not cloud:
+        fixtures += hdr_movies(workspace / 'fixtures')
     fixture_root = cloud_fixtures(workspace, rclone=rclone) if cloud else None
     with ZipFile(apk) as archive:
         if not any(b'Lio/github/ispaure/logistics/video/VideoPlayer$Listener;' in archive.read(name)

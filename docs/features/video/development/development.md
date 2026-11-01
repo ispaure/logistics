@@ -1,5 +1,24 @@
 # Video Player development
 
+## Mobile HDR output
+
+iOS prefers VLC's `samplebufferdisplay` output, retaining automatic renderer
+fallback. The native sample-buffer layer requests high dynamic range on iOS 26+
+and extended dynamic range on iOS 17–25; controls and subtitles retain their
+normal range. Android uses VLC's SurfaceView output with hardware decoding
+enabled, avoiding TextureView's HDR limitations. The operating system and decoder
+negotiate the content's color metadata with the display; HDR requires a compatible
+codec, device and display. This does not guarantee every Dolby Vision profile or
+HDR10+ dynamic-metadata format.
+
+The owned `video_chrome_tools --hdr` probe generates 10-bit BT.2020/PQ HEVC,
+records its stream metadata, and checks decoded frames on an EDR-enabled iOS
+sample-buffer layer alongside the native controls. Simulator evidence verifies
+the rendering path, not physical display luminance or color accuracy.
+
+Platform references: [Android HDR playback](https://developer.android.com/media/grow/hdr-playback)
+and [Apple HDR video metadata](https://developer.apple.com/documentation/technotes/tn3145-hdr-video-metadata).
+
 See the [desktop/mobile playback audit](playback-audit.md) for functionality
 differences, remaining oversights and the adjustable memory-buffer policy.
 

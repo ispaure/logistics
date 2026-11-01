@@ -324,7 +324,10 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         }]];
     }
 #endif
-    self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--stats"]];
+    // Keep 10-bit frames and their color attachments in Apple's native renderer.
+    // Retain automatic fallback for formats the sample-buffer output cannot use.
+    self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--stats",
+        @"--vout=samplebufferdisplay,any"]];
     self.player.drawable = self;
     self.player.delegate = self;
     self.player.media = [self playbackMedia];
@@ -443,6 +446,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     // VLCKit installs its surface through VLCDrawable, not a UIView drawable.
     // Explicitly resize that surface after rotations, folds and bar changes.
     for (UIView *surface in self.movie.subviews) surface.frame = self.movie.bounds;
+    [self configureVideoDynamicRange:self.movie.layer];
     CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
     NSDictionary *layout = [self playbackOptions][@"reader_layout"];
     CGFloat margin = layout[@"margin"] ? [layout[@"margin"] doubleValue] : 12;
@@ -1034,6 +1038,15 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     view.frame = self.movie.bounds;
     view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.movie addSubview:view];
+    [self configureVideoDynamicRange:view.layer];
+}
+- (void)configureVideoDynamicRange:(CALayer *)layer {
+    // Only the video layer requests display headroom; subtitles/chrome stay SDR.
+    if ([layer isKindOfClass:AVSampleBufferDisplayLayer.class]) {
+        if (@available(iOS 26.0, *)) layer.preferredDynamicRange = CADynamicRangeHigh;
+        else if (@available(iOS 17.0, *)) layer.wantsExtendedDynamicRangeContent = YES;
+    }
+    for (CALayer *child in layer.sublayers) [self configureVideoDynamicRange:child];
 }
 - (CGRect)bounds { return self.movie.bounds; }
 - (void)play { if ([self canPlay:YES]) [self startByUser]; }

@@ -8,9 +8,26 @@
 @property(nonatomic) BOOL completed;
 @end
 @implementation LGVideoChromeChecks
+- (AVSampleBufferDisplayLayer *)videoLayer:(CALayer *)layer {
+    if ([layer isKindOfClass:AVSampleBufferDisplayLayer.class]) return (AVSampleBufferDisplayLayer *)layer;
+    for (CALayer *child in layer.sublayers) {
+        AVSampleBufferDisplayLayer *found = [self videoLayer:child];
+        if (found) return found;
+    }
+    return nil;
+}
 - (void)finish:(NSString *)error {
     if (self.completed) return;
     self.completed = YES;
+    AVSampleBufferDisplayLayer *layer = [self videoLayer:self.video.movie.layer];
+    BOOL hdrEnabled = NO;
+    BOOL ready = NO;
+    if (@available(iOS 17.4, *)) ready = layer.readyForDisplay;
+    if (@available(iOS 26.0, *)) hdrEnabled = [layer.preferredDynamicRange isEqualToString:CADynamicRangeHigh];
+    else if (@available(iOS 17.0, *)) hdrEnabled = layer.wantsExtendedDynamicRangeContent;
+    if (!error && [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDR"] boolValue] &&
+        (!ready || !hdrEnabled || self.video.player.time.intValue < 1000))
+        error = @"HDR fixture did not reach an EDR-enabled sample-buffer display";
     [self.sampler invalidate];
     NSDictionary *report = @{@"success": @(!error), @"error": error ?: @"", @"samples": self.samples ?: @[],
         @"scope": @"Real UIKit controller and VLC; synthetic local movie; simulator only"};
@@ -18,6 +35,8 @@
     details[@"bounds"] = NSStringFromCGRect(self.window.bounds);
     details[@"orientation"] = @(self.window.windowScene.interfaceOrientation);
     details[@"idiom"] = @(self.video.traitCollection.userInterfaceIdiom);
+    details[@"hdrLayerEnabled"] = @(hdrEnabled);
+    details[@"videoReadyForDisplay"] = @(ready);
     report = details;
     NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/result.json"];
     [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:path atomically:YES];

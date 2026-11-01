@@ -106,6 +106,8 @@ async def android_controls(owner):
         pending, rows = [controls], []
         while pending:
             view = pending.pop(0)
+            if view.getVisibility() != jclass('android.view.View').VISIBLE:
+                continue  # Collapsed Undo seek has no touch target until a seek.
             if isinstance(view, jclass('android.widget.Button')):
                 label = str(view.getContentDescription())
                 assert view.getWidth() / density >= 47.5 and view.getHeight() / density >= 47.5, label
@@ -145,7 +147,7 @@ async def fullscreen_controls(owner, android):
             value.setAccessible(True)
             return value.get(native)
 
-        controls, root = field('controls'), field('root')
+        controls, root = field('controlsScroll'), field('root')
         decor = owner.app._impl.native.getWindow().getDecorView()
         # The surface tap target sits above VLC and below the controls.
         tap = lambda: root.getChildAt(1).performClick()
@@ -221,10 +223,12 @@ async def exercise(app):
         bundled = Path(__file__).with_name('video-fixtures')
         for source in sorted(bundled.glob('*')):
             (root / source.name).write_bytes(source.read_bytes())
-        assert len(list(root.glob('*.mp4'))) == 4
+        android = type(app._impl).__module__.startswith('toga_android.')
+        assert len(list(root.glob('*.mp4'))) == (6 if android else 4)
+        if android:
+            assert (root / 'hevc-hdr-pq.mp4').is_file() and (root / 'hevc-hdr-hlg.mp4').is_file()
         assert len(list(root.glob('*.mkv'))) == 7
         assert len(list(root.glob('*.avi'))) == 2
-        android = type(app._impl).__module__.startswith('toga_android.')
         fullscreen_checked = False
         for path in sorted(root.iterdir()):
             closed_chrome = None

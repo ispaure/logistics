@@ -843,7 +843,10 @@ public final class VideoPlayer {
         root.requestApplyInsets();
         wasSecure = (activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0;
         if (restricted) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        player.attachViews(video, null, true, true);
+        // MediaCodec must render directly to SurfaceView to preserve HDR buffers
+        // and their color metadata. TextureView composites through an SDR path
+        // on older Android versions and has limited HDR support on newer ones.
+        player.attachViews(video, null, true, false);
         setControlsVisible(true);
     }
 

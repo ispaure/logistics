@@ -38,6 +38,26 @@ def codec_matrix(root, ffmpeg='ffmpeg', *, duration=2):
     return fixtures
 
 
+def hdr_movies(root, ffmpeg='ffmpeg', *, duration=30):
+    """10-bit BT.2020 PQ and HLG samples; not a display calibration pattern."""
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    fixtures = []
+    for name, transfer in (('pq', 'smpte2084'), ('hlg', 'arib-std-b67')):
+        path = root / f'hevc-hdr-{name}.mp4'
+        subprocess.run([ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
+            '-f', 'lavfi', '-i', 'testsrc2=size=128x72:rate=12',
+            '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
+            '-t', str(duration), '-c:v', 'libx265', '-preset', 'ultrafast',
+            '-threads', '1', '-pix_fmt', 'yuv420p10le',
+            '-x265-params', 'pools=1:frame-threads=1:log-level=error:colorprim=9:colormatrix=9:transfer=' + ('16' if name == 'pq' else '18'),
+            '-color_primaries', 'bt2020', '-color_trc', transfer, '-colorspace', 'bt2020nc',
+            '-tag:v', 'hvc1', '-c:a', 'aac', str(path)],
+            check=True, capture_output=True, timeout=45)
+        fixtures.append(('mp4', 'hevc', 'aac', path))
+    return fixtures
+
+
 def multitrack_movie(root, source, ffmpeg='ffmpeg'):
     root = Path(root)
     subtitles = root / 'tracks.srt'

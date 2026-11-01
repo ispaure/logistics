@@ -20,7 +20,7 @@ from logistics_build.build_retention import scratch
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(framework, output, model, orientation='portrait'):
+def run(framework, output, model, orientation='portrait', hdr=False):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -46,11 +46,23 @@ def run(framework, output, model, orientation='portrait'):
         (output / 'source.json').write_text(json.dumps(dict(model=model,
             sources={str(p.relative_to(ROOT)): sha256(p.read_bytes()).hexdigest()
                      for p in [*controller.parent.glob('*.m'), fixture]}), indent=2))
+        codec = (['-c:v', 'libx265', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le',
+                  '-x265-params', 'pools=1:frame-threads=1:log-level=error:hdr10=1:colorprim=9:transfer=16:colormatrix=9',
+                  '-color_primaries', 'bt2020', '-color_trc', 'smpte2084',
+                  '-colorspace', 'bt2020nc', '-tag:v', 'hvc1'] if hdr else
+                 ['-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p'])
         subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
-                        'testsrc2=size=128x72:rate=12', '-t', '30', '-c:v', 'libx264', '-preset', 'ultrafast',
-                        '-threads', '1', '-pix_fmt', 'yuv420p', str(app / 'fixture.mp4')], check=True)
+                        'testsrc2=size=128x72:rate=12', '-t', '30',
+                        '-threads', '1', *codec, str(app / 'fixture.mp4')], check=True)
+        metadata = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+            '-show_streams', '-of', 'json', str(app / 'fixture.mp4')], text=True)
+        (output / 'fixture.json').write_text(metadata)
+        if hdr:
+            stream = json.loads(metadata)['streams'][0]
+            assert (stream['pix_fmt'], stream['color_transfer'], stream['color_primaries']) == (
+                'yuv420p10le', 'smpte2084', 'bt2020'), 'HDR fixture lost its depth or color tags'
         (app / 'Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier=bundle,
-            CFBundleName='Video Chrome QA', QAOrientation=orientation, CFBundleExecutable='VideoChromeQA', CFBundleVersion='1',
+            CFBundleName='Video Chrome QA', QAOrientation=orientation, QAHDR=hdr, CFBundleExecutable='VideoChromeQA', CFBundleVersion='1',
             CFBundleShortVersionString='1.0', CFBundlePackageType='APPL', MinimumOSVersion='17.0',
             UIDeviceFamily=[1, 2], UILaunchScreen={},
             UIApplicationSceneManifest=dict(UIApplicationSupportsMultipleScenes=False, UISceneConfigurations={
@@ -102,8 +114,9 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--model', choices=('iPhone Duo', 'iPhone', 'iPad'), default='iPhone Duo')
     parser.add_argument('--orientation', choices=('portrait', 'landscape'), default='portrait')
+    parser.add_argument('--hdr', action='store_true', help='Decode 10-bit BT.2020 PQ HEVC and inspect the native HDR layer.')
     args = parser.parse_args()
-    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation)
+    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr)
 
 
 if __name__ == '__main__':
