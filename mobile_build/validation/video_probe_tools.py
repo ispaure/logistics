@@ -187,7 +187,7 @@ def run(apk, output, *, cloud=False, rclone=None, decode_only=False):
                     captured = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                         'run-as', BUNDLE, 'tar', '-C', 'cache', '-cf', '-', 'video-ui'],
                         env=emulator.environment, capture_output=True, timeout=30)
-                    if captured.returncode == 0:
+                    if captured.returncode == 0 and not decode_only:
                         screens = output / 'screens'
                         screens.mkdir(exist_ok=True)
                         with tarfile.open(fileobj=BytesIO(captured.stdout)) as archive:
@@ -198,6 +198,7 @@ def run(apk, output, *, cloud=False, rclone=None, decode_only=False):
                     (output / 'logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', timeout=30))
                 finally:
                     emulator.cleanup()
+                    (output / 'cleanup.json').write_text(json.dumps(dict(emulator_removed=True)))
             else:
                 emulator.cleanup()
 

@@ -232,7 +232,11 @@ async def exercise(app):
         assert len(list(root.glob('*.mkv'))) == 7
         assert len(list(root.glob('*.avi'))) == 2
         fullscreen_checked = False
-        for path in sorted(root.iterdir()):
+        paths = sorted(root.iterdir())
+        if decode_only:
+            paths = [path for path in paths if path.name in (
+                'h264-aac.mp4', 'hevc-hdr-pq.mp4', 'hevc-hdr-hlg.mp4')]
+        for path in paths:
             closed_chrome = None
             assert await open_video(app, LocalFiles(root), path.name)
             owner = app.video_player
