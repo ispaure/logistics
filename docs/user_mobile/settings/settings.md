@@ -3,7 +3,7 @@
 ## Categories and adaptive layout
 
 Settings opens a category list: **App**, **Features**, **Read aloud**, **Markdown**, **Text**,
-**EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Help**, and **About**.
+**EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Privacy & Security**, **Reset**, **Help**, and **About**.
 Both platforms include **Appearance** for Seasonal snow; Android also offers
 High contrast / E Ink there. On a phone, tap
 one category to see its options and use Back to return to the list.
@@ -175,7 +175,7 @@ is available offline; the About heading keeps its normal appearance.
 
 ### Trusted Wi-Fi session resume
 
-In **Settings → Workspaces**, **Skip session password on trusted Wi-Fi** is off
+In **Settings → Privacy & Security**, **Skip session password on trusted Wi-Fi** is off
 by default. Enable it to reveal **Trusted Wi-Fi networks…**. Add the current
 network or enter its exact name (SSID), including case and spaces. Remove a row
 to stop trusting that name. The setting and list are saved on this device.
@@ -330,6 +330,12 @@ migration and general app-data backup remain separate work.
 
 ## Erase all app data
 
+**Settings → Reset** also contains **Clear all saved positions…** and
+**Clear all recent files…**. Each opens a confirmation popup and has no trailing
+navigation arrow. Clearing positions keeps files and bookmarks; clearing recent
+files keeps open documents and saved positions. Protected reader-history migration
+is under **Settings → Workspaces**, alongside connection settings.
+
 Open **Settings → Reset → Erase all app data…**. Read the scope, export anything
 you need, type **ERASE**, then confirm. Finish transfers/generation and close
 other Logistics windows first. This is irreversible.
@@ -388,7 +394,7 @@ Ordinary documents may show their filename; private readers use **Read aloud**.
 Document passages never appear in lock-screen or notification metadata. The subtitle
 shows the timer when enabled, otherwise the app name.
 
-**Session-only speech while locked** defaults to off. With it off, speech from
+**Settings → Privacy & Security → Session-only speech while locked** defaults to off. With it off, speech from
 session-only credentials stops and its queued text clears when the app locks or
 goes into the background. Turn the setting on to permit already-started speech
 and system controls while locked; the choice is remembered on this device.
@@ -398,4 +404,4 @@ the document stops playback even with the setting enabled.
 
 ## Audio playback
 
-Manage approved Bluetooth outputs in **Audio playback**. See [audio playback](audio-playback.md) for approval, removal and pause behavior across video and read-aloud.
+Manage approved Bluetooth outputs in **Settings → Privacy & Security**, under **Protected audio outputs**. See [audio playback](audio-playback.md) for approval, removal and pause behavior across video and read-aloud.

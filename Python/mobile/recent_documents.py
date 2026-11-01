@@ -11,7 +11,8 @@ REFERENCE_KINDS = KINDS | {'video'}
 
 
 class RecentDocuments:
-    def __init__(self, root):
+    def __init__(self, root, *, private_root=None):
+        self.private_root = root if private_root is None else private_root
         self.path = root / 'recent-documents.json'
         from services.documents.history_controls import _recent
         _recent.add(self)
@@ -35,9 +36,31 @@ class RecentDocuments:
                             or item['provider'] not in PROVIDERS or not uuid(item['resource'])
                             or item['kind'] not in KINDS or not self.valid_time(item)):
                         raise ValueError('Invalid recent document identity.')
-                self.items = items
+                self.items = self.normalize_items(items)
+                if self.items != items:
+                    atomic_write_json(self.path, self.items, max_bytes=MAX_HISTORY_BYTES, durable_directory=True)
         except (OSError, ValueError, TypeError) as error:
             self.error = str(error)
+
+    def normalize_source(self, source):
+        if source.get('type') != 'local':
+            return source
+        from types import SimpleNamespace
+        from .document_sources import local_document_path
+        path = local_document_path(SimpleNamespace(private_root=self.private_root), source['path'])
+        return dict(source, path=str(path))
+
+    def normalize_items(self, items):
+        result, seen = [], set()
+        for item in sorted(items, key=lambda item: item.get('opened', 0), reverse=True):
+            if item['provider'] == 'file-reference':
+                source = self.normalize_source(item['source'])
+                item = dict(item, source=source, resource=self.reference_id(source))
+            identity = item['provider'], item['resource']
+            if identity not in seen:
+                result.append(item)
+                seen.add(identity)
+        return result
 
     def remember(self, session):
         if session is None or self.error:
@@ -103,6 +126,7 @@ class RecentDocuments:
     def remember_file(self, session, source):
         if self.error or source is None:
             return
+        source = self.normalize_source(source)
         item = dict(provider='file-reference', resource=self.reference_id(source),
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
         if self.items and all(self.items[0].get(key) == value for key, value in item.items() if key != 'opened'):

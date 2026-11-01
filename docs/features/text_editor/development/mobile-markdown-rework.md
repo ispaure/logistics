@@ -23,6 +23,51 @@ LocalCrypt data, settings and unrelated changes in the current development branc
 
 ## Starting points and ownership
 
+### Markdown typography
+
+Markdown document sizes use CSS pixels across formatted editing, previews,
+Notes Library and the documentation article pane. Native source editors convert
+that preference to Toga's integer CSS-point units at the font-binding boundary;
+rounding can differ by at most two-thirds of a native logical unit. Initial
+provider opening, mode changes, settings refresh and pinch updates use the same
+conversion. Plain text and EPUB retain their independent size policies.
+
+Reading and formatted editing use matching heading, code and table sizes.
+Both disable WebKit's automatic text enlargement so viewport changes do not
+silently change the selected size. Navigation labels and sidebar rows retain
+their interface typography.
+
+The browser regression in `test_mobile_markdown_editing_dom.py` compares computed
+element sizes in the editor, preview and Chat transcript at 12, 16, 23 and 32.
+The isolated native `markdown_typography_probe.py` measures local files, Notes
+Library/provider documents, documentation and Chat, including UIKit source and
+message-field font sizes, at 16 and 24.
+Run it through `mobile_build.validation.document_storage_tools` with
+`ios --probe markdown-typography --family iPhone` (or `iPad`) and an ignored
+`--output` directory. The runner owns simulator creation, evidence and cleanup.
+
+On November 1, 2026, focused iPhone and iPad simulator runs passed all seven
+surface measurements at both sizes: file formatted/source/preview, note
+formatted/source/reader, and the documentation article. UIKit source fonts and
+WebView body text measured exactly 16 and 24 respectively. Screenshots were
+reviewed and the owned QA apps/simulators were removed. Host font, Markdown,
+provider, notes and documentation regressions passed, as did all 20 browser
+editing tests (including computed-style parity at four sizes).
+
+A second pass included Chat's rendered replies and native composer: on both
+iPhone and iPad all nine surfaces matched at 16 and 24 while Chat's legacy
+general preference was set to 12. The iPad install timed out before the probe
+on its first attempt; a clean simulator retry passed. Both simulator runs
+removed their QA apps and devices.
+
+These were current Python/CSS checks in a cached native shell, with its missing
+incoming-file service disabled only in the isolated harness. A fresh native
+build was blocked by unrelated concurrent video compilation errors. This is
+typography acceptance, not release-build, incoming-file, physical-device or
+Android-device acceptance.
+
+### Owner map
+
 Read the [developer index](../../../development/development.md),
 [mobile runtime](../../../development/mobile-runtime.md),
 [workspace navigation](../../../development/mobile-workspace-navigation.md),

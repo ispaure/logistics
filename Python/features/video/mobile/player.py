@@ -311,7 +311,7 @@ async def open_video(app, provider, path):
         state = getattr(progress, 'credential_state', None)
         notice = getattr(progress, 'resume_notice', None)
         if state is not None and state.locked_state:
-            notice = 'Saved position needs the previous ZIP password. Use Settings → App → Migrate protected reader history.'
+            notice = 'Saved position needs the previous ZIP password. Use Settings → Workspaces → Migrate protected reader history.'
         if notice:
             app.loop.call_later(1, lambda: player.native.status(notice) if not player.closed and player.native is not None else None)
         from services.documents.mobile_storage import remember_video

@@ -214,7 +214,7 @@ The operating system controls the exact lock-screen layout and refresh timing.
 Playback and controls end when
 the passage finishes, the document closes or its credentials are revoked. For
 session-only credentials, background speech is disabled unless **Settings →
-Session-only speech while locked** is enabled. The saved opt-in does not unlock
+Privacy & Security → Session-only speech while locked** is enabled. The saved opt-in does not unlock
 credentials or allow another chapter/file to be read while locked. See
 [the speech setting](../../../user_mobile/settings/settings.md#speech-while-locked).
 

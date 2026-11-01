@@ -99,7 +99,7 @@ for the next test session: prepare a new one from the then-current code.
 
 ## All-audio Bluetooth and mirroring extension
 
-The video launcher now opens the real Settings → Audio playback category between
+The video launcher now opens the real Settings → Privacy & Security category between
 ordinary and session-only video phases. It includes native synthetic read-aloud,
 real selected-output monitoring and a Continue QA button. Test both video and
 speech with a Bluetooth device connected before Play; add/decline/cancel approval,

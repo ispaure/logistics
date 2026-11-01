@@ -248,7 +248,11 @@ class FolderHubUI:
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
         self.app.incoming_notice = FittedLabel(getattr(self.app, 'incoming_status',
             'Files shared from other apps appear in Received Files.'), style=Pack(font_size=12, margin_top=4))
-        box = toga.Box(children=[self.folder_source_tabs, self.folder_local_header, self.folder_picker_header, self.folder_source_actions,
+        self.folder_source_tabs.style.flex = 1
+        self.folder_source_tabs.style.margin_bottom = 0
+        self.app._files_status_row = toga.Box(children=[self.folder_source_tabs],
+            style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
+        box = toga.Box(children=[self.app._files_status_row, self.folder_local_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box,
             folder_scroll(self.folder_list), self.app.incoming_notice],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
@@ -347,6 +351,19 @@ class FolderHubUI:
             button = toga.Button(SOURCE_LABELS[source], on_press=select_source,
                                  style=Pack(flex=1, height=TOUCH_TARGET,
                                             font_size=toga_font_size(CONTROL_TEXT), margin=2))
+            backend = type(button._impl).__module__
+            if backend.startswith('toga_iOS.'):
+                button._impl.native.titleLabel.numberOfLines = 2
+                button._impl.native.titleLabel.lineBreakMode = 0
+                button._impl.native.titleLabel.textAlignment = 1
+            elif backend.startswith('toga_android.'):
+                # Share the row by label length and use the full touch height
+                # for text. Material's default padding clips a second line at 48 dp.
+                button.style.flex = 1.7 if source == 'Network shares' else 1
+                pad = button._impl.scale_in(4)
+                button._impl.native.setPaddingRelative(pad, 0, pad, 0)
+                button._impl.native.setSingleLine(False)
+                button._impl.native.setMaxLines(2)
             self.folder_source_buttons[source] = button
             self.folder_source_tabs.add(button)
 

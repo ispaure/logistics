@@ -4,6 +4,13 @@ The feature's lazy `register()` contributes `lm.chat`, the `lm` rail glyph and
 typed chat defaults. Registration/page construction never make network requests.
 The [user guide](../user/user.md) describes available workflows and limits.
 
+Mobile Chat uses the shared Markdown size preference for its transcript and
+native composer. The font binding converts CSS-pixel sizes at the native input
+boundary, reapplies the preference after WebView loads, and propagates settings
+and pinch changes without replacing messages or drafts. Streaming updates read
+the same preference. Markdown heading/code/table proportions match document
+viewers; conversation bubble spacing and interface labels remain chat-specific.
+
 Mobile `laptop.py` retains the existing transcript, draft, primary action and
 history controls while allocating them around active horizontal UIKit reserved
 regions. The transcript occupies the upper panel and the lower panel owns the

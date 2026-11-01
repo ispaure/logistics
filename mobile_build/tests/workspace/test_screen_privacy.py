@@ -85,19 +85,23 @@ class ScreenPrivacyTests(unittest.TestCase):
             app.video_player = SimpleNamespace(conceal=Mock(), reveal=Mock(), retire_changed_policy=Mock())
             privacy.interrupt()
             self.assertIs(privacy.shield.parent, window)
-            self.assertFalse(gate.locked)
-            self.assertFalse(privacy.inactive)
+            self.assertTrue(gate.locked)
+            self.assertTrue(privacy.inactive)
             privacy.refresh()  # A progress/credential refresh while Control Center is up.
-            self.assertFalse(gate.locked)
-            app.video_player.conceal.assert_not_called()
+            self.assertTrue(gate.locked)
+            app.video_player.conceal.assert_called()
             privacy.reveal()
             self.assertIsNone(privacy.shield)
-            self.assertFalse(gate.locked)
+            self.assertTrue(gate.locked)  # Returning without backgrounding still needs a password.
+            self.assertFalse(privacy.inactive)
+            self.assertTrue(gate.verify('session-password'))
+            self.assertTrue(gate.authorize(gate.revision))
+            privacy.app.retire_private_comic_batch.reset_mock()
             privacy.interrupt()
             privacy.conceal()
             self.assertTrue(gate.locked)
             app.video_player.conceal.assert_called()
-            privacy.app.retire_private_comic_batch.assert_called_once_with()
+            self.assertEqual(privacy.app.retire_private_comic_batch.call_count, 2)
             self.assertIs(privacy.shield.parent, window)
             privacy.shield.parent = None
             privacy.refresh()
@@ -139,6 +143,18 @@ class ScreenPrivacyTests(unittest.TestCase):
             # that ordinary UI, including an unattached startup scene.
             app.cloud_client = SimpleNamespace(package_name='Saved.zip', session_privacy=None)
             app.cloud_pending_zip = object()
+            app.video_player = SimpleNamespace(conceal=Mock(), reveal=Mock(), retire_changed_policy=Mock())
+            window.activation = 1
+            privacy.interrupt()
+            privacy.refresh()
+            self.assertIsNone(privacy.shield)
+            self.assertFalse(privacy.inactive)
+            self.assertFalse(privacy.resume_locked)
+            app.video_player.conceal.assert_not_called()
+            window.activation = 0
+            privacy.reveal()
+            self.assertIsNone(privacy.shield)
+            app.video_player.conceal.assert_not_called()
             for activation in (-1, 0, 1, 2):
                 for captured in (False, True):
                     for scene_capture in (-1, 0, 1):
@@ -293,8 +309,8 @@ class ResumeLockTests(unittest.TestCase):
         self.app.loop.run_until_complete(browser.select(browser.entries[1]))
         snapshot, selected, epoch = browser.native_list.data, browser.native_list.selection, browser.epoch
         self.app.main_window.content = browser.widget
-        for _ in range(3):
-            self.privacy.conceal()
+        for leave in (self.privacy.interrupt, self.privacy.conceal, self.privacy.interrupt):
+            leave()
             self.privacy.reveal()
             self.unlock('wrong')
             self.assertIs(self.app.main_window.content, self.privacy.lock_view)
@@ -377,6 +393,38 @@ class ResumeLockTests(unittest.TestCase):
         self.assertTrue(replacement.locked)
         self.assertIs(self.app.main_window.content, self.privacy.lock_view)
         self.unlock('new-password')
+        self.assertIs(self.app.main_window.content, self.original)
+
+    def test_session_loaded_during_ordinary_interruption_requires_password(self):
+        for refresh_before_return in (True, False):
+            with self.subTest(refresh_before_return=refresh_before_return):
+                self.app.cloud_client.session_privacy = None
+                self.privacy.refresh()
+                self.privacy.interrupt()
+                self.assertFalse(self.privacy.inactive)
+                self.app.cloud_client.session_privacy = ResumePassword('new-password')
+                if refresh_before_return:
+                    self.privacy.refresh()
+                    self.assertTrue(self.app.cloud_client.session_privacy.locked)
+                self.privacy.reveal()
+                self.assertTrue(self.app.cloud_client.session_privacy.locked)
+                self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+                self.unlock('new-password')
+                self.assertIs(self.app.main_window.content, self.original)
+
+    def test_interruption_and_return_during_password_check_rejects_old_result(self):
+        self.privacy.interrupt()
+        self.privacy.reveal()
+        async def verify_then_interrupt(function, *args):
+            result = function(*args)
+            self.privacy.interrupt()
+            self.privacy.reveal()
+            return result
+        with patch('asyncio.to_thread', side_effect=verify_then_interrupt):
+            self.unlock('session-password')
+        self.assertTrue(self.gate.locked)
+        self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+        self.unlock('session-password')
         self.assertIs(self.app.main_window.content, self.original)
 
     def test_private_view_holds_protection_after_credentials_cleared(self):
@@ -462,6 +510,27 @@ class ResumeLockTests(unittest.TestCase):
             self.privacy.reveal()
             self.assertFalse(self.gate.locked)
             self.assertIs(self.app.main_window.content, self.original)
+
+    def test_failed_interruption_invalidates_pending_wifi_resume(self):
+        import asyncio
+        self.app.preferences.save(session_trusted_wifi='true', trusted_wifi_networks='["Home"]')
+        self.privacy.conceal()
+        revision = self.privacy.wifi_revision
+        ready = self.app.loop.create_future()
+        async def read(app):
+            return await ready
+        with patch('mobile.trusted_wifi.read_ssid', side_effect=read):
+            task = self.app.loop.create_task(self.privacy.resume_on_wifi(revision))
+            self.app.loop.run_until_complete(asyncio.sleep(0))
+            with patch.object(self.privacy, 'prepare_native_protection', side_effect=RuntimeError('native failure')):
+                with self.assertRaisesRegex(RuntimeError, 'native failure'):
+                    self.privacy.interrupt()
+            ready.set_result('Home')
+            self.app.loop.run_until_complete(task)
+        self.assertTrue(self.gate.locked)
+        self.assertTrue(self.privacy.inactive)
+        self.assertTrue(self.privacy.interrupted)
+        self.assertIs(self.app.main_window.content, self.privacy.lock_view)
 
     def test_ios_document_stays_hidden_until_wifi_verification_finishes(self):
         import asyncio

@@ -172,7 +172,7 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.owner.save({CAR.identity: CAR.label})
         box = toga.Box()
         rows = controls(self.app, box)
-        row = rows.children[0]
+        row = rows.children[0].children[0]
         self.assertIn('Car', row.children[0].text)
         self.assertIn(CAR.identity[:8], row.children[0].text)
         row.children[1].on_press()

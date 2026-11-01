@@ -14,6 +14,22 @@ from mobile.chat_fixture import fixture_server
 
 
 class ChatUITests(unittest.TestCase):
+    def test_markdown_size_updates_chat_without_replacing_the_draft_or_transcript(self):
+        from mobile.font_scaling import refresh
+        app = self.app
+        app.chat_prompt.value = 'Keep my draft'
+        app.chat_transcript.evaluate_javascript = AsyncMock()
+        with patch('mobile.font_scaling.native_backend', return_value='toga_iOS.widgets'):
+            app.preferences.values['font_size'] = '12'
+            app.preferences.values['markdown_font_size'] = '24'
+            refresh(app)
+            app.loop.run_until_complete(asyncio.sleep(0))
+            self.assertEqual(app.chat_prompt.style.font_size, 18)
+            self.assertIn("fontSize='24px'", app.chat_transcript.evaluate_javascript.call_args.args[0])
+            app.show_chat()
+            self.assertEqual(app.chat_prompt.style.font_size, 18)
+        self.assertEqual(app.chat_prompt.value, 'Keep my draft')
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
@@ -259,6 +275,7 @@ class ChatUITests(unittest.TestCase):
 
     def test_transcript_updates_coalesce_and_use_the_latest_conversation(self):
         app = self.app
+        app.preferences.values.update(font_size='12', markdown_font_size='24')
         scripts = []
         async def evaluate(script):
             scripts.append(script)
@@ -270,6 +287,7 @@ class ChatUITests(unittest.TestCase):
             app.loop.run_until_complete(app.chat_render_task)
         self.assertEqual(len(scripts), 2)
         self.assertIn(app.chat_current['id'], scripts[-1])
+        self.assertIn('"font_size": 24', scripts[-1])
 
     def test_transcript_worker_cannot_publish_after_switching_conversations(self):
         from threading import Event, get_ident

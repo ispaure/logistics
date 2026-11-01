@@ -169,21 +169,27 @@ class WorkspaceNavigation(AdaptiveWorkspace):
     def install(self):
         # Both Apple and Android use the same measured content split, inside
         # their existing native navigation controller, including compact Back.
-        adapter = self.app.native_host.adapter
-        if adapter is not None and hasattr(adapter, 'navigation'):
-            home = adapter.navigation[self.app.native_host.destinations.index('home')]
-            home.topViewController.navigationItem.title = 'Home'
-            self.sync_home_bar()
         self.render()
 
-    def sync_home_bar(self):
+    def sync_destination_bar(self, destination):
+        """Reclaim title-only root bars after the screen mounts its actions."""
         adapter = self.app.native_host.adapter
-        if adapter is None or not hasattr(adapter, 'navigation'):
+        if (adapter is None or not hasattr(adapter, 'navigation')
+                or getattr(self.app, '_reader_chrome_hidden', False)):
             return
-        home = adapter.navigation[self.app.native_host.destinations.index('home')]
-        # Keep the same native title and Back container as other destinations.
-        if bool(home.isNavigationBarHidden()):
-            home.setNavigationBarHidden(False, animated=False)
+        navigation = adapter.navigation_for(destination)
+        item = adapter.content_controller(destination).navigationItem
+        # Include both legacy item arrays and modern grouped/overflow actions.
+        # Disabled actions still need their toolbar, as do native More/Back routes.
+        actions = any(list(getattr(item, name, None) or ()) for name in (
+            'leftBarButtonItems', 'rightBarButtonItems', 'leadingItemGroups', 'trailingItemGroups'))
+        actions = actions or any(getattr(item, name, None) is not None for name in (
+            'pinnedTrailingGroup', 'additionalOverflowItems'))
+        nested = (bool(self.app.routes.screens[destination])
+                  or len(list(navigation.viewControllers)) > 1)
+        hidden = not (nested or actions)
+        if bool(navigation.isNavigationBarHidden()) != hidden:
+            navigation.setNavigationBarHidden(hidden, animated=False)
 
     def uninstall(self):
         columns = getattr(self, 'file_columns', None)
@@ -350,7 +356,6 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return
         self.rendering = True
         try:
-            self.sync_home_bar()
             adapter = self.app.native_host.adapter
             if (adapter is not None and type(self.app._impl).__module__.startswith('toga_android.')
                     and adapter.impl.native.getWidth() > 0):
@@ -422,6 +427,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 sync_screen(self.app, view, destination or self.app.native_host.state.destination)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
+            self.sync_destination_bar(destination or self.app.native_host.state.destination)
             from .appearance import reserve_navigation
             reserve_navigation(self.app)
             if hasattr(self.app, 'home_sections'):

@@ -593,7 +593,7 @@ class FolderHubTests(unittest.TestCase):
                 app.cloud_remote.items = ['Loaded drive']
                 app.show_locations()
                 view = app.body.children[0]._workspace_frame.main
-                self.assertEqual([button.text for button in view.children[0].children], ['Local', 'Cloud', 'Home Server'])
+                self.assertEqual([button.text for button in app.folder_source_tabs.children], ['Local', 'Cloud', 'Home Server'])
                 self.assertEqual(app.folder_source, 'Local')
                 self.assertEqual(list(app.folder_local_header.children), [app.folder_local_tabs])
                 self.assertFalse(app.folder_picker_header.children)

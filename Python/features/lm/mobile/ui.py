@@ -46,7 +46,7 @@ class ChatUI:
             if error:
                 self.set_chat_status(error)
             self.chat_transcript.set_content('https://logistics.invalid/chat/', transcript_document(theme_css=self.presentation.css_variables()))
-        self.chat_prompt.style.font_size = int(self.preferences.values['font_size'])
+        self.chat_prompt._font_binding.apply(self.presentation.font_size('markdown'))
         self.update_chat_transcript()
         if present:
             self.show_view(self.chat_view, destination='chat', root=True, title='Chat')
@@ -81,9 +81,11 @@ class ChatUI:
         self.transcript.force_latest = False
         self.chat_transcript = ChatTranscript(on_navigation_starting=lambda widget, url, **kw: False,
             on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
+        self.presentation.bind_font(self.chat_transcript, 'markdown', web=True)
         self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
         self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
-            placeholder='Message…', style=Pack(flex=1, height=52, margin=4, margin_left=12, font_size=int(self.preferences.values['font_size'])))
+            placeholder='Message…', style=Pack(flex=1, height=52, margin=4, margin_left=12))
+        self.presentation.bind_font(self.chat_prompt, 'markdown')
         self.chat_send = self.presentation.icon_button('up', 'Send', on_press=self.chat_primary_action)
         self.chat_send.style.margin = 6
         self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=48))
@@ -308,7 +310,10 @@ class ChatUI:
         # action capsule outside the safe-area allocation on iPad and Duo.
         available = self.adaptive.content_width('chat')
         menu_width = 52 if self.chat_menu_button in self.chat_header.children else 0
-        title_width = max(24, int(available) - 96 - menu_width - 12)
+        sync_width = sum(child.style.width + child.style.margin_left + child.style.margin_right
+                         for child in self.chat_header.children if getattr(child, '_sync_shortcut', False))
+        actions_width = 96 if self.chat_header_actions in self.chat_header.children else 0
+        title_width = max(24, int(available) - actions_width - menu_width - sync_width - 12)
         for label in (self.chat_title, self.chat_model_label):
             if label.style.width != title_width:
                 label.style.width = title_width
@@ -329,7 +334,7 @@ class ChatUI:
         container = self.chat_view._impl.container
         available_height = container.height if container is not None else 0
         self.chat_prompt.style.height = composer_height(self.chat_prompt.value, min(width, 780) - 84,
-            int(self.preferences.values['font_size']), available_height=available_height or None)
+            self.presentation.font_size('markdown'), available_height=available_height or None)
         if self.laptop.active:
             self.chat_prompt.style.height = self.laptop.prompt_height
 
@@ -587,7 +592,7 @@ class ChatUI:
                 while start < min(len(entries), len(previous)) and entries[start] is previous[start]:
                     start += 1
                 script = transcript_update(data['id'], entries[start:],
-                    self.preferences.values['font_size'],
+                    self.presentation.font_size('markdown'),
                     configured=configured(self.chat_profile),
                     force_latest=force_latest, start=start)
                 ready = await self.chat_transcript.evaluate_javascript(script)

@@ -21,6 +21,8 @@ the side or horizontal bar for the current window, including Duo's exterior and
 interior displays. The timeline overlays the bottom of the screen within the safe area and avoids an active Duo fold.
 The iOS filename occupies the native title area alongside playback controls,
 with centered storage details beneath it and a glass background on iOS 26 or newer.
+In narrow or short landscape windows, the filename moves above the timeline so
+the navigation buttons do not crowd it out.
 The green cached-range strip follows the seek track's endpoints directly beneath it.
 The movie stays centered in the full player surface when controls appear or hide. Android retains its responsive
 48-dp playback buttons.
@@ -33,6 +35,11 @@ panel hides the status bar, including time, connection and battery indicators,
 even while the lower controls remain visible.
 Unfolding restores the full video surface. The split follows the system's hinge
 state and reserved division; physical-pose acceptance is separate from layout tests.
+
+On iOS, use the **Picture** icon to choose Fit, Fill (crop edges), or Original.
+Picture size is not repeated in the Playback menu. Selection popups, including
+Playback, Audio, Subtitles and Chapters, close when you tap outside them and have
+no Cancel row. Text-entry prompts still have explicit Apply/Cancel controls.
 
 **Chapters** lists embedded chapter names and start times when the file provides
 them. Selecting a chapter seeks without resuming a paused movie. AVI files often

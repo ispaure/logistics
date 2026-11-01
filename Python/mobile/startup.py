@@ -92,7 +92,7 @@ def load_startup_models(root, workspace_root):
     from .workspace import Workspace
     preferences = Preferences(workspace_root)
     store = DocumentStore(root / 'Documents')
-    recent = RecentDocuments(workspace_root)
+    recent = RecentDocuments(workspace_root, private_root=root)
     workspace = Workspace(workspace_root)
     display = {}
     keys = {session.resource for session in workspace.sessions.values() if session.provider == 'managed-text'}

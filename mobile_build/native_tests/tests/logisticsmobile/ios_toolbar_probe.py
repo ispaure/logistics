@@ -44,6 +44,7 @@ class ToolbarProbe(LogisticsMobile):
             # UIKit's system Close item can have a nil title even when its
             # accessible name is "Hide Find" or another contextual dismissal.
         sample = dict(name=name, edge=vertical_edge(controller),
+                      bar_hidden=bool(navigation.isNavigationBarHidden()),
                       leading=[str(item.title or item.accessibilityLabel) for item in leading],
                       trailing=[str(item.title) for item in trailing],
                       pinned=[str(item.title) for item in pinned],
@@ -87,10 +88,24 @@ class ToolbarProbe(LogisticsMobile):
             from services.documents.readers import PrivateReader
             from pypdf import PdfWriter
             import io
+            import toga
             await asyncio.sleep(1)
-            self.show_home(); await self.record('home')
-            self.show_locations(); await self.record('workspaces')
-            self.show_documents_hub(); await self.record('documents')
+            for name, show, hidden in (
+                    ('home', self.show_home, True),
+                    ('workspaces', self.show_locations, True),
+                    ('documents', self.show_documents_hub, False),  # Keep Browse.
+                    ('chat-root', self.show_chat, False),  # Keep conversation controls.
+                    ('settings', self.show_settings, True)):
+                show()
+                sample = await self.record(name)
+                assert sample['bar_hidden'] == hidden, sample
+                self.show_view(toga.Label('Synthetic navigation check'),
+                               route='root-bar-audit', title='Navigation check')
+                sample = await self.record(name + '-nested')
+                assert not sample['bar_hidden'], sample
+                assert self.routes.back()
+                sample = await self.record(name + '-returned')
+                assert sample['bar_hidden'] == hidden, sample
             self.show_home()
             root = collection_path(self.private_root) / 'Comics'
             root.mkdir(exist_ok=True, parents=True)
@@ -98,6 +113,7 @@ class ToolbarProbe(LogisticsMobile):
             (root / 'Note.md').write_text('# Synthetic note\n\nToolbar fixture.')
             await self.show_files(location=('Local files', 'Comics'))
             sample = await self.record('folder')
+            assert not sample['bar_hidden'], sample  # Back and folder actions restore the bar.
             if sample['edge']:
                 assert sample['leading'][0] == 'Search this folder', sample
                 assert 'Search this folder' not in sample['trailing'] and sample['overflow'], sample

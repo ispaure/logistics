@@ -355,13 +355,13 @@ class HubDocumentTests(unittest.TestCase):
         self.assertFalse(home.paired)
         self.assertFalse(documents.paired)
 
-    def test_home_heading_is_compact_and_keeps_native_home_label(self):
+    def test_home_omits_repeated_heading_and_keeps_navigation_label(self):
         import toga
         app = self.app
         app.workspace.active = None
         view = app.build_home()
         labels = [child.text for child in view.content.children if isinstance(child, toga.Label)]
-        self.assertEqual(labels[0], 'Home')
+        self.assertNotIn('Home', labels)
         self.assertEqual(view.content.style.margin_top, 8)
         self.assertEqual(view.content.children[0].style.margin_top, 0)
         self.assertNotIn('Read. Write. Organize.', labels)
@@ -437,9 +437,10 @@ class HubDocumentTests(unittest.TestCase):
         view = app.body.children[0]
         frame = view._workspace_frame
         self.assertIsNone(view.transfer_banner)
-        self.assertIs(frame.main.children[0], app._sync_status_controls['files'][1])
+        self.assertIs(frame.main.children[0], app._files_status_row)
+        self.assertIs(app._sync_status_controls['files'][2].parent, app._files_status_row)
         credential_row = app.folder_credential.parent
-        self.assertIs(frame.main.children[1], app.folder_source_tabs)
+        self.assertIs(app._files_status_row.children[0], app.folder_source_tabs)
         self.assertFalse(app.folder_local_header.children)
         self.assertIn(app.folder_picker_header, frame.main.children)
         self.assertEqual(list(app.folder_picker_header.children), [credential_row])
@@ -580,7 +581,7 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = '# A retained draft'
         app.show_home()
         content = app.body.children[0].content
-        self.assertEqual(content.children[0].text, 'Home')
+        self.assertIs(content.children[0], app._home_status_row)
         self.assertIsNone(app.home_continue)
         self.assertIn('Focus.md', [getattr(widget, 'text', '') for widget in widgets(content)])
         self.assertNotIn('Markdown', labels(content))

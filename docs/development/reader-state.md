@@ -48,7 +48,7 @@ another crypto implementation to the native bridge.
 
 ## Clear actions and lifetime
 
-`history_controls.py` backs separate desktop Reader history and mobile App settings
+`history_controls.py` backs separate desktop Reader history and mobile Reset settings
 for clearing positions and Recent. Neither requires credential keys. Clearing
 positions removes app-owned checkpoint files and advances a nonsecret generation
 fence. Old readers and pending writes cannot recreate their pre-clear position.
@@ -78,3 +78,13 @@ integration test exercises the actual mobile bridge for positions, bookmarks and
 Recent across password replacement, migration and clearing while credentials are
 unloaded. Provider opening tests cover preparation, restoration, publication and
 retirement. Physical-device UI acceptance remains separate from these host checks.
+
+## Local recent references after iOS updates
+
+Loading ordinary Recent history resolves historical iOS application Documents
+paths against the current registered Documents root before deduplication. Only
+an existing relocated file qualifies; unrelated paths and missing files keep
+their identities. Duplicate references retain the newest entry. New opens use
+the same resolution, preventing a container relocation from adding a second row.
+Secondary windows resolve against the app storage root while retaining their own
+history file in the window settings folder.

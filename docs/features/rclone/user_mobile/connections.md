@@ -245,7 +245,7 @@ disappear from the list. A passwordless connection asks you to create a temporar
 session password. These labels and password checks stay in memory.
 
 
-The optional **Settings → Workspaces → Skip session password on trusted Wi-Fi**
+The optional **Settings → Privacy & Security → Skip session password on trusted Wi-Fi**
 setting can skip this repeat foreground-resume check for already-unlocked
 session-only credentials on explicitly listed networks. It is off by default,
 never saves a password and does not bypass app restart or manual session locking.

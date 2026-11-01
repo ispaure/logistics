@@ -16,6 +16,7 @@
     "mobile/controls.py",
     "mobile/ios/PlaybackControls.m",
     "mobile/android/io/github/ispaure/logistics/video/PlaybackControls.java",
+    "mobile/ios/HDRDiagnostics.m",
     "mobile/ios/PausePresentation.m",
     "mobile/android/io/github/ispaure/logistics/video/PausePresentation.java"
   ]

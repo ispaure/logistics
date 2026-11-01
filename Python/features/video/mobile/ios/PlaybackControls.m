@@ -28,7 +28,24 @@
     if (presented) {
         if (![presented isKindOfClass:UIAlertController.class]) return;
         [presented dismissViewControllerAnimated:NO completion:^{ [self presentPlaybackDialog:dialog]; }];
-    } else [self presentViewController:dialog animated:YES completion:nil];
+    } else {
+        [self.menuOutsideTap.view removeGestureRecognizer:self.menuOutsideTap];
+        self.menuOutsideTap = nil;
+        [self presentViewController:dialog animated:YES completion:^{
+            // Text-entry dialogs retain explicit Apply/Cancel. Selection menus
+            // dismiss from the backdrop, including compact scrollable alerts.
+            if (dialog.textFields.count || self.presentedViewController != dialog) return;
+            self.menuOutsideTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismissPlaybackMenu:)];
+            self.menuOutsideTap.delegate = self;
+            self.menuOutsideTap.cancelsTouchesInView = NO;
+            [dialog.presentationController.containerView addGestureRecognizer:self.menuOutsideTap];
+        }];
+    }
+}
+- (void)dismissPlaybackMenu:(id)sender {
+    [self.menuOutsideTap.view removeGestureRecognizer:self.menuOutsideTap];
+    self.menuOutsideTap = nil;
+    [self.presentedViewController dismissViewControllerAnimated:YES completion:^{ [self scheduleControls]; }];
 }
 - (void)emitCommand:(NSString *)name value:(NSString *)value {
     if (!self.retired && !self.lockHidden && [self canPlay:NO] && self.command) self.command(name, value ?: @"");
@@ -58,6 +75,8 @@
     if (!isfinite(configuredScale) || configuredScale <= 0) configuredScale = 1.f;
     float subtitleScale = self.sessionSubtitleScale > 0 ? self.sessionSubtitleScale : configuredScale * (20.f / 22.f);
     self.player.currentSubTitleFontScale = MAX(.5f, MIN(3.f, subtitleScale));
+    [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
     [self applyPictureSize];
     NSString *audio = options[@"audio_language"] ?: @"", *subtitle = options[@"subtitle_language"] ?: @"";
     NSString *signature = [NSString stringWithFormat:@"%@:%@:%lu:%lu", audio, subtitle, (unsigned long)self.player.audioTracks.count, (unsigned long)self.player.textTracks.count];
@@ -78,6 +97,7 @@
     NSString *geometry = [NSString stringWithFormat:@"%@:%g:%g", aspect, bounds.size.width, bounds.size.height];
     if ([self.pictureGeometry isEqualToString:geometry]) return;
     self.pictureGeometry = geometry;
+    [self configureVideoDynamicRange:self.movie.layer];
     self.player.scaleFactor = [aspect isEqualToString:@"original"] ? 1.f : 0.f;
     if ([aspect isEqualToString:@"fill"] && bounds.size.width > 0 && bounds.size.height > 0)
         [self.player setCropRatioWithNumerator:(unsigned)bounds.size.width denominator:(unsigned)bounds.size.height];
@@ -236,7 +256,7 @@
     if (![self canPlay:NO] || self.controlsLocked) return;
     UIAlertController *menu = [self menu:@"Playback" sender:sender];
     for (NSArray *entry in @[@[@"Go to time…", @"goToTime:"], @[@"Speed…", @"speedOptions:"],
-        @[@"Picture size…", @"pictureOptions:"], @[@"HDR display mode…", @"hdrDisplayOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
+        @[@"HDR display mode…", @"hdrDisplayOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
         @[@"Show in folder", @"showInFolder:"], @[@"Current folder…", @"queueVideos:"], @[@"Previous episode", @"previousVideo:"],
         @[@"Next episode", @"nextVideo:"], @[@"Mute / unmute", @"toggleMute:"], @[@"Lock controls", @"toggleControlLock:"]]) {
         [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
@@ -367,8 +387,9 @@
     self.cacheStrip.frame = CGRectMake(left, y, MAX(0, right-left), 4);
     [self.seek sendSubviewToBack:self.cacheStrip];
     [self.cacheStrip setNeedsDisplay];
-    if (self.tabletop || self.view.bounds.size.width < 500) {
-        // On compact phones keep the title above playback controls, away from navigation actions.
+    if (self.tabletop || self.view.bounds.size.width < 500 ||
+        self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact) {
+        // On narrow or short phone windows keep the title above playback controls, away from navigation actions.
         // Keep the upper display for video. Identity belongs with the controls
         // on the lower panel, independent of the hidden navigation rail's inset.
         if (self.videoHeader.superview != self.controls) {

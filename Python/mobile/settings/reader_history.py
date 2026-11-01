@@ -41,14 +41,16 @@ def controls(app, box):
     async def recent(widget, **kwargs):
         await clear(False)
 
-    box.add(
-        toga.Button(
-            "Clear all saved positions…", on_press=positions, style=Pack(height=48)
-        )
-    )
-    box.add(
-        toga.Button("Clear all recent files…", on_press=recent, style=Pack(height=48))
-    )
+    for title, handler in (
+        ("Clear all saved positions…", positions),
+        ("Clear all recent files…", recent),
+    ):
+        button = toga.Button(title, on_press=handler, style=Pack(height=48))
+        box.add(button)
+
+
+def migration_controls(app, box):
+    """Protected-history migration for Workspaces settings."""
     from commonUtils.ui.native.password_input import PasswordInput
 
     password = PasswordInput(

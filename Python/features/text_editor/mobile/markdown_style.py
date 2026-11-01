@@ -1,9 +1,27 @@
 """Responsive writing surface; formatting overlays never resize the document."""
 
+TRANSCRIPT_CSS = '''
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.65}
+#messages h1{font-size:2em}#messages h2{font-size:1.55em}#messages h3{font-size:1.25em}
+#messages h4{font-size:1.1em}#messages h5,#messages h6{font-size:1em}
+#messages h1,#messages h2,#messages h3,#messages h4,#messages h5,#messages h6{line-height:1.25}
+#messages code{font-family:ui-monospace,monospace;font-size:.88em}
+#messages pre,#messages table{font-size:1em}
+'''
+
 READING_CSS = '''
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html body{max-width:800px;margin:0 auto;padding:20px 24px 32px;box-sizing:border-box;line-height:1.65}
 html body h1{font-size:2em}html body h2{font-size:1.55em}html body h3{font-size:1.25em}
-html body h1,html body h2,html body h3{letter-spacing:-.02em}
+html body h4{font-size:1.1em}html body h5,html body h6{font-size:1em}
+html body h1,html body h2,html body h3,html body h4,html body h5,html body h6{letter-spacing:-.02em;font-weight:700;line-height:1.25;margin:.6em 0 .4em}
+html body p{margin:.35em 0 .85em}
+html body ul,html body ol{margin:.4em 0 .9em;padding-left:1.5em}
+html body li>ul,html body li>ol{margin-bottom:.2em}
+html body code{font-family:ui-monospace,monospace;font-size:.88em}
+html body pre{font-size:1em}
+html body table{font-size:1em}
 html body pre{border:0;border-radius:12px;background:var(--surface,ButtonFace)}
 html body blockquote{border-left-color:var(--accent,GrayText)}
 @media(max-width:380px){html body{padding:16px}}
@@ -12,7 +30,7 @@ html body blockquote{border-left-color:var(--accent,GrayText)}
 EDITOR_CSS = r'''
 :root { color-scheme: light dark; --toolbar-height: 56px; }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; overflow: hidden; }
+html, body { height: 100%; margin: 0; overflow: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
     display: flex; flex-direction: column; min-height: 0;
     font-family: -apple-system,BlinkMacSystemFont,sans-serif; line-height: 1.65;
@@ -79,12 +97,12 @@ section:empty { display: none; }
 #document li > ul, #document li > ol { margin-bottom: .2em; }
 #document a { color: var(--accent, LinkText); text-underline-offset: .15em; }
 #document blockquote { margin: .5em 0 1em; border-left: 3px solid var(--accent, GrayText); padding: .1em 1em; }
-#document pre { white-space: pre; overflow-x: auto; padding: 12px; border-radius: 12px; background: var(--surface, ButtonFace); }
+#document pre { font-size: 1em; white-space: pre; overflow-x: auto; padding: 12px; border-radius: 12px; background: var(--surface, ButtonFace); }
 #document code { font-family: ui-monospace, monospace; font-size: .88em; }
 #document :not(pre) > code { padding: .12em .3em; border-radius: 4px; background: var(--surface, ButtonFace); }
 #document .live-bold { font-weight: 700; }
 #document .live-italic { font-style: italic; }
-#document .live-code { font-family: ui-monospace, monospace; background: var(--surface, ButtonFace); }
+#document .live-code { font-family: ui-monospace, monospace; font-size: .88em; background: var(--surface, ButtonFace); }
 #document .live-marker { color: GrayText; font-weight: normal; font-style: normal; }
 #document .live-marker { font-size: 0; }
 #document [data-live-heading] { font-weight: 700; line-height: 1.25; }

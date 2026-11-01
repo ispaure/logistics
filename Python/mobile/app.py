@@ -235,7 +235,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.document_password = PasswordInput()
         self.store = models['store'] if models is not None else DocumentStore(root / 'Documents')
         from .recent_documents import RecentDocuments, MAX_RECENT
-        self.recent_documents = models['recent'] if models is not None else RecentDocuments(workspace_root)
+        self.recent_documents = models['recent'] if models is not None else RecentDocuments(workspace_root, private_root=root)
         self.workspace = models['workspace'] if models is not None else Workspace(workspace_root)
         self._startup_display = models['display'] if models is not None else {}
         from features.rclone.mobile.document_lists import CredentialDocumentLists

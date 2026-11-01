@@ -2,9 +2,12 @@
 
 ## Mobile HDR output
 
+See the [HDR Play/Pause investigation](hdr-play-pause.md) for the native-frame
+hold correction, opt-in diagnostics, version evidence and physical acceptance matrix.
+
 iOS prefers VLC's `samplebufferdisplay` output, retaining automatic renderer
-fallback. The native sample-buffer layer requests high dynamic range on iOS 26+
-and extended dynamic range on iOS 17–25; controls and subtitles retain their
+fallback. The native sample-buffer layer defaults to system-managed HDR on iOS 26+
+with a session-only Maximum HDR option, and requests extended dynamic range on iOS 17–25; controls and subtitles retain their
 normal range. Android uses VLC's SurfaceView output with hardware decoding
 enabled, avoiding TextureView's HDR limitations. The operating system and decoder
 negotiate the content's color metadata with the display; HDR requires a compatible

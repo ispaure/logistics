@@ -3,7 +3,7 @@ import json
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from .forms import SettingsLabel, switch_row, fit_section, settings_presentation
+from .forms import SettingsLabel, switch_row, fit_section, settings_presentation, page_button
 from ..trusted_wifi import read_ssid, request_access, access_state, network_names
 
 
@@ -15,7 +15,7 @@ def controls(app, box):
         'for already-unlocked session-only credentials. Off by default. Passwords are never saved. '
         'App restart and manual session locking still require authentication. '
         'Wi-Fi names can be duplicated; this is a convenience setting.'))
-    manage = toga.Button('Trusted Wi-Fi networks…', enabled=choice.value,
+    manage = page_button('Trusted Wi-Fi networks…', enabled=choice.value,
         on_press=lambda widget, **kwargs: show(app), style=Pack(height=48))
     management = toga.Box(style=Pack(direction=COLUMN))
     if choice.value:
@@ -46,7 +46,8 @@ def controls(app, box):
             status.text = str(error)
         finally:
             saving = False
-        fit_section(box, app.adaptive.content_width('settings'))
+        width = getattr(box, '_settings_fit_width', None)
+        fit_section(box, width if width is not None else app.adaptive.content_width('settings'))
     choice.on_change = save
     return choice, manage
 

@@ -52,11 +52,12 @@ height changes otherwise leave the mounted panes attached, preserving UIKit's
 search first responder. `test_workspace_navigation.py` checks pane attachment
 through keyboard-sized height changes and stacked-pane height reallocation.
 
-On iOS, Home uses the native **Home** title bar, matching Documents and Settings.
-These roots omit duplicate content headings. Home child routes retain the bar for Back.
-Android's compact shell hides its native activity bar, so these pages retain one
-content heading, using **Home** instead of **Your workspace**. The Home unlock
-button shares the introductory row rather than reserving a separate title row.
+Main destinations omit standalone headings that repeat their navigation labels.
+On iOS, title-only root navigation bars are hidden after screen actions are mounted;
+bars with Browse, conversation controls or other actions remain visible. Nested
+routes retain their title and Back bar, and reader fullscreen keeps ownership of
+its chrome. Android's compact shell also hides its native activity bar. The Home
+unlock button shares the introductory row rather than reserving a title row.
 
 Destination artwork is projected again after the tab controller attaches to its
 window and whenever UIKit changes its vertical-bar edge. This deferred,

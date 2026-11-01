@@ -96,6 +96,25 @@ Go `protocol.go` owns decoding/admission and response envelopes; `requests.go`
 routes requests into domain owners. Cancellation and credential publication retain
 the process-wide operation scopes in `operation_scope.go`.
 
+## Mobile sync shortcut layout
+
+`mobile/transfer_status.py` mounts a 48-point/dp tinted button in existing root
+rows: Home's introduction, Files' source selector, Documents search, Chat's
+header and the first Settings category. Home wraps its introduction around both
+Unlock and Sync; Chat reserves the mounted shortcut's width before fitting its
+title. Settings refits its category when the shortcut appears or disappears and
+excludes the icon from generic text-button fitting. Files source labels can wrap
+within their existing touch targets. Nested readers keep the shortcut hidden.
+
+The `sync_status_probe` native probe captures all five destinations in portrait
+and landscape, including synthetic locked credentials on Home, every Files
+source, and wide Settings detail panels. It checks the actual native shortcut
+size and screen bounds, taps through to transfers, and verifies that reader
+navigation stops the progress animation. Use `document_storage_tools` with
+`--probe sync-status`; its disposable Android profile is 320 dp wide. Use
+`--family 'iPhone 17e'` for the compact iPhone or `--family iPad` for split panes. Raw screenshots and reports
+belong under ignored `test-results/`.
+
 ## Checks for a change
 
 Run tests through the project runner from the repository root:

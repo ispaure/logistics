@@ -328,6 +328,12 @@ class VideoBuildTests(unittest.TestCase):
         _, sources = load_source_modules(Path(__file__).resolve().parents[3])
         self.assertIn('features/video/playback.py', sources)
         self.assertIn('features/video/mobile/ios/VideoPlayer.m', sources)
+        # Local native compilation can mask a helper omitted from staged sources.
+        import re
+        owner = Path(__file__).resolve().parents[3] / 'Python/features/video/mobile/ios'
+        for native in owner.glob('*.m'):
+            for helper in re.findall(r'#import "([^"\n]+\.m)"', native.read_text()):
+                self.assertIn('features/video/mobile/ios/' + helper, sources)
         self.assertEqual(document_feature('movie.MKV'), 'video')
 
 

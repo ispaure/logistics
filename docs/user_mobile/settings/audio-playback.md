@@ -1,6 +1,6 @@
 # Audio playback
 
-Open **Settings → Audio playback** to see and remove approved Bluetooth audio
+Open **Settings → Privacy & Security → Protected audio outputs** to see and remove approved Bluetooth audio
 outputs. The list applies to videos and every read-aloud reader **only while session-only protection is active**. This means at least one session-only credential is loaded, or retained protected content still prevents screencasting. Ordinary playback does not ask for Bluetooth approval or rely on this list. It is saved on
 this device and is separate from Bluetooth pairing in system Settings.
 

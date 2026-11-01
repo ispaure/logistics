@@ -337,43 +337,67 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
         self.assertIn('archive is damaged', drawer.status.text)
 
-    def test_home_uses_the_native_destination_title(self):
-        import toga
+    def test_title_only_roots_hide_the_bar_and_nested_routes_restore_it(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
-        self.assertNotIn(toga.Command.ABOUT, self.app.commands)
         original = self.app.native_host.adapter
-        bars = [Mock() for _ in self.app.native_host.destinations]
-        bars[0].isNavigationBarHidden.return_value = True
-        self.app.native_host.adapter = SimpleNamespace(navigation=bars)
+        item = SimpleNamespace()
+        bar = Mock(viewControllers=[object()])
+        bar.isNavigationBarHidden.return_value = False
+        self.app.native_host.adapter = SimpleNamespace(navigation=[bar],
+            navigation_for=lambda destination: bar,
+            content_controller=lambda destination: SimpleNamespace(navigationItem=item))
         try:
-            with patch.object(self.navigation, 'render'):
-                self.navigation.install()
-            self.assertEqual(bars[0].topViewController.navigationItem.title, 'Home')
-            bars[0].setNavigationBarHidden.assert_called_once_with(False, animated=False)
-            self.assertEqual(self.app.native_host.labels[0], 'Home')
+            for destination in self.app.native_host.destinations:
+                with self.subTest(destination=destination):
+                    screens = self.app.routes.screens[destination]
+                    saved = list(screens)
+                    screens.clear()
+                    try:
+                        bar.setNavigationBarHidden.reset_mock()
+                        bar.isNavigationBarHidden.return_value = False
+                        self.navigation.sync_destination_bar(destination)
+                        bar.setNavigationBarHidden.assert_called_once_with(True, animated=False)
+                        bar.setNavigationBarHidden.reset_mock()
+                        bar.isNavigationBarHidden.return_value = True
+                        self.navigation.sync_destination_bar(destination)
+                        bar.setNavigationBarHidden.assert_not_called()  # No layout flicker.
+                        screens.append(('fixture', None, None))
+                        self.navigation.sync_destination_bar(destination)
+                        bar.setNavigationBarHidden.assert_called_once_with(False, animated=False)
+                    finally:
+                        screens[:] = saved
         finally:
             self.app.native_host.adapter = original
 
-    def test_home_child_routes_and_root_keep_the_native_bar(self):
+    def test_root_bars_keep_actions_native_back_and_fullscreen_ownership(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
         original = self.app.native_host.adapter
-        bars = [Mock() for _ in self.app.native_host.destinations]
-        self.app.native_host.adapter = SimpleNamespace(navigation=bars)
-        screens = self.app.routes.screens['home']
+        bar = Mock(viewControllers=[object()])
+        bar.isNavigationBarHidden.return_value = True
+        item = SimpleNamespace()
+        self.app.native_host.adapter = SimpleNamespace(navigation=[bar],
+            navigation_for=lambda destination: bar,
+            content_controller=lambda destination: SimpleNamespace(navigationItem=item))
         try:
-            screens.append(('fixture', None, None))
-            bars[0].isNavigationBarHidden.return_value = True
-            self.navigation.sync_home_bar()
-            bars[0].setNavigationBarHidden.assert_called_once_with(False, animated=False)
-            screens.pop()
-            bars[0].setNavigationBarHidden.reset_mock()
-            bars[0].isNavigationBarHidden.return_value = False
-            self.navigation.sync_home_bar()
-            bars[0].setNavigationBarHidden.assert_not_called()
+            for name in ('leftBarButtonItems', 'rightBarButtonItems', 'leadingItemGroups',
+                         'trailingItemGroups', 'pinnedTrailingGroup', 'additionalOverflowItems'):
+                with self.subTest(action=name):
+                    setattr(item, name, [object()] if name.endswith(('Items', 'Groups')) else object())
+                    bar.setNavigationBarHidden.reset_mock()
+                    self.navigation.sync_destination_bar('home')
+                    bar.setNavigationBarHidden.assert_called_once_with(False, animated=False)
+                    delattr(item, name)
+            bar.viewControllers = [object(), object()]  # UIKit More owns Back.
+            bar.setNavigationBarHidden.reset_mock()
+            self.navigation.sync_destination_bar('home')
+            bar.setNavigationBarHidden.assert_called_once_with(False, animated=False)
+            bar.setNavigationBarHidden.reset_mock()
+            with patch.object(self.app, '_reader_chrome_hidden', True, create=True):
+                self.navigation.sync_destination_bar('home')
+            bar.setNavigationBarHidden.assert_not_called()
         finally:
-            screens.clear()
             self.app.native_host.adapter = original
 
     def test_first_apple_tap_waits_for_committed_selection_on_phone_and_ipad(self):

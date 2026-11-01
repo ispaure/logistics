@@ -26,6 +26,53 @@ class RecentDocumentTests(unittest.TestCase):
             self.assertEqual(restored.sessions()[0].source, source)
             self.assertNotIn('video', KINDS)
 
+    def test_relocated_ios_history_merges_only_the_same_existing_document(self):
+        import json
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            documents = root / 'Documents'
+            documents.mkdir()
+            (documents / 'Movie.mkv').touch()
+            old = '/var/mobile/Containers/Data/Application/OLD/Documents/'
+            sources = [dict(type='local', path=old + 'Movie.mkv'),
+                       dict(type='local', path=str(documents / 'Movie.mkv')),
+                       dict(type='local', path='/other/Movie.mkv'),
+                       dict(type='local', path=old + 'Missing.mkv')]
+            items = [dict(provider='file-reference', resource=RecentDocuments.reference_id(source),
+                          kind='video', title='Movie.mkv', source=source, opened=i + 1)
+                     for i, source in enumerate(sources)]
+            (root / 'recent-documents.json').write_text(json.dumps(items))
+            with patch('services.documents.locations.shared_documents_path', return_value=documents):
+                history = RecentDocuments(root)
+                self.assertFalse(history.error)
+                self.assertEqual(len(history.items), 3)
+                self.assertEqual({i['source']['path'] for i in history.items},
+                                 {sources[1]['path'], sources[2]['path'], sources[3]['path']})
+                session = Session('', 'file-reference', '', 'video', title='Movie.mkv')
+                history.remember_file(session, sources[0])
+                self.assertEqual(len(history.items), 3)
+                self.assertEqual(history.items[0]['source'], sources[1])
+                self.assertEqual(RecentDocuments(root).items, history.items)
+
+    def test_secondary_window_resolves_against_app_storage_not_window_storage(self):
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            window = root / 'Windows' / 'secondary'
+            window.mkdir(parents=True)
+            documents = root / 'Public'
+            documents.mkdir()
+            (documents / 'Movie.mkv').touch()
+            source = dict(type='local', path='/var/mobile/Containers/Data/Application/OLD/Documents/Movie.mkv')
+            session = Session('', 'file-reference', '', 'video', title='Movie.mkv')
+            with patch('services.documents.locations.shared_documents_path',
+                       side_effect=lambda private: documents if private == root else None):
+                history = RecentDocuments(window, private_root=root)
+                history.remember_file(session, source)
+                self.assertEqual(history.items[0]['source']['path'], str(documents / 'Movie.mkv'))
+                self.assertEqual(history.path.parent, window)
+
     def test_bound_order_restore_and_private_removal(self):
         with TemporaryDirectory() as directory:
             history = RecentDocuments(Path(directory))

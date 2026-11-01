@@ -1,6 +1,6 @@
 # Reader history and saved positions
 
-Open **Settings → Reader history** on desktop, or **Settings → App** on mobile.
+Open **Settings → Reader history** on desktop, or **Settings → Reset** on mobile.
 Two separate actions apply across readers and sources, including credentials that
 are currently locked or unloaded:
 
@@ -18,7 +18,8 @@ and paths in session-only Recent use that password too. Passwordless sessions ke
 reader state only in memory.
 
 After changing a credential ZIP password, unlock the updated ZIP and choose
-**Migrate protected reader history…**. Enter the previous password. Matching saved
+**Migrate protected reader history…** (under **Settings → Workspaces** on mobile).
+Enter the previous password. Matching saved
 positions, bookmarks and Recent can then be encrypted under the updated password.
 Reopen readers afterward to restore them. Wrong passwords or unmatched accounts
 leave the old encrypted files intact; they are not silently replaced with empty

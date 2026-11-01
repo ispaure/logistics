@@ -20,7 +20,7 @@ from logistics_build.build_retention import scratch
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False):
+def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -68,7 +68,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 'yuv420p10le', 'smpte2084', 'bt2020'), 'HDR fixture lost its depth or color tags'
         (app / 'Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier=bundle,
             CFBundleName='Video Chrome QA', QAOrientation=orientation, QAHDR=hdr, QAResume=resume, QAFold=fold,
-            QAURL=url or '', QADuration=duration, QAUnknownDuration=unknown_duration, QAStreamProbe=bool(url),
+            QAURL=url or '', QADuration=duration, QAUnknownDuration=unknown_duration, QAStreamProbe=bool(url), QAPauseTransitions=pause_transitions,
             NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True),
             CFBundleExecutable='VideoChromeQA', CFBundleVersion='1',
             CFBundleShortVersionString='1.0', CFBundlePackageType='APPL', MinimumOSVersion='17.0',
@@ -123,10 +123,11 @@ def main():
     parser.add_argument('--model', choices=('iPhone Duo', 'iPhone', 'iPad'), default='iPhone Duo')
     parser.add_argument('--orientation', choices=('portrait', 'landscape'), default='portrait')
     parser.add_argument('--hdr', action='store_true', help='Decode 10-bit BT.2020 PQ HEVC and inspect the native HDR layer.')
+    parser.add_argument('--pause-transitions', action='store_true', help='Run native Play/Pause/Resume checks in both HDR modes without chrome timing checks.')
     parser.add_argument('--resume', type=int, default=0, help='Resume milliseconds in the 30-second fixture.')
     parser.add_argument('--fold', action='store_true', help='Exercise a synthetic horizontal division and lower control deck.')
     args = parser.parse_args()
-    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold)
+    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions)
 
 
 if __name__ == '__main__':

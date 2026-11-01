@@ -7,7 +7,9 @@ an in-memory embedded rclone session, browse supported remotes and preview suppo
 Push with progress while ordinary writing or reading continues. Transfer details
 show the transfer's **From** and **To** folders during and after the transfer,
 alongside a numeric percentage of known work and transferred/known totals in
-megabytes (MB) on both platforms. Main tabs show a compact sync icon with a
+megabytes (MB) on both platforms. Main tabs show a filled sync button alongside existing controls (Home actions,
+Files source tabs, Documents search, Chat header, and the first Settings category),
+without reserving a separate row. The button has a
 progress ring at the top right (beside the Home unlock key). Tap it to reopen
 transfer details. Document viewers have no transfer headers or sync controls.
 Progress uses bytes when available, or completed/known file counts otherwise;

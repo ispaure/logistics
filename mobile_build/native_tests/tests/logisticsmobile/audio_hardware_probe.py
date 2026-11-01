@@ -22,8 +22,8 @@ from mobile.app import LogisticsMobile
 async def phase(app, label='ordinary'):
     owner = app.audio_output
     app.show_settings(rebuild=True)
-    app.settings_navigation.choose('Audio playback')
-    section = app.settings_navigation.sections['Audio playback']
+    app.settings_navigation.choose('Privacy & Security')
+    section = app.settings_navigation.sections['Privacy & Security']
     section.add(toga.Label('QA: ' + label, style=Pack(font_size=20)))
     section.add(toga.Label('Ordinary playback: connect/switch Bluetooth without an approval prompt or list dependency. '
         'With session-only or retained protection: add/decline approval, remove it while speaking, '

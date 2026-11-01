@@ -12,14 +12,22 @@ from services.build_version import BuildVersion, installed_build
 
 from commonUtils.ui.native import forms as _forms
 from commonUtils.ui.native.forms import wrap_text, FittedLabel as SettingsLabel
+from commonUtils.ui.native.password_input import PasswordInput
 
 
 def fit_text(control, width):
+    if isinstance(control.parent, PasswordInput):
+        return  # The password control owns its compact native eye button.
     from ..appearance import list_button
     return _forms.fit_text(control, width, style_button=list_button)
 
 
 def _label_reserve(section):
+    if getattr(section, '_settings_sync_row', False):
+        return sum(child.style.width + child.style.margin_left + child.style.margin_right
+                   for child in section.children[1:])
+    if getattr(section, '_settings_action_row', False):
+        return section.children[1].style.width + 12
     if getattr(section, '_connection_switch_row', False):
         return 72
     if getattr(section, '_settings_switch_row', False):
@@ -33,8 +41,17 @@ def fit_section(section, width):
 
 
 def disclosure(button):
+    if getattr(button, '_settings_disclosure', False):
+        return button
     from ..appearance import apple_color
     return _forms.disclosure(button, apple_color=apple_color)
+
+
+def page_button(text, **kwargs):
+    """Declare navigation independently of the button label or punctuation."""
+    button = toga.Button(text, **kwargs)
+    button._settings_opens_page = True
+    return button
 
 
 def group_rows(rows, *, icon_inset=False):
@@ -63,7 +80,7 @@ def settings_presentation(section):
             child._settings_row = True
             surface(child, radius=0, background='transparent', foreground='accent',
                     outlined=False, eink_outlined=False)
-            if child.text.endswith('…') or child.text == 'Mobile documentation':
+            if getattr(child, '_settings_opens_page', False):
                 disclosure(child)
             rows.append(child)
         elif getattr(child, '_settings_switch_row', False):
@@ -104,6 +121,18 @@ def settings_presentation(section):
                 child.style.margin_left = child.style.margin_right = 12
                 child.style.margin_bottom = 12
                 section.add(child)
+        elif getattr(child, '_settings_managed_content', False):
+            flush()
+            section.add(child)
+        elif getattr(child, '_settings_action_row', False):
+            label, button = child.children
+            surface(label, radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False)
+            surface(button, radius=0, background='transparent', foreground='accent', outlined=False, eink_outlined=False)
+            rows.append(child)
+        elif isinstance(child, PasswordInput):
+            # Preserve the field and eye as one row, rather than recursively
+            # treating the composite input as a settings section.
+            rows.append(child)
         elif isinstance(child, toga.Box):
             flush()
             settings_presentation(child)

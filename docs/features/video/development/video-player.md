@@ -49,3 +49,19 @@ alone cannot establish those capabilities. Keep the implemented status and
 remaining acceptance work in the [development guide](development.md).
 
 Session-only persisted state now follows the shared [credential-password and clearing policy](../../../development/reader-state.md).
+
+## iOS framing and selection menus
+
+Framing changes refresh the drawable layout immediately. The native
+`AVSampleBufferDisplayLayer` uses aspect-fill gravity for Fill and aspect-fit
+otherwise; VLC crop/scale settings still serve the decoder output. New rendering
+layers and layout changes reapply the native gravity. The Picture icon owns the
+framing selector in both the normal navigation toolbar and folded control deck,
+without a duplicate Playback menu entry.
+
+Selection menus use backdrop dismissal, including compact scrollable alerts on
+Duo. The backdrop gesture excludes touches inside the menu; text-entry prompts
+retain Apply/Cancel. The native chrome probe checks Fit/Fill geometry and gravity,
+menu presentation without Cancel actions, inside/outside gesture filtering, and
+backdrop dismissal. Landscape coverage also checks that the filename stays
+visible above the timeline when the navigation bar has limited room.

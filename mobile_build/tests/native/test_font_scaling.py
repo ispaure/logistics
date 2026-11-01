@@ -15,6 +15,21 @@ from mobile.font_scaling import FONT_KEYS, refresh
 
 
 class FontScalingTests(unittest.TestCase):
+    def test_ios_markdown_source_uses_webview_units_on_open_and_refresh(self):
+        with patch('mobile.font_scaling.native_backend', return_value='toga_iOS.widgets'):
+            self.app.preferences.values['markdown_font_size'] = '16'
+            self.app.create_chosen_document('md')
+            owner = self.app.editor_view
+            self.assertEqual(owner.editor.style.font_size, 12)
+            owner.editor.value = '# Unsaved draft'
+            self.app.preferences.values['markdown_font_size'] = '24'
+            refresh(self.app)
+            self.assertEqual(owner.editor.style.font_size, 18)
+            owner.apply_split(0)
+            self.assertEqual(owner.editor.style.font_size, 18)
+            self.assertEqual(owner.editor.value, '# Unsaved draft')
+            self.assertEqual(owner.formatted.font_size, 24)
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)

@@ -52,6 +52,9 @@ class TransferFeedbackTests(TestCase):
                 app.refresh_transfer_status()
                 _, _, button, _ = app._sync_status_controls[destination]
                 self.assertIsNotNone(button.parent)
+                self.assertEqual(button._impl._surface_roles, ('hover', 'text', False))
+                self.assertTrue(app._sync_status_controls[destination][3])
+                self.assertGreater(len(button.parent.children), 1)
                 self.assertIn('42%', button.accessible_name)
                 self.assertEqual(sum((control if inline else row).parent is not None
                                      for _, row, control, inline in app._sync_status_controls.values()), 1)
@@ -67,6 +70,40 @@ class TransferFeedbackTests(TestCase):
         button = app._sync_status_controls['home'][2]
         self.assertIs(button.parent, app._home_status_row)
         self.assertIsNone(app.home_sections.content.transfer_banner)
+
+    def test_chat_title_reserves_sync_space_and_restores_it_on_dismissal(self):
+        app = self.app
+        app.routes.return_to('chat')
+        app.update_chat_header()
+        width = app.chat_title.style.width
+        app.transfer_busy = True
+        app.transfer_percentage = 42
+        app.refresh_transfer_status()
+        self.assertEqual(app.chat_title.style.width, width - 56)
+        app.transfer_busy = app.transfer_notification = False
+        app.refresh_transfer_status()
+        self.assertEqual(app.chat_title.style.width, width)
+
+    def test_settings_refits_category_without_restyling_sync_on_resize(self):
+        app = self.app
+        app.routes.return_to('settings')
+        navigation = app.settings_navigation
+        category = next(iter(navigation.buttons.values()))
+        original_width = category._settings_available_width
+        app.transfer_busy = True
+        app.transfer_percentage = 42
+        app.refresh_transfer_status()
+        button = app._sync_status_controls['settings'][2]
+        self.assertEqual(category._settings_available_width, original_width - 56)
+        from types import SimpleNamespace
+        app.main_window.size = SimpleNamespace(width=900, height=600)
+        navigation.reflow()
+        self.assertEqual(button.style.height, 48)
+        self.assertEqual(button._impl._surface_roles, ('hover', 'text', False))
+        narrow_width = category._settings_available_width
+        app.transfer_busy = app.transfer_notification = False
+        app.refresh_transfer_status()
+        self.assertEqual(category._settings_available_width, narrow_width + 56)
 
     def test_same_progress_does_not_repaint_and_indeterminate_timer_stops_in_viewer(self):
         app = self.app

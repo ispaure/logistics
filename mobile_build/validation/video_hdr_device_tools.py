@@ -19,6 +19,46 @@ from tests.readers.video_fixtures import hdr_movies
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def require_hdr_success(report):
+    """A collected report is evidence, not automatically a passing device test."""
+    if not report.get('success'):
+        raise RuntimeError(report.get('error') or 'Physical HDR probe failed')
+    if not report.get('hdrActiveObserved'):
+        raise RuntimeError('Physical HDR output was not observed')
+    transitions = report.get('hdrTransitions', [])
+    if [row.get('event') for row in transitions] != ['playing', 'paused', 'resumed'] * 2:
+        raise RuntimeError('Physical HDR transition evidence is incomplete')
+
+
+def restore_after_probe(device_command, template, bundle, folder, output, device):
+    """Always attempt app restoration, even if the QA cleanup command raises."""
+    cleaned = restored = None
+    cleanup_error = restore_error = None
+    try:
+        try:
+            cleaned = device_command('process', 'launch', '--terminate-existing', bundle,
+                                     '--', '--cleanup-video-qa')
+            (output / 'cache-cleanup.log').write_text(cleaned.stdout + cleaned.stderr)
+            cleaned.check_returncode()
+        except Exception as exc:
+            cleanup_error = str(exc)
+    finally:
+        try:
+            restored = device_command('install', 'app', template)
+            (output / 'restore.log').write_text(restored.stdout + restored.stderr)
+            restored.check_returncode()
+        except Exception as exc:
+            restore_error = str(exc)
+            raise
+        finally:
+            (output / 'cleanup.json').write_text(json.dumps(dict(
+                device=device, app_restored=restored is not None and restored.returncode == 0,
+                cache_cleanup_requested=cleaned is not None and cleaned.returncode == 0,
+                cache_folder=folder, cleanup_error=cleanup_error, restore_error=restore_error)))
+    if cleanup_error:
+        raise RuntimeError('Normal app restored, but QA cache cleanup failed: ' + cleanup_error)
+
+
 def run(template, device, output, framework):
     output.mkdir(parents=True, exist_ok=False)
     info = plistlib.loads((template / 'Info.plist').read_bytes())
@@ -79,6 +119,7 @@ def run(template, device, output, framework):
                     report = json.loads(line.split('LOGISTICS_HDR_RESULT=', 1)[1])
                     (output / 'result.json').write_text(json.dumps(report, indent=2))
                     print(json.dumps(report), flush=True)
+                    require_hdr_success(report)
                     return
             deadline = time.monotonic() + 60
             while time.monotonic() < deadline:
@@ -88,17 +129,13 @@ def run(template, device, output, framework):
                 if copied.returncode == 0 and (output / 'result.json').is_file():
                     report = json.loads((output / 'result.json').read_text())
                     print(json.dumps(report), flush=True)
+                    require_hdr_success(report)
                     return
                 time.sleep(2)
             raise TimeoutError('Physical HDR probe produced no report; normal app will be restored.')
         finally:
             # Only our UUID cache folder is removed, by the test executable.
-            cleaned = device_command('process', 'launch', '--terminate-existing', bundle, '--', '--cleanup-video-qa')
-            restored = device_command('install', 'app', template)
-            (output / 'restore.log').write_text(restored.stdout + restored.stderr)
-            (output / 'cleanup.json').write_text(json.dumps(dict(device=device, app_restored=restored.returncode == 0,
-                cache_cleanup_requested=cleaned.returncode == 0, cache_folder=folder)))
-            restored.check_returncode()
+            restore_after_probe(device_command, template, bundle, folder, output, device)
 
 
 if __name__ == '__main__':

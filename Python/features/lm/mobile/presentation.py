@@ -5,6 +5,7 @@ import math
 import unicodedata
 
 from commonUtils.ui.native.markdown_preview import markdown_body
+from features.text_editor.mobile.markdown_style import TRANSCRIPT_CSS
 
 
 def composer_height(text, width, font_size=16, *, available_height=None):
@@ -42,7 +43,7 @@ def transcript_document(*, theme_css=""):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <style>
-''' + theme_css + '''
+''' + theme_css + TRANSCRIPT_CSS + '''
 :root { --ink:var(--text); --user:var(--chat_bubble); --line:var(--control_border) }
 html { min-height:100%; background:var(--chat_background) }
 body::before { content:""; position:fixed; top:0; left:0; right:0; height:40px; z-index:10;

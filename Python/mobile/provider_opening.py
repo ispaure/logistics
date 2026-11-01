@@ -109,7 +109,7 @@ class ProviderDocumentOpening:
             if progress.state.locked_state:
                 notice = getattr(owner.app, 'recovery_notice', None)
                 if notice is not None:
-                    notice.text = 'Saved reader history needs the previous ZIP password. Use Settings → App → Migrate protected reader history.'
+                    notice.text = 'Saved reader history needs the previous ZIP password. Use Settings → Workspaces → Migrate protected reader history.'
         if reader.editable and reader.kind in {'.md', '.markdown'}:
             if edit and not getattr(reader, 'read_only', False):
                 owner.show_private_markdown_editor()

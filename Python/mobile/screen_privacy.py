@@ -149,12 +149,19 @@ class ScreenPrivacy:
         return for_app(self.app).process.protected()
 
     def interrupt(self):
-        """Cover snapshots during Control Center without revoking the session."""
+        """Lock protected sessions on app switcher and Control Center interruptions."""
         self.interrupted = True
-        self.prepare_native_protection()
+        self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
+        if self.sensitive():
+            self.conceal()
+        else:
+            self.prepare_native_protection()
 
     def conceal(self):
         self.inactive = True  # Deny reentrant playback before native/UI effects.
+        # Native shielding and player callbacks can fail or reenter the loop.
+        # Invalidate outstanding authentication before invoking any of them.
+        self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         self.prepare_native_protection()
         output = getattr(self.app, 'audio_output', None)
         if output is not None:
@@ -164,7 +171,6 @@ class ScreenPrivacy:
             video.conceal()
         from .comic_feedback import clear as clear_comic_feedback
         clear_comic_feedback(self.app)
-        self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         from .page_animation import cancel_visible_slides
         cancel_visible_slides(self.app)
         from .ios_content_background import clear
@@ -227,6 +233,8 @@ class ScreenPrivacy:
             self.finish_reveal(ssid)
 
     def finish_reveal(self, ssid):
+        # A credential import may finish before its queued refresh runs.
+        self.lock_new_gates(self.gates())
         if hasattr(self, 'wifi_resume'):
             self.wifi_resume.resume(self.app, self.gates(), self.credential_gates(), ssid)
         self.inactive = False
@@ -294,14 +302,18 @@ class ScreenPrivacy:
             self.shield.removeFromSuperview()
             self.shield = None
 
+    def lock_new_gates(self, gates):
+        # Late imports cannot inherit an earlier window's authentication.
+        for gate in gates:
+            if not gate.locked and (self.inactive or getattr(self, 'interrupted', False)
+                                    or (self.lock_gates and gate not in self.lock_gates)):
+                gate.lock(reason='challenge')
+
     def refresh(self):
         from .protection import for_app
         scope = for_app(self.app)
         gates = self.gates()
-        # Late imports cannot inherit an earlier window's authentication.
-        for gate in gates:
-            if not gate.locked and (self.inactive or (self.lock_gates and gate not in self.lock_gates)):
-                gate.lock(reason='challenge')
+        self.lock_new_gates(gates)
         hidden = self.prepare_native_protection(transitioning=True)
         scope.changed()
         video = getattr(self.app, 'video_player', None)
@@ -313,7 +325,8 @@ class ScreenPrivacy:
             output.capture_changed(self.sensitive() and self.captured)
         video = getattr(self.app, 'video_player', None)
         if video is not None:
-            if self.sensitive() and (self.inactive or self.captured or self.resume_locked):
+            if self.sensitive() and (self.inactive or getattr(self, 'interrupted', False)
+                                     or self.captured or self.resume_locked):
                 video.conceal()
             elif not hidden:
                 video.reveal()  # Restore controls, never playback.
@@ -422,8 +435,9 @@ class ScreenPrivacy:
 
     async def unlock(self, widget=None, **kwargs):
         import asyncio
-        if self.unlock_busy or self.inactive:
+        if self.unlock_busy or self.inactive or getattr(self, 'interrupted', False):
             return
+        lifecycle_revision = getattr(self, 'wifi_revision', 0)
         snapshot = self.gates()
         gates = tuple(gate for gate in snapshot if gate.locked)
         revisions = tuple(gate.revision for gate in gates)
@@ -444,7 +458,8 @@ class ScreenPrivacy:
                     accepted.append(await asyncio.to_thread(gate.configure, secret))
                 else:
                     accepted.append(await asyncio.to_thread(gate.verify, secret))
-            if (self.disposed or self.inactive or self.gates() != snapshot
+            if (self.disposed or self.inactive or getattr(self, 'interrupted', False)
+                    or getattr(self, 'wifi_revision', 0) != lifecycle_revision or self.gates() != snapshot
                     or tuple(gate.revision for gate in gates) != revisions):
                 if not self.disposed:
                     self.refresh()

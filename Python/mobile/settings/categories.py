@@ -15,7 +15,7 @@ from commonUtils.ui.native.forms import wrap_text
 
 
 from dataclasses import dataclass
-from .forms import SettingsLabel, switch_row
+from .forms import SettingsLabel, switch_row, page_button
 from .information import build_information
 from .speech import speech_voice_setting
 
@@ -47,8 +47,6 @@ class SettingsCategories:
             'Closes documents with no pending changes in Open documents when the app restarts. '
             'The last active document is kept when Restore last document is on. '
             'Stored documents, reading progress and unsaved drafts are kept.'))
-        from .reader_history import controls as history_controls
-        history_controls(app, box)
         box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=app.reload_preferences, style=Pack(height=48)))
         if app.scene_manager.supported:
@@ -91,6 +89,13 @@ class SettingsCategories:
         app = self.app
         box = self.category('Read aloud')
         box.add(speech_voice_setting(app))
+        return box
+
+    def privacy(self):
+        app = self.app
+        box = self.category('Privacy & Security')
+        from .trusted_wifi import controls as trusted_wifi_controls
+        trusted_wifi_controls(app, box)
         app.session_speech_choice = toga.Switch('Session-only speech while locked',
             value=app.preferences.values['session_speech_when_locked'] == 'true',
             on_change=app.change_session_speech, style=Pack(height=48))
@@ -98,6 +103,9 @@ class SettingsCategories:
             'Allow already-started read-aloud from session-only credentials to keep playing '
             'and show system playback controls while locked. Off by default. This choice is saved. '
             'It does not unlock credentials or permit new file reads while locked.'))
+        box.add(SettingsLabel('Protected audio outputs', style=Pack(font_weight='bold')))
+        from .audio import controls as audio_controls
+        audio_controls(app, box)
         return box
 
 
@@ -121,12 +129,6 @@ class SettingsCategories:
         return box
 
 
-    def audio(self):
-        from .audio import controls
-        box = self.category('Audio playback')
-        controls(self.app, box)
-        return box
-
     def camera(self):
         app = self.app
         from features.images.mobile.burst_camera import settings_controls
@@ -143,7 +145,7 @@ class SettingsCategories:
         app.magnifier_choice = setting(app)
         box.add(app.magnifier_choice)
         box.add(toga.Label('Keep holding; tap −/+ just outside the lens’s upper corners.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
-        box.add(toga.Button('Saved books & comics…', on_press=app.show_saved_files, style=Pack(height=48)))
+        box.add(page_button('Saved books & comics…', on_press=app.show_saved_files, style=Pack(height=48)))
         box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
         return box
 
@@ -151,7 +153,7 @@ class SettingsCategories:
     def chat(self):
         app = self.app
         box = self.category('LM Chat')
-        box.add(toga.Button('Server & generation settings…', on_press=app.show_chat_configuration, style=Pack(height=48)))
+        box.add(page_button('Server & generation settings…', on_press=app.show_chat_configuration, style=Pack(height=48)))
         return box
 
 
@@ -159,24 +161,26 @@ class SettingsCategories:
         app = self.app
         box = self.category('Workspaces')
         if type(app._impl).__module__.startswith('toga_android.'):
-            box.add(toga.Button('Local / LocalCrypt location…', on_press=app.show_collection_storage, style=Pack(height=48)))
+            box.add(page_button('Local / LocalCrypt location…', on_press=app.show_collection_storage, style=Pack(height=48)))
         app.show_legacy_choice = toga.Switch('Show Legacy',
             value=getattr(app, 'show_legacy_session', False),
             on_change=app.change_show_legacy, style=Pack(height=48))
         box.add(switch_row(app, 'Show Legacy', app.show_legacy_choice,
             'Show Legacy- folders in Workspaces, file browsers and library shortcuts, '
             'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
-        from .trusted_wifi import controls as trusted_wifi_controls
-        trusted_wifi_controls(app, box)
-        box.add(toga.Button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))
-        box.add(toga.Button('SMB shares…', on_press=app.show_smb_connection, style=Pack(height=48)))
+        from .reader_history import migration_controls
+        migration_controls(app, box)
+        box.add(page_button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))
+        box.add(page_button('SMB shares…', on_press=app.show_smb_connection, style=Pack(height=48)))
         return box
 
 
     def reset(self):
         app = self.app
         box = self.category('Reset')
-        box.add(toga.Button('Erase all app data…', on_press=app.show_app_reset, style=Pack(height=48)))
+        from .reader_history import controls as history_controls
+        history_controls(app, box)
+        box.add(page_button('Erase all app data…', on_press=app.show_app_reset, style=Pack(height=48)))
         box.add(SettingsLabel('Delete private files, local app data, settings and metadata. Review the full scope before confirming.'))
         return box
 
@@ -185,9 +189,9 @@ class SettingsCategories:
         app = self.app
         box = self.category('Help')
         if type(app._impl).__module__.startswith('toga_android.'):
-            box.add(toga.Button('Developer settings…', on_press=app.open_android_developer_settings, style=Pack(height=48)))
+            box.add(page_button('Developer settings…', on_press=app.open_android_developer_settings, style=Pack(height=48)))
         from ..documentation_ui import show_documentation
-        box.add(toga.Button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(app),
+        box.add(page_button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(app),
                             style=Pack(height=48)))
         return box
 
@@ -211,12 +215,12 @@ class Category:
 
 CATEGORIES = (
     Category('App', 'application'), Category('Appearance', 'appearance'), Category('Features', 'features'),
-    Category('Audio playback', 'audio'), Category('Camera', 'camera', camera_required=True), Category('Read aloud', 'speech'),
+    Category('Camera', 'camera', camera_required=True), Category('Read aloud', 'speech'),
     Category('Markdown', 'text_size', ('Markdown', 'markdown_font_size')),
     Category('Text', 'text_size', ('Text', 'text_font_size')),
     Category('EPUB', 'text_size', ('EPUB', 'epub_font_size')),
     Category('Books & Comics', 'books'), Category('LM Chat', 'chat'),
-    Category('Workspaces', 'workspaces'), Category('Reset', 'reset'),
+    Category('Workspaces', 'workspaces'), Category('Privacy & Security', 'privacy'), Category('Reset', 'reset'),
     Category('Help', 'help'), Category('About', 'about'),
 )
 

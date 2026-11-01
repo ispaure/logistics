@@ -5,6 +5,11 @@
     if (self.pauseSnapshot || !self.player.isPlaying || !self.surfaceVisible ||
         self.lockHidden || self.movie.hidden || self.pipActive || self.casting ||
         UIApplication.sharedApplication.applicationState != UIApplicationStateActive || ![self canPlay:NO]) return;
+    // Keep native video on the same HDR presentation path while VLC pauses.
+    // A UIKit snapshot is a separate compositor surface with no guaranteed
+    // preservation of the video layer's transfer function or tone mapping.
+    // Leave checkpoint capture (including stalled-frame recovery) to pause.
+    if ([self sampleBufferLayer:self.movie.layer]) return;
     self.startMilliseconds = [self positionMilliseconds];
     self.lastPosition = self.startMilliseconds;
     UIView *snapshot = [self.movie snapshotViewAfterScreenUpdates:NO];

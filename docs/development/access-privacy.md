@@ -93,6 +93,18 @@ challenge. Providers still validate the original grant independently.
 
 ## Resume challenges and asynchronous callbacks
 
+iOS loss of activity uses the same session-lock path as backgrounding, including
+opening the app switcher or Control Center and returning directly to Logistics.
+Protected sessions require authentication on return unless the configured trusted
+Wi-Fi waiver applies. Android continues to lock on activity pause.
+Without protected content, an iOS interruption does not hide the view, lock it
+or pause video; actual background entry retains the existing playback policy.
+Credentials arriving during an interruption are challenged before revealing the
+view, even if their queued refresh has not run. Password verification results
+are discarded if another lifecycle transition occurred while verification ran.
+Lifecycle transitions invalidate pending authentication before native shielding
+or playback callbacks, so a callback failure cannot revive an older Wi-Fi result.
+
 `services.session_auth.ResumePassword` is platform-neutral. It records setup,
 explicit and lifecycle challenge reasons separately from provider revocation.
 A repeated lifecycle callback neither overwrites a manual lock nor restores a

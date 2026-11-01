@@ -177,7 +177,7 @@ class AudioOutput:
                 await self.app.main_window.dialog(toga.InfoDialog('Audio output unavailable',
                     'Playback is paused because the selected audio output cannot be identified. '
                     'Select an identifiable output in system controls and press Play again. '
-                    'Manage saved approvals in Settings → Audio playback.'))
+                    'Manage saved approvals in Settings → Privacy & Security.'))
                 return
             if not pending:
                 return
@@ -185,7 +185,7 @@ class AudioOutput:
             accepted = await self.app.main_window.dialog(toga.ConfirmDialog('Approve Bluetooth audio?',
                 f'Allow session-only audio playback through {names}? This applies to video and read-aloud while session-only protection is active. '
                 'Adding approval leaves playback paused. Press Play separately when ready. '
-                'You can remove approval in Settings → Audio playback.'))
+                'You can remove approval in Settings → Privacy & Security.'))
             self.refresh()
             # A route/credential/lifecycle transition invalidates an old decision.
             if (accepted and self.protected() and self.available() and self.policy.revision == revision
@@ -193,7 +193,7 @@ class AudioOutput:
                 self.save({**self.approved(), **{item.identity: item.label for item in pending}})
         except (OSError, ValueError):
             await self.app.main_window.dialog(toga.InfoDialog('Approval was not saved',
-                'Playback remains paused. Try again in Settings → Audio playback.'))
+                'Playback remains paused. Try again in Settings → Privacy & Security.'))
         finally:
             self.prompt = None
             # A stale decision leaves playback paused; only a new Play asks again.

@@ -15,6 +15,130 @@ from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_privacy_updates_preserve_split_pane_text_width(self):
+        import toga
+        app = self.make_app()
+        with patch.object(app.adaptive, 'content_width', return_value=900):
+            app.show_settings(present=False)
+            nav = app.settings_navigation
+            nav.choose('Privacy & Security')
+            section = nav.sections['Privacy & Security']
+
+            def descendants(widget):
+                yield widget
+                for child in getattr(widget, 'children', ()):
+                    yield from descendants(child)
+
+            refresh = next(widget for widget in descendants(section) if isinstance(widget, toga.Button)
+                           and widget.text == 'Refresh output and approvals')
+            initial_width = refresh._settings_available_width
+            self.assertLess(initial_width, 900)
+            refresh.on_press()
+            self.assertEqual(refresh._settings_available_width, initial_width)
+            wifi = next(widget for widget in descendants(section) if isinstance(widget, toga.Switch)
+                        and widget is not app.session_speech_choice)
+            for enabled in (True, False, True):
+                wifi.value = enabled
+                self.assertEqual(refresh._settings_available_width, initial_width)
+
+    def test_dynamic_privacy_rows_keep_one_arrow_and_inline_remove_controls(self):
+        import toga
+        from mobile.settings.forms import fit_section
+        from mobile.settings.trusted_wifi import controls
+        from commonUtils.ui.native import forms
+        app = self.make_app()
+        container = toga.Box()
+        choice, manage = controls(app, container)
+        with patch.object(forms, 'disclosure', wraps=forms.disclosure) as draw:
+            for enabled in (True, False, True, False, True):
+                choice.value = enabled
+            self.assertEqual(draw.call_count, 1)
+        self.assertTrue(manage._settings_disclosure)
+
+        from services.audio_output import output
+        device = output('test', 'settings-headset', 'A long Bluetooth headset name', bluetooth=True)
+        app.audio_output.save({device.identity: device.label})
+        app.show_settings(present=False)
+        section = app.settings_navigation.sections['Privacy & Security']
+
+        def descendants(widget):
+            yield widget
+            for child in getattr(widget, 'children', ()):
+                yield from descendants(child)
+
+        refresh = next(widget for widget in descendants(section) if isinstance(widget, toga.Button)
+                       and widget.text == 'Refresh output and approvals')
+        for _ in range(2):
+            row = next(widget for widget in descendants(section)
+                       if getattr(widget, '_settings_action_row', False))
+            label, remove = row.children
+            self.assertIsInstance(label, toga.Label)
+            self.assertIsInstance(remove, toga.Button)
+            self.assertEqual(remove.text, 'Remove')
+            fit_section(section, 320)
+            self.assertLess(label._settings_available_width, 220)
+            self.assertFalse(getattr(remove, '_settings_disclosure', False))
+            refresh.on_press()
+        remove = next(widget for widget in descendants(section) if isinstance(widget, toga.Button)
+                      and widget.text == 'Remove')
+        remove.on_press()
+        self.assertEqual(app.audio_output.approved(), {})
+        self.assertFalse(any(getattr(widget, '_settings_action_row', False)
+                             for widget in descendants(section)))
+
+    def test_privacy_and_history_placement_and_explicit_page_arrows(self):
+        import toga
+        app = self.make_app()
+        app.preferences.save(session_trusted_wifi='true')
+        app.show_settings(present=False)
+        sections = app.settings_navigation.sections
+
+        def descendants(widget):
+            yield widget
+            for child in getattr(widget, 'children', ()):
+                yield from descendants(child)
+
+        def buttons(title):
+            return {widget.text: widget for widget in descendants(sections[title])
+                    if isinstance(widget, toga.Button)}
+
+        expected = {
+            'Privacy & Security': {
+                'Trusted Wi-Fi networks…': True, 'Approve current output…': False,
+            },
+            'Workspaces': {
+                'Migrate protected reader history…': False,
+                'rclone connections…': True, 'SMB shares…': True,
+            },
+            'Reset': {
+                'Clear all saved positions…': False, 'Clear all recent files…': False,
+                'Erase all app data…': True,
+            },
+            'Help': {'Mobile documentation': True},
+        }
+        for title, actions in expected.items():
+            actual = buttons(title)
+            for label, opens_page in actions.items():
+                with self.subTest(category=title, label=label):
+                    self.assertEqual(bool(getattr(actual[label], '_settings_disclosure', False)), opens_page)
+        self.assertNotIn('Migrate protected reader history…', buttons('App'))
+        self.assertNotIn('Trusted Wi-Fi networks…', buttons('Workspaces'))
+        self.assertIn(app.show_legacy_choice, list(descendants(sections['Workspaces'])))
+        self.assertIn(app.session_speech_choice, list(descendants(sections['Privacy & Security'])))
+        self.assertNotIn(app.session_speech_choice, list(descendants(sections['Read aloud'])))
+        self.assertNotIn('Audio playback', sections)
+        from commonUtils.ui.native.password_input import PasswordInput
+        password = next(widget for widget in descendants(sections['Workspaces'])
+                        if isinstance(widget, PasswordInput))
+        from mobile.settings.forms import fit_section
+        fit_section(sections['Workspaces'], 320)
+        self.assertEqual(list(password.children), [password.field, password.eye])
+        self.assertEqual(password.eye.style.height, 48)
+        password.value = 'synthetic previous password'
+        password.eye.on_press()
+        self.assertTrue(password.revealed)
+        self.assertEqual(password.value, 'synthetic previous password')
+
     def make_app(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)

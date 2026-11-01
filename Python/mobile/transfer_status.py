@@ -8,11 +8,12 @@ from .control_icons import tint_android
 
 class SyncButton(toga.Button):
     def __init__(self, app):
-        super().__init__(on_press=app.show_transfers, style=Pack(width=48, height=48))
+        super().__init__(on_press=app.show_transfers, style=Pack(width=48, height=48, margin_left=8))
         self.renderer = IconRenderer({}, tint_android=tint_android)
         self.snapshot = None
+        self._sync_shortcut = True
         from .appearance import surface
-        surface(self, background='transparent', foreground='text', outlined=False)
+        surface(self, background='hover', foreground='text', outlined=False)
 
     def update(self, busy, percentage, complete, phase):
         progress = None if percentage is None else max(0, min(100, round(percentage)))
@@ -37,13 +38,12 @@ def status_host(app, destination):
     if destination == 'home':
         return getattr(app, '_home_status_row', None), True
     if destination == 'documents':
-        return getattr(getattr(app, 'documents_sections', None), 'content', None), False
+        return getattr(app, '_documents_status_row', None), True
     if destination == 'files':
-        view = getattr(app, 'folder_picker_view', None)
-        return getattr(getattr(view, '_workspace_frame', None), 'main', view), False
+        return getattr(app, '_files_status_row', None), True
     if destination == 'chat':
         return getattr(app, 'chat_header', None), True
-    return getattr(getattr(app, 'settings_navigation', None), '_menu', None), False
+    return getattr(getattr(app, 'settings_navigation', None), '_status_row', None), True
 
 
 def refresh(app, destination=None):
@@ -65,6 +65,13 @@ def refresh(app, destination=None):
             mounted = button if inline else row
             if mounted.parent is not None:
                 mounted.parent.remove(mounted)
+                if key == 'home':
+                    app.reflow_home()
+                if key == 'chat':
+                    app.update_chat_header()
+                if key == 'settings':
+                    app.settings_navigation._menu_fit_width = None
+                    app.settings_navigation.reflow()
             if current is not host:
                 del controls[key]
     if not visible or app.routes.screens[destination]:
@@ -81,6 +88,13 @@ def refresh(app, destination=None):
     mounted = button if inline else row
     if mounted.parent is None:
         host.add(button) if inline else host.insert(0, row)
+        if destination == 'home':
+            app.reflow_home()
+        if destination == 'chat':
+            app.update_chat_header()
+        if destination == 'settings':
+            app.settings_navigation._menu_fit_width = None
+            app.settings_navigation.reflow()
     percentage = getattr(app, 'transfer_percentage', None)
     phase = int(app.loop.time() * 5) % 12
     button.update(busy, percentage, getattr(app, 'transfer_complete', False), phase)

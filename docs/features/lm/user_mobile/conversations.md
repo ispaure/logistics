@@ -83,6 +83,10 @@ displayed text; if the platform declines copying, select the text and use its
 system Copy command. Streaming follows the latest reply only while you are near
 the bottom. **Latest message ↓** returns there after reading older messages.
 
+**Settings → Markdown → Font size** controls both conversation text and the
+message field, using the same size as notes, Markdown files and documentation.
+Pinching the conversation also updates this shared size.
+
 The native message field grows as you type, up to a bounded height; longer drafts
 scroll inside it. A circular up-arrow sends your message; it becomes a square Stop
 control during generation, inside the same rounded composer. The header’s pencil

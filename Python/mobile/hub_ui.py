@@ -196,6 +196,16 @@ class HubSections(toga.Box):
                 if scroll.style.flex != 1:
                     scroll.style.flex = 1
 
+        if destination == 'home':
+            row = getattr(app, '_home_status_row', None)
+            if row is not None:
+                from commonUtils.ui.native.forms import fit_text
+                content_width = allocation.leading if paired and not vertical else width
+                controls_width = sum(child.style.width + child.style.margin_left + child.style.margin_right
+                                     for child in row.children[1:])
+                fit_text(row.children[0], max(24, content_width - self.content.style.margin_left
+                    - self.content.style.margin_right - controls_width))
+
 
 def _home_state(hub, recent):
     """Compare visible content, excluding credential badges refreshed in place."""
@@ -325,10 +335,8 @@ class HubUI:
         self._home_content_state = _home_state(self, recent)
         self._home_recent_buttons = []
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))
-        from .navigation import native_destination_titles
-        if not native_destination_titles(self.app):
-            box.add(toga.Label('Home', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)))
-        intro = toga.Label('Open a file or start a new document.', style=Pack(flex=1))
+        from commonUtils.ui.native.forms import FittedLabel
+        intro = FittedLabel('Open a file or start a new document.', style=Pack(flex=1))
         status_row = toga.Box(children=[intro],
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.app._home_status_row = status_row
@@ -388,13 +396,12 @@ class HubUI:
 
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        from .navigation import native_destination_titles
-        if not native_destination_titles(self.app):
-            box.add(toga.Label('Documents', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)))
         self.document_search = toga.TextInput(placeholder='Search documents',
             value=getattr(self, 'documents_query', ''), on_change=self.search_documents,
-            style=Pack(height=48, margin_bottom=8))
-        box.add(self.document_search)
+            style=Pack(height=48, flex=1))
+        self.app._documents_status_row = toga.Box(children=[self.document_search],
+            style=Pack(direction=ROW, align_items=CENTER, margin_bottom=8))
+        box.add(self.app._documents_status_row)
         self.document_grids = []
         self.document_categories = {}
         self.document_launchers = PanelGrid([], self.main_window.size.width)

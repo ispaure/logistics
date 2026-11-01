@@ -2,7 +2,7 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from .forms import SettingsLabel
+from .forms import SettingsLabel, settings_presentation, fit_section
 from ..audio_output import for_app
 
 
@@ -14,6 +14,7 @@ def controls(app, box):
     current = SettingsLabel('')
     status = SettingsLabel('')
     rows = toga.Box(style=Pack(direction=COLUMN))
+    rows._settings_managed_content = True
     def render(widget=None, **kwargs):
         owner.refresh()
         outputs = owner.policy.route
@@ -29,11 +30,18 @@ def controls(app, box):
                     render()
                 except (OSError, ValueError) as error:
                     status.text = str(error)
-            rows.add(toga.Box(children=[SettingsLabel(name + ' · ' + identity[:8], style=Pack(flex=1)),
-                toga.Button('Remove', on_press=remove, style=Pack(height=48))], style=Pack(direction=ROW)))
+            row = toga.Box(children=[SettingsLabel(name + ' · ' + identity[:8], style=Pack(flex=1)),
+                toga.Button('Remove', on_press=remove, style=Pack(width=88, height=48))], style=Pack(direction=ROW))
+            row._settings_action_row = True
+            rows.add(row)
         if not rows.children:
             rows.add(SettingsLabel('No approved Bluetooth devices. Select a Bluetooth output in system '
                 'controls during session-only protection, then press Play or Approve current output.'))
+        settings_presentation(rows)
+        adaptive = getattr(app, 'adaptive', None)
+        if adaptive is not None:
+            width = getattr(box, '_settings_fit_width', None)
+            fit_section(box, width if width is not None else adaptive.content_width('settings'))
     async def approve(widget=None, **kwargs):
         if not owner.protected():
             status.text = 'Session-only protection is inactive. Ordinary playback does not need Bluetooth approval.'

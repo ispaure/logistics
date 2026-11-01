@@ -39,6 +39,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, copy) void (^closed)(void);
 @property(nonatomic, strong) VLCMediaPlayer *player;
 @property(nonatomic, strong) UIView *movie;
+@property(nonatomic, strong) UITapGestureRecognizer *menuOutsideTap;
 @property(nonatomic, strong) UIStackView *controls;
 @property(nonatomic, strong) UIScrollView *controlsScroll;
 @property(nonatomic, strong) UIActivityIndicatorView *bufferSpinner;
@@ -109,10 +110,17 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)installPlaybackTools;
 - (void)applyPlaybackOptions;
 - (void)applyPictureSize;
+- (void)presentPlaybackDialog:(UIAlertController *)dialog;
 - (void)layoutPlaybackTools;
 - (NSDictionary *)playbackOptions;
 - (void)emitCommand:(NSString *)name value:(NSString *)value;
 - (void)playbackTools:(id)sender;
+@end
+
+@interface LGVideoController (HDRDiagnostics)
+- (AVSampleBufferDisplayLayer *)sampleBufferLayer:(CALayer *)layer;
+- (NSDictionary *)hdrPresentationState;
+- (void)logHDRTransition:(NSString *)event;
 @end
 
 @interface LGVideoController (PausePresentation)
@@ -202,12 +210,13 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     UIBarButtonItem *back = [self item:@"Back 10 seconds" selector:@selector(back:)];
     self.playButton = [self item:@"Play" selector:@selector(togglePlay:)];
     UIBarButtonItem *forward = [self item:@"Forward 10 seconds" selector:@selector(forward:)];
+    UIBarButtonItem *picture = [self item:@"Picture" selector:@selector(pictureOptions:)];
     UIBarButtonItem *chapters = [self item:@"Chapters" selector:@selector(chapters:)];
     UIBarButtonItem *audio = [self item:@"Audio tracks" selector:@selector(audioTracks:)];
     UIBarButtonItem *subtitles = [self item:@"Subtitles" selector:@selector(subtitleTracks:)];
     self.fullscreenButton = [self item:@"Exit fullscreen" selector:@selector(toggleFullscreen:)];
     UIBarButtonItem *tools = [self item:@"Playback" selector:@selector(playbackTools:)];
-    NSMutableArray<UIBarButtonItem *> *utilities = [NSMutableArray arrayWithArray:@[audio, subtitles, chapters, self.fullscreenButton, tools]];
+    NSMutableArray<UIBarButtonItem *> *utilities = [NSMutableArray arrayWithArray:@[picture, audio, subtitles, chapters, self.fullscreenButton, tools]];
     if (!self.restricted) {
         UIBarButtonItem *more = [self item:@"More playback options" selector:NULL];
         __weak LGVideoController *owner = self;
@@ -227,7 +236,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         self.navigationItem.pinnedTrailingGroup = [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[self.playButton] representativeItem:nil];
         self.navigationItem.trailingItemGroups = @[
             [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[back, forward] representativeItem:nil],
-            [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[tools, audio, subtitles, chapters, self.fullscreenButton] representativeItem:nil]
+            [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[picture, tools, audio, subtitles, chapters, self.fullscreenButton] representativeItem:nil]
         ];
         if (!self.restricted) {
             UIMenu *externalMenu = utilities.lastObject.menu;
@@ -377,6 +386,11 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     return (self.tabletop || (self.fullscreen && self.systemChromeHidden)) && !self.pipActive ? UIRectEdgeBottom : UIRectEdgeNone;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
+    if (gesture == self.menuOutsideTap) {
+        UIViewController *menu = self.presentedViewController;
+        return [menu isKindOfClass:UIAlertController.class] &&
+            !CGRectContainsPoint(menu.view.bounds, [touch locationInView:menu.view]);
+    }
     return ![touch.view isDescendantOfView:self.controlsScroll];
 }
 - (void)setControlsShown:(BOOL)visible {
@@ -591,7 +605,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         @"Back 10 seconds": @"gobackward.10", @"Forward 10 seconds": @"goforward.10",
         @"Audio tracks": @"speaker.wave.2", @"Subtitles": @"captions.bubble", @"Fullscreen": @"arrow.up.left.and.arrow.down.right",
         @"Exit fullscreen": @"arrow.down.right.and.arrow.up.left", @"More playback options": @"ellipsis",
-        @"Chapters": @"list.bullet", @"Done": @"xmark"};
+        @"Chapters": @"list.bullet", @"Picture": @"arrow.up.left.and.arrow.down.right", @"Done": @"xmark"};
     button.image = [UIImage systemImageNamed:symbols[label]];
     if (button == self.playButton && self.tabletopPlay) {
         UIButtonConfiguration *config = self.tabletopPlay.configuration;
@@ -670,6 +684,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    [self logHDRTransition:@"pause-request"];
     [self holdPausePresentation];
     [self setScreenAwake:NO];
     [self setControlsShown:YES];
@@ -781,6 +796,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self updateItem:self.playButton label:@"Pause"];
     self.networkResumePending = NO;
     NSLog(@"[VideoPlayback] play target=%lld current=%lld", self.startMilliseconds, self.player.time.value.longLongValue);
+    [self logHDRTransition:@"play-request"];
     [self.player play];
     [self tick:nil];
     if ([self.message.text isEqualToString:@"Ready. Press Play to start."]) {
@@ -918,6 +934,9 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     }
     if (![self canPlay:NO]) [self pause];
     [self updatePlaybackProgress];
+    // Playing can arrive before the first frame/seek acknowledgement. Revisit
+    // eligibility once those arrive without postponing an existing deadline.
+    [self scheduleControls];
     CGSize videoSize = self.player.videoSize;
     if (fabs(videoSize.width - self.lastVideoSize.width) > 0.5 ||
         fabs(videoSize.height - self.lastVideoSize.height) > 0.5) {
@@ -949,6 +968,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)mediaPlayerStateChanged:(VLCMediaPlayerState)state {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self.retired) return;
+        [self logHDRTransition:[NSString stringWithFormat:@"state-%ld", (long)state]];
         if (state != VLCMediaPlayerStatePlaying) self.pausePending = NO;
         // A blocked input can complete an earlier Pause after Play was queued.
         // Reconcile that completion with current intent, never with read-ahead.
@@ -1014,7 +1034,6 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         menu.popoverPresentationController.sourceView = sender ?: self.view;
         menu.popoverPresentationController.sourceRect = [sender isKindOfClass:UIView.class] ? ((UIView *)sender).bounds : self.view.bounds;
     }
-    [menu addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     return menu;
 }
 - (void)chapters:(id)sender {
@@ -1032,7 +1051,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         }]];
     }
     if (!chapters.count) menu.message = @"This video has no embedded chapters.";
-    [self presentViewController:menu animated:YES completion:nil];
+    [self presentPlaybackDialog:menu];
 }
 - (void)audioTracks:(id)sender { [self tracks:sender subtitles:NO]; }
 - (void)subtitleTracks:(id)sender { [self tracks:sender subtitles:YES]; }
@@ -1073,7 +1092,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         }
     }
     if (!tracks.count) menu.message = @"No embedded tracks available yet. Start playback to discover tracks.";
-    [self presentViewController:menu animated:YES completion:nil];
+    [self presentPlaybackDialog:menu];
 }
 - (void)mediaPlayerBufferingChanged:(float)progress {
     // Decoder progress callbacks also describe prebuffering while frames are
@@ -1101,7 +1120,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         }
     }
     if (count == 0) menu.message = @"Looking for receivers. Open Cast again in a few seconds.";
-    [self presentViewController:menu animated:YES completion:nil];
+    [self presentPlaybackDialog:menu];
 }
 - (void)selectRenderer:(VLCRendererItem *)renderer {
     if (![self canPlay:YES]) return;
@@ -1141,6 +1160,12 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     // System-managed HDR is the default on iOS 26; the old forced mode is available
     // through Playback for A/B comparison without changing decoder or video output.
     if ([layer isKindOfClass:AVSampleBufferDisplayLayer.class]) {
+        // Apple's native output has its own framing policy; VLC crop alone
+        // does not change its default aspect-fit presentation.
+        AVSampleBufferDisplayLayer *videoLayer = (AVSampleBufferDisplayLayer *)layer;
+        AVLayerVideoGravity gravity = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"]
+            ? AVLayerVideoGravityResizeAspectFill : AVLayerVideoGravityResizeAspect;
+        if (![videoLayer.videoGravity isEqualToString:gravity]) videoLayer.videoGravity = gravity;
         if (@available(iOS 26.0, *)) {
             layer.preferredDynamicRange = self.forceMaximumHDR ? CADynamicRangeHigh : CADynamicRangeAutomatic;
         } else if (@available(iOS 17.0, *)) {
@@ -1158,6 +1183,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [CATransaction setDisableActions:YES];
     [self configureVideoDynamicRange:self.movie.layer];
     [CATransaction commit];
+    [self logHDRTransition:@"mode-change"];
     NSLog(@"[VideoHDR] requestedMode=%@ (effective on iOS 26+)", forced ? @"high" : @"automatic");
 }
 - (CGRect)bounds { return self.movie.bounds; }
@@ -1221,4 +1247,5 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 
 #import "PlaybackControls.m"
 
+#import "HDRDiagnostics.m"
 #import "PausePresentation.m"

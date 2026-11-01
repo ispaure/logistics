@@ -1,4 +1,12 @@
 // Compiled with the production video controller in a disposable UIKit app.
+// Supply locations to the real gesture delegate without private event injection.
+@interface LGVideoMenuTouch : UITouch
+@property(nonatomic, strong) UIView *coordinateView;
+@property(nonatomic) CGPoint point;
+@end
+@implementation LGVideoMenuTouch
+- (CGPoint)locationInView:(UIView *)view { return [self.coordinateView convertPoint:self.point toView:view]; }
+@end
 @interface LGVideoChromeChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, strong) LGVideoController *video;
@@ -6,6 +14,8 @@
 @property(nonatomic, strong) NSTimer *sampler;
 @property(nonatomic) NSTimeInterval started;
 @property(nonatomic) BOOL completed;
+@property(nonatomic) BOOL pauseChecksStarted;
+@property(nonatomic, strong) NSMutableArray *hdrTransitions;
 @property(nonatomic) int64_t firstVideoClock;
 @property(nonatomic) float initialTimeline;
 @property(nonatomic) BOOL initialTimelineHidden;
@@ -25,9 +35,85 @@
     }
     return nil;
 }
+- (NSString *)presentationError:(NSDictionary *)state maximum:(BOOL)maximum {
+    if (![state[@"ready"] boolValue] || [state[@"status"] integerValue] != AVQueuedSampleBufferRenderingStatusRendering ||
+        [state[@"snapshotOverlay"] boolValue] || !state[@"pixelFormat"])
+        return @"Native video is not ready or is covered by a snapshot";
+    if (@available(iOS 26.0, *)) {
+        if (![state[@"dynamicRange"] isEqual:maximum ? CADynamicRangeHigh : CADynamicRangeAutomatic])
+            return @"Requested HDR mode was not applied to the video layer";
+    } else if (![state[@"extendedRange"] boolValue]) return @"Extended range is disabled";
+    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDR"] boolValue]) {
+        NSDictionary *metadata = state[@"pixelAttachments"];
+        if (![metadata[(__bridge NSString *)kCVImageBufferColorPrimariesKey] isEqual:(__bridge NSString *)kCVImageBufferColorPrimaries_ITU_R_2020] ||
+            ![metadata[(__bridge NSString *)kCVImageBufferTransferFunctionKey] isEqual:(__bridge NSString *)kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ] ||
+            ![metadata[(__bridge NSString *)kCVImageBufferYCbCrMatrixKey] isEqual:(__bridge NSString *)kCVImageBufferYCbCrMatrix_ITU_R_2020])
+            return @"PQ fixture lost required BT.2020/PQ/matrix attachments";
+    }
+    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue] &&
+        (![state[@"pixelFormat"] isEqual:@"x420"] || [state[@"currentEDRHeadroom"] doubleValue] <= 1))
+        return @"Physical HDR fixture lacks 10-bit video-range output or active EDR headroom";
+    return nil;
+}
+- (void)checkPauseMode:(BOOL)maximum {
+    [self.video setForcedMaximumHDRForSession:maximum];
+    [self.video startByUser];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        NSDictionary *playing = [self.video hdrPresentationState];
+        [self.hdrTransitions addObject:@{@"event": @"playing", @"presentation": playing}];
+        NSString *error = [self presentationError:playing maximum:maximum];
+        if (error || !self.video.player.isPlaying) { [self finish:error ?: @"Playback did not start"]; return; }
+        [self.video pause]; // Exercise the production action, including pause presentation.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            NSDictionary *paused = [self.video hdrPresentationState];
+            [self.hdrTransitions addObject:@{@"event": @"paused", @"presentation": paused}];
+            NSString *error = [self presentationError:paused maximum:maximum];
+            if (error) { [self finish:error]; return; }
+            if (self.video.pauseSnapshot || self.video.player.state != VLCMediaPlayerStatePaused ||
+                ![playing[@"sampleBufferLayer"] isEqual:paused[@"sampleBufferLayer"]] ||
+                !playing[@"pixelFormat"] || ![playing[@"pixelFormat"] isEqual:paused[@"pixelFormat"]] ||
+                ![playing[@"pixelAttachments"] isEqual:paused[@"pixelAttachments"]] ||
+                ![(playing[@"dynamicRange"] ?: playing[@"extendedRange"]) isEqual:(paused[@"dynamicRange"] ?: paused[@"extendedRange"])]) {
+                [self finish:@"Pause replaced the native presentation, lost color metadata, or was not acknowledged"]; return;
+            }
+            [self.video startByUser];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                NSDictionary *resumed = [self.video hdrPresentationState];
+                [self.hdrTransitions addObject:@{@"event": @"resumed", @"presentation": resumed}];
+                NSString *error = [self presentationError:resumed maximum:maximum];
+                if (error) { [self finish:error]; return; }
+                if ([resumed[@"clock"] longLongValue] <= [paused[@"clock"] longLongValue]) {
+                    [self finish:@"Resume did not advance the media clock"]; return;
+                }
+                if (!self.video.player.isPlaying || self.video.pauseSnapshot ||
+                    ![paused[@"sampleBufferLayer"] isEqual:resumed[@"sampleBufferLayer"]] ||
+                    ![paused[@"pixelFormat"] isEqual:resumed[@"pixelFormat"]] ||
+                    ![paused[@"pixelAttachments"] isEqual:resumed[@"pixelAttachments"]] ||
+                    ![(paused[@"dynamicRange"] ?: paused[@"extendedRange"]) isEqual:(resumed[@"dynamicRange"] ?: resumed[@"extendedRange"])]) {
+                    [self finish:@"Resume changed the native presentation or color metadata"]; return;
+                }
+                if (!maximum) [self checkPauseMode:YES];
+                else { [self.video setForcedMaximumHDRForSession:NO]; [self finish:nil]; }
+            });
+        });
+    });
+}
 - (void)finish:(NSString *)error {
     if (self.completed) return;
+    if (!error && !self.pauseChecksStarted &&
+        ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue] ||
+         [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) &&
+        [self videoLayer:self.video.movie.layer]) {
+        self.pauseChecksStarted = YES;
+        [self.sampler invalidate];
+        self.hdrTransitions = [NSMutableArray array];
+        [self checkPauseMode:NO];
+        return;
+    }
     self.completed = YES;
+    if (!error && ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue] ||
+        [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) && self.hdrTransitions.count != 6)
+        error = @"No sample-buffer layer available for transition checks";
     int64_t duration = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QADuration"] longLongValue] ?: 30000;
     int64_t resume = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAResume"] longLongValue];
     if (!error && resume > 0 && ((![[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAUnknownDuration"] boolValue] && fabs(self.initialTimeline - resume / (double)duration) > .01) || self.initialTimelineHidden || self.firstVideoClock < resume - 1500
@@ -50,7 +136,8 @@
             CVPixelBufferRelease(pixels);
         }
     }
-    if (@available(iOS 26.0, *)) hdrEnabled = [layer.preferredDynamicRange isEqualToString:CADynamicRangeHigh];
+    if (@available(iOS 26.0, *)) hdrEnabled = [layer.preferredDynamicRange isEqualToString:CADynamicRangeHigh] ||
+        [layer.preferredDynamicRange isEqualToString:CADynamicRangeAutomatic];
     else if (@available(iOS 17.0, *)) hdrEnabled = layer.wantsExtendedDynamicRangeContent;
     if (!error && [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDR"] boolValue] &&
         (!ready || !hdrEnabled || self.video.player.time.intValue < 1000))
@@ -63,6 +150,7 @@
                 ? @"Real UIKit/VLC and retained rclone range transport; delayed synthetic MKV; simulator"
                 : @"Real UIKit controller and VLC; synthetic local movie; simulator only")};
     NSMutableDictionary *details = [report mutableCopy];
+    details[@"hdrTransitions"] = self.hdrTransitions ?: @[];
     details[@"bounds"] = NSStringFromCGRect(self.window.bounds);
     details[@"orientation"] = @(self.window.windowScene.interfaceOrientation);
     details[@"idiom"] = @(self.video.traitCollection.userInterfaceIdiom);
@@ -123,20 +211,22 @@
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAStreamProbe"] boolValue]) [self.video setNetworkWaiting:YES];
         [self.video startByUser];
         self.started = NSProcessInfo.processInfo.systemUptime;
-        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                [self.video.player pause];
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self finish:nil]; });
+        self.sampler = [NSTimer scheduledTimerWithTimeInterval:1.0/60 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
+        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue] ||
+            [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue]) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                [self finish:nil];
             });
             return;
         }
-        self.sampler = [NSTimer scheduledTimerWithTimeInterval:1.0/60 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
     });
 }
 - (void)sample:(NSTimer *)timer {
     LGVideoController *v = self.video;
     if (!self.firstVideoClock && v.player.media.statistics.displayedPictures > 0 && v.player.time.value.longLongValue > 0)
         self.firstVideoClock = v.player.time.value.longLongValue;
+    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue] ||
+        [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) return;
     CGFloat opacity = ((CALayer *)v.controlsScroll.layer.presentationLayer).opacity;
     CGFloat barOpacity = ((CALayer *)v.navigationController.navigationBar.layer.presentationLayer).opacity;
     CGRect headerFrame = [v.videoHeader convertRect:v.videoHeader.bounds toView:self.window];
@@ -189,15 +279,37 @@
 - (void)menus:(NSUInteger)index {
     LGVideoController *v = self.video;
     if (index == 0) {
+        UIBarButtonItem *picture = nil;
+        for (UIBarButtonItemGroup *group in v.navigationItem.trailingItemGroups)
+            for (UIBarButtonItem *item in group.barButtonItems)
+                if (item.action == NSSelectorFromString(@"pictureOptions:")) picture = item;
+        if (!picture.image || ![picture.accessibilityLabel isEqualToString:@"Picture"]) {
+            [self finish:@"Normal toolbar is missing the Picture control"]; return;
+        }
+        [v setting:@"aspect" value:@"fill"];
+        [v.view layoutIfNeeded];
+        AVSampleBufferDisplayLayer *layer = [v sampleBufferLayer:v.movie.layer];
+        if (!layer || ![layer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspectFill]) {
+            [self finish:@"Fill did not reach the native video output"]; return;
+        }
+        CGSize filledSize = v.movie.bounds.size;
+        [v setting:@"aspect" value:@"fit"];
+        [v.view layoutIfNeeded];
+        if (![layer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspect] ||
+            (v.movie.bounds.size.height >= filledSize.height && v.movie.bounds.size.width >= filledSize.width)) {
+            [self finish:@"Fit/Fill did not update the drawable geometry"]; return;
+        }
         CGRect track = [v.seek trackRectForBounds:v.seek.bounds];
         CGRect strip = v.cacheStrip.frame;
-        if (fabs(CGRectGetMinX(track) - CGRectGetMinX(strip)) > .5 ||
-            fabs(CGRectGetMaxX(track) - CGRectGetMaxX(strip)) > .5) {
-            [self finish:@"Cached ranges do not align with the native seek track"]; return;
+        CGRect firstThumb = [v.seek thumbRectForBounds:v.seek.bounds trackRect:track value:v.seek.minimumValue];
+        CGRect lastThumb = [v.seek thumbRectForBounds:v.seek.bounds trackRect:track value:v.seek.maximumValue];
+        if (fabs(CGRectGetMidX(firstThumb) - CGRectGetMinX(strip)) > .5 ||
+            fabs(CGRectGetMidX(lastThumb) - CGRectGetMaxX(strip)) > .5) {
+            [self finish:@"Cached ranges do not align with the seek thumb endpoints"]; return;
         }
-        CGFloat expectedGap = .6 * (CGRectGetHeight(v.seek.bounds) - CGRectGetMaxY(track) + 4);
-        if (fabs(CGRectGetMinY(strip) - CGRectGetMaxY(track) - expectedGap) > .5) {
-            [self finish:@"Cached ranges did not move 40 percent closer"]; return;
+        if (CGRectGetMinY(strip) < 0 || CGRectGetMaxY(strip) > CGRectGetHeight(v.seek.bounds) ||
+            CGRectGetHeight(strip) <= 0) {
+            [self finish:@"Cached ranges are clipped outside the slider"]; return;
         }
         if ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls) || !v.videoHeader.window ||
             v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != NSTextAlignmentCenter) {
@@ -246,7 +358,7 @@
     NSString *progress = [self outputPath:@"progress.json"];
     [[NSJSONSerialization dataWithJSONObject:@{@"fadePassed": @YES, @"menuIndex": @(index)} options:0 error:nil]
         writeToFile:progress atomically:YES];
-    NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"pictureOptions:", @"subtitleOptions:", @"queueVideos:"];
+    NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"pictureOptions:", @"subtitleOptions:", @"queueVideos:", @"audioTracks:", @"subtitleTracks:", @"chapters:"];
     if (index >= selectors.count) {
 #ifdef LG_VIDEO_FOLD_QA
         [(LGVideoPoseQAController *)v applyTestFold:NO];
@@ -266,6 +378,8 @@
         for (UIBarButtonItem *item in self.video.mediaItems)
             if ([item.accessibilityLabel isEqualToString:@"More playback options"]) sender = item;
         SEL selector = NSSelectorFromString(selectors[index]);
+        for (UIBarButtonItem *item in self.video.mediaItems)
+            if (item.action == selector) sender = item;
         if (self.video.tabletop) {
             for (UIStackView *row in self.video.tabletopUtilities.arrangedSubviews)
                 for (UIButton *button in row.arrangedSubviews)
@@ -275,11 +389,31 @@
         invoke(self.video, selector, sender);
         UIAlertController *menu = (UIAlertController *)self.video.presentedViewController;
         if (!menu) { [self finish:@"Playback menu did not present"]; return; }
+        if (index == 0) for (UIAlertAction *action in menu.actions) {
+            if ([action.title hasPrefix:@"Picture size"]) { [self finish:@"Playback duplicates the Picture icon"]; return; }
+        }
         NSUInteger cancel = 0;
         for (UIAlertAction *action in menu.actions) if (action.style == UIAlertActionStyleCancel) cancel++;
-        if (cancel != 1) { [self finish:@"Playback menu must have exactly one Cancel action"]; return; }
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .4 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            [menu dismissViewControllerAnimated:NO completion:^{ [self menus:index+1]; }];
+        if (cancel != 0) { [self finish:@"Playback menus must dismiss without Cancel actions"]; return; }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if (!self.video.menuOutsideTap.view) { [self finish:@"Menu backdrop dismissal was not installed"]; return; }
+            UIView *backdrop = self.video.menuOutsideTap.view;
+            LGVideoMenuTouch *touch = [[LGVideoMenuTouch alloc] init];
+            touch.coordinateView = menu.view;
+            touch.point = CGPointMake(CGRectGetMidX(menu.view.bounds), CGRectGetMidY(menu.view.bounds));
+            if ([self.video gestureRecognizer:self.video.menuOutsideTap shouldReceiveTouch:touch]) {
+                [self finish:@"Menu taps are intercepted by backdrop dismissal"]; return;
+            }
+            touch.coordinateView = backdrop;
+            touch.point = CGPointMake(CGRectGetMinX(backdrop.bounds) + 1, CGRectGetMinY(backdrop.bounds) + 1);
+            if (![self.video gestureRecognizer:self.video.menuOutsideTap shouldReceiveTouch:touch]) {
+                [self finish:@"Outside taps cannot reach menu dismissal"]; return;
+            }
+            [self.video dismissPlaybackMenu:self.video.menuOutsideTap];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                if (self.video.presentedViewController) { [self finish:@"Menu backdrop did not dismiss"]; return; }
+                [self menus:index+1];
+            });
         });
     } @catch (NSException *exception) { [self finish:exception.reason]; }
 }

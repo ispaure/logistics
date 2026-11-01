@@ -167,13 +167,12 @@ class WifiSettingsTests(unittest.TestCase):
             # Exercise the actual grouped Settings page, not just its factory.
             app.show_settings(present=False)
             app.preferences.save(session_trusted_wifi='true')
-            section = app.settings_navigation.sections['Workspaces']
+            section = app.settings_navigation.sections['Privacy & Security']
             def descendants(widget):
                 yield widget
                 for child in getattr(widget, 'children', ()):
                     yield from descendants(child)
-            switch = next(widget for widget in descendants(section) if isinstance(widget, toga.Switch)
-                          and widget is not app.show_legacy_choice)
+            switch = next(widget for widget in descendants(section) if isinstance(widget, toga.Switch))
             for enabled in (False, True, False, True, False):
                 switch.value = enabled
                 buttons = [widget for widget in descendants(section) if isinstance(widget, toga.Button)

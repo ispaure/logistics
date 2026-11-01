@@ -25,6 +25,15 @@ QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaur
 NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
                       'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-fullscreen.png', 'notes-links-landscape-left.png', 'notes-links-portrait.png', 'notes-files-landscape-left.png', 'notes-files-portrait.png', 'sync-portrait.png', 'sync-landscape-left.png')
 
+SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
+    for orientation in ('portrait', 'landscape-left')
+    for destination in ('home', 'files', 'documents', 'chat', 'settings',
+                        'files-rclone', 'files-Network-shares', 'files-Local', 'settings-panel'))
+
+
+def diagnostics(entry_point):
+    return NATIVE_DIAGNOSTICS + (SYNC_SCREENSHOTS if entry_point.endswith('.sync_status_probe') else ())
+
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
     print('Running ' + str(args[0]) + '; log: ' + str(output), flush=True)
@@ -193,7 +202,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
             (output / 'ios-contrast.json').write_text(json.dumps(dict(increase_contrast=contrast)))
             if contrast != 'enabled':
                 raise RuntimeError('iOS Increase Contrast could not be enabled.')
-        client.invoke('install', device, str(app))
+        client.invoke('install', device, str(app), timeout=180)
         cache = Path(client.invoke('get_app_container', device, bundle, 'data')) / 'Library/Caches'
         console_stream = (output / 'ios-console.log').open('w')
         console = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', device, bundle],
@@ -231,7 +240,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         raise TimeoutError('iOS focused QA probe timed out')
     finally:
         if cache is not None:
-            for artifact_name in NATIVE_DIAGNOSTICS:
+            for artifact_name in diagnostics(entry_point):
                 if (cache / artifact_name).exists():
                     shutil.copyfile(cache / artifact_name, output / artifact_name)
         if cache is not None and entry_point.endswith('.notebook_apple_memory_probe'):
@@ -302,6 +311,9 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         else:
             record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
+        if device is None and entry_point.endswith('.sync_status_probe'):
+            emulator.invoke('-s', serial, 'shell', 'wm', 'size', '640x1136')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
         emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=90)
         if device is not None:
             # Boox's launcher can auto-freeze a newly installed QA identity.
@@ -408,10 +420,10 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 'run-as', bundle, 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
             if report_data.returncode == 0 and report_data.stdout:
                 (output / 'android-result.json').write_bytes(report_data.stdout)
-            for name in NATIVE_DIAGNOSTICS:
+            for name in diagnostics(entry_point):
                 artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                     'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
-                if artifact.returncode == 0:
+                if artifact.returncode == 0 and (not name.endswith('.png') or artifact.stdout.startswith(b'\x89PNG')):
                     (output / name).write_bytes(artifact.stdout)
             (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
             try:
@@ -435,9 +447,9 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
-    parser.add_argument('--family', choices=('iPhone', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
+    parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
     parser.add_argument('--pose', choices=('closed', 'open', 'partial'), help='Explicit Duo simulator posture')
     parser.add_argument('--duoctl', type=Path, help='Reviewed external simulator-only Duo pose helper')
@@ -455,6 +467,8 @@ def main():
         parser.error('The recent-deletion native probe requires Android.')
     if args.probe in ('boox-raw-ink', 'boox-preview') and (args.platform != 'android' or not args.device):
         parser.error('The raw ink probe requires an explicit physical Android --device.')
+    if args.probe == 'markdown-typography' and args.platform != 'ios':
+        parser.error('The Markdown typography probe measures UIKit fonts and requires iOS.')
     SOURCE = args.source_root.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     options, _ = manager_settings.settings(REPO / 'mobile_build')
@@ -472,6 +486,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'markdown-typography':
+            creation_profile = dict(entry_point='tests.logisticsmobile.markdown_typography_probe',
+                result_name='markdown-typography-result.json')
         if args.probe == 'reader-space':
             creation_profile = dict(bundle='io.github.ispaure.logisticsreaderspaceqa',
                 entry_point='tests.logisticsmobile.reader_space_probe', result_name='reader-space-result.json')

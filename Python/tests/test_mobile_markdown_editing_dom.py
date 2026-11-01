@@ -87,6 +87,36 @@ class MobileMarkdownEditingDOMTests(QtTestCase):
         return json.loads(self.evaluate(f"""return JSON.stringify([...{section}.querySelectorAll('.live-marker')]
             .map(marker => parseFloat(getComputedStyle(marker).fontSize)));"""))
 
+    def test_reading_and_editing_have_matching_typography_at_multiple_sizes(self):
+        from commonUtils.ui.native.markdown_preview import markdown_preview
+        from features.text_editor.mobile.markdown_style import READING_CSS
+        from features.lm.mobile.presentation import transcript_document
+        source = ('# Heading\n\n## Two\n\n### Three\n\n#### Four\n\n'
+                  '##### Five\n\n###### Six\n\nBody `inline`.\n\n'
+                  '- List\n\n> Quote\n\n```\ncode\n```\n\n| Table |\n| --- |\n| Cell |\n')
+        for size in (12, 16, 23, 32):
+            samples = []
+            chat = transcript_document().replace('<main id="messages" aria-label="Conversation">',
+                '<main id="messages" aria-label="Conversation"><article class="assistant">'
+                + MarkdownIt().enable('table').render(source) + '</article>')
+            for html in (editor_html(source), markdown_preview(source, stylesheet=READING_CSS), chat):
+                self.loaded = False
+                self.page.setHtml(html)
+                self.wait_until(lambda: self.loaded, timeout=10)
+                samples.append(json.loads(self.evaluate("""
+                    document.body.style.fontSize = %s + 'px';
+                    return JSON.stringify(Object.fromEntries(
+                        ['p','h1','h2','h3','h4','h5','h6','li','blockquote','pre code','p code','td']
+                        .map(s => {
+                            const selector = /^h[1-6]$/.test(s) ? s + ',[data-live-heading="' + s[1] + '"]'
+                                : s === 'p' ? 'p:not([data-live-heading])'
+                                : s === 'p code' ? 'p code,p .live-code' : s;
+                            return [s, getComputedStyle((document.querySelector('#document') || document.body).querySelector(selector)).fontSize];
+                        })));
+                    """ % size)))
+            self.assertEqual(samples[0], samples[1], size)
+            self.assertEqual(samples[0], samples[2], size)
+
     def test_inline_visibility_matches_desktop_boundaries_and_selection(self):
         from commonUtils.formats.markdown.editing import syntax_active
         text = '😀 **bold** and *other* after'

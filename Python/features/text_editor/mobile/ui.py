@@ -293,7 +293,7 @@ class TextEditorView:
         """Keep one editing surface at every width, including restored old splits."""
         if self.session is None:
             return
-        self.editor.style.font_size = self.app.presentation.font_size(self.session.kind)
+        self.editor._font_binding.apply(self.app.presentation.font_size(self.session.kind))
         rich = self.session.kind == 'markdown' and self.session.view.get('markdown_editor', 'formatted') == 'formatted'
         surface = self.editor
         if rich:
