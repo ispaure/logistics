@@ -102,4 +102,7 @@ class HomeUnlockTests(unittest.TestCase):
     def test_unavailable_retention_hides_home_action(self):
         self.retained.side_effect = OSError('Unavailable')
         self.app.show_home()
-        self.assertIsInstance(self.app.home_content.children[0], toga.Label)
+        row = self.app._home_status_row
+        self.assertIs(self.app.home_content.children[0], row)
+        self.assertEqual(len(row.children), 1)
+        self.assertIsInstance(row.children[0], toga.Label)

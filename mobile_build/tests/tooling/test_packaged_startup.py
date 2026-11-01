@@ -67,7 +67,8 @@ for saved_document in (False, True):
     LogisticsMobile.storage_root = root
     app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
     assert app.native_host.state.destination == 'home'
-    assert app.body.children[0].content.children[0].text == 'Home'
+    assert app._home_status_row.children[0].text == 'Open a file or start a new document.'
+    assert app.home_actions.children[0].text == 'Open file…'
     from mobile.documentation_ui import show_documentation
     owner = show_documentation(app)
     assert owner.path.name == 'user_mobile.md'

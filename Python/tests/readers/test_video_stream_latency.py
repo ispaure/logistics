@@ -206,6 +206,7 @@ class VideoReadAheadTests(unittest.TestCase):
     def test_prefetch_is_bounded_and_stops_before_stream_closes(self):
         from threading import Event
         from features.video.transport import read_ahead
+        from features.video.buffering import BufferingPolicy
         full = Event()
         class Stream:
             reads = 0
@@ -215,7 +216,8 @@ class VideoReadAheadTests(unittest.TestCase):
                     full.set()
                 return bytes([self.reads]) * count
         stream = Stream()
-        with read_ahead(stream, 20 * 1024 * 1024, lambda: None) as chunks:
+        with read_ahead(stream, 20 * 1024 * 1024, lambda: None,
+                        policy=BufferingPolicy(read_ahead_chunks=4)) as chunks:
             self.assertTrue(full.wait(2), 'Read-ahead never reached its bounded queue')
             self.assertEqual(stream.reads, 5)
             self.assertEqual(next(chunks), b'\x01' * (1024 * 1024))

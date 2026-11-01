@@ -27,15 +27,21 @@ def compact_apple_reader(container):
     if container.content is None:
         return False
     app = container.content.interface.app
-    if app is None or not getattr(app, 'body', None) or not app.body.children:
-        return False
-    view = app.body.children[0]
-    if view._impl.container is not container:
+    if app is None:
         return False
     from .document_location import side_title_reader
-    reader = side_title_reader(view)
-    if reader is None and page_footer(view) is None:
-        return False
+    # Title mounting can precede route_changed, while app.body still points at
+    # the previous page. Measure this container's content, never that stale route.
+    reader = side_title_reader(container.content.interface)
+    if reader is not None:
+        view = reader
+    else:
+        body = getattr(app, 'body', None)
+        if body is None or not body.children:
+            return False
+        view = body.children[0]
+        if view._impl.container is not container or page_footer(view) is None:
+            return False
     from .screen_privacy import native_value
     window = native_value(container.native, 'window')
     if window is None:

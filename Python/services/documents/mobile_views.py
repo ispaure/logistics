@@ -40,6 +40,8 @@ def document_webview(resource=None, **options):
 
 def markdown_webview(*, private=False, **options):
     """The host chooses a protected native surface; callers retain Source mode."""
+    from mobile.keyboard import install_editor_accessory_policy
+    install_editor_accessory_policy()
     from types import SimpleNamespace
     from services.documents.storage import DocumentPolicy
     if private:

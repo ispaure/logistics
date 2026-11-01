@@ -5,12 +5,11 @@ from toga.style.pack import COLUMN, ROW
 
 
 def chat_region(owner):
-    from mobile.fold_layout import reserved_divisions
     widget = owner.chat_workspace
     if not type(widget._impl).__module__.startswith('toga_iOS.'):
         return None
     bounds = widget._impl.native.bounds.size
-    for region in reserved_divisions(widget):
+    for region in owner.presentation.reserved_divisions(widget):
         # A software keyboard can cover the lower half of an active fold.
         # Keep recognizing that posture when the division leaves the viewport.
         if not region.vertical and region.x <= 1 and region.x + region.width >= float(bounds.width) - 1 and region.y > 0:

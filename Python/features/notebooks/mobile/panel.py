@@ -157,8 +157,7 @@ class NotebookPanel:
         resource = self.document.resource if self.document else None
         self.web = document_webview(resource, on_navigation_starting=self.navigate,
                                     on_webview_load=self.canvas_loaded, style=Pack(flex=1))
-        from mobile.layout_participants import participants
-        self._fold_subscription = participants(self.app).register(('notebook-fold', id(self)), self,
+        self._fold_subscription = self.app.presentation.register_layout(('notebook-fold', id(self)), self,
             lambda owner, frame: owner.refresh_fold())
         self._fold_signature = ()
         self._canvas_ready = False
@@ -188,8 +187,7 @@ class NotebookPanel:
         web = self.web
         async def update():
             try:
-                from mobile.fold_layout import division
-                region = division(self.app, web)
+                region = self.app.presentation.fold_division(web)
                 geometry = None
                 if region is not None and not region.vertical:
                     height = float(web._impl.native.bounds.size.height)

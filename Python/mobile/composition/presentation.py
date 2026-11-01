@@ -80,6 +80,8 @@ def mobile_presentation(app):
     from mobile.recycled_file_list import summary_list
     from mobile.font_scaling import bind, font_size
     from mobile.document_sources import folder_action
+    from mobile.fold_layout import reserved_divisions, division
+    from mobile.layout_participants import participants
 
     return MobilePresentation(
         icon_button=icon_button,
@@ -99,6 +101,9 @@ def mobile_presentation(app):
         font_size=lambda kind: font_size(app, kind),
         bind_font=lambda widget, kind, **kwargs: bind(app, widget, kind, **kwargs),
         folder_actions=lambda session: folder_action(app, session),
+        reserved_divisions=reserved_divisions,
+        fold_division=lambda widget: division(app, widget),
+        register_layout=lambda *args, **kwargs: participants(app).register(*args, **kwargs),
     )
 
 

@@ -595,6 +595,9 @@ keeps the hardware’s top safe inset without reserving a second navigation-titl
 strip. Fullscreen hides the row; returning to a horizontal navigation bar moves
 the title back to UIKit. Only a horizontal footer’s passive caption may extend
 toward the home indicator.
+The inset calculation finds the mounted title inside the container being laid
+out, including before the selected route switches to that reader. A stale
+previous route must not leave the old navigation strip above the new title.
 `viewer_layout_probe.py` measures clearance after opening and rotating.
 The `--probe reader-title` scenario checks imported and provider comics and EPUBs, including
 fullscreen restoration and optional simulator hinge transitions.

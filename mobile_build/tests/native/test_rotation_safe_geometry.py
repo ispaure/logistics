@@ -27,7 +27,7 @@ class ReaderTitleLayoutTests(unittest.TestCase):
         view = NS(_reader_page_footer=footer, _impl=NS(container=container), children=[])
         if side:
             view._document_title_header = NS(parent=view)
-        container.content = NS(interface=NS(app=NS(body=NS(children=[view]))))
+        container.content = NS(interface=NS(app=NS(body=NS(children=[view])), children=[view]))
         return container
 
     def test_reader_header_reclaims_the_bar_strip_but_preserves_hardware_clearance(self):
@@ -45,6 +45,15 @@ class ReaderTitleLayoutTests(unittest.TestCase):
         with patch('mobile.appearance.reserve_navigation'):
             compact_apple_reader(container)
         self.assertEqual(container.top_inset, 82)
+
+    def test_new_reader_compacts_before_the_selected_route_changes(self):
+        container = self.fixture(vertical=False, side=True, safe_top=0)
+        app = container.content.interface.app
+        app.body = NS(children=[NS(_impl=NS(container=object()))])
+        with patch('mobile.appearance.reserve_navigation') as reserve:
+            self.assertTrue(compact_apple_reader(container))
+        self.assertEqual(container.top_inset, 0)
+        reserve.assert_called_once_with(app, view=container.content.interface.children[0])
 
 
 class RotationSafeGeometryTests(unittest.TestCase):

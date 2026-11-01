@@ -107,3 +107,6 @@ class MobilePresentation:
     font_size: Callable[[str], int]
     bind_font: FontBinding
     folder_actions: Callable[[Any], Iterable[Action]]
+    reserved_divisions: Callable[[Any], tuple[Any, ...]]
+    fold_division: Callable[[Any], Any]
+    register_layout: Callable[..., Any]

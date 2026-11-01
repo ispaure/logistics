@@ -5,7 +5,15 @@ import math
 import unicodedata
 
 from commonUtils.ui.native.markdown_preview import markdown_body
-from features.text_editor.mobile.markdown_style import TRANSCRIPT_CSS
+TRANSCRIPT_CSS = '''
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.65}
+#messages h1{font-size:2em}#messages h2{font-size:1.55em}#messages h3{font-size:1.25em}
+#messages h4{font-size:1.1em}#messages h5,#messages h6{font-size:1em}
+#messages h1,#messages h2,#messages h3,#messages h4,#messages h5,#messages h6{line-height:1.25}
+#messages code{font-family:ui-monospace,monospace;font-size:.88em}
+#messages pre,#messages table{font-size:1em}
+'''
 
 
 def composer_height(text, width, font_size=16, *, available_height=None):

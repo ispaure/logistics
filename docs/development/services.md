@@ -30,6 +30,12 @@ not import Qt/Toga. Feature-specific connection dependencies are declared by
 `ConnectionHost` beside the SMB workflow. Broader factories retain their existing
 call shapes until their own workflows are extracted.
 
+The mobile presentation port also supplies reserved-region queries, the active
+fold division and owner-scoped layout subscriptions. Chat and notebook features
+consume those injected capabilities; only host composition imports the mobile
+geometry and subscription owners. The document WebView factory installs the
+editor keyboard-accessory policy before constructing a Markdown surface.
+
 ## Desktop document page transitions
 
 `services.documents.ui.page_transition` owns the Logistics readers' short,
