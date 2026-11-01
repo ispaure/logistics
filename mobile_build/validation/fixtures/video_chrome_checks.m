@@ -8,6 +8,7 @@
 @property(nonatomic) BOOL completed;
 @property(nonatomic) int64_t firstVideoClock;
 @property(nonatomic) float initialTimeline;
+@property(nonatomic) BOOL initialTimelineHidden;
 @end
 @implementation LGVideoChromeChecks
 - (NSString *)outputPath:(NSString *)name {
@@ -27,9 +28,10 @@
 - (void)finish:(NSString *)error {
     if (self.completed) return;
     self.completed = YES;
+    int64_t duration = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QADuration"] longLongValue] ?: 30000;
     int64_t resume = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAResume"] longLongValue];
-    if (!error && resume > 0 && (fabs(self.initialTimeline - resume / 30000.0) > .01 || self.firstVideoClock < resume - 1500
-            || llabs(self.video.player.media.length.value.longLongValue - 30000) > 100))
+    if (!error && resume > 0 && ((![[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAUnknownDuration"] boolValue] && fabs(self.initialTimeline - resume / (double)duration) > .01) || self.initialTimelineHidden || self.firstVideoClock < resume - 1500
+            || llabs(self.video.player.media.length.value.longLongValue - duration) > 100))
         error = @"Resume timeline or first decoded timestamp started before the saved position";
     AVSampleBufferDisplayLayer *layer = [self videoLayer:self.video.movie.layer];
     BOOL hdrEnabled = NO;
@@ -57,7 +59,9 @@
     NSDictionary *report = @{@"success": @(!error), @"error": error ?: @"", @"samples": self.samples ?: @[],
         @"scope": [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]
             ? @"Physical device; real UIKit controller and VLC; synthetic local HDR movie"
-            : @"Real UIKit controller and VLC; synthetic local movie; simulator only"};
+            : ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAStreamProbe"] boolValue]
+                ? @"Real UIKit/VLC and retained rclone range transport; delayed synthetic MKV; simulator"
+                : @"Real UIKit controller and VLC; synthetic local movie; simulator only")};
     NSMutableDictionary *details = [report mutableCopy];
     details[@"bounds"] = NSStringFromCGRect(self.window.bounds);
     details[@"orientation"] = @(self.window.windowScene.interfaceOrientation);
@@ -70,6 +74,7 @@
         && [pixelEvidence[@"format"] unsignedIntValue] == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange);
     details[@"currentEDRHeadroom"] = @(self.window.screen.currentEDRHeadroom);
     details[@"potentialEDRHeadroom"] = @(self.window.screen.potentialEDRHeadroom);
+    details[@"initialTimelineHidden"] = @(self.initialTimelineHidden);
     details[@"initialTimeline"] = @(self.initialTimeline);
     details[@"firstVideoClock"] = @(self.firstVideoClock);
     report = details;
@@ -91,9 +96,11 @@
 #else
     self.video = [LGVideoController new];
 #endif
-    self.video.videoURL = [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
+    NSString *remoteURL = [NSBundle.mainBundle objectForInfoDictionaryKey:@"QAURL"];
+    self.video.videoURL = remoteURL.length ? remoteURL : [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
     self.video.startMilliseconds = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAResume"] longLongValue];
-    self.video.knownDuration = 30000;
+    self.video.knownDuration = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QADuration"] longLongValue] ?: 30000;
+    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAUnknownDuration"] boolValue]) self.video.knownDuration = 0;
     self.video.subtitleJSON = @"[]";
     self.video.queueJSON = @"[]";
     self.video.optionsJSON = @"{\"video_title\":\"A long video filename for title alignment.mp4\",\"source_label\":\"Cloud file\",\"source_remote\":true}";
@@ -103,6 +110,7 @@
     [self.window makeKeyAndVisible];
     [self.video tick:nil];
     self.initialTimeline = self.video.seek.value;
+    self.initialTimelineHidden = self.video.seek.hidden;
     if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAOrientation"] isEqualToString:@"landscape"]) {
         UIWindowSceneGeometryPreferencesIOS *geometry = [[UIWindowSceneGeometryPreferencesIOS alloc]
             initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscapeLeft];
@@ -112,6 +120,7 @@
     }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, .5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         self.video.player.audio.muted = YES;
+        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAStreamProbe"] boolValue]) [self.video setNetworkWaiting:YES];
         [self.video startByUser];
         self.started = NSProcessInfo.processInfo.systemUptime;
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) {
@@ -136,7 +145,14 @@
         @"systemHidden": @(v.systemChromeHidden), @"headerY": @(CGRectGetMinY(headerFrame)),
         @"statusHidden": @(self.window.windowScene.statusBarManager.statusBarHidden),
         @"playing": @(v.player.isPlaying), @"decoderClock": v.player.time.value ?: @(-1),
-        @"shownClock": @([v positionMilliseconds]), @"nativeDuration": v.player.media.length.value ?: @(-1), @"nativePosition": @(v.player.position), @"slider": @(v.seek.value)}];
+        @"shownClock": @([v positionMilliseconds]), @"timelineHidden": @(v.seek.hidden), @"spinner": @(v.bufferSpinner.isAnimating), @"nativeDuration": v.player.media.length.value ?: @(-1), @"nativePosition": @(v.player.position), @"slider": @(v.seek.value)}];
+    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAStreamProbe"] boolValue]) {
+        if (self.firstVideoClock > 0) [v setNetworkWaiting:NO];
+        int64_t target = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAResume"] longLongValue];
+        if (self.firstVideoClock > 0 && v.player.time.value.longLongValue >= target + 1000) [self finish:nil];
+        else if (NSProcessInfo.processInfo.systemUptime-self.started > 80) [self finish:@"Remote resume did not produce frames within 80 seconds"];
+        return;
+    }
     if (NSProcessInfo.processInfo.systemUptime-self.started > 15) { [self finish:@"Initial playback did not auto-hide controls"]; return; }
     if (!v.controlsScroll.hidden) return;
     [timer invalidate];

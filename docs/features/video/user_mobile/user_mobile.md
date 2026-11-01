@@ -110,6 +110,10 @@ cache. It does not create a decrypted file on disk.
 
 Saved video duration keeps the resume timestamp and seek bar aligned while the
 movie opens. Older checkpoints without a duration show the timestamp with an
-unknown total and reveal the seek bar once the decoder knows the duration.
+loading-duration label and a visible disabled seek bar until the decoder knows the duration.
 Remote folder/subtitle discovery runs after opening playback, so directory
 listing latency does not delay the first video request.
+
+The timeline and loading indicator remain visible until playback produces frames.
+On iOS, indexed MKV videos use their cue table to resume directly; metadata and
+keyframe reads are still necessary, so network startup is not instantaneous.

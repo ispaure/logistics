@@ -554,7 +554,7 @@ and spacing and saves a synthetic-video screenshot before its menu checks.
 
 Mobile checkpoints retain duration beside position under the same storage and
 encryption policy. Native controls use it before metadata arrives; an unknown
-duration hides the seek track instead of displaying a misleading zero position.
+duration keeps a disabled seek track visible with a loading-duration label.
 iOS seeks on Opening, with a Playing fallback. Do not use VLC 4's `start-time`
 media option: it clips duration and resets the clock origin. Keep the pending
 resume position until the native clock acknowledges it. Android supplies its
@@ -579,3 +579,26 @@ and a fresh ignored `--output`. The physical Duo check observed a displayed
 10-bit `x420` buffer with PQ/BT.2020 attachments and active screen EDR headroom of
 8. Simulator HDR metadata alone is not evidence that a physical screen entered
 HDR. Headroom varies with device, brightness and system conditions.
+
+### Delayed MKV range regression
+
+The iOS MKV adapter selects VLC's `mkv_trusted,mkv` demux chain to use embedded
+cue positions. This is a container-index choice, not a change to credential,
+revision or range validation. VLC's default MKV cue validation can scan preceding
+clusters before a remote resume. The retained provider still bounds every read.
+Opening waits never pause an input with no displayed frames or overwrite its
+pending target. Seek acknowledgement requires displayed frames; controls cannot
+auto-hide during startup. VideoContent avoids an extra metadata check already owned by
+ProviderContent.open; HTTP admission still validates every requested resource.
+
+`mobile_build/validation/video_remote_resume_tools.py --framework FRAMEWORK
+--output OUTPUT [--unknown-duration]` compiles current UIKit/VLC code and plays a
+synthetic three-minute PQ HEVC MKV through real rclone alias ranges. It introduces
+150 ms plus 2 MiB/s transfer delay, resumes at two minutes, records requested
+ranges, and rejects a sequential scan through the middle third. The unknown
+duration case checks that the timeline is visible at presentation; startup
+network waiting is held until first frames. Scratch data and the disposable Duo
+simulator are removed by their owners. This does not access a Dropbox account.
+The controlled baseline reached resume plus one second in 17.3 seconds; indexed
+seeking took 6.6 seconds and skipped the intervening ranges. These timings are
+fixture evidence, not a promise about a user's network or file index.

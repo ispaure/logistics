@@ -84,7 +84,7 @@ public final class VideoPlayer {
     private final Runnable hideControls = new Runnable() {
         @Override public void run() {
             AccessibilityManager accessibility = (AccessibilityManager) activity.getSystemService(Context.ACCESSIBILITY_SERVICE);
-            if (fullscreen && attached && !buffering && player.isPlaying() && !seek.isPressed()
+            if (fullscreen && attached && !buffering && observedFrames > 0 && resume < 0 && player.isPlaying() && !seek.isPressed()
                     && (openDialog == null || !openDialog.isShowing()) && !accessibility.isTouchExplorationEnabled())
                 setControlsVisible(false);
             else if (fullscreen && attached) scheduleControls();
@@ -425,7 +425,7 @@ public final class VideoPlayer {
     private void scheduleControls() {
         handler.removeCallbacks(hideControls);
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
-        if (fullscreen && controlsVisible && attached && player.isPlaying() && !pip)
+        if (fullscreen && controlsVisible && attached && !buffering && observedFrames > 0 && resume < 0 && player.isPlaying() && !pip)
             handler.postDelayed(hideControls, 3000);
     }
 
@@ -684,7 +684,7 @@ public final class VideoPlayer {
         observedClock = clock;
         boolean renderStalled = frames > 0 && now - lastFrameProgress >= 6000;
         boolean stalled = playRequested && !manualResumeRequired && !ended &&
-            (now - lastPlaybackProgress >= 3000 || (networkWaiting && renderStalled));
+            (frames == 0 || now - lastPlaybackProgress >= 3000 || (networkWaiting && renderStalled));
         if (stalled && transportFailure != null) {
             String failure = transportFailure;
             playbackFailed = true;
@@ -692,7 +692,7 @@ public final class VideoPlayer {
             status(failure);
             return;
         }
-        if (stalled && networkWaiting && !networkResumePending) {
+        if (stalled && frames > 0 && resume < 0 && networkWaiting && !networkResumePending) {
             bufferPosition = Math.max(0, lastRenderedClock);
             networkResumePending = true;
             if (player.isPlaying()) player.pause();
@@ -715,17 +715,18 @@ public final class VideoPlayer {
             if (done) return;
             updatePlaybackProgress();
             updateScreenAwake();
-            if (resumeSeekSubmitted && resume >= 0 && player.isPlaying() && Math.abs(player.getTime() - resume) < 1500) {
+            if (resumeSeekSubmitted && resume >= 0 && observedFrames > 0 && player.isPlaying() && Math.abs(player.getTime() - resume) < 1500) {
                 resume = -1;
                 resumeSeekSubmitted = false;
             }
             long time = position(), length = durationMilliseconds();
             if (time >= 0 && !ended) lastPosition = time;
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
-            seek.setVisibility(length > 0 ? View.VISIBLE : View.GONE);
+            seek.setVisibility(View.VISIBLE);
+            seek.setEnabled(length > 0 && player.isSeekable());
             play.setText(playRequested ? "Pause" : "Play");
             play.setContentDescription(playRequested ? "Pause" : "Play");
-            timeLabel.setText(clock(time) + " / " + (length > 0 ? clock(length) : "—") + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
+            timeLabel.setText(clock(time) + " / " + (length > 0 ? clock(length) : "Loading duration…") + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
             seek.setContentDescription("Video position: " + timeLabel.getText());
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
             if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
@@ -893,8 +894,9 @@ public final class VideoPlayer {
         knownDuration = Math.max(0, value);
         long time = position();
         if (knownDuration > 0) seek.setProgress((int)(time * 10000 / knownDuration));
-        seek.setVisibility(knownDuration > 0 ? View.VISIBLE : View.GONE);
-        timeLabel.setText(clock(time) + " / " + (knownDuration > 0 ? clock(knownDuration) : "—"));
+        seek.setVisibility(View.VISIBLE);
+        seek.setEnabled(knownDuration > 0 && player.isSeekable());
+        timeLabel.setText(clock(time) + " / " + (knownDuration > 0 ? clock(knownDuration) : "Loading duration…"));
     }
     public long durationMilliseconds() {
         long duration = player.getLength();

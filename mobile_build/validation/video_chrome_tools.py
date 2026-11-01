@@ -20,7 +20,7 @@ from logistics_build.build_retention import scratch
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False):
+def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -53,9 +53,12 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                   '-color_primaries', 'bt2020', '-color_trc', 'smpte2084',
                   '-colorspace', 'bt2020nc', '-tag:v', 'hvc1'] if hdr else
                  ['-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p'])
-        subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
-                        'testsrc2=size=128x72:rate=12', '-t', '30',
-                        '-threads', '1', *codec, str(app / 'fixture.mp4')], check=True)
+        if movie is not None:
+            shutil.copyfile(movie, app / 'fixture.mp4')
+        else:
+            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+                            'testsrc2=size=128x72:rate=12', '-t', '30',
+                            '-threads', '1', *codec, str(app / 'fixture.mp4')], check=True)
         metadata = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
             '-show_streams', '-of', 'json', str(app / 'fixture.mp4')], text=True)
         (output / 'fixture.json').write_text(metadata)
@@ -65,6 +68,8 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 'yuv420p10le', 'smpte2084', 'bt2020'), 'HDR fixture lost its depth or color tags'
         (app / 'Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier=bundle,
             CFBundleName='Video Chrome QA', QAOrientation=orientation, QAHDR=hdr, QAResume=resume, QAFold=fold,
+            QAURL=url or '', QADuration=duration, QAUnknownDuration=unknown_duration, QAStreamProbe=bool(url),
+            NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True),
             CFBundleExecutable='VideoChromeQA', CFBundleVersion='1',
             CFBundleShortVersionString='1.0', CFBundlePackageType='APPL', MinimumOSVersion='17.0',
             UIDeviceFamily=[1, 2], UILaunchScreen={},
@@ -85,7 +90,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             client.invoke('install', device, str(app), timeout=120)
             client.invoke('launch', device, bundle)
             cache = Path(client.invoke('get_app_container', device, bundle, 'data')) / 'Documents/result.json'
-            deadline = time.monotonic() + 50
+            deadline = time.monotonic() + (100 if url else 50)
             while time.monotonic() < deadline:
                 if cache.exists():
                     report = json.loads(cache.read_text())

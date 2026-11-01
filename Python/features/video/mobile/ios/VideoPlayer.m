@@ -406,7 +406,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (void)scheduleControls {
     BOOL eligible = !self.tabletop && self.fullscreen && self.controlsVisible && !self.pipActive &&
-        !self.retired && !self.lockHidden && self.view.window && !self.buffering && self.player.isPlaying;
+        !self.retired && !self.lockHidden && self.view.window && !self.buffering && self.player.isPlaying && self.observedFrames > 0 && self.startMilliseconds < 0;
     if (!eligible) { [self.controlsTimer invalidate]; self.controlsTimer = nil; return; }
     // Decoder notifications must not continually postpone an existing deadline.
     if (!self.controlsTimer.valid) {
@@ -415,7 +415,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (void)hideControls:(NSTimer *)timer {
     self.controlsTimer = nil;
-    if (self.player.isPlaying && !self.seek.tracking && !self.presentedViewController &&
+    if (!self.buffering && self.observedFrames > 0 && self.startMilliseconds < 0 && self.player.isPlaying && !self.seek.tracking && !self.presentedViewController &&
         !self.navigationController.presentedViewController && !UIAccessibilityIsVoiceOverRunning())
         [self setControlsShown:NO];
     else [self scheduleControls];
@@ -662,6 +662,10 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (VLCMedia *)playbackMedia {
     VLCMedia *media = [VLCMedia mediaWithURL:[NSURL URLWithString:self.videoURL]];
     self.resumeSeekSubmitted = NO;
+    // Indexed MKV seeks must use the embedded cues instead of scanning every
+    // preceding cluster over the retained provider's HTTP range transport.
+    if ([[NSURL URLWithString:self.videoURL].pathExtension.lowercaseString isEqualToString:@"mkv"])
+        [media addOption:@":demux=mkv_trusted,mkv"];
     // VLC 4 start-time clips the timeline and duration. Seek the opening
     // input instead so timestamps and later seeks retain the original origin.
     [media addOption:@":network-caching=3000"];
@@ -720,6 +724,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     [self updateItem:self.playButton label:@"Pause"];
     self.networkResumePending = NO;
     [self.player play];
+    [self tick:nil];
     if ([self.message.text isEqualToString:@"Ready. Press Play to start."]) {
         self.message.text = @"";
         self.message.hidden = YES;
@@ -758,9 +763,9 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     // also watches rendered frames, allowing six seconds for batched stats.
     BOOL renderStalled = frames > 0 && now - self.lastFrameProgress >= 6.0;
     BOOL stalled = self.playRequested && !self.manualResumeRequired && !self.ended &&
-        (now - self.lastPlaybackProgress >= 3.0 || (self.networkWaiting && renderStalled));
+        (frames == 0 || now - self.lastPlaybackProgress >= 3.0 || (self.networkWaiting && renderStalled));
     if (stalled && self.transportFailure) { [self playbackFailed]; return; }
-    if (stalled && self.networkWaiting && !self.networkResumePending) {
+    if (stalled && frames > 0 && self.startMilliseconds < 0 && self.networkWaiting && !self.networkResumePending) {
         self.bufferPosition = MAX(0, self.lastRenderedClock);
         self.networkResumePending = YES;
         if (self.player.isPlaying) [self.player pause];
@@ -848,6 +853,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)tick:(NSTimer *)timer {
     // Keep the resume target visible until the decoder acknowledges that seek.
     if (self.resumeSeekSubmitted && self.startMilliseconds >= 0 && self.player.isPlaying &&
+        self.player.media.statistics.displayedPictures > 0 &&
         llabs(self.player.time.value.longLongValue - self.startMilliseconds) < 1500) {
         self.startMilliseconds = -1;
         self.resumeSeekSubmitted = NO;
@@ -861,14 +867,15 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     int64_t position = [self positionMilliseconds];
     int64_t duration = [self durationMilliseconds];
     if (!self.seek.tracking && duration > 0) self.seek.value = (float)position / duration;
-    self.seek.hidden = duration <= 0;
+    self.seek.hidden = NO;
+    self.seek.enabled = duration > 0 && self.player.isSeekable;
     NSString *(^time)(int64_t) = ^NSString *(int64_t value) {
         int64_t seconds = MAX(0, value / 1000);
         return [NSString stringWithFormat:@"%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60];
     };
     [self.view bringSubviewToFront:self.controlsScroll];
     [self.view bringSubviewToFront:self.bufferOverlay];
-    self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), duration > 0 ? time(duration) : @"—", self.cacheApproximate ? @" · Cache ≈" : @""];
+    self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), duration > 0 ? time(duration) : @"Loading duration…", self.cacheApproximate ? @" · Cache ≈" : @""];
     self.timeLabel.accessibilityValue = self.timeLabel.text;
     self.seek.accessibilityValue = self.timeLabel.text;
     self.pauseSnapshot.frame = self.movie.frame;

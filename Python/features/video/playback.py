@@ -67,7 +67,8 @@ class VideoContent:
 
     @contextmanager
     def open(self):
-        self.check()
+        # ProviderContent.open owns revision validation at this boundary.
+        self.check_access()
         with self.source.open(self.path) as stream:
             from commonUtils.runtime.resources.range_reader import RangeReader
             if self.memory is None:
