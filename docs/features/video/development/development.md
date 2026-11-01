@@ -534,7 +534,9 @@ a real scene rotation; the result retains the resulting orientation and bounds.
 The runner selects the newest installed runtime compatible with the model. Compiler output lives in a leased
 scratch workspace; the simulator is removed even on failure.
 
-The probe starts a synthetic local movie, observes the initial auto-hide and
+The probe checks the direct Fit/Fill toggle, Fit default, legacy Original-to-Fit
+fallback, native output gravity and absence of a separate fullscreen toolbar item.
+It starts a synthetic local movie, observes the initial auto-hide and
 intermediate presentation-layer opacity, checks that status-bar visibility and
 header position remain stable during the fade, then opens Playback and its
 related option sheets. The shared menu factory owns their single Cancel action. Phone option lists use
@@ -611,9 +613,31 @@ fixture evidence, not a promise about a user's network or file index.
 Tabletop posture owns status-bar hiding independently of control visibility.
 The lower deck remains visible while the upper movie area uses immersive system
 chrome; leaving tabletop returns to the ordinary fullscreen/control policy.
-Its compact two-row quick settings reuse existing Speed, Picture, Audio,
-Subtitles, Chapters, Go to time, Playback and Done actions, with 44-point minimum
-touch targets. The chrome probe with `--fold` checks actual status-bar visibility,
-all eight button bounds, menu presentation from deck anchors and restoration
-when leaving the injected fold. A synthetic division tests geometry, not a
-physical hinge transition.
+Portrait laptop posture uses the feature-owned `DuoDeck.m` adapter. It stretches
+the scrollable control deck through the available lower region, keeps identity
+and an X close action at the top, then the seek track, time, transport and a
+six-action native glass toolbar. The existing selectors and close callback are
+reused. Go to time remains in Playback; landscape laptop quick actions remain
+unchanged. The adapter is included in the feature's mobile source manifest.
+
+Portrait settings reuse the existing alert models, action callbacks and text
+fields through a native table controller and a custom presentation controller.
+Both the sheet and its dismissal backdrop are bounded by the current lower
+reserved region, including keyboard exclusion. Long menus scroll; text prompts
+retain explicit Apply/Cancel actions. A pose change dismisses that presentation.
+Ordinary iPhone, iPad and unfolded playback keep the existing UIKit alerts and
+popovers.
+
+The chrome probe with `--fold` checks the portrait toolbar bounds, X dispatch,
+lower-panel allocation, menu bounds, speed selection and unfold restoration.
+The injected division is returned only for division-region requests, never as
+an occlusion. A synthetic division tests geometry, not a physical hinge transition.
+
+Validation on November 1, 2026 passed the injected portrait Duo chrome run,
+including ten settings presentations, Speed and time-entry dispatch, X close,
+video visibility, lower-only backdrops and unfold restoration. Ordinary iPhone
+alerts and iPad popover anchors/dismissal also passed on disposable simulators.
+The focused mobile video suite passed 29 tests; documentation checks passed five
+cases, and Ruff passed. All owned QA simulators were removed. These checks do not
+establish physical-hinge, touch/VoiceOver or on-device keyboard acceptance; the
+main installed app and its data were not changed.

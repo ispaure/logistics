@@ -11,7 +11,7 @@
 @end
 @implementation LGVideoQAView
 - (NSArray *)reservedRegionsOfKind:(UIViewReservedRegionKind *)kind API_AVAILABLE(ios(27.1)) {
-    if (!self.testFold) return @[];
+    if (!self.testFold || ![kind isEqual:UIViewReservedRegionKind.divisionRegionKind]) return @[];
     LGVideoQADivision *region = [LGVideoQADivision new];
     region.frame = CGRectMake(0, self.bounds.size.height / 2 - 6, self.bounds.size.width, 12);
     return @[region];

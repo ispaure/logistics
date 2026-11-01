@@ -24,6 +24,7 @@
 @implementation LGVideoController (PlaybackControls)
 - (void)presentPlaybackDialog:(UIAlertController *)dialog {
     if (self.retired || self.lockHidden || ![self canPlay:NO]) return;
+    if (self.portraitTabletop) { [self presentPortraitMenu:dialog]; return; }
     UIViewController *presented = self.presentedViewController;
     if (presented) {
         if (![presented isKindOfClass:UIAlertController.class]) return;
@@ -64,6 +65,9 @@
     if (!self.player || self.retired) return;
     NSDictionary *options = [self playbackOptions];
     float rate = [options[@"rate"] floatValue];
+    UIButtonConfiguration *speed = self.portraitSpeedButton.configuration;
+    speed.title = [NSString stringWithFormat:@"%g×", rate >= .5 && rate <= 2. ? rate : 1.];
+    self.portraitSpeedButton.configuration = speed;
     if (rate >= .5 && rate <= 2.) self.player.rate = rate;
     self.player.currentVideoSubTitleDelay = [options[@"subtitle_delay_ms"] longLongValue] * 1000;
     self.player.currentAudioPlaybackDelay = [options[@"audio_delay_ms"] longLongValue] * 1000;
@@ -92,13 +96,15 @@
 }
 - (void)applyPictureSize {
     if (!self.player || !self.movie) return;
-    NSString *aspect = [self playbackOptions][@"aspect"] ?: @"fit";
+    NSString *aspect = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"] ? @"fill" : @"fit";
+    NSString *label = [aspect isEqualToString:@"fill"] ? @"Fit view" : @"Fill view";
+    if (![self.pictureButton.accessibilityLabel isEqualToString:label]) [self updateItem:self.pictureButton label:label];
     CGRect bounds = self.movie.bounds;
     NSString *geometry = [NSString stringWithFormat:@"%@:%g:%g", aspect, bounds.size.width, bounds.size.height];
     if ([self.pictureGeometry isEqualToString:geometry]) return;
     self.pictureGeometry = geometry;
     [self configureVideoDynamicRange:self.movie.layer];
-    self.player.scaleFactor = [aspect isEqualToString:@"original"] ? 1.f : 0.f;
+    self.player.scaleFactor = 0.f;
     if ([aspect isEqualToString:@"fill"] && bounds.size.width > 0 && bounds.size.height > 0)
         [self.player setCropRatioWithNumerator:(unsigned)bounds.size.width denominator:(unsigned)bounds.size.height];
     else [self.player setCropRatioWithNumerator:0 denominator:0];
@@ -116,9 +122,10 @@
         field.text = [[self playbackOptions][key] description];
         if (numeric) field.keyboardType = UIKeyboardTypeNumbersAndPunctuation;
     }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Apply" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSString *text = alert.textFields.firstObject.text ?: @"";
+    UITextField *input = alert.textFields.firstObject;
+    [alert lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Apply" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        NSString *text = input.text ?: @"";
         if (numeric) {
             NSScanner *scan = [NSScanner scannerWithString:text]; long long value;
             if (![scan scanLongLong:&value] || !scan.isAtEnd || llabs(value) > 600000) { [self showStatus:@"Enter a delay within ±600000 ms."]; return; }
@@ -134,8 +141,9 @@
     if (![self canPlay:NO] || self.controlsLocked) return;
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Go to time" message:@"Seconds, MM:SS or HH:MM:SS" preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.placeholder = @"12:34"; field.keyboardType = UIKeyboardTypeNumbersAndPunctuation; }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Go" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"seek" value:alert.textFields.firstObject.text]; }]];
+    UITextField *input = alert.textFields.firstObject;
+    [alert lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Go" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"seek" value:input.text]; }]];
     [self presentPlaybackDialog:alert];
 }
 - (void)undoSeek:(id)sender {
@@ -190,42 +198,37 @@
     NSArray *rows = [NSJSONSerialization JSONObjectWithData:[self.queueJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
     for (NSDictionary *row in rows) {
         NSString *title = [NSString stringWithFormat:@"%@%@", [row[@"current"] boolValue] ? @"✓ " : @"", row[@"name"]];
-        [menu addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"queue" value:row[@"path"]]; }]];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"queue" value:row[@"path"]]; }]];
     }
     [self presentPlaybackDialog:menu];
 }
-- (void)pictureOptions:(id)sender {
-    UIAlertController *menu = [self menu:@"Picture size" sender:sender];
-    NSArray *keys = @[@"fit", @"fill", @"original"], *labels = @[@"Fit", @"Fill (crop edges)", @"Original size"];
-    for (NSUInteger i=0;i<keys.count;i++) {
-        NSString *key = keys[i];
-        [menu addAction:[UIAlertAction actionWithTitle:labels[i] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"aspect" value:key]; }]];
-    }
-    [self presentPlaybackDialog:menu];
+- (void)togglePictureSize:(id)sender {
+    BOOL filled = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"];
+    [self setting:@"aspect" value:filled ? @"fit" : @"fill"];
 }
 - (void)speedOptions:(id)sender {
     UIAlertController *menu = [self menu:@"Speed · pitch preserved" sender:sender];
     for (NSNumber *rate in @[@.5,@.75,@1.,@1.25,@1.5,@1.75,@2.])
-        [menu addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"%@×",rate] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"rate" value:rate]; }]];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[NSString stringWithFormat:@"%@×",rate] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"rate" value:rate]; }]];
     [self presentPlaybackDialog:menu];
 }
 - (void)subtitleOptions:(id)sender {
     UIAlertController *menu = [self menu:@"Subtitles and audio" sender:sender];
-    [menu addAction:[UIAlertAction actionWithTitle:@"Choose subtitle file…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"subtitleBrowse" value:@""]; }]];
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Choose subtitle file…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"subtitleBrowse" value:@""]; }]];
     for (NSArray *entry in @[@[@"Subtitle delay (ms; positive = later)", @"subtitle_delay_ms"], @[@"Audio delay (ms; positive = later)", @"audio_delay_ms"], @[@"Preferred audio language (e.g. fr)", @"audio_language"], @[@"Preferred subtitle language (e.g. en)", @"subtitle_language"]])
-        [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self promptValue:entry[0] key:entry[1] numeric:[entry[1] hasSuffix:@"_ms"]]; }]];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self promptValue:entry[0] key:entry[1] numeric:[entry[1] hasSuffix:@"_ms"]]; }]];
     [self presentPlaybackDialog:menu];
 }
 - (void)subtitleSizeOptions:(id)sender {
     UIAlertController *menu = [self menu:@"Subtitle size · current session" sender:sender];
     for (NSNumber *scale in @[@.75,@1.,@1.25,@1.5,@2.]) {
-        [menu addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Subtitle size %@× (session)",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[NSString stringWithFormat:@"Subtitle size %@× (session)",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             self.sessionSubtitleScale = MAX(.5f, MIN(3.f, scale.floatValue * (20.f / 22.f)));
             self.player.currentSubTitleFontScale = self.sessionSubtitleScale;
             [self showStatus:[NSString stringWithFormat:@"Subtitle size %.0f%% (session)", self.sessionSubtitleScale * 100]];
         }]];
     }
-    [menu addAction:[UIAlertAction actionWithTitle:@"Reset subtitle size (session)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Reset subtitle size (session)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         self.sessionSubtitleScale = 0;
         [self applyPlaybackOptions];
         [self showStatus:@"Subtitle size reset"];
@@ -237,12 +240,12 @@
     UIAlertController *menu = [self menu:@"HDR display mode (session)" sender:sender];
     if (@available(iOS 26.0, *)) {
         BOOL forced = self.forceMaximumHDR;
-        [menu addAction:[UIAlertAction actionWithTitle:forced ? @"System-managed HDR" : @"✓ System-managed HDR"
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:forced ? @"System-managed HDR" : @"✓ System-managed HDR"
             style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
                 [self setForcedMaximumHDRForSession:NO];
                 [self showStatus:@"HDR: system-managed (session)"];
             }]];
-        [menu addAction:[UIAlertAction actionWithTitle:forced ? @"✓ Maximum HDR (previous behavior)" : @"Maximum HDR (previous behavior)"
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:forced ? @"✓ Maximum HDR (previous behavior)" : @"Maximum HDR (previous behavior)"
             style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
                 [self setForcedMaximumHDRForSession:YES];
                 [self showStatus:@"HDR: maximum (session)"];
@@ -259,14 +262,14 @@
         @[@"HDR display mode…", @"hdrDisplayOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
         @[@"Show in folder", @"showInFolder:"], @[@"Current folder…", @"queueVideos:"], @[@"Previous episode", @"previousVideo:"],
         @[@"Next episode", @"nextVideo:"], @[@"Mute / unmute", @"toggleMute:"], @[@"Lock controls", @"toggleControlLock:"]]) {
-        [menu addAction:[UIAlertAction actionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             SEL selector = NSSelectorFromString(entry[1]);
             void (*invoke)(id, SEL, id) = (void (*)(id, SEL, id))[self methodForSelector:selector]; invoke(self,selector,sender);
         }]];
     }
-    [menu addAction:[UIAlertAction actionWithTitle:@"Start over" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self seekToMilliseconds:0]; }]];
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Start over" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self seekToMilliseconds:0]; }]];
     BOOL autoNext = [[self playbackOptions][@"autoplay_next"] boolValue];
-    [menu addAction:[UIAlertAction actionWithTitle:autoNext ? @"✓ Play next automatically" : @"Play next automatically" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"autoplay_next" value:@(!autoNext)]; }]];
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:autoNext ? @"✓ Play next automatically" : @"Play next automatically" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"autoplay_next" value:@(!autoNext)]; }]];
     [self presentPlaybackDialog:menu];
 }
 - (void)attachSubtitleURL:(NSString *)url { if ([self canPlay:NO]) [self.player addPlaybackSlave:[NSURL URLWithString:url] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES]; }
@@ -276,7 +279,7 @@
     UIAlertController *menu = [self menu:@"Choose subtitles · current source" sender:self.playButton];
     for (NSDictionary *row in rows) {
         NSString *label = [NSString stringWithFormat:@"%@%@", [row[@"directory"] boolValue] ? @"▸ " : @"", row[@"name"]];
-        [menu addAction:[UIAlertAction actionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:[row[@"directory"] boolValue] ? @"subtitleBrowse" : @"subtitleAttach" value:row[@"path"]]; }]];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:[row[@"directory"] boolValue] ? @"subtitleBrowse" : @"subtitleAttach" value:row[@"path"]]; }]];
     }
     [self presentPlaybackDialog:menu];
 }
@@ -312,6 +315,7 @@
     self.videoHeader = header;
     self.deckHeaderHeight = [header.heightAnchor constraintEqualToConstant:44];
     UIStackView *identity = [[UIStackView alloc] init];
+    self.videoIdentity = identity;
     identity.axis = UILayoutConstraintAxisVertical;
     identity.alignment = UIStackViewAlignmentCenter;
     identity.spacing = 2;
@@ -387,6 +391,7 @@
     self.cacheStrip.frame = CGRectMake(left, y, MAX(0, right-left), 4);
     [self.seek sendSubviewToBack:self.cacheStrip];
     [self.cacheStrip setNeedsDisplay];
+    if (self.portraitTabletop) return;
     if (self.tabletop || self.view.bounds.size.width < 500 ||
         self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact) {
         // On narrow or short phone windows keep the title above playback controls, away from navigation actions.

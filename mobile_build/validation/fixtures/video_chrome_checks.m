@@ -14,6 +14,7 @@
 @property(nonatomic, strong) NSTimer *sampler;
 @property(nonatomic) NSTimeInterval started;
 @property(nonatomic) BOOL completed;
+@property(nonatomic, copy) NSString *deckCommand;
 @property(nonatomic) BOOL pauseChecksStarted;
 @property(nonatomic, strong) NSMutableArray *hdrTransitions;
 @property(nonatomic) int64_t firstVideoClock;
@@ -111,6 +112,13 @@
         return;
     }
     self.completed = YES;
+    if (error && self.window) {
+        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithBounds:self.window.bounds];
+        UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+            [self.window drawViewHierarchyInRect:self.window.bounds afterScreenUpdates:YES];
+        }];
+        [UIImagePNGRepresentation(image) writeToFile:[self outputPath:@"failure.png"] atomically:YES];
+    }
     if (!error && ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue] ||
         [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) && self.hdrTransitions.count != 6)
         error = @"No sample-buffer layer available for transition checks";
@@ -282,23 +290,42 @@
         UIBarButtonItem *picture = nil;
         for (UIBarButtonItemGroup *group in v.navigationItem.trailingItemGroups)
             for (UIBarButtonItem *item in group.barButtonItems)
-                if (item.action == NSSelectorFromString(@"pictureOptions:")) picture = item;
-        if (!picture.image || ![picture.accessibilityLabel isEqualToString:@"Picture"]) {
-            [self finish:@"Normal toolbar is missing the Picture control"]; return;
+                {
+                    if (item.action == NSSelectorFromString(@"toggleFullscreen:")) {
+                        [self finish:@"Toolbar still has the redundant fullscreen button"]; return;
+                    }
+                    if (item.action == NSSelectorFromString(@"togglePictureSize:")) picture = item;
+                }
+        if (!picture.image || ![picture.accessibilityLabel isEqualToString:@"Fill view"]) {
+            [self finish:@"Normal toolbar is missing the default Fit/Fill toggle"]; return;
         }
-        [v setting:@"aspect" value:@"fill"];
+        [v applyPictureSize];
+        AVSampleBufferDisplayLayer *initialLayer = [v sampleBufferLayer:v.movie.layer];
+        if (![initialLayer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspect] || v.player.scaleFactor != 0.f) {
+            [self finish:@"Picture did not default to Fit"]; return;
+        }
+        [v togglePictureSize:picture];
+        if (v.presentedViewController || ![picture.accessibilityLabel isEqualToString:@"Fit view"]) {
+            [self finish:@"Fit/Fill toggle opened a menu or failed to update"]; return;
+        }
         [v.view layoutIfNeeded];
         AVSampleBufferDisplayLayer *layer = [v sampleBufferLayer:v.movie.layer];
         if (!layer || ![layer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspectFill]) {
             [self finish:@"Fill did not reach the native video output"]; return;
         }
         CGSize filledSize = v.movie.bounds.size;
-        [v setting:@"aspect" value:@"fit"];
+        [v togglePictureSize:picture];
         [v.view layoutIfNeeded];
-        if (![layer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspect] ||
+        if (![picture.accessibilityLabel isEqualToString:@"Fill view"] ||
+            ![layer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspect] ||
             (v.movie.bounds.size.height >= filledSize.height && v.movie.bounds.size.width >= filledSize.width)) {
             [self finish:@"Fit/Fill did not update the drawable geometry"]; return;
         }
+        [v setting:@"aspect" value:@"original"];
+        if (v.player.scaleFactor != 0.f || ![layer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspect]) {
+            [self finish:@"Legacy Original preference did not fall back to Fit"]; return;
+        }
+        [v setting:@"aspect" value:@"fit"];
         CGRect track = [v.seek trackRectForBounds:v.seek.bounds];
         CGRect strip = v.cacheStrip.frame;
         CGRect firstThumb = [v.seek thumbRectForBounds:v.seek.bounds trackRect:track value:v.seek.minimumValue];
@@ -311,8 +338,8 @@
             CGRectGetHeight(strip) <= 0) {
             [self finish:@"Cached ranges are clipped outside the slider"]; return;
         }
-        if ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls) || !v.videoHeader.window ||
-            v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != NSTextAlignmentCenter) {
+        if ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls && v.videoHeader.superview != v.portraitHeader) || !v.videoHeader.window ||
+            v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != (v.portraitTabletop ? NSTextAlignmentLeft : NSTextAlignmentCenter)) {
             [self finish:@"Video identity is not centered in the native title area"]; return;
         }
         [v showCachedRanges:@"{\"ranges\":[[0,0.3],[0.5,0.65],[0.8,1]]}"];
@@ -324,7 +351,8 @@
                 [self finish:@"Laptop upper screen still shows system chrome"]; return;
             }
             NSMutableSet *labels = [NSMutableSet set];
-            for (UIStackView *row in v.tabletopUtilities.arrangedSubviews) {
+            NSArray *rows = v.portraitTabletop ? @[v.portraitUtilities] : v.tabletopUtilities.arrangedSubviews;
+            for (UIStackView *row in rows) {
                 for (UIButton *button in row.arrangedSubviews) {
                     [labels addObject:button.accessibilityLabel];
                     CGRect frame = [button convertRect:button.bounds toView:self.window];
@@ -333,18 +361,31 @@
                     }
                 }
             }
-            if (![labels containsObject:@"Speed"] || ![labels containsObject:@"Picture"] || labels.count != 8) {
+            if (![labels containsObject:@"Speed"] || ![labels containsObject:@"Fill view"] || labels.count != (v.portraitTabletop ? 6 : 8)) {
                 [self finish:@"Laptop quick settings missing"]; return;
             }
-            if (!CGRectContainsRect(deck, title) || CGRectGetMinY(title) < CGRectGetMaxY(movie) ||
-                fabs(CGRectGetMidX(title) - CGRectGetMidX(deck)) > 1) {
-                [self finish:@"Laptop title is not centered inside the lower control deck"]; return;
+            if (!CGRectContainsRect(deck, title) || CGRectGetMinY(title) < CGRectGetMaxY(movie)) {
+                [self finish:@"Laptop title is outside the lower control deck"]; return;
+            }
+            if (v.portraitTabletop) {
+                CGRect close = [v.portraitClose convertRect:v.portraitClose.bounds toView:self.window];
+                if (!CGRectContainsRect(deck, close) || ![v.portraitClose.configuration.image isEqual:[UIImage systemImageNamed:@"xmark"]]) {
+                    [self finish:@"Portrait deck lacks its X close action"]; return;
+                }
+                __block BOOL closed = NO;
+                v.closed = ^{ closed = YES; };
+                [v.portraitClose sendActionsForControlEvents:UIControlEventTouchUpInside];
+                v.closed = nil;
+                if (!closed) { [self finish:@"X did not dispatch the existing close callback"]; return; }
+                if (deck.size.height < v.tabletopArea.size.height - 20) {
+                    [self finish:@"Portrait deck does not use the lower panel height"]; return;
+                }
             }
         }
         CGRect filename = [v.videoTitle convertRect:v.videoTitle.bounds toView:self.window];
         UIView *source = v.sourceLabel.superview;
         CGRect details = [source convertRect:source.bounds toView:self.window];
-        if (fabs(CGRectGetMidX(filename) - CGRectGetMidX(details)) > .5) {
+        if (!v.portraitTabletop && fabs(CGRectGetMidX(filename) - CGRectGetMidX(details)) > .5) {
             [self finish:@"Storage details are not centered beneath the filename"]; return;
         }
         [self.samples addObject:@{@"titleFrame": NSStringFromCGRect(title),
@@ -358,7 +399,7 @@
     NSString *progress = [self outputPath:@"progress.json"];
     [[NSJSONSerialization dataWithJSONObject:@{@"fadePassed": @YES, @"menuIndex": @(index)} options:0 error:nil]
         writeToFile:progress atomically:YES];
-    NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"pictureOptions:", @"subtitleOptions:", @"queueVideos:", @"audioTracks:", @"subtitleTracks:", @"chapters:"];
+    NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"subtitleOptions:", @"queueVideos:", @"audioTracks:", @"subtitleTracks:", @"chapters:", @"goToTime:", @"hdrDisplayOptions:", @"subtitleSizeOptions:"];
     if (index >= selectors.count) {
 #ifdef LG_VIDEO_FOLD_QA
         [(LGVideoPoseQAController *)v applyTestFold:NO];
@@ -381,21 +422,76 @@
         for (UIBarButtonItem *item in self.video.mediaItems)
             if (item.action == selector) sender = item;
         if (self.video.tabletop) {
-            for (UIStackView *row in self.video.tabletopUtilities.arrangedSubviews)
+            for (UIStackView *row in (self.video.portraitTabletop ? @[self.video.portraitUtilities] : self.video.tabletopUtilities.arrangedSubviews))
                 for (UIButton *button in row.arrangedSubviews)
                     if ([[button actionsForTarget:self.video forControlEvent:UIControlEventTouchUpInside] containsObject:selectors[index]]) sender = button;
         }
         void (*invoke)(id,SEL,id) = (void (*)(id,SEL,id))[self.video methodForSelector:selector];
         invoke(self.video, selector, sender);
-        UIAlertController *menu = (UIAlertController *)self.video.presentedViewController;
+        UIViewController *presentation = self.video.presentedViewController;
+        UIAlertController *menu = [presentation isKindOfClass:LGVideoDeckSettings.class]
+            ? ((LGVideoDeckSettings *)presentation).dialog : (UIAlertController *)presentation;
         if (!menu) { [self finish:@"Playback menu did not present"]; return; }
         if (index == 0) for (UIAlertAction *action in menu.actions) {
             if ([action.title hasPrefix:@"Picture size"]) { [self finish:@"Playback duplicates the Picture icon"]; return; }
         }
         NSUInteger cancel = 0;
         for (UIAlertAction *action in menu.actions) if (action.style == UIAlertActionStyleCancel) cancel++;
-        if (cancel != 0) { [self finish:@"Playback menus must dismiss without Cancel actions"]; return; }
+        if (!menu.textFields.count && cancel != 0) { [self finish:@"Playback menus must dismiss without Cancel actions"]; return; }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if (self.video.portraitTabletop) {
+                UIViewController *presented = self.video.presentedViewController;
+                CGRect frame = [presented.view convertRect:presented.view.bounds toView:self.video.view];
+                if (![presented isKindOfClass:LGVideoDeckSettings.class] ||
+                    !CGRectContainsRect(CGRectInset(self.video.tabletopArea, -1, -1), frame)) {
+                    [self finish:[NSString stringWithFormat:@"Settings escaped the lower panel: %@", NSStringFromCGRect(frame)]]; return;
+                }
+                UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithBounds:self.window.bounds];
+                UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+                    [self.window drawViewHierarchyInRect:self.window.bounds afterScreenUpdates:YES];
+                }];
+                [UIImagePNGRepresentation(image) writeToFile:[self outputPath:[NSString stringWithFormat:@"menu-%lu.png", (unsigned long)index]] atomically:YES];
+                if (!self.video.surfaceVisible) { [self finish:@"Lower menu hid the playing video owner"]; return; }
+                LGVideoDeckPresentation *deckPresentation = (LGVideoDeckPresentation *)presented.presentationController;
+                CGRect backdrop = [deckPresentation.backdrop convertRect:deckPresentation.backdrop.bounds toView:self.video.view];
+                if (!CGRectContainsRect(CGRectInset(self.video.tabletopArea, -1, -1), backdrop)) {
+                    [self finish:@"Settings backdrop covers the upper movie"]; return;
+                }
+                if (index == 7) {
+                    LGVideoDeckSettings *settings = (LGVideoDeckSettings *)presented;
+                    settings.dialog.textFields.firstObject.text = @"0:12";
+                    self.video.command = ^(NSString *name, NSString *value) { self.deckCommand = [NSString stringWithFormat:@"%@:%@", name, value]; };
+                    [settings tableView:settings.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:1 inSection:0]];
+                } else if (index == 0) [deckPresentation dismiss:nil];
+                else if (index == 1) {
+                    LGVideoDeckSettings *settings = (LGVideoDeckSettings *)presented;
+                    // Select a real speed row through the production table delegate.
+                    [settings tableView:settings.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+                } else [presented dismissViewControllerAnimated:YES completion:nil];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    if (index == 1 && fabs([[self.video playbackOptions][@"rate"] doubleValue] - .5) > .01) {
+                        [self finish:[NSString stringWithFormat:@"Deck Speed selection failed: %@", [self.video playbackOptions]]]; return;
+                    }
+                    if (index == 7 && ![self.deckCommand isEqualToString:@"seek:0:12"]) {
+                        [self finish:@"Lower-panel text entry lost its existing seek command"]; return;
+                    }
+                    [self menus:index+1];
+                });
+                return;
+            }
+            if (menu.textFields.count) {
+                [self.video.presentedViewController dismissViewControllerAnimated:NO completion:^{ [self menus:index+1]; }];
+                return;
+            }
+            // Regular iPad popovers own outside-tap dismissal in UIKit; their
+            // container need not expose the compact alert's backdrop recognizer.
+            if (menu.presentationController.presentationStyle == UIModalPresentationPopover) {
+                if (!menu.popoverPresentationController.barButtonItem && !menu.popoverPresentationController.sourceView && !menu.popoverPresentationController.sourceItem) {
+                    [self finish:@"iPad menu lost its native popover anchor"]; return;
+                }
+                [menu dismissViewControllerAnimated:YES completion:^{ [self menus:index+1]; }];
+                return;
+            }
             if (!self.video.menuOutsideTap.view) { [self finish:@"Menu backdrop dismissal was not installed"]; return; }
             UIView *backdrop = self.video.menuOutsideTap.view;
             LGVideoMenuTouch *touch = [[LGVideoMenuTouch alloc] init];

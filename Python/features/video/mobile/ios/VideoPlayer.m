@@ -47,7 +47,14 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, strong) UIStackView *bufferOverlay;
 @property(nonatomic) BOOL buffering, hasPlayed;
 @property(nonatomic, copy) NSString *transportFailure;
-@property(nonatomic) BOOL hingePartiallyOpen, tabletop;
+@property(nonatomic) BOOL hingePartiallyOpen, tabletop, portraitTabletop;
+@property(nonatomic) CGRect tabletopArea;
+@property(nonatomic, strong) UIStackView *portraitHeader, *portraitUtilities;
+@property(nonatomic, strong) UIVisualEffectView *portraitToolbar;
+@property(nonatomic, strong) UIButton *portraitClose, *portraitPictureButton, *portraitSpeedButton;
+@property(nonatomic, strong) NSLayoutConstraint *portraitDeckHeight;
+@property(nonatomic, strong) NSArray<NSLayoutConstraint *> *transportSizes;
+@property(nonatomic, strong) UIStackView *videoIdentity;
 @property(nonatomic, strong) UIStackView *tabletopTransport, *tabletopUtilities;
 @property(nonatomic, strong) UIButton *tabletopPlay;
 @property(nonatomic, strong) NSLayoutConstraint *movieWidth, *movieHeight, *movieCenterY, *deckCenterY, *controlsHeightLimit;
@@ -64,7 +71,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic, strong) UILabel *message;
 @property(nonatomic, strong) UISlider *seek;
 @property(nonatomic, strong) UIBarButtonItem *playButton;
-@property(nonatomic, strong) UIBarButtonItem *fullscreenButton;
+@property(nonatomic, strong) UIBarButtonItem *pictureButton;
+@property(nonatomic, strong) UIButton *tabletopPictureButton;
 @property(nonatomic) BOOL fullscreen;
 @property(nonatomic) BOOL controlsVisible;
 @property(nonatomic) BOOL systemChromeHidden;
@@ -127,6 +135,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)holdPausePresentation;
 - (void)clearPausePresentation;
 @end
+
+#import "DuoDeck.m"
 
 @implementation LGVideoController
 - (void)setScreenAwake:(BOOL)awake {
@@ -210,13 +220,13 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     UIBarButtonItem *back = [self item:@"Back 10 seconds" selector:@selector(back:)];
     self.playButton = [self item:@"Play" selector:@selector(togglePlay:)];
     UIBarButtonItem *forward = [self item:@"Forward 10 seconds" selector:@selector(forward:)];
-    UIBarButtonItem *picture = [self item:@"Picture" selector:@selector(pictureOptions:)];
+    self.pictureButton = [self item:@"Fill view" selector:@selector(togglePictureSize:)];
+    UIBarButtonItem *picture = self.pictureButton;
     UIBarButtonItem *chapters = [self item:@"Chapters" selector:@selector(chapters:)];
     UIBarButtonItem *audio = [self item:@"Audio tracks" selector:@selector(audioTracks:)];
     UIBarButtonItem *subtitles = [self item:@"Subtitles" selector:@selector(subtitleTracks:)];
-    self.fullscreenButton = [self item:@"Exit fullscreen" selector:@selector(toggleFullscreen:)];
     UIBarButtonItem *tools = [self item:@"Playback" selector:@selector(playbackTools:)];
-    NSMutableArray<UIBarButtonItem *> *utilities = [NSMutableArray arrayWithArray:@[picture, audio, subtitles, chapters, self.fullscreenButton, tools]];
+    NSMutableArray<UIBarButtonItem *> *utilities = [NSMutableArray arrayWithArray:@[picture, audio, subtitles, chapters, tools]];
     if (!self.restricted) {
         UIBarButtonItem *more = [self item:@"More playback options" selector:NULL];
         __weak LGVideoController *owner = self;
@@ -236,7 +246,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         self.navigationItem.pinnedTrailingGroup = [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[self.playButton] representativeItem:nil];
         self.navigationItem.trailingItemGroups = @[
             [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[back, forward] representativeItem:nil],
-            [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[picture, tools, audio, subtitles, chapters, self.fullscreenButton] representativeItem:nil]
+            [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[picture, tools, audio, subtitles, chapters] representativeItem:nil]
         ];
         if (!self.restricted) {
             UIMenu *externalMenu = utilities.lastObject.menu;
@@ -265,7 +275,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     UIStackView *utilityRow = nil;
     NSUInteger utilityIndex = 0;
     for (NSArray *entry in @[@[@"Speed", @"speedometer", @"speedOptions:"],
-                            @[@"Picture", @"arrow.up.left.and.arrow.down.right", @"pictureOptions:"],
+                            @[@"Fill view", @"arrow.up.left.and.arrow.down.right", @"togglePictureSize:"],
                             @[@"Audio", @"speaker.wave.2", @"audioTracks:"],
                             @[@"Subtitles", @"captions.bubble", @"subtitleTracks:"],
                             @[@"Chapters", @"list.bullet", @"chapters:"],
@@ -290,6 +300,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
             return result;
         };
         button.configuration = config;
+        if ([entry[2] isEqualToString:@"togglePictureSize:"]) self.tabletopPictureButton = button;
         button.accessibilityLabel = entry[0];
         [button addTarget:self action:NSSelectorFromString(entry[2]) forControlEvents:UIControlEventTouchUpInside];
         [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
@@ -363,6 +374,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.player.media = [self playbackMedia];
     self.discoverers = [NSMutableArray array];
     [self installPlaybackTools];
+    [self installPortraitDeck];
     [self applyPlaybackOptions];
     self.timer = [NSTimer scheduledTimerWithTimeInterval:.5 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [self tick:nil];
@@ -459,7 +471,6 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (void)toggleFullscreen:(id)sender {
     self.fullscreen = !self.fullscreen;
-    [self updateItem:self.fullscreenButton label:self.fullscreen ? @"Exit fullscreen" : @"Fullscreen"];
     [self setControlsShown:YES];
 }
 - (void)tapVideo:(id)sender {
@@ -526,16 +537,18 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         }
     }
 #endif
-    BOOL poseChanged = self.tabletop != tabletop;
+    BOOL portrait = tabletop && self.view.bounds.size.height > self.view.bounds.size.width;
+    BOOL poseChanged = self.tabletop != tabletop || self.portraitTabletop != portrait;
     self.tabletop = tabletop;
+    self.portraitTabletop = portrait;
     // Fit the drawable itself to the decoded image, with letterboxing supplied
     // by our black parent view. VLC subtitles then have the image's bounds as
-    // their layout surface. Only do this for Fit: Fill/Original retain their
-    // existing VLC-specific crop/scale semantics.
+    // their layout surface. Fill keeps the viewport bounds for cropping;
+    // unsupported legacy modes use Fit.
     CGSize viewport = movieArea.size;
     CGSize decoded = self.player.videoSize;
     NSString *pictureMode = [self playbackOptions][@"aspect"] ?: @"fit";
-    BOOL fit = [pictureMode isEqualToString:@"fit"];
+    BOOL fit = ![pictureMode isEqualToString:@"fill"];
     if (fit && decoded.width > 0 && decoded.height > 0 &&
         isfinite(decoded.width) && isfinite(decoded.height) &&
         viewport.width > 0 && viewport.height > 0) {
@@ -556,10 +569,10 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     for (UIView *surface in self.movie.subviews) surface.frame = self.movie.bounds;
     [self configureVideoDynamicRange:self.movie.layer];
     self.tabletopTransport.hidden = !tabletop;
-    self.tabletopUtilities.hidden = !tabletop;
-    self.controls.spacing = tabletop ? 2 : 4;
+    self.tabletopUtilities.hidden = !tabletop || portrait;
+    self.controls.spacing = portrait ? (available.size.height >= 380 ? 10 : 4) : tabletop ? 2 : 4;
     self.controls.layoutMarginsRelativeArrangement = tabletop;
-    self.controls.layoutMargins = tabletop ? UIEdgeInsetsMake(4, 12, 4, 12) : UIEdgeInsetsZero;
+    self.controls.layoutMargins = portrait ? UIEdgeInsetsMake(8, 16, 8, 16) : tabletop ? UIEdgeInsetsMake(4, 12, 4, 12) : UIEdgeInsetsZero;
     if (tabletop && self.view.window) {
         // A hidden navigation rail may retain controller safe-area insets.
         // The lower deck uses physical window insets, not that retired rail.
@@ -581,8 +594,12 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         }
 #endif
     }
+    self.tabletopArea = available;
+    self.portraitDeckHeight.active = portrait;
+    self.portraitDeckHeight.constant = MAX(44, available.size.height - 16);
+    [self layoutPortraitDeck];
     self.controlsScroll.backgroundColor = tabletop ? [UIColor colorWithWhite:.08 alpha:1] : UIColor.clearColor;
-    self.controlsScroll.layer.cornerRadius = tabletop ? 24 : 0;
+    self.controlsScroll.layer.cornerRadius = tabletop && !portrait ? 24 : 0;
     if (poseChanged) [self setControlsShown:YES];
     // In laptop posture the upper panel owns the movie and the lower panel
     // owns persistent controls. The movie never spans the horizontal hinge.
@@ -603,15 +620,29 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)updateItem:(UIBarButtonItem *)button label:(NSString *)label {
     NSDictionary *symbols = @{@"Play": @"play.fill", @"Pause": @"pause.fill",
         @"Back 10 seconds": @"gobackward.10", @"Forward 10 seconds": @"goforward.10",
-        @"Audio tracks": @"speaker.wave.2", @"Subtitles": @"captions.bubble", @"Fullscreen": @"arrow.up.left.and.arrow.down.right",
-        @"Exit fullscreen": @"arrow.down.right.and.arrow.up.left", @"More playback options": @"ellipsis",
-        @"Chapters": @"list.bullet", @"Picture": @"arrow.up.left.and.arrow.down.right", @"Done": @"xmark"};
+        @"Audio tracks": @"speaker.wave.2", @"Subtitles": @"captions.bubble", @"Fill view": @"arrow.up.left.and.arrow.down.right",
+        @"Fit view": @"arrow.down.right.and.arrow.up.left", @"More playback options": @"ellipsis",
+        @"Chapters": @"list.bullet", @"Done": @"xmark"};
     button.image = [UIImage systemImageNamed:symbols[label]];
+    if (button == self.pictureButton && self.portraitPictureButton) {
+        UIButtonConfiguration *config = self.portraitPictureButton.configuration;
+        config.image = button.image;
+        config.title = [label isEqualToString:@"Fit view"] ? @"Fit" : @"Fill";
+        self.portraitPictureButton.configuration = config;
+        self.portraitPictureButton.accessibilityLabel = label;
+    }
     if (button == self.playButton && self.tabletopPlay) {
         UIButtonConfiguration *config = self.tabletopPlay.configuration;
         config.image = [UIImage systemImageNamed:symbols[label] withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:36 weight:UIImageSymbolWeightSemibold]];
         self.tabletopPlay.configuration = config;
         self.tabletopPlay.accessibilityLabel = label;
+    }
+    if (button == self.pictureButton && self.tabletopPictureButton) {
+        UIButtonConfiguration *config = self.tabletopPictureButton.configuration;
+        config.image = [UIImage systemImageNamed:symbols[label]];
+        config.title = label;
+        self.tabletopPictureButton.configuration = config;
+        self.tabletopPictureButton.accessibilityLabel = label;
     }
     button.title = label;
     button.accessibilityLabel = label;
@@ -1046,7 +1077,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         int64_t offset = chapter.timeOffset.value.longLongValue;
         NSString *name = chapter.name.length ? chapter.name : [NSString stringWithFormat:@"Chapter %lu", (unsigned long)index + 1];
         NSString *label = [NSString stringWithFormat:@"%@%lld:%02lld · %@", chapter.isCurrent ? @"✓ " : @"", offset / 60000, offset / 1000 % 60, name];
-        [menu addAction:[UIAlertAction actionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             [self seekToMilliseconds:offset];
         }]];
     }
@@ -1073,20 +1104,20 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     // The timer defers hiding while a menu is presented and resumes afterward.
     [self setControlsShown:YES];
     UIAlertController *menu = [self menu:text ? @"Subtitles" : @"Audio tracks" sender:sender];
-    if (text) [menu addAction:[UIAlertAction actionWithTitle:@"Subtitles off" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+    if (text) [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitles off" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         if ([self canPlay:NO]) [self.player deselectAllTextTracks];
     }]];
     NSArray<VLCMediaPlayerTrack *> *tracks = text ? self.player.textTracks : self.player.audioTracks;
     for (NSUInteger index = 0; index < tracks.count; index++) {
         VLCMediaPlayerTrack *track = tracks[index];
-        [menu addAction:[UIAlertAction actionWithTitle:[self trackLabel:track index:index] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[self trackLabel:track index:index] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             if ([self canPlay:NO]) track.selectedExclusively = YES;
         }]];
     }
     if (text) {
         NSArray *subtitles = [NSJSONSerialization JSONObjectWithData:[self.subtitleJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
         for (NSDictionary *subtitle in subtitles) {
-            [menu addAction:[UIAlertAction actionWithTitle:subtitle[@"name"] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:subtitle[@"name"] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
                 if ([self canPlay:NO]) [self.player addPlaybackSlave:[NSURL URLWithString:subtitle[@"url"]] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES];
             }]];
         }
@@ -1107,14 +1138,14 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         }
     }
     UIAlertController *menu = [self menu:@"Cast video" sender:sender];
-    [menu addAction:[UIAlertAction actionWithTitle:@"This device" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"This device" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         [self selectRenderer:nil];
     }]];
     NSUInteger count = 0;
     for (VLCRendererDiscoverer *discoverer in self.discoverers) {
         for (VLCRendererItem *renderer in discoverer.renderers) {
             count++;
-            [menu addAction:[UIAlertAction actionWithTitle:renderer.name style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:renderer.name style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
                 [self selectRenderer:renderer];
             }]];
         }

@@ -26,18 +26,23 @@ the navigation buttons do not crowd it out.
 The green cached-range strip follows the seek track's endpoints directly beneath it.
 The movie stays centered in the full player surface when controls appear or hide. Android retains its responsive
 48-dp playback buttons.
-On a partially folded Duo with a horizontal hinge, the player uses the upper
-panel for the movie and keeps the title, source caption and control deck on the lower panel. Large round
-ten-second skip buttons flank a larger Play/Pause button; the timeline and
-Speed, Picture (Fit/Fill crop/Original), Audio, Subtitles, Chapters, Go to time,
-Playback and Done controls stay accessible below the hinge in two rows. The upper
-panel hides the status bar, including time, connection and battery indicators,
-even while the lower controls remain visible.
-Unfolding restores the full video surface. The split follows the system's hinge
-state and reserved division; physical-pose acceptance is separate from layout tests.
+On a partially folded Duo with a horizontal hinge, the movie stays above the
+hinge and the controls stay below it. In portrait laptop posture, the lower
+panel uses its full height: the filename and source sit beside an **X** that
+closes the player, followed by the timeline, large ten-second skip and Play/Pause
+controls, and a glass toolbar for Speed, Fit/Fill, Audio, Subtitles, Chapters and
+Playback. **Go to time** remains available inside Playback. Settings lists and
+text-entry dialogs open within the lower panel; long lists scroll there. Turning
+out of portrait or unfolding dismisses an open lower-panel settings list and
+restores the corresponding ordinary layout. The existing landscape laptop deck
+retains its quick actions. The upper panel hides system status indicators while
+the laptop deck is visible. The split follows the system's reserved hinge region;
+physical-pose acceptance is separate from injected layout checks.
 
-On iOS, use the **Picture** icon to choose Fit, Fill (crop edges), or Original.
-Picture size is not repeated in the Playback menu. Selection popups, including
+On iOS, picture sizing defaults to **Fit**, preserving the whole image. Tap
+**Fill view** to crop the edges and fill the player, then **Fit view** to return.
+This single toggle replaces the Picture menu and separate fullscreen button;
+there is no Original size option. Picture size is not repeated in the Playback menu. Selection popups, including
 Playback, Audio, Subtitles and Chapters, close when you tap outside them and have
 no Cancel row. Text-entry prompts still have explicit Apply/Cancel controls.
 
@@ -45,11 +50,12 @@ no Cancel row. Text-entry prompts still have explicit Apply/Cancel controls.
 them. Selecting a chapter seeks without resuming a paused movie. AVI files often
 have no embedded chapters; the player does not manufacture chapter boundaries.
 
-Choose **Fullscreen** for immersive playback. Controls remain visible initially on iOS, then hide during playback. Tap the video to
+On Android, choose **Fullscreen** for immersive playback. On iOS, playback
+starts fullscreen with controls visible, then hides them during playback. Tap the video to
 bring the controls back; tap again to hide them. While playing, revealed controls
 hide again after three seconds. Pausing, finishing or encountering an error shows
-the controls. Choose **Exit fullscreen** to keep them visible. The movie fills
-the available player area, preserving the video's aspect ratio.
+the controls. On Android, choose **Exit fullscreen** to keep them visible.
+The movie preserves its aspect ratio in both Fit and Fill.
 Automatic hiding is disabled with VoiceOver or Android touch exploration.
 
 When a cloud read exhausts playable data, playback holds its last rendered

@@ -15,6 +15,7 @@
     "session.py",
     "mobile/controls.py",
     "mobile/ios/PlaybackControls.m",
+    "mobile/ios/DuoDeck.m",
     "mobile/android/io/github/ispaure/logistics/video/PlaybackControls.java",
     "mobile/ios/HDRDiagnostics.m",
     "mobile/ios/PausePresentation.m",

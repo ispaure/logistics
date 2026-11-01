@@ -57,7 +57,11 @@ async def exercise(app):
         assert report['controls'][1] >= midpoint + 6
         assert abs(report['controls'][0] + report['controls'][2]/2 - report['movie'][2]/2) < 1, 'Deck is not centered across the lower panel'
         report['buttons'] = []
-        rows = [native.tabletopTransport, *native_value(native.tabletopUtilities, 'arrangedSubviews')]
+        rows = [native.tabletopTransport]
+        if native.portraitTabletop:
+            rows.append(native.portraitUtilities)
+        else:
+            rows.extend(native_value(native.tabletopUtilities, 'arrangedSubviews'))
         chapter_button = None
         for row in rows:
             for button in native_value(row, 'arrangedSubviews'):
@@ -81,7 +85,13 @@ async def exercise(app):
         assert chapter_button is not None
         native.chapters(chapter_button)
         await until(lambda: presented_menu(native) is not None)
-        report['chapter_menu'] = [str(action.title) for action in native_value(presented_menu(native),'actions')]
+        menu = presented_menu(native)
+        if menu.isKindOfClass(ObjCClass('LGVideoDeckSettings')):
+            x, y, w, h = frame(native_value(menu, 'view'), view)
+            assert y >= midpoint + 6, 'Chapter menu overlaps the upper video panel'
+            assert y + h <= float(native_value(view, 'bounds').size.height), 'Chapter menu leaves the lower panel'
+            menu = native_value(menu, 'dialog')
+        report['chapter_menu'] = [str(action.title) for action in native_value(menu, 'actions')]
         assert any('Second scene' in title for title in report['chapter_menu'])
         await dismiss_menu(native)
         native.seekToMilliseconds(6000)
