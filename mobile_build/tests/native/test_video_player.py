@@ -38,6 +38,35 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         app.video_player = owner
         return owner
 
+    async def test_newest_speed_selection_wins_slow_preference_write(self):
+        import json
+        from threading import Event
+        from features.video.session import PlaybackSettings
+        owner = self.player(restricted=False)
+        entered, release = Event(), Event()
+        persisted = []
+        def save(values):
+            if values['rate'] == 2.:
+                entered.set()
+                if not release.wait(2):
+                    raise TimeoutError('Controlled preference write timed out')
+            persisted.append(values['rate'])
+            return PlaybackSettings.from_dict(values)
+        owner.controls.store.save = Mock(side_effect=save)
+        first = asyncio.create_task(owner.controls.command('settings', '{"rate": 2.0}'))
+        try:
+            self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+            newest = asyncio.create_task(owner.controls.command('settings', '{"rate": 0.5}'))
+            await asyncio.sleep(0)
+            release.set()
+            await asyncio.wait_for(asyncio.gather(first, newest), 2)
+        finally:
+            release.set()
+        self.assertEqual(persisted, [2., .5])
+        self.assertEqual(owner.controls.settings.rate, .5)
+        owner.native.configure.assert_called_once()
+        self.assertEqual(json.loads(owner.native.configure.call_args.args[0])['rate'], .5)
+
     async def test_show_in_folder_keeps_source_alive_until_browser_has_adopted_it(self):
         from features.video.mobile.controls import native_options
         owner = self.player(restricted=False)

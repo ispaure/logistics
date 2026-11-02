@@ -95,6 +95,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @property(nonatomic) BOOL interrupted;
 @property(nonatomic) BOOL manualResumeRequired;
 @property(nonatomic) BOOL pausePending;
+@property(nonatomic) BOOL rateChangePending;
 @property(nonatomic) BOOL audioSuppressed;
 @property(nonatomic) BOOL resumeMuted;
 @property(nonatomic) BOOL holdsIdleTimer;
@@ -117,6 +118,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 @interface LGVideoController (PlaybackControls)
 - (void)installPlaybackTools;
 - (void)applyPlaybackOptions;
+- (void)applyPlaybackRate;
 - (void)applyPictureSize;
 - (void)presentPlaybackDialog:(UIAlertController *)dialog;
 - (void)layoutPlaybackTools;
@@ -152,7 +154,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (void)updateScreenAwake {
     [self setScreenAwake:!self.retired && self.surfaceVisible && self.view.window &&
-        !self.lockHidden && !self.manualResumeRequired && !self.pausePending &&
+        !self.lockHidden && !self.manualResumeRequired && (!self.pausePending || self.rateChangePending) &&
         !self.ended && !self.casting && !self.pipActive && self.playRequested &&
         UIApplication.sharedApplication.applicationState == UIApplicationStateActive];
 }
@@ -715,6 +717,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    self.rateChangePending = NO;
     [self logHDRTransition:@"pause-request"];
     [self holdPausePresentation];
     [self setScreenAwake:NO];
@@ -828,7 +831,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     self.networkResumePending = NO;
     NSLog(@"[VideoPlayback] play target=%lld current=%lld", self.startMilliseconds, self.player.time.value.longLongValue);
     [self logHDRTransition:@"play-request"];
-    [self.player play];
+    if (!self.rateChangePending && !self.player.isPlaying) [self.player play];
     [self tick:nil];
     if ([self.message.text isEqualToString:@"Ready. Press Play to start."]) {
         self.message.text = @"";
@@ -866,7 +869,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     BOOL fallbackStall = missingFrames && (now - self.lastPlaybackProgress >= 3.0 ||
         (self.networkWaiting && now - self.lastFrameProgress >= 3.0));
     BOOL stalled = self.playRequested && !self.manualResumeRequired && !self.ended &&
-        !self.pausePending && (frameStall || fallbackStall);
+        (!self.pausePending || self.rateChangePending) && (frameStall || fallbackStall);
     if (stalled && self.transportFailure) { [self playbackFailed]; return; }
     BOOL changed = self.buffering != stalled;
     self.buffering = stalled;
@@ -957,9 +960,11 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 }
 - (void)tick:(NSTimer *)timer {
     // Keep the resume target visible until the decoder acknowledges that seek.
+    // The acknowledgement window measures wall time even at faster playback.
+    int64_t seekTolerance = (int64_t)(1500 * MAX(1.f, fabsf(self.player.rate)));
     if (self.resumeSeekSubmitted && self.startMilliseconds >= 0 && self.player.isPlaying &&
         self.player.media.statistics.displayedPictures > 0 &&
-        llabs(self.player.time.value.longLongValue - self.startMilliseconds) < 1500) {
+        llabs(self.player.time.value.longLongValue - self.startMilliseconds) < seekTolerance) {
         self.startMilliseconds = -1;
         self.resumeSeekSubmitted = NO;
     }
@@ -1001,9 +1006,17 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         if (self.retired) return;
         [self logHDRTransition:[NSString stringWithFormat:@"state-%ld", (long)state]];
         if (state != VLCMediaPlayerStatePlaying) self.pausePending = NO;
+        if (state == VLCMediaPlayerStatePaused && self.player.state == VLCMediaPlayerStatePaused &&
+            !self.player.isPlaying) {
+            self.rateChangePending = NO;
+            [self applyPlaybackRate];
+        } else if (state == VLCMediaPlayerStateStopped || state == VLCMediaPlayerStateError) {
+            self.rateChangePending = NO;
+        }
         // A blocked input can complete an earlier Pause after Play was queued.
         // Reconcile that completion with current intent, never with read-ahead.
-        if (state == VLCMediaPlayerStatePaused && self.playRequested &&
+        if (state == VLCMediaPlayerStatePaused && self.player.state == VLCMediaPlayerStatePaused &&
+            !self.player.isPlaying && self.playRequested &&
             !self.manualResumeRequired && !self.networkResumePending &&
             [self canPlay:self.casting || self.pipActive]) [self.player play];
         if (state == VLCMediaPlayerStateOpening && self.startMilliseconds > 0) {
@@ -1014,7 +1027,8 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
             [self applyPlaybackOptions];
             if (self.manualResumeRequired || ![self canPlay:NO]) { [self pause]; return; }
             if (self.startMilliseconds >= 0) {
-                if (llabs(self.player.time.value.longLongValue - self.startMilliseconds) >= 1500)
+                int64_t seekTolerance = (int64_t)(1500 * MAX(1.f, fabsf(self.player.rate)));
+                if (llabs(self.player.time.value.longLongValue - self.startMilliseconds) >= seekTolerance)
                     self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
                 self.resumeSeekSubmitted = YES;
             }
@@ -1235,6 +1249,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     if (self.retired) return;
     [self setScreenAwake:NO];
     self.retired = YES;
+    self.rateChangePending = NO;
     [self clearPausePresentation];
     self.command = nil;
     self.bufferOverlay.hidden = YES;

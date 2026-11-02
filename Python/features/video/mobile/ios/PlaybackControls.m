@@ -68,7 +68,6 @@
     UIButtonConfiguration *speed = self.portraitSpeedButton.configuration;
     speed.title = [NSString stringWithFormat:@"%g×", rate >= .5 && rate <= 2. ? rate : 1.];
     self.portraitSpeedButton.configuration = speed;
-    if (rate >= .5 && rate <= 2.) self.player.rate = rate;
     self.player.currentVideoSubTitleDelay = [options[@"subtitle_delay_ms"] longLongValue] * 1000;
     self.player.currentAudioPlaybackDelay = [options[@"audio_delay_ms"] longLongValue] * 1000;
     // A session subtitle-menu adjustment wins over later settings refreshes.
@@ -93,6 +92,34 @@
                 if (track.language.length && [track.language caseInsensitiveCompare:preferred] == NSOrderedSame) { track.selectedExclusively = YES; break; }
         }
     }
+    // Apply requested speed after the other output and track preferences.
+    [self applyPlaybackRate];
+}
+- (void)applyPlaybackRate {
+    if (!self.player || self.retired || self.rateChangePending) return;
+    float rate = [[self playbackOptions][@"rate"] floatValue];
+    if (rate < .5 || rate > 2. || !isfinite(rate) || fabsf(self.player.rate - rate) < .001f) return;
+    if (self.player.state == VLCMediaPlayerStatePaused && !self.player.isPlaying) {
+        int64_t position = [self positionMilliseconds];
+        self.player.rate = rate;
+        // Discard pictures/audio queued at the previous rate without moving
+        // the user's timeline checkpoint or adding an Undo seek entry.
+        if (position >= 0 && self.player.isSeekable) {
+            self.startMilliseconds = position;
+            self.resumeSeekSubmitted = YES;
+            self.player.time = [VLCTime timeWithNumber:@(position)];
+        }
+    } else if (self.player.isPlaying) {
+        // A live request can update VLCKit's rate getter without changing its
+        // clock. Apply after native Pause acknowledges it, then reconcile the
+        // latest Play intent. User/OS Pause cancels that automatic resume.
+        self.rateChangePending = YES;
+        if (!self.pausePending) {
+            self.pausePending = YES;
+            [self.player pause];
+        }
+    }
+    // Opening/Stopped inputs receive the preference from the Playing callback.
 }
 - (void)applyPictureSize {
     if (!self.player || !self.movie) return;

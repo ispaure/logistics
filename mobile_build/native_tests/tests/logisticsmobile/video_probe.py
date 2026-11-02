@@ -46,6 +46,76 @@ def start_playback(owner):
     owner.native.play()
 
 
+async def playback_speed(owner, android):
+    """Measure the real control path, including acknowledged Pause and resume."""
+    from dataclasses import asdict, replace
+    from mobile.screen_privacy import native_value
+    player = android_player(owner) if android else owner.native.native.player
+    def clock():
+        if android:
+            return int(player.getTime())
+        value = native_value(native_value(player, 'time'), 'value')
+        return int(value) if isinstance(value, (int, float)) else int(native_value(value, 'longLongValue'))
+    def playing():
+        return bool(player.isPlaying()) if android else bool(native_value(player, 'isPlaying'))
+    async def pause():
+        owner.native.pause()
+        await until(lambda: not playing())
+        if not android:
+            await until(lambda: not bool(owner.native.native.pausePending))
+    async def setting(rate):
+        if android:
+            await owner.controls.command('settings', json.dumps(asdict(replace(owner.controls.settings, rate=rate))))
+        else:
+            owner.native.native.setting('rate', value=rate)
+            await until(lambda: owner.controls.settings.rate == rate)
+    await pause()
+    start_playback(owner)
+    await until(playing)
+    initial = clock()
+    await until(lambda: clock() > initial + 200)
+    samples = []
+    for rate, paused in ((2., False), (.5, False), (1.5, True)):
+        if paused:
+            await pause()
+        await setting(rate)
+        if paused:
+            assert not playing(), 'Changing speed resumed paused video'
+            start_playback(owner)
+        await until(playing)
+        initial = clock()
+        try:
+            await until(lambda: clock() > initial + 100)
+        except AssertionError as error:
+            details = dict(rate=rate, initial=initial, current=clock(), samples=samples)
+            if not android:
+                details['native'] = json.loads(str(owner.native.native.playbackDiagnosticJSON()))
+                details['duration'] = int(owner.native.native.durationMilliseconds())
+            raise AssertionError('Speed transition did not advance: ' + json.dumps(details)) from error
+        await asyncio.sleep(.5)
+        start, position = asyncio.get_running_loop().time(), clock()
+        await asyncio.sleep(2)
+        actual = (clock() - position) / ((asyncio.get_running_loop().time() - start) * 1000)
+        sample = dict(requested=rate, observed=actual, paused_change=paused,
+                      requested_native=float(player.getRate()) if android else float(native_value(player, 'rate')))
+        if not android:
+            sample['timeline_error_ms'] = abs(owner.native.position()[0] - clock())
+        samples.append(sample)
+        print('VIDEO_SPEED_SAMPLE=' + json.dumps(sample), flush=True)
+    if not android:
+        owner.native.native.setting('rate', value=.75)
+        owner.native.pause()  # A user/OS Pause wins before the queued rate resume.
+        await until(lambda: not playing() and owner.controls.settings.rate == .75)
+        await asyncio.sleep(.3)
+        assert not playing() and not bool(owner.native.native.playRequested), 'Rate change overrode manual Pause'
+        samples[-1]['manual_pause_wins'] = True
+    await setting(1.)
+    assert all(abs(sample['observed'] - sample['requested']) < .4 for sample in samples), (
+        'Playback speed was not applied', samples)
+    assert all(sample.get('timeline_error_ms', 0) < 500 for sample in samples), ('Timeline retained an old checkpoint', samples)
+    return samples
+
+
 async def android_frame(owner):
     from java import jclass, dynamic_proxy
     PixelCopy = jclass('android.view.PixelCopy')
@@ -183,10 +253,23 @@ async def fullscreen_controls(owner, android):
     else:
         movie_bounds = native_value(native.movie, 'bounds')
         view_bounds = native_value(view, 'bounds')
-        assert abs(movie_bounds.size.height - view_bounds.size.height) < 1
-        assert abs(movie_bounds.size.width - view_bounds.size.width) < 1
+        # Fit sizes the drawable to the image so captions follow the image,
+        # while the black controller view supplies the letterboxing.
+        assert movie_bounds.size.height <= view_bounds.size.height + 1
+        assert movie_bounds.size.width <= view_bounds.size.width + 1
+        assert min(abs(movie_bounds.size.height - view_bounds.size.height),
+                   abs(movie_bounds.size.width - view_bounds.size.width)) < 1
+        movie_center = native_value(native.movie, 'center')
+        assert abs(movie_center.x - view_bounds.size.width / 2) < 1
+        assert abs(movie_center.y - view_bounds.size.height / 2) < 1
+        immersive_size = (movie_bounds.size.width, movie_bounds.size.height)
     tap()
     await until(visible)
+    if not android:
+        await asyncio.sleep(.3)
+        shown_bounds = native_value(native.movie, 'bounds')
+        assert abs(shown_bounds.size.width - immersive_size[0]) < 1
+        assert abs(shown_bounds.size.height - immersive_size[1]) < 1
     await until(lambda: not visible() and hidden_bars(), timeout=5)
     native.pause()
     await until(lambda: not awake())
@@ -232,6 +315,7 @@ async def exercise(app):
         assert len(list(root.glob('*.mkv'))) == 7
         assert len(list(root.glob('*.avi'))) == 2
         fullscreen_checked = False
+        speed_checked = False
         paths = sorted(root.iterdir())
         if decode_only:
             paths = [path for path in paths if path.name in (
@@ -285,6 +369,9 @@ async def exercise(app):
                 assert native_value(player, 'hasVideoOut')
                 colors = None
                 player.pause()
+            if not speed_checked:
+                rows.append(dict(name='playback-speed', samples=await playback_speed(owner, android)))
+                speed_checked = True
             if not fullscreen_checked and not decode_only:
                 # Longer focused fixtures leave time to observe the real timer.
                 owner.native.native.pause()

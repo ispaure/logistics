@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "source": "Generated testsrc2/color patterns and sine tones.",
+  "generator": "tests.readers.video_fixtures.refresh_bundled",
+  "ffmpeg_version": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers",
+  "codec_matrix": [
+    {
+      "container": "mp4",
+      "video": "h264",
+      "audio": "aac",
+      "file": "h264-aac.mp4"
+    },
+    {
+      "container": "mp4",
+      "video": "h264",
+      "audio": "opus",
+      "file": "h264-opus.mp4"
+    },
+    {
+      "container": "mp4",
+      "video": "hevc",
+      "audio": "aac",
+      "file": "hevc-aac.mp4"
+    },
+    {
+      "container": "mp4",
+      "video": "hevc",
+      "audio": "opus",
+      "file": "hevc-opus.mp4"
+    },
+    {
+      "container": "mkv",
+      "video": "h264",
+      "audio": "aac",
+      "file": "h264-aac.mkv"
+    },
+    {
+      "container": "mkv",
+      "video": "h264",
+      "audio": "opus",
+      "file": "h264-opus.mkv"
+    },
+    {
+      "container": "mkv",
+      "video": "hevc",
+      "audio": "aac",
+      "file": "hevc-aac.mkv"
+    },
+    {
+      "container": "mkv",
+      "video": "hevc",
+      "audio": "opus",
+      "file": "hevc-opus.mkv"
+    },
+    {
+      "container": "avi",
+      "video": "mpeg4",
+      "audio": "mp3",
+      "file": "mpeg4-mp3.avi"
+    },
+    {
+      "container": "avi",
+      "video": "mjpeg",
+      "audio": "pcm",
+      "file": "mjpeg-pcm.avi"
+    },
+    {
+      "container": "mkv",
+      "video": "h264",
+      "audio": "ac3",
+      "file": "h264-ac3.mkv"
+    },
+    {
+      "container": "mkv",
+      "video": "h264",
+      "audio": "eac3",
+      "file": "h264-eac3.mkv"
+    },
+    {
+      "container": "mkv",
+      "video": "h264",
+      "audio": "flac",
+      "file": "h264-flac.mkv"
+    }
+  ],
+  "files": {
+    "h264-aac.mp4": {
+      "bytes": 57781,
+      "sha256": "eb9ab43be5dc5f2f1796cb82c3a6d9b9663e66947042ea00bd21b9d48ac5eb67"
+    },
+    "h264-opus.mp4": {
+      "bytes": 58921,
+      "sha256": "69dfb8ac96d9c38dac730a642e200b6865a67a8b38267f9a96f3e0c0b8a2138a"
+    },
+    "hevc-aac.mp4": {
+      "bytes": 44600,
+      "sha256": "4beb5c6fa92612c62e0ef42e6f7f42d965b7f775e7b22b917751dbd4edb42bf2"
+    },
+    "hevc-opus.mp4": {
+      "bytes": 45740,
+      "sha256": "79904c7380211860ae64b94f8c1f0f61781fdb8e54f5b23cff33175eec7178d3"
+    },
+    "h264-aac.mkv": {
+      "bytes": 57262,
+      "sha256": "9badb65ee87dcb23938f522a015919a438b62c4e066de207b332e289ff7863c0"
+    },
+    "h264-opus.mkv": {
+      "bytes": 58435,
+      "sha256": "d3adabf2581eb54f30708991207ae65a3bcc21c1088df2fb45263fecbe6e986a"
+    },
+    "hevc-aac.mkv": {
+      "bytes": 43845,
+      "sha256": "0cf02765c8b8d602370010395998e130a099eb354186c55035e85492557183f1"
+    },
+    "hevc-opus.mkv": {
+      "bytes": 45017,
+      "sha256": "2721d3fc0eef9ff1097ba9f90eee963c17a3ea70bcdb63516f115c5274e3dbdd"
+    },
+    "mpeg4-mp3.avi": {
+      "bytes": 109420,
+      "sha256": "06288efd127e224fdd051914f733f8b26060dee210efe0081881f871b0df2133"
+    },
+    "mjpeg-pcm.avi": {
+      "bytes": 305232,
+      "sha256": "98c4f90ded8d60dcea7892f7afc6638b271e0cfeb331360dae300af278c17141"
+    },
+    "h264-ac3.mkv": {
+      "bytes": 43896,
+      "sha256": "33dd6b8d42881ffd40279588591511b8509111a2fbf3b4678e58180cd0b0c7a7"
+    },
+    "h264-eac3.mkv": {
+      "bytes": 43884,
+      "sha256": "586d0da2e285dc63d62a42b88ecaffd1d7a1d052adbfddc7cacf7958d05fd4be"
+    },
+    "h264-flac.mkv": {
+      "bytes": 45610,
+      "sha256": "e714f4fcbd16759da2ec8b9434f5ecb917d8931f884ef75852216ddff737160b"
+    },
+    "chapters.mkv": {
+      "bytes": 955232,
+      "sha256": "bae594ec35768378a661b9a64d7d40ac0e4eb9653c505b83779eb73cb46485a5"
+    },
+    "speed-with-audio.mkv": {
+      "bytes": 668581,
+      "sha256": "f901639db9436696942695343358d03ec9d307b2e7481b2ae500c84a60273eb0"
+    },
+    "black.mkv": {
+      "bytes": 4501,
+      "sha256": "8262b360765ee52f2899556f32559699a9b4655ef3b56b83fea7a74e0a177cb8"
+    }
+  }
+}

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from features.video.playback import SubtitleContent
-from features.video.session import FolderQueue, parse_time
+from features.video.session import FolderQueue, PlaybackSettings, parse_time
 from services.documents.video_settings import SettingsStore
 
 
@@ -34,6 +34,8 @@ class PlaybackControls:
         self.busy = False
         self.task = None
         self.jobs = set()
+        self.settings_lock = asyncio.Lock()
+        self.settings_revision = 0
 
     def dispatch(self, name, value=""):
         owner = self.owner
@@ -64,13 +66,22 @@ class PlaybackControls:
             return
         try:
             if name == "settings":
-                self.settings = await asyncio.to_thread(
-                    self.store.save, json.loads(value)
-                )
-                if not owner.closed and not owner.hidden and owner.allowed():
-                    owner.native.configure(
-                        self.settings.json(), json.dumps(self.queue.rows())
+                values = json.loads(value)
+                PlaybackSettings.from_dict(values)
+                self.settings_revision += 1
+                revision = self.settings_revision
+                async with self.settings_lock:
+                    if revision != self.settings_revision:
+                        return
+                    self.settings = await asyncio.to_thread(
+                        self.store.save, values
                     )
+                    if revision != self.settings_revision:
+                        return
+                    if not owner.closed and not owner.hidden and owner.allowed():
+                        owner.native.configure(
+                            self.settings.json(), json.dumps(self.queue.rows())
+                        )
             elif name == "seek":
                 owner.native.seek(parse_time(value))
             elif name in ("previous", "next", "queue", "ended"):

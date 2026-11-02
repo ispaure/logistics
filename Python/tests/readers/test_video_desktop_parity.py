@@ -17,6 +17,40 @@ TEST_STAGE = TestStage.EXTENDED
 
 
 class DesktopVideoParityTests(QtTestCase):
+    def test_selected_speed_changes_real_playback_clock_after_resume(self):
+        from time import monotonic
+        from features.video.ui.player import VideoWindow
+        from features.video.ui.backend import QtPlayback
+        from features.video.ui.vlc_backend import VLCPlayback
+        from logistics_build.build_retention import scratch
+        from tests.readers.video_fixtures import bundled_movie
+        with scratch() as root:
+            path = bundled_movie('speed-with-audio.mkv', root)
+            for factory in (QtPlayback, lambda owner: VLCPlayback(owner, interactive=False)):
+                with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'settings'):
+                    window = VideoWindow(ResourceChoice(LocalFiles(root), path.name), backend_factory=factory)
+                window.audio.setVolume(0)
+                try:
+                    window.show()
+                    self.wait_until(lambda: window.have_frame and window.player.position() > 500, timeout=20)
+                    for speed, paused in ((2.0, False), (.5, False), (1.5, True)):
+                        if paused:
+                            window.pause_requested()
+                        window.change_setting('rate', speed)
+                        if paused:
+                            self.assertEqual(window.player.playbackState(), window.player.PlaybackState.PausedState)
+                        window.seek_to(1000)
+                        if paused:
+                            window.toggle_play()
+                        self.wait_until(lambda: window.have_frame and window.player.position() > 1200, timeout=10)
+                        start, position = monotonic(), window.player.position()
+                        self.wait_until(lambda: monotonic() - start >= 2, timeout=3)
+                        actual = (window.player.position() - position) / ((monotonic() - start) * 1000)
+                        self.assertAlmostEqual(actual, speed, delta=.35,
+                            msg=f'{type(window.player).__name__}: requested {speed}×, observed {actual:.2f}×')
+                finally:
+                    window.close()
+
     def test_actual_stall_recovers_and_manual_pause_wins(self):
         if not shutil.which('ffmpeg'):
             self.skipTest('FFmpeg fixture generator required')
@@ -131,8 +165,6 @@ class DesktopVideoParityTests(QtTestCase):
                 window.close()
 
     def test_vlc_frames_pause_offsets_and_retirement(self):
-        if not shutil.which('ffmpeg'):
-            self.skipTest('FFmpeg fixture generator required')
         from features.video.ui.player import VideoWindow
         from features.video.ui.vlc_backend import VLCPlayback
         from logistics_build.build_retention import scratch
@@ -175,8 +207,6 @@ class DesktopVideoParityTests(QtTestCase):
             self.assertTrue(window.content.closed)
 
     def test_vlc_codec_matrix_decodes_frames_and_audio(self):
-        if not shutil.which('ffmpeg'):
-            self.skipTest('FFmpeg fixture generator required')
         from features.video.ui.player import VideoWindow
         from features.video.ui.vlc_backend import VLCPlayback
         from logistics_build.build_retention import scratch
@@ -237,11 +267,10 @@ class DesktopVideoParityTests(QtTestCase):
                 self.wait_until(lambda: provider.leases == 0, drain_deferred=True)
 
     def test_native_subtitle_formats_render_real_cues(self):
-        if not shutil.which('ffmpeg'):
-            self.skipTest('FFmpeg fixture generator required')
         from features.video.ui.player import VideoWindow
         from features.video.ui.vlc_backend import VLCPlayback
         from logistics_build.build_retention import scratch
+        from tests.readers.video_fixtures import bundled_movie
         formats = {
             'srt': '1\n00:00:00,000 --> 00:00:11,000\nWHITE CAPTION\n',
             'vtt': 'WEBVTT\n\n00:00.000 --> 00:11.000\nWHITE CAPTION\n',
@@ -257,10 +286,7 @@ class DesktopVideoParityTests(QtTestCase):
                 'Dialogue: Marked=0,0:00:00.00,0:00:11.00,Default,,0,0,0,,WHITE CAPTION\n'),
         }
         with scratch() as root:
-            path = root / 'black.mkv'
-            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-f', 'lavfi', '-i',
-                'color=c=black:s=320x180:r=15:d=12', '-c:v', 'libx264', '-preset', 'ultrafast', str(path)],
-                check=True, timeout=30)
+            path = bundled_movie('black.mkv', root)
             provider = LocalFiles(root)
             diagnostics = Path(__file__).resolve().parents[3] / 'test-results/video-desktop-vlc'
             diagnostics.mkdir(parents=True, exist_ok=True)

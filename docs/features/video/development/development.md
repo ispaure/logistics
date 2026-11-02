@@ -38,6 +38,19 @@ lease handoff. Existing Qt, range, resume and privacy regressions remain require
 Host checks do not establish physical audible sync, receiver playback or native
 sleep/lock timing on every OS. HDR output work remains excluded.
 
+Playback-speed acceptance measures the actual media clock at 2× and 0.5× while
+playing and 1.5× after a paused change, rather than trusting the selected setting.
+iOS acknowledges native Pause, applies the newest rate and flushes buffered media
+with a same-position seek before resuming. Manual Pause and existing playback
+authorization still control whether it resumes. Mobile preference writes are
+serialized so an older slow write cannot overwrite the latest selection.
+
+Small synthetic clips in `Python/tests/readers/fixtures/video/` let the desktop
+codec, caption, chapter and speed gates run when FFmpeg is absent. Their manifest
+records generator provenance and checksums; regenerate with
+`PYTHONPATH=Python:. python -m tests.readers.video_fixtures`. Generated custom-duration
+and controlled-stall fixtures still require FFmpeg and use disposable workspaces.
+
 ## Mobile HDR output
 
 See the [HDR Play/Pause investigation](hdr-play-pause.md) for the native-frame

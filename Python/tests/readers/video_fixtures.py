@@ -1,11 +1,38 @@
 """Small deterministic codec fixtures; caller owns the disposable directory."""
 from pathlib import Path
+from hashlib import sha256
+import json
+import shutil
 import subprocess
+
+
+def bundled_movie(name, root):
+    """Copy an integrity-checked synthetic clip into the caller's workspace."""
+    assets = Path(__file__).with_name('fixtures') / 'video'
+    manifest = json.loads((assets / 'manifest.json').read_text())
+    if manifest.get('schema') != 1 or Path(name).name != name:
+        raise ValueError('Unsupported video fixture manifest or name.')
+    data = (assets / name).read_bytes()
+    if sha256(data).hexdigest() != manifest['files'][name]['sha256']:
+        raise ValueError('Video fixture checksum changed: ' + name)
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    result = root / name
+    result.write_bytes(data)
+    return result
 
 
 def codec_matrix(root, ffmpeg='ffmpeg', *, duration=2):
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
+    if ffmpeg == 'ffmpeg' and not shutil.which(ffmpeg):
+        if duration != 2:
+            raise RuntimeError('FFmpeg is required to generate custom-duration video fixtures.')
+        manifest = json.loads((Path(__file__).with_name('fixtures') / 'video/manifest.json').read_text())
+        rows = manifest['codec_matrix']
+        if len(rows) != 13:
+            raise ValueError('The complete recorded codec fixture matrix is required.')
+        return [(row['container'], row['video'], row['audio'], bundled_movie(row['file'], root)) for row in rows]
     fixtures = []
     for container in ('mp4', 'mkv'):
         for video, encoder in (('h264', 'libx264'), ('hevc', 'libx265')):
@@ -102,6 +129,8 @@ def orientation_fixtures(root):
 
 def chapter_movie(root, container='mkv', ffmpeg='ffmpeg'):
     """A short movie with named chapter boundaries, for real decoder/menu tests."""
+    if container == 'mkv' and ffmpeg == 'ffmpeg' and not shutil.which(ffmpeg):
+        return bundled_movie('chapters.mkv', root)
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     metadata = root / 'chapters.ffmeta'
@@ -114,3 +143,36 @@ def chapter_movie(root, container='mkv', ffmpeg='ffmpeg'):
         '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', str(output)],
         check=True, capture_output=True, timeout=30)
     return output
+
+
+def refresh_bundled(ffmpeg='ffmpeg'):
+    """Regenerate the small, committed clips used by hosts without FFmpeg."""
+    if not shutil.which(ffmpeg):
+        raise RuntimeError('FFmpeg is required to regenerate the recorded fixtures.')
+    from logistics_build.build_retention import scratch
+    destination = Path(__file__).with_name('fixtures') / 'video'
+    with scratch() as root:
+        matrix = codec_matrix(root / 'codecs', ffmpeg)
+        chapter = chapter_movie(root / 'chapters', ffmpeg=ffmpeg)
+        speed, black = root / 'speed-with-audio.mkv', root / 'black.mkv'
+        subprocess.run([ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi', '-i',
+            'testsrc2=size=128x72:rate=12:duration=24', '-f', 'lavfi', '-i',
+            'sine=frequency=440:sample_rate=48000:duration=24', '-c:v', 'libx264',
+            '-preset', 'ultrafast', '-threads', '1', '-c:a', 'aac', str(speed)], check=True, timeout=40)
+        subprocess.run([ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi', '-i',
+            'color=c=black:s=320x180:r=15:d=12', '-c:v', 'libx264', '-preset', 'ultrafast',
+            '-threads', '1', str(black)], check=True, timeout=30)
+        destination.mkdir(parents=True, exist_ok=True)
+        manifest = dict(schema=1, source='Generated testsrc2/color patterns and sine tones.',
+            generator='tests.readers.video_fixtures.refresh_bundled',
+            ffmpeg_version=subprocess.check_output([ffmpeg, '-version'], text=True).splitlines()[0],
+            codec_matrix=[dict(container=c, video=v, audio=a, file=p.name) for c, v, a, p in matrix], files={})
+        for path in [*(row[3] for row in matrix), chapter, speed, black]:
+            data = path.read_bytes()
+            (destination / path.name).write_bytes(data)
+            manifest['files'][path.name] = dict(bytes=len(data), sha256=sha256(data).hexdigest())
+        (destination / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+
+
+if __name__ == '__main__':
+    refresh_bundled()

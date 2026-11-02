@@ -230,7 +230,8 @@ def run_ios(source, output, *, cloud=False, model_name='iPad', ui=False, duoctl=
             shutil.copytree(cloud_fixtures(workspace, rclone=rclone), tests / 'video-cloud-fixtures')
             shutil.copyfile(tests / 'video-cloud-fixtures/fixture-tool.json', output / 'fixture-tool.json')
         else:
-            codec_matrix(tests / 'video-fixtures', duration=60 if ui else 30)
+            # Speed changes and pause/resume must not run into fixture EOF.
+            codec_matrix(tests / 'video-fixtures', duration=60)
             if ui:
                 multitrack_movie(tests / 'video-fixtures', tests / 'video-fixtures/h264-aac.mp4')
             if ui:
