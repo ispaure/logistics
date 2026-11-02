@@ -32,6 +32,7 @@ def sync_copy(
                     checks=state.get("checks", 0),
                     listed=state.get("listed", 0),
                     active=state.get("active", 0),
+                    active_files=state.get("active_files", []),
                     attempt=state.get("attempt", 0),
                     max_attempts=state.get("max_attempts", 0),
                     retrying=state.get("retrying", False),
@@ -59,14 +60,22 @@ def sync_copy(
             ),
         )
         result = validate_result("mirror_sync", result)
-        state = mirror_progress(client, run)
-        progress(
-            phase="Sync complete; verifying local copy",
-            files=result,
-            done=state["done"],
-            total=state["total"],
-        )
-        return result
     finally:
         done.set()
         watcher.join()
+
+    try:
+        state = mirror_progress(client, run)
+    except (OSError, ValueError):
+        # Progress is advisory. The sync result and destination checks establish success.
+        state = {}
+    progress(
+        phase="Sync complete; verifying local copy",
+        files=result,
+        total_files=state.get("total_files", 0),
+        checks=state.get("checks", 0),
+        listed=state.get("listed", 0),
+        done=state.get("done", 0),
+        total=state.get("total", 0),
+    )
+    return result

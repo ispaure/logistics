@@ -11,7 +11,6 @@ import unittest
 from unittest.mock import patch
 from mobile.app import LogisticsMobile
 from commonUtils.ui.native.code_input import CodeInput
-from toga.style.pack import COLUMN, ROW
 
 
 class SourceEditorTests(unittest.TestCase):
@@ -34,6 +33,48 @@ class SourceEditorTests(unittest.TestCase):
         self.app.open_document(document.id)
         self.app.show_documents()
         return self.app.editor_view
+
+    def test_search_recounts_only_after_visible_edits_settle_and_cancels_on_close(self):
+        owner = self.open('Search.txt')
+        search = owner.search
+        search.query.value = 'needle'
+        with patch.object(search, 'pattern', wraps=search.pattern) as count:
+            owner.editor.value = 'needle'
+            self.app.loop.run_until_complete(asyncio.sleep(.35))
+            count.assert_not_called()
+        search.toggle()
+        with patch.object(search, 'pattern', wraps=search.pattern) as count:
+            owner.editor.value = 'needle needle'
+            self.assertEqual(count.call_count, 0)
+            self.app.loop.run_until_complete(asyncio.sleep(.35))
+            self.assertEqual(count.call_count, 1)
+            self.assertEqual(search.notice.text, '2 match(es)')
+            search.query.value = 'other'
+            search.toggle()
+            self.app.loop.run_until_complete(asyncio.sleep(.35))
+            self.assertEqual(count.call_count, 1)
+            search.query.value = 'pending'
+            owner.dispose()
+            search.replace()
+            search.replace_all()
+            self.app.loop.run_until_complete(asyncio.sleep(.35))
+            self.assertEqual(count.call_count, 1)
+
+    def test_explicit_find_during_typing_uses_new_query_and_bounds_match_count(self):
+        owner = self.open('Search.txt')
+        search = owner.search
+        owner.editor.value = 'new old new'
+        search.toggle()
+        search.query.value = 'old'
+        search.find()
+        self.assertEqual(search.span, (4, 7))
+        search.query.value = 'new'
+        search.find()
+        self.assertEqual(search.span, (0, 3))
+        owner.editor.value = 'x' * 10000
+        search.query.value = 'x'
+        search.changed()
+        self.assertEqual(search.notice.text, '5000+ match(es)')
 
     def test_markdown_uses_one_formatted_surface_at_phone_and_wide_widths(self):
         owner = self.open('Live.md')

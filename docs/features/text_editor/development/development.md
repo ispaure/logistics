@@ -17,6 +17,70 @@ window, including the initial presentation.
 
 ## Architecture
 
+### Notes Library data views
+
+`notes.document_kind` and `DOCUMENTS` define filename-only routing for Markdown,
+source text and notebook files. Provider listing and content search share this
+supported-type boundary; hidden configuration stays excluded. Explicit links may
+resolve to any supported document, while extensionless note links still mean `.md`.
+Connection scans index supported file paths but read bodies only from Markdown.
+
+Desktop `ui/library_text.py` embeds the shared `CodeEdit`, `SyntaxHighlighter` and
+`SearchPanel` without creating an external editor window or a local-file recovery
+session. `DocumentResource` owns the source baseline and verified provider writes;
+the library retains Save-before-navigation/close and waits for editor/search work.
+Mobile `mobile/library_text.py` owns the common text draft/read/save/retirement
+lifecycle using the existing `CodeInput`; `LibraryMarkdown` adds formatted mode
+through this base. Text and notebook opening use `VaultBrowser.open_embedded`
+for one history, publication and cleanup path. Source-file saves preserve BOM,
+encoding and line endings, and opening JSON/JavaScript never executes it.
+
+`dataview.py` parses complete top-level `dataviewjs` fences, retains their source
+spans and supplies per-render `ViewFiles` reads through `DocumentResource`.
+Requests obey library containment, hidden-configuration exclusion, provider access
+checks, cancellation and byte/request budgets. It does not recursively index files.
+Frontmatter is excluded before parsing script fences. Span accounting uses only
+CR/LF line boundaries so Unicode separators cannot displace generated output.
+The total byte budget is checked before another file is opened. Desktop editing
+retires view execution; failed navigation keeps the currently published view alive.
+Mobile view runs use the document publication token, independently of unsuccessful
+opening attempts, and defer generated-heading jumps until results are published.
+`dataview_script.py` is an independent implementation of the documented JSON/view
+API subset: it runs authored scripts in a disposable browser worker and returns
+escaped Markdown output. No Obsidian or Dataview source is bundled. Trust is
+enabled by default; worker CSP forbids network access and the host exposes no
+write or arbitrary native bridge. Worker messages remain untrusted provider input.
+
+Desktop `ui/dataview.py` adds `NotesMarkdownViewer` only to Notes Library. Its
+off-the-record Chromium page executes the shared runtime; `OperationProgress`
+owns asynchronous file reads. Results render in the existing native Markdown
+browser, retaining search, speech and heading controls. Original editor text and
+save baselines never receive generated output. Close waits for active reads
+before releasing the provider, and stale generations cannot publish results.
+
+Mobile `mobile/dataview.py` uses the attached reading WebView to execute that
+same worker. `VaultBrowser` polls bounded read requests, validates the generation
+and re-renders results through the existing Markdown preview. Worker permission
+is removed from the completed page. Navigation, editing and disposal retire the
+run. The worker deadline is 30 seconds; hosts additionally stop waiting after
+35 seconds. Data reloads on reopening a note; there is no live file watcher.
+
+`test_text_editor_dataview.py` covers real desktop rendering and the mobile preview
+CSP in Chromium, nested view files, JSON, errors, literal output, source preservation,
+refresh and provider limits. Mobile `test_notes_library.py` checks result publication
+and stale navigation. `document_storage_tools --probe notes-dataview` runs
+`dataview_probe.py` on disposable iOS/Android devices to check native worker/JSON
+execution, nested views, tables/lists, editing/source preservation, refresh and
+visible errors. Raw reports/screenshots stay under ignored test results.
+
+On November 2, 2026, the focused probe passed on a disposable iPhone simulator
+and Android phone emulator, including extensionless JSON/view paths, embedded
+JSON saving and JavaScript source opening, failed navigation and generated-heading
+jumps. The Markdown authoring regressions also passed after the shared draft
+refactor. Both QA apps
+and disposable devices were removed afterward. This does not certify physical
+devices, fold layouts or compatibility with APIs outside the documented subset.
+
 | Module | Responsibility |
 | --- | --- |
 | `contributions.py`, `ui/page.py` | Lazy feature registration, entry point and browser integration |
@@ -83,6 +147,33 @@ same document-owned WebView. Host and native document acceptance cover repeated
 presentation without a second navigation, with the original render deadline.
 
 ## Notes document ownership
+
+Direct note links probe their contained provider path without listing sibling
+files. Bare wiki names first try the current folder and library root; unresolved
+names still require a bounded vault scan and duplicate matches are rejected.
+LocalCrypt matches the deterministic encrypted basename without decoding unrelated
+file names. On POSIX hosts it walks ciphertext through directory descriptors,
+avoiding repeated ancestor checks and decoding only candidate full paths. Hidden
+candidate paths are excluded after decoding. Deep or oversized raw trees fall back
+to the bounded visible-tree scan, which batches directory-name decoding across
+each breadth-first level and skips hidden folders. Neither path retains a lookup
+index. Root containment, linked/special
+file rejection, cancellation, credential checks and the 10,000-entry limit remain
+enforced. Ordinary local global lookups reuse an in-memory, 10,000-entry folder-name cache. Validated local
+directory inode and nanosecond modification/change times invalidate changed
+folders, including changes made outside Logistics. Providers without a validated
+physical directory location keep uncached lookup. No note bodies or persistent
+plaintext index are added. Close and credential revocation retire the cache;
+late workers cannot repopulate it. Mobile Notes Library navigation history and
+scroll positions also remain in memory and clear on disposal; the library's
+transient workspace session does not enter persistent Recent history.
+The native `notes_audit_probe` checks direct/cold/warm lookups and actual WebView
+publication with synthetic ordinary and LocalCrypt libraries; its LocalCrypt
+checks also reject plaintext workspace/Recent note names and verify lock cleanup.
+For explicit on-device diagnosis, a `notes-open-timing.enabled` marker in the app
+cache enables `notes-open-timing.json` with numeric stage durations and cache counts
+only. It records no filenames, source text, credentials or error messages. Remove
+both files after collecting measurements; disabled libraries emit no timing files.
 
 The desktop Notes library clears `viewer.document_state` when retiring a private
 draft, then clears the reading/source/formatted surfaces. Saved byte and rich
@@ -178,8 +269,9 @@ Run `test_text_editor*.py` for feature lifecycle, commands, diff, split views an
 recovery failure paths. The reusable `test_code*.py`, `test_session_store.py`,
 `test_text_files.py` and `test_workspace.py` suites cover the shared components.
 `test_document_workspace.py`, `test_main_window.py` and
-`test_application_instance.py` cover surrounding Logistics integration. These
-headless Qt checks run on macOS, Windows, and Fedora 43 in CI; native
+`test_launch.py` cover surrounding Logistics integration. These
+headless Qt checks run on macOS, Windows, and Fedora in CI, using the environment
+versions in `test-environments.json`; native
 desktop interaction still benefits from manual validation. New UI surfaces have also been rendered and inspected in both themes.
 
 ## Merge external changes
@@ -507,6 +599,30 @@ retained browser. It refreshes the saved note and restores its reading position.
 Creation uses the provider’s exclusive create operation; remote libraries reject
 all library entry, including direct construction, before any indexing.
 
+Notes Library typeahead uses the shared 300 ms quiet period on mobile and
+desktop. Mobile content traversal, result sorting, and formatted Markdown
+preparation run on workers. Native result rows are reused and reconciled in
+cooperative batches; progress delivery keeps only the latest pending snapshot.
+The Files and Calendar tabs mount only the selected content subtree.
+`notes_audit_probe.py` measures synthetic search latency, main-loop stalls, and
+Markdown opening on native devices without reading the user's notes. Its QA
+package is isolated and removed after evidence collection. The Notes Library
+probe also checks actual software-keyboard geometry in Duo laptop mode when
+launched with its managed partial-fold simulator profile. Markdown sizes its
+writing surface to the visual viewport as well as the native view: WebKit can
+retain the full view height while a Duo keyboard overlays its lower half.
+Formatting stays above that keyboard; the lower half is used when it has room.
+Fold updates arriving during a WebView update are replayed with the latest geometry.
+Formatted/Source mode switches also retain a request generation so a late worker
+cannot override a newer mode choice or publish an obsolete error. Search progress
+suppression compares snapshots within the current query, rather than comparing
+its match count with a previous query's results. Search entry immediately
+cancels unfinished native row reconciliation. A scan with no early matches shows
+its busy status without rebuilding the retained results. Selecting Calendar
+pauses file search and row rendering; returning to Files resumes the latest query.
+Interrupted row cleanup removes retired rows from the cache before releasing
+file actions, so a later render cannot reuse a row with detached gestures.
+
 Focused checks include the Markdown editing/font/image/search/speech suites,
 `test_provider_markdown.py`, `test_markdown_access.py`,
 `test_markdown_library_workflow.py`, Notes Library/Obsidian, editor picker,
@@ -612,8 +728,28 @@ commonUtils owns Documentation Library (`ui.markdown.wiki.WikiPanel` and
 sidebar. Alt/Option enables document editing without enabling tree mutations.
 Logistics owns filename-based notes, provider mutations and Obsidian-folder
 choices under `features/text_editor/`. Desktop uses `ui/notes_offer.py` with a
-cancellable probe and a nonmodal banner; mobile reuses the published immediate
-folder listing through `mobile/obsidian.offer_vault`. Refresh and native back-stack
+cancellable probe and a window-modal choice before directory publication. Both
+filesystem and provider browsers use commonUtils' `directory_gate` continuation
+hook; initial provider listings are gated before model publication too. Tree
+expansion and column selection retain their original continuation. Dismissal,
+close and superseding requests cannot resume an old choice, and provider access
+is rechecked for either action. History positions change only when a directory
+is published. Mobile checks the immediate folder
+listing through `mobile/obsidian.offer_vault` before publishing browser contents
+or presenting a newly constructed browser. The existing screen stays visible
+until the choice completes; choosing Notes Library bypasses browser publication.
+Pending listings are revalidated after the dialog so navigation away or a
+superseding request cannot publish the folder. Mobile also captures navigation
+generation before reading and restores browser location controls to their last
+published folder when the request is abandoned or opens a library instead.
+Repeated requests for the same folder await one pending choice; only the newest
+listing may publish or restore its controls. The requested location is captured
+before reading so a previous prompt cannot open a superseded folder. Dismissing
+the native prompt is distinct from choosing **Browse Files** and leaves the
+previous folder visible; an abandoned choice does not count as a completed visit.
+Cancelling the waiting task also dismisses the native Android/iOS alert, allowing
+a later request to present a fresh choice without leaving an orphaned dialog.
+Refresh and native back-stack
 restoration do not repeat the mobile choice. Stale navigation and credential
 responses cannot open a library.
 
@@ -637,3 +773,80 @@ explicit path. Desktop and mobile use the same resolver, including LocalCrypt's
 decoded provider paths. Mobile's shared renderer also recognizes bare `[[Tech]]`
 links in formatted headings. Root-vault offers are covered by actual desktop
 local/LocalCrypt browsers and mobile host tests; these are not device QA.
+
+## Notes Library platform parity
+
+Desktop `ui/library_panels.py` supplies recursive library search through
+commonUtils' provider search engine, Files/Calendar navigation, connection scans,
+and copy/delete context actions through the same `library_files` and
+`notes_links` services as mobile. Search/calendar and connection scans have
+independently cancellable workers, generation-checked snapshots and paged search
+results. Closing waits for all workers before releasing the provider. Folder landing notes and
+session reading positions are retained independently of the viewer's history.
+Existing Markdown opens in reading mode on both platforms; new Markdown starts
+editing. Desktop drag/drop and mobile move forms remain platform-specific controls.
+
+Mobile `library_tools.py` adds heading navigation, properties and raw YAML forms;
+`library_document.py` hosts commonUtils' `EditorSearch` over its native Source
+input. YAML changes use the shared preservation helpers and reject stale drafts.
+Retirement clears retained search inputs and form content. Contents reads actual
+rendered heading IDs in preview and parses the current draft for Source jumps.
+
+`test_notes_library_desktop.py` covers recursive modes/order, hidden configuration,
+calendar duplicates/confirmation, connection navigation, copy collisions, dirty
+delete cancellation, folder landings, positions and worker-close lifetime.
+`test_markdown_library_workflow.py` covers literal/Unicode replacement, saving,
+heading jumps, YAML/body preservation, stale tools and retirement. The native
+Notes Library probe additionally exercises actual text selection, Source search,
+YAML application and saved bytes on disposable devices. Evidence belongs under
+ignored test results, and host passes alone do not certify native interactions.
+
+The November 2 parity pass passed the native Notes Library probe on an iPhone
+simulator and a disposable Android phone emulator, including Source selection
+after a non-BMP character, literal replacement, YAML application and save,
+formatted keyboard geometry, rotation and drawing navigation. QA apps were removed
+after evidence collection. This pass does not certify physical devices or fold
+and tablet layouts for the newly added tools.
+
+The follow-up parity review covers delayed desktop Files callbacks after switching
+to Calendar, hidden calendar refreshes, saved content/connection refresh, and
+discarded notebook resources when opening finishes after close. Failed mutations
+resume cancelled background scans so a collision cannot leave a panel loading.
+Mobile tool entry requires a completed mode switch; failed input snapshots and superseded Source
+requests leave the current draft and mode intact. Property names are fixed while
+editing an existing row, and Add Property refuses existing names. Mobile forms wrap
+guidance/errors and shorten row captions while retaining full accessible labels.
+Focused tests exercise these failure/race paths; the native Notes probe also
+exercises property editing, duplicate-name rejection and recovery after a failed
+Source switch.
+
+Desktop Save-before-navigation and Save-before-mutation use one deferred action
+for Markdown and drawings. Completion resumes it only after a successful save;
+failure, close and revocation retire it. A close request during a save takes
+priority over navigation without prompting for that save again. Failed drawing
+close requests do not survive into later manual saves. Deletion on both platforms
+preserves the current history occurrence, including repeated visits to the same
+note; retiring the current document disables parent navigation. Mobile folder
+creation uses directory metadata from loaded/search rows, so an unopened selected
+folder remains the destination without a filesystem probe. Desktop save/close
+and platform history/folder regressions cover these workflows.
+
+Mobile Markdown saving flushes native input again after publication. Edits entered
+while the write runs remain dirty and prevent navigation; a later flush failure
+retains the published baseline for retry. Successful writes, copies and deletes
+refresh an active library query and invalidate connections. An already-open Links
+panel refreshes asynchronously; dismissing it cancels the queued refresh instead
+of reopening the panel. Deletion removes stale search rows before rescanning.
+Host workflows cover slow-write input, retry baselines, saved connections and
+copy/delete search results. The native Notes probe additionally leaves actual
+WebView text ahead of Python during a blocked write and verifies both saved bytes
+and the retained newer draft before a second save.
+Mobile Markdown naming also retains either supported `.md` or `.markdown`
+extension, including mixed case, matching desktop creation.
+
+Formatted editor HTML publishes its bridge identity after script initialization.
+Native flush reads a snapshot only when that identity matches the current Python
+editor generation. An old page retained during asynchronous replacement therefore
+cannot submit patches against the new source blocks. The production-HTML DOM
+suite verifies that a mismatched page does not even invoke its snapshot function;
+native probes wait for the matching identity before testing queued input.

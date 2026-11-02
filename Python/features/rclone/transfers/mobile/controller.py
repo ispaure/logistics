@@ -63,6 +63,14 @@ class TransferController(MirrorUI):
         self._transfer_cancel = None
         self._cancel_transfer_review = None
 
+    def dispose(self):
+        for name in ('_transfer_review_view', '_progress_surface', '_transfer_setup_surface'):
+            surface = getattr(self, name, None)
+            if surface is not None:
+                surface.dispose()
+        if self._cancel_transfer_review is not None:
+            self._cancel_transfer_review()
+
     transfer_busy = StateAttribute("state", "busy")
     transfer_notification = StateAttribute("state", "notification")
     transfer_complete = StateAttribute("state", "complete")
@@ -101,6 +109,7 @@ class TransferController(MirrorUI):
     selected_cloud_remote = HostAttribute('selected_cloud_remote')
     set_cloud_busy = HostAttribute('set_cloud_busy')
     show_cloud = HostAttribute('show_cloud')
+    show_files = HostAttribute('show_files')
     show_local_location = HostAttribute('show_local_location')
     show_locations = HostAttribute('show_locations')
     show_view = HostAttribute('show_view')

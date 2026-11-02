@@ -11,10 +11,8 @@ def controls(app, box):
     choice = toga.Switch('Skip session password on trusted Wi-Fi',
         value=app.preferences.values['session_trusted_wifi'] == 'true', style=Pack(height=48))
     box.add(switch_row(app, 'Skip session password on trusted Wi-Fi', choice,
-        'Skip repeat password prompts after sleep or switching apps on listed Wi-Fi networks, '
-        'for already-unlocked session-only credentials. Off by default. Passwords are never saved. '
-        'App restart and manual session locking still require authentication. '
-        'Wi-Fi names can be duplicated; this is a convenience setting.'))
+        'Keep session-only credentials unlocked after sleep or switching apps on trusted Wi-Fi. Restarting the app or locking the session still requires your password. '
+        'Network names can be copied, so trust only private networks.'))
     manage = page_button('Trusted Wi-Fi networks…', enabled=choice.value,
         on_press=lambda widget, **kwargs: show(app), style=Pack(height=48))
     management = toga.Box(style=Pack(direction=COLUMN))
@@ -55,9 +53,8 @@ def controls(app, box):
 def show(app):
     box = toga.Box(style=Pack(direction=COLUMN, margin=16))
     box.add(SettingsLabel('Trusted Wi-Fi networks', style=Pack(font_size=22)))
-    box.add(SettingsLabel('Only listed network names skip repeat prompts. Public or unlisted Wi-Fi, '
-        'cellular, and unavailable Wi-Fi information require your session password. '
-        'The list is saved on this device. Names match exactly, including case and spaces.'))
+    box.add(SettingsLabel('Add networks where your unlocked session can stay unlocked. '
+        'Other networks and cellular still require your session password. Names must match exactly, including case and spaces.'))
     status = SettingsLabel('')
     current = SettingsLabel('Current Wi-Fi: identification not enabled.')
     entry = toga.TextInput(placeholder='Wi-Fi network name (SSID)', style=Pack(height=48))

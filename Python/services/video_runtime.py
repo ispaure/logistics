@@ -13,6 +13,7 @@ import zipfile
 
 from commonUtils.runtime.streams.downloads import DownloadSpec, provision
 from commonUtils.persistence.locking import file_lock
+from services.license_inventory import is_notice
 
 
 PACKAGES = {
@@ -32,7 +33,7 @@ def extract(archive, destination, prefix):
         with zipfile.ZipFile(archive) as package:
             for item in package.infolist():
                 relative = item.filename[len(prefix):] if item.filename.startswith(prefix) else (
-                    'notices/' + Path(item.filename).name if item.filename.lower().endswith(('.txt', '.nuspec', '.md')) else '')
+                    'notices/' + item.filename if is_notice(item.filename) or item.filename.lower().endswith(('.txt', '.nuspec', '.md')) else '')
                 if not relative or item.is_dir():
                     continue
                 target = destination / relative

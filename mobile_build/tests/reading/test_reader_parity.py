@@ -591,9 +591,7 @@ class SpeechAndLibraryUITests(unittest.TestCase):
                     [button.text for button in catalog.library_row_buttons], []
                 )
                 app.show_cloud()
-                await app.show_files(local_root=True)
-                app.file_location.value = "Comics"
-                await app.browse_files()
+                await app.show_files(location=("Local files", "Comics"))
                 app.file_selection.value = "Select an item…"
                 await app.edit_local_comic_folder()
                 view = app.local_comic_batch_view

@@ -166,6 +166,12 @@ recovery, publication rollback and retained partial output without chat widgets.
 timeouts, stop/close, failures, profiles and recovery. Real LM Studio and native
 Windows/Linux behavior require separate smoke checks.
 
+Run the desktop integration checks with `python3 dev.py test desktop test_lm_ui.py`.
+They need localhost socket access but no model server or API key. Each case owns
+its HTTP server and shuts it down after retiring the page's requests. A short
+server polling interval avoids repeated teardown delays while preserving real
+networking, cancellation and recovery checks.
+
 ## Code mode and optional direct edits
 
 Additive `mode`, `project_id` and boolean `allow_edits` fields preserve legacy version-one conversations.

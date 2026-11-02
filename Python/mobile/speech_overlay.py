@@ -39,11 +39,13 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False):
+    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False):
         self.leading = leading
         self.full_height = full_height or leading
         self.label = label
         self.passthrough_controls = passthrough_controls
+        self.dim = dim
+        self.backdrop = None
         self.owner = owner
         self.anchor = anchor
         self.panel = panel
@@ -75,6 +77,13 @@ class SpeechOverlay:
         native.layer.shadowOpacity = .25
         native.layer.shadowRadius = 8
         native.accessibilityLabel = self.label or ('Chapters' if self.leading else 'Read aloud controls')
+        if self.dim:
+            self.backdrop = ObjCClass('UIView').alloc().initWithFrame(window.bounds)
+            from .screen_privacy import native_value
+            self.backdrop.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor').colorWithAlphaComponent(.35)
+            self.backdrop.autoresizingMask = 2 | 16
+            window.addSubview(self.backdrop)
+            native.accessibilityViewIsModal = True
 
         self.last_size = None
 
@@ -104,7 +113,7 @@ class SpeechOverlay:
                             right = min(right, x)
                         elif x + width <= (left + right) / 2:
                             left = max(left, x + width)
-            width = max(1, min(320, right - left - 24))
+            width = max(1, min(320, right - left - (56 if self.dim else 24)))
             height = (max(1, bottom - top - 12)
                       if self.full_height else self.panel.overlay_height)
             x = left + 12 if self.leading else right - width - 12
@@ -145,7 +154,7 @@ class SpeechOverlay:
         self.container.init_container(root)
         width = min(self.container.scale_in(320),
                     (owner._impl.native.getRootView().getWidth() if self.full_height else
-                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(24))
+                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(56 if self.dim else 24))
         height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
                   if self.full_height else self.container.scale_in(self.panel.overlay_height))
         self.container.set_content(self.panel._impl)
@@ -170,6 +179,13 @@ class SpeechOverlay:
             self.popup.setAnimationStyle(0)  # Host owns drawer motion and E Ink policy.
         self.popup.showAtLocation(owner._impl.native, Gravity.TOP | (Gravity.LEFT if self.leading else Gravity.END),
                                   self.container.scale_in(12), self.container.scale_in(96))
+        if self.dim:
+            from android.view import WindowManager
+            decor = root.getRootView()
+            params = decor.getLayoutParams()
+            params.flags |= WindowManager.LayoutParams.FLAG_DIM_BEHIND
+            params.dimAmount = .35
+            context.getSystemService('window').updateViewLayout(decor, params)
         self.panel.refresh()
 
         def reposition():
@@ -177,7 +193,7 @@ class SpeechOverlay:
                 return
             width = min(self.container.scale_in(320),
                     (owner._impl.native.getRootView().getWidth() if self.full_height else
-                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(24))
+                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(56 if self.dim else 24))
             height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
                       if self.full_height else self.container.scale_in(self.panel.overlay_height))
             self.container.resize_content(width, height)
@@ -186,6 +202,9 @@ class SpeechOverlay:
 
     def close(self):
         self.reposition = lambda: None
+        if self.backdrop is not None:
+            self.backdrop.removeFromSuperview()
+            self.backdrop = None
         if self.outside_tap is not None:
             self.window.removeGestureRecognizer(self.outside_tap)
             self.outside_tap.delegate = None

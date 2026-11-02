@@ -209,17 +209,20 @@ of leaving only a selection message. Workspaces retains name-based groups but
 does not promote the current remote listing's subfolders into its entry tree.
 Explicit Workspaces locations preserve their folder when switching remotes.
 
-The browser exposes no standalone download/copy actions for files or folders on
-any platform. Retired Python copy/folder-download helpers and native `read`,
-`crypt_read` and `crypt_fetch` endpoints are removed. Managed Pull/Push remains
-the only remote-to-local transfer workflow. Existing offline-copy catalogs retain
-read/edit/export compatibility; their tests seed pre-existing records directly.
+Desktop browser actions remain preview-only. Mobile also offers an explicit
+selected-item Pull through `mobile/remote_downloads.py`; see
+[selected downloads](development.md#selected-remote-item-downloads-on-mobile).
+Opening a preview does not transfer files to local storage. Retired Python
+copy/folder-download helpers and native `read`, `crypt_read` and `crypt_fetch`
+endpoints remain removed. Existing offline-copy catalogs retain read/edit/export
+compatibility; their tests seed pre-existing records directly.
 
 Validation uses synthetic local/alias/crypt CLI backends, memory-backed native Go
 remotes, and Toga dummy/Qt offscreen UI tests. No user accounts are accessed.
 `test_remote_browser.py` covers account isolation, range/CBZ reads, nested encrypted navigation, preview-only actions, revocation, tab cloning and current-folder filtering.
 Mobile `test_remote_readers.py` covers reader presentation, mutation guards,
-manual-copy dialogs, cache revocation and absence of standalone downloads. Native
+manual-copy dialogs, cache revocation and absence of retired copy APIs.
+`test_remote_downloads.py` covers the current explicit selected-item Pull. Native
 `remote_document_test.go` checks ordinary/crypt ranges, archive members, identity,
 revisions, bounds and cancellation. Live-service performance and physical-device
 behavior remain outside this local validation.
@@ -266,11 +269,12 @@ and LocalCrypt readers retain their editing controls. Regression checks inspect
 both the main reader and overflow tools for text, images and comics; the native
 probe repeats the check for EPUB too on all three mobile targets.
 
-The audit found no standalone remote file/folder download or copy entry points.
+At that reviewed snapshot, the audit found no standalone remote file/folder download or copy entry points.
 The remaining offline catalogs only read existing records; their creation/fetch
 helpers and the retired native endpoints are absent. Managed Pull/Push, local
 file operations and existing offline-file export remain intentional. Current
 reports and the validation manifest above reflect the reviewed source snapshot.
+The later selected-item mobile Pull is documented above and has its own validation scope.
 
 
 A second audit also found disabled desktop EPUB/comic metadata actions. These

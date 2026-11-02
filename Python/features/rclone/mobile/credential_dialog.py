@@ -11,7 +11,7 @@ class CredentialStorageDialog(Dialog):
     def __init__(self, package, *, saved=False, content_factory=None):
         self.package, self.saved = package, saved
         self.content_factory = content_factory
-        self.title = 'Unlock credential ZIP'
+        self.title = 'Keep credentials'
         self.message = (f'How should Logistics keep credentials from {package}?\n\n'
                         f'{SESSION_TITLE}\n{SESSION_DESCRIPTION}\n\n'
                         f'{PERSISTENT_TITLE}\n{PERSISTENT_DESCRIPTION}\n'

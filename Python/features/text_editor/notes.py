@@ -1,11 +1,21 @@
 """Bounded provider-backed Notes Libraries with on-demand note-link lookup."""
 import posixpath
 from pathlib import PurePosixPath
+from threading import RLock
 from services.documents.storage import DocumentResource
 from .access import can_write
 
 MARKDOWN = {'.md', '.markdown'}
+TEXT = {'.json', '.jsonc', '.js', '.mjs', '.cjs', '.css', '.txt', '.csv',
+        '.yaml', '.yml', '.toml', '.ini', '.xml', '.html', '.py', '.ts'}
+DOCUMENTS = MARKDOWN | TEXT | {'.rmdoc'}
 MAX_NOTE = 2 * 1024 * 1024
+
+
+def document_kind(path):
+    """The library's shared, filename-only document routing contract."""
+    suffix = PurePosixPath(path).suffix.lower()
+    return 'markdown' if suffix in MARKDOWN else 'text' if suffix in TEXT else 'notebook' if suffix == '.rmdoc' else None
 
 
 def operation(provider, cancelled):
@@ -34,6 +44,45 @@ class NotesLibrary:
         if not local_library(provider):
             raise ValueError('Notes Library requires a local copy. Download or sync this folder first.')
         self.provider, self.root = provider, provider.relative(root)
+        self._link_folders = {}
+        self._link_lock = RLock()
+        self._links_closed = False
+
+    def close(self):
+        """Retire in-memory names, including work completing after revocation."""
+        with self._link_lock:
+            self._links_closed = True
+            self._link_folders.clear()
+
+    def _link_listing(self, folder, cancelled):
+        """Reuse names only while the validated local directory is unchanged."""
+        from commonUtils.runtime.operations import check_cancelled
+        check_cancelled(lambda: self._links_closed or cancelled())
+        locate = getattr(self.provider, 'transfer_location', None)
+        if not callable(locate):
+            return self.provider.list(folder, cancelled=cancelled)
+
+        def revision():
+            info = locate(folder, directory=True).stat()
+            return info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+
+        before = revision()
+        with self._link_lock:
+            check_cancelled(lambda: self._links_closed or cancelled())
+            cached = self._link_folders.get(folder)
+        if cached is not None and cached[0] == before:
+            return cached[1]
+        rows = self.provider.list(folder, cancelled=cancelled)
+        check_cancelled(cancelled)
+        # Do not keep stale size, content revision or modification metadata.
+        names = [dict(name=row['name'], path=row['path'], directory=row['directory']) for row in rows]
+        if revision() == before and len(names) <= 10000:
+            with self._link_lock:
+                check_cancelled(lambda: self._links_closed or cancelled())
+                if sum(len(value[1]) for value in self._link_folders.values()) + len(names) > 10000:
+                    self._link_folders.clear()
+                self._link_folders[folder] = before, names
+        return names
 
     @property
     def writable(self):
@@ -61,7 +110,7 @@ class NotesLibrary:
         if len(rows) > 10000:
             raise ValueError('Folder exceeds the 10,000-entry limit.')
         return sorted((row for row in rows if not row['name'].startswith('.')
-            and (row['directory'] or PurePosixPath(row['name']).suffix.lower() in MARKDOWN)),
+            and (row['directory'] or PurePosixPath(row['name']).suffix.lower() in DOCUMENTS)),
             key=lambda row: (not row['directory'], row['name'].casefold()))
 
     def entry(self, path):
@@ -93,15 +142,31 @@ class NotesLibrary:
         data.decode('utf-8-sig')
         return data
 
-    def create(self, name, parent=None, *, cancelled=lambda: False):
+    def read_text(self, path, *, cancelled=lambda: False):
+        """Bounded content search for the same source types shown in Files."""
+        from commonUtils.persistence.text import decode_bytes
+        path = self.contained(path)
+        if document_kind(path) not in ('markdown', 'text'):
+            return ''
+        with DocumentResource(self.provider, path, max_bytes=MAX_NOTE, independent=False) as resource:
+            return decode_bytes(resource.read(cancelled=cancelled)).text
+
+    def create(self, name, parent=None, *, extension='md', cancelled=lambda: False):
         from .names import document_name
         if not self.writable:
             raise ValueError('This Notes Library is read-only.')
         name = document_name(name)
-        if PurePosixPath(name).suffix.lower() not in MARKDOWN:
-            name += '.md'
+        if extension not in ('md', 'rmdoc'):
+            raise ValueError('Choose Markdown or Remarkable Document.')
+        suffixes = MARKDOWN if extension == 'md' else {'.rmdoc'}
+        if PurePosixPath(name).suffix.lower() not in suffixes:
+            name += '.' + extension
         path = self.contained(posixpath.join(self.root if parent is None else parent, name))
-        DocumentResource.publish(self.provider, path, b'', max_bytes=MAX_NOTE, cancelled=cancelled)
+        data, limit = b'', MAX_NOTE
+        if extension == 'rmdoc':
+            from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+            data, limit = Notebook.new(PurePosixPath(name).stem).to_bytes(), MAX_ARCHIVE
+        DocumentResource.publish(self.provider, path, data, max_bytes=limit, cancelled=cancelled)
         return path
 
     def supports(self, action):
@@ -127,9 +192,9 @@ class NotesLibrary:
             raise ValueError('Choose a different destination outside the selected folder.')
         with operation(self.provider, cancelled):
             entry = self.entry(source)
-            if not entry['directory'] and (PurePosixPath(source).suffix.lower() not in MARKDOWN
-                                           or PurePosixPath(destination).suffix.lower() not in MARKDOWN):
-                raise ValueError('Keep a Markdown filename extension.')
+            if not entry['directory'] and (PurePosixPath(source).suffix.lower() not in DOCUMENTS
+                                           or PurePosixPath(destination).suffix.lower() != PurePosixPath(source).suffix.lower()):
+                raise ValueError('Keep the document filename extension.')
             from services.documents.storage import move_document_resource
             move_document_resource(self.provider, source, destination, cancelled=cancelled)
         return destination
@@ -144,6 +209,9 @@ class NotesLibrary:
     def link(self, current, target, *, cancelled=lambda: False):
         from urllib.parse import unquote, urlsplit
         from commonUtils.runtime.operations import check_cancelled
+        requested_cancelled = cancelled
+        cancelled = lambda: self._links_closed or requested_cancelled()
+        check_cancelled(cancelled)
         link = urlsplit(target)
         if link.scheme or link.netloc or link.query or link.path.startswith(('/', '\\')) or '\\' in link.path:
             raise ValueError('Choose a note inside this Notes Library.')
@@ -154,8 +222,8 @@ class NotesLibrary:
         if not PurePosixPath(name).suffix:
             name += '.md'
         path = self.contained(posixpath.normpath(posixpath.join(posixpath.dirname(current), name)))
-        if PurePosixPath(path).suffix.lower() not in MARKDOWN:
-            raise ValueError('Choose a Markdown note.')
+        if PurePosixPath(path).suffix.lower() not in DOCUMENTS:
+            raise ValueError('Choose a supported library document.')
         with operation(self.provider, cancelled):
             listings = {}
             count = 0
@@ -163,7 +231,7 @@ class NotesLibrary:
                 nonlocal count
                 check_cancelled(cancelled)
                 if folder not in listings:
-                    rows = self.provider.list(folder, cancelled=cancelled)
+                    rows = self._link_listing(folder, cancelled)
                     count += len(rows)
                     if count > 10000:
                         raise ValueError('Note lookup exceeds the 10,000-entry limit. Use an explicit note path.')
@@ -171,18 +239,14 @@ class NotesLibrary:
                 return listings[folder]
 
             def exists(candidate):
-                folder = self.root
-                parts = PurePosixPath(candidate).relative_to(self.root or '.').parts
-                for index, part in enumerate(parts):
-                    row = next((row for row in listing(folder) if row['name'] == part), None)
-                    if row is None:
-                        return False
-                    if index == len(parts) - 1:
-                        return not row['directory']
-                    if not row['directory']:
-                        return False
-                    folder = self.contained(row['path'])
-                return False
+                # A rooted provider validates the whole path itself. Listing
+                # every ancestor makes a direct link proportional to unrelated
+                # siblings (and decrypts their names for encrypted providers).
+                check_cancelled(cancelled)
+                try:
+                    return not self.entry(candidate)['directory']
+                except (FileNotFoundError, NotADirectoryError):
+                    return False
 
             candidates = [path]
             # Explicit ../ paths retain their relative meaning. Other wiki paths
@@ -194,6 +258,15 @@ class NotesLibrary:
                 if exists(candidate):
                     return candidate, link.fragment
             if any(part in {'.', '..'} for part in name.split('/')):
+                raise ValueError('Note not found in this Notes Library.')
+            find = getattr(self.provider, 'find_note_paths', None)
+            if callable(find) and PurePosixPath(name).suffix.lower() in MARKDOWN:
+                matches = [self.contained(match) for match in find(name, self.root, cancelled=cancelled)]
+                check_cancelled(cancelled)
+                if len(matches) == 1:
+                    return matches[0], link.fragment
+                if matches:
+                    raise ValueError('Several notes match this link. Use a path from the Notes Library root.')
                 raise ValueError('Note not found in this Notes Library.')
             matches, pending, seen = [], [self.root], set()
             while pending:

@@ -1,6 +1,7 @@
 """Transfer execution state, worker retirement and progress delivery without widgets."""
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from time import monotonic
 from threading import Event, Lock
 from typing import Protocol
 from .models import TransferOutcome
@@ -9,7 +10,7 @@ from .models import TransferOutcome
 def coalesced_progress(loop, publish, *, interval=1.0):
     """Keep the latest snapshot and leave UI time between native renders."""
     lock = Lock()
-    latest, scheduled = None, False
+    latest, last, scheduled = None, None, False
     next_render = 0
 
     def schedule():
@@ -36,14 +37,18 @@ def coalesced_progress(loop, publish, *, interval=1.0):
                 loop.call_later(interval, drain)
 
     def progress(**values):
-        nonlocal latest, scheduled
+        nonlocal latest, last, scheduled
         with lock:
-            latest = values
+            latest = last = values
             if scheduled:
                 return
             scheduled = True
         loop.call_soon_threadsafe(schedule)
 
+    def snapshot():
+        with lock:
+            return dict(last) if last is not None else None
+    progress.snapshot = snapshot
     return progress
 
 
@@ -88,6 +93,12 @@ class TransferState:
     message: str = 'No transfer is running.'
     endpoints: tuple[str, str] | None = None
     cancel: Event | None = None
+    operation: str = 'pull'
+    result: str = 'idle'
+    started_at: float = 0
+    finished_at: float = 0
+    metrics: dict = field(default_factory=dict)
+    display_revoked: bool = False
 
 
 class TransferPresentation(Protocol):
@@ -130,6 +141,10 @@ class TransferExecution:
         state.endpoints = (source, destination) if source is not None and destination is not None else None
         state.busy, state.notification, state.complete = True, True, False
         state.percentage = None
+        state.operation, state.result = operation, 'running'
+        state.started_at, state.finished_at = monotonic(), 0
+        state.metrics = {}
+        state.display_revoked = False
         state.cancel = cancel = Event()
         state.message = 'Preparing transfer…'
         state.epoch += 1
@@ -140,22 +155,32 @@ class TransferExecution:
             worker = asyncio.create_task(asyncio.to_thread(work, client, cancel.is_set, progress))
             result = await wait_for_transfer(worker, cancel, client)
             if not view.current(client, generation):
+                state.result = 'failed'
                 state.message = 'Sync stopped because the connection changed; completed destination changes remain.'
                 return False
+            final_progress = progress.snapshot()
+            if final_progress is not None:
+                view.progress(epoch, final_progress)
             outcome = TransferOutcome.from_result(operation, result)
             complete = outcome.status != 'conflict'
             prefix = '100% · ' if complete else ''
             message = prefix + completion_message(operation, outcome)
             state.message = message
+            if outcome.files is not None:
+                state.metrics['files'] = outcome.files
             state.complete = complete
+            state.result = 'complete' if complete else 'conflict'
             return complete
         except asyncio.CancelledError:
+            state.result = 'cancelled'
             state.message = 'Sync cancelled; completed destination changes remain.'
             raise
         except Exception as error:
+            state.result = 'cancelled' if cancel.is_set() else 'failed'
             state.message = 'Sync stopped; completed destination changes remain. ' + str(error)[:350]
             return False
         finally:
+            state.finished_at = monotonic()
             state.epoch += 1
             state.cancel = None
             state.busy = False
@@ -168,6 +193,9 @@ class TransferProgress:
     percentage: float | None
     done: int
     total: int
+    phase: str
+    files: int
+    total_files: int
 
 
 def transfer_progress(values):
@@ -199,4 +227,4 @@ def transfer_progress(values):
         message += f' · {done / 1_000_000:,.2f} / {total / 1_000_000:,.2f} MB (known so far)'
     elif done > 0:
         message += f' · {done / 1_000_000:,.2f} MB transferred'
-    return TransferProgress(message, percentage, done, total)
+    return TransferProgress(message, percentage, done, total, phase, files, total_files)

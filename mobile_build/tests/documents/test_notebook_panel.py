@@ -42,6 +42,27 @@ class NotebookPanelTests(unittest.TestCase):
         panel.dispose()
         self.assertNotIn(gate, self.app.protection.retained_gates())
 
+    def test_recovery_notebook_title_follows_rename_and_close(self):
+        self.app.loop.run_until_complete(open_notebook(self.app))
+        panel = self.app.notebook_panel
+        self.app.loop.run_until_complete(panel.perform({'op': 'rename', 'name': 'Field notes'}))
+        self.assertEqual(panel.view._native_reader_title(), 'Field notes')
+        self.assertEqual(panel.view._document_path(), f'Field notes\n\n{panel.repository.root / panel.key}')
+        panel.dispose()
+        self.assertIsNone(panel.view._document_path())
+
+    def test_title_hold_uses_the_notebooks_window_and_leaves_it_clean(self):
+        from unittest.mock import AsyncMock, patch
+        self.app.loop.run_until_complete(open_notebook(self.app))
+        panel = self.app.notebook_panel
+        self.assertIsNotNone(panel.view.window)
+        with patch.object(panel.view.window, 'dialog', new_callable=AsyncMock) as dialog, \
+                patch('toga.InfoDialog') as location_dialog:
+            self.app.loop.run_until_complete(panel.perform({'op': 'document-location'}))
+        location_dialog.assert_called_once_with('Document location', panel.view._document_path())
+        dialog.assert_awaited_once_with(location_dialog.return_value)
+        self.assertFalse(panel.document.dirty)
+
     def test_reopen_uses_document_recovery_owner_and_can_checkpoint_afterward(self):
         app = self.app
         app.loop.run_until_complete(open_notebook(app))

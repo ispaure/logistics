@@ -17,7 +17,9 @@ def native_options(options, content=None):
     if content is not None:
         from services.documents.storage import document_sources
         private = any(getattr(source, 'private', False) for source in document_sources(content.provider))
-        values['video_title'] = Path(content.path).name
+        from services.documents.storage import display_path, document_display_name
+        values['video_path'] = display_path(content.provider, content.path)
+        values['video_title'] = document_display_name(content.provider, content.path)
         values['source_remote'] = content.remote
         values['source_private'] = private
         values['source_label'] = ('Cloud file' if content.remote else

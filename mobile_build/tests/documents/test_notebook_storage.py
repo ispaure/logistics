@@ -49,9 +49,11 @@ class NotebookStorageTests(unittest.TestCase):
 
     def create(self, *, private=True):
         with patch.object(self.app, 'existing_crypt_locations', return_value={'LocalCrypt: Secret': self.provider}):
-            self.run_async(self.app.choose_document_type())
+            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='rmdoc')):
+                self.run_async(self.app.choose_document_type())
             picker = self.app.editor_picker()
-            picker.save_as_name.value, picker.creation_type.value = 'Private sketch', 'Notebook (.rmdoc)'
+            picker.save_as_name.value = 'Private sketch'
+            self.run_async(picker.choose_creation_location())
         picker = self.app.editor_picker()
         picker.save_as_storage.value = 'LocalCrypt: Secret' if private else 'Local'
         self.run_async(picker.refresh_editor_browser())

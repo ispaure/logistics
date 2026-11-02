@@ -76,7 +76,9 @@ separate operation from saving decoded credentials. See
 Interactive commands capture a platform request, call `TransferService.review`,
 present the shared `ReviewSession`, and consume approval once through `execute`.
 Full approval rechecks the completed comparison; explicit incomplete approval waits
-for comparison retirement. Both paths retain mandatory transfer preflight.
+for comparison retirement. Desktop incomplete approval also skips full LocalCrypt
+integrity scanning and generated-file cleanup, retaining structural/access checks.
+Normal approval and mobile incomplete approval retain full transfer preflight.
 
 `TransferPlan.valid` includes the reviewed record binding; `active` tracks access
 through execution so the transfer's own record writes remain valid. The

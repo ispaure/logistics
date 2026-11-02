@@ -20,8 +20,10 @@ class AndroidEInkTests(unittest.TestCase):
     def test_rotation_keeps_palette_but_night_mode_and_explicit_refresh_repaint(self):
         configuration = SimpleNamespace(uiMode=0x11, orientation=1)
         android = type('Android', (), {'__module__': 'toga_android.app'})()
-        android.native = SimpleNamespace(getResources=lambda: SimpleNamespace(
-            getConfiguration=lambda: configuration))
+        # A retained themed context can disagree with system resources.
+        system = SimpleNamespace(getResources=lambda: SimpleNamespace(getConfiguration=lambda: configuration))
+        android.native = SimpleNamespace(getApplicationContext=lambda: system, getResources=lambda: SimpleNamespace(
+            getConfiguration=lambda: SimpleNamespace(uiMode=0x11)))
         editor = SimpleNamespace(highlighting=True, changed=Mock())
         app = SimpleNamespace(_impl=android, active_host=True,
             preferences=SimpleNamespace(values={}), text_views={'draft': SimpleNamespace(editor=editor)})
@@ -46,6 +48,15 @@ class AndroidEInkTests(unittest.TestCase):
             self.assertEqual(repaint.call_count, 2)
             self.assertFalse(editor.highlighting)
 
+    def test_live_system_palette_overrides_stale_widget_configuration(self):
+        self.addCleanup(palette.set_android_system_dark, None)
+        for dark, expected in ((False, palette.LIGHT), (True, palette.DARK), (False, palette.LIGHT)):
+            palette.set_android_system_dark(dark)
+            self.assertIs(palette.android_palette(not dark), expected)
+            palette.set_eink_enabled(True)
+            self.assertIs(palette.android_palette(not dark), palette.EINK)
+            palette.set_eink_enabled(False)
+
     def tearDown(self):
         palette.set_eink_enabled(False)
 
@@ -65,6 +76,7 @@ class AndroidEInkTests(unittest.TestCase):
             with patch.dict('sys.modules', {'java': SimpleNamespace(jclass=lambda name: window)}):
                 configure_android_eink(app)
             window.configure.assert_called_once_with(android.native)
+            window.setSuppressed.assert_called_once_with(True)
             self.assertTrue(palette.eink_enabled())
             delegate.setLocalNightMode.assert_called_once_with(1)
             palette.set_eink_enabled(False)

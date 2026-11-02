@@ -9,7 +9,7 @@ from uuid import uuid4
 from build_manager import Phase, Plan
 from build_manager.credentials import reject_secrets
 from build_manager.journeys import request, validate_plan
-from build_manager.workflows import EXTERNAL, ancestors
+from build_manager.workflows import EXTERNAL, transitive_dependency_ids
 
 
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ def _namespace(plan, prefix, barrier=()):
             # An unscoped finalizer would wait for unrelated pending deliveries.
             # Exclude consumers of this cleanup (notably release acceptance).
             dependencies = tuple(other.id for other in plan.phases if not other.always
-                                 and phase.id not in ancestors(plan, other.id))
+                                 and phase.id not in transitive_dependency_ids(plan, other.id))
         mapped = tuple(names[name] for name in dependencies)
         if not phase.always and not dependencies:
             mapped = (*mapped, *barrier)
@@ -271,4 +271,5 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
     result = adapt_plan(result)
     validate_plan(result, selected)
     from logistics_build.release_test_evidence import with_export_request
-    return with_export_request(result)
+    from logistics_build.storage_extras import with_storage_owner
+    return with_storage_owner(with_export_request(result), project.root)

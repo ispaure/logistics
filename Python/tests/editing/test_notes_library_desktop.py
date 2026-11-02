@@ -34,6 +34,511 @@ class NotesLibraryDesktopTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
+    def open_library(self, root):
+        (root / '.obsidian').mkdir(exist_ok=True)
+        window = NotesLibraryWindow(lambda: LocalFiles(root), 'Parity')
+        window.show()
+        self.wait_until(lambda: not window.progress.busy)
+        self.addCleanup(lambda: window.close() if __import__('shiboken6').isValid(window) else None)
+        return window
+
+    def test_save_before_navigation_continues_once_and_failure_keeps_current_note(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            (root / 'Other.md').write_text('# Other')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.set_editing(True)
+            window.viewer.set_edit_mode('source')
+            window.viewer.editor.insertPlainText('Saved draft ')
+            with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Save) as prompt:
+                window.open_note('Other.md')
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertEqual(prompt.call_count, 1)
+            self.assertEqual(window.history, ['Home.md', 'Other.md'])
+            self.assertIn('Saved draft', (root / 'Home.md').read_text())
+            window.viewer.editor.insertPlainText('Unpublished ')
+            with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Save), \
+                    patch('services.documents.storage.DocumentResource.save', side_effect=OSError('Disk full')):
+                window.open_note('Home.md')
+                self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Other.md')
+            self.assertTrue(window.viewer.is_modified)
+            self.assertIsNone(window._after_document_save)
+            window.viewer.save_document()
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Other.md')
+            window.close()
+
+    def test_save_before_move_continues_for_markdown_and_drawing(self):
+        from features.notebooks.notebook import Notebook
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            (root / 'Drawing.rmdoc').write_bytes(Notebook.new('Drawing').to_bytes())
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.set_editing(True)
+            window.viewer.set_edit_mode('source')
+            window.viewer.editor.insertPlainText('Preserved ')
+            with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Save) as prompt:
+                window.move_entry('Home.md', 'Moved.md')
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertEqual(prompt.call_count, 1)
+            self.assertFalse((root / 'Home.md').exists())
+            self.assertIn('Preserved', (root / 'Moved.md').read_text())
+            window.open_note('Drawing.rmdoc')
+            self.wait_until(lambda: not window.progress.busy)
+            window.canvas.perform({'op': 'add-page'})
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save) as prompt:
+                window.move_entry('Drawing.rmdoc', 'Moved.rmdoc')
+                self.wait_until(lambda: not window.canvas.busy and not window.progress.busy)
+                self.assertEqual(prompt.call_count, 1)
+            self.assertFalse((root / 'Drawing.rmdoc').exists())
+            self.assertEqual(len(Notebook.read((root / 'Moved.rmdoc').read_bytes()).pages), 2)
+            self.assertEqual(window.history[window.index], 'Moved.rmdoc')
+            window.close()
+
+    def test_close_during_save_supersedes_deferred_navigation(self):
+        from threading import Event
+        from shiboken6 import isValid
+        from services.documents.storage import DocumentResource
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            (root / 'Other.md').write_text('# Other')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.set_editing(True)
+            window.viewer.set_edit_mode('source')
+            window.viewer.editor.insertPlainText('Keep saved ')
+            entered, release = Event(), Event()
+            original = DocumentResource.save
+            def slow(resource, *args, **kwargs):
+                entered.set()
+                release.wait(5)
+                return original(resource, *args, **kwargs)
+            try:
+                with patch.object(DocumentResource, 'save', new=slow), \
+                        patch.object(window.library, 'read', wraps=window.library.read) as read:
+                    with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Save):
+                        window.open_note('Other.md')
+                    self.wait_until(entered.is_set)
+                    with patch.object(qt.QMessageBox, 'warning', side_effect=AssertionError('Save already authorized')):
+                        window.close()
+                    self.assertTrue(window.pending_close)
+                    self.assertIsNone(window._after_document_save)
+                    release.set()
+                    self.wait_until(lambda: not isValid(window))
+                    read.assert_not_called()
+                self.assertIn('Keep saved', (root / 'Home.md').read_text())
+            finally:
+                release.set()
+
+    def test_failed_drawing_close_does_not_close_after_later_manual_save(self):
+        from shiboken6 import isValid
+        from features.notebooks.notebook import Notebook
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Drawing.rmdoc').write_bytes(Notebook.new('Drawing').to_bytes())
+            window = self.open_library(root)
+            window.open_note('Drawing.rmdoc')
+            self.wait_until(lambda: not window.progress.busy)
+            window.canvas.perform({'op': 'add-page'})
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save), \
+                    patch('services.documents.storage.DocumentResource.save', side_effect=OSError('Disk full')):
+                window.close()
+                self.wait_until(lambda: not window.canvas.busy)
+            self.assertTrue(isValid(window))
+            self.assertFalse(window.pending_close)
+            self.assertTrue(window.canvas.document.dirty)
+            window.canvas.save_document()
+            self.wait_until(lambda: not window.canvas.busy)
+            self.assertTrue(isValid(window))
+            self.assertFalse(window.canvas.document.dirty)
+            self.assertEqual(len(Notebook.read((root / 'Drawing.rmdoc').read_bytes()).pages), 2)
+            window.close()
+
+    def test_deleting_other_note_preserves_current_duplicate_history_entry(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            for name in ('A.md', 'B.md', 'C.md'):
+                (root / name).write_text('# ' + name)
+            window = self.open_library(root)
+            for path in ('A.md', 'B.md', 'A.md', 'C.md'):
+                window.open_note(path)
+                self.wait_until(lambda: not window.progress.busy)
+            window.navigate(-1)
+            self.wait_until(lambda: not window.progress.busy)
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
+                window.delete_entry('B.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history, ['A.md', 'A.md', 'C.md'])
+            self.assertEqual(window.index, 1)
+            window.navigate(1)
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'C.md')
+            window.close()
+
+    def test_delayed_files_search_cannot_cancel_calendar_or_restart_hidden_scan(self):
+        from threading import Event
+        from features.text_editor.library_files import daily_notes
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '2026-11-02.md').write_text('# Today')
+            window = self.open_library(root)
+            entered, release = Event(), Event()
+            def slow(*args, **kwargs):
+                entered.set()
+                release.wait(5)
+                return daily_notes(*args, **kwargs)
+            try:
+                with patch('features.text_editor.library_files.daily_notes', side_effect=slow) as scan:
+                    window.panel_tabs.setCurrentIndex(1)
+                    self.wait_until(entered.is_set)
+                    generation = window.aux_generation
+                    window.search.setText('query')
+                    window.filter()  # Delayed callback from Files.
+                    self.assertEqual(window.aux_generation, generation)
+                    self.assertFalse(window.aux.cancelled.is_set())
+                    release.set()
+                    self.wait_until(lambda: not window.aux.busy)
+                    self.assertIn('2026-11-02', window.calendar_entries)
+                    window.search.clear()
+                    window.panel_tabs.setCurrentIndex(0)
+                    window.refresh_calendar()  # A retained button callback.
+                    self.assertEqual(scan.call_count, 1)
+                    self.assertFalse(window.aux.busy)
+            finally:
+                release.set()
+            window.close()
+
+    def test_close_releases_a_notebook_that_finishes_opening_after_cancellation(self):
+        from threading import Event
+        from shiboken6 import isValid
+        from features.notebooks.notebook import Notebook
+        from features.notebooks.storage import NotebookDocument
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Drawing.rmdoc').write_bytes(Notebook.new('Drawing').to_bytes())
+            window = self.open_library(root)
+            entered, release = Event(), Event()
+            documents = []
+            def construct(*args, **kwargs):
+                document = NotebookDocument(*args, **kwargs)
+                documents.append(document)
+                entered.set()
+                release.wait(5)
+                return document
+            try:
+                with patch('features.notebooks.storage.NotebookDocument', side_effect=construct):
+                    window.open_note('Drawing.rmdoc')
+                    self.wait_until(entered.is_set)
+                    window.close()
+                    self.assertTrue(isValid(window))
+                    release.set()
+                    self.wait_until(lambda: not isValid(window))
+                    self.assertTrue(documents[0].resource.closed)
+            finally:
+                release.set()
+
+    def test_saved_note_refreshes_content_matches_and_visible_connections(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Needle\n\n[[Missing]]')
+            (root / 'Other.md').write_text('# Other')
+            window = self.open_library(root)
+            window.search.setText('needle')
+            window.filter()
+            self.wait_until(lambda: not window.aux.busy)
+            self.assertEqual([row['path'] for row in window.search_rows], ['Home.md'])
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.toggle_links()
+            self.wait_until(lambda: not window.connections_progress.busy)
+            self.assertEqual(window.links_tree.topLevelItem(3).text(0), 'Unresolved links (1)')
+            window.viewer.set_editing(True)
+            window.viewer.set_edit_mode('source')
+            window.viewer.editor.selectAll()
+            window.viewer.editor.insertPlainText('# Changed\n\n[[Other]]')
+            window.viewer.save_document()
+            self.wait_until(lambda: not window.progress.busy and not window.aux.busy and not window.connections_progress.busy)
+            self.assertEqual(window.search_rows, [])
+            self.assertEqual(window.links_tree.topLevelItem(2).text(0), 'Outgoing links (1)')
+            self.assertEqual(window.links_tree.topLevelItem(3).text(0), 'Unresolved links (0)')
+            window.close()
+
+    def test_failed_mutation_resumes_search_and_connections(self):
+        from commonUtils.search.providers import search_resources
+        from features.text_editor.notes_links import connections
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Needle\n\n[[Other]]')
+            (root / 'Other.md').write_text('# Other')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.search.setText('needle')
+            window.filter()
+            window.toggle_links()
+            self.wait_until(lambda: not window.aux.busy and not window.connections_progress.busy)
+            with patch.object(qt.QInputDialog, 'getText', return_value=('Other.md', True)), \
+                    patch('features.text_editor.ui.library_panels.search_resources', wraps=search_resources) as search, \
+                    patch('features.text_editor.notes_links.connections', wraps=connections) as links:
+                window.copy_entry('Home.md')
+                self.wait_until(lambda: not window.progress.busy and not window.aux.busy and not window.connections_progress.busy)
+                self.assertGreaterEqual(search.call_count, 1)
+                self.assertGreaterEqual(links.call_count, 1)
+            self.assertEqual([row['path'] for row in window.search_rows], ['Home.md'])
+            self.assertEqual(window.links_tree.topLevelItem(2).text(0), 'Outgoing links (1)')
+            self.assertEqual((root / 'Other.md').read_text(), '# Other')
+            window.close()
+
+    def test_recursive_search_modes_prioritize_names_and_exclude_hidden_configuration(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Nested').mkdir()
+            (root / 'Nested/turtle red.md').write_text('Name match')
+            (root / 'Body.md').write_text('A turtle followed by red.')
+            window = self.open_library(root)
+            (root / '.obsidian/turtle red.md').write_text('Private configuration')
+            window.search.setText('turtle red')
+            window.filter()
+            self.wait_until(lambda: not window.aux.busy)
+            self.assertEqual([row['path'] for row in window.search_rows], ['Nested/turtle red.md', 'Body.md'])
+            self.assertNotIn('Nested', window.loaded)
+            window.search_mode.setCurrentIndex(1)
+            self.wait_until(lambda: not window.aux.busy)
+            self.assertEqual([row['path'] for row in window.search_rows], ['Nested/turtle red.md'])
+            window.search.clear()
+            window.filter()
+            self.assertIs(window.files_stack.currentWidget(), window.tree)
+            window.close()
+
+    def test_calendar_handles_nested_duplicates_and_confirmed_creation(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Nested').mkdir()
+            for path in ['2026-10-15.md', 'Nested/2026-10-15.md']:
+                (root / path).write_text('# Daily')
+            window = self.open_library(root)
+            window.panel_tabs.setCurrentIndex(1)
+            self.wait_until(lambda: not window.aux.busy)
+            self.assertEqual(len(window.calendar_entries['2026-10-15']), 2)
+            with patch.object(qt.QInputDialog, 'getItem', return_value=('Nested/2026-10-15.md', True)):
+                window.open_daily_note(qt.QDate(2026, 10, 15))
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Nested/2026-10-15.md')
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.No):
+                window.open_daily_note(qt.QDate(2026, 10, 16))
+            self.assertFalse((root / '2026-10-16.md').exists())
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
+                window.open_daily_note(qt.QDate(2026, 10, 16))
+            self.wait_until(lambda: not window.progress.busy and not window.aux.busy)
+            self.assertTrue((root / '2026-10-16.md').exists())
+            self.assertEqual(window.history[window.index], '2026-10-16.md')
+            self.assertTrue(window.viewer.edit_button.isChecked())
+            window.close()
+
+    def test_connections_open_targets_and_report_unresolved_links(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home\n\n[[Other]] [[Missing]]')
+            (root / 'Other.md').write_text('[[Home]]')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.toggle_links()
+            self.wait_until(lambda: not window.connections_progress.busy)
+            self.assertGreater(window.links_tree.width(), 100)
+            self.assertEqual(window.links_tree.topLevelItem(1).text(0), 'Backlinks (1)')
+            self.assertEqual(window.links_tree.topLevelItem(2).text(0), 'Outgoing links (1)')
+            self.assertEqual(window.links_tree.topLevelItem(3).child(0).text(0), 'Missing')
+            window.choose_connection(window.links_tree.topLevelItem(2).child(0))
+            self.wait_until(lambda: not window.progress.busy and not window.connections_progress.busy)
+            self.assertEqual(window.history[window.index], 'Other.md')
+            window.close()
+
+    def test_copy_collision_and_delete_resolve_unsaved_changes(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('Original')
+            window = self.open_library(root)
+            with patch.object(qt.QInputDialog, 'getText', return_value=('Copy.md', True)):
+                window.copy_entry('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual((root / 'Copy.md').read_text(), 'Original')
+            (root / 'Copy.md').write_text('Keep destination')
+            with patch.object(qt.QInputDialog, 'getText', return_value=('Copy.md', True)):
+                window.copy_entry('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual((root / 'Copy.md').read_text(), 'Keep destination')
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.set_editing(True)
+            window.viewer.set_edit_mode('source')
+            window.viewer.editor.insertPlainText('Draft ')
+            draft = window.viewer.markdown_text()
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes), \
+                    patch.object(qt.QMessageBox, 'warning', side_effect=AssertionError('Unrelated delete must keep draft')):
+                window.delete_entry('Copy.md')
+                self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.viewer.markdown_text(), draft)
+            self.assertTrue(window.viewer.is_modified)
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
+                with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Cancel):
+                    window.delete_entry('Home.md')
+                self.assertTrue((root / 'Home.md').exists())
+                with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Discard):
+                    window.delete_entry('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertFalse((root / 'Home.md').exists())
+            self.assertEqual(window.history, [])
+            self.assertIs(window.document_stack.currentWidget(), window.welcome)
+            self.assertFalse(window.up.isEnabled())
+            window.close()
+
+    def test_connections_do_not_cancel_file_search_and_close_waits_for_both(self):
+        from threading import Event
+        from shiboken6 import isValid
+        from features.text_editor.notes_links import connections
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Searchable home')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            entered, release = Event(), Event()
+            def slow(*args, **kwargs):
+                entered.set()
+                release.wait(5)
+                return connections(*args, **kwargs)
+            try:
+                with patch('features.text_editor.notes_links.connections', side_effect=slow):
+                    window.toggle_links()
+                    self.wait_until(entered.is_set)
+                    window.search.setText('Searchable')
+                    window.filter()
+                    self.wait_until(lambda: not window.aux.busy)
+                    self.assertEqual([row['path'] for row in window.search_rows], ['Home.md'])
+                    self.assertTrue(window.connections_progress.busy)
+                    window.close()
+                    self.assertTrue(isValid(window))
+                    release.set()
+                    self.wait_until(lambda: not isValid(window))
+            finally:
+                release.set()
+
+    def test_folder_landing_notes_and_reading_positions(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Topics').mkdir()
+            (root / 'Topics/Topics.md').write_text('# Topics\n\n' + '\n\n'.join(f'Paragraph {i}' for i in range(200)))
+            (root / 'Other.md').write_text('# Other')
+            window = self.open_library(root)
+            window.choose(window.items['Topics'])
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Topics/Topics.md')
+            bar = window.viewer.browser.verticalScrollBar()
+            self.wait_until(lambda: bar.maximum() > 500)
+            bar.setValue(400)
+            window.open_note('Other.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.navigate(-1)
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(bar.value(), 400)
+            window.parent_folder()
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertIn('Topics', window.loaded)
+            window.close()
+
+    def test_close_waits_for_cancelled_background_scan(self):
+        from threading import Event
+        from shiboken6 import isValid
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            window = self.open_library(root)
+            entered, release = Event(), Event()
+            original = window.library.folders
+            def slow(*args, **kwargs):
+                entered.set()
+                release.wait(5)
+                return original(*args, **kwargs)
+            try:
+                with patch.object(window.library, 'folders', side_effect=slow):
+                    window.search.setText('query')
+                    window.filter()
+                    self.wait_until(entered.is_set)
+                    window.close()
+                    self.assertTrue(isValid(window))
+                    self.assertTrue(window.closing)
+                    release.set()
+                    self.wait_until(lambda: not isValid(window))
+            finally:
+                release.set()
+
+    def test_remarkable_document_uses_the_same_library_window(self):
+        from features.text_editor.notes import NotesLibrary
+        from features.notebooks.notebook import Notebook
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '.obsidian').mkdir()
+            (root / 'Home.md').write_text('# [[Tech]]\n')
+            provider = LocalFiles(root)
+            NotesLibrary(provider).create('Drawing', extension='rmdoc')
+            window = NotesLibraryWindow(lambda: provider, 'Mixed documents')
+            window.show()
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertIs(window.document_stack.currentWidget(), window.welcome)
+            window.open_note('Drawing.rmdoc')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertIsNotNone(window.canvas)
+            self.assertIs(window.document_stack.currentWidget(), window.canvas)
+            from desktop.location_context import document_location
+            self.assertEqual(document_location(window), (root / 'Drawing.rmdoc', provider))
+            window.canvas.perform({'op': 'add-page'})
+            self.assertTrue(window.canvas.document.dirty)
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
+                window.open_note('Home.md')
+            self.assertEqual(window.history, ['Drawing.rmdoc'])
+            self.assertTrue(window.save_drawing.isVisible())
+            window.save_drawing.click()
+            self.wait_until(lambda: not window.canvas.busy)
+            self.assertEqual(len(Notebook.read((root / 'Drawing.rmdoc').read_bytes()).pages), 2)
+            window.canvas.perform({'op': 'add-page'})
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save):
+                window.open_note('Home.md')
+            self.wait_until(lambda: not window.canvas.busy and not window.progress.busy)
+            self.assertEqual(len(Notebook.read((root / 'Drawing.rmdoc').read_bytes()).pages), 3)
+            self.assertIs(window.document_stack.currentWidget(), window.viewer)
+            window.close()
+
+    def test_formatted_wiki_heading_can_be_edited_and_saved(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '.obsidian').mkdir()
+            (root / 'Home.md').write_text('# [[Tech]]\n')
+            window = NotesLibraryWindow(lambda: LocalFiles(root), 'Wiki')
+            window.show()
+            self.wait_until(lambda: not window.progress.busy)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.set_editing(True)
+            window.viewer.set_edit_mode('formatted')
+            editor = window.viewer.formatted_editor
+            cursor = editor.textCursor()
+            cursor.movePosition(qt.QTextCursor.MoveOperation.End)
+            cursor.insertText(' updated')
+            window.viewer.save_document()
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertIn('[[Tech]]', (root / 'Home.md').read_text())
+            self.assertIn('updated', (root / 'Home.md').read_text())
+            window.close()
+
     def test_real_localcrypt_and_crypt_remote_open_and_read_notes(self):
         from io import BytesIO
         from features.rclone import executable, session
@@ -55,7 +560,8 @@ class NotesLibraryDesktopTests(QtTestCase):
             offer = view.notes_offer
             self.wait_until(lambda: offer.location is not None and not offer.progress.busy)
             self.assertIsNotNone(offer.candidate, offer.progress.message.text())
-            self.assertFalse(offer.isHidden())
+            self.assertTrue(offer.dialog.isVisible())
+            self.assertIsNone(view.file_browser.views.root)
             view.close()
             # Seed the synthetic cloud crypt with the same vault marker and nested note.
             environment, source, destination = session.launch(
@@ -77,11 +583,12 @@ class NotesLibraryDesktopTests(QtTestCase):
                         continue
                     self.assertIsNotNone(window.library, window.progress.message.text())
                     self.assertEqual(window.viewer.allow_edit, not remote)
-                    self.assertEqual(window.viewer.edit_button.isChecked(), not remote)
+                    self.assertFalse(window.viewer.edit_button.isChecked())
                     self.assertIn('note.md', window.items)
                     window.open_note('note.md')
                     self.wait_until(lambda: not window.progress.busy)
                     self.assertIn('Original note', window.viewer.browser.toPlainText(), window.viewer.status.text())
+                    window.viewer.set_editing(True)
                     self.assertEqual(len(window.storage.resources), 1)
                     url = window.viewer.browser.document().baseUrl().resolved(qt.QUrl('page.png'))
                     image = window.viewer.browser.document().resource(qt.QTextDocument.ResourceType.ImageResource, url)
@@ -143,7 +650,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                     self.assertFalse(opened.call_args.kwargs['remote'])
             self.assertEqual([item[0] for item in sources(replace(entry, local=None, storage_scope='local'))], [])
 
-    def test_workspace_library_starts_editing_and_saves_in_local_context(self):
+    def test_workspace_library_starts_reading_and_saves_in_local_context(self):
         with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Discard):
             with self.temporary_directory() as directory:
                 root = Path(directory)
@@ -154,7 +661,8 @@ class NotesLibraryDesktopTests(QtTestCase):
                 window.open_note('Home.md')
                 self.wait_until(lambda: not window.progress.busy)
                 self.assertTrue(window.viewer.allow_edit)
-                self.assertTrue(window.viewer.edit_button.isChecked())
+                self.assertFalse(window.viewer.edit_button.isChecked())
+                window.viewer.set_editing(True)
                 window.viewer.set_edit_mode('source')
                 window.viewer.editor.insertPlainText('Edited locally. ')
                 window.viewer.save_document()
@@ -225,7 +733,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 self.wait_until(lambda:not window.progress.busy)
                 self.assertIn(window,host.records)
                 self.assertIsNotNone(window.search)
-                self.assertEqual(window.tree.topLevelItemCount(),2)
+                self.assertEqual(window.tree.topLevelItemCount(),3)
                 window.open_note('Home.md');self.wait_until(lambda:not window.progress.busy)
                 self.assertIn('Home',window.viewer.browser.toPlainText())
                 window.open_note('Nested/Next.md');self.wait_until(lambda:not window.progress.busy)

@@ -1,4 +1,5 @@
 """Retained, nonmodal Find in Files with cancellable search and source preview."""
+from commonUtils.search.policy import SEARCH_DEBOUNCE_MS
 from concurrent.futures import ThreadPoolExecutor
 from html import escape
 from pathlib import Path
@@ -180,7 +181,7 @@ class FindFiles(qt.QFrame):
         self.preview.clear(); self.preview_title.setText('Select a result to preview its source')
         self.preview.search_selections = []
         self.summary.setText('Searching…' if self.pending_search else 'Enter text to search')
-        self.debounce.start(400)
+        self.debounce.start(SEARCH_DEBOUNCE_MS)
 
     def start_search(self):
         if self.closing or not self.pending_search or self.search_future is not None:

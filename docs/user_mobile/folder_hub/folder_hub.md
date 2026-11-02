@@ -35,10 +35,10 @@ note. Back/Forward revisit notes; Up shows the parent folder. The speaker opens
 Read aloud with the same playback and 15-second controls as other Markdown
 readers. The preview is read-only; **Open in editor** uses the selected storage.
 
-Remote Notes Libraries have **no search field or recursive index**: opening
-one lists only its root, expanding a folder lists just that folder, and opening
-a note reads only that note. Local/LocalCrypt libraries offer **Filter loaded
-notes**, which filters names already displayed without scanning other folders.
+In a local or LocalCrypt Notes Library, **Search Notes Library** searches
+names and note text across the library by default. Choose **Names only** to
+limit the results to matching file and folder names. Select a note to read it or a folder to
+expand it in the tree.
 
 Notes are limited to 2 MiB, configuration/hidden files are excluded and links
 stay within the selected library. Private previews stay in memory and are
@@ -51,15 +51,14 @@ does not run Obsidian plugins.
 **Local File Browser** opens directly on the current folder, without a source
 button above it. The folder header has Back (‹), Search and an upper-right
 actions menu (circled ellipsis on iOS, vertical dots on Android). On iOS it opens
-Logistics’ shared Files directory, showing files and folders saved there alongside
-**Local**. Open Local to browse the managed folder; Back
-returns to the shared directory. This is the existing
-`Local` folder in Apple’s Files app; no files are moved or duplicated. Its root
-cannot be renamed, moved or deleted from the outer browser; open it to manage its
-contents. Workspaces lists imported folders and downloaded/synced copies
+Logistics’ shared Files directory, showing other files and folders saved there.
+**Browse All Files** omits **Local** and **Received Files**; use their dedicated
+Workspaces locations instead. Both folders remain visible in Apple’s Files app
+and in destination pickers. No files are moved or duplicated.
+Workspaces lists imported folders and downloaded/synced copies
 individually, opening each folder directly. **Browse All Files** appears underneath
 the folder list and opens the shared directory on iOS.
-On Android, it opens the managed Local folder.
+On Android, this browser may be empty when there are no other public files.
 When you open a local folder directly from Workspaces, Back from that folder
 returns to Workspaces. Inside a subfolder, Back first returns to its parent.
 List mode uses compact native rows on both iOS and Android.
@@ -121,6 +120,10 @@ combined folder-and-lock icon as Workspaces: an open blue padlock after successf
 unlocked browsing, or an orange closed padlock when locked.
 These indicators describe the folder currently open, including when a remote
 also has an on-device copy.
+If the current folder name is too long for the title at the top of the browser,
+it scrolls slowly. Hold that title to see the full folder name and path. The title
+stays still with reduced motion, system high contrast, or **High contrast / E Ink**.
+
 In List mode, tap the **⋯** button beside an item on either Android or iOS to
 select it and open its commands without opening its contents. Tapping the row
 still opens it. Android long press and iOS's **Select** swipe action remain
@@ -169,8 +172,9 @@ a number, such as **Personal (2)**. Loaded-package changes refresh a visible hub
 automatically, including changes made in another iPad window.
 **Local** lists imported folders, downloaded/synced copies and, on iOS, folders
 beside `Local` in the `Logisticks` shared directory. **Browse All Files** below the
-list opens that directory, including the managed `Local` folder.
-On Android it opens the ordinary Local folder. **Home Server** contains
+list opens other public files, omitting the dedicated Local and Received Files
+locations on both platforms. Save pickers and Apple’s Files app still expose
+those locations. **Home Server** contains
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
 **Cloud**. Local and Home Server hide the credential selector. **Transfers** appears on **Cloud** only while a transfer is active or a stopped

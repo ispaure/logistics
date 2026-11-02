@@ -12,7 +12,7 @@ from features.rclone.transfers.transfer_options import CLEANUP_NAMES
 from features.rclone.transfers.scope import pull_name
 from .records import CopyRecords
 from .records import MAX_RECORD_BYTES as MAX_RECORD_BYTES  # Legacy public constant.
-from .planning import CopyPlanner
+from .planning import CopyPlanner, resolved_job
 from .transport import sync_copy
 from features.rclone.mobile.bridge_protocol import crypt_path
 
@@ -21,11 +21,6 @@ def copy_target(root, job):
     root = Path(root)
     return (collection_path(root, True) / job['identity'] / job['prefix'] if job['crypt']
             else collection_path(root) / job['target'])
-
-
-def resolved_job(client, job):
-    resolve = getattr(client, 'resolve_remote', None)
-    return dict(job, remote=resolve(job['remote'], job['identity'])) if resolve else job
 
 
 def remote_location(client, job):
@@ -37,6 +32,26 @@ def remote_location(client, job):
         path = crypt_path(client, remote=job['remote'], identity=job['cipher_identity'],
             path=path, directory=True)
     return job['remote'], path
+
+
+def loaded_copy_cipher(client, job):
+    """Resolve local ciphertext independently of a replacement cloud account."""
+    if not job['crypt']:
+        return None
+    resolve = getattr(client, 'resolve_remote', None)
+    remote = resolve(job['remote'], job['cipher_identity'], cipher=True) if resolve else job['remote']
+    if any(record.get('crypt_identities', {}).get(remote) == job['cipher_identity']
+           for record in getattr(client, 'package_records', ())):
+        return remote
+    return None
+
+
+def local_copy_location(client, job):
+    remote = loaded_copy_cipher(client, job)
+    if remote is None:
+        return remote_location(client, job)
+    return remote, crypt_path(client, remote=remote, identity=job['cipher_identity'],
+                              path=job['prefix'], directory=True)
 
 
 class MirrorJobs:
@@ -101,8 +116,8 @@ class MirrorJobs:
     def check(self, client, job, cancelled):
         if cancelled():
             raise ValueError('Transfer cancelled; completed changes remain in the destination.')
-        job['remote'] = resolved_job(client, job)['remote']
-        if client.connection_identity(job['remote']) != job['identity']:
+        remote = resolved_job(client, job)['remote']
+        if client.connection_identity(remote) != job['identity']:
             raise ValueError('The connection changed. Unlock the original package before transferring this copy.')
 
     @staticmethod
@@ -200,7 +215,7 @@ class MirrorJobs:
         """Execution after shared review; crypt integrity remains mandatory."""
         with self.lock:
             self.check_records()
-            job = self.jobs[key]
+            job = resolved_job(client, self.jobs[key])
             self.check(client, job, cancelled)
             cleanup = self.cleanup_plan(job, client, cancelled)
             encrypted_junk = {}
@@ -248,7 +263,7 @@ class MirrorJobs:
     def pull(self, key, client, *, options=None, cancelled=lambda: False, progress=lambda **kw: None):
         with self.lock:
             self.check_records()
-            job = self.jobs[key]
+            job = resolved_job(client, self.jobs[key])
             self.check(client, job, cancelled)
             target = self.guard(self.target(job))
             target.mkdir(parents=True, exist_ok=True, mode=0o700)

@@ -35,6 +35,8 @@ class AndroidVideo:
 
     def configure(self, settings, queue):
         from .controls import native_options
+        from commonUtils.ui.native.panning_title import configure_android_title
+        configure_android_title(self.native.getTitleLabel())
         self.native.configurePlayback(native_options(settings, self.owner.content), queue)
 
     def seek(self, position):

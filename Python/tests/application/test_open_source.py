@@ -26,6 +26,21 @@ class OpenSourceTests(unittest.TestCase):
         rclone = next(entry for entry in entries if entry['name'] == 'rclone')
         desktop = json.loads((ROOT / 'software_manifest.json').read_text())['rclone']
         self.assertEqual({item['version'] for item in desktop.values()}, {rclone['version']})
+        dependencies = json.loads((ROOT / 'services/licenses/rclone-dependency-notices.json').read_text())
+        self.assertEqual(dependencies['version'], rclone['version'])
+        self.assertIn('github.com/rclone/rclone', {item['name'] for item in dependencies['components']})
+
+    def test_qt_notice_versions_match_the_installed_frameworks(self):
+        from importlib.metadata import version
+        from PySide6.QtWebEngineCore import qWebEngineVersion
+        resources = ROOT / 'services/licenses'
+        source = json.loads((resources / 'qt-source-notices.json').read_text())
+        engine = json.loads((resources / 'qtwebengine-source-notices.json').read_text())
+        self.assertEqual(source['version'], version('PySide6'))
+        self.assertEqual(engine['version'], qWebEngineVersion())
+        self.assertIn('qtquick3d', source['modules'])
+        self.assertTrue(any(item['name'] == 'PDFium' for item in engine['components']))
+        self.assertTrue(all(item['text'] for item in engine['components']))
 
     def test_desktop_downloaded_vlc_notices_are_read_without_installing(self):
         with TemporaryDirectory() as directory:
@@ -35,9 +50,12 @@ class OpenSourceTests(unittest.TestCase):
             notices = root / 'video/libvlc-mac-1-arm64/notices'
             notices.mkdir(parents=True)
             (notices / 'COPYING.txt').write_text('Full decoder license')
+            (notices / 'third-party').mkdir()
+            (notices / 'third-party/COPYING').write_text('Nested codec notice')
             items = desktop_native_notices(root)
             self.assertEqual(len(items), 1)
             self.assertIn('Full decoder license', items[0].content)
+            self.assertIn('Nested codec notice', items[0].content)
 
     def test_installed_dependency_closure_keeps_notices_and_excludes_optional_extras(self):
         with TemporaryDirectory() as directory:
@@ -62,6 +80,39 @@ class OpenSourceTests(unittest.TestCase):
             self.assertIn('Full upstream notice', notices[0].content)
             self.assertIn('No complete license text', next(item.text for item in notices if item.name == 'Child'))
             self.assertEqual(lookup.call_count, 2)
+
+    def test_explicit_extras_are_followed_without_listing_unrelated_extras(self):
+        from email.message import Message
+        def distribution(name, requires):
+            info = Message()
+            info['Name'] = name
+            info['License'] = 'MIT'
+            return SimpleNamespace(metadata=info, version='1', files=[], requires=requires)
+        packages = {'parent': distribution('parent', ['child; extra == "reader"', 'unused; extra == "dev"']),
+                    'child': distribution('child', [])}
+        with patch('services.open_source.metadata.distribution', side_effect=packages.__getitem__):
+            notices = python_notices(['parent[reader]'])
+        self.assertEqual({item.name for item in notices}, {'parent', 'child'})
+
+    def test_python_wheel_license_files_can_be_read_without_record(self):
+        from email.message import Message
+        info = Message()
+        info['Name'] = 'example'
+        info['License-File'] = 'licenses/LEGAL.txt'
+        package = SimpleNamespace(metadata=info, version='1', files=None, requires=[],
+            read_text=lambda name: 'Full installed publisher license' if name == 'licenses/LEGAL.txt' else None)
+        with patch('services.open_source.metadata.distribution', return_value=package):
+            notice = python_notices(['example'])[0]
+        self.assertIn('Full installed publisher license', notice.text)
+
+    def test_resolved_android_inventory_replaces_static_direct_entry(self):
+        inventory = dict(components=[dict(module='androidx.appcompat:appcompat', name='AndroidX AppCompat',
+            version='1.7.1', text='Selected artifact notice', license='Apache-2.0')])
+        notices = bundled_notices(ROOT, 'android', inventory)
+        entries = [item for item in notices if item.name == 'AndroidX AppCompat']
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].version, '1.7.1')
+        self.assertEqual(entries[0].text, 'Selected artifact notice')
 
     def test_platforms_only_show_their_native_components_and_texts_exist(self):
         android = bundled_notices(ROOT, 'android')

@@ -53,7 +53,7 @@ def speech_voice_setting(app):
                 picker.reloadAllComponents()
             choice.value = selected if selected in engine.voices else system
             status.text = ('Saved voice unavailable; using the system default.' if selected and selected not in engine.voices
-                           else 'Choose an installed offline voice. Saved immediately.')
+                           else 'Choose an installed offline voice.')
         finally:
             choice.on_change = save
             if engine is not None:

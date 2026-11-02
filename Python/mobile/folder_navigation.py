@@ -49,6 +49,11 @@ class FolderPreview:
         from .browser_ui import FileBrowser
         self.app, self.entry = app, entry
         self.provider = entry.browser.search_provider
+        live = getattr(entry.view, '_folder_screen', None)
+        if (entry.kind == 'browser' and entry.source == 'Shared files'
+                and live is not None and live.source == 'Local files'):
+            # Back crosses from the managed collection into its shared parent.
+            self.provider = app.file_provider_for(entry.source)
         owner = getattr(self.provider, 'provider', self.provider)
         self.private = entry.kind == 'remote-browser' or getattr(owner, 'private', False)
         self.client = getattr(app, 'cloud_client', None)
@@ -65,7 +70,7 @@ class FolderPreview:
             source_header = entry.browser.location_bar
             remote, encrypted, unlocked, session_only = source_header._identity_key
             header.update(entry.path, remote=remote, encrypted=encrypted, unlocked=unlocked,
-                          session_only=session_only, name=entry.title)
+                          session_only=session_only, name=entry.title, provider=self.provider)
         self.view = toga.Box(children=[header, self.browser.scroll_container()],
                              style=Pack(direction=COLUMN, flex=1, margin=12))
         self.sidebar_snapshot = None
@@ -93,6 +98,7 @@ class FolderPreview:
             self.browser.set_tree(entry.browser.tree)
             self.status.value = ''
         else:
+            header.folder_location = None
             self.task = app.loop.create_task(self.prepare())
 
     async def prepare(self):
@@ -113,6 +119,8 @@ class FolderPreview:
                     or self.generation != getattr(self.client, 'generation', None)))):
                 return
             self.browser.set_entries(self.provider, self.entry.path, rows)
+            from services.documents.storage import display_path
+            self.browser.location_bar.folder_location = display_path(self.provider, self.entry.path)
             owned = None
             self.status.value = ''
         except (OSError, ValueError, AttributeError):

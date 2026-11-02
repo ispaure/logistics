@@ -15,6 +15,43 @@ from mobile_build.tests.support.mirror import MirrorClient
 
 
 class MirrorJobTests(unittest.TestCase):
+    def test_missing_final_progress_does_not_turn_successful_pull_into_failure(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            with patch('features.rclone.transfers.mobile.transport.mirror_progress',
+                       side_effect=ValueError('Progress unavailable')):
+                job, _ = store.create(client, 'Remote', 'folder')
+            self.assertEqual((store.target(job) / 'note.txt').read_bytes(), client.data['folder/note.txt'])
+            self.assertIn(job['id'], MirrorJobs(directory).jobs)
+
+    def test_matching_cipher_opens_local_copy_without_authorizing_new_cloud_account(self):
+        from features.rclone.transfers.mobile.jobs import local_copy_location, remote_location
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Secret', 'private')
+            client.identity = 'c' * 64  # A different cloud account.
+            client.resolve_remote = lambda name, identity, *, cipher=False: 'Renamed' if cipher else name
+            client.package_records = (dict(crypt_identities={'Renamed': job['cipher_identity']}),)
+            self.assertEqual(local_copy_location(client, job), ('Renamed', job['prefix']))
+            with self.assertRaisesRegex(ValueError, 'matching connection'):
+                remote_location(client, job)
+            with self.assertRaisesRegex(ValueError, 'connection changed'):
+                store.pull(job['id'], client)
+            client.package_records = (dict(crypt_identities={'Renamed': 'd' * 64}),)
+            with self.assertRaisesRegex(ValueError, 'matching connection'):
+                local_copy_location(client, job)
+
+    def test_replacement_package_alias_reuses_existing_local_mapping(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Remote', 'folder')
+            original = dict(job)
+            client.resolve_remote = lambda name, identity: 'Remote @ Replacement'
+            proposal = store.prepare_review(client, 'Remote @ Replacement', 'folder')
+            self.assertEqual(proposal, original)
+            self.assertEqual(store.execute_review(proposal, client).status, 'updated')
+            self.assertEqual(MirrorJobs(directory).jobs[job['id']], original)
+
     def test_save_refuses_records_that_cannot_be_restored(self):
         from uuid import uuid4
         for invalid in ('mismatched_key', 'too_many'):
@@ -549,28 +586,22 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         self.assertIsNone(bar.max)
 
     def test_reopening_details_and_banner_keep_known_percentage(self):
-        import weakref
-        import toga
-        from types import SimpleNamespace
-        from unittest.mock import Mock
-        from features.rclone.transfers.mobile.ui import MirrorUI
-        parent, banner = toga.Box(), toga.Box()
-        banner.visible_when = lambda: True
-        banner.notice = toga.Button('Details')
-        banner.dismiss = toga.Button('Dismiss')
-        banner.progress = toga.ProgressBar(max=100, value=0)
-        refresh_folder = Mock()
-        app = SimpleNamespace(app=SimpleNamespace(require_feature=lambda name: name == 'rclone'),
-                              rclone_ui=SimpleNamespace(refresh_folder_source_actions=refresh_folder),
-                              transfer_busy=True, transfer_percentage=42,
-                              transfer_message='Transferring · 42% of known work',
-                              mirror_store=lambda: SimpleNamespace(error=''),
-                              show_view=Mock(), cancel_mirror_transfer=Mock(),
-                              transfer_banners=[(weakref.ref(parent), weakref.ref(banner))])
-        MirrorUI.show_transfers(app, present=False)
-        self.assertEqual(app.transfer_progress.max, 100)
-        self.assertEqual(app.transfer_progress.value, 42)
-        MirrorUI.refresh_transfer_status(app)
-        refresh_folder.assert_called_once_with()
-        self.assertNotIn(banner, parent.children)
-        self.assertEqual(app.transfer_progress.value, 42)
+        from mobile.app import LogisticsMobile
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.transfer_busy = True
+                app.transfer_percentage = 42
+                app.show_transfers(present=False)
+                self.assertEqual(app.transfer_progress.max, 100)
+                self.assertEqual(app.transfer_progress.value, 42)
+                surface = app.transfer_view
+                app.show_transfers()
+                self.assertIs(app.transfer_view, surface)
+                self.assertEqual(app.transfer_progress.value, 42)
+            finally:
+                app.transfer_controller().dispose()
+                app.main_window.close()
+                app.loop.close()
+                LogisticsMobile.storage_root = None

@@ -74,8 +74,16 @@ def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
         return (hasattr(widget, '_reader_session_id')
                 or any(document(child) for child in widget.children))
 
-    hidden = fullscreen or document(view) or any(
-        document_route(route) for route, *_ in (*screens, *details))
+    def focused(widget):
+        return (getattr(widget, '_focus_navigation', False)
+                or any(focused(child) for child in widget.children))
+
+    app._focus_navigation_active = focused(view)
+    hidden = (fullscreen or document(view)
+              or any(document_route(route) for route, *_ in (*screens, *details)))
+    if app._focus_navigation_active:
+        size = app.main_window.size
+        hidden = hidden or size.width < 600 or size.height < 500
     app._document_tabs_hidden = hidden
     adapter = app.native_host.adapter
     if adapter is None:
@@ -172,6 +180,7 @@ class ReaderChrome:
         self.library_view = self.reading_frame.widget
         from .document_location import install_document_location
         install_document_location(self.library_view)
+        self.library_view._document_path = self.library_document_location
         self.library_view._native_reader_title = lambda: self.session.title
         self.library_view._native_reader_toolbar = self.reader_header
         self.library_view._native_reader_status = self.book_status
@@ -188,6 +197,13 @@ class ReaderChrome:
             self.reader_tools_view = comic_pages(self.chapter_selector, self.show_library)
         else:
             self.reader_tools_view = tree
+
+    def library_document_location(self):
+        from .document_sources import folder_location
+        if self.book_record:
+            name = self.book_record['name']
+            location = folder_location(self.app, self.session, self)
+            return f"{name}\n\n{location['path']}" if location else name
 
     def reflow_chapters(self):
         sidebar = getattr(self, 'chapter_sidebar', None)

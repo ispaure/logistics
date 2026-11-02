@@ -64,82 +64,255 @@ class StorageUI:
             await self.main_window.dialog(toga.InfoDialog('Developer settings unavailable',
                 'Android could not open developer settings. Developer mode must be enabled first.'))
 
+    def _storage_note(self, text):
+        from .settings.forms import connection_note
+        return connection_note(text)
+
+    def _storage_button(self, title, callback, *, primary=False, destructive=False):
+        from .settings.forms import OPTION_FONT_SIZE
+        from .appearance import surface
+        button = toga.Button(title, on_press=callback,
+                             style=Pack(height=48, font_size=OPTION_FONT_SIZE, margin_bottom=8))
+        if destructive:
+            button.action_role = 'destructive'
+            surface(button, radius=12, background='destructive_fill', foreground='on_destructive')
+        elif primary:
+            surface(button, radius=12, background='text', foreground='surface')
+        return button
+
+    def _storage_heading(self, text):
+        from .settings.forms import SettingsLabel, OPTION_FONT_SIZE
+        return SettingsLabel(text, style=Pack(font_size=OPTION_FONT_SIZE, font_weight='bold', margin_bottom=12))
+
+    def _storage_disclosure(self, title, children):
+        from commonUtils.ui.native.forms import collapsible
+        from .settings.forms import fit_section, OPTION_FONT_SIZE
+        from .appearance import surface
+        def changed(box):
+            section = box
+            while isinstance(section.parent, toga.Box):
+                section = section.parent
+            fit_section(section, max(280, self.app.adaptive.content_width('settings')))
+        def style(button):
+            button.style.font_size = OPTION_FONT_SIZE
+            return surface(button, radius=0, background='transparent', foreground='text')
+        return collapsible(title, children, changed=changed, style_button=style)[0]
+
+    def _show_storage_page(self, box, title, route, *, footer=None):
+        from .settings.forms import fit_section
+        from .appearance import surface
+        from .layout_participants import participants, reflow_settings_section
+        surface(box, radius=0, background='settings_background')
+        self.collection_storage_page = box
+        view = toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
+        if footer is not None:
+            view = toga.Box(children=[view, footer], style=Pack(direction=COLUMN, flex=1))
+        participants(self.app).register(route, box, reflow_settings_section)
+        width = max(280, self.app.adaptive.content_width('settings'))
+        fit_section(box, width)
+        if footer is not None:
+            participants(self.app).register(route + '-footer', footer, reflow_settings_section)
+            fit_section(footer, width)
+        self.show_view(view, destination='settings', route=route, title=title)
+
+    def _storage_paths(self, volume):
+        try:
+            state = describe_location(self.private_root, volume)
+            return self._storage_disclosure('Folder paths',
+                [self._storage_note(path + '\n' + status) for path, status in state['folders']])
+        except (OSError, ValueError) as error:
+            return self._storage_note('Location unavailable: ' + str(error))
+
+    def _storage_permission(self, box, action):
+        volume = self.collection_drives[self.collection_drive.value]
+        try:
+            source_external = action == 'copy' and selection(self.private_root) is not None
+        except (OSError, ValueError):
+            source_external = False
+        needed = (volume is not None or source_external) and android_sdk() >= 30
+        if needed and not all_files_allowed():
+            box.add(self._storage_heading('Allow storage access'),
+                self._storage_note('Android needs All files access for this location. Other apps with storage access can read Local files; LocalCrypt stays encrypted.'),
+                self._storage_button('Open Android settings', self.allow_collection_storage),
+                self._storage_button('Check access', lambda widget: self._show_storage_target(action)
+                    if action == 'wipe' else self._show_storage_review(action)))
+            return False
+        if volume is not None and android_sdk() < 30:
+            box.add(self._storage_note('No storage permission is needed. Android removes these app storage folders if you uninstall Logistics or clear its app data. Keep a separate backup.'))
+        return True
+
     def show_collection_storage(self, widget=None, **kwargs):
         if getattr(self, '_storage_changing', False) and getattr(self, 'collection_storage_progress_view', None) is not None:
             self.show_view(self.collection_storage_progress_view, destination='settings',
                            route='collection-storage-progress', title='File storage progress')
             return
-        from .settings.forms import SettingsLabel, fit_section
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        self.collection_storage_page = box
-        from .layout_participants import participants, reflow_settings_section
-        participants(self.app).register('collection_storage_page', box, reflow_settings_section)
-        box.add(SettingsLabel('Collection storage', style=Pack(font_size=22)))
-        try:
-            base = collection_base(self.private_root)
-            current = str(base) if selection(self.private_root) else 'App internal storage'
-        except (OSError, ValueError) as error:
-            current = 'Unavailable: ' + str(error)
-        box.add(SettingsLabel('Currently used for Local, LocalCrypt and Received Files:\n' + current))
-        box.add(SettingsLabel('Choose a location to inspect. Choosing it here does not change where files are stored.'))
-        self.collection_drives = android_drives(self)
+        from .settings.forms import OPTION_FONT_SIZE, group_rows
+        from .appearance import surface
+        self._collection_target_box = None
+        raw_drives = android_drives(self)
+        # Paths belong in details, not in the location picker. Keep duplicate
+        # volume names distinct without guessing which mounted drive is meant.
+        self.collection_drives = {}
+        for raw, path in raw_drives.items():
+            base_label = raw.split(' · ')[0]
+            label, suffix = base_label, 2
+            while label in self.collection_drives:
+                label = f'{base_label} ({suffix})'
+                suffix += 1
+            self.collection_drives[label] = path
         try:
             chosen = selection(self.private_root)
+            current = next((name for name, path in self.collection_drives.items()
+                            if str(path) == (chosen['volume'] if chosen else 'None')),
+                           'Unavailable storage')
+            collection_base(self.private_root)
         except (OSError, ValueError):
-            chosen = None
-        label = next((label for label, path in self.collection_drives.items()
-                      if str(path) == (chosen['volume'] if chosen else 'None')), next(iter(self.collection_drives)))
-        self.collection_drive = toga.Selection(items=list(self.collection_drives), value=label, style=Pack(height=48))
+            current = 'Unavailable storage'
+        selected = current if current in self.collection_drives else next(iter(self.collection_drives))
+        self.collection_drive = toga.Selection(items=list(self.collection_drives), value=selected,
+                                             style=Pack(height=48, font_size=OPTION_FONT_SIZE))
+        self.collection_target_status = self._storage_note('')
+        self.collection_storage_status = self._storage_note('')
+        self.collection_copy = self._storage_button('Copy and switch', self.change_collection_storage, primary=True)
+        self.collection_existing = self._storage_button('Use these files', self.recover_collection_storage, primary=True)
+        self.collection_empty = self._storage_button('Start empty and switch', self.start_empty_collection, primary=True)
+        self.collection_erase = self._storage_button('Delete files…', self.wipe_collection_storage, destructive=True)
         self.collection_drive.on_change = self.collection_target_changed
-        box.add(self.collection_drive)
-        self.collection_target_status = SettingsLabel('')
-        box.add(self.collection_target_status)
-        if android_sdk() < 30:
-            box.add(SettingsLabel('SD card and device storage use Logistics’ app storage folders. No storage permission is needed. '
-                'Android removes these folders if you uninstall Logistics or clear its app data. Keep a separate backup. '
-                'LocalCrypt stays encrypted.'))
-        else:
-            box.add(toga.Button('Allow SD card / shared storage access…', on_press=self.allow_collection_storage, style=Pack(height=48)))
-            box.add(SettingsLabel('Android requires All files access. Local files are readable by other apps with storage access. LocalCrypt stays encrypted.'))
-        self.collection_copy = toga.Button('Copy current files here, then use them…', on_press=self.change_collection_storage, style=Pack(height=48))
-        self.collection_existing = toga.Button('Use existing files here — no copy…', on_press=self.recover_collection_storage, style=Pack(height=48))
-        self.collection_empty = toga.Button('Start empty here — keep old files…', on_press=self.start_empty_collection, style=Pack(height=48))
-        self.collection_erase = toga.Button('Erase collection files at this location…', on_press=self.wipe_collection_storage, style=Pack(height=48))
-        for button, explanation in (
-            (self.collection_copy, 'Copies and verifies Local + LocalCrypt + Received Files. Keeps the original files. Stops if the destination has different files; no merge or overwrite.'),
-            (self.collection_existing, 'Switches to files already at the selected location without scanning or copying their contents. Current files stay where they are. These files may be an older backup; LocalCrypt needs its original credentials.'),
-            (self.collection_empty, 'Selects empty Local + LocalCrypt + Received Files folders without copying anything. Current files stay where they are. Refuses a destination that already contains files.'),
-            (self.collection_erase, 'Permanently deletes only the three collection folders shown above and interrupted copy folders at that location. Does not switch location. Disabled for the collection currently in use.')):
-            box.add(button, SettingsLabel(explanation))
-        box.add(SettingsLabel('All four actions keep private app documents, credentials, settings and metadata. For a full app reset, use Settings → Reset.'))
-        box.add(toga.Button('Refresh drives / permission', on_press=self.show_collection_storage, style=Pack(height=48)))
-        self.collection_storage_status = SettingsLabel('After switching, Logistics closes. Reopen it to use the selected location.')
-        box.add(self.collection_storage_status)
-        for child in box.children:
-            if isinstance(child, toga.Label):
-                child.style.margin_bottom = 12
+        box = toga.Box(style=Pack(direction=COLUMN, margin=20))
+        location = toga.Box(children=[self._storage_heading(current),
+            self._storage_note('Local · LocalCrypt · Received Files')], style=Pack(direction=COLUMN, margin=16))
+        surface(location, radius=16, background='settings_group')
+        box.add(self._storage_note('Current location'), location,
+                self._storage_note('Choose where these files are stored. LocalCrypt stays encrypted.'),
+                self._storage_button('Change location', lambda widget: self._show_storage_target('copy'), primary=True))
+        options = [self._storage_button(title, lambda widget, action=action: self._show_storage_target(action))
+                   for title, action in (('Use files from another location', 'recover'),
+                                         ('Start with empty folders', 'empty'),
+                                         ('Delete files from an old location', 'wipe'))]
+        box.add(self._storage_disclosure('Other storage options', [group_rows(options)]),
+                self._storage_disclosure('What stays on this device?', [self._storage_note(
+                    'Settings, credentials and app-managed documents stay in the app. Only Local, LocalCrypt and Received Files change location.')]),
+                self.collection_storage_status)
         self.collection_target_changed()
+        self._show_storage_page(box, 'File storage', 'collection-storage')
+
+    def _show_storage_target(self, action):
+        if getattr(self, '_storage_changing', False):
+            return
+        from .file_drawer import detach
+        titles = {'copy': 'Change location', 'recover': 'Use existing files',
+                  'empty': 'Start empty', 'wipe': 'Delete old files'}
+        box = toga.Box(style=Pack(direction=COLUMN, margin=20))
+        box.add(self._storage_heading('Choose a location'), self._storage_note(
+            'The location currently in use cannot be deleted.' if action == 'wipe'
+            else 'Your current location stays unchanged until you confirm.'))
+        for control in (self.collection_drive, self.collection_target_status):
+            detach(control)
+            box.add(control)
+        box.add(self._storage_button('Refresh locations', lambda widget: self._refresh_storage_target(action)))
+        detach(self.collection_storage_status)
+        box.add(self.collection_storage_status)
+        self.collection_storage_status.text = ''
+        self._collection_target_action = action
+        self._collection_target_box = box
+        self.collection_storage_page = box
+        self._collection_target_details = None
+        self._collection_delete_footer = toga.Box(style=Pack(direction=COLUMN, margin=(8, 20, 20, 20))) if action == 'wipe' else None
+        self.collection_target_changed()
+        self._show_storage_page(box, titles[action], 'collection-storage-target', footer=self._collection_delete_footer)
+
+    def _refresh_storage_target(self, action):
+        volume = self.collection_drives[self.collection_drive.value]
+        self.show_collection_storage()
+        selected = next((name for name, path in self.collection_drives.items() if path == volume), None)
+        if selected is not None:
+            self.collection_drive.value = selected
+        self._show_storage_target(action)
+
+    def _render_storage_target(self):
+        from .file_drawer import detach
+        action, box = self._collection_target_action, self._collection_target_box
+        previous = self._collection_target_details
+        if previous is not None:
+            detach(previous)
+        details = toga.Box(style=Pack(direction=COLUMN, margin_top=16))
+        self._collection_target_details = details
+        box.add(details)
+        if action == 'wipe':
+            details.add(self._storage_note('Permanently delete Local, LocalCrypt and Received Files at this location, including interrupted copies. Your active storage and other files are kept.'),
+                        self._storage_paths(self.collection_drives[self.collection_drive.value]))
+            allowed = self._storage_permission(details, action)
+            detach(self.collection_erase)
+            self._collection_delete_footer.add(self.collection_erase)
+            self.collection_erase.enabled = self.collection_erase.enabled and allowed
+        else:
+            proceed = self._storage_button('Continue', lambda widget: self._show_storage_review(action), primary=True)
+            proceed.enabled = getattr(self, 'collection_' + {'copy': 'copy', 'recover': 'existing', 'empty': 'empty'}[action]).enabled
+            details.add(proceed)
+        from .settings.forms import fit_section
         fit_section(box, max(280, self.app.adaptive.content_width('settings')))
-        self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
-                       destination='settings', route='collection-storage', title='Collection storage')
+
+    def _show_storage_review(self, action):
+        if getattr(self, '_storage_changing', False):
+            return
+        from .file_drawer import detach
+        box = toga.Box(style=Pack(direction=COLUMN, margin=20))
+        target = self.collection_drive.value
+        box.add(self._storage_note('New location'), self._storage_heading(target))
+        explanations = {
+            'copy': ('Copy your files and switch', 'Copy and verify Local, LocalCrypt and Received Files. Original files stay where they are.'),
+            'recover': ('Use the files already here', 'No files are copied or merged. These files may be older than your current collection. LocalCrypt needs its original credentials.'),
+            'empty': ('Start with empty folders', 'Create empty Local, LocalCrypt and Received Files folders. Your current files stay at their old location. The destination must be empty.'),
+        }
+        title, note = explanations[action]
+        box.add(self._storage_heading(title), self._storage_note(note))
+        allowed = self._storage_permission(box, action)
+        try:
+            state = describe_location(self.private_root, self.collection_drives[target])
+            contains_files = any(status == 'contains files or folders' for _, status in state['folders'])
+        except (OSError, ValueError):
+            contains_files = False
+        if contains_files and action in ('copy', 'empty'):
+            box.add(self._storage_note('This location already has files. Copying stops if any files differ; nothing is merged or overwritten.'
+                if action == 'copy' else 'This location already has files. Choose an empty location or use the files already here.'))
+            box.add(self._storage_button('Use existing files instead', lambda widget: self._show_storage_review('recover')))
+        box.add(self._storage_paths(self.collection_drives[target]))
+        status = self.collection_storage_status
+        detach(status)
+        status.text = ''
+        box.add(status)
+        if allowed:
+            box.add(self._storage_note('Logistics will close when finished. Reopen it to use this location.'))
+            button = getattr(self, 'collection_' + {'copy': 'copy', 'recover': 'existing', 'empty': 'empty'}[action])
+            detach(button)
+            if action == 'empty' and contains_files:
+                button.enabled = False
+            box.add(button)
+        self._show_storage_page(box, 'Review change', 'collection-storage-review')
 
     def collection_target_changed(self, widget=None, **kwargs):
         if not hasattr(self, 'collection_target_status'):
             return
         try:
             state = describe_location(self.private_root, self.collection_drives[self.collection_drive.value])
-            self.collection_target_status.text = ('Selected location: CURRENTLY IN USE' if state['active']
-                else 'Selected location: NOT CURRENTLY IN USE') + '\n' + '\n'.join(
-                    path + ' · ' + status for path, status in state['folders'])
+            self.collection_target_status.text = ('Currently in use' if state['active'] else
+                'Existing files found' if any(status == 'contains files or folders' for _, status in state['folders'])
+                else 'No collection files found')
+            enabled = not state['active'] and not getattr(self, '_storage_changing', False)
             for name in ('collection_copy', 'collection_existing', 'collection_empty', 'collection_erase'):
-                getattr(self, name).enabled = not state['active'] and not getattr(self, '_storage_changing', False)
+                getattr(self, name).enabled = enabled
         except (OSError, ValueError) as error:
             self.collection_target_status.text = 'Cannot inspect this location: ' + str(error)
             for name in ('collection_copy', 'collection_existing', 'collection_empty'):
                 getattr(self, name).enabled = not getattr(self, '_storage_changing', False)
             self.collection_erase.enabled = False
-            # Recovery can repair a damaged private selection. Erase still
-            # refuses an unreadable active selection in the storage service.
+        from .routes import contains
+        if (getattr(self, '_collection_target_box', None) is not None
+                and (self.collection_storage_page is self._collection_target_box
+                     or contains(self.app.body, self._collection_target_box))
+                and not getattr(self, '_storage_changing', False)):
+            self.collection_storage_page = self._collection_target_box
+            self._render_storage_target()
         from .settings.forms import fit_text
         fit_text(self.collection_target_status, max(248, self.app.adaptive.content_width('settings') - 32))
 
@@ -177,7 +350,7 @@ class StorageUI:
             self.collection_storage_status.text = 'Use existing files here to repair storage settings: ' + str(error)
             return
         if (volume is not None or external_source) and not all_files_allowed():
-            self.collection_storage_status.text = 'Tap Allow SD card / shared storage access, enable permission, then return here.'
+            self.collection_storage_status.text = 'Open Android settings, enable permission for All files access, then return and choose Check access.'
             return
         if any(session.provider != 'managed-text' for session in self.workspace.sessions.values()):
             self.collection_storage_status.text = 'Close open readers and local/remote documents in Open documents, then retry.'
@@ -205,22 +378,22 @@ class StorageUI:
                 return
             self.set_cloud_busy(True)
             busy = True
-            from .settings.forms import SettingsLabel, fit_section, fit_text
+            from .settings.forms import fit_section, fit_text
             width = max(280, self.app.adaptive.content_width('settings'))
             progress_box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-            heading = {'copy': 'Moving Local + LocalCrypt + Received Files', 'recover': 'Selecting existing collection',
+            heading = {'copy': 'Copying your files', 'recover': 'Selecting existing files',
                        'empty': 'Preparing empty folders', 'wipe': 'Erasing files at selected location'}[action]
-            progress_box.add(SettingsLabel(heading, style=Pack(font_size=22, margin_bottom=16)))
+            progress_box.add(self._storage_heading(heading))
             if action == 'copy':
-                progress_box.add(SettingsLabel('From: ' + str(collection_base(self.private_root))))
-            progress_box.add(SettingsLabel('To: ' + destination if action != 'wipe' else 'Location: ' + destination))
-            progress_box.add(SettingsLabel('Keep Logistics open until this finishes. Original files stay in place when copying.'))
-            self.collection_storage_status = SettingsLabel('Preparing…', style=Pack(margin_top=16))
+                progress_box.add(self._storage_note('From: ' + str(collection_base(self.private_root))))
+            progress_box.add(self._storage_note('To: ' + destination if action != 'wipe' else 'Location: ' + destination))
+            progress_box.add(self._storage_note('Keep Logistics open until this finishes. Original files stay in place when copying.'))
+            self.collection_storage_status = self._storage_note('Preparing…')
             progress_bar = toga.ProgressBar(max=None, style=Pack(height=12, margin_top=12, margin_bottom=12))
-            details = SettingsLabel('Finding files…')
-            current_file = SettingsLabel('')
-            done_button = toga.Button('Back to storage settings', enabled=False,
-                                      on_press=self.show_collection_storage, style=Pack(height=48, margin_top=24))
+            details = self._storage_note('Finding files…')
+            current_file = self._storage_note('')
+            done_button = self._storage_button('Back to storage settings', self.show_collection_storage)
+            done_button.enabled = False
             progress_box.add(self.collection_storage_status, progress_bar, details, current_file, done_button)
             self.collection_storage_page = progress_box
             from .layout_participants import participants, reflow_settings_section

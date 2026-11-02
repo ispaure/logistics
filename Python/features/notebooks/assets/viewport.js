@@ -70,6 +70,7 @@ function resize() {
     ctx.setTransform(canvas.width / state.width, 0, 0, canvas.height / state.height, 0, 0);
     sizeDraft()
   }
+  if (typeof updateZoomChrome === 'function') updateZoomChrome();
   draw()
 }
 

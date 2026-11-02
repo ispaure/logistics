@@ -49,6 +49,9 @@ class HostLifecycle:
         from features.books.mobile.media_controls import stop_media
         stop_markdown_speech(host)
         stop_media(host)
+        transfer = getattr(host, '_transfer_controller', None)
+        if transfer is not None:
+            transfer.dispose()
         for panel in getattr(host, '_notebook_views', {}).values():
             panel.dispose()
         for name in ('vault_browser', 'notebook_panel', 'memory_pressure', 'screen_privacy', 'audio_output'):

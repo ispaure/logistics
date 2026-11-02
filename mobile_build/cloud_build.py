@@ -10,13 +10,14 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tomllib
 
 if __package__:
-    from .build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build, video_build, wifi_build, widget_build, lm_build
+    from .build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build, video_build, wifi_build, widget_build, lm_build, license_build
     from .deployment.deployment_paths import output_root
 else:
-    from build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build, video_build, wifi_build, widget_build, lm_build
+    from build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build, video_build, wifi_build, widget_build, lm_build, license_build
     from deployment.deployment_paths import output_root
 
 ROOT = Path(__file__).resolve().parent
@@ -80,6 +81,7 @@ def configure_android_sources(project):
     metadata.parent.mkdir(parents=True, exist_ok=True)
     metadata.write_text('<resources><string name="main_module">logisticsmobile</string></resources>\n')
     (Path(project) / 'app/extract-packages.txt').write_text('')
+    license_build.configure_android(project, sys.executable)
 
 
 
@@ -87,6 +89,17 @@ def configure_android_appearance(project):
     """Use DayNight resources and preserve Python sessions across uiMode changes."""
     import xml.etree.ElementTree as ET
     project = Path(project)
+    # Replace Briefcase's combined toolbar/status inset with live chrome geometry.
+    activity = project / 'app/src/main/java/org/beeware/android/MainActivity.java'
+    if activity.exists():
+        source = activity.read_text()
+        hook = 'io.github.ispaure.logisticsmobile.SystemChrome.install(this, view);'
+        if hook not in source:
+            start = source.index('        // EdgeToEdge.enable', source.index('public void setContentView(View view,'))
+            end = source.index('\n    }', start)
+            if 'statusBarBackground' not in source[start:end] or 'setOnApplyWindowInsetsListener' not in source[start:end]:
+                raise ValueError('Unexpected Briefcase window inset listener.')
+            activity.write_text(source[:start] + '        ' + hook + source[end:])
     styles = project / 'app/src/main/res/values/styles.xml'
     text = styles.read_text()
     text = text.replace('Theme.AppCompat.Light.DarkActionBar', 'Theme.MaterialComponents.DayNight')
@@ -222,32 +235,43 @@ def ios(project=None, *, include_watch=False):
     lm_build.configure_ios(project)
 
 
-def licenses(destination=None):
+def licenses(destination=None, *, platform='host'):
     """Carry notices for the modules actually compiled into the native engine."""
-    raw = subprocess.check_output(['go', 'list', '-deps', '-json', '.'], cwd=ROOT / 'rclone_bridge', text=True)
-    decoder, modules = json.JSONDecoder(), {}
+    raw = ''
+    for arch in (('arm64', 'amd64') if platform in ('ios', 'android') else (None,)):
+        env = dict(os.environ)
+        if arch is not None:
+            env.update(GOOS=platform, GOARCH=arch, CGO_ENABLED='1')
+        raw += subprocess.check_output(['go', 'list', '-deps', '-json', '.'],
+                                       cwd=ROOT / 'rclone_bridge', text=True, env=env) + '\n'
+    decoder, modules, packages, embedded = json.JSONDecoder(), {}, {}, {}
     while raw.strip():
         value, end = decoder.raw_decode(raw.lstrip())
         raw = raw.lstrip()[end:]
         module = value.get('Module', {})
         if module.get('Version'):
             modules[module['Path']] = module
+            packages.setdefault(module['Path'], set()).add(Path(value['Dir']))
+            embedded.setdefault(module['Path'], set()).update(
+                Path(value['Dir']) / name for name in value.get('EmbedFiles', ()))
     destination = Path(destination) if destination is not None else output_root(ROOT) / 'payload/mobile/native-licenses'
     destination.mkdir(parents=True, exist_ok=True)
     manifest = []
+    reader = license_build.inventory_module()
     for name, module in sorted(modules.items()):
-        root = Path(module['Dir'])
-        files = [p for p in root.iterdir() if p.is_file()
-                 and p.name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE'))]
+        root = Path(module['Dir']).resolve()
+        files = reader.package_notice_paths(root, packages[name], embedded[name])
         if not files:
             raise ValueError('No license notice found for native dependency: ' + name)
         records = []
         for source in files:
             if source.stat().st_size > 512 * 1024:
                 raise ValueError('Unexpected native dependency notice size.')
-            target = destination / (name.replace('/', '_') + '-' + module['Version'] + '-' + source.name)
+            relative = source.relative_to(root).as_posix()
+            suffix = hashlib.sha256(relative.encode()).hexdigest()[:12]
+            target = destination / (name.replace('/', '_') + '-' + module['Version'] + '-' + suffix + '-' + source.name)
             shutil.copyfile(source, target)
-            records.append(dict(file=target.name, sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
+            records.append(dict(file=target.name, path=relative, sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
         manifest.append(dict(module=name, version=module['Version'], notices=records))
     goroot = Path(subprocess.check_output(['go', 'env', 'GOROOT'], text=True).strip())
     shutil.copyfile(goroot / 'LICENSE', destination / 'Go-LICENSE')
@@ -257,13 +281,16 @@ def licenses(destination=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('target', choices=['android', 'ios', 'host', 'licenses'])
+    parser.add_argument('--platform', choices=['android', 'ios', 'host'], default='host')
+    parser.add_argument('--skip-tests', action='store_true', help='Compile the bridge without running its Go tests')
     args = parser.parse_args()
     if not shutil.which('go'):
         parser.error('Install the pinned Go 1.26.9 toolchain first.')
     if args.target == 'licenses':
-        licenses()
+        licenses(platform=args.platform)
         return
-    run('go', 'test', './...')
+    if not args.skip_tests:
+        run('go', 'test', './...')
     if args.target == 'android':
         android()
     elif args.target == 'ios':

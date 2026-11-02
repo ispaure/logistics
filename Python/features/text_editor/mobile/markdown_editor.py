@@ -54,30 +54,41 @@ def editor_blocks(text, *, image_source=None):
         for index, line in enumerate(lines[1:], 1):
             if line.strip() in ('---', '...'):
                 frontmatter = index + 1
-                ranges.append((0, frontmatter, False))
+                ranges.append((0, frontmatter, False, None))
                 break
     body = ''.join(lines[frontmatter:])
-    for token in parser.parse(body):
+    env = {}
+    parsed = parser.parse(body, env)
+    for token_index, token in enumerate(parsed):
         if token.level == 0 and token.map is not None and token.type != 'inline':
             start, end = (n + frontmatter for n in token.map)
             if ranges and start < ranges[-1][1]:
                 continue
             source = ''.join(lines[start:end])
-            # Wiki aliases and embedded HTML retain exact spelling in Source mode.
+            # A simple wiki heading/paragraph uses the lossless live-source DOM.
+            wiki = token.type in ('paragraph_open', 'heading_open') and '\n' not in source.rstrip('\r\n')
+            checked = re.sub(r'(?<!!)\[\[[^]\n]+\]\]', 'wiki', source) if wiki else source
             safe = (token.type in ('paragraph_open', 'heading_open', 'blockquote_open',
                                   'bullet_list_open', 'ordered_list_open', 'fence', 'code_block', 'table_open')
-                    and not re.search(r'\[\[|<|\$|^\s*\[[^]]+\]:', source, re.M)
-                    and not re.search(r'\][ \t]*\[|\[[^]\n]+\](?![([])', source))
+                    and not re.search(r'\[\[|<|\$|^\s*\[[^]]+\]:', checked, re.M)
+                    and not re.search(r'\][ \t]*\[|\[[^]\n]+\](?![([])', checked))
             if token.type in ('fence', 'code_block'):
                 safe = True
-            ranges.append((start, end, safe))
+            stop = token_index + 1
+            if token.nesting == 1:
+                while stop < len(parsed):
+                    closing = parsed[stop]
+                    stop += 1
+                    if closing.level == token.level and closing.nesting == -1:
+                        break
+            ranges.append((start, end, safe, parsed[token_index:stop]))
     result, cursor = [], 0
-    for start, end, editable in ranges:
+    for start, end, editable, block_tokens in ranges:
         if start > cursor:
             result.append(dict(source=''.join(lines[cursor:start]), editable=False, html=''))
         source = ''.join(lines[start:end])
-        rendered = parser.render(source) if start >= frontmatter else '<pre>' + escape(source) + '</pre>'
-        tokens = parser.parse(source) if editable else []
+        rendered = parser.renderer.render(block_tokens, parser.options, env) if block_tokens is not None else '<pre>' + escape(source) + '</pre>'
+        tokens = block_tokens if editable else []
         if (len(tokens) == 3 and tokens[0].type in ('paragraph_open', 'heading_open')
                 and all(child.type in ('text', 'strong_open', 'strong_close', 'em_open',
                                        'em_close', 'code_inline') for child in (tokens[1].children or []))
@@ -100,10 +111,16 @@ def editor_blocks(text, *, image_source=None):
 
 
 
-def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet=''):
+def snapshot_script(bridge):
+    return ('JSON.stringify(document.documentElement.dataset.editorBridge === '
+            + json.dumps(bridge) + ' ? (window.markdownSnapshot?.() ?? null) : null)')
+
+
+def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='', blocks=None):
     nonce = uuid4().hex
-    data = json.dumps(editor_blocks(text, image_source=image_source), ensure_ascii=True).replace('<', '\\u003c')
+    data = json.dumps(blocks if blocks is not None else editor_blocks(text, image_source=image_source), ensure_ascii=True).replace('<', '\\u003c')
     script = (_SCRIPT + LIVE_SCRIPT).replace('LIVE_ACTIVE', web_patterns()['active']).replace('LIVE_PATTERNS', json.dumps(web_patterns())).replace('location.href = BRIDGE', 'location.href = ' + json.dumps(bridge)).replace('const blocks = DATA;', 'const blocks = ' + data + ';')
+    script += '\ndocument.documentElement.dataset.editorBridge=' + json.dumps(bridge) + ';'
     common = [('Bold', 'bold', ''), ('Italic', 'italic', ''), ('Undo', 'undo', ''), ('Redo', 'redo', '')]
     more = [('Strike', 'strikeThrough', ''), ('Bullets', 'insertUnorderedList', ''),
             ('Numbered', 'insertOrderedList', ''), ('Remove link', 'unlink', '')]
@@ -148,15 +165,27 @@ def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='')
             f'<script nonce="{nonce}">{script}</script></body></html>')
 
 
+def prepare_editor(text, *, font_size=16, image_source=None, stylesheet=''):
+    """Prepare an immutable document payload without touching native widgets."""
+    bridge = 'logistics-editor://' + uuid4().hex + '/'
+    blocks = editor_blocks(text, image_source=image_source)
+    content = editor_html(text, bridge, font_size, stylesheet=stylesheet, blocks=blocks)
+    return bridge, content, tuple(block['source'] for block in blocks)
+
+
 from services.documents.mobile_views import markdown_webview
 
 
 class FormattedMarkdownInput:
-    def __init__(self, changed, *, font_size=16, image_source=None, stylesheet='', private=False):
+    def __init__(self, changed, *, font_size=16, image_source=None, stylesheet='', private=False, presentation=None):
         self.changed, self.font_size = changed, font_size
         self.image_source = image_source
         self.stylesheet = stylesheet
         self.closed = False
+        self.presentation = presentation
+        self.geometry_subscription = None
+        self.geometry_task = None
+        self.geometry_dirty = False
         self.text = None
         self._blocks = ()
         self._revision = 0
@@ -179,19 +208,42 @@ class FormattedMarkdownInput:
             self._viewport_lock = ViewportLock()
             self.view._impl.native.setOnScrollChangeListener(self._viewport_lock)
 
+    def refresh_geometry(self):
+        if self.closed or self.presentation is None:
+            return
+        self.geometry_dirty = True
+        if self.geometry_task is not None and not self.geometry_task.done():
+            return
+        import asyncio
+        async def update():
+            while self.geometry_dirty and not self.closed:
+                self.geometry_dirty = False
+                region = self.presentation.fold_division(self.view)
+                height = region.y if region is not None and not region.vertical else None
+                await self.view.evaluate_javascript('window.markdownFold?.(' + json.dumps(height) + ')')
+        self.geometry_task = asyncio.get_running_loop().create_task(update())
+
     async def loaded(self, widget=None, url=None, **kwargs):
+        if self.presentation is not None and not self.closed:
+            if self.geometry_subscription is None:
+                self.geometry_subscription = self.presentation.register_layout(('markdown-fold', id(self)), self,
+                    lambda owner, frame: owner.refresh_geometry())
+            self.refresh_geometry()
         if not self.closed and self.scroll_top:
             await self.view.evaluate_javascript('(function(){const root=document.getElementById("document");'
                 'if(root)root.scrollTop=' + json.dumps(self.scroll_top) + ';})()')
 
-    def load(self, text):
+    def preparation_inputs(self):
+        # Capture native presentation inputs before moving pure parsing to a worker.
+        return dict(font_size=self.font_size, stylesheet=self.stylesheet,
+                    image_source=self.image_source() if self.image_source else None)
+
+    def load(self, text, *, prepared=None):
         if self.closed or self.text == text:
             return
-        bridge = 'logistics-editor://' + uuid4().hex + '/'
-        content = editor_html(text, bridge, self.font_size,
-            image_source=self.image_source() if self.image_source else None, stylesheet=self.stylesheet)
+        bridge, content, sources = prepared if prepared is not None else prepare_editor(text, **self.preparation_inputs())
         self.bridge = bridge
-        self._blocks = tuple(block['source'] for block in editor_blocks(text))
+        self._blocks = sources
         self._revision = 0
         self.text = text
         set_inline_html(self.view, 'https://logistics.invalid/' + uuid4().hex + '/', content)
@@ -240,7 +292,7 @@ class FormattedMarkdownInput:
         if self.closed or not native_backend(self.view).startswith(('toga_iOS.', 'toga_android.')):
             return
         bridge = self.bridge
-        raw = await self.view.evaluate_javascript('JSON.stringify(window.markdownSnapshot?.() ?? null)')
+        raw = await self.view.evaluate_javascript(snapshot_script(bridge))
         if self.closed or bridge != self.bridge:
             raise ValueError('The Markdown editor closed before its edits could be saved.')
         try:
@@ -256,6 +308,11 @@ class FormattedMarkdownInput:
 
     def dispose(self):
         self.closed = True
+        if self.geometry_subscription is not None:
+            self.geometry_subscription.dispose()
+        if self.geometry_task is not None:
+            self.geometry_task.cancel()
+        self.presentation = None
         self.changed = None
         self.text = None
         self._blocks = ()

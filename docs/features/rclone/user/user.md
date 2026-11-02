@@ -183,7 +183,14 @@ the comparison changed, inspect the new results and confirm again. Comparison
 scans use rclone’s normal retries on both desktop and mobile. Each attempt
 replaces the previous attempt’s results; an exhausted or cancelled comparison
 remains incomplete. Cancel and **Proceed without full review…** remain available
-while waiting for a retry.
+while waiting for a retry (mobile labels this **Skip full comparison…**).
+
+The desktop review displays a change table with **Change**, **File** and **Folder**
+columns, plus total counts for additions, replacements, deletions and local
+cleanup. A side inspector explains the selected action and exact affected paths.
+Large reviews page through 30 changes at a time without limiting the comparison. Filter by action or search a path to find affected files; hover a row
+for its full path. Unchanged files stay out of the list. Local cleanup removes
+local generated files before Push and is distinguished from destination deletion.
 
 Empty source folders are preserved when the destination backend supports them.
 Both desktop and mobile review list directory changes with a trailing `/`,
@@ -194,9 +201,11 @@ timestamp changes as new transfer work.
 While scanning or checking a completed review, **Proceed without full review…**
 lets you stop waiting and explicitly confirm the source and destination. The
 confirmation warns that additional replacements and deletions may occur. It waits
-for the comparison to stop before launching the transfer. Credential, destination
-and LocalCrypt integrity checks still apply. **Cancel** closes the review without
-starting a transfer. An incomplete or failed comparison never starts one by itself.
+for the comparison to stop before launching the transfer. Credential and destination
+checks still apply. On desktop, this choice also skips the full LocalCrypt
+integrity scan and generated-file cleanup; it starts Push after the comparison
+stops and structural checks pass. Mobile retains its LocalCrypt integrity checks.
+**Cancel** closes the review without starting a transfer. An incomplete or failed comparison never starts one by itself.
 
 Ordinary sync follows source file links (`--copy-links`), so linked content can be included.
 Unassociated local folders match accounts by remote name. A folder pulled with
@@ -252,10 +261,12 @@ you to manually make a local copy and open it. External applications require an
 explicit local copy. Remote readers cannot save text or metadata back to storage and show no Save,
 Save As or metadata-edit controls.
 
-Remote browsers on desktop, iOS and Android offer browsing and direct previews
-only. They have no standalone file or folder download/copy actions. To create an
-offline copy, use **Pull** from Workspaces and choose the storage type when
-prompted. Session-only credentials do not create a persistent
+Desktop remote browsers offer browsing and direct previews. To create an
+offline copy on desktop, use **Pull** from Workspaces and choose the storage type
+when prompted. On mobile, a file or folder's **••• → Download locally…** menu
+also offers a selected-item pull to an ordinary or unlocked LocalCrypt folder;
+see the [mobile workflow](../user_mobile/workflows.md#mobile-folder-navigation).
+Opening a preview alone never creates an offline copy. Session-only credentials do not create a persistent
 remote document; locking or replacing credentials retires its open readers.
 
 On mobile, open a remote from Workspaces or **Remote files**, then tap a supported
@@ -427,12 +438,15 @@ remote removal as **Delete**. Unchanged encrypted junk is therefore shown as a
 planned deletion, rather than hidden among matching files. Cancelling review
 preserves both copies. Encrypted junk must still pass authentication before removal.
 
-The cancellable check then validates every stored name and fully decrypts and
+Unless desktop **Proceed without full review…** was explicitly confirmed, the
+cancellable check then validates every stored name and fully decrypts and
 authenticates every file in memory. Plaintext with an encrypted-looking filename,
 unknown names, corrupt ciphertext and files that change during checking refuse
 the push. This reads the whole copy before transfer, so large copies take time.
 Repair or move unexpected files explicitly; changing an exclusion cannot bypass
-validation. The app does not create decrypted temporary files for this check.
+validation on the normal path. Skipping the desktop review also skips this
+validation, so corrupt or unexpected files are not detected before upload. The
+app does not create decrypted temporary files for this check.
 
 **Settings → rclone → Push exclusions** controls one [rclone exclusion pattern](https://rclone.org/filtering/)
 per line. Defaults skip common Finder/Explorer junk and AppleDouble sidecars.

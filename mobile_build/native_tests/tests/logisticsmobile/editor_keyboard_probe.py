@@ -293,15 +293,17 @@ class Probe(LogisticsMobile):
                     if name.startswith('New'):
                         # Exercise the actual creation form while its name
                         # input still owns the software keyboard.
-                        await self.choose_document_type()
+                        from .fixtures import choose_creation_type
+                        await choose_creation_type(self, 'md' if name.endswith('.md') else 'txt')
                         form = self.editor_picker()
                         form.save_as_name.value = name
                         form.creation_type.value = ('Markdown (.md)' if name.endswith('.md') else 'Plain text (.txt)')
-                        await form.browser_editor_location(('Local', ''))
                         field = form.save_as_name._impl.native
                         field.requestFocus()
                         manager.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
                         await asyncio.sleep(.7)
+                        await form.choose_creation_location()
+                        await form.browser_editor_location(('Local', ''))
                         await form.confirm_editor_file()
                         actual = self.private_sessions.active
                         assert actual.crypt_reader.name == name

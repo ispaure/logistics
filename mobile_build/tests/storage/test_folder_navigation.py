@@ -475,6 +475,48 @@ class ShowInFolderTests(TestCase):
                 await preview.browser.close()
         app.loop.run_until_complete(exercise())
 
+    def test_shared_root_preview_uses_its_own_location_inside_local_files(self):
+        from mobile.folder_navigation import FolderPreview, FolderScreen
+        app = self.app
+
+        async def exercise():
+            await app.show_files()
+            await app.browser_file_location(('Local files', 'Projects/Reports'))
+            entry = FolderScreen(app.files_view, app.file_browser, app.browser_file_location,
+                                 'Shared files', '', 'browser')
+            preview = FolderPreview(app, entry)
+            try:
+                await preview.task
+                shared = app.file_provider_for('Shared files')
+                self.assertEqual(preview.browser.location_bar.folder_location, str(shared.root))
+                self.assertEqual(preview.browser.search_provider.root, shared.root)
+                self.assertEqual(app.file_path, 'Projects/Reports')
+            finally:
+                preview.close()
+                await preview.browser.close()
+        app.loop.run_until_complete(exercise())
+
+    def test_unloaded_ancestor_cannot_reveal_an_unverified_path(self):
+        from mobile.folder_navigation import FolderPreview, FolderScreen
+        app = self.app
+
+        async def exercise():
+            await app.show_files()
+            entry = FolderScreen(app.files_view, app.file_browser, app.browser_file_location,
+                                 'Local files', 'Folder that was removed', 'browser')
+            preview = FolderPreview(app, entry)
+            try:
+                with patch('mobile.document_location.show_location') as show:
+                    preview.browser.location_bar.show_location()
+                    await preview.task
+                    preview.browser.location_bar.show_location()
+                    show.assert_not_called()
+                self.assertEqual(preview.status.value, 'Return to this folder to refresh.')
+            finally:
+                preview.close()
+                await preview.browser.close()
+        app.loop.run_until_complete(exercise())
+
     def test_markdown_preview_offers_the_same_folder_action(self):
         app = self.app
         path = self.folder / 'note.md'

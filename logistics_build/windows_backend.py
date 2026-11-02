@@ -127,7 +127,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
                       Phase('release-tooling', (python, '-m', 'unittest', 'discover', '-s', '.github/scripts', '-v'),
                             target, timeout=300, environment=environment))
         if getattr(args, 'native_notebooks', False):
-            probe_count = len(args.notebook_probe or ('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'brush-pixels'))
+            probe_count = len(args.notebook_probe or ('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'view-zoom', 'brush-pixels'))
             graphics_count = 4 if args.notebook_rendering == 'all' else 1
             phases += (Phase('notebook-native', (python, 'Python/tests/notebooks/notebook_platform_probe.py',
                 '--output', str(root / reports / 'notebook-native'),
@@ -172,7 +172,7 @@ def main():
     parser.add_argument('--prepared', type=Path)
     parser.add_argument('--pattern', default='')
     parser.add_argument('--native-notebooks', action='store_true', help='Run native notebook UI probes after focused setup')
-    parser.add_argument('--notebook-probe', action='append', choices=('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'brush-pixels'),
+    parser.add_argument('--notebook-probe', action='append', choices=('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'view-zoom', 'brush-pixels'),
                         help='Select focused native checks; defaults to all checks')
     parser.add_argument('--notebook-rendering', choices=('native', 'software', 'chromium-software', 'warp', 'all'),
                         help='Select a graphics path for native notebook acceptance')

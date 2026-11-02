@@ -27,17 +27,23 @@ class GitUITests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
+        temporary = TemporaryDirectory()
+        cls.addClassCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        cls.repository_template = initialize(root / 'repo')
+        repo = Repository(cls.repository_template)
+        repo.run(['config', 'user.name', 'UI Test'])
+        repo.run(['config', 'user.email', 'test@example.invalid'])
+        repo.run(['config', 'commit.gpgsign', 'false'])
+        repo.run(['config', 'core.hooksPath', str(root / 'no-hooks')])
+        repo.run(['symbolic-ref', 'HEAD', 'refs/heads/main'])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
-        self.repo = Repository(initialize(self.root / 'repo'))
-        self.repo.run(['config', 'user.name', 'UI Test'])
-        self.repo.run(['config', 'user.email', 'test@example.invalid'])
-        self.repo.run(['config', 'commit.gpgsign', 'false'])
-        self.repo.run(['config', 'core.hooksPath', str(self.root / 'no-hooks')])
-        self.repo.run(['symbolic-ref', 'HEAD', 'refs/heads/main'])
+        # Copy the empty repository, including .git: each case owns its refs,
+        # index, configuration and working files, with no shared writable state.
+        self.repo = Repository(shutil.copytree(self.repository_template, self.root / 'repo'))
         self.page = RepositoryView(preferences_path=self.root / 'git.json')
         self.page.resize(1250, 800)
         self.page.show()
@@ -70,6 +76,20 @@ class GitUITests(QtTestCase):
         (self.repo.path / 'file.txt').write_text('first\n')
         self.repo.stage(['file.txt'])
         self.repo.commit('First')
+
+    def test_repository_fixture_keeps_mutations_out_of_template(self):
+        template = self.repository_template
+        config = (template / '.git/config').read_bytes()
+        original_status = Repository(template).status()
+        self.repo.run(['config', 'user.name', 'Changed in one case'])
+        self.commit_fixture()
+        self.assertNotEqual((self.repo.path / '.git/config').read_bytes(), config)
+        self.assertTrue((self.repo.path / '.git/index').is_file())
+        self.assertNotEqual(self.repo.status().oid, original_status.oid)
+        self.assertEqual((template / '.git/config').read_bytes(), config)
+        self.assertFalse((template / '.git/index').exists())
+        self.assertEqual(Repository(template).status(), original_status)
+        self.assertFalse((template / 'file.txt').exists())
 
     def test_conventional_menus_share_toolbar_actions_and_busy_guards(self):
         menus = self.page.menu_controls.menus

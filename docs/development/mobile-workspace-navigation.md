@@ -193,10 +193,12 @@ reserved regions. Geometry and retained-owner contracts are covered by
 successfully listed Workspaces folder. A local workspace shortcut starts its
 stack at the selected folder: Back from that folder returns to the retained
 Workspaces overview, and subfolders return to their parent within that workspace.
-Browse All Files starts at the storage root. On iOS, entering **Local** from
-the shared Documents root switches providers while retaining that shared root
-as its native Back destination. Back from Local returns to Browse All Files;
-the next Back returns to Workspaces. Folder identity includes both provider and
+Browse All Files starts at the storage root and omits the dedicated Local and
+Received Files collections. Browser entry points capture provider and path before
+their first listing, including LocalCrypt and mapped offline copies. Android Back
+and the toolbar return to Workspaces at that entry point, before considering older
+browser history. Search dismissal and child-folder history remain separate steps.
+Folder identity includes both provider and
 path, since both provider roots have an empty path. Other direct reveals retain their
 folder ancestry.
 Local, LocalCrypt, remote and full-page workspace browsers publish successful
@@ -291,8 +293,9 @@ establish physical fold-pose behavior or live provider operation.
 ## Home and Documents hub sections
 
 `hub_ui.HubSections` retains the existing controls and moves Recent between the
-compact page and a second scroll container. Home keeps its introduction and Open/New
-actions together, with five recent entries and a Documents link in the trailing
+compact page and a second scroll container. Home has Open/New actions without
+introductory copy. Its status row is mounted only for credential or transfer
+shortcuts, with five recent entries and a Documents link in the trailing
 section. Documents keeps search and All open together; the trailing section holds
 closed Recent entries, other saved text documents and library access. Open entries
 are excluded from Recent, with the active session first in All open. Search updates
@@ -1208,8 +1211,11 @@ feedback takes precedence over Cloud's setup action.
 
 On iOS, `storage_location.shared_documents_path` exposes the registered public
 Documents root separately from the managed Local directory. The app-owned
-`local_sources.SharedFiles` provider lists `Local` under its actual name and
-protects its root from mutations. Entering it switches to `CollectionFiles`.
+`local_sources.SharedFiles` provider protects managed collection roots from
+mutations. Its `include_collections` listing option defaults to true for pickers;
+the main file browser passes false to omit Local and Received Files, including
+recursive root search. Android's `DeviceFiles` uses the same option without
+exposing private app storage. This changes listings only, not filesystem exposure.
 Local lists imported folders and downloaded/synced copies individually, alongside
 shared subfolders. The root choice is marked `browser_root` and rendered as a
 **Browse All Files** folder button below the folder tree, using the same row

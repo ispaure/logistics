@@ -123,6 +123,16 @@ class TransferExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.state.complete)
         self.assertIn('Sync stopped', self.state.message)
 
+    async def test_worker_final_snapshot_is_published_before_terminal_state(self):
+        def work(client, cancelled, progress):
+            progress(phase='Transferring', files=1, done=10, total=20)
+            progress(phase='Sync complete; verifying local copy', files=2, done=20, total=20)
+            return 2
+        self.assertTrue(await self.execution.run(work, 'push'))
+        self.assertEqual(self.view.progress.call_args.args[1]['done'], 20)
+        self.assertEqual(self.view.progress.call_args.args[1]['files'], 2)
+        self.assertEqual(self.state.metrics['files'], 2)
+
 
 class MirrorCopyAdmissionTests(unittest.IsolatedAsyncioTestCase):
     async def test_stale_open_releases_unpublished_provider(self):
@@ -132,15 +142,16 @@ class MirrorCopyAdmissionTests(unittest.IsolatedAsyncioTestCase):
         client = SimpleNamespace(generation=1)
         provider = Mock()
         def open_provider(location):
+            self.assertEqual((location.remote, location.cipher_identity, location.create), ('Secret', 'b' * 64, False))
             client.generation = 2
             return provider
         service = SimpleNamespace(localcrypt=SimpleNamespace(open=open_provider))
-        store = SimpleNamespace(jobs={'copy': dict(crypt=True, remote='Secret', identity='a' * 64)})
+        store = SimpleNamespace(jobs={'copy': dict(crypt=True, remote='Secret', identity='a' * 64, cipher_identity='b' * 64)})
         owner = SimpleNamespace(rclone_ui=SimpleNamespace(local_read_available=Mock()), cloud_busy=False,
             mirror_store=lambda: store, show_local_location=AsyncMock(), cloud_client=client,
             navigation_generation=1, active_host=True, private_root=Path('/synthetic'),
             file_roots={}, browser_file_location=AsyncMock(), update_file_locations=Mock())
-        with patch('features.rclone.transfers.mobile.jobs.remote_location', return_value=(None, 'books')), \
+        with patch('features.rclone.transfers.mobile.jobs.local_copy_location', return_value=('Secret', 'books')), \
              patch('features.rclone.mobile.service.native_service', return_value=service):
             self.assertFalse(await MirrorUI.open_mirror_copy(owner, 'copy'))
         provider.close.assert_called_once_with()

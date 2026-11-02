@@ -238,24 +238,13 @@ and the validation/build/runtime gates still precede publication.
 
 ## Guided remote copies
 
-`features.rclone.mobile.copy_ui.CopyUI` owns the remote-to-device destination route.
-It snapshots the client, credential generation and selected row before presenting
-an app-managed LocalFiles folder picker. Connection changes refuse the transfer.
-The browser exposes separate selected-item and current-folder copy actions because
-folder taps navigate immediately. Local storage selection and parent navigation
-are primary controls; storage changes open the root. No remote write API is added.
-
-`folder_download.pull_item` stages files, flushes them and publishes with an
-exclusive hard link; staging removal leaves one independent destination file.
-Collisions produce a new copy name. Folder transfers reuse the existing staged
-folder pull. Cancellation, authentication failure and credential changes before
-publication remove staging. The native descriptor is sampled every 200 ms on a
-worker to report bytes without changing the bridge ABI. UI progress is dispatched
-on the event loop; the bar measures the current file, stays animated for unknown
-sizes, and completes only after publication. Folder status also counts completed
-files. `mobile_build/tests/test_copy_ui.py` covers destination browsing, collisions,
-source generation changes, retry, cancellation and progress using the dummy host;
-these checks are not physical iOS/Android interaction evidence.
+The earlier `copy_ui.CopyUI` and `folder_download.pull_item` implementation and
+its `test_copy_ui.py` suite have been retired. Current mobile selected-item Pulls
+use `mobile/remote_downloads.py`, the destination picker and the existing transfer
+execution owner. See [selected downloads](../features/rclone/development/development.md#selected-remote-item-downloads-on-mobile)
+for current ownership and validation. Existing names are rejected rather than
+automatically renamed. Host checks establish selection, cancellation and cleanup;
+they do not certify physical iOS/Android interaction.
 
 ## Native launch panels and per-editor search
 

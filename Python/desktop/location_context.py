@@ -143,6 +143,10 @@ class BrowserLocationRow(qt.QWidget):
         self.refresh()
 
     def refresh(self, *_):
+        if self.browser.navigation.directory is None:
+            self.hide()
+            return
+        self.show()
         context = location_context(self.browser.navigation.directory, self.provider)
         if self.provider is not None and getattr(self.provider, 'private', False):
             from features.rclone import session

@@ -52,6 +52,10 @@ class SessionTransitions:
 
     def preserve_for_replacement(self):
         host = self.host
+        library = getattr(host, 'vault_browser', None)
+        if library is not None and library.__dict__.get('embedded') is not None:
+            # A native DOM/ink event may still be queued even when dirty is false.
+            raise OSError('Save or close the Notes Library document before replacing this workspace.')
         store = getattr(host, 'store', None)
         if store is not None:
             store.flush_checkpoints()
@@ -65,12 +69,35 @@ class SessionTransitions:
         host = self.host
         if host.__dict__.get('_document_close_tasks'):
             return False
+        library = getattr(host, 'vault_browser', None)
+        if library is not None and library.__dict__.get('embedded') is not None:
+            # Always flush through the async close path: a clean Python model can
+            # still have native keystrokes or ink waiting for bridge delivery.
+            if library.session is not None:
+                self.request_close_session(library.session.id)
+            return False
         if hasattr(host, 'chat_current') and not host.checkpoint_chat():
             return False
         return host.checkpoint()
 
     def request_close_session(self, key, *, _markdown_flushed=False):
         host = self.host
+        library = getattr(host, 'vault_browser', None)
+        if (not _markdown_flushed and library is not None and library.session is not None
+                and library.session.id == key and library.embedded is not None):
+            if not getattr(library, '_close_task', None):
+                async def close_library():
+                    try:
+                        if await library.prepare_leave() and host.active_host:
+                            library._approved_close = library.embedded
+                            try:
+                                self.request_close_session(key, _markdown_flushed=True)
+                            finally:
+                                library._approved_close = None
+                    finally:
+                        library._close_task = None
+                library._close_task = host.loop.create_task(close_library())
+            return True
         if not _markdown_flushed:
             owner = host.text_views.get(key) or host.provider_sessions().controllers.get(key)
             formatted = getattr(owner, 'formatted', None)
@@ -245,7 +272,14 @@ class SessionTransitions:
                       if name == 'notebook:' + key or any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
         if index is not None:
             host.adaptive.trim_details(index)
+        # Both hubs retain rows even while another destination is visible.
+        # Publish the committed session state before returning to either hub.
+        host.refresh_document_list()
+        host.refresh_home_documents()
         if not leaving or target is None:
+            if host.native_host.state.destination == 'home' and not host.routes.screens['home']:
+                host.routes.render('home')
+                return
             host.show_documents_hub()
             return
         destination, route, drawer = target

@@ -47,7 +47,7 @@ class ConnectionSettingsTests(unittest.TestCase):
         self.assertNotIn(app.cloud_probe, set(self.descendants(app.cloud_connections_view.content)))
         app.show_cloud_import()
         self.assertEqual(app.routes.screens['settings'][-1][0], 'import-credentials')
-        self.assertIn(app.cloud_password, set(self.descendants(app.cloud_import_view.content)))
+        self.assertNotIn(app.cloud_password, set(self.descendants(app.cloud_import_view.content)))
         buttons['SMB shares…'].on_press()
         self.assertEqual(app.native_host.state.destination, 'settings')
         self.assertEqual(app.routes.screens['settings'][-1][0], 'smb-connection')

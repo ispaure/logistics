@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceSelection
@@ -69,11 +69,11 @@ class ObsidianTests(unittest.TestCase):
         self.assertFalse(hasattr(owner.view, '_workspace_frame'))
         self.assertTrue(self.run_async(owner.open_note('Vault/Home.md')))
         self.assertTrue(self.run_async(owner.open_editor()))
-        editor = self.app.private_sessions.active
-        self.assertEqual(self.app._reader_returns[editor.session.id], ('files', route, False))
-        self.app.request_close_session(editor.session.id)
+        self.assertIsNotNone(owner.embedded)
         self.assertEqual(self.app.visible_reader(), owner.session.id)
+        self.assertEqual(self.app.routes.screens['files'][-1][0], route)
         owner.close()
+        self.run_async(owner._close_task)
         self.assertEqual(self.app.native_host.state.destination, 'files')
         self.assertFalse(self.app.routes.screens['files'])
         self.assertFalse(self.app._document_tabs_hidden)
@@ -160,7 +160,7 @@ class ObsidianTests(unittest.TestCase):
                         await asyncio.sleep(.01)
                     self.assertTrue(entered.is_set())
                     self.assertTrue(owner.page_loading.active)
-                    self.assertIs(owner.page_loading.row.parent, owner.article)
+                    self.assertIs(owner.page_loading.panel.parent, owner.article)
                     self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
                 finally:
                     released.set()
@@ -196,7 +196,7 @@ class ObsidianTests(unittest.TestCase):
         self.assertEqual(list(owner.sidebar.view.children), [owner.article])
         self.assertIs(owner.toolbar.parent, owner.view)
         self.assertNotIn(owner.toolbar, owner.article.children)
-        self.assertTrue(all(button.parent is owner.toolbar for button in
+        self.assertTrue(all(button.parent is owner.secondary for button in
             (owner.back_button, owner.forward_button, owner.reader_actions_button)))
         self.assertIsNone(owner.up_button.parent)
         self.assertIsNone(owner.speech.button.parent)
@@ -204,11 +204,10 @@ class ObsidianTests(unittest.TestCase):
         owner.reflow(390)
         self.assertIs(owner.toolbar.parent, owner.view)
         owner.reflow(900)
-        with patch.object(self.app, 'open_crypt', new=AsyncMock(return_value=True)) as opened:
-            self.assertTrue(self.run_async(owner.open_editor()))
-            self.assertEqual(opened.call_args.kwargs['key'], 'Vault/Projects/Plan.MD')
-            self.assertIs(opened.call_args.kwargs['copies'].provider, self.provider)
-            self.assertTrue(opened.call_args.kwargs['edit'])
+        self.assertTrue(self.run_async(owner.open_editor()))
+        self.assertIs(owner.embedded.library, owner)
+        self.assertEqual(owner.embedded.path, 'Vault/Projects/Plan.MD')
+        self.assertIs(owner.embedded.resource.provider, self.provider)
         with patch.object(self.app, 'folder_path_visible', side_effect=lambda path, **kw: 'Projects' not in path):
             self.app.refresh_folder_visibility()
             self.assertEqual(paths(), ['Vault/Home.md'])

@@ -7,7 +7,7 @@ import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from mobile.app import LogisticsMobile
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
@@ -80,10 +80,12 @@ class DocumentNavigationTests(TestCase):
                         app.loop.run_until_complete(app.browser_file_location(('Local files', 'Fixtures')))
                     origin = app.body
                     routes = [screen[0] for screen in app.routes.screens[destination]]
-                    app.loop.run_until_complete(app.choose_document_type())
+                    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='md' if kind.startswith('Markdown') else 'txt')):
+                        app.loop.run_until_complete(app.choose_document_type())
                     picker = app.editor_picker()
                     picker.save_as_name.value = 'Created ' + destination + ' ' + choice
                     picker.creation_type.value = kind
+                    app.loop.run_until_complete(picker.choose_creation_location())
                     app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
                     app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
                     owner = app.private_sessions.active
@@ -103,10 +105,12 @@ class DocumentNavigationTests(TestCase):
         app = self.app
         app.show_home()
         origin = app.body
-        app.loop.run_until_complete(app.choose_document_type())
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
+            app.loop.run_until_complete(app.choose_document_type())
         panel = app.body
         picker = app.editor_picker()
         picker.save_as_name.value = 'Could not create'
+        app.loop.run_until_complete(picker.choose_creation_location())
         picker = app.editor_picker()
         app.loop.run_until_complete(picker.browser_editor_location(('Local', '')))
         with patch('services.documents.storage.save_resource_and_reopen', side_effect=OSError('No space')):
@@ -247,6 +251,47 @@ class DocumentNavigationTests(TestCase):
         app.session_opener(session)()
         self.assertEqual(owner.document_view._workspace_frame.destination, 'documents')
         self.assertEqual(owner.editor.value, 'Unsaved draft stays with this session')
+
+    def test_reopening_ios_documents_detail_from_home_retires_old_parent(self):
+        import toga
+        app = self.app
+        app.show_documents_hub()
+        app.show_documents(edit=True)
+        owner = app.editor_view
+        owner.editor.value = 'Keep the live draft'
+        app.show_home()
+        app.routes.trim('documents', 0)
+        view = owner.document_view
+        if view.parent is not None:
+            view.parent.remove(view)
+        detail = toga.Box(children=[view])
+        app.adaptive.detail_routes = [('editor', detail, None)]
+
+        def retire(count):
+            del app.adaptive.detail_routes[count:]
+
+        with patch.object(app.adaptive, 'trim_details', side_effect=retire) as trim:
+            app.session_opener(owner.session.id)()
+        trim.assert_called_once_with(0)
+        self.assertFalse(detail.children)
+        self.assertFalse(app.adaptive.detail_routes)
+        self.assertIn(view, app.body.children)
+        self.assertEqual(owner.editor.value, 'Keep the live draft')
+
+    def test_reopening_home_reader_in_ios_split_retires_home_route(self):
+        app = self.app
+        app.show_home()
+        app.show_documents(edit=True)
+        owner = app.editor_view
+        app.show_documents_hub()
+        with (patch.object(app.adaptive, 'split', object()),
+              patch('mobile.reader_chrome.sync_comic_chrome'),
+              patch.object(app.adaptive, 'present') as present):
+            app.session_opener(owner.session.id)()
+        present.assert_called_once()
+        self.assertFalse(app.routes.screens['home'])
+        self.assertIsNone(owner.document_view.parent)
+        self.assertEqual(app.native_host.state.destination, 'documents')
 
     def test_home_open_file_browser_and_provider_text_keep_home(self):
         app = self.app

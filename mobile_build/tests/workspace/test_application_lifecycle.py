@@ -15,7 +15,7 @@ class HostLifecycleTests(unittest.TestCase):
         return NS(active_host=True, store=Mock(), credential_document_lists=Mock(),
                   chat_current=object(), checkpoint_chat=Mock(return_value=True),
                   startup_task=Mock(done=Mock(return_value=False)),
-                  vault_browser=Mock(), memory_pressure=Mock(), screen_privacy=Mock(),
+                  vault_browser=Mock(embedded=None), memory_pressure=Mock(), screen_privacy=Mock(),
                   cloud_startup_task=Mock(), cloud_client=Mock(), cancel_cloud=Mock(),
                   _editor_picker=Mock(), workspace=NS(sessions={'doc': NS(id='doc')}, invalidate=Mock()),
                   _crypt_cancel=Mock())

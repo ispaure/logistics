@@ -99,23 +99,80 @@ def empty_bar_title():
     return placeholder
 
 
-def place_title_in_header(header, title):
+def place_title_in_header(header, title, subtitle):
+    from .folder_title import storage_title_height
+    # UIKit may have compressed this view in a previous navigation bar.
+    # Reserve its designed height before attaching or reusing it in the reader.
+    height = storage_title_height(subtitle)
+    if header.style.height != height:
+        header.style.height = height
     host = header._impl.native
     if title.superview == host:
         return
     previous = getattr(header, '_mounted_title', None)
-    if previous is not None and previous.superview == host:
+    if previous is not None and previous != title:
+        # UIKit can reparent a retained title during adaptive bar changes.
+        # Retire the previous title even when its current superview has moved.
         previous.removeFromSuperview()
-    from math import ceil
-    header.style.height = ceil(float(title.bounds.size.height))
     host.addSubview(title)
     title.frame = host.bounds
     title.autoresizingMask = 2 | 16  # Flexible width and height.
     header._mounted_title = title
 
 
+def show_location(view, title, location):
+    window = view.window
+    if window is None:
+        return
+    if location:
+        view.app.loop.create_task(window.dialog(toga.InfoDialog(title, str(location))))
+
+
+def show_document_path(view):
+    if view.window is not None:
+        show_location(view, 'Document location', view._document_path())
+
+
+_apple_hold_target = None
+
+
+def bind_apple_hold(view, native, callback=show_document_path):
+    from rubicon.objc import ObjCClass, SEL, objc_method
+    from weakref import ref
+    global _apple_hold_target
+    if _apple_hold_target is None:
+        class LogisticsDocumentTitleHold(ObjCClass('NSObject')):
+            @objc_method
+            def hold_(self, gesture) -> None:
+                owner = self.owner()
+                if owner is not None and int(gesture.state) == 1:
+                    self.callback(owner)
+        _apple_hold_target = LogisticsDocumentTitleHold
+    target = _apple_hold_target.alloc().init()
+    target.owner = ref(view)
+    target.callback = callback
+    gesture = ObjCClass('UILongPressGestureRecognizer').alloc().initWithTarget(target, action=SEL('hold:'))
+    native.userInteractionEnabled = True
+    native.addGestureRecognizer(gesture)
+    view._title_hold_target = target
+
+
+def bind_android_hold(view, label, callback=show_document_path):
+    from android.view import View
+    from java import dynamic_proxy
+    from weakref import ref
+    owner = ref(view)
+    class Hold(dynamic_proxy(View.OnLongClickListener)):
+        def onLongClick(self, widget):
+            current = owner()
+            if current is not None:
+                callback(current)
+            return True
+    label.setOnLongClickListener(Hold())
+
+
 def mount_apple_title(view, controller, title):
-    if not hasattr(view, '_document_storage_status'):
+    if not hasattr(view, '_document_storage_status') and not hasattr(view, '_document_path'):
         controller.navigationItem.titleView = None
         return
     from .folder_title import storage_title
@@ -124,17 +181,18 @@ def mount_apple_title(view, controller, title):
     bounds = controller.view.bounds.size
     width = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
     width = max(44, width - (32 if edge else 216))
-    state = (title, view._document_storage_status, tuple(view._document_storage_kinds), width)
+    state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width)
     changed = getattr(view, '_document_title_state', None) != state
     if changed:
         view._document_title_view = storage_title(title, state[1], state[2], width)
+        if hasattr(view, '_document_path'):
+            bind_apple_hold(view, view._document_title_view)
         view._document_title_state = state
     remove_location_row(view)
     header = getattr(view, '_document_title_header', None)
     was_mounted = side_title_header(view) is not None
     frame = getattr(view, '_reading_frame_owner', None)
-    side = edge and frame is not None
-    if side:
+    if edge and (frame is not None or hasattr(view, '_document_path')):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:
@@ -142,13 +200,13 @@ def mount_apple_title(view, controller, title):
             header._empty_bar_title = empty_bar_title()
         if controller.navigationItem.titleView != header._empty_bar_title:
             controller.navigationItem.titleView = header._empty_bar_title
-        if header not in frame.controls:
+        if frame is not None and header not in frame.controls:
             frame.controls.insert(0, header)
             frame.top_controls += 1
         if not getattr(view, '_reader_fullscreen', False):
             if not was_mounted:
                 view.insert(0, header)
-            place_title_in_header(header, view._document_title_view)
+            place_title_in_header(header, view._document_title_view, state[1])
         elif was_mounted:
             view.remove(header)
     else:

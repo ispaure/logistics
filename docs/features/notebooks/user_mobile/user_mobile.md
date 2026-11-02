@@ -46,7 +46,7 @@ Mechanical pencil, Calligraphy in the second; and Marker, Shader, Paintbrush
 in the third. The panel
 floats below the toolbar. Tap the brush icon again, tap outside, or start a
 stroke outside the panel to close it; that first stroke draws immediately. The current
-brush has a dark background and check mark in the palette; the top button also
+brush has a tinted background and check mark in the palette; the top button also
 shows its nib and a small ink-color indicator. A border and check mark identify
 the selected color. Colors follow the selected brush's supported palette and
 remain visible in high-contrast mode and while grayscale document preview is on. The original brush icons are shared with the desktop editor.
@@ -57,6 +57,16 @@ contains zoom, **Grayscale preview** and **Draw with finger**. Rename saved file
 from the file browser; an open notebook follows its renamed source and retains
 unsaved ink. **Layers** selects
 the visible layer to draw on, shows or hides layers, and adds a named layer.
+
+Controls follow the device's light or dark appearance using the app's Slate
+colors. Paper and PDF backgrounds stay white, and ink colors stay unchanged.
+The bottom zoom bar provides **−**, **+**, the current percentage and **Fit**
+to fit the whole page clear of the floating toolbar and zoom bar. Pinch with two
+fingers to zoom from 10% to 400%; this
+also works with **Draw with finger** enabled. Starting a pinch cancels the
+unfinished finger stroke. The fingers remaining after a pinch do not draw or
+turn pages until lifted. **Hide tools** also hides the zoom bar.
+
 Deletion asks before removing the source file and recovery draft, or an unsaved
 draft without a source. Cancelling keeps the document editable. A source changed
 elsewhere must be reopened before deletion.
@@ -79,6 +89,8 @@ falls back automatically.
 Write with a stylus or enable **Draw with finger**. With finger drawing disabled,
 horizontal finger swipes change pages when the page fits the viewport width.
 Vertical drags scroll; when zoomed in, finger drags pan instead of turning pages.
+When finger drawing is enabled, stylus contact cancels an unfinished finger
+stroke and begins pen input with the supplied pressure.
 Pointer cancellation discards the unfinished stroke. Resize and zoom change the
 view while stored points retain page coordinates. The drawing surface suppresses
 browser page selection and long-press callouts, including extra contacts during

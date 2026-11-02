@@ -142,14 +142,31 @@ def present(app, panel, *, destination=None):
     app.workspace.activate(session.id)
     if not session.transient:
         app.recent_documents.remember(session)
+    from mobile.document_location import install_document_location
+    install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
+    panel.view._native_reader_title = lambda: panel.editor.notebook.name if panel.editor is not None else ''
+    panel.view._document_path = lambda: notebook_location(panel)
     app.show_view(panel.view, destination=destination, route='notebook:' + session.id,
                   title=panel.editor.notebook.name)
     if panel.web is None:
         panel.mount_canvas()
-    from mobile.document_location import install_document_location
-    install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
     app.save_workspace()
     app.refresh_document_list()
+
+
+def notebook_location(panel):
+    from .storage import display_path
+    if panel.editor is None or panel.closed:
+        return None
+    document = panel.document
+    if document is not None and document.resource is not None:
+        return display_path(document.resource.provider, document.resource.path)
+    name = panel.editor.notebook.name
+    if document is not None and document.recovery is not None and document.key:
+        return f'{name}\n\n{document.recovery.root / document.key}'
+    if document is None and panel.key:
+        return f'{name}\n\n{panel.repository.root / panel.key}'
+    return name
 
 
 def close_notebook(app, key, choice, *, leaving_reader=False):
@@ -361,3 +378,74 @@ async def delete_notebook(panel):
             panel.busy = False
         elif getattr(panel, 'bridge', None) is canvas:
             panel.busy = was_busy
+
+
+async def notes_editor(app, library, path):
+    """Embed the regular notebook canvas in a library, with no extra reader route."""
+    import asyncio
+    if not app.require_feature('notebooks'):
+        raise ValueError('Enable Notebooks to edit Remarkable Documents.')
+    from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+    from features.notebooks.storage import NotebookDocument
+    from .storage import DocumentResource
+
+    class LibraryPanel(NotebookPanel):
+        def state(self):
+            state = super().state()
+            state.update(native_close=True, notes_library=True, has_source=False, can_delete=False)
+            return state
+
+        async def perform(self, action, **options):
+            if action.get('op') in ('library', 'save-as', 'transfer', 'show-in-folder', 'delete-file'):
+                if self.web is not None:
+                    from features.notebooks.protocol import update_script
+                    await self.web.evaluate_javascript(update_script(self.state()))
+                return
+            return await super().perform(action, **options)
+
+    class Embedded:
+        def __init__(self, panel):
+            self.panel, self.view = panel, panel.view
+        @property
+        def dirty(self):
+            return self.panel.document.dirty
+        @property
+        def busy(self):
+            return self.panel.busy
+        async def flush(self):
+            from commonUtils.ui.native.text_size import native_backend
+            if self.panel.web is not None and native_backend(self.panel.web).startswith(('toga_iOS.', 'toga_android.')):
+                for _ in range(100):
+                    if await self.panel.web.evaluate_javascript('window.notebookIdle?.() === true'):
+                        return
+                    if self.panel.closed or not library.valid():
+                        raise ValueError('Notes Library closed.')
+                    await asyncio.sleep(.02)
+                raise ValueError('Finish the current stroke and try again.')
+        async def save(self):
+            await self.flush()
+            await self.panel.perform({'op': 'save'})
+            return not self.dirty
+        def dispose(self):
+            self.panel.dispose()
+
+    resource = DocumentResource(library.provider, path, max_bytes=MAX_ARCHIVE)
+    panel = LibraryPanel(app, library=False)
+    epoch = library.epoch
+    try:
+        book = await asyncio.to_thread(lambda: Notebook.read(resource.read(
+            cancelled=lambda: not library.valid() or library.epoch != epoch)))
+        if not library.valid() or library.epoch != epoch:
+            raise ValueError('Notes Library closed.')
+        document = NotebookDocument(book, resource=resource, changed=lambda doc: setattr(library.session, 'dirty', doc.dirty)
+                                    if library.session is not None else None)
+        if not resource.policy.persistent:
+            panel.privacy_gate = getattr(resource.provider, 'privacy_gate', None)
+            from mobile.protection import for_app
+            for_app(app).changed()
+        panel.open_resource(document)
+        return Embedded(panel)
+    except BaseException:
+        panel.dispose()
+        resource.close()
+        raise

@@ -4,7 +4,6 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -30,9 +29,13 @@ class LibraryModeTests(QtTestCase):
             try:
                 binding = view._extensions_by_feature['text_editor']
                 offer = binding.controller.notes_offer
-                self.wait_until(lambda: not offer.progress.busy and offer.location is not None)
+                self.wait_until(lambda: offer.dialog is not None)
                 self.assertIsNotNone(offer.candidate, offer.progress.message.text())
-                self.assertFalse(offer.isHidden())
+                self.assertTrue(offer.dialog.isVisible())
+                self.assertIsNone(view.file_browser.navigation.directory)
+                self.assertIsNone(view.file_browser.views.root)
+                self.choose(offer, 'Browse Files')
+                self.wait_until(lambda: view.file_browser.navigation.directory == root)
             finally:
                 view.close()
 
@@ -123,10 +126,17 @@ class LibraryModeTests(QtTestCase):
             self.assertEqual(window.history, ['New folder/renamed.md'])
             self.assertIn('New folder/renamed.md', window.items)
             window.tree.setCurrentItem(window.items['New folder'])
-            with patch.object(qt.QInputDialog, 'getText', return_value=('New note', True)):
+            (root / 'New folder/Unopened').mkdir()
+            def choose_markdown():
+                menu = self.app.activePopupWidget()
+                menu.close()
+                next(action for action in menu.actions() if action.text() == 'Markdown').trigger()
+            with patch.object(qt.QInputDialog, 'getText', return_value=('New note', True)), \
+                    patch.object(qt.QInputDialog, 'getItem', return_value=('New folder/Unopened/', True)):
+                qt.QTimer.singleShot(0, choose_markdown)
                 window.new_note()
             self.wait_until(lambda: not window.progress.busy)
-            self.assertTrue((root / 'New folder/New note.md').exists())
+            self.assertTrue((root / 'New folder/Unopened/New note.md').exists())
             self.assertEqual(window.storage.path.name, 'New note.md')
             window.close()
 
@@ -172,28 +182,236 @@ class LibraryModeTests(QtTestCase):
             with self.assertRaises(ValueError):
                 library.create_folder('Remote folder')
 
-    def test_desktop_offer_appears_for_vault_and_hides_when_entering_regular_folder(self):
-        class Browser(qt.QWidget):
-            directory_changed = qt.Signal(object)
+    def choose(self, offer, label):
+        next(button for button in offer.dialog.buttons() if button.text() == label).click()
+
+    def test_desktop_choice_opens_notes_without_publishing_folder(self):
+        from commonUtils.ui.file_browser import FileBrowser
         with self.temporary_directory() as directory:
             root = Path(directory)
             (root / '.obsidian').mkdir()
             (root / 'Regular').mkdir()
-            browser = Browser()
-            qt.QVBoxLayout(browser)
-            browser.navigation = SimpleNamespace(directory=root)
+            browser = FileBrowser(calculate_folder_sizes=False)
             offer = NotesFolderOffer(browser)
             browser.show()
-            self.wait_until(lambda: offer.candidate is not None)
-            self.assertFalse(offer.isHidden())
+            browser.set_directory(root)
+            self.wait_until(lambda: offer.dialog is not None)
+            self.assertIsNone(browser.navigation.directory)
+            self.assertIsNone(browser.views.root)
             with patch('features.text_editor.ui.notes_library.open_notes') as opened:
-                offer.open()
+                self.choose(offer, 'Open as Notes Library')
                 self.assertEqual(opened.call_args.kwargs['root'], '')
                 self.assertFalse(opened.call_args.kwargs['remote'])
-            browser.navigation.directory = root / 'Regular'
-            browser.directory_changed.emit(root / 'Regular')
+            self.assertIsNone(browser.navigation.directory)
+            browser.set_directory(root / 'Regular')
             self.wait_until(lambda: not offer.progress.busy)
+            self.assertEqual(browser.navigation.directory, root / 'Regular')
             self.assertIsNone(offer.candidate)
-            self.assertTrue(offer.isHidden())
+            self.assertIsNone(offer.dialog)
             self.assertTrue(offer.prepare_close())
             browser.close()
+
+    def test_cancel_and_superseded_desktop_choices_keep_folder_history(self):
+        from commonUtils.ui.file_browser import FileBrowser
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            vault = root / 'Vault'
+            (vault / '.obsidian').mkdir(parents=True)
+            browser = FileBrowser(root, calculate_folder_sizes=False)
+            offer = NotesFolderOffer(browser)
+            browser.show()
+            try:
+                browser.navigate(vault)
+                self.wait_until(lambda: offer.dialog is not None)
+                self.assertEqual(browser.navigation.directory, root)
+                offer.dialog.reject()
+                self.assertEqual(browser.navigation.directory, root)
+                self.assertEqual(browser.navigation.history, [root])
+                browser.navigate(vault)
+                self.wait_until(lambda: offer.dialog is not None)
+                stale = offer.dialog
+                browser.navigate(root)
+                self.assertIsNone(offer.dialog)
+                self.assertEqual(browser.navigation.directory, root)
+                self.assertFalse(stale.isVisible())
+                browser.navigate(vault)
+                self.wait_until(lambda: offer.dialog is not None)
+                self.choose(offer, 'Browse Files')
+                self.assertEqual(browser.navigation.directory, vault)
+                self.assertEqual(browser.navigation.history, [root, vault])
+                browser.navigation._history(-1)
+                self.assertEqual(browser.navigation.directory, root)
+                browser.navigation._history(1)
+                self.wait_until(lambda: offer.dialog is not None)
+                self.assertEqual(browser.navigation.position, 0)
+                self.choose(offer, 'Browse Files')
+                self.assertEqual(browser.navigation.position, 1)
+                self.assertEqual(browser.navigation.history, [root, vault])
+            finally:
+                offer.prepare_close()
+                self.wait_until(lambda: not offer.progress.busy)
+                browser.close()
+
+    def test_provider_initial_listing_waits_for_choice(self):
+        from commonUtils.ui.resources.browser import ResourceBrowser
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '.obsidian').mkdir()
+            (root / 'Home.md').write_text('# Home')
+            provider = LocalFiles(root)
+            browser = ResourceBrowser(provider)
+            offer = NotesFolderOffer(browser)
+            browser.show()
+            try:
+                self.wait_until(lambda: offer.dialog is not None)
+                self.assertIsNone(browser.views.root)
+                self.assertEqual(browser.history, [])
+                self.choose(offer, 'Browse Files')
+                self.wait_until(lambda: browser.views.root == root)
+                self.assertEqual(browser.history, [root])
+                browser.refresh()
+                self.wait_until(lambda: not browser.operation.busy)
+                self.assertIsNone(offer.dialog)
+            finally:
+                offer.prepare_close()
+                self.wait_until(lambda: not offer.progress.busy)
+                browser.stop()
+                self.wait_until(lambda: not browser.busy)
+                browser.close()
+
+    def test_provider_choice_cannot_publish_or_open_after_access_is_revoked(self):
+        from commonUtils.ui.resources.browser import ResourceBrowser
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '.obsidian').mkdir()
+            for choice in ('Browse Files', 'Open as Notes Library'):
+                provider = LocalFiles(root)
+                provider.revoked = False
+                def check():
+                    if provider.revoked:
+                        raise ValueError('Access revoked')
+                provider._check_active = check
+                browser = ResourceBrowser(provider)
+                offer = NotesFolderOffer(browser)
+                browser.show()
+                try:
+                    self.wait_until(lambda: offer.dialog is not None)
+                    provider.revoked = True
+                    with patch('features.text_editor.ui.notes_library.open_notes') as opened:
+                        self.choose(offer, choice)
+                        opened.assert_not_called()
+                    self.assertIsNone(browser.views.root)
+                    self.assertEqual(browser.history, [])
+                finally:
+                    offer.prepare_close()
+                    self.wait_until(lambda: not offer.progress.busy)
+                    browser.stop()
+                    self.wait_until(lambda: not browser.busy)
+                    browser.close()
+
+    def test_tree_and_columns_wait_for_choice_before_revealing_vault_children(self):
+        from commonUtils.ui.file_browser import FileBrowser
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            vault = root / 'Vault'
+            (vault / '.obsidian').mkdir(parents=True)
+            (vault / 'Home.md').write_text('# Home')
+            for mode in (0, 2):
+                browser = FileBrowser(root, calculate_folder_sizes=False)
+                offer = NotesFolderOffer(browser)
+                browser.show()
+                try:
+                    self.wait_until(lambda: browser.model.index(str(vault)).isValid())
+                    index = browser.model.index(str(vault))
+                    browser.view_selector.setCurrentIndex(mode)
+                    if mode == 0:
+                        index = browser.sort_model.mapFromSource(index)
+                        browser.tree.expand(index)
+                    else:
+                        browser.views.columns.setCurrentIndex(index)
+                    saved = qt.QPersistentModelIndex(index)
+                    self.wait_until(lambda: offer.dialog is not None)
+                    index = qt.QModelIndex(saved)
+                    if mode == 0:
+                        self.assertFalse(browser.tree.isExpanded(index))
+                    else:
+                        self.assertFalse(any(column.rootIndex() == index
+                                             for column in browser.views.columns.findChildren(qt.QListView)))
+                    self.assertEqual(browser.navigation.directory, root)
+                    self.choose(offer, 'Browse Files')
+                    if mode == 0:
+                        self.assertTrue(browser.tree.isExpanded(index),
+                                        (offer.location, offer.accepted, browser.navigation.directory))
+                    else:
+                        self.wait_until(lambda: any(column.rootIndex() == index
+                            for column in browser.views.columns.findChildren(qt.QListView)))
+                    self.assertEqual(browser.views.root, root)
+                finally:
+                    offer.prepare_close()
+                    self.wait_until(lambda: not offer.progress.busy)
+                    browser.close()
+
+    def test_close_during_folder_probe_does_not_show_a_late_choice(self):
+        from threading import Event
+        from commonUtils.ui.file_browser import FileBrowser
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '.obsidian').mkdir()
+            entered, release = Event(), Event()
+            provider = LocalFiles(root)
+            original = provider.list
+            def slow(*args, **kwargs):
+                entered.set()
+                release.wait(5)
+                return original(*args, **kwargs)
+            browser = FileBrowser(calculate_folder_sizes=False)
+            offer = NotesFolderOffer(browser)
+            try:
+                with patch('services.documents.storage.local_document_provider', return_value=provider), \
+                        patch.object(provider, 'list', side_effect=slow):
+                    browser.set_directory(root)
+                    self.wait_until(entered.is_set)
+                    self.assertFalse(offer.prepare_close())
+                    release.set()
+                    self.wait_until(lambda: not offer.progress.busy)
+                self.assertIsNone(offer.dialog)
+                self.assertIsNone(browser.views.root)
+            finally:
+                release.set()
+                offer.prepare_close()
+                self.wait_until(lambda: not offer.progress.busy)
+                browser.close()
+
+    def test_reentering_a_cancelled_probe_still_requires_a_choice(self):
+        from threading import Event
+        from commonUtils.ui.file_browser import FileBrowser
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            for name in ('First', 'Second'):
+                (root / name / '.obsidian').mkdir(parents=True)
+            entered, release = Event(), Event()
+            class Slow(LocalFiles):
+                def list(self, *args, **kwargs):
+                    if not entered.is_set():
+                        entered.set()
+                        release.wait(5)
+                    return super().list(*args, **kwargs)
+            browser = FileBrowser(root, calculate_folder_sizes=False)
+            offer = NotesFolderOffer(browser)
+            try:
+                with patch('services.documents.storage.local_document_provider', side_effect=Slow):
+                    browser.navigate(root / 'First')
+                    self.wait_until(entered.is_set)
+                    browser.navigate(root / 'Second')
+                    browser.navigate(root / 'First')
+                    release.set()
+                    self.wait_until(lambda: offer.dialog is not None)
+                    self.assertEqual(browser.navigation.directory, root)
+                    self.assertEqual(offer.location, root / 'First')
+                    self.choose(offer, 'Browse Files')
+                    self.assertEqual(browser.navigation.directory, root / 'First')
+            finally:
+                release.set()
+                offer.prepare_close()
+                self.wait_until(lambda: not offer.progress.busy)
+                browser.close()

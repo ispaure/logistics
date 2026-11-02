@@ -9,6 +9,8 @@ DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
             text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#75a7ff', hover='#3d4045')
 LIGHT.update(control_border='#7b8493', destructive='#c62828')
 DARK.update(control_border='#858c99', destructive='#ff8a80')
+for colors in (LIGHT, DARK):
+    colors.update(destructive_fill='#d32f2f', on_destructive='#ffffff')
 LIGHT.update(tree_guide='#a8b2c1')
 DARK.update(tree_guide='#737f90')
 
@@ -60,6 +62,7 @@ EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
 EINK.update(folder='#000000', folder_unlocked='#000000', folder_locked='#000000')
 EINK.update(settings_background='#ffffff', settings_group='#ffffff', settings_separator='#000000')
 EINK.update(control_border='#000000', destructive='#000000')
+EINK.update(destructive_fill='#000000', on_destructive='#ffffff')
 EINK.update(tree_guide='#000000')
 _eink_enabled = False
 
@@ -73,7 +76,19 @@ def eink_enabled():
     return _eink_enabled
 
 
+# Android wraps controls in themed contexts. On older AppCompat versions
+# those wrappers can keep the configuration they had at construction.
+_android_system_dark = None
+
+
+def set_android_system_dark(dark):
+    global _android_system_dark
+    _android_system_dark = dark
+
+
 def android_palette(dark=False):
+    if _android_system_dark is not None:
+        dark = _android_system_dark
     return EINK if eink_enabled() else DARK if dark else LIGHT
 
 

@@ -160,6 +160,7 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
             old = '/var/mobile/Containers/Data/Application/OLD-CONTAINER/Documents/Welcome to Local.txt'
             from mobile.document_sources import local_reference_available
             self.assertTrue(local_reference_available(app, dict(type='local', path=old)))
+            self.assertTrue(local_reference_available(app, dict(type='local', path='/private' + old)))
             self.assertTrue(await reopen_file(app, dict(type='local', path=old)))
             copies = app.open_crypt.await_args.kwargs['copies']
             self.assertEqual(copies.provider.root, documents)

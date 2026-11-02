@@ -16,6 +16,7 @@ class NotesDrawers:
         self.side = None
         self.gestures = []
         self.on_close = lambda: None
+        self.on_change = lambda: None
         for panel in (files, links):
             panel.hide = self.show_detail
             panel.overlay = None
@@ -26,7 +27,9 @@ class NotesDrawers:
         return self.side is not None
 
     def reflow(self, width):
-        self.policy.sidebar_width = min(320, max(1, width - 24))
+        # The host passes the document width minus its 24-unit inset. Leave
+        # at least 44 units opposite the drawer for outside dismissal.
+        self.policy.sidebar_width = min(320, max(1, width - 32))
         self.sidebar.style.width = max(1, self.policy.sidebar_width - 24)
         self.links.style.width = max(1, self.policy.sidebar_width - 24)
         if self.overlay is not None:
@@ -46,10 +49,11 @@ class NotesDrawers:
             return
         self.show_detail()
         self.side = side
+        self.on_change()
         panel = self.sidebar if side == 'files' else self.links
         self.overlay = SpeechOverlay(panel, self.view, self.app, leading=side == 'files',
                                      full_height=True, label='Files' if side == 'files' else 'Links',
-                                     passthrough_controls=True)
+                                     dim=True)
         self.overlay.chapter_owner = self.view
         panel.overlay = self.overlay
         self.install_swipe(panel)
@@ -140,6 +144,7 @@ class NotesDrawers:
         if self.side is not None:
             self.on_close()
         self.side = None
+        self.on_change()
         self.clear_gestures()
         overlay, self.overlay = self.overlay, None
         if overlay is not None:

@@ -188,10 +188,35 @@ func mirrorSyncStats(run string, stats *accounting.StatsInfo) {
 	mirrorProgressState.Checks = values["checks"].(int64)
 	mirrorProgressState.Listed = values["listed"].(int64)
 	mirrorProgressState.Active = int64(len(transfers))
+	mirrorProgressState.ActiveFiles = boundedActiveTransfers(transfers)
 	mirrorProgressState.Phase = "Discovering / checking files"
 	if len(transfers) > 0 {
 		mirrorProgressState.Phase = "Transferring"
 	} else if mirrorProgressState.Files > 0 {
 		mirrorProgressState.Phase = "Checking / finishing sync"
 	}
+}
+
+// Only the visible live rows cross the native UI bridge, independent of job size.
+func boundedActiveTransfers(transfers []rc.Params) []activeTransfer {
+	rows := make([]activeTransfer, 0, 3)
+	for _, entry := range transfers {
+		name, ok := entry["name"].(string)
+		if !ok || name == "" || len(name) > 4096 {
+			continue
+		}
+		done, _ := entry["bytes"].(int64)
+		size, _ := entry["size"].(int64)
+		if done < 0 {
+			done = 0
+		}
+		if size < 0 {
+			size = 0
+		}
+		rows = append(rows, activeTransfer{Name: name, Bytes: done, Size: size})
+		if len(rows) == 3 {
+			break
+		}
+	}
+	return rows
 }

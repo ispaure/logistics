@@ -16,10 +16,12 @@ async def exercise_notebooks(app, *, return_to_home=True):
     app.set_feature_enabled('notebooks', True, refresh=False)
     app.show_home()
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:create')
-    await app.choose_document_type()
+    from .fixtures import choose_creation_type
+    await choose_creation_type(app, 'rmdoc')
     form = app.editor_picker()
     form.save_as_name.value = 'Notebook QA'
-    form.creation_type.value = 'Notebook (.rmdoc)'
+    form.creation_type.value = 'Remarkable Document (.rmdoc)'
+    await form.choose_creation_location()
     picker = app.editor_picker()
     # Native Selection change callbacks can start another directory read after
     # the push; wait for actual readiness rather than a fixed animation delay.

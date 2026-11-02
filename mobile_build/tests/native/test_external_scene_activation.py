@@ -35,6 +35,8 @@ class ExternalSceneActivationTests(unittest.TestCase):
             self.assertEqual(result['CFBundleIdentifier'], 'preserved')
             configure(root)
             self.assertEqual(plistlib.loads(info.read_bytes()), result)
+            self.assertEqual(main.read_text().count('#import "../Support/ScrollingTitle.m"'), 1)
+            self.assertTrue((root / 'Support/ScrollingTitle.m').is_file())
 
     def test_ios27_registers_once_and_releases_previous_controller(self):
         delegate = object()

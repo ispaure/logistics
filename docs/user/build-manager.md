@@ -95,14 +95,37 @@ or choose **Delete all unprotected…** for the displayed category. The confirma
 includes the exact paths. This manual action can remove even the newest local
 artifacts; automatic retention still keeps its normal recent-build allowance.
 
-The list covers only the existing retention owners. Native test build caches
-inside owned source snapshots are removed with those snapshots. SDKs, toolchains,
-physical-device deployment workspaces, personal VM/simulator state, credentials,
-signing inputs, build counters and unclassified evidence are not cleanup targets.
-Published releases are unaffected. A `.keep` anywhere in a tree or an active build
-lease protects it. Deletion checks ownership, links, pins and locks again after
-confirmation, reports skipped entries and refreshes the list. Listing and deleting
-run off the UI thread; cleanup is unavailable while this manager runs an operation.
+The dialog shows allocated sizes and protected/deletable totals. Filter by storage
+category to inspect rebuildable Android/iOS caches separately from retained source
+snapshots and packages. Device preparation caches expire after packaging; their
+reviewed APK/ZIP, recipe and receipts remain available. Known snapshot compiler
+intermediates and TestFlight `derived` directories share a 12 GiB soft budget,
+one-day age limit and one-hour grace period. Active locks and explicit `.keep`
+pins protect caches. Workflow holds protect source, packages and evidence without
+also preserving rebuildable caches. Global project-owned Xcode caches have their
+own 12 GiB budget and one-hour access protection.
+
+The **Retained workflows** tab lists held and retired runs. Select superseded runs
+and confirm retirement to release only their holds and disable continuation. Their
+logs, receipts and original outcomes remain, including unknown outcomes. Check the
+provider before preparing a replacement delivery. Other runs' holds and `.keep`
+pins remain protected; review newly unprotected outputs before deleting them.
+
+Use **Adopt disposable build folder…** for a reviewed temporary build checkout,
+**Adopt legacy build folder…** for a disposable direct child of `mobile_build/build`,
+or **Adopt disposable simulator…** with an exact QA simulator UUID. Adoption gives
+project cleanup permission to delete the selected state; save needed evidence
+first. Temporary directories receive a seven-day window; explicitly adopted
+simulators and abandoned project simulator leases receive one day. Neither a
+Logistics-looking folder name nor a simulator display name proves ownership.
+
+SDKs, toolchains, personal VM/simulator state, credentials, signing inputs, build
+counters and unclassified evidence are outside automatic cleanup. Published
+releases and installed apps are unaffected. Deletion rechecks ownership, links,
+pins and active locks and reports skipped entries. Work runs off the UI thread.
+CLI/GUI execution invokes the project's declared storage maintenance after build
+leases are released; planning also applies ordinary retention. Maintenance is
+separate from the workload outcome and is recorded in `storage-maintenance.json`.
 
 The CLI uses the same guarded cleanup. Run `build-manager storage --project
 /absolute/path/to/logistics` to review owned entries, then select exact entries
@@ -112,7 +135,8 @@ remove recent artifacts; automatic retention rules remain unchanged. System
 backups and unrelated personal files are outside this cleanup.
 
 The generic UI consumes optional `storage_inventory()` and
-`delete_storage(selections)` adapter methods. Logistics defines owned roots in
+`delete_storage(selections)` adapter methods, plus optional adoption and post-run
+`storage_maintenance` actions. Logistics defines owned roots in
 `logistics_build.build_retention`; reusable manual deletion and lease protection remain
 in `build_manager.retention`. The settings navigation factory is optional for
 other projects; field metadata supports section, label, description, kind and

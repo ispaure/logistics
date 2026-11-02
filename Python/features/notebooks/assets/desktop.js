@@ -1,4 +1,37 @@
 renderEraserChoices();
+// Keep eraser settings beside the toolbar without blocking the document.
+function positionEraserSettings() {
+  const anchor = $('erase').getBoundingClientRect();
+  const panel = eraserDialog.getBoundingClientRect();
+  eraserDialog.style.left = Math.max(8, Math.min(anchor.left, innerWidth - panel.width - 8)) + 'px';
+  eraserDialog.style.top = Math.max(8, Math.min(anchor.bottom + 6, innerHeight - panel.height - 8)) + 'px'
+}
+function closeEraserSettings(restoreFocus = false) {
+  eraserDialog.close();
+  $('erase').setAttribute('aria-expanded', 'false');
+  if (restoreFocus) $('erase').focus()
+}
+$('erase').setAttribute('aria-controls', eraserDialog.id);
+$('erase').setAttribute('aria-expanded', 'false');
+showEraserSettings = () => {
+  eraserDialog.show();
+  positionEraserSettings();
+  $('erase').setAttribute('aria-expanded', 'true')
+};
+const selectDesktopEraser = $('erase').onclick;
+$('erase').onclick = () => {
+  if (active !== null) return;
+  if (eraserDialog.open) closeEraserSettings(true);
+  else selectDesktopEraser()
+};
+$('closeEraser').onclick = () => closeEraserSettings(true);
+eraserDialog.addEventListener('close', () => $('erase').setAttribute('aria-expanded', String(eraserDialog.open)));
+document.addEventListener('pointerdown', event => {
+  if (eraserDialog.open && !eraserDialog.contains(event.target) && !$('erase').contains(event.target))
+    closeEraserSettings()
+});
+window.addEventListener('resize', () => {if (eraserDialog.open) positionEraserSettings()});
+window.addEventListener('scroll', () => {if (eraserDialog.open) positionEraserSettings()}, true);
 continuousInk = true;
 // Desktop bounds work to display frames; mobile paints delivered pen batches immediately.
 frameBatchedInk = true;
@@ -55,6 +88,7 @@ for (let [label, value] of Object.entries(state.widths)) {
 }
 
 function syncChrome() {
+  if (mode !== 'erase' && eraserDialog.open) closeEraserSettings();
   syncSwatches();
   for (let [group, id] of [
       ['brushes', 'tool'],
@@ -89,7 +123,10 @@ $('grayscale').onchange = () => {
   grayChange();
   syncChrome()
 };
-$('focus').onclick = () => document.body.classList.toggle('hide-toolbar');
+$('focus').onclick = () => {
+  closeEraserSettings();
+  document.body.classList.toggle('hide-toolbar')
+};
 let previewStart = 0;
 function requestPagePreviews() {
   if (busy) return;
@@ -99,6 +136,7 @@ function requestPagePreviews() {
 }
 $('pagesOverview').onclick = () => {
   if (busy || active !== null || $('pagesDialog').open) return;
+  cancelTouchZoom();
   previewStart = 0;
   $('pagePreviews').replaceChildren();
   $('overviewCurrent').textContent = 'Current page: ' + (state.index + 1) + ' of ' + state.count;
@@ -136,54 +174,7 @@ window.notebookPagePreviews = rows => {
   $('morePages').hidden = previewStart >= state.count;
   $('overviewStatus').textContent = ''
 };
-// Zoom the ink surface rather than the browser chrome. Preserve the page point
-// under the wheel cursor, or the viewport center for keys and menu commands.
-function setZoom(value, anchor = null) {
-  if (active !== null) return;
-  let numeric = Number(value);
-  if (!['page', 'fit'].includes(value)) {
-    if (!Number.isFinite(numeric) || numeric <= 0) return;
-    value = String(Math.round(Math.min(4, Math.max(.1, numeric)) * 10000) / 10000);
-    if (![...$('zoom').options].some(option => option.value === value)) {
-      let custom = $('customZoom');
-      if (!custom) {
-        custom = document.createElement('option');
-        custom.id = 'customZoom';
-        $('zoom').append(custom)
-      }
-      custom.value = value;
-      custom.textContent = Math.round(Number(value) * 100) + '%';
-    }
-  }
-  let viewport = $('viewport'),
-    box = viewport.getBoundingClientRect(),
-    before = canvas.getBoundingClientRect();
-  let x = anchor?.x ?? box.left + viewport.clientWidth / 2,
-    y = anchor?.y ?? box.top + viewport.clientHeight / 2;
-  let px = Math.max(0, Math.min(1, (x - before.left) / before.width)),
-    py = Math.max(0, Math.min(1, (y - before.top) / before.height));
-  $('zoom').value = value;
-  resize();
-  let after = canvas.getBoundingClientRect();
-  viewport.scrollLeft += after.left + px * after.width - x;
-  viewport.scrollTop += after.top + py * after.height - y;
-}
-
-function zoomBy(factor, anchor = null) {
-  setZoom(canvas.getBoundingClientRect().width / state.width * factor, anchor)
-}
-$('zoom').onchange = () => setZoom($('zoom').value);
-$('viewport').addEventListener('wheel', event => {
-  if (!(event.ctrlKey || event.metaKey) || !event.deltaY) return;
-  event.preventDefault();
-  let delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? $('viewport').clientHeight : 1);
-  zoomBy(Math.exp(Math.max(-1, Math.min(1, -delta * .002))), {
-    x: event.clientX,
-    y: event.clientY
-  });
-}, {
-  passive: false
-});
+createZoomControls($('zoomControls'));
 window.notebookViewState = () => ({
   toolbar: !document.body.classList.contains('hide-toolbar'),
   grayscale: $('grayscale').checked,
@@ -231,7 +222,12 @@ document.addEventListener('pointerdown', e => {
     if (panel.open && !panel.contains(e.target)) panel.open = false
 });
 document.addEventListener('keydown', e => {
-  if ($('pagesDialog').open || eraserDialog.open) return;
+  if (eraserDialog.open && e.key === 'Escape') {
+    e.preventDefault();
+    closeEraserSettings(true);
+    return
+  }
+  if ($('pagesDialog').open) return;
   let key = e.key.toLowerCase(),
     command = e.metaKey || e.ctrlKey;
   if (command && !e.altKey && ['+', '=', '-', '0'].includes(key)) {

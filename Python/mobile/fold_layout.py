@@ -23,7 +23,8 @@ class Division:
 
 def reserved_divisions(widget, *, include_inactive=False):
     """Query in the view's own coordinates; older platforms return no regions."""
-    if not type(widget._impl).__module__.startswith('toga_iOS.'):
+    from commonUtils.ui.native.text_size import native_backend
+    if not native_backend(widget).startswith('toga_iOS.'):
         return ()
     native = widget._impl.native
     if not hasattr(native, 'reservedRegionsOfKind'):

@@ -27,29 +27,156 @@ class CreationProbe(LogisticsMobile):
 
     async def new_form(self):
         picker = self.editor_picker()
-        original = picker._accepts
-        rejected = []
-        def accepts(work):
-            result = original(work)
-            if not result:
-                rejected.append(dict(same_work=picker._work is work,
-                    epoch=(work.epoch, picker._epoch), active=picker.active_host,
-                    cancelled=work.cancel.is_set(), same_client=self.cloud_client is work.client,
-                    credentials=(work.credential_generation, getattr(self.cloud_client, 'generation', None)),
-                    navigation=(work.navigation, self.navigation_generation),
-                    location=(work.location, (picker.save_as_storage.value, picker.picker_folder.value))))
-            return result
-        picker._accepts = accepts
-        try:
-            await self.choose_document_type()
-            for _ in range(100):
-                if picker.editor_picker_location is not None and not picker.cloud_busy:
-                    return picker
-                await asyncio.sleep(.1)
-            raise AssertionError(('Creation form did not finish loading',
-                picker.editor_picker_location, picker.save_as_status.value, rejected))
-        finally:
-            picker._accepts = original
+        from .fixtures import choose_creation_type
+        await choose_creation_type(self, 'txt')
+        assert picker.panel is picker.name_panel
+        assert picker.next_button.enabled
+        return picker
+
+    async def check_keyboard_steps(self):
+        from mobile.keyboard import picker_keyboard_visible
+        from .fixtures import capture_window
+        picker = await self.new_form()
+        picker.save_as_name.value = 'Field notes'
+        field = picker.save_as_name._impl.native
+        adapter = self.native_host.adapter
+        ios = type(self._impl).__module__.startswith('toga_iOS.')
+        from commonUtils.testing.waiting import settled_keyboard
+        if ios:
+            def request():
+                if field.window is not None:
+                    field.becomeFirstResponder()
+            def ready():
+                return bool(field.isFirstResponder)
+        else:
+            from android.content import Context
+            from java import jclass
+            manager = field.getContext().getSystemService(Context.INPUT_METHOD_SERVICE)
+            ime = jclass('androidx.core.view.WindowInsetsCompat$Type').ime()
+            controller = jclass('androidx.core.view.WindowCompat').getInsetsController(
+                self._impl.native.getWindow(), field)
+            def request():
+                field.requestFocus()
+                if field.hasWindowFocus() and manager.isActive(field):
+                    controller.show(ime)
+                    manager.showSoftInput(field, 0)
+            def ready():
+                return bool(field.hasWindowFocus() and field.hasFocus() and manager.isActive(field))
+        assert await settled_keyboard(request, lambda: picker_keyboard_visible(self, adapter),
+                                      ready=ready, attempts=100), 'Filename keyboard did not appear'
+        await asyncio.sleep(.4)
+        assert picker.next_button.enabled and picker.name_form.layout.height >= 48
+        if ios:
+            window = self.main_window._impl.native
+            rect = field.convertRect(field.bounds, toView=window)
+            keyboard = window.convertRect(adapter.keyboard_frame, fromCoordinateSpace=window.screen.coordinateSpace)
+            assert rect.origin.y >= 0 and rect.origin.y + rect.size.height <= keyboard.origin.y + 1
+        else:
+            from android.graphics import Rect
+            for control in (field, picker.next_button._impl.native):
+                visible = Rect()
+                assert control.getGlobalVisibleRect(visible) and visible.height() >= control.getHeight() - 1
+        await capture_window(self, Path(self.paths.cache) / 'creation-name.png')
+        await picker.choose_creation_location()
+        for _ in range(50):
+            if not picker_keyboard_visible(self, adapter):
+                break
+            await asyncio.sleep(.1)
+        assert not picker_keyboard_visible(self, adapter), 'Keyboard stayed open over locations'
+        await picker.browser_editor_location(('Local', ''))
+        assert picker.picker_primary.enabled
+        await asyncio.sleep(.4)
+        assert picker.editor_picker_location == ('Local', '') and picker.picker_primary.enabled
+        assert 'Local' in picker.picker_destination.text
+        await capture_window(self, Path(self.paths.cache) / 'creation-location.png')
+        picker.cancel_text_destination()
+
+    async def check_adaptive_creation(self):
+        from .rotation_checks import rotate
+        from .fixtures import capture_window
+        from mobile.fold_layout import division
+        self.show_home()
+        origin = self.body
+        picker = await self.new_form()
+        layout = picker.creation_layout
+        picker.save_as_name.value = 'Rotation draft'
+        picker.creation_type.value = 'Markdown (.md)'
+        await picker.choose_creation_location()
+        await picker.browser_editor_location(('Local', ''))
+        samples = []
+        for pose in ('landscape-left', 'portrait'):
+            if not layout.apple:
+                # Large-screen Android may ignore activity orientation requests.
+                # Its disposable tablet driver rotates the display itself.
+                (Path(self.paths.cache) / 'creation-orientation').write_text(pose)
+            await rotate(self, pose)
+            await asyncio.sleep(.4)
+            assert picker.visible() and picker.editor_picker_location == ('Local', '')
+            assert picker.panel is picker.location_panel and picker.destination_filename() == 'Rotation draft.md'
+            assert (picker.name_panel.parent is layout) == layout.paired
+            assert picker.location_panel.parent is layout
+            fold = division(self, layout)
+            left, gap = picker.name_panel.layout.content_width, layout.gutter.layout.content_width
+            if layout.paired and fold is not None:
+                assert abs(left - fold.x) <= 2 and abs(gap - fold.width) <= 2
+            if layout.paired:
+                picker.save_as_name.value = '../invalid'
+                picker.update_effective_name()
+                assert not picker.picker_primary.enabled
+                picker.save_as_name.value = 'Rotation draft'
+                picker.update_effective_name()
+                assert picker.picker_primary.enabled
+            if not layout.apple:
+                from android.graphics import Rect
+                button = picker.picker_primary._impl.native
+                bounds = Rect()
+                density = button.getResources().getDisplayMetrics().density
+                assert button.getGlobalVisibleRect(bounds), 'Create is outside the viewport'
+                assert bounds.height() / density >= 44, (pose, bounds.height(), density, layout.layout.height)
+            samples.append(dict(pose=pose, paired=layout.paired, width=layout.layout.content_width,
+                                left=left, gap=gap, fold=vars(fold) if fold else None))
+            await capture_window(self, Path(self.paths.cache) / f'creation-{pose}.png')
+        if (Path(self.paths.cache) / 'drive-folds').exists():
+            from commonUtils.testing.waiting import wait_until
+            # The Duo has a vertical book crease in landscape. In portrait
+            # the same crease runs horizontally across the form.
+            await rotate(self, 'landscape-left')
+            folder = Path(self.paths.cache) / 'document-creation-evidence'
+            for angle in (0, 180, 127):
+                change = dict(angle=angle)
+                pending = folder / 'fold-request.tmp'
+                pending.write_text(json.dumps(change))
+                pending.replace(folder / 'fold-request.json')
+                done = folder / 'fold-done.json'
+                done.unlink(missing_ok=True)
+                await wait_until(lambda: done.exists() and json.loads(done.read_text()) == change,
+                                 timeout=50, message='Duo hinge request timed out')
+                if angle:
+                    await rotate(self, 'landscape-left')
+                await wait_until(lambda: layout.paired == (angle != 0), timeout=10,
+                                 message=lambda: f'Duo at {angle} degrees: {layout.signature}, {division(self, layout)}')
+                if angle == 127:
+                    fold = division(self, layout)
+                    assert fold is not None and fold.vertical
+                    assert abs(picker.name_panel.layout.content_width - fold.x) <= 2
+                    assert abs(layout.gutter.layout.content_width - fold.width) <= 2
+                assert picker.visible() and picker.editor_picker_location == ('Local', '')
+                assert picker.destination_filename() == 'Rotation draft.md'
+                samples.append(dict(angle=angle, paired=layout.paired, width=layout.layout.content_width))
+        paired = layout.paired
+        if layout.apple:
+            # Exercise the actual leading bar item in both layouts.
+            button = layout.name_cancel if paired else picker.edit_name
+            item = button._ios_action_item
+            item.target.performSelector(item.action, withObject=item)
+            await asyncio.sleep(.3)
+        else:
+            self.routes.back()
+        if not paired:
+            assert picker.panel is picker.name_panel and picker.save_as_name.value == 'Rotation draft'
+            self.routes.back()
+        assert self.body is origin and not picker.visible()
+        return samples
 
     async def create_in(self, filename, location, kind='Plain text (.txt)'):
         self.show_home()
@@ -57,10 +184,12 @@ class CreationProbe(LogisticsMobile):
         form = await self.new_form()
         form.save_as_name.value = filename
         form.creation_type.value = kind
+        await form.choose_creation_location()
         picker = self.editor_picker()
         assert self.store.documents() == before
         assert not any(label.startswith('Remote') for label in picker.editor_storage_roots)
-        assert picker.editor_picker_location == ('All files', '')
+        assert picker.editor_picker_location == ('All files', ''), (picker.panel is picker.name_panel,
+            picker.cloud_busy, picker.effective_name.text, picker.save_as_status.value)
         picker.save_as_storage.value = location
         # UIKit may finish its push after the async action returns. Match a
         # user's next action after presentation, rather than cancelling the
@@ -95,29 +224,35 @@ class CreationProbe(LogisticsMobile):
         self.show_home()
         form = await self.new_form()
         form.save_as_name.value = 'Native notebook'
-        form.creation_type.value = 'Notebook (.rmdoc)'
+        form.creation_type.value = 'Remarkable Document (.rmdoc)'
+        await form.choose_creation_location()
         await asyncio.sleep(.3)
         picker = self.editor_picker()
-        assert picker.editor_picker_location == ('All files', '')
+        assert picker.editor_picker_location == ('All files', ''), (picker.panel is picker.name_panel,
+            picker.cloud_busy, picker.effective_name.text, picker.save_as_status.value)
         row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Local')
         assert await picker.browser_editor_folder(row), picker.save_as_status.value
         assert picker.picker_parent.enabled
         await picker.parent_editor_folder()
-        assert picker.editor_picker_location == ('All files', '')
+        assert picker.editor_picker_location == ('All files', ''), (picker.panel is picker.name_panel,
+            picker.cloud_busy, picker.effective_name.text, picker.save_as_status.value)
         assert await picker.browser_editor_folder(row), picker.save_as_status.value
+        picker.show_new_folder()
         picker.new_folder_name.value = 'Test'
+        assert not picker.picker_primary.enabled
+        await picker.confirm_editor_file()
+        assert picker.visible() and picker.creating_notebook()
         await picker.create_picker_folder()
         assert picker.picker_folder.value == 'Test', picker.save_as_status.value
         assert picker.effective_name.text == 'Save as: Native notebook.rmdoc'
+        picker.show_creation_name()
         picker.save_as_name.value = 'Invalid.txt'
-        await picker.confirm_editor_file()
-        assert 'ending in .rmdoc' in picker.save_as_status.value
-        backend = type(picker.save_as_status._impl).__module__
-        if backend.startswith('toga_android.'):
-            native = picker.save_as_status.label._impl.native
-            assert str(native.getText()) == picker.save_as_status.value
-            assert native.getHeight() > 0
+        await picker.choose_creation_location()
+        assert picker.panel is picker.name_panel and not picker.next_button.enabled
+        assert 'ending in .rmdoc' in picker.effective_name.text
         picker.save_as_name.value = 'Native notebook'
+        await picker.choose_creation_location()
+        assert picker.editor_picker_location == ('Local', 'Test')
         path = picker.editor_provider('Local').root / 'Test/Native notebook.rmdoc'
         await picker.confirm_editor_file()
         assert path.is_file(), picker.save_as_status.value
@@ -131,6 +266,9 @@ class CreationProbe(LogisticsMobile):
         output.mkdir(parents=True, exist_ok=True)
         report = dict(success=False, cases=[])
         try:
+            await self.check_keyboard_steps()
+            report['cases'].append(dict(keyboard_steps=True))
+            report['layouts'] = await self.check_adaptive_creation()
             report['cases'].append(await self.create_in('Ordinary.txt', 'Local'))
             report['cases'].append(await self.create_in('Note.md', 'Received Files', 'Markdown (.md)'))
             report['cases'].append(await self.create_notebook())
@@ -150,7 +288,8 @@ class CreationProbe(LogisticsMobile):
             self.show_home()
             form = await self.new_form()
             form.save_as_name.value = 'My notebook'
-            form.creation_type.value = 'Notebook (.rmdoc)'
+            form.creation_type.value = 'Remarkable Document (.rmdoc)'
+            await form.choose_creation_location()
             await form.browser_editor_location(('Local', ''))
             await asyncio.sleep(.5)
             report['success'] = True

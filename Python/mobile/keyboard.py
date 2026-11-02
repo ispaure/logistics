@@ -37,9 +37,24 @@ def prepare_picker_input(control):
 
 
 
+def dismiss_picker_keyboard(picker, field=None):
+    field = picker.save_as_name if field is None else field
+    backend = type(field._impl).__module__
+    if backend.startswith('toga_android.'):
+        from android.content import Context
+        native = field._impl.native
+        native.getContext().getSystemService(Context.INPUT_METHOD_SERVICE).hideSoftInputFromWindow(
+            native.getWindowToken(), 0)
+        native.clearFocus()
+    elif backend.startswith('toga_iOS.'):
+        picker.app.main_window._impl.native.endEditing(True)
+
+
 def reveal_picker_input(picker):
     """Keep the current UIKit first responder inside the resized picker viewport."""
-    scroll = picker.picker_form._impl.native
+    editing_name = picker.name_panel is not None and picker.save_as_name._impl.native.isFirstResponder
+    form = picker.name_form if editing_name else picker.picker_form
+    scroll = form._impl.native
     focused = next((control._impl.native for control in (picker.save_as_name, picker.new_folder_name)
                     if control._impl.native.isFirstResponder
                     and control._impl.native.isDescendantOfView(scroll)), None)
@@ -48,7 +63,7 @@ def reveal_picker_input(picker):
     picker.app.main_window._impl.native.layoutIfNeeded()
     # Toga refreshes scroll content on a deferred native callback. Refresh now
     # before scrolling, so its content size cannot clamp away the needed offset.
-    picker.save_as_view.refresh()
+    form.content.refresh()
     scroll.layoutIfNeeded()
     scroll.scrollRectToVisible(focused.convertRect(focused.bounds, toView=scroll), animated=False)
 

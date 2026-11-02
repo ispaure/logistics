@@ -51,7 +51,7 @@ def refresh_features(app):
     retired = set()
     if not enabled(app.preferences, 'rclone'):
         retired.update(('remote-browser', 'remote-actions', 'remote-item', 'connections',
-            'import-credentials', 'smb-connection', 'choose-credential', 'credential-package',
+            'import-credentials', 'import-credentials-password', 'smb-connection', 'choose-credential', 'credential-package',
             'unlock-credential', 'transfers', 'transfer-copy', 'transfer-settings', 'transfer-review', 'local-push'))
     if not enabled(app.preferences, 'lm'):
         retired.add('chat-settings')
@@ -137,7 +137,7 @@ def feature_controls(app, box):
     import toga
     from toga.style import Pack
     from .settings.forms import switch_row, SettingsLabel
-    box.add(SettingsLabel('Choose the features available on this device. All features are on by default. Changes save automatically; files and settings are kept.'))
+    box.add(SettingsLabel('Choose which features appear on this device. Turning one off keeps its files and settings.'))
     switches = box.feature_switches = {}
     def change(widget, name):
         try:

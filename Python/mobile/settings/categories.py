@@ -41,12 +41,10 @@ class SettingsCategories:
             value=app.preferences.values['clear_unmodified_documents_on_restart'] == 'true',
             style=Pack(height=48))
         box.add(switch_row(app, 'Restore last document', app.restore_choice,
-            'Resume the last active document when the app starts, including ordinary EPUB and comic readers. '
-            'Session-only documents, including those loaded using session-only credentials, are never restored.'))
+            'Resume the last active document when the app starts.'))
         box.add(switch_row(app, 'Close saved documents on restart', app.clear_documents_choice,
-            'Closes documents with no pending changes in Open documents when the app restarts. '
-            'The last active document is kept when Restore last document is on. '
-            'Stored documents, reading progress and unsaved drafts are kept.'))
+            'Close documents with no unsaved changes when the app restarts. Files and drafts are kept. '
+            'The last active document stays open if Restore last document is on.'))
         box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=app.reload_preferences, style=Pack(height=48)))
         if app.scene_manager.supported:
@@ -65,16 +63,14 @@ class SettingsCategories:
         app.snow_choice = toga.Switch('Seasonal snow',
             value=app.preferences.values['seasonal_snow'] == 'true', style=Pack(height=48))
         box.add(switch_row(app, 'Seasonal snow', app.snow_choice,
-            'Snow from December 15 through January 2, inclusive. On by default. '
-            'Disabled in high-contrast / E Ink mode. Saved immediately.'))
+            'Show falling snow from December 15 to January 2. Hidden in high-contrast / E Ink mode.'))
         app.snow_choice.on_change = app.change_seasonal_snow
         if not type(app._impl).__module__.startswith('toga_android.'):
             return box
         app.android_eink_choice = toga.Switch('High contrast / E Ink',
             value=app.preferences.values['android_eink'] == 'true', style=Pack(height=48))
         box.add(switch_row(app, 'High contrast / E Ink', app.android_eink_choice,
-            'Use black text on white, strong borders and simpler controls. Overrides dark mode and reader colors '
-            'without changing images or files. Saved immediately. No BOOX hardware refresh control.'))
+            'Use black text on white, stronger borders and simpler controls. Overrides dark mode and reader colors; images stay unchanged.'))
         app.android_eink_choice.on_change = app.change_android_eink
         return box
 
@@ -100,9 +96,8 @@ class SettingsCategories:
             value=app.preferences.values['session_speech_when_locked'] == 'true',
             on_change=app.change_session_speech, style=Pack(height=48))
         box.add(switch_row(app, 'Session-only speech while locked', app.session_speech_choice,
-            'Allow already-started read-aloud from session-only credentials to keep playing '
-            'and show system playback controls while locked. Off by default. This choice is saved. '
-            'It does not unlock credentials or permit new file reads while locked.'))
+            'Keep read-aloud playing when the screen locks, including system playback controls. '
+            'Applies to session-only documents already being read; new files stay locked.'))
         box.add(SettingsLabel('Protected audio outputs', style=Pack(font_weight='bold')))
         from .audio import controls as audio_controls
         audio_controls(app, box)
@@ -118,13 +113,13 @@ class SettingsCategories:
         setattr(app, key + '_choice', choice)
         choice.on_change = app.save_preferences
         box.add(choice)
-        box.add(toga.Label('Pinch to adjust. Saved for this format on this device.', style=Pack(font_size=12)))
+        box.add(toga.Label('Pinch while reading to change this size.', style=Pack(font_size=12)))
         if title in {'Markdown', 'EPUB'}:
             justify_key = title.lower() + '_justify'
             justify = toga.Switch('Justify text', value=app.preferences.values[justify_key] == 'true', style=Pack(height=48))
             setattr(app, justify_key + '_choice', justify)
             box.add(switch_row(app, 'Justify text', justify,
-                'Align paragraphs and lists to both edges. Saved for this format on this device.'))
+                'Align text to both the left and right edges.'))
             justify.on_change = app.save_preferences
         return box
 
@@ -144,9 +139,9 @@ class SettingsCategories:
         box.add(toga.Label('Comic & PDF magnifier zoom'))
         app.magnifier_choice = setting(app)
         box.add(app.magnifier_choice)
-        box.add(toga.Label('Keep holding; tap −/+ just outside the lens’s upper corners.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
+        box.add(toga.Label('While holding the magnifier, tap − or + to change its zoom. Applies to comics and PDFs.', style=Pack(font_size=12)))
         box.add(page_button('Saved books & comics…', on_press=app.show_saved_files, style=Pack(height=48)))
-        box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
+        box.add(toga.Label('For page layout and colors, open Appearance in the reader.', style=Pack(font_size=12)))
         return box
 
 
@@ -161,13 +156,12 @@ class SettingsCategories:
         app = self.app
         box = self.category('Workspaces')
         if type(app._impl).__module__.startswith('toga_android.'):
-            box.add(page_button('Local / LocalCrypt location…', on_press=app.show_collection_storage, style=Pack(height=48)))
+            box.add(page_button('File storage…', on_press=app.show_collection_storage, style=Pack(height=48)))
         app.show_legacy_choice = toga.Switch('Show Legacy',
             value=getattr(app, 'show_legacy_session', False),
             on_change=app.change_show_legacy, style=Pack(height=48))
         box.add(switch_row(app, 'Show Legacy', app.show_legacy_choice,
-            'Show Legacy- folders in Workspaces, file browsers and library shortcuts, '
-            'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
+            'Show older folders and credentials named Legacy. Resets when the app closes.'))
         from .reader_history import migration_controls
         migration_controls(app, box)
         box.add(page_button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))

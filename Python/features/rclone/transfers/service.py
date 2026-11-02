@@ -19,6 +19,7 @@ def _ignore_progress(*args, **kwargs):
 class TransferContext:
     cancelled: Callable[[], bool] = _not_cancelled
     progress: Callable = _ignore_progress
+    skip_localcrypt_integrity: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,7 @@ class TransferService:
         # Review bindings include records which execution may legitimately save.
         # The active binding tracks only access lifetime throughout execution.
         active = plan.active or plan.valid
-        execution = TransferContext(lambda: context.cancelled() or not active(), context.progress)
+        execution = TransferContext(lambda: context.cancelled() or not active(), context.progress,
+                                    context.skip_localcrypt_integrity)
         check_cancelled(execution.cancelled)
         return plan.execute(plan.request, execution)

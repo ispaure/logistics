@@ -121,6 +121,15 @@ def validate_result(action, value):
         ):
             if field in value and (type(value[field]) is not int or value[field] < 0):
                 invalid()
+        if "active_files" in value:
+            rows = value['active_files']
+            if not isinstance(rows, list) or len(rows) > 3:
+                invalid()
+            for row in rows:
+                if (not isinstance(row, dict) or not isinstance(row.get('name'), str)
+                        or not row['name'] or len(row['name'].encode('utf-8')) > 4096
+                        or any(type(row.get(key)) is not int or row[key] < 0 for key in ('bytes', 'size'))):
+                    invalid()
         if "retrying" in value and type(value["retrying"]) is not bool:
             invalid()
     elif action == "mirror_sync":
@@ -152,6 +161,7 @@ class MirrorProgress(TypedDict, total=False):
     attempt: int
     max_attempts: int
     retrying: bool
+    active_files: list[dict]
 
 
 def mirror_info(

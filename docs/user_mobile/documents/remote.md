@@ -15,6 +15,12 @@ Locking or replacing credentials retires associated private reader contents.
 
 ## Offline folders
 
+For one file or folder, use its **••• → Download locally…** menu. Choose the
+destination folder and name, then **Download here**. Existing names are rejected;
+an ordinary destination needs confirmation because its decrypted contents remain
+readable after locking the connection. See the
+[remote workflow](../../features/rclone/user_mobile/workflows.md#mobile-folder-navigation).
+
 Use Workspaces's managed Pull workflow to keep files in a Local or LocalCrypt
 folder. Review the proposed transfer before applying it. Existing offline copies
 remain readable and exportable when the remote is unavailable.

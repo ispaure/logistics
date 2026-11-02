@@ -1,11 +1,11 @@
 $('grayscale').onchange = draw;
-$('zoom').onchange = resize;
-let resizeFrame = null;
+let resizeFrame = null, viewportResizePending = false;
 new ResizeObserver(() => {
   if (resizeFrame !== null) return;
   resizeFrame = requestAnimationFrame(() => {
     resizeFrame = null;
-    if (active === null) resize()
+    if (active === null) resize();
+    else viewportResizePending = true
   })
 }).observe($('viewport'));
 render();

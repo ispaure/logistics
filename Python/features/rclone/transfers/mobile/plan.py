@@ -73,7 +73,9 @@ def build_plan(client, transfer, credentials):
     store.check_records()
     records = store.original
     signature = store.signature(job)
-    grant = credentials.capture(job['remote'])
+    from .planning import resolved_job
+    active_job = resolved_job(client, job)
+    grant = credentials.capture(active_job['remote'])
     target = store.guard(store.target(job))
     def active():
         try:
@@ -91,16 +93,16 @@ def build_plan(client, transfer, credentials):
     check_cancelled(lambda: not active())
     prefix = job['prefix']
     if job['crypt']:
-        prefix = client.request('crypt_path', remote=job['remote'], path=prefix,
+        prefix = client.request('crypt_path', remote=active_job['remote'], path=prefix,
             identity=job['cipher_identity'], directory=True, decode=True)['path']
-    online = job['remote'] + ':' + prefix
+    online = active_job['remote'] + ':' + prefix
     local = ('LocalCrypt/' if job['crypt'] else 'Local/') + job['target']
     if job['crypt'] and prefix:
         local += '/' + prefix
     request = ReviewRequest('Push' if transfer.push else 'Pull', local if transfer.push else online,
                             online if transfer.push else local, job['identity'], transfer.options)
-    scan = native_scanner(client, job, target, push=transfer.push,
-        options=transfer.options, cleanup_plan=lambda cancelled: store.cleanup_plan(dict(job), client, cancelled))
+    scan = native_scanner(client, active_job, target, push=transfer.push,
+        options=transfer.options, cleanup_plan=lambda cancelled: store.cleanup_plan(dict(active_job), client, cancelled))
     def compare(emit, cancelled):
         stopping = lambda: cancelled() or not active()
         check_cancelled(stopping)

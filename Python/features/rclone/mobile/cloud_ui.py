@@ -83,8 +83,8 @@ class CloudUI(LocalCryptUI):
     def _build_cloud_controls(self, error):
         """Construct retained connection, browser and download controls."""
         self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
-        self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
-        self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Unlock.'), style=Pack(font_size=14))
+        self.cloud_selected_zip = self.rclone_ui.settings.note('')
+        self.cloud_import_message = self.rclone_ui.settings.note('Choose a credential ZIP to add its connections.')
         self.cloud_password = PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
         self.cloud_import = toga.Button('Unlock', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
         self.cloud_probe = toga.Button('Check rclone engine', on_press=self.probe_cloud, style=Pack(height=44))
@@ -129,11 +129,8 @@ class CloudUI(LocalCryptUI):
                 ui.settings.note('Lock to stop access until you unlock again. This also locks SMB connections.'),
                 troubleshooting, self.cloud_connections_status])
         self.cloud_import_view = ui.settings.page('Import credential ZIP',
-            'Choose your Logistics credential package.', [
-                self.cloud_choose, self.cloud_selected_zip,
-                ui.settings.group([ui.settings.field('ZIP password (if encrypted)', self.cloud_password)]),
-                self.cloud_import, self.cloud_import_message,
-                ui.settings.note('Unlock to choose Session-Only or Persistent credential storage. Password-protected ZIPs are retained for future unlocking. The ZIP password is never saved.')])
+            'Choose a package exported from Logistics desktop.', [
+                self.cloud_choose, self.cloud_selected_zip, self.cloud_import_message])
         # Build each route in its final shape. Browser controls belong only to
         # the browser header; advanced actions never temporarily adopt them.
         self.cloud_advanced_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
@@ -231,14 +228,39 @@ class CloudUI(LocalCryptUI):
         self.show_view(self.cloud_connections_view, destination='settings', route='connections', title='rclone connections')
 
     async def begin_cloud_import(self, widget=None, **kwargs):
-        self.show_cloud_import()
-        await self.choose_cloud_package()
+        if self.show_cloud_import() is not False:
+            await self.choose_cloud_package(automatic=True)
 
     def show_cloud_import(self, widget=None, **kwargs):
         if not self.app.require_feature('rclone'):
-            return
+            return False
         self.show_cloud(present=False)
-        self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
+        if self.cloud_busy:
+            return False
+        self.credential_workflow.cancel_import()
+        return self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
+
+    def _show_cloud_import_password(self, package):
+        ui = self.rclone_ui
+        for control in (self.cloud_password, self.cloud_import, self.cloud_import_message):
+            if control.parent is not None:
+                control.parent.remove(control)
+        self.cloud_import_message.text = 'This ZIP is encrypted. Your password is never saved.'
+        page = ui.settings.page('Unlock credential ZIP', package.name, [
+            ui.settings.group([ui.settings.field('ZIP password', self.cloud_password)]),
+            self.cloud_import_message, self.cloud_import,
+            toga.Button('Choose a different ZIP…', on_press=self.begin_cloud_import, style=Pack(height=48)),
+            toga.Button('Cancel', on_press=lambda widget: self._finish_cloud_import(), style=Pack(height=48))])
+        if self.show_view(page, destination='settings', route='import-credentials-password', title='Unlock credential ZIP') is not False:
+            self.cloud_password.focus()
+
+    def _finish_cloud_import(self):
+        self.credential_workflow.cancel_import()
+        screens = self.routes.screens['settings']
+        first = next((i for i, (route, *_) in enumerate(screens) if route.startswith('import-credentials')), None)
+        if first is not None:
+            self.routes.trim('settings', first)
+        self.show_cloud_connections()
 
     def refresh_retained_credentials(self):
         return self.credential_workflow.refresh_retained_credentials()
@@ -674,7 +696,7 @@ class CloudBrowserPresentation:
         cloud.remote_browser.thumbnail = None
         cloud.remote_browser.set_entries(provider, folder,
             rows, location=(remote, folder))
-        cloud.remote_browser.location_bar.update(folder, remote=True,
+        cloud.remote_browser.location_bar.update(folder, remote=True, provider=provider,
             encrypted=remote in cloud.cloud_crypt_remotes, unlocked=True,
             session_only=any(remote in record.get('remotes', ()) and not record.get('saved', False)
                              for record in getattr(cloud.cloud_client, 'package_records', ())),

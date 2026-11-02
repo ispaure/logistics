@@ -370,3 +370,33 @@ cleanup explicitly verified that only `io.github.ispaure.logisticsmobile` remain
 among Logistics packages. Simulator appearance, contrast and text-size settings
 and the Duo display power state were restored. Local test identifiers, screenshots,
 source manifests, XCTest results and logs remain outside the wiki.
+
+## In-place library documents
+
+`mobile/library_document.py` owns an embedded Markdown draft over DocumentResource,
+using the regular FormattedMarkdownInput and CodeInput. It does not create a
+second workspace session. `services/documents/mobile_notebooks.py:notes_editor`
+embeds the regular NotebookPanel over NotebookDocument. Library-specific canvas
+state suppresses commands that would leave this storage context. Native-bound
+ink must drain through `window.notebookIdle` before a document transition.
+
+Library transitions flush the active editor, resolve Save/Discard/Cancel and
+bind asynchronous loads to the library epoch. A stale load disposes its resource
+rather than replacing the newly selected document. Source save conflicts retain
+the draft. Session close and application-exit checks include embedded editors.
+
+The library accepts Markdown and `.rmdoc` entries; Markdown connection scans skip
+archive documents. Creation uses the library containment boundary for both formats.
+Home selects the format before the existing name/location flow, preserving the
+broader host destination policy. Formatted single-line wiki paragraphs/headings use
+the live-source DOM so editing does not escape or lose wiki delimiters.
+
+Formatted controls are below the writing viewport during editing, with the same
+shortcuts for hardware keyboards. Active horizontal fold geometry bounds the
+writing pane; the system owns keyboard sizing. This follows the accessory and
+keyboard-layout guidance in [Apple’s virtual keyboard guidance](https://developer.apple.com/design/human-interface-guidelines/virtual-keyboards).
+
+Run the `notes-library` native probe through the owned document-storage validation
+helper on iOS and Android. It checks in-place identity, live wiki input, drawers,
+keyboard toolbar bounds, search cancellation, canvas saving, guarded transitions
+and the confined creation picker. Screenshots/reports stay in ignored test-results.

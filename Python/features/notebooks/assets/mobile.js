@@ -261,7 +261,30 @@ renderEraserChoices();
   heading(pp, 'Remove page');
   actions(pp, ['delete-page']);
   let dp = panels.document;
-  dp.append(control('title'));
+  const notebookTitle = control('title');
+  dp.append(notebookTitle);
+  let titleHold, titleTouch;
+  function cancelTitleHold() {
+    clearTimeout(titleHold);
+    titleTouch = null;
+  }
+  notebookTitle.addEventListener('pointerdown', e => {
+    cancelTitleHold();
+    if (!e.isPrimary || e.button !== 0) return;
+    titleTouch = {id: e.pointerId, x: e.clientX, y: e.clientY};
+    titleHold = setTimeout(() => {
+      cancelTitleHold();
+      if (!sheet.hidden && sheet.dataset.panel === 'document') send({op: 'document-location'});
+    }, 500);
+  });
+  notebookTitle.addEventListener('pointermove', e => {
+    if (titleTouch && e.pointerId === titleTouch.id &&
+        Math.hypot(e.clientX - titleTouch.x, e.clientY - titleTouch.y) > 8) cancelTitleHold();
+  });
+  for (const event of ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture']) {
+    notebookTitle.addEventListener(event, cancelTitleHold);
+  }
+  window.addEventListener('blur', cancelTitleHold);
   let shortcuts = document.createElement('div');
   shortcuts.className = 'sheet-actions sheet-shortcuts';
   for (let [button, label] of [
@@ -316,6 +339,9 @@ renderEraserChoices();
   let vp = panels.view;
   control('zoom').add(new Option('Fit page', 'page'));
   field(vp, 'Zoom', control('zoom'));
+  const zoomControls = document.createElement('div');
+  document.body.append(zoomControls);
+  createZoomControls(zoomControls);
   let fingerLabel = document.createElement('label');
   fingerLabel.append(control('finger'), document.createTextNode('Draw with finger'));
   vp.append(fingerLabel);
@@ -323,7 +349,7 @@ renderEraserChoices();
   grayLabel.append(control('grayscale'), document.createTextNode('Grayscale preview'));
   vp.append(grayLabel);
   let hint = document.createElement('p');
-  hint.textContent = 'Swipe left or right with a finger to change pages. When zoomed in, drag to pan. Stylus input always draws. Ballpoint, Pencil, Marker, Paintbrush, Calligraphy and Shader respond to pen pressure. Grayscale changes the preview only.';
+  hint.textContent = 'Swipe left or right with a finger to change pages. Pinch with two fingers to zoom; drag with one finger to pan when zoomed in. Stylus input always draws. Ballpoint, Pencil, Marker, Paintbrush, Calligraphy and Shader respond to pen pressure. Grayscale changes the preview only.';
   vp.append(hint);
   dp.append(control('status'));
   let addPage = document.createElement('button');
@@ -384,6 +410,8 @@ renderEraserChoices();
 
   function openSheet(key, opener) {
     if (active !== null) return;
+    cancelTitleHold();
+    cancelTouchZoom();
     if (fold && ['brush', 'layers', 'view'].includes(key)) {
       closeSheet(false);
       panels[key].scrollIntoView({block: 'nearest'});
@@ -421,18 +449,21 @@ renderEraserChoices();
     header.inert = !nonmodal;
     dock.inert = !nonmodal;
     restore.inert = !nonmodal;
+    zoomControls.inert = !nonmodal;
     $('viewport').inert = !nonmodal;
     if (menu) documentDropdown.activate();
     else (floating ? grid.querySelector('[aria-pressed=true]') || grid.firstElementChild : closer).focus()
   }
 
   function closeSheet(restoreFocus = true) {
+    cancelTitleHold();
     sheet.hidden = backdrop.hidden = true;
     documentDropdown.deactivate();
     brushToggle.setAttribute('aria-expanded', 'false');
     header.inert = false;
     dock.inert = false;
     restore.inert = false;
+    zoomControls.inert = false;
     $('viewport').inert = false;
     if (!restoreFocus) return;
     if (returnFocus && returnFocus.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
@@ -562,7 +593,7 @@ renderEraserChoices();
     pageNumber.max = String(state.count);
     if (document.activeElement !== pageNumber) pageNumber.value = String(state.index + 1);
     for (let card of previews.querySelectorAll('[data-page]')) card.setAttribute('aria-current', String(Number(card.dataset.page) === state.index));
-    for (let b of document.querySelectorAll('[data-file-action]')) b.hidden = b.dataset.fileAction === 'show-in-folder' ? !state.has_source : b.dataset.fileAction === 'delete-file' ? !state.can_delete : false;
+    for (let b of document.querySelectorAll('[data-file-action]')) b.hidden = state.notes_library && ['library','save-as','transfer','show-in-folder','delete-file'].includes(b.dataset.fileAction) ? true : b.dataset.fileAction === 'show-in-folder' ? !state.has_source : b.dataset.fileAction === 'delete-file' ? !state.can_delete : false;
     let t = control('tool'),
       c = control('color');
     const next = JSON.stringify(state.tools);

@@ -57,9 +57,8 @@ class HomeUnlockTests(unittest.TestCase):
             app.show_legacy_session = False
             self.assertEqual(app.home_unlock_candidates(), [])
             app.show_home()
-            self.assertIs(app.home_content.children[0], app._home_status_row)
-            self.assertEqual(len(app._home_status_row.children), 1)
-            self.assertIsInstance(app._home_status_row.children[0], toga.Label)
+            self.assertIsNone(app._home_status_row.parent)
+            self.assertFalse(app._home_status_row.children)
             app.show_legacy_session = True
             self.assertEqual([item['zip'] for _, item in app.home_unlock_candidates()], ['Legacy.zip'])
 
@@ -69,13 +68,13 @@ class HomeUnlockTests(unittest.TestCase):
             app.show_legacy_session = False
             app.show_home()
             header = app.home_content.children[0]
-            self.assertEqual(header.children[0].text, 'Open a file or start a new document.')
-            unlock = header.children[1]
+            self.assertEqual(len(header.children), 1)
+            unlock = header.children[0]
             self.assertEqual(unlock.control_icon, 'storage_crypt')
             self.assertEqual(unlock.accessible_name, 'Unlock credentials')
             self.assertEqual((unlock.style.width, unlock.style.height), (48, 48))
             self.assertEqual(unlock._impl._surface_roles, ('surface', 'text', False))
-            header.children[1].on_press()
+            unlock.on_press()
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertEqual(app.routes.screens['home'][-1][0], 'unlock-credential')
             selector = next(child for child in app.body.children[0].content.children if isinstance(child, toga.Selection))
@@ -103,6 +102,5 @@ class HomeUnlockTests(unittest.TestCase):
         self.retained.side_effect = OSError('Unavailable')
         self.app.show_home()
         row = self.app._home_status_row
-        self.assertIs(self.app.home_content.children[0], row)
-        self.assertEqual(len(row.children), 1)
-        self.assertIsInstance(row.children[0], toga.Label)
+        self.assertIsNone(row.parent)
+        self.assertFalse(row.children)

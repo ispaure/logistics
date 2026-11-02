@@ -91,7 +91,7 @@ about pending work or original blockers describe that increment, not current sta
 | Area | Decision |
 | --- | --- |
 | Review | Detailed review before both Push and Pull, showing additions, replacements and deletions. |
-| Slow review | While scanning, offer an explicit action to proceed without the full review, after destination/direction confirmation. Mark partial results incomplete. This bypasses the comparison scan, not required credential, destination or LocalCrypt integrity checks. |
+| Slow review | While scanning, offer an explicit action to proceed without the full review, after destination/direction confirmation. Mark partial results incomplete. Desktop also skips full LocalCrypt integrity scanning and generated-file cleanup. Credential, destination and structural checks remain; mobile retains full LocalCrypt integrity checks. |
 | Destination inference | Preserve desktop conventions: whole-folder Push uses the local folder name as the remote name in the selected account; specific-folder Push targets that folder name beneath the selected remote; Pull uses the remote name for its managed local folder. Do not introduce user-managed arbitrary persistent source/destination pairs as the primary workflow. |
 | Account ownership | Preserve credential associations and LocalCrypt backing-target routing; name inference must not discard account context. |
 | Ordinary file links | Follow file links for ordinary Local transfers on both platforms, using desktop behavior as the model. |

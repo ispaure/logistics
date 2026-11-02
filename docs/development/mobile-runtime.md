@@ -452,12 +452,17 @@ Workspaces and Documents; it never opens user files.
 
 New-document naming delegates to `EditorPicker.show_document_creation()`. Its
 destination picker offers ordinary browsable roots and unlocked LocalCrypt roots,
-including encrypted roots with no offline files yet. It publishes empty bytes
+including linked pulled folders. Text and Markdown creation publish empty bytes
 through the existing non-overwriting resource operation, verifies the reopened
 file and enters provider editing. It never creates a `DocumentStore` copy.
 Encrypted destinations use `encrypted_copies()`; direct remote destinations are
-rejected. Successful creation retires both creation forms so closing the reader
-returns to the opening screen. Cancelling the picker returns to the name form.
+rejected. Naming and folder selection share one route. The creation layout retains the
+same controls and folder selection across resize. A wide pane shows the name
+beside the destination; a vertical UIKit division reserves its own local gap.
+Choose location validates the name and loads the browser. In compact mode Back
+returns to naming. In paired mode Back exits after local browser navigation has
+been exhausted. Cancel exits either step. Successful creation retires the route
+so closing the reader returns to the opening screen.
 Host coverage is in `test_document_creation.py`; the isolated native
 `document_creation_probe.py` checks ordinary and encrypted creation/edit/save with
 the compiled bridge through `markdown_rework_tools --creation`.
@@ -553,7 +558,14 @@ Confirmed managed-text deletion follows the same origin return path as Close.
 It refreshes exposed Home and Documents roots from the committed workspace and
 store before rendering, so retained recent/saved rows cannot show the deleted
 document while the background inventory scan finishes. Ordinary Close preserves
-the existing root panels and viewport.
+the existing root panels and viewport, updates Documents lists and Home's Recent
+rows immediately, and removes the closed session's Open badge without a tab
+switch. Reopening a retained document across tabs retires its previous
+presentation before mounting the same live view, including iOS Documents'
+secondary stack. Host regressions in `test_hub_documents.py` and
+`test_document_navigation.py` cover row refresh, draft preservation and both
+directions of that secondary-stack handoff; these checks do not certify native
+UIKit rendering.
 
 `PrivateSessions.positions` is a bounded, memory-only cache keyed by the existing
 opaque source identity. It retains page indices, EPUB offsets and supported
@@ -1150,12 +1162,13 @@ built. Scene callbacks record activity immediately and dispatch privacy/focus
 handlers only after the privacy owner exists.
 
 The local browser presents one On this device source. `SharedFiles` lists the
-iOS Documents root and exposes its `Local` child with the display name Collection.
+iOS Documents root. The main browser omits Local and Received Files because they
+have dedicated Workspaces entries; destination pickers retain them.
 `FilesUI.browser_file_location` routes that child and its descendants into the
 existing CollectionFiles provider; Parent at the collection root returns to
 Documents. The outer provider rejects direct entry access to Local so root mutations
-cannot rename or remove the managed collection; recursive search can list its
-contents. Internal Local files and Shared
+cannot rename or remove the managed collection; recursive search from Browse All
+Files also omits these collections. Internal Local files and Shared
 files location identities remain distinct for existing pins, managed workflows,
 provider documents and history, but share one source control. No storage migration
 is involved; Android's collection root is unchanged.
@@ -1187,6 +1200,19 @@ in `composition/presentation.py` and keeps storage/provider discovery, workspace
 credentials and private publication. Reader and private-session compatibility
 accessors delegate format state to its owning controller; prepared view handoff
 uses setters so state cannot bypass these owners.
+
+The feature's `mobile/library_panels.py` owns Files/Calendar and contextual file
+commands; `library_files.py` owns filename-only daily-note discovery and verified,
+provider-backed copy/delete operations. Calendar results stay in memory and are
+cancelled on disposal. Notes drawers opt into the host overlay's modal dimming;
+speech overlays retain their existing default. A cancelled library open advances
+its epoch, restores the retained document and rejects late results. Scroll-position
+retrieval has a 250 ms limit and is skipped while the embedded editor is active;
+opening a Markdown note updates existing tree selection without rebuilding rows.
+Focused host coverage includes calendar duplicates/creation races, read-only
+guards, copy collisions/root containment, opening cancellation and mocked native
+overlay dismissal. This does not establish device performance or native visual
+acceptance for the new calendar and dimming.
 
 Comic folder batch plans/views are owned by a composed feature controller.
 Generic speech, private WebView and image-header mechanisms live in commonUtils;
@@ -1436,12 +1462,42 @@ repeat visits, cross-document Edit and checkpoint/token vetoes.
 
 ## Settings implementation owners
 
+Settings option titles use the shared 16 pt/sp control size; descriptions use
+the 13 pt/sp caption size, converted through `ui_metrics.toga_font_size` for
+Toga's font units on both mobile backends. Descriptions explain the option's
+effect briefly; longer text is reserved for consequences such as retained drafts
+or session security. `test_settings_ui.py` checks the title/caption hierarchy,
+and `test_settings_navigation.py` checks wrapping in narrow and folded panes.
+
+Android `storage_ui.StorageUI` presents File storage as an overview, a destination
+page and a review. Recovery, empty setup and deletion live under Other storage
+options. Deletion uses a filled red bottom action (black/white in E Ink mode),
+then the existing exact-path confirmation. All pages use the shared settings
+control/caption font sizes. Permission prompts appear only for operations that
+need external access; older Android app-directory storage needs no grant.
+The existing storage services still own copy verification, collision refusal,
+active-location protection and retained originals. `test_storage_ui.py` checks
+the guided flow, permission return, cancellation, typography and destructive
+action; `test_storage_location.py` checks file effects. These are host checks,
+not native rendering certification.
+
 `settings.navigation.SettingsNavigation` owns compact routes, retained wide panes
 and per-window selection. Its `SettingsPages` mapping builds each category only on
 first access. `SettingsCategories` constructs application controls;
 `settings.forms` owns shared rows and connection forms, `settings.speech` owns
 voice controls, and `settings.information` builds installed-version/help content.
 The old `settings_ui.py` module is removed; use canonical imports and patch targets.
+
+Mobile credential import opens the system picker first. Bounded ZIP metadata
+determines whether to present `import-credentials-password`; otherwise the UI
+continues directly to the explicit session/persistent choice and existing native
+credential loader. Password retries reuse the in-memory archive and storage
+choice. Route retirement clears the pending archive and password; picker results
+are admitted only while their captured client, generation and navigation remain
+current. Native publication and retention guards remain authoritative.
+`test_cloud_import_ui.py` covers both archive types, retries, cancellation and
+navigation during selection. Direct no-widget tooling calls retain the existing
+manual selection/import API.
 
 ### Mobile feature selection
 

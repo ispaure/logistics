@@ -197,7 +197,7 @@ class FileUITests(unittest.TestCase):
             try:
                 app.cloud_client = Client()
                 app.show_cloud()
-                app.loop.run_until_complete(app.show_files())
+                app.loop.run_until_complete(app.show_files(location=('Local files', '')))
                 root = app.private_root / 'LocalFiles'
                 (root / 'remove.txt').write_text('delete fixture')
                 app.loop.run_until_complete(app.browse_files())

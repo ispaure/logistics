@@ -27,6 +27,19 @@ function hits(p) {
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
   return state.strokes.filter(s => visible.has(s.layer) && s.points.some((v, i) => distance(p, i ? s.points[i - 1] : v, v) < (mode === 'erase' ? eraserRadius + v[3] / 2 : Math.max(12, v[3] / 2)))).map(s => s.id)
 }
+function beginPan(e, capture = canvas) {
+  if (pan) {
+    pan.cancelled = true;
+    return
+  }
+  pan = {
+    id: e.pointerId, x: e.clientX, y: e.clientY,
+    startX: e.clientX, startY: e.clientY, time: performance.now(),
+    paging: pageSwipe && canvas.getBoundingClientRect().width <= $('viewport').clientWidth + 1
+  };
+  capture.setPointerCapture(e.pointerId);
+  e.preventDefault()
+}
 canvas.onpointerdown = e => {
   // A second contact (often the resting palm) must not fall through to the
   // browser's default selection even while a Pencil stroke owns the canvas.
@@ -35,27 +48,18 @@ canvas.onpointerdown = e => {
     e.preventDefault();
     return
   }
+  // Prefer the stylus when a finger/palm started an unfinished ink gesture.
+  if (e.pointerType === 'pen' && touchContacts.has(active)) cancelTouchZoom();
   if (active !== null) return;
   if (e.pointerType === 'touch' && !$('finger').checked) {
-    if (pan) {
-      pan.cancelled = true;
-      return
-    }
-    pan = {
-      id: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
-      startX: e.clientX,
-      startY: e.clientY,
-      time: performance.now(),
-      paging: pageSwipe && canvas.getBoundingClientRect().width <= $('viewport').clientWidth + 1
-    };
-    canvas.setPointerCapture(e.pointerId);
-    e.preventDefault();
+    beginPan(e);
     return
   }
   if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke'))) || state.warning || state.read_only) return;
-  if (e.pointerType === 'pen') pan = null;
+  if (e.pointerType === 'pen') {
+    pan = null;
+    cancelTouchZoom()
+  }
   canvas.style.touchAction = 'none';
   e.preventDefault();
   active = e.pointerId;
@@ -171,6 +175,10 @@ function flushUpdate() {
     let update = deferredUpdate;
     deferredUpdate = null;
     update()
+  }
+  if (viewportResizePending && active === null) {
+    viewportResizePending = false;
+    resize()
   }
 }
 canvas.onpointerup = e => finish(e);

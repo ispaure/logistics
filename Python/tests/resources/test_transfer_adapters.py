@@ -16,6 +16,45 @@ from features.rclone.transfers.transfer_options import TransferOptions
 
 
 class DesktopTransferTests(unittest.TestCase):
+    def test_desktop_incomplete_approval_skips_integrity_but_normal_approval_keeps_it(self):
+        from types import SimpleNamespace
+        from features.rclone.transfers import workflow, push_policy, sync
+        for incomplete in (True, False):
+            with self.subTest(incomplete=incomplete), TemporaryDirectory() as root:
+                config = Path(root) / 'account.session'
+                session.remember(config, {'Files': {'type': 'local'}})
+                self.addCleanup(session.forget, config)
+                item = SimpleNamespace(data=Path(root))
+                def confirm(prepared):
+                    self.assertTrue(prepared.review.scan.retired.wait(2))
+                    self.assertTrue(prepared.review.approve(incomplete=incomplete))
+                    self.assertTrue(prepared.review.scan.retired.wait(2))
+                    self.assertTrue(prepared.review.approved)
+                    return prepared
+                with patch('features.rclone.localcrypt.mapping.for_path', return_value=item), patch(
+                        'features.rclone.transfers.desktop._compare', return_value='revision'), patch(
+                        'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm), patch.object(
+                        push_policy, 'validate_localcrypt_push') as validate, patch.object(
+                        sync, '_run_sync', return_value=True) as launch:
+                    self.assertTrue(workflow.reviewed_sync(root, 'Files:', operation='Push',
+                        config_path=config, executable_path='/rclone', crypt_item=item, wait_for_output=True))
+                    self.assertEqual(validate.call_count, 0 if incomplete else 1)
+                    launch.assert_called_once()
+                    self.assertFalse(launch.call_args.kwargs['copy_links'])
+
+    def test_skipped_integrity_still_rejects_linked_entries(self):
+        from types import SimpleNamespace
+        from features.rclone.transfers import sync, push_policy
+        with TemporaryDirectory() as root:
+            (Path(root) / 'linked').symlink_to('missing')
+            with patch('features.rclone.localcrypt.mapping.for_path', return_value=SimpleNamespace(data=Path(root))), patch.object(
+                    push_policy, 'validate_localcrypt_push') as validate, patch.object(sync, '_run_sync') as launch:
+                with self.assertRaisesRegex(ValueError, 'linked entry'):
+                    sync.rclone_sync(root, 'Files:', config_path=Path(root) / 'config',
+                                     executable_path='/rclone', skip_localcrypt_integrity=True)
+                validate.assert_not_called()
+                launch.assert_not_called()
+
     def approve(self, prepared):
         self.assertTrue(prepared.review.scan.retired.wait(2))
         self.assertTrue(prepared.review.approve())

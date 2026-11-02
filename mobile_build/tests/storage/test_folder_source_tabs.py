@@ -291,10 +291,10 @@ class FolderSourceTabTests(unittest.TestCase):
             self.assertGreaterEqual(control.style.height, 48)
             self.assertEqual(control.style.font_size * 96 / 72, 16)
 
-    def test_all_files_local_back_returns_to_shared_root_before_workspaces(self):
+    def test_all_files_child_back_returns_to_shared_root_before_workspaces(self):
         app = self.app
         documents = Path(self.directory.name) / 'Documents'
-        (documents / 'Local').mkdir(parents=True)
+        (documents / 'Other').mkdir(parents=True)
         (documents / 'note.md').write_text('# Shared root')
         use_shared_local(app.private_root, documents)
         for system_back in (False, True):
@@ -303,8 +303,8 @@ class FolderSourceTabTests(unittest.TestCase):
                 overview = app.body
                 app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
                 browser = app.body
-                local = next(row for row in app.file_rows.values() if row['name'] == 'Local')
-                app.loop.run_until_complete(app.browser_file_folder(local))
+                other = next(row for row in app.file_rows.values() if row['name'] == 'Other')
+                app.loop.run_until_complete(app.browser_file_folder(other))
                 if system_back:
                     self.assertTrue(app.routes.system_back())
                     app.loop.run_until_complete(app.routes.back_task)
@@ -312,7 +312,7 @@ class FolderSourceTabTests(unittest.TestCase):
                     app.loop.run_until_complete(app.parent_file_folder())
                 self.assertIs(app.body, browser)
                 self.assertEqual(app.file_provider.root, documents)
-                self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Received Files', 'note.md'})
+                self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Other', 'note.md'})
                 if system_back:
                     self.assertTrue(app.routes.system_back())
                 else:
@@ -341,11 +341,10 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertIs(app.file_browser.location_bar.children[-1], app.file_actions_button)
         self.assertEqual(app.file_actions_button.control_icon, 'overflow')
         self.assertIsNone(app.file_storage.parent)
-        self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Notes', 'Received Files', 'note.md'})
-        collection = next(row for row in app.file_rows.values() if row['name'] == 'Local')
-        self.assertNotIn('display_name', collection)
-        self.assertIn('Local', [row.title for row in app.file_browser.native_list.data])
-        app.loop.run_until_complete(app.browser_file_folder(collection))
+        self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Notes', 'note.md'})
+        self.assertNotIn('Local', [row.title for row in app.file_browser.native_list.data])
+        self.assertNotIn('Received Files', [row.title for row in app.file_browser.native_list.data])
+        app.loop.run_until_complete(app.browser_file_location(('Local files', '')))
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_browser.location_bar.folder_name.text, 'Local')
         self.assertEqual(app.file_source_buttons, {})
@@ -365,9 +364,9 @@ class FolderSourceTabTests(unittest.TestCase):
         (documents / 'Local' / 'Managed' / 'find-me.txt').write_text('collection content')
         result = search_resources(app.file_provider, '', 'find-me')
         self.assertTrue(result.complete)
-        self.assertEqual([row['path'] for row in result.rows], ['Local/Managed/find-me.txt'])
+        self.assertEqual(result.rows, [])
         app.file_browser.show_tiles()
-        self.assertIn('Local', [button.text for button in app.file_browser.buttons.values()])
+        self.assertNotIn('Local', [button.text for button in app.file_browser.buttons.values()])
         app.show_locations()
         app.loop.run_until_complete(app.folder_buttons['Managed'].on_press())
         self.assertEqual(app.file_provider.root, documents / 'Local')

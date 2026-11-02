@@ -44,6 +44,155 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_json_and_view_scripts_use_embedded_code_input_and_preserve_source_bytes(self):
+        from dataclasses import replace
+        from unittest.mock import AsyncMock
+        from mobile.obsidian import open_vault
+        from commonUtils.ui.native.code_input import CodeInput
+        folder = self.vault / '_Resources/dataview'
+        folder.mkdir(parents=True)
+        path = folder / 'items.json'
+        path.write_bytes(b'\xef\xbb\xbf{\r\n  "name": "Original"\r\n}\r\n')
+        (folder / 'show.js').write_text('dv.paragraph("Script source");')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.load_folder('Vault/_Resources/dataview')
+            self.assertEqual({row['name'] for row in owner.folders['Vault/_Resources/dataview']}, {'items.json', 'show.js'})
+            self.assertTrue(await owner.open_note('Vault/_Resources/dataview/items.json'))
+            editor = owner.embedded
+            self.assertIsInstance(editor.source, CodeInput)
+            self.assertIn(editor.view, owner.article.children)
+            editor.source.value = '{\n  "name": "Edited in library"\n}\n'
+            editor.changed(editor.source.value)
+            self.assertTrue(await editor.save())
+            self.assertEqual(path.read_bytes(), b'\xef\xbb\xbf{\r\n  "name": "Edited in library"\r\n}\r\n')
+            editor.source.value = '{"draft":true}'
+            editor.changed(editor.source.value)
+            path.write_text('{"external":true}')
+            self.assertFalse(await editor.save())
+            self.assertTrue(editor.dirty)
+            self.assertEqual(editor.text, '{"draft":true}')
+            self.assertEqual(path.read_text(), '{"external":true}')
+            with patch.object(owner, 'host', replace(owner.host, confirm=AsyncMock(return_value='cancel'))):
+                self.assertFalse(await owner.open_note('Vault/Home.md'))
+            self.assertIs(owner.embedded, editor)
+            with patch.object(owner, 'host', replace(owner.host, confirm=AsyncMock(return_value='discard'))):
+                self.assertTrue(await owner.open_note('Vault/Home.md'))
+            self.assertTrue(await owner.open_note('_Resources/dataview/show.js', resolve_link=True))
+            self.assertEqual(owner.embedded.text, 'dv.paragraph("Script source");')
+            self.assertEqual(owner.embedded.kind, 'text')
+            owner.dispose()
+            self.assertEqual(editor.text, '')
+        self.run_async(exercise())
+
+    def test_data_view_heading_jump_waits_for_generated_content(self):
+        from unittest.mock import AsyncMock
+        from mobile.obsidian import open_vault
+        (self.vault / 'Home.md').write_text('```dataviewjs\ndv.header(2, "Generated target");\n```\n')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            with patch.object(owner, 'scroll_fragment') as scroll, \
+                    patch('features.text_editor.mobile.dataview.execute_views', new=AsyncMock(return_value='## Generated target\n')):
+                self.assertTrue(await owner.open_note('Vault/Home.md', fragment='generated-target'))
+                owner.page_loaded()
+                scroll.assert_not_called()
+                self.assertEqual(owner.pending_fragment, 'generated-target')
+                await owner.data_view_task
+                owner.page_loaded()
+                scroll.assert_called_once_with('generated-target')
+                self.assertEqual(owner.pending_fragment, '')
+        self.run_async(exercise())
+
+    def test_data_view_output_does_not_change_authored_source_and_stale_output_is_discarded(self):
+        from unittest.mock import AsyncMock
+        from mobile.obsidian import open_vault
+        source = '# Dashboard\n\n```dataviewjs\nawait dv.view("views/inventory");\n```\n'
+        (self.vault / 'Home.md').write_text(source)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            with patch.object(owner.web, 'set_content') as publish:
+                await owner.open_note('Vault/Home.md')
+                initial = publish.call_args.args[1]
+                self.assertIn('Loading data view', initial)
+                self.assertIn('worker-src blob:', initial)
+                plan = owner.data_view_plan
+                owner.data_view_plan = None
+                with patch('features.text_editor.mobile.dataview.execute_views',
+                           new=AsyncMock(return_value='# Dashboard\n\n| Name |\n| --- |\n| Mobile result |\n')):
+                    await owner.render_data_views(plan, owner.base, owner.path)
+                self.assertIn('Mobile result', publish.call_args.args[1])
+                self.assertNotIn('worker-src blob:', publish.call_args.args[1])
+                self.assertEqual((self.vault / 'Home.md').read_text(), source)
+                entered, release = asyncio.Event(), asyncio.Event()
+                async def slow(*args, **kwargs):
+                    entered.set()
+                    await release.wait()
+                    return 'Stale result'
+                with patch('features.text_editor.mobile.dataview.execute_views', side_effect=slow):
+                    pending = asyncio.create_task(owner.render_data_views(plan, owner.base, owner.path))
+                    await entered.wait()
+                    await owner.open_note('Vault/Projects/Plan.MD')
+                    calls = publish.call_count
+                    release.set()
+                    await pending
+                    self.assertEqual(publish.call_count, calls)
+                    self.assertNotIn('Stale result', publish.call_args.args[1])
+        self.run_async(exercise())
+
+    def test_direct_links_probe_only_the_target_without_listing_siblings(self):
+        library = NotesLibrary(self.provider, 'Vault')
+        with patch.object(self.provider, 'list', side_effect=AssertionError('Listed unrelated notes')):
+            self.assertEqual(library.link('Vault/Home.md', 'Projects/Plan.MD#heading'),
+                             ('Vault/Projects/Plan.MD', 'heading'))
+            self.assertEqual(library.link('Vault/Projects/Plan.MD', 'Home'), ('Vault/Home.md', ''))
+            self.assertEqual(library.link('Vault/Projects/Plan.MD', '../Home.md'), ('Vault/Home.md', ''))
+            with self.assertRaisesRegex(ValueError, 'not found'):
+                library.link('Vault/Home.md', './missing.md')
+            (self.vault / 'Linked.md').symlink_to(self.vault / 'Home.md')
+            with self.assertRaisesRegex(ValueError, 'Linked storage'):
+                library.link('Vault/Home.md', 'Linked.md')
+
+    def test_global_link_lookup_reuses_names_and_detects_external_changes(self):
+        (self.vault / 'Projects/Tech.md').write_text('# Tech')
+        library = NotesLibrary(self.provider, 'Vault')
+        with patch.object(self.provider, 'list', wraps=self.provider.list) as listing:
+            self.assertEqual(library.link('Vault/Home.md', 'Tech'), ('Vault/Projects/Tech.md', ''))
+            self.assertEqual(listing.call_count, 2)
+            listing.reset_mock()
+            self.assertEqual(library.link('Vault/Home.md', 'Tech'), ('Vault/Projects/Tech.md', ''))
+            listing.assert_not_called()
+            (self.vault / 'New').mkdir()
+            (self.vault / 'New/Tech.md').write_text('# Another Tech')
+            with self.assertRaisesRegex(ValueError, 'Several notes'):
+                library.link('Vault/Home.md', 'Tech')
+            self.assertEqual({call.args[0] for call in listing.call_args_list}, {'Vault', 'Vault/New'})
+            (self.vault / 'Projects/Tech.md').unlink()
+            self.assertEqual(library.link('Vault/Home.md', 'Tech'), ('Vault/New/Tech.md', ''))
+            (self.vault / 'New/Tech.md').rename(self.vault / 'New/Renamed.md')
+            with self.assertRaisesRegex(ValueError, 'not found'):
+                library.link('Vault/Home.md', 'Tech')
+
+    def test_close_retires_cached_names_and_a_late_scan_cannot_repopulate_them(self):
+        from commonUtils.runtime.operations import OperationCancelled
+        library = NotesLibrary(self.provider, 'Vault')
+        library._link_listing('Vault', lambda: False)
+        self.assertTrue(library._link_folders)
+        library.close()
+        self.assertEqual(library._link_folders, {})
+        with self.assertRaises(OperationCancelled):
+            library._link_listing('Vault', lambda: False)
+        library = NotesLibrary(self.provider, 'Vault')
+        original = self.provider.list
+        def retire_during_listing(*args, **kwargs):
+            rows = original(*args, **kwargs)
+            library.close()
+            return rows
+        with patch.object(self.provider, 'list', side_effect=retire_during_listing):
+            with self.assertRaises(OperationCancelled):
+                library._link_listing('Vault', lambda: False)
+        self.assertEqual(library._link_folders, {})
+
+
     def test_close_and_page_history_are_separate_controls(self):
         from mobile.obsidian import open_vault
         from commonUtils.runtime.resources.local import LocalFiles
@@ -58,8 +207,9 @@ class NotesLibraryTests(unittest.TestCase):
                     key = owner.session.id
                     self.assertIs(owner.view._reader_close_button, owner.close_button)
                     self.assertEqual(owner.close_button.control_icon, 'close')
-                    self.assertEqual(owner.view._native_reader_buttons()[:2],
-                                     [owner.back_button, owner.forward_button])
+                    self.assertEqual(owner.view._native_reader_buttons(), [owner.links_button])
+                    self.assertEqual(owner.secondary.children[:2], [owner.back_button, owner.forward_button])
+                    self.assertEqual(owner.menu.control_icon, 'notes_files')
                     self.assertFalse(owner.back_button.enabled)
                     self.assertFalse(owner.forward_button.enabled)
                     await owner.open_note('Vault/Home.md')
@@ -76,6 +226,7 @@ class NotesLibraryTests(unittest.TestCase):
                             break
                         await asyncio.sleep(.01)
                     self.assertEqual(owner.path, 'Vault/Home.md')
+                    self.assertEqual(owner.view._document_path(), str(self.root / owner.path))
                     self.assertFalse(owner.back_button.enabled)
                     self.assertTrue(owner.forward_button.enabled)
                     self.assertIs(self.app.body, panel)
@@ -85,6 +236,7 @@ class NotesLibraryTests(unittest.TestCase):
                             break
                         await asyncio.sleep(.01)
                     self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+                    self.assertEqual(owner.view._document_path(), str(self.root / owner.path))
                     owner.sidebar.show_sidebar()
                     owner.close_button.on_press()
                     self.assertNotIn(key, self.app.workspace.sessions)
@@ -117,6 +269,9 @@ class NotesLibraryTests(unittest.TestCase):
                 provider.mkdir('Nested')
                 provider.create_file('Home.md', BytesIO(b'# Private home'))
                 provider.create_file('Nested/Next.md', BytesIO(b'# Private nested note'))
+                # Real cipher names must match across different parent paths.
+                with patch.object(provider, 'list', side_effect=AssertionError('Decoded unrelated filenames')):
+                    self.assertEqual(NotesLibrary(provider).link('Home.md', 'Next'), ('Nested/Next.md', ''))
                 client.request('mirror_sync', remote='Secret', path='', identity=client.connection_identity('Secret'),
                                local_path=str(provider.root.resolve()), run=uuid4().hex, push=True)
                 for kind, source, value in [('crypt', 'Local', 'Secret'), ('remote', 'Cloud', ('Secret', ''))]:

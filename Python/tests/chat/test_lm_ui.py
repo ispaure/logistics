@@ -152,7 +152,9 @@ class LMUITests(QtTestCase):
         self.server.requests = []
         self.server.gets = []
         self.server.release = threading.Event()
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        # Keep real HTTP coverage without the default half-second shutdown poll per case.
+        self.thread = threading.Thread(target=self.server.serve_forever,
+                                       kwargs={'poll_interval': .01}, daemon=True)
         self.thread.start()
         self.addCleanup(self.stop_server)
         self.store = Store(self.temp.name)
@@ -174,6 +176,7 @@ class LMUITests(QtTestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive(), 'HTTP fixture server did not stop')
 
     def until(self, condition):
         deadline = monotonic() + 5

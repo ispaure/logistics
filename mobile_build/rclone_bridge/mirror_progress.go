@@ -5,10 +5,17 @@ import (
 	"sync"
 )
 
+type activeTransfer struct {
+	Name  string `json:"name"`
+	Bytes int64  `json:"bytes"`
+	Size  int64  `json:"size"`
+}
+
 var mirrorProgressState struct {
 	sync.Mutex
 	Attempt, MaxAttempts                      int
 	Retrying                                  bool
+	ActiveFiles                               []activeTransfer
 	Run, Phase                                string
 	Done, Total                               int64
 	Files, TotalFiles, Checks, Listed, Active int64
@@ -20,6 +27,7 @@ func mirrorPhase(run, phase string, total int64) {
 	mirrorProgressState.Attempt, mirrorProgressState.MaxAttempts, mirrorProgressState.Retrying = 0, 0, false
 	mirrorProgressState.Run, mirrorProgressState.Phase = run, phase
 	mirrorProgressState.Done, mirrorProgressState.Total = 0, total
+	mirrorProgressState.ActiveFiles = []activeTransfer{}
 	mirrorProgressState.Files, mirrorProgressState.TotalFiles = 0, 0
 	mirrorProgressState.Checks, mirrorProgressState.Listed, mirrorProgressState.Active = 0, 0, 0
 }
@@ -38,7 +46,7 @@ func mirrorProgress(input string) string {
 		result = map[string]any{"phase": mirrorProgressState.Phase, "done": mirrorProgressState.Done, "total": mirrorProgressState.Total,
 			"files": mirrorProgressState.Files, "total_files": mirrorProgressState.TotalFiles,
 			"checks": mirrorProgressState.Checks, "listed": mirrorProgressState.Listed, "active": mirrorProgressState.Active,
-			"attempt": mirrorProgressState.Attempt, "max_attempts": mirrorProgressState.MaxAttempts, "retrying": mirrorProgressState.Retrying}
+			"attempt": mirrorProgressState.Attempt, "max_attempts": mirrorProgressState.MaxAttempts, "retrying": mirrorProgressState.Retrying, "active_files": mirrorProgressState.ActiveFiles}
 	}
 	data, _ := json.Marshal(map[string]any{"ok": true, "result": result})
 	return string(data)

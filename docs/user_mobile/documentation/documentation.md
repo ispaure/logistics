@@ -60,7 +60,8 @@ to read the page. Relative Markdown page links also open within the guide.
 
 Links such as `../documents/remote.md` resolve from the page you are reading.
 You can omit `.md`, or link to a folder that has a same-named page, README or index.
-A link into a feature wiki opens that guide and changes the tree to that feature's scope. Back and Forward restore the corresponding scope as well.
+Links to feature guides stay within the bundled Logistics wiki, so the same tree
+remains available. Back and Forward revisit the pages you opened.
 
 Links to local text and code files such as `.txt` and `.py` open a separate text
 editor session. They leave the documentation page and its history in place, and

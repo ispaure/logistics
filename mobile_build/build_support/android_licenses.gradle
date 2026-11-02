@@ -1,0 +1,86 @@
+// Resolve the same runtime graph that the variant packages, including transitive AARs/JARs.
+import groovy.json.JsonOutput
+import groovy.xml.XmlSlurper
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.maven.MavenModule
+import org.gradle.maven.MavenPomArtifact
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.OutputDirectory
+
+abstract class LogisticsNoticeAssets extends DefaultTask {
+    @OutputDirectory abstract DirectoryProperty getOutputDirectory()
+}
+
+androidComponents.onVariants(androidComponents.selector().all(), { variant ->
+    def assets = layout.buildDirectory.dir("generated/logisticsNotices/${variant.name}/assets")
+    def generate = tasks.register("generateLogistics${variant.name.capitalize()}Licenses", LogisticsNoticeAssets) {
+        outputDirectory.set(assets)
+        // Re-evaluate dependency substitutions, selected versions and artifact notices each build.
+        outputs.upToDateWhen { false }
+        doLast {
+            def runtime = configurations.getByName("${variant.name}RuntimeClasspath")
+            // Chaquopy keeps packaged interpreter/bootstrap artifacts in detached
+            // configurations, outside AGP's runtime classpath (pinned plugin API).
+            def pythonPlugin = plugins.findPlugin('com.chaquo.python')
+            def prefix = "python${variant.name.capitalize()}"
+            def support = pythonPlugin.configs.findAll { name, config ->
+                (name == 'pythonRuntimeJava' || name.startsWith(prefix)) &&
+                    !name.contains('Build') && !name.contains('Proxy')
+            }.values()
+            def graphs = [runtime] + support
+            def ids = graphs.collectMany { graph -> graph.incoming.resolutionResult.allComponents.collect { it.id } }
+                .findAll { it instanceof ModuleComponentIdentifier }
+            def poms = [:]
+            def pomFailures = []
+            dependencies.createArtifactResolutionQuery().forComponents(ids)
+                .withArtifacts(MavenModule, MavenPomArtifact).execute().resolvedComponents.each { component ->
+                    component.getArtifacts(MavenPomArtifact).each { artifact ->
+                        if (artifact instanceof org.gradle.api.artifacts.result.ResolvedArtifactResult) {
+                            poms[component.id.displayName] = artifact.file.absolutePath
+                        } else {
+                            pomFailures.add([component: component.id.displayName, error: artifact.failure.message])
+                        }
+                    }
+                }
+            def visitedParents = [] as Set
+            while (true) {
+                def parents = poms.values().collect { path ->
+                    def pom = new XmlSlurper(false, false).parse(new File(path))
+                    def parent = pom.parent
+                    parent.size() ? [parent.groupId.text(), parent.artifactId.text(), parent.version.text()] : null
+                }.findAll { it != null && !poms.containsKey(it.join(':')) && !visitedParents.contains(it.join(':')) }
+                if (parents.empty) break
+                parents.each { id ->
+                    visitedParents.add(id.join(':'))
+                    dependencies.createArtifactResolutionQuery().forModule(id[0], id[1], id[2])
+                        .withArtifacts(MavenModule, MavenPomArtifact).execute().resolvedComponents.each { component ->
+                            component.getArtifacts(MavenPomArtifact).each { artifact ->
+                                if (artifact instanceof org.gradle.api.artifacts.result.ResolvedArtifactResult) {
+                                    poms[component.id.displayName] = artifact.file.absolutePath
+                                } else {
+                                    pomFailures.add([component: component.id.displayName, error: artifact.failure.message])
+                                }
+                            }
+                        }
+                }
+            }
+            def artifacts = graphs.collectMany { graph -> graph.resolvedConfiguration.resolvedArtifacts.collect { artifact ->
+                def id = artifact.moduleVersion.id
+                [module: "${id.group}:${id.name}", version: id.version,
+                 file: artifact.file.absolutePath, pom: poms[id.toString()]]
+            } }
+            def folder = assets.get().asFile
+            folder.mkdirs()
+            def inventory = new File(folder.parentFile, 'inventory.json')
+            inventory.text = JsonOutput.toJson([artifacts: artifacts, pomFailures: pomFailures, poms: poms])
+            def tools = new File(projectDir, 'logistics-license-tools')
+            providers.exec {
+                commandLine new File(tools, 'python.txt').getText('UTF-8').trim(),
+                    new File(tools, 'license_build.py'), '--inventory', inventory,
+                    '--resources', new File(tools, 'licenses'),
+                    '--output', new File(folder, 'logistics-open-source.json')
+            }.result.get().assertNormalExitValue()
+        }
+    }
+    variant.sources.assets.addGeneratedSourceDirectory(generate, { task -> task.outputDirectory })
+})

@@ -8,16 +8,16 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from features.text_editor.mobile.document_dialogs import DocumentDialog
+from features.text_editor.mobile.document_dialogs import DocumentDialog, LibraryOpenDialog
 
 
 class DocumentDialogTests(TestCase):
     def test_apple_save_discard_cancel_and_delete_have_native_roles(self):
-        async def exercise(delete):
+        async def exercise(delete, interrupted=False):
             impl = type('Window', (), {'__module__': 'toga_iOS.window'})()
             presenter = NS(presentedViewController=None, presentViewController=Mock())
             impl.native = NS(rootViewController=presenter)
-            alert = NS(addAction=Mock())
+            alert = NS(addAction=Mock(), dismissViewControllerAnimated=Mock())
             actions = NS(actionWithTitle=lambda title, **kwargs: NS(title=title, **kwargs))
             controller = NS(alertControllerWithTitle=Mock(return_value=alert))
             module = NS(ObjCClass=lambda name: controller if name == 'UIAlertController' else actions,
@@ -31,13 +31,20 @@ class DocumentDialogTests(TestCase):
                 self.assertEqual([(action.title, action.style) for action in native_actions], expected)
                 self.assertIs(alert.preferredAction, native_actions[-1])
                 presenter.presentViewController.assert_called_once_with(alert, animated=True, completion=None)
+                if interrupted:
+                    result.cancel()
+                    await asyncio.sleep(0)
+                    alert.dismissViewControllerAnimated.assert_called_once_with(True, completion=None)
+                    self.assertIsNone(dialog.native)
+                    return
                 native_actions[0].handler(None)
                 self.assertEqual(await result, 'delete' if delete else 'save')
         for delete in (False, True):
             asyncio.run(exercise(delete))
+        asyncio.run(exercise(False, interrupted=True))
 
     def test_android_buttons_and_system_dismiss_have_explicit_results(self):
-        async def exercise(choice):
+        async def exercise(choice, library=False):
             impl = type('Window', (), {'__module__': 'toga_android.window'})()
             builder, native = Mock(), Mock()
             builder.create.return_value = native
@@ -48,19 +55,29 @@ class DocumentDialogTests(TestCase):
                 'android.graphics': NS(Color=NS(rgb=lambda *args: 123)),
             }
             with patch.dict('sys.modules', modules):
-                dialog = DocumentDialog('Title', 'Message')
+                dialog = LibraryOpenDialog() if library else DocumentDialog('Title', 'Message')
                 result = dialog._show(NS(_impl=impl, app=NS(_impl=NS(native=object()))))
-                self.assertEqual(builder.setPositiveButton.call_args.args[0], 'Save')
-                self.assertEqual(builder.setNeutralButton.call_args.args[0], 'Quit without saving')
-                self.assertEqual(builder.setNegativeButton.call_args.args[0], 'Cancel')
+                self.assertEqual(builder.setPositiveButton.call_args.args[0], 'Open as Notes Library' if library else 'Save')
+                self.assertEqual(builder.setNegativeButton.call_args.args[0], 'Browse Files' if library else 'Cancel')
+                if not library:
+                    self.assertEqual(builder.setNeutralButton.call_args.args[0], 'Quit without saving')
+                if choice == 'interrupted':
+                    result.cancel()
+                    await asyncio.sleep(0)
+                    native.dismiss.assert_called_once_with()
+                    self.assertIsNone(dialog.native)
+                    return
                 if choice == 'cancel':
                     builder.setOnCancelListener.call_args.args[0].onCancel(native)
                 else:
-                    setter = builder.setPositiveButton if choice == 'save' else builder.setNeutralButton
+                    setter = (builder.setPositiveButton if choice in ('save', 'notes') else
+                              builder.setNegativeButton if choice == 'files' else builder.setNeutralButton)
                     setter.call_args.args[1].onClick(native, 0)
                 self.assertEqual(await result, choice)
         for choice in ('save', 'discard', 'cancel'):
             asyncio.run(exercise(choice))
+        for choice in ('notes', 'files', 'cancel', 'interrupted'):
+            asyncio.run(exercise(choice, library=True))
 
 
 class DocumentCloseLifetimeTests(TestCase):

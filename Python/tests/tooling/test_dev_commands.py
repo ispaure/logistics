@@ -20,6 +20,10 @@ spec.loader.exec_module(dev)
 
 
 class DeveloperCommandTests(unittest.TestCase):
+    def setUp(self):
+        # These cases exercise routing; real inventory validation has its own fixtures.
+        self.enterContext(patch('logistics_build.test_structure.inventory', return_value=[]))
+
     def test_host_suites_use_their_own_interpreters_and_isolate_files(self):
         for suite, folder in (('desktop', 'Python'), ('mobile', 'mobile_build')):
             with self.subTest(suite=suite), patch.object(development.subprocess, 'run') as run, \
@@ -127,6 +131,9 @@ class DoctorCommandTests(unittest.TestCase):
 
 
 class SharedMatrixTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(patch('logistics_build.test_structure.inventory', return_value=[]))
+
     def test_shared_matrix_keeps_both_failures_and_environment_ownership(self):
         from types import SimpleNamespace
         for codes, expected in (((7, 0), 7), ((0, 9), 9), ((7, 9), 7), ((0, 0), 0)):
@@ -185,6 +192,34 @@ class SharedMatrixTests(unittest.TestCase):
                     dev.main(args)
                 self.assertEqual(error.exception.code, 2)
             run.assert_not_called()
+
+
+class PreflightCommandTests(unittest.TestCase):
+    def test_real_preflight_accepts_valid_sources_and_blocks_invalid_sources_before_execution(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tests = root / 'Python/tests'
+            tests.mkdir(parents=True)
+            source = tests / 'test_fixture.py'
+            source.write_text('# TEST_STAGE = TestStage.SMOKE\nraise RuntimeError("must not import")\n')
+            (root / 'test-structure.json').write_text(json.dumps(dict(schema=1, roots=[
+                dict(owner='fixture', directory='Python/tests', patterns=['test*.py'])])))
+            with patch.object(dev, 'ROOT', root), patch.object(sys, 'path', list(sys.path)), \
+                    patch.object(development.subprocess, 'run') as run:
+                self.assertEqual(dev.main(['test', 'desktop', 'test_fixture.py',
+                                           '--python', '/missing/python', '--dry-run']), 0)
+                source.write_text('# TEST_STAGE = TestStage.INVALID\n')
+                for suite in ('desktop', 'mobile', 'shared', 'bridge'):
+                    with self.subTest(suite=suite):
+                        diagnostic = StringIO()
+                        with redirect_stderr(diagnostic), self.assertRaises(SystemExit) as error:
+                            dev.main(['test', suite, '--python', str(Path(sys.executable).absolute())])
+                        self.assertEqual(error.exception.code, 2)
+                        self.assertIn('invalid TestStage member INVALID', diagnostic.getvalue())
+                run.assert_not_called()
 
 
 class LintScopeTests(unittest.TestCase):

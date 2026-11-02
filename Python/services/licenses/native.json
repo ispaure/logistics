@@ -151,8 +151,13 @@
     ],
     "license": "ML Kit Terms of Service",
     "source": "https://developers.google.com/ml-kit/terms",
-    "note": "Google ML Kit is provided under its own terms, rather than the app's MIT license. GenAI additional terms: https://developers.google.com/ml-kit/genai-terms . These publisher terms are available online.",
-    "module": "com.google.mlkit:genai-prompt"
+    "note": "Google ML Kit is provided under its own publisher terms rather than the app's MIT license. Publisher terms bundled here were retrieved on 2026-11-02.",
+    "module": "com.google.mlkit:genai-prompt",
+    "files": [
+      "Google-MLKit-Terms.txt",
+      "Google-APIs-Terms.txt",
+      "Google-MLKit-GenAI-Terms.txt"
+    ]
   },
   {
     "name": "rclone",
@@ -166,6 +171,28 @@
     "source": "https://github.com/rclone/rclone/tree/v1.74.1",
     "files": [
       "rclone-1.74.1.txt"
+    ]
+  },
+  {
+    "name": "macFUSE (optional mount integration)",
+    "version": "5.0.5",
+    "platforms": [
+      "darwin"
+    ],
+    "source": "https://github.com/macfuse/macfuse/tree/macfuse-5.0.5",
+    "files": [
+      "macFUSE-5.0.5.txt"
+    ]
+  },
+  {
+    "name": "WinFsp (optional mount integration)",
+    "version": "1.11",
+    "platforms": [
+      "win32"
+    ],
+    "source": "https://github.com/winfsp/winfsp/tree/v1.11",
+    "files": [
+      "WinFsp-1.11.txt"
     ]
   }
 ]

@@ -33,6 +33,7 @@ class ProviderMarkdownHost:
     error: Callable
     icon_button: Callable
     apply_icon: Callable
+    presentation: object = None
 
 
 class ProviderMarkdown:
@@ -330,7 +331,7 @@ class ProviderMarkdown:
                 self.source.value = text
         try:
             formatted = FormattedMarkdownInput(changed, font_size=self.host.font_size(),
-                stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(self.host.reader()), private=self.private)
+                stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(self.host.reader()), private=self.private, presentation=self.host.presentation)
         except ValueError as error:
             self.host.error(str(error))
             if self.edit_mode is not None:

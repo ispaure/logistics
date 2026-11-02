@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from mobile.app import LogisticsMobile
 from mobile.preferences import Preferences
@@ -143,9 +143,11 @@ class MobileFeatureTests(unittest.TestCase):
         app.show_folder_picker(initialize=False)
         self.assertEqual(set(app.folder_source_buttons), {'Local'})
         app.show_home()
-        self.run_async(app.choose_document_type())
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
+            self.run_async(app.choose_document_type())
         picker = app.editor_picker()
         picker.save_as_name.value = 'Offline'
+        self.run_async(picker.choose_creation_location())
         self.run_async(picker.browser_editor_location(('Local', '')))
         self.run_async(picker.confirm_editor_file())
         self.assertEqual((self.root / 'LocalFiles/Offline.txt').read_bytes(), b'')

@@ -9,10 +9,11 @@ import json
 from pathlib import Path
 import plistlib
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 REPO = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('mobile_ui_tools', REPO / 'mobile_build/validation/ui_tools.py')
@@ -20,7 +21,38 @@ ui_tools = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ui_tools)
 
 
+class NativePreflightTests(unittest.TestCase):
+    def test_real_preflight_accepts_valid_sources_and_blocks_invalid_sources_before_launch_or_reuse(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            tests = root / 'tests'
+            tests.mkdir()
+            source = tests / 'test_fixture.py'
+            source.write_text('# TEST_STAGE = TestStage.SMOKE\nraise RuntimeError("must not import")\n')
+            (root / 'test-structure.json').write_text(json.dumps(dict(schema=1, roots=[
+                dict(owner='fixture', directory='tests', patterns=['test*.py'])])))
+            with patch.object(ui_tools, 'REPO', root), patch.object(sys, 'path', list(sys.path)), \
+                    patch.object(ui_tools, 'verify_prebuilt_ios', side_effect=RuntimeError('preflight accepted')) as prebuilt, \
+                    patch.object(ui_tools.subprocess, 'Popen') as process:
+                with self.assertRaisesRegex(RuntimeError, 'preflight accepted'):
+                    ui_tools.run('ios', 'fixture', no_update=True)
+                prebuilt.assert_called_once_with(local=False)
+                prebuilt.reset_mock()
+                source.write_text('# TEST_STAGE = TestStage.INVALID\n')
+                for target in ('ios', 'android'):
+                    for no_update in (False, True):
+                        with self.subTest(target=target, no_update=no_update), \
+                                self.assertRaisesRegex(ValueError, 'invalid TestStage member INVALID'):
+                            ui_tools.run(target, 'fixture', no_update=no_update, local=True)
+                prebuilt.assert_not_called()
+                process.assert_not_called()
+
+
 class NativeReportTests(unittest.TestCase):
+    def setUp(self):
+        # Report/transport scenarios do not need to rescan the checkout for every launch.
+        self.enterContext(patch('logistics_build.test_structure.inventory', return_value=[]))
+
     def test_hosted_emulator_records_sdk_revision_and_current_software_backend(self):
         import os
         from unittest.mock import patch

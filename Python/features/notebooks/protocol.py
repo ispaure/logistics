@@ -12,7 +12,7 @@ MODEL_COMMANDS = frozenset({
     'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo',
 })
 HOST_COMMANDS = frozenset({
-    'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'delete-file', 'page-previews',
+    'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'document-location', 'delete-file', 'page-previews',
 })
 
 

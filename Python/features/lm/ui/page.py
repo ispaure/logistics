@@ -1,4 +1,5 @@
 """LM workspace presentation and navigation, backed by an owned conversation session."""
+from commonUtils.search.policy import SEARCH_DEBOUNCE_MS
 from commonUtils.ui.appearance.typography import point_size
 from copy import deepcopy
 from math import ceil
@@ -129,7 +130,7 @@ class LMPage(qt.QWidget):
         self.render_timer.timeout.connect(self.render)
         self.search_timer = qt.QTimer(self)
         self.search_timer.setSingleShot(True)
-        self.search_timer.setInterval(400)
+        self.search_timer.setInterval(SEARCH_DEBOUNCE_MS)
         self.search_timer.timeout.connect(self.refresh)
         self.search.textChanged.connect(lambda: self.search_timer.start())
         self.list.currentItemChanged.connect(self.select)

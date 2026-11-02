@@ -199,13 +199,34 @@ root.addEventListener('input', event => {
 });
 root.addEventListener('compositionend', () => { renderTypedMarkup(); rememberEdit(); publish(); scheduleCaretReveal(); });
 root.addEventListener('focusout', () => publish());
-root.addEventListener('focusin', scheduleCaretReveal);
+root.addEventListener('focusin', () => { document.body.classList.add('editing'); scheduleCaretReveal(); });
+document.addEventListener('focusin', event => {
+    if (!root.contains(event.target) && !event.target.closest('nav,dialog')) {
+        document.body.classList.remove('editing');
+    }
+});
 root.addEventListener('keyup', event => {
     if (/^(Arrow|Home|End|Page)/.test(event.key)) scheduleCaretReveal();
 });
-window.addEventListener('resize', scheduleCaretReveal);
+function syncVisibleViewport() {
+    // WebKit can shrink visualViewport for its keyboard while innerHeight and
+    // the native WebView's bounds retain the full display height (notably Duo).
+    const viewport = window.visualViewport;
+    const bottom = Math.min(innerHeight, viewport ? viewport.offsetTop + viewport.height : innerHeight);
+    const height = Math.max(44, bottom) + 'px';
+    if (document.body.style.height !== height) document.body.style.height = height;
+    scheduleCaretReveal();
+}
+window.addEventListener('resize', syncVisibleViewport);
 window.addEventListener('scroll', scheduleCaretReveal);
-window.visualViewport?.addEventListener('resize', scheduleCaretReveal);
+window.visualViewport?.addEventListener('resize', syncVisibleViewport);
+window.visualViewport?.addEventListener('scroll', syncVisibleViewport);
+syncVisibleViewport();
+window.markdownFold = height => {
+    document.body.classList.toggle('laptop-writing', Number.isFinite(height));
+    if (Number.isFinite(height)) document.body.style.setProperty('--writing-height', Math.max(44, height) + 'px');
+    scheduleCaretReveal();
+};
 root.addEventListener('paste', event => {
     event.preventDefault();
     document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));

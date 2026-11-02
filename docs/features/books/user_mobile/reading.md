@@ -127,6 +127,12 @@ runs when starting a passage; it does not switch voices sentence by sentence.
 Physical-device audio and accessibility ergonomics
 still need a device pass.
 
+EPUB and Markdown share punctuation handling: prose dashes separate words,
+discretionary line-wrap hyphens are omitted from speech, and sentence endings
+keep their closing quotes. Question marks, exclamation marks, periods and
+ellipses remain in the speech text for the installed voice to interpret.
+These adjustments preserve the document and its selection/highlight positions.
+
 Below Speed, **Timer** offers **Off** (the default), **15 min**, **30 min**,
 **45 min**, and **1 hr**. The remaining time appears in bold beneath the timer
 controls. The circular-arrow icon beside the duration is **Reset timer**.

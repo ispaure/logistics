@@ -109,11 +109,10 @@ class FolderHubTests(unittest.TestCase):
                 app.loop.run_until_complete(app.credential_unlock_button.on_press())
                 self.assertIn('Unlock failed', app.credential_unlock_status.text)
                 self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
-                with patch.object(app, 'show_files', new_callable=AsyncMock), \
-                        patch.object(app, 'browser_file_location', new_callable=AsyncMock) as browse:
+                with patch.object(app, 'show_files', new_callable=AsyncMock) as browse:
                     app.credential_unlock_password.value = 'correct'
                     app.loop.run_until_complete(app.credential_unlock_button.on_press())
-                    browse.assert_awaited_once_with(('LocalCrypt: Secret', ''))
+                    browse.assert_awaited_once_with(location=('LocalCrypt: Secret', ''))
                 self.assertTrue(client.loaded)
                 self.assertFalse(app.cloud_busy)
 
@@ -660,6 +659,34 @@ class FolderHubTests(unittest.TestCase):
                 app.main_window.close()
                 app.loop.close()
 
+    def test_pulled_ciphertext_stays_browsable_after_replacing_cloud_account(self):
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        class Client(MirrorClient):
+            def crypt_remotes(self):
+                return ['Renamed']
+
+            def cancel(self):
+                pass
+        with mobile_app() as app:
+            app.cloud_client = client = Client()
+            app.show_cloud(present=False)
+            store = app.mirror_store()
+            job, _ = store.create(client, 'Secret', '')
+            client.identity = 'c' * 64
+            state = NativeCredentialState()
+            client.package_records = state.package_records = (
+                dict(package_name='Replacement.zip', remotes=['Renamed'], saved=True,
+                     aliases={'Renamed': 'Renamed'}, identities={'Renamed': client.identity},
+                     crypt_identities={'Renamed': job['cipher_identity']}),)
+            client.resolve_remote = state.resolve_remote
+            entry = dict(kind='job', value=job['id'], name=job['target'], source='LocalCrypt')
+            self.assertTrue(app.loop.run_until_complete(app.open_picker_folder(entry)))
+            self.assertEqual(app.file_provider.remote, 'Renamed')
+            self.assertEqual(app.file_provider.root / app.file_path, store.target(job))
+            self.assertIn('opaque-name', [row['name'] for row in app.file_rows.values()])
+            with self.assertRaisesRegex(ValueError, 'connection changed'):
+                store.execute_push(job['id'], client)
+
     def test_grouped_copies_stay_visible_while_busy_and_actions_recover(self):
         from mobile.app import LogisticsMobile
         class Client(MirrorClient):
@@ -762,9 +789,8 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual([button.text for button, _ in app.folder_action_controls
                                   if button.text.startswith('Browse ')], ['Browse Local'])
                 app.show_transfers()
-                self.assertEqual(app.transfer_view.content.children[0].text, 'Transfer details')
-                self.assertFalse(any(getattr(child, 'text', '') in ('Remote', 'Choose a remote to pull')
-                                     for child in app.transfer_view.content.children))
+                self.assertEqual(app.transfer_view.model['mode'], 'progress')
+                self.assertEqual(app.transfer_view.model['phase'], 'idle')
                 self.assertNotIn(app.cloud_remote, app.cloud_view.children)
             finally:
                 app.main_window.close()

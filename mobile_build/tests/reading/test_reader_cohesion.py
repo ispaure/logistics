@@ -43,6 +43,10 @@ class ReaderCohesionTests(unittest.TestCase):
             owner.set_reading_mode(False)
             view = owner.library_view
             self.assertEqual(view._native_reader_title(), owner.session.title)
+            self.assertEqual(view._document_path(), f"{record['name']}\n\n{path}")
+            path.unlink()
+            cached = store.path(record['id'], '.epub' if kind == 'epub' else '.cbz')
+            self.assertEqual(view._document_path(), f"{record['name']}\n\n{cached}")
             self.assertIs(owner.reader_footer.parent, view)
             labels = [label.lower() for label, callback in owner.reader_actions.actions]
             buttons = view._native_reader_buttons()
@@ -77,6 +81,7 @@ class ReaderCohesionTests(unittest.TestCase):
         rename_view.children[1].value = 'Renamed.md'
         rename_view.children[-1].on_press()
         self.assertEqual(view._native_reader_title(), 'Renamed.md')
+        self.assertEqual(view._document_path(), f'Renamed.md\n\n{owner.document.snapshot.path}')
         self.assertEqual(owner.editor.value, '# Unsaved passage\n')
         self.assertTrue(owner.document.modified)
         self.app.save_document()
@@ -93,6 +98,7 @@ class ReaderCohesionTests(unittest.TestCase):
             owner = self.app.private_sessions.active
             view = owner.crypt_view
             self.assertEqual(view._native_reader_title(), 'Guide.pdf')
+            self.assertEqual(view._document_path(), str(path))
             self.assertEqual([b.control_icon for b in view._native_reader_buttons()], ['find', 'more'])
             labels = [label.lower() for label, callback in owner.crypt_actions_menu.actions]
             self.assertFalse(any('chapter' in label or 'read aloud' in label or 'metadata' in label for label in labels))

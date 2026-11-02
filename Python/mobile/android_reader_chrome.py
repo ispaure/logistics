@@ -26,6 +26,45 @@ def set_bar_visibility(adapter, bar, visible):
     bar.show() if visible else bar.hide()
 
 
+def fit_document_title(root, label, leading_count, trailing_count):
+    """Keep a hold target even when Notes Library has more actions than fit."""
+    from android.view import View
+    from android.widget import HorizontalScrollView
+    from java import dynamic_proxy
+
+    unit = round(48 * root.getResources().getDisplayMetrics().density)
+    title_index = root.indexOfChild(label.getParent())
+    actions = root.getChildAt(root.getChildCount() - 1)
+    params = actions.getLayoutParams()
+    root.removeView(actions)
+    scroll = HorizontalScrollView(root.getContext())
+    scroll.addView(actions, -2, -1)
+    root.addView(scroll, params)
+
+    class Layout(dynamic_proxy(View.OnLayoutChangeListener)):
+        def onLayoutChange(self, widget, left, top, right, bottom, *previous):
+            width = right - left
+            if width <= 0:
+                return
+            leading = leading_count * unit
+            trailing = min(trailing_count * unit, max(0, width - leading - unit))
+            gutter = max(leading, trailing)
+            start, end = (gutter, gutter) if width >= 2 * gutter + unit else (leading, trailing)
+            titles = widget.getChildAt(title_index)
+            margins = titles.getLayoutParams()
+            if margins.getMarginStart() != start or margins.getMarginEnd() != end:
+                margins.setMarginStart(start)
+                margins.setMarginEnd(end)
+                titles.setLayoutParams(margins)
+            scroll = widget.getChildAt(widget.getChildCount() - 1)
+            bounds = scroll.getLayoutParams()
+            if bounds.width != trailing:
+                bounds.width = trailing
+                scroll.setLayoutParams(bounds)
+
+    root.addOnLayoutChangeListener(Layout())
+
+
 def sync(app, view, destination):
     adapter = app.native_host.adapter
     if adapter is None:
@@ -88,6 +127,10 @@ def sync(app, view, destination):
             button.app, button.window = app, app.main_window
             return button._impl.native
         root, label, status = android_bar(app._impl.native, leading, buttons, native_control=native_control)
+        if hasattr(view, '_document_path'):
+            from .document_location import bind_android_hold
+            fit_document_title(root, label, len(leading), len(buttons))
+            bind_android_hold(view, label.getParent())
         bar.setCustomView(root, jclass('androidx.appcompat.app.ActionBar$LayoutParams')(-1, -1))
         bar.setDisplayOptions(16)  # DISPLAY_SHOW_CUSTOM; title/actions live in one row.
         adapter._reader_action_bar_title = label
@@ -95,7 +138,11 @@ def sync(app, view, destination):
         adapter._reader_action_bar_buttons = [*leading, *buttons]
         adapter._reader_action_bar_state = state
     label = adapter._reader_action_bar_title
-    label.setText(title)
+    if hasattr(view, '_document_path'):
+        from commonUtils.ui.native.panning_title import configure_android_title
+        configure_android_title(label)
+    if str(label.getText()) != title:
+        label.setText(title)
     label.setContentDescription(title)
     dark = app._impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20
     label.setTextColor(Color.parseColor(android_palette(dark)['text']))

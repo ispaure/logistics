@@ -651,7 +651,9 @@ class FolderHubUI:
             remote = entry.get('remote')
             job = self.mirror_store().jobs.get(value) if kind in ('job', 'job-remote') else None
             remote = job['remote'] if job else remote or (value[0] if kind == 'remote' else '')
-            if remote:
+            from features.rclone.transfers.mobile.jobs import loaded_copy_cipher
+            local_cipher = job and kind == 'job' and loaded_copy_cipher(self.cloud_client, job)
+            if remote and not local_cipher:
                 async with self.remote_activity('Checking connection for ' + remote):
                     if not await self.require_remote_credentials_async(remote,
                             identity=job['identity'] if job else entry.get('connection_identity'),
@@ -673,8 +675,7 @@ class FolderHubUI:
         if kind == 'local':
             return await self.show_files(location=('Local files', value))
         if kind == 'crypt':
-            await self.show_files()
-            return await self.browser_file_location((value, ''))
+            return await self.show_files(location=(value, ''))
         if kind == 'job-remote':
             job = self.mirror_store().jobs.get(value)
             if job is None:

@@ -531,13 +531,16 @@ def _install_android_appearance(app):
 def native_theme_configuration(app):
     """Only Android configuration values which change the native palette."""
     if type(app._impl).__module__.startswith('toga_android.'):
-        configuration = app._impl.native.getResources().getConfiguration()
-        return int(configuration.uiMode)
+        configuration = app._impl.native.getApplicationContext().getResources().getConfiguration()
+        return int(configuration.uiMode) & 0x30
     return None
 
 
 def refresh_appearance(app):
     """Recolour live chrome without replacing editors or transfer owners."""
+    if type(app._impl).__module__.startswith('toga_android.'):
+        from .palette import set_android_system_dark
+        set_android_system_dark(native_theme_configuration(app) == 0x20)
     from .page_animation import sync_preferences
     sync_preferences(app)
     from .reader_progress import refresh_progress
@@ -577,20 +580,11 @@ def refresh_appearance(app):
     for impl in list(_template_icons):
         impl.native.setImageTintList(ColorStateList.valueOf(impl.get_theme_color(R.attr.textColorPrimary)))
     from .palette import eink_script
-    native_window = app._impl.native.getWindow()
-    decor = native_window.getDecorView()
-    if eink_enabled():
-        if not hasattr(app, '_eink_system_bars'):
-            app._eink_system_bars = (native_window.getStatusBarColor(), native_window.getNavigationBarColor(), decor.getSystemUiVisibility())
-        native_window.setStatusBarColor(argb('#ffffff'))
-        native_window.setNavigationBarColor(argb('#ffffff'))
-        decor.setSystemUiVisibility(decor.getSystemUiVisibility() | 8192 | 16)
-    elif hasattr(app, '_eink_system_bars'):
-        status, navigation, visibility = app._eink_system_bars
-        native_window.setStatusBarColor(status)
-        native_window.setNavigationBarColor(navigation)
-        decor.setSystemUiVisibility(visibility)
-        del app._eink_system_bars
+    from java import jclass
+    dark = native_theme_configuration(app) == 0x20
+    colors = android_palette(dark)
+    jclass('io.github.ispaure.logisticsmobile.SystemChrome').paint(app._impl.native,
+        argb(colors['window']), argb(colors['surface']), eink_enabled() or not dark)
     for impl in list(_android_boxes):
         impl.set_background_color(impl.interface.style.background_color)
     for impl in list(_android_webviews):
@@ -624,6 +618,11 @@ def refresh_appearance(app):
                 toolbar.getOverflowIcon().mutate().setTint(foreground)
 
     refresh_android_navigation(host)
+    if host is not None and getattr(host.adapter, '_reader_action_bar_active', False):
+        body = app.routes.body()
+        if body.children:
+            from .android_reader_chrome import sync
+            sync(app, body.children[0], host.state.destination)
 
 
 def refresh_android_navigation(host):
@@ -676,6 +675,8 @@ def configure_android_eink(app):
         from .palette import set_eink_enabled
         enabled = app.preferences.values['android_eink'] == 'true'
         set_eink_enabled(enabled)
+        from commonUtils.ui.native.panning_title import set_android_title_motion_suppressed
+        set_android_title_motion_suppressed(enabled)
         # This activity handles uiMode changes; do not recreate document owners.
         delegate = app._impl.native.getDelegate()
         mode = 1 if enabled else -1  # MODE_NIGHT_NO / MODE_NIGHT_FOLLOW_SYSTEM

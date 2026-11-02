@@ -3,6 +3,15 @@
 The mobile app provides its text editor in Documents and Workspaces.
 See the [Documents and editing](../../../user_mobile/documents/documents.md) guide for opening, editing, saving and exporting files.
 
+Notes Library also runs [JSON data views and reusable `dv.view` scripts](../user/user.md#json-data-views-in-notes-library)
+in reading mode, enabled by default. The same API subset and file/path limits
+apply on desktop and mobile. Editing retains the authored code blocks.
+
+JSON, JavaScript and [other supported source files](../user/user.md#embedded-source-files-in-notes-library)
+appear in Files and open in the same library detail pane using the normal native
+code input. Use **••• → Save** or **Find / replace…**. Switching files retains the
+library history and asks before discarding unsaved edits.
+
 Markdown opens in preview. The top **pencil** icon (**Edit Markdown**) opens
 directly editable, formatted text. Use **••• → Source editing** for exact syntax,
 or **••• → Formatted editing** to return to styled writing. These commands remain
@@ -25,8 +34,13 @@ work with these edits; Ctrl/Cmd+B and Ctrl/Cmd+I apply bold and italic.
 In Markdown preview and Notes Library, choose **••• → Find in this page…**
 to highlight text in the open note. A compact panel above the page shows the
 current match and total, with Previous/Next arrows and **Done**. Done clears page
-marks. Notes Library's **Filter loaded file names** field filters the loaded
-filename list; it does not search the contents of every note. In the editor,
+marks. In the Files drawer, **Search Notes Library** shows one row per matching note or
+folder across the library. **Documents** searches names and Markdown text, with
+name matches first. Choose **Names only** to search file and folder names.
+If results share a name, their parent paths distinguish them. Enter `turtle red`
+to require both words in any order, or `"this follow this"` for a phrase.
+Search ignores case and treats spaces, hyphens and underscores alike in phrases.
+Clear the field to return to the folder tree. In the editor,
 **Find and replace…** searches Source mode and selects the current source match.
 
 Background memory cleanup preserves the active Markdown reading or editing
@@ -63,11 +77,13 @@ The three-dot menu omits New, Open from Files, Import and Close. Delete uses red
 destructive styling and a native **Delete / Cancel** confirmation.
 Close other app windows before deleting. Files opened directly from a folder
 continue to use that folder's file-management actions.
-Choose **New document** from Home to enter a name
-and select the file type before creating it. The filename remains independent of the headings you add while editing.
-For a new Markdown document, tap anywhere in the blank writing area below the
-formatting toolbar to place the cursor and open the keyboard.
-The formatting toolbar stays above the writing area while the document scrolls.
+Choose **New Document** from Home, choose a document type, then enter its name
+and choose where to save it. Remarkable Document (`.rmdoc`) opens the drawing editor;
+Markdown (`.md`) opens the Markdown editor. The filename remains independent of the headings you add while editing.
+For a new Markdown document, tap in the blank writing area to place the cursor.
+While editing, Bold, Italic, Undo, Redo and Format appear below the text viewport,
+above the system keyboard. The row remains available with a hardware keyboard,
+alongside the usual keyboard shortcuts.
 Opening the keyboard resizes that area; continuing to type scrolls only as needed
 to keep the caret visible. Plain text and Markdown Source use native text inputs.
 The language dropdown starts on **Automatic**, following the filename and initial
@@ -79,13 +95,14 @@ to keep the current line inside the writing area above the keyboard.
 On Android, a short keyboard-sized window hides destination navigation and
 secondary mode/language controls while retaining the document action bar, including
 Save and **•••**. Hidden secondary controls return when the keyboard closes.
-In a very short formatted writing area, **Format** becomes a floating button;
-its scrollable panel keeps formatting and link controls reachable above the keyboard. Source mode stays
+In a short formatted writing area, the formatting row uses compact spacing;
+its scrollable Format panel stays above the keyboard. Source mode stays
 inside the app in landscape. The formatting page is anchored to its viewport,
 and tight layouts reduce padding around the writing line.
 The main toolbar uses a compact row while the keyboard is open in a tight window.
-In the shortest writing areas, **Format** opens a popup containing the formatting
-commands, leaving the full height available for text.
+On a horizontal Duo fold, the text viewport fits above the active fold and the
+formatting row stays in the lower available area, above the system keyboard.
+The app does not change the system keyboard’s size.
 In very short formatted editing areas, headings use body-sized text so a line
 fits; their heading levels remain intact.
 Formatting and source share the same
@@ -152,7 +169,9 @@ explicit saved opt-in for background speech; it defaults to off. See
 ## Notes Library and Documentation Library
 
 Opening a folder with an `.obsidian` subfolder offers **Open as Notes Library**
-or **Browse Files**. Browsing keeps the ordinary folder view. Notes Library keeps
+or **Browse Files** before displaying the folder. Your previous screen stays
+visible while you choose. Dismissing the prompt leaves that screen in place.
+Browsing opens the ordinary folder view. Notes Library keeps
 actual filenames in its sidebar; refreshes of the current folder do not repeat
 the choice. Returning from a parent folder offers it again.
 
@@ -160,8 +179,36 @@ In writable libraries, **••• → New folder…** creates a folder beside t
 note or inside the selected folder. **Rename / move selected…** accepts a new
 path inside the library, with existing folders. These actions also work on
 selected folders. Moves preserve navigation history and do not overwrite existing
-entries. Links in other notes are not rewritten. Use **New note…** to write a
-Markdown note in the selected folder.
+entries. Links in other notes are not rewritten.
+
+An unopened library shows **Open Document** and **New Document** cards. New Document
+first offers **Remarkable Document** and **Markdown**, followed by the name and a
+folder picker confined to this library. It cannot publish outside the library.
+Markdown and drawing documents open inside the same library pane. The file and
+link drawers remain available while editing. Changing document or closing the
+library asks to save or discard unsaved edits; cancelling keeps the draft open.
+Malformed drawings and failed saves retain the current document.
+
+The first mobile header row contains Close, the left-pane button, the filename,
+and the right-pane button. Note history, edit/view and the actions menu are on a
+second row, hidden during folder browsing. Single-line wiki headings such as
+`# [[Tech]]` and wiki aliases are editable in formatted mode and keep their syntax.
+Other protected constructs remain available in Source editing.
+
+**••• → Contents…** jumps to a heading. In reading mode it scrolls the rendered
+note; while editing it selects the heading in Source, including unsaved headings.
+**Find / replace…** while editing opens Source with the shared editor search
+controls: previous/next, match case, replace and replace all. Reading mode keeps
+**Find in this page…** for the rendered note.
+
+While editing, **Properties…** lists YAML fields and supports adding, editing or
+removing text, numbers, checkboxes, dates and lists. **Edit YAML…** handles the raw
+frontmatter, including complex values. Apply updates the current draft and keeps
+the body; use Save to publish it. Invalid values stay in the form with an error.
+A form opened against an older draft cannot replace newer edits.
+
+Search runs away from the UI thread. Updates are coalesced and matching rows are
+paged, so changing the search mode cancels the previous result stream.
 
 **Documentation Library** is the shared viewer for built-in guides. It uses each
 page's opening Markdown heading as its sidebar title, with a filename fallback.
@@ -183,24 +230,49 @@ edge, opens **Backlinks** and **Outgoing links**. Swipe right in that drawer to
 close it. These floating panels work on phones, tablets and Duo in both orientations.
 Horizontal tables, selected text and zoomed pages retain their ordinary gestures.
 
+Files and Links dim the content behind them and block its controls until the
+panel closes. Tap the dimmed area to dismiss either panel; there is no panel X.
+The storage/editability caption in Files uses a subdued italic style.
+
+The left drawer has **Files** and **Calendar** tabs. Calendar starts on the current
+month; use its arrows to browse months. A dot marks a day with a note named
+`YYYY-MM-DD.md` anywhere in the library. Tap to open it, choosing a folder if
+several notes share that date. A missing day offers confirmation before creating
+its Markdown file in the library root. Read-only libraries can open existing
+daily notes. Refresh daily notes after files are changed outside the library.
+Calendar reads filenames only and keeps its index in memory, with a 10,000-entry
+and 100-folder-level limit; a failed scan does not offer creation.
+
+In Files, hold a file or folder for **Move / rename…**, **Copy…**, or **Delete…**,
+as supported by the location. Destinations stay inside this library and must have
+existing parent folders. Copy and move refuse existing names; delete asks for
+confirmation and permanently removes the selected item and its contents. Links
+are not rewritten. The search choices are **Search in File Names** and
+**Search within Documents**. Searches also inspect unopened folders, excluding
+hidden configuration.
+
+Opening a Markdown document shows a full-pane **Opening document…** screen with
+**Cancel**. Cancelling keeps the current document and ignores late loading results.
+
 Connections are scanned locally when opening Links, with progress feedback,
 clickable note paths, unresolved links and word/character counts. Scans are
 cancelled when the panel closes or the library locks. The scan is limited to
 5,000 notes, 10,000 entries and 64 MiB; an exceeded limit shows an error instead
-of incomplete backlinks. No plaintext index is saved. File filtering searches
-loaded names. Hidden configuration is excluded and links stay inside the library.
+of incomplete backlinks. No plaintext index is saved. Hidden configuration is
+excluded and links stay inside the library.
 
 Links such as `[[Tech]]` can open `Tech.md` in an unloaded subfolder. The current
 folder and library root take priority; otherwise following the link searches for
 a unique match across subfolders, up to 10,000 entries. Use an explicit path such
 as `[[Topics/Tech]]` when more than one note has that name.
 
-Local and unlocked LocalCrypt libraries support editing. Tap the pencil to open
-the current note in formatted editing, or choose **••• → New note…** to create a
-Markdown file in the current note’s folder. Existing names are never overwritten.
-Choose **Return to Notes Library** from the editor’s actions to return to the same
-note; unsaved edits offer Save, Discard changes and Cancel. A failed save keeps the draft.
-The library refreshes the saved note and retains its reading position. Cloud
+Local and unlocked LocalCrypt libraries support editing in place. Tap the pencil
+to edit the current Markdown document, then the view icon to return to reading.
+The file and link drawers remain available. **New Document** offers Markdown or
+Remarkable Document before the name and library folder. Existing names are never
+overwritten. Leaving an unsaved document offers Save, Discard changes and Cancel;
+a failed save keeps the draft open. The library refreshes the saved note and
+retains its reading position. Cloud
 remotes, including encrypted remotes, remain read-only in the standalone
 Markdown viewer and cannot open as libraries. Source inspection does not enable editing.
 

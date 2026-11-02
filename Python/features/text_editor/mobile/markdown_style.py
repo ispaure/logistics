@@ -151,3 +151,27 @@ dialog label { font-size: .85em; } dialog input { font-size: 16px; border: 1px s
     .dialog-actions button { padding: 0 8px; }
 }
 '''
+
+# The native viewport follows the system keyboard, including docked/folded layouts.
+# Hardware keyboards retain the same formatting row while the document has focus.
+EDITOR_CSS += r'''
+nav { order: 3; border-top: 1px solid var(--border, ButtonFace); border-bottom: 0; display: none; }
+body.editing nav { display: flex; }
+#document { order: 1; }
+#notice { order: 2; }
+.format-menu { top: auto; bottom: var(--toolbar-height); }
+'''
+
+EDITOR_CSS += r'''
+body.laptop-writing #document { flex: 0 1 var(--writing-height); max-height: var(--writing-height); }
+body.laptop-writing nav { margin-top: auto; }
+@media(max-height:160px){
+    :root{--toolbar-height:44px}
+    nav{position:static;width:auto;height:44px;padding:0 4px;flex:0 0 44px}
+    nav>.icon-button{display:inline-flex}
+    nav>.mode-label{display:none}
+    #document{padding:4px 12px}
+    .compact-formatting{display:none}
+    .format-menu{top:auto;bottom:44px;left:4px;right:4px;max-height:calc(100% - 44px)}
+}
+'''

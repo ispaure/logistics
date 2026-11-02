@@ -35,6 +35,18 @@ class DocumentChromeTests(TestCase):
         self.bar.setVisibility.assert_called_with(0)
         self.assertFalse(self.app._document_tabs_hidden)
 
+    def test_focused_transfer_restores_tabs_on_wide_layout(self):
+        self.view._focus_navigation = True
+        self.app.main_window = NS(size=NS(width=390, height=844))
+        sync_document_tabs(self.app, self.view)
+        self.assertTrue(self.app._document_tabs_hidden)
+        self.app.main_window.size.width = 900
+        sync_document_tabs(self.app, self.view)
+        self.assertFalse(self.app._document_tabs_hidden)
+        self.app.main_window.size.height = 400
+        sync_document_tabs(self.app, self.view)
+        self.assertTrue(self.app._document_tabs_hidden)
+
     def test_fullscreen_exit_keeps_document_tabs_hidden_and_does_not_hide_top_bar(self):
         self.view._reader_session_id = 'text'
         for immersive in (True, False):

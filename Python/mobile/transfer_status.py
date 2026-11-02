@@ -46,6 +46,17 @@ def status_host(app, destination):
     return getattr(getattr(app, 'settings_navigation', None), '_status_row', None), True
 
 
+def sync_home_row(app):
+    row = getattr(app, '_home_status_row', None)
+    content = getattr(app, 'home_content', None)
+    if row is None or content is None:
+        return
+    if row.children and row.parent is None:
+        content.insert(0, row)
+    elif not row.children and row.parent is not None:
+        row.parent.remove(row)
+
+
 def refresh(app, destination=None):
     pending = getattr(app, '_sync_status_tick', None)
     if pending is not None:
@@ -66,6 +77,7 @@ def refresh(app, destination=None):
             if mounted.parent is not None:
                 mounted.parent.remove(mounted)
                 if key == 'home':
+                    sync_home_row(app)
                     app.reflow_home()
                 if key == 'chat':
                     app.update_chat_header()
@@ -89,6 +101,7 @@ def refresh(app, destination=None):
     if mounted.parent is None:
         host.add(button) if inline else host.insert(0, row)
         if destination == 'home':
+            sync_home_row(app)
             app.reflow_home()
         if destination == 'chat':
             app.update_chat_header()

@@ -13,6 +13,59 @@ from features.text_editor.mobile.markdown_editor import editor_blocks, editor_ht
 
 
 class MarkdownEditorTests(unittest.TestCase):
+    def test_fold_refresh_replays_geometry_changed_during_webview_update(self):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+        async def exercise():
+            region = [SimpleNamespace(y=100, vertical=False)]
+            presentation = SimpleNamespace(fold_division=lambda widget: region[0])
+            editor = FormattedMarkdownInput(lambda text: None, presentation=presentation)
+            entered, release = asyncio.Event(), asyncio.Event()
+            calls = []
+            async def evaluate(script):
+                calls.append(script)
+                if len(calls) == 1:
+                    entered.set()
+                    await release.wait()
+            with patch.object(editor.view, 'evaluate_javascript', side_effect=evaluate):
+                editor.refresh_geometry()
+                await entered.wait()
+                region[0] = SimpleNamespace(y=200, vertical=False)
+                editor.refresh_geometry()
+                release.set()
+                await editor.geometry_task
+            self.assertEqual(len(calls), 2)
+            self.assertIn('(200)', calls[-1])
+            editor.dispose()
+        asyncio.run(exercise())
+
+    def test_preparing_formatted_document_parses_once_and_preserves_source(self):
+        from unittest.mock import patch
+        from markdown_it import MarkdownIt
+        from features.text_editor.mobile.markdown_editor import prepare_editor
+        source = '---\ntitle: Test\n---\n\n# [[Tech]]\r\n\r\n' + ('A **bold** paragraph.\n\n' * 100)
+        calls = []
+        original = MarkdownIt.parse
+        def parse(parser, *args, **kwargs):
+            calls.append(args[0])
+            return original(parser, *args, **kwargs)
+        with patch.object(MarkdownIt, 'parse', parse):
+            bridge, html, sources = prepare_editor(source)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(''.join(sources), source)
+        self.assertIn(bridge, html)
+        self.assertIn('data-live-source', html)
+
+    def test_wiki_headings_and_aliases_are_editable_without_losing_source(self):
+        for source in ('# [[Tech]]\n', '# **[[Tech|Technology]]**\n', 'See [[Projects/Tech#Tools|tools]] today.\n'):
+            with self.subTest(source=source):
+                blocks = editor_blocks(source)
+                self.assertTrue(blocks[0]['editable'])
+                self.assertIn('data-live-source', blocks[0]['html'])
+                self.assertEqual(''.join(block['source'] for block in blocks), source)
+
     def test_fence_metadata_survives_rendering_inside_an_editable_list(self):
         source = '- Parent\n\n  ~~~~c++ title="example"\n  int value = 1;\n  ~~~~\n'
         blocks = editor_blocks(source)

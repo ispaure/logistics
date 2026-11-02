@@ -32,6 +32,9 @@ def sync_transfer(source, destination, *, operation, config_path, crypt_item=Non
         from .ui.review import confirm_review
         if not confirm_review(prepared):
             return False
-        return service.transfers.execute(prepared, TransferContext(cancelled=cancelled))
+        # Incomplete approval stops the comparison without creating an expected
+        # snapshot. Only this explicit desktop choice bypasses full integrity I/O.
+        return service.transfers.execute(prepared, TransferContext(cancelled=cancelled,
+            skip_localcrypt_integrity=prepared.review.expected is None))
     finally:
         prepared.review.scan.stop()

@@ -511,6 +511,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         for overlay in tuple(getattr(self, '_speech_overlays', ())):
             overlay.reposition()
         self.adaptive.render()
+        if getattr(self, '_focus_navigation_active', False):
+            from .reader_chrome import sync_document_tabs
+            sync_document_tabs(self, self.body, fullscreen=self._reader_chrome_hidden)
         from .fold_layout import sync_epub_geometry
         sync_epub_geometry(self)
         if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
@@ -570,6 +573,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             if owner is None or view not in (getattr(owner, 'crypt_view', None), getattr(owner, 'crypt_metadata_view', None)):
                 private.suspend()
         if self.adaptive.split is not None and target == 'documents' and not root:
+            self.routes.retire_other_presentations(view, target, 'editor' if route == 'preview' else route)
             self.native_host.activate('documents')
             self.adaptive.present(view, route=route, title=title)
             from .reader_chrome import sync_comic_chrome

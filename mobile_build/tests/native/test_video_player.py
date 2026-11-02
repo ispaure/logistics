@@ -75,6 +75,7 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         import json
         options = json.loads(native_options('{}', owner.content))
         self.assertEqual(options['video_title'], 'Episode 1.mkv')
+        self.assertEqual(options['video_path'], 'Season 1/Episode 1.mkv')
         self.assertEqual(options['source_label'], 'Local file')
         async def reveal(app, location):
             self.assertIs(app, owner.app)

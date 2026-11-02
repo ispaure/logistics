@@ -17,6 +17,56 @@ class FolderLocationTests(unittest.TestCase):
     tearDown = obsidian_tests.ObsidianTests.tearDown
     run_async = obsidian_tests.ObsidianTests.run_async
 
+    def test_header_hold_follows_current_local_and_remote_folder(self):
+        from types import SimpleNamespace as NS
+        from commonUtils.runtime.resources.local import LocalFiles
+
+        header = FolderLocationHeader(toga.Label(''), icon_button('back', 'Back'))
+        with patch('mobile.document_location.show_location') as show:
+            local = LocalFiles(self.root)
+            for folder in ('Projects', 'Projects/Long folder name'):
+                header.update_provider(folder, local)
+                header.show_location()
+                show.assert_called_with(header, 'Folder location', f'{header.folder_name.value}\n\n{self.root / folder}')
+            remote = NS(remote='work', remote_storage=True, private=False)
+            header.update_provider('Archive/Notes', remote)
+            header.show_location()
+            show.assert_called_with(header, 'Folder location', 'Notes\n\nwork:Archive/Notes')
+            header.update('', remote=True)
+            show.reset_mock()
+            header.show_location()
+            show.assert_not_called()
+
+    def test_equal_folder_names_restart_only_when_location_changes(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        local = LocalFiles(self.root)
+        header = FolderLocationHeader(toga.Label(''), icon_button('back', 'Back'))
+        leaf = 'Shared project meeting notes'
+        header.update_provider('First/' + leaf, local)
+        with patch.object(header.folder_name, 'restart_pan') as restart:
+            header.update_provider('First/' + leaf, local)
+            restart.assert_not_called()
+            header.update_provider('Second/' + leaf, local)
+            restart.assert_called_once()
+        self.assertEqual(header.folder_location, str(self.root / 'Second' / leaf))
+
+    def test_stopped_browser_cannot_reveal_previous_folder_and_can_reopen(self):
+        from types import SimpleNamespace as NS
+        from mobile.browser_ui import FileBrowser
+
+        browser = FileBrowser()
+        header = browser.attach_location_header(toga.Label(''), icon_button('back', 'Back'))
+        provider = NS(remote='work', remote_storage=True, private=True)
+        header.update_provider('Private/Old folder', provider)
+        browser.stop()
+        with patch('mobile.document_location.show_location') as show:
+            header.show_location()
+            show.assert_not_called()
+            self.assertEqual(header.folder_name.value, '')
+            header.update_provider('New folder', provider)
+            header.show_location()
+            show.assert_called_once_with(header, 'Folder location', 'New folder\n\nwork:New folder')
+
     def test_apple_header_back_calls_bound_async_handler_with_one_widget(self):
         from types import SimpleNamespace
         from mobile.browser_ui import FileBrowser
@@ -120,9 +170,15 @@ class FolderLocationTests(unittest.TestCase):
                           CGSize=lambda width, height: (width, height))
                 with patch.dict(sys.modules, {'rubicon.objc': objc}), \
                         patch('mobile.folder_title.mount_actions'), \
+                        patch('mobile.document_location.bind_apple_hold') as hold, \
                         patch('mobile.appearance.apple_color'), \
                         patch('mobile.hub_icons.icon'):
                     mount(header, controller, 'Secret')
+                    mount(header, controller, 'Secret')
+                self.assertEqual(len(instances['CommonUtilsPanningTitle']), 1)
+                hold.assert_called_once()
+                hold.call_args.args[2](header)
+                header.show_location.assert_called_once_with(name='Secret')
                 scroll = instances['UIScrollView'][0]
                 row = instances['UIStackView'][0]
                 row.widthAnchor.constraintGreaterThanOrEqualToAnchor.assert_called_once_with(

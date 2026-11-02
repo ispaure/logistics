@@ -5,6 +5,10 @@ from features.text_editor.mobile.ui import TextEditorView
 def close_notes_library(host, key, choice, *, leaving_reader=False):
     owner = getattr(host, 'vault_browser', None)
     if owner is not None and owner.session is host.workspace.sessions[key]:
+        editor = getattr(owner, 'embedded', None)
+        if editor is not None and (editor.busy or (editor.dirty and choice != 'discard'
+                and getattr(owner, '_approved_close', None) is not editor)):
+            return False
         owner.dispose()
     else:
         host.workspace.close(key, guard=lambda session: True)

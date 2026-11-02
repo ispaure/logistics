@@ -90,6 +90,17 @@ class MultiCredentialUITests(unittest.TestCase):
             setup.assert_not_called()
         self.client.connection_identity.assert_not_called()
 
+    def test_renamed_local_cipher_requires_unique_matching_identity(self):
+        state = NativeCredentialState()
+        cipher = 'a' * 64
+        replacement = dict(aliases={'New name': 'New name'}, crypt_identities={'New name': cipher})
+        state.package_records = (replacement,)
+        self.assertEqual(state.resolve_remote('Old name', cipher, cipher=True), 'New name')
+        self.assertEqual(state.resolve_remote('Old name', 'b' * 64, cipher=True), 'Old name')
+        self.assertEqual(state.resolve_remote('Old name', cipher), 'Old name')
+        state.package_records += (dict(aliases={'Another': 'Another'}, crypt_identities={'Another': cipher}),)
+        self.assertEqual(state.resolve_remote('Old name', cipher, cipher=True), 'Old name')
+
     def test_loaded_name_does_not_admit_a_different_account(self):
         self.client.package_records[0]['identities'] = {'Main': 'a' * 64}
         self.client.connection_identity = Mock(return_value='a' * 64)

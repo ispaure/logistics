@@ -36,7 +36,7 @@ def build(root, output):
     if not reused:
         from logistics_build.mobile_payload import stage_payload
         stage_payload(root, sys.executable, command)
-        command([sys.executable,'cloud_build.py','licenses'],mobile)
+        command([sys.executable,'cloud_build.py','licenses','--platform','android'],mobile)
         command([sys.executable,'-m','briefcase','create','android','--no-input'],mobile)
         command([sys.executable,'cloud_build.py','android'],mobile)
         command([sys.executable,'-m','briefcase','build','android','--test','--no-input'],mobile)

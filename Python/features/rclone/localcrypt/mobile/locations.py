@@ -11,6 +11,7 @@ class LocalCryptLocation:
     namespace: str | None = None
     storage_root: Path | None = None
     create: bool = True
+    cipher_identity: str | None = None
 
 
 @dataclass(frozen=True)

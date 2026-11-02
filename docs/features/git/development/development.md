@@ -145,11 +145,13 @@ files and upstream ahead/behind counts from the latest fetched state.
 From the repository root:
 
 ```sh
-PYTHONPATH=Python:. QT_QPA_PLATFORM=offscreen python3 -m unittest \
-  tests.version_control.test_git_backend tests.version_control.test_git_ui \
-  tests.application.test_main_window tests.application.test_feature_registry \
-  tests.application.test_feature_preferences tests.application.test_settings_page
+python3 dev.py test desktop 'test_git*.py'
 ```
+
+For shell/registration changes, also run `test_main_window.py`,
+`test_feature_registry.py`, `test_feature_preferences.py` and `test_settings_page.py`
+through the same desktop entry point. It selects the test environment, isolates
+each file and saves timing reports.
 
 Tests use disposable repositories and local bare remotes, including rename/path
 handling, empty repositories, clone/fetch/pull/push, conflict resolution and abort,
@@ -158,6 +160,14 @@ The submodule fixture opts into local file transport only for its test runner;
 the application keeps Git's default transport rules. Optional subtree tests skip
 when the installed Git lacks that extension. UI tests run offscreen and cover
 worker ownership, shutdown retries, drafts, editor reuse, and sidebar ordering.
+The UI fixture initializes and configures one empty repository, then copies its
+full contents into a fresh directory for each case. Tests still use real Git
+operations; no case shares writable refs, indexes, config or working files.
+An isolation check commits and changes configuration in a copy, then verifies
+the template's files, refs, index and configuration remain unchanged. Per-case
+temporary directories use the managed Qt fixture so cleanup drains owned work
+before deleting repository files, including when a test fails.
+Keep repository-initialization coverage in the backend suite when changing this fixture.
 
 ## Next increments
 
