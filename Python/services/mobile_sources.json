@@ -39,6 +39,7 @@
     "documents/state_migration.py",
     "documents/video_state.py",
     "documents/video_migration.py",
-    "documents/video_settings.py"
+    "documents/video_settings.py",
+    "open_source.py"
   ]
 }

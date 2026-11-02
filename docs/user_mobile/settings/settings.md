@@ -173,6 +173,12 @@ short source revision and commit time when available, plus the platform and
 packaged source snapshot. Local modified builds are identified. This information
 is available offline; the About heading keeps its normal appearance.
 
+Open **Settings → About → Open-source licenses** to search component names or
+licenses and read the bundled notices offline. Tap a component for its license
+text and source address; use Back to return to the list. Python dependencies and
+native Go notices come from the installed build, and native entries are filtered
+for Android or iOS. Publisher terms that are only available online are identified.
+
 ### Trusted Wi-Fi session resume
 
 In **Settings → Privacy & Security**, **Skip session password on trusted Wi-Fi** is off

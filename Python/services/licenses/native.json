@@ -1,0 +1,157 @@
+[
+  {
+    "name": "Python runtime",
+    "version": "3.12.2",
+    "platforms": [
+      "android",
+      "ios",
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "source": "https://github.com/python/cpython/tree/v3.12.2",
+    "files": [
+      "Python.txt"
+    ]
+  },
+  {
+    "name": "Android Material Components",
+    "version": "1.12.0",
+    "platforms": [
+      "android"
+    ],
+    "license": "Apache-2.0",
+    "source": "https://github.com/material-components/material-components-android",
+    "files": [
+      "Apache-2.0.txt"
+    ],
+    "module": "com.google.android.material:material"
+  },
+  {
+    "name": "AndroidX AppCompat",
+    "version": "1.0.2",
+    "platforms": [
+      "android"
+    ],
+    "license": "Apache-2.0",
+    "source": "https://developer.android.com/jetpack/androidx/releases/appcompat",
+    "files": [
+      "Apache-2.0.txt"
+    ],
+    "module": "androidx.appcompat:appcompat"
+  },
+  {
+    "name": "AndroidX ConstraintLayout",
+    "version": "1.1.3",
+    "platforms": [
+      "android"
+    ],
+    "license": "Apache-2.0",
+    "source": "https://developer.android.com/jetpack/androidx/releases/constraintlayout",
+    "files": [
+      "Apache-2.0.txt"
+    ],
+    "module": "androidx.constraintlayout:constraintlayout"
+  },
+  {
+    "name": "AndroidX SwipeRefreshLayout",
+    "version": "1.1.0",
+    "platforms": [
+      "android"
+    ],
+    "license": "Apache-2.0",
+    "source": "https://developer.android.com/jetpack/androidx/releases/swiperefreshlayout",
+    "files": [
+      "Apache-2.0.txt"
+    ],
+    "module": "androidx.swiperefreshlayout:swiperefreshlayout"
+  },
+  {
+    "name": "AndroidX WebKit",
+    "version": "1.15.0",
+    "platforms": [
+      "android"
+    ],
+    "license": "Apache-2.0",
+    "source": "https://developer.android.com/jetpack/androidx/releases/webkit",
+    "files": [
+      "Apache-2.0.txt"
+    ],
+    "module": "androidx.webkit:webkit"
+  },
+  {
+    "name": "Android Hidden API Bypass",
+    "version": "4.3",
+    "platforms": [
+      "android"
+    ],
+    "license": "Apache-2.0",
+    "source": "https://github.com/LSPosed/AndroidHiddenApiBypass",
+    "files": [
+      "Apache-2.0.txt"
+    ],
+    "module": "org.lsposed.hiddenapibypass:hiddenapibypass"
+  },
+  {
+    "name": "LibVLC Android",
+    "version": "3.7.5",
+    "platforms": [
+      "android"
+    ],
+    "license": "LGPL-2.1-or-later",
+    "source": "https://code.videolan.org/videolan/libvlcjni/-/tags/3.7.5",
+    "files": [
+      "LGPL-2.1.txt",
+      "GPL-2.0.txt"
+    ],
+    "note": "This application uses LibVLC from VideoLAN. Library source and build information: https://code.videolan.org/videolan/libvlcjni . Included codec components may have additional licenses.",
+    "module": "org.videolan.android:libvlc-all"
+  },
+  {
+    "name": "VLCKit",
+    "version": "2e0868f5ed40fe59cd92f377645fdcc260c6e759",
+    "platforms": [
+      "ios"
+    ],
+    "license": "LGPL-2.1-or-later",
+    "source": "https://github.com/videolan/vlckit/tree/2e0868f5ed40fe59cd92f377645fdcc260c6e759",
+    "files": [
+      "LGPL-2.1.txt",
+      "GPL-2.0.txt"
+    ],
+    "note": "This application uses VLCKit from VideoLAN. Library source and build information are available at the source address above. Included codec components may have additional licenses."
+  },
+  {
+    "name": "Onyx device SDK",
+    "version": "1.3.5.3",
+    "platforms": [
+      "android"
+    ],
+    "license": "BSD-3 (publisher metadata)",
+    "source": "https://repo.boox.com/repository/maven-public/com/onyx/android/sdk/onyxsdk-device/1.3.5.3/onyxsdk-device-1.3.5.3.pom",
+    "note": "The publisher identifies this SDK as BSD-3 in its Maven metadata. A complete copyright and license notice was not supplied in the reviewed AAR.",
+    "module": "com.onyx.android.sdk:onyxsdk-device"
+  },
+  {
+    "name": "Onyx pen SDK",
+    "version": "1.5.8",
+    "platforms": [
+      "android"
+    ],
+    "license": "BSD-3 (publisher metadata)",
+    "source": "https://repo.boox.com/repository/maven-public/com/onyx/android/sdk/onyxsdk-pen/1.5.8/onyxsdk-pen-1.5.8.pom",
+    "note": "The publisher identifies this SDK as BSD-3 in its Maven metadata. A complete copyright and license notice was not supplied in the reviewed AAR.",
+    "module": "com.onyx.android.sdk:onyxsdk-pen"
+  },
+  {
+    "name": "ML Kit GenAI Prompt",
+    "version": "1.0.0-beta4",
+    "platforms": [
+      "android"
+    ],
+    "license": "ML Kit Terms of Service",
+    "source": "https://developers.google.com/ml-kit/terms",
+    "note": "Google ML Kit is provided under its own terms, rather than the app's MIT license. GenAI additional terms: https://developers.google.com/ml-kit/genai-terms . These publisher terms are available online.",
+    "module": "com.google.mlkit:genai-prompt"
+  }
+]

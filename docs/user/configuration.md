@@ -8,6 +8,10 @@ individual workflows and platform limitations.
 Password and token fields start hidden. Use the eye button beside a field to
 show or hide its value. Clearing the field hides it again.
 
+Open **Settings → Open-source licenses** to search the installed desktop runtime's
+components and read their license notices offline. Select a component to view
+and copy its notice and source address.
+
 ## Configuration layers
 
 | Location | Owns | Path base |

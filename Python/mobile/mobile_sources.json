@@ -162,6 +162,7 @@
     "ios/watch/WatchValueReceiver.swift",
     "ios/watch/LogisticsWatchApp.swift",
     "ios/watch/WatchValueWidget.swift",
-    "ios/widgets/SyncWatchValues.swift"
+    "ios/widgets/SyncWatchValues.swift",
+    "settings/licenses.py"
   ]
 }

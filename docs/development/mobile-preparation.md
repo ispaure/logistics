@@ -1,5 +1,32 @@
 # Mobile document host and validation
 
+## Offline component notices
+
+Settings → About → Open-source licenses uses `services/open_source.py` for installed
+Python dependency notices, the vendored rmscene notice and the Go build's
+`mobile/native-licenses/manifest.json`. The Python inventory follows the platform's
+declared requirements and their installed dependencies, excluding optional extras
+and unrelated host tools. Package metadata and license files must remain in the
+final app; missing texts are displayed explicitly.
+
+Staging copies `Python/services/licenses/` as package data and writes the Android
+and iOS Python requirements to `mobile/open-source-dependencies.json`, so the
+viewer needs neither the source checkout nor network access. Native catalog
+versions and source addresses in `services/licenses/native.json` must be updated
+with their pinned dependencies. The bundled LGPL, GPL, Apache and Python texts
+are upstream license resources, not application guides.
+
+This viewer does not establish redistribution permission or complete source and
+relinking obligations. The native catalog covers the declared direct libraries;
+transitive Java dependencies and codec notices still require artifact review.
+The Onyx entries record the publisher's BSD-3 Maven metadata and its missing
+complete AAR notice. ML Kit links to the publisher's online terms. Resolve these
+gaps and verify the final artifact's notice inventory before store publication.
+
+Host coverage: `test_open_source.py`, `test_settings_page.py`,
+`test_settings_ui.py` and `test_mobile_packaging.py`. Native device layout and
+final APK/IPA contents require separate release validation.
+
 ## Launcher artwork
 
 `mobile_build/resources/icons` contains pre-sized PNGs derived from the supplied light,

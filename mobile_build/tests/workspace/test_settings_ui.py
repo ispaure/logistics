@@ -15,6 +15,39 @@ from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_about_license_navigation_search_and_native_back(self):
+        import toga
+        from services.open_source import Notice
+        app = self.make_app()
+        notice = Notice('Example', '1.0', 'MIT', '', 'Copyright Example')
+        with patch('mobile.settings.licenses.installed_notices', return_value=[notice]):
+            app.show_settings(present=False)
+            app.settings_navigation.choose('About')
+            def descendants(widget):
+                yield widget
+                if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
+                    yield from descendants(widget.content)
+                for child in getattr(widget, 'children', ()):
+                    yield from descendants(child)
+            about = app.settings_navigation.sections['About']
+            entry = next(widget for widget in descendants(about)
+                         if isinstance(widget, toga.Button) and widget.text == 'Open-source licenses')
+            entry.on_press()
+            view = app.routes.screens['settings'][-1][1]
+            search = next(widget for widget in descendants(view) if isinstance(widget, toga.TextInput))
+            search.value = 'missing'
+            self.assertTrue(any(getattr(widget, 'text', '') == 'No matching components.' for widget in descendants(view)))
+            search.value = 'example'
+            component = next(widget for widget in descendants(view)
+                             if isinstance(widget, toga.Button) and widget.text == 'Example 1.0')
+            component.on_press()
+            detail = app.routes.screens['settings'][-1][1]
+            text = next(widget for widget in descendants(detail) if isinstance(widget, toga.MultilineTextInput))
+            self.assertTrue(text.readonly)
+            self.assertIn('Copyright Example', text.value)
+            app.routes.back()
+            self.assertIs(app.routes.screens['settings'][-1][1], view)
+
     def test_privacy_updates_preserve_split_pane_text_width(self):
         import toga
         app = self.make_app()

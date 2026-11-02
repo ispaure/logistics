@@ -18,6 +18,22 @@ from desktop.pages.settings import SettingsPage, ConfigurationPanel
 
 
 class SettingsPageTests(QtTestCase):
+    def test_license_category_search_and_read_only_notice(self):
+        from services.open_source import Notice
+        with patch.object(registry, 'get_feature_states', return_value=[]), \
+                patch('desktop.settings.licenses.installed_notices', return_value=[
+                    Notice('Example', '1.0', 'MIT', 'https://example.org', 'Copyright Example')]):
+            page = SettingsPage(); self.addCleanup(page.deleteLater)
+            page.show_category('licenses')
+            panel = page.panels['licenses']
+            self.assertTrue(panel.text.isReadOnly())
+            self.assertIn('Copyright Example', panel.text.toPlainText())
+            panel.search.setText('missing')
+            self.assertEqual(panel.components.count(), 0)
+            panel.search.setText('MIT')
+            self.assertEqual(panel.components.count(), 1)
+            self.assertIn('Copyright Example', panel.text.toPlainText())
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 

@@ -201,6 +201,9 @@ class SettingsCategories:
         box = self.category('About')
         app.build_version_label = toga.Label(build_information(app.version),
             style=Pack(font_size=12, color='#808080'))
+        from .licenses import show_licenses
+        box.add(page_button('Open-source licenses', on_press=lambda widget, **kw: show_licenses(app),
+                            style=Pack(height=48)))
         box.add(app.build_version_label)
         return box
 

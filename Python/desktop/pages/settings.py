@@ -437,7 +437,7 @@ class SettingsPage(qt.QWidget):
             self.sidebar.clear()
             items = {}
             for key, title in (('features', 'Features'), ('reader-history', 'Reader history'), ('workspaces', 'Workspaces'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
-                               ('commonutils', 'Appearance & shared controls')):
+                               ('commonutils', 'Appearance & shared controls'), ('licenses', 'Open-source licenses')):
                 item = qt.QTreeWidgetItem([title])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
                 self.sidebar.addTopLevelItem(item)
@@ -484,6 +484,9 @@ class SettingsPage(qt.QWidget):
                                             scope=self.scope_selector.currentData())
             elif key == 'commonutils':
                 panel = CommonUtilsPanel(self, layered=True, scope=self.scope_selector.currentData())
+            elif key == 'licenses':
+                from desktop.settings.licenses import LicensesPanel
+                panel = LicensesPanel(self)
             else:
                 state = next(state for state in registry.get_feature_states() if key == f'feature:{state.name}')
                 panel = FeatureSettingsPanel(state, self, scope=self.scope_selector.currentData())

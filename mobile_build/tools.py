@@ -7,6 +7,7 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
+import tomllib
 
 SOURCE_OWNERS = (
     'mobile', 'services', 'features/books', 'features/pdf', 'features/comics',
@@ -232,6 +233,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
              'Python/tests/portable_documents.py', 'Python/tests/books_fixture.py']
     paths.extend('Python/' + name for name in document_modules)
     paths.extend('Python/' + owner + '/mobile_sources.json' for owner in SOURCE_OWNERS)
+    paths.append('Python/services/licenses')
     dirty = bool(subprocess.check_output(['git', '-C', str(repo), 'status', '--porcelain', '--', *paths]))
     if dirty and not allow_dirty:
         raise ValueError('Commit mobile sources before creating a release/testbed payload.')
@@ -278,6 +280,15 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     copy(repo / 'README.md', Path('mobile/help/README.md'))
     copy(repo / 'LICENSE.md', Path('mobile/LICENSE.md'))
     copy(shared / 'LICENSE.md', Path('commonUtils/LICENSE.md'))
+    # License resources are package data, separate from the executable allowlist.
+    for resource in sorted((repo / 'Python/services/licenses').iterdir()):
+        if resource.suffix in {'.txt', '.json'}:
+            copy(resource, Path('services/licenses') / resource.name)
+    config = tomllib.loads((repo / 'mobile_build/pyproject.toml').read_text())['tool']['briefcase']['app']['logisticsmobile']
+    (destination / 'mobile/open-source-dependencies.json').write_text(json.dumps({
+        platform: config['requires'] + config[section]['requires']
+        for platform, section in (('android', 'android'), ('ios', 'iOS'))
+    }, indent=2) + '\n')
     for name in document_modules:
         copy(repo / 'Python' / name, Path(name))
     # Briefcase copies package sources, not payload-root configuration files.
@@ -299,7 +310,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
              (repo / 'mobile_build/native_navigation', 'native-navigation/'))
     for root, prefix in roots:
         for path in sorted(root.rglob('*')):
-            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.m', '.swift', '.json', '.ini', '.mod', '.sum'} and path.name != 'source.json':
+            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.m', '.swift', '.json', '.ini', '.mod', '.sum', '.txt'} and path.name != 'source.json':
                 digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
                 digest.update(path.read_bytes())
     manifest['source_sha256'] = digest.hexdigest()
