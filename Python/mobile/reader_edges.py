@@ -22,6 +22,34 @@ def passive_caption_tail(view):
     return max(0, footer.widget.layout.content_height - footer.row.layout.content_height)
 
 
+def footer_bottom_extension(view, home):
+    footer = page_footer(view)
+    if footer is None or footer.vertical:
+        return 0
+    # A lowered track and arrow glyphs use the lower part of their touch row.
+    # Keep the caption near the edge, directly below those controls.
+    offset = getattr(getattr(footer, 'slider', None), '_reader_track_offset', 0)
+    return min(passive_caption_tail(view) + offset, max(0, home - 4))
+
+
+def apple_reader_top(container, window):
+    """A side bar's rectangular status inset need not cover the reader width."""
+    native = container.native
+    origin = native.convertRect(native.bounds, toView=window).origin
+    top = max(0, float(window.safeAreaInsets.top) - float(origin.y))
+    responds = getattr(native, 'respondsToSelector', None)
+    if responds is None:
+        return top
+    from rubicon.objc import SEL
+    if not responds(SEL('reservedRegionsOfKind:options:')):
+        return top
+    from .ios_reader_chrome import occlusion_geometry
+    left, right = container.left_inset, float(native.bounds.size.width) - container.right_inset
+    return max((y + height for x, y, width, height in occlusion_geometry(native)
+                if x + width > left + .5 and x < right - .5
+                and y + height > 0 and (y <= .5 or y < top)), default=0)
+
+
 def compact_apple_reader(container):
     """The reader owns the title row; keep only the hardware inset above it."""
     if container.content is None:
@@ -48,13 +76,12 @@ def compact_apple_reader(container):
         return False
     changed = False
     if reader is not None:
-        origin = container.native.convertRect(container.native.bounds, toView=window).origin
-        top = max(0, float(window.safeAreaInsets.top) - float(origin.y))
+        top = apple_reader_top(container, window)
         if abs(container.top_inset - top) > .5:
             container.top_inset = top
             changed = True
     home = float(window.safeAreaInsets.bottom)
-    extension = min(passive_caption_tail(view), max(0, home - 4))
+    extension = footer_bottom_extension(view, home)
     original_bottom = float(container.native.safeAreaInsets.bottom)
     bottom = max(0, original_bottom - extension) if 0 < original_bottom <= home else original_bottom
     if container.bottom_inset != bottom:
@@ -97,6 +124,19 @@ def style_progress_caption(label):
 def refresh_progress_edges(footer):
     widget = footer.widget
     base = READER_LAYOUT.progress_margin
+    if type(widget._impl).__module__.startswith('toga_iOS.'):
+        if not footer.vertical:
+            from .screen_privacy import native_value
+            window = native_value(widget._impl.native, 'window')
+            height = footer.spacer.layout.content_height
+            if window is not None and height > 0:
+                home = float(window.safeAreaInsets.bottom)
+                # Keep the caption near the edge and the complete control row
+                # immediately above it, rather than leaving a blank band.
+                margin = max(-10, min(2, home - 4 - height)) if home > 4 else -10
+                if footer.badge.style.margin_top != margin:
+                    footer.badge.style.margin_top = margin
+        return
     # UIKit safe areas already include display curvature. Never infer a radius
     # from a model name or a private screen property. Older Android releases
     # likewise retain the system cutout/bar insets without a guessed radius.

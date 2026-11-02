@@ -1,10 +1,10 @@
-"""Qt/FFmpeg video document; private media stays in revocable provider streams."""
+"""Desktop video document; private media stays in revocable provider streams."""
 from pathlib import Path
 from threading import Event, Thread
+from time import monotonic
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
-from PySide6.QtMultimediaWidgets import QVideoWidget
 
 from features.video.playback import VideoContent, VIDEO_EXTENSIONS, SubtitleContent
 from services.documents.video_progress import VideoProgress
@@ -17,44 +17,77 @@ def clock(milliseconds):
 
 
 from .controls import PlaybackTools, CachedSlider
-from .audio_output import audio_output
+from .backend import QtPlayback
+from .presentation import PlaybackPresentation
 
 
-class VideoWindow(PlaybackTools, qt.QMainWindow):
+class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
     idle = qt.Signal()
     queue_result = qt.Signal(object)
     chapter_result = qt.Signal(object)
     stream_problem = qt.Signal(str)
+    network_wait = qt.Signal(object, bool)
+    sidecar_result = qt.Signal(object)
 
-    def __init__(self, choice):
+    def __init__(self, choice, *, backend_factory=QtPlayback):
         super().__init__()
         self.choice = choice
         self.document_read_only = True
         self.closing = True  # Failed construction must also tolerate a Qt close event.
+        self.retired = False
+        self._retiring = False
+        self.initialized = False
         self.subtitles = None
         self.external = False
+        self.external_selection = None
         self.ended = False
         self.chapter_cancelled, self.chapter_worker = Event(), None
         self.chapter_data, self.chapter_menu = None, None
         self.transport_failure = None
+        self.resource_changed = False
+        self.resume_guard = None
+        self.sidecar_worker = None
+        self.sidecar_data = []
+        self.deferred_sidecars = None
+        self.subtitle_resources = []
+        self.casting = False
+        self.receiver_menu = None
+        self.process_checks = ()
+        from services.desktop_video_access import session_contexts
+        self.process_contexts = session_contexts()
+        self.backend_factory = backend_factory
         try:
             self.content = VideoContent(choice.provider, choice.path)
-            self.transport = VideoTransport(self.content, failed=self.stream_problem.emit)
+            self.transport = VideoTransport(self.content, failed=self.stream_problem.emit,
+                waiting=self.network_wait.emit)
             from commonUtils.filesystem.storage import cache_directory
             self.progress = VideoProgress(self.content, cache_directory(create=False) / 'Video')
-            self.resume_at = self.progress.load()
+            self.resume_at = self.progress.load() or None
             self.build()
             self.queue_result.connect(self.queue_loaded)
             self.build_tools(cache_directory(create=False) / 'Video')
+            self.build_presentation()
+            self.sidecar_result.connect(self.sidecars_loaded)
+            self.start_sidecars()
             state = getattr(self.progress, 'credential_state', None)
             if state is not None and state.locked_state:
                 self.status.setText('Saved position needs the previous ZIP password. Use Settings → Reader history → Migrate.')
             elif self.progress.resume_notice:
                 self.status.setText(self.progress.resume_notice)
             self.closing = False
+            self.initialized = True
         except BaseException:
+            self.chapter_cancelled.set()
+            if self.sidecar_worker is not None:
+                self.sidecar_worker.join()
+            if hasattr(self, 'lifecycle'):
+                self.lifecycle.close()
+            if hasattr(self, 'backend'):
+                self.backend.retire()
             if hasattr(self, 'transport'):
                 self.transport.close()
+            for resource in self.subtitle_resources:
+                resource.close()
             if hasattr(self, 'content'):
                 self.content.close()
             self.deleteLater()
@@ -66,34 +99,44 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         protect_private_view(self, self.content.provider)
         self.destroyed.connect(choice.close)
         self.player.setSource(qt.QUrl(self.transport.url))
+        if self.resume_at:
+            self.player.setPosition(self.resume_at)
         self.resume_guard = None
-        if self.content.restricted:
+        if self.content.restricted or self.process_contexts:
             try:
                 from .privacy import VideoResumeGuard
-                self.resume_guard = VideoResumeGuard(self)
+                from services.desktop_video_access import process_authorization
+                authorization, self.process_checks = process_authorization() if not self.content.restricted else (None, ())
+                self.resume_guard = VideoResumeGuard(self, authorization=authorization)
             except BaseException:
                 self.retire_private_content()
                 self.deleteLater()
                 raise
-        qt.QTimer.singleShot(0, self.toggle_play)
+        self.startup_pending = True
+        qt.QTimer.singleShot(0, self.start_initial_playback)
+
+    def start_initial_playback(self):
+        if not self.closing and self.startup_pending:
+            self.toggle_play()
 
     def build(self):
-        self.player = QMediaPlayer(self)
-        self.audio = audio_output(self)
-        self.audio.setVolume(.8)
-        self.player.setAudioOutput(self.audio)
+        self.backend = self.backend_factory(self)
+        self.player, self.audio = self.backend.player, self.backend.audio
         body = qt.QWidget()
         self.setCentralWidget(body)
-        layout = qt.QVBoxLayout(body)
+        layers = qt.QStackedLayout(body)
+        layers.setContentsMargins(0, 0, 0, 0)
+        layers.setStackingMode(qt.QStackedLayout.StackingMode.StackAll)
+        self.overlay = qt.QWidget()
+        overlay_layout = qt.QVBoxLayout(self.overlay)
         from commonUtils.ui.readers.layout import READER_LAYOUT
-        layout.setContentsMargins(*READER_LAYOUT.desktop_margins)
-        layout.setSpacing(READER_LAYOUT.spacing)
-        self.video = QVideoWidget()
+        overlay_layout.setContentsMargins(*READER_LAYOUT.desktop_margins)
+        overlay_layout.setSpacing(READER_LAYOUT.spacing)
+        self.video = self.backend.video
         palette = self.video.palette()
         palette.setColor(qt.QPalette.ColorRole.Window, qt.QColor('black'))
         self.video.setPalette(palette)
         self.video.setAutoFillBackground(True)
-        self.player.setVideoOutput(self.video)
         self.video_viewport = qt.QScrollArea()
         self.video_viewport.setFrameShape(qt.QFrame.Shape.NoFrame)
         self.video_viewport.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
@@ -101,14 +144,43 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         self.video_viewport.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.video_viewport.setStyleSheet("background: black;")
         self.video_viewport.setWidget(self.video)
-        layout.addWidget(self.video_viewport, 1)
+        layers.addWidget(self.video_viewport)
+        layers.addWidget(self.overlay)
+        layers.setCurrentWidget(self.overlay)
+        self.wait_indicator = qt.QLabel('Buffering…', self.overlay)
+        self.wait_indicator.setStyleSheet('color: white; background: rgba(0, 0, 0, 180); padding: 12px;')
+        self.wait_indicator.setAccessibleName('Waiting for video data')
+        self.wait_indicator.adjustSize()
+        self.wait_indicator.hide()
+        self.identity = qt.QLabel()
+        self.identity.setTextFormat(qt.Qt.TextFormat.PlainText)
+        from services.documents.storage import document_sources
+        private = any(getattr(source, 'private', False) for source in document_sources(self.content.provider))
+        source = 'Cloud file' if self.content.remote else 'Local encrypted file' if private else 'Local file'
+        self.identity.setText(Path(self.content.path).name + '\n' + source)
+        self.identity.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
+        self.identity.setWordWrap(True)
+        self.identity.setMinimumWidth(0)
+        self.identity.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
+        self.identity.setStyleSheet('color: white; background: rgba(0, 0, 0, 180); padding: 8px;')
+        overlay_layout.addWidget(self.identity)
+        overlay_layout.addStretch(1)
         self.caption = qt.QLabel()
         self.caption.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.caption.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
         self.caption.setWordWrap(True)
         self.caption.setStyleSheet('font-size: 22px; color: white; background: black;')
-        layout.addWidget(self.caption)
+        overlay_layout.addWidget(self.caption)
         self.caption.hide()
+        self.unlock_button = qt.QPushButton('Unlock controls (Escape)')
+        overlay_layout.addWidget(self.unlock_button)
+        self.unlock_button.hide()
+        self.chrome = qt.QWidget()
+        self.chrome.setAutoFillBackground(True)
+        layout = qt.QVBoxLayout(self.chrome)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(READER_LAYOUT.spacing)
+        overlay_layout.addWidget(self.chrome)
         row = qt.QHBoxLayout()
         self.seek = CachedSlider(qt.Qt.Orientation.Horizontal)
         self.seek.setAccessibleName('Video position')
@@ -172,12 +244,17 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         self.fullscreen_action.changed.connect(lambda: self.fullscreen_button.setToolTip(self.fullscreen_action.text() + ' (F)'))
         self.floating = qt.QPushButton('Floating window')
         self.floating.setCheckable(True)
-        self.floating.setEnabled(not self.content.restricted)
+        self.floating.setEnabled(not (self.content.restricted or self.process_contexts))
         self.floating.clicked.connect(self.toggle_floating)
         self.chapters = qt.QPushButton('Chapters…')
         self.chapters.clicked.connect(self.show_chapters)
         self.chapter_result.connect(self.chapters_loaded)
         self.action_buttons = (self.attach, self.chapters, self.fullscreen_button, self.floating)
+        if self.backend.capabilities.receivers:
+            self.cast_button = qt.QPushButton('Cast…')
+            self.cast_button.clicked.connect(self.show_receivers)
+            self.cast_button.setEnabled(not (self.content.restricted or self.process_contexts))
+            self.action_buttons += (self.cast_button,)
         for column, button in enumerate(self.action_buttons):
             button.setMinimumHeight(32)
             self.action_layout.addWidget(button, 0, column)
@@ -201,7 +278,7 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         self.timer.timeout.connect(self.checkpoint)
         self.timer.start()
         for key, action in [('Space', self.toggle_play), ('F', self.toggle_fullscreen),
-                            ('Escape', self.fullscreen.leave),
+                            ('Escape', self.escape_playback),
                             ('Left', lambda: self.skip(-10000)),
                             ('Right', lambda: self.skip(10000)), ('M', self.mute.click)]:
             shortcut = qt.QShortcut(qt.QKeySequence(key), self)
@@ -218,7 +295,12 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         return button
 
     def update_play(self, state):
-        playing = state == QMediaPlayer.PlaybackState.PlayingState
+        if hasattr(self, 'requested_play') and not self.network_hold:
+            if state == QMediaPlayer.PlaybackState.PausedState:
+                self.requested_play = False
+            elif state == QMediaPlayer.PlaybackState.PlayingState:
+                self.requested_play = True
+        playing = getattr(self, 'requested_play', False) or state == QMediaPlayer.PlaybackState.PlayingState
         label = 'Pause' if playing else 'Play'
         self.play.setIcon(self.style().standardIcon(qt.QStyle.StandardPixmap.SP_MediaPause if playing else qt.QStyle.StandardPixmap.SP_MediaPlay))
         self.play.setText(label)
@@ -249,6 +331,8 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         super().resizeEvent(event)
         if not hasattr(self, 'action_buttons'):
             return
+        self.wait_indicator.move(self.overlay.rect().center() - self.wait_indicator.rect().center())
+        self.wait_indicator.raise_()
         narrow = self.width() < 520
         widgets = (self.audio_label, self.audio_tracks, self.subtitle_label, self.subtitle_tracks)
         for widget in widgets:
@@ -262,7 +346,15 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
             self.action_layout.addWidget(button, index // 2 if narrow else 0, index % 2 if narrow else index)
 
     def toggle_play(self):
-        if self.resume_guard is not None and self.resume_guard.blocked:
+        self.startup_pending = False
+        if self.controls_locked or (self.resume_guard is not None and self.resume_guard.blocked):
+            return
+        if self.resource_changed:
+            self.status.setText('The video changed while it was open. Close and reopen it.')
+            return
+        if self.requested_play:
+            self.pause_requested()
+            self.checkpoint()
             return
         try:
             self.content.check_access()
@@ -272,27 +364,40 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
             self.player.pause()
             return
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.pause()
+            self.pause_requested()
             self.checkpoint()
         else:
-            if self.player.error() != QMediaPlayer.Error.NoError:
+            if self.player.error() != QMediaPlayer.Error.NoError or self.transport_failure:
                 self.resume_at = self.player.position()
                 self.player.setSource(qt.QUrl())
                 self.player.setSource(qt.QUrl(self.transport.url))
+                self.player.setPosition(self.resume_at)
             self.transport_failure = None
+            self.requested_play = True
+            self.last_frame = self.last_clock = monotonic()
             self.player.play()
+            self.update_play(self.player.playbackState())
+            self.show_controls()
 
     def duration_changed(self, duration):
+        if duration <= 0:
+            return
+        self.progress.duration = duration
+        self.seek.setEnabled(True)
         self.seek.setRange(0, min(duration, 2147483647))
-        if self.resume_at and duration > 0:
+        if self.resume_at is not None and duration > 0:
             self.status.setText("Resumed playback. Use Playback → Start over to restart.")
+            self.have_frame = False
+            self.last_frame = self.last_clock = monotonic()
             self.player.setPosition(min(self.resume_at, max(0, duration - 1000)))
-            self.resume_at = 0
+            self.resume_at = None
 
     def position_changed(self, position):
+        self.last_clock = monotonic()
         if not self.seek.isSliderDown():
             self.seek.setValue(position)
-        self.time.setText(f'{clock(position)} / {clock(self.player.duration())}')
+        duration = self.player.duration() or self.progress.duration
+        self.time.setText(f'{clock(position)} / {clock(duration) if duration else "Loading duration…"}')
         self.caption.setText(self.subtitles.at(position - self.settings.subtitle_delay_ms) if self.external and self.subtitles else '')
         self.caption.setVisible(bool(self.caption.text()))
 
@@ -310,12 +415,26 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         for index, track in enumerate(self.player.subtitleTracks()):
             self.subtitle_tracks.addItem(label(track, index), index)
         if self.subtitles:
-            self.subtitle_tracks.addItem('External SRT', -2)
-        selected = -2 if self.external else self.player.activeSubtitleTrack()
+            self.subtitle_tracks.addItem('External subtitles', -2)
+        for index, (name, subtitles) in enumerate(self.sidecar_data):
+            self.subtitle_tracks.addItem(name, -3 - index)
+        selected = self.external_selection if self.external_selection is not None else (
+            -2 if self.external else self.player.activeSubtitleTrack())
         self.subtitle_tracks.setCurrentIndex(self.subtitle_tracks.findData(selected))
 
     def select_subtitle(self, index):
         selected = self.subtitle_tracks.itemData(index)
+        if selected is None:
+            return
+        if selected <= -3:
+            if hasattr(self.player, 'add_subtitle'):
+                if self.player.add_subtitle(self.sidecar_data[-3 - selected][1]):
+                    self.external_selection = selected
+                    self.external = False
+                return
+            self.subtitles = self.sidecar_data[-3 - selected][1]
+            selected = -2
+        self.external_selection = None
         self.external = selected == -2
         self.player.setActiveSubtitleTrack(-1 if self.external else selected)
         self.position_changed(self.player.position())
@@ -325,7 +444,7 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         from features.video.subtitles import Subtitles, MAX_SUBTITLE
         # A private video's subtitle picker starts in the same encrypted folder.
         choice = choose_editor_resource(self, 'open', self.content.provider,
-            extensions=('.srt',), directory=self.content.path.rpartition('/')[0])
+            extensions=self.backend.capabilities.external_formats, directory=self.content.path.rpartition('/')[0])
         if choice is None:
             return
         resource = None
@@ -336,6 +455,16 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
                     (self.content.provider.storage_id, getattr(self.content.provider, 'storage_namespace', ''))):
                 raise ValueError('Choose private subtitles from the same storage as the video.')
             resource = SubtitleContent(choice.provider, choice.path)
+            if hasattr(self.player, 'add_subtitle'):
+                url = self.transport.add_subtitle(resource)
+                if not self.player.add_subtitle(url):
+                    raise ValueError('The decoder could not attach these subtitles.')
+                self.subtitle_resources.append(resource)
+                self.sidecar_data.append((Path(resource.path).name, url))
+                self.external_selection = -3 - (len(self.sidecar_data) - 1)
+                self.refresh_tracks()
+                resource = None
+                return
             with resource.open() as stream:
                 self.subtitles = Subtitles(stream.read(MAX_SUBTITLE + 1))
             self.external = True
@@ -349,7 +478,65 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
                 resource.close()
             choice.close()
 
+    def start_sidecars(self):
+        def load():
+            from features.video.sidecars import discover_sidecars
+            from features.video.subtitles import Subtitles, MAX_SUBTITLE
+            resources = []
+            rows = []
+            try:
+                resources = discover_sidecars(self.content,
+                    cancelled=self.chapter_cancelled.is_set,
+                    extensions=self.backend.capabilities.external_formats)
+                for resource in resources:
+                    if self.chapter_cancelled.is_set():
+                        break
+                    try:
+                        if hasattr(self.player, 'add_subtitle'):
+                            url = self.transport.add_subtitle(resource)
+                            self.subtitle_resources.append(resource)
+                            rows.append((Path(resource.path).name, url))
+                            continue
+                        with resource.open() as stream:
+                            subtitles = Subtitles(stream.read(MAX_SUBTITLE + 1))
+                        rows.append((Path(resource.path).name, subtitles))
+                    except (OSError, ValueError):
+                        continue
+            except (OSError, ValueError):
+                pass
+            finally:
+                for resource in resources:
+                    if resource not in self.subtitle_resources:
+                        resource.close()
+            if not self.chapter_cancelled.is_set():
+                self.sidecar_result.emit(rows)
+        self.sidecar_worker = Thread(target=load, name='video-subtitle-discovery')
+        self.sidecar_worker.start()
+
+    def sidecars_loaded(self, rows):
+        if self.closing or self.chapter_cancelled.is_set():
+            return
+        if self.resume_guard is not None and self.resume_guard.blocked:
+            self.deferred_sidecars = rows
+            return
+        try:
+            self.content.check_access()
+        except (OSError, ValueError):
+            return
+        # Preserve manual attachments made while discovery was still running;
+        # their stable indices also identify the selected external subtitle.
+        for row in rows:
+            if row not in self.sidecar_data:
+                self.sidecar_data.append(row)
+        self.refresh_tracks()
+
+    def restore_sidecars(self):
+        if self.deferred_sidecars is not None:
+            rows, self.deferred_sidecars = self.deferred_sidecars, None
+            self.sidecars_loaded(rows)
+
     def transport_problem(self, category):
+        self.resource_changed = self.resource_changed or category == 'changed'
         messages = {
             'access': 'Video access expired. Unlock the source, then press Play to retry.',
             'changed': 'The video changed while it was open. Close and reopen it.',
@@ -359,6 +546,9 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         self.transport_failure = messages.get(category, messages['read'])
 
     def playback_error(self, *args):
+        self.requested_play = False
+        self.network_hold = False
+        self.show_controls()
         messages = {
             QMediaPlayer.Error.FormatError: 'This video format could not be decoded.',
             QMediaPlayer.Error.AccessDeniedError: 'Video access was denied. Unlock the source and press Play to retry.',
@@ -375,6 +565,8 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         except (OSError, ValueError, PermissionError):
             self.status.setText('Unlock the video before opening chapters.')
             return
+        if hasattr(self.player, 'chapters'):
+            self.chapter_data = self.player.chapters()
         if self.chapter_data is not None:
             if not self.chapter_data:
                 self.status.setText('This video has no supported embedded chapters.')
@@ -417,8 +609,13 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
             return
         try:
             self.content.check_access()
-            position = max(0, min(self.player.duration(), position))
+            duration = self.player.duration() or self.progress.duration
+            position = max(0, min(duration, position) if duration else position)
             self.remember_seek(position)
+            self.have_frame = False
+            self.last_frame = self.last_clock = monotonic()
+            if self.player.duration() <= 0:
+                self.resume_at = position
             self.player.setPosition(position)
         except (OSError, ValueError, PermissionError):
             self.player.pause()
@@ -429,7 +626,8 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
 
     def toggle_floating(self):
         try:
-            self.content.require_external()
+            from services.desktop_video_access import require_external
+            require_external(self.content)
         except (OSError, ValueError, PermissionError) as error:
             self.floating.setChecked(bool(self.window().windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint))
             self.status.setText(str(error))
@@ -445,18 +643,51 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
                 return
         window = self.window()
         floating = not bool(window.windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint)
+        if floating:
+            self.floating_geometry = window.saveGeometry()
         window.setWindowFlag(qt.Qt.WindowType.WindowStaysOnTopHint, floating)
         self.floating.setChecked(floating)
-        self.floating.setText('Stop floating' if floating else 'Floating window')
+        self.floating.setText('Return to document size' if floating else 'Floating window')
         if floating:
             window.resize(560, 420)
+        elif getattr(self, 'floating_geometry', None) is not None:
+            window.restoreGeometry(self.floating_geometry)
         window.show()
+
+    def show_receivers(self):
+        if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
+            return
+        try:
+            from services.desktop_video_access import require_external
+            require_external(self.content)
+            self.backend.show_receivers(self, self.cast_button)
+        except (OSError, ValueError):
+            self.status.setText('Casting is unavailable for this protected source.')
+
+    def show_in_folder(self):
+        if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
+            return
+        try:
+            self.content.check_access()
+            from .source_folder import VideoSourceFolder
+            from services.documents.ui.editors import retain
+            browser = retain(VideoSourceFolder(self.content))
+            browser.show()
+            self.close()
+        except (OSError, ValueError) as error:
+            self.status.setText(str(error))
 
     def media_status(self, status):
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            if self.transport_failure:
+                self.playback_error()
+                return
+            was_requested = self.requested_play
+            self.requested_play = False
+            self.show_controls()
             self.ended = True
             self.checkpoint(completed=True)
-            if self.settings.autoplay_next:
+            if self.settings.autoplay_next and was_requested:
                 qt.QTimer.singleShot(0, lambda: self.queue_move(1))
         elif status == QMediaPlayer.MediaStatus.BufferedMedia:
             self.ended = False
@@ -475,11 +706,34 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
             except (OSError, ValueError, PermissionError):
                 self.player.pause()
             self.status.setText('Resume unavailable: ' + str(error))
-        self.floating.setEnabled(not self.content.restricted)
+        self.floating.setEnabled(not (self.content.restricted or self.process_contexts))
         self.idle.emit()
 
     def retire_private_content(self):
+        if self.retired or self._retiring:
+            return
+        self._retiring = True
+        try:
+            self._retire_content()
+            self.retired = True
+        finally:
+            self._retiring = False
+
+    def _retire_content(self):
+        self.closing = True
+        self.requested_play = False
+        self.audio.setMuted(True)
+        self.player.pause()
+        self.transport.suspend()
+        self.retire_presentation()
+        if self.receiver_menu is not None:
+            self.receiver_menu.close()
+            self.receiver_menu.clear()
         self.chapter_cancelled.set()
+        if self.sidecar_worker is not None:
+            self.sidecar_worker.join()
+        self.sidecar_data = []
+        self.deferred_sidecars = None
         if self.chapter_menu is not None:
             self.chapter_menu.close()
             self.chapter_menu.clear()
@@ -496,16 +750,20 @@ class VideoWindow(PlaybackTools, qt.QMainWindow):
         if self.resume_guard is not None:
             self.resume_guard.dispose()
         self.timer.stop()
-        self.player.stop()
-        self.player.setSource(qt.QUrl())
+        self.backend.retire()
         self.caption.clear()
         self.subtitles = None
         self.transport.close()
+        for resource in self.subtitle_resources:
+            resource.close()
+        self.subtitle_resources = []
         self.content.close()
+        self.lifecycle.close()
 
     def closeEvent(self, event):
-        if not self.closing:
-            self.checkpoint()
+        if self.initialized and not self.retired:
+            if not self.closing:
+                self.checkpoint()
             self.closing = True
             self.timer.stop()
             self.retire_private_content()
@@ -518,7 +776,8 @@ def open_video_choice(choice, parent=None):
         from features.application import registry
         if not registry.is_feature_enabled('video'):
             raise ValueError('Enable Video Player in Settings → Features before opening a video.')
-        return retain(VideoWindow(choice))
+        from .vlc_backend import VLCPlayback
+        return retain(VideoWindow(choice, backend_factory=VLCPlayback))
     except BaseException:
         choice.close()
         raise

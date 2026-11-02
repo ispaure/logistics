@@ -18,10 +18,14 @@ within the current folder and source; it cannot bypass credential authorization.
 Folder listings run on a worker and may take time on cloud storage.
 
 **Subtitles and languages** accepts preferred language codes such as `fr` and
-`en`; blank uses the decoder default. Load any UTF-8 SRT accessible through the
-existing provider picker. External SRT size and delay are adjustable; a positive
-delay displays cues later. Embedded subtitle styling/delay and audio sync offsets
-are available on mobile; Qt's desktop player does not expose those adjustments.
+`en`; blank uses the decoder default. Load UTF-8 SRT, VTT, ASS or SSA through the
+provider picker, or select a discovered matching sidecar. Subtitle size, subtitle
+delay and audio sync offset are adjustable; a positive delay means later.
+Font/language changes may reopen the decoder at the held position and briefly
+buffer. Font-size changes require stopping casting first. Embedded ASS styling
+may constrain overrides. The retained Qt compatibility decoder offers external
+SRT/VTT text captions and their size/delay; it does not expose embedded adjustments
+or audio offset.
 
 The green timeline strip shows locally available ranges. For remote videos its
 byte-to-time mapping is **approximate**, especially with variable bitrate files;

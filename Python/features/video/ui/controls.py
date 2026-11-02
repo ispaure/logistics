@@ -18,16 +18,16 @@ class CachedSlider(qt.QSlider):
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        painter = qt.QPainter(self)
-        painter.setPen(qt.Qt.PenStyle.NoPen)
-        painter.setBrush(qt.QColor("#72c3ad"))
-        width = max(0, self.width() - 16)
-        for start, stop in self.ranges:
-            painter.drawRect(
-                qt.QRectF(
-                    8 + start * width, self.height() - 4, (stop - start) * width, 3
+        with qt.QPainter(self) as painter:
+            painter.setPen(qt.Qt.PenStyle.NoPen)
+            painter.setBrush(qt.QColor("#72c3ad"))
+            width = max(0, self.width() - 16)
+            for start, stop in self.ranges:
+                painter.drawRect(
+                    qt.QRectF(
+                        8 + start * width, self.height() - 4, (stop - start) * width, 3
+                    )
                 )
-            )
 
 
 class PlaybackTools:
@@ -35,9 +35,10 @@ class PlaybackTools:
         self.settings_store = SettingsStore(root)
         self.settings = self.settings_store.load()
         self.undo_position, self.undo_deadline = None, 0
-        self.body_layout = self.centralWidget().layout()
+        self.body_layout = self.chrome.layout()
         self.queue = None
         self.tools_menu = None
+        self.attach.setText('Load subtitles…')
         self.tools_button = qt.QPushButton("Playback…")
         self.tools_button.clicked.connect(self.show_tools)
         self.action_buttons += (self.tools_button,)
@@ -48,7 +49,7 @@ class PlaybackTools:
         self.action_layout.addWidget(self.tools_button, 0, len(self.action_buttons) - 1)
         self.undo_button = qt.QPushButton("Undo seek")
         self.undo_button.clicked.connect(self.undo_seek)
-        self.centralWidget().layout().addWidget(self.undo_button)
+        self.body_layout.addWidget(self.undo_button)
         self.undo_button.hide()
         self.seek.setToolTip(
             "Green strip: approximate cached byte ranges. Variable bitrate may shift the time mapping."
@@ -68,6 +69,11 @@ class PlaybackTools:
         self.apply_settings()
         self.player.videoSink().videoSizeChanged.connect(self.apply_aspect)
         self.player.tracksChanged.connect(self.prefer_languages)
+        self.seek.setRange(0, min(self.progress.duration, 2147483647))
+        self.seek.setEnabled(self.progress.duration > 0)
+        self.seek.setValue(self.resume_at or 0)
+        from .player import clock
+        self.time.setText(f'{clock(self.resume_at or 0)} / {clock(self.progress.duration) if self.progress.duration else "Loading duration…"}')
 
     def refresh_cache(self):
         if self.closing:
@@ -119,6 +125,9 @@ class PlaybackTools:
             self.status.setText(str(error))
 
     def apply_settings(self):
+        configure = getattr(self.player, 'configure', None)
+        if configure is not None:
+            configure(self.settings)
         self.player.setPlaybackRate(self.settings.rate)
         if hasattr(self.player, "setPitchCompensation"):
             self.player.setPitchCompensation(True)
@@ -194,6 +203,8 @@ class PlaybackTools:
         except (OSError, ValueError):
             return
         menu = self.tools_menu = qt.QMenu(self)
+        menu.addAction('Lock controls', lambda: self.lock_controls(True))
+        menu.addAction('Show in folder', self.show_in_folder)
         menu.addAction("Go to time… (G)", self.go_to_time)
         menu.addAction("Start over", lambda: self.seek_to(0))
         undo = menu.addAction("Undo seek (Ctrl+Z)", self.undo_seek)
@@ -215,14 +226,15 @@ class PlaybackTools:
             action.setCheckable(True)
             action.setChecked(value == self.settings.aspect)
         subtitles = menu.addMenu("Subtitles and languages")
-        subtitles.addAction("Load SRT…", self.load_subtitles)
+        subtitles.addAction("Load subtitles…", self.load_subtitles)
+        scope = '' if self.backend.capabilities.embedded_subtitle_adjustment else 'External '
         for value in (0.75, 1.0, 1.25, 1.5, 2.0):
             subtitles.addAction(
-                f"External subtitle size {value:g}×",
+                f"{scope}subtitle size {value:g}×",
                 lambda checked=False, v=value: self.change_setting("subtitle_scale", v),
             )
         for key, label in [
-            ("subtitle_delay_ms", "External subtitle delay (ms; positive = later)"),
+            ("subtitle_delay_ms", scope + "subtitle delay (ms; positive = later)"),
             (
                 "audio_language",
                 "Preferred audio language code (e.g. fr; blank = default)",
@@ -238,10 +250,12 @@ class PlaybackTools:
                     k, text, getattr(self.settings, k)
                 ),
             )
-        limitation = subtitles.addAction(
-            "Embedded subtitle size/delay and audio sync: available on mobile"
-        )
-        limitation.setEnabled(False)
+        if self.backend.capabilities.audio_delay:
+            subtitles.addAction('Audio delay (ms; positive = later)…',
+                lambda: self.ask_setting('audio_delay_ms', 'Audio delay (ms; positive = later)', self.settings.audio_delay_ms))
+        if not self.backend.capabilities.embedded_subtitle_adjustment:
+            limitation = subtitles.addAction('Embedded subtitle size/delay: unavailable with this decoder')
+            limitation.setEnabled(False)
         queue_menu = menu.addMenu("Current folder")
         if self.queue is None:
             self.load_queue()

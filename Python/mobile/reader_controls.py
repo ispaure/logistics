@@ -144,7 +144,8 @@ class PageFooter:
             from .reader_progress import VerticalPageSlider
             self.slider = VerticalPageSlider(on_release=self.release, style=Pack(flex=1, width=44))
         else:
-            self.slider = toga.Slider(min=0, max=1, value=0, on_release=self.release,
+            from .reader_progress import PageSlider
+            self.slider = PageSlider(min=0, max=1, value=0, on_release=self.release,
                                       style=Pack(flex=1, height=READER_LAYOUT.touch_extent))
         accessible_name(self.slider, 'Chapter position' if unit == 'chapter' else 'Page position')
         self.spacer = toga.Label('', style=Pack(width=92 if vertical else 1, flex=0 if vertical else 1,
@@ -200,6 +201,10 @@ class PageFooter:
                                     (self.following, 'back' if self.rtl else 'forward', 'Next page')):
             apply_icon(button, icon, label, size=18)
             surface(button, radius=24, background='transparent', foreground='text')
+            if not self.vertical and type(button._impl).__module__.startswith('toga_iOS.'):
+                from rubicon.objc import UIEdgeInsets
+                from .reader_progress import IOS_TRACK_OFFSET
+                button._impl.native.imageEdgeInsets = UIEdgeInsets(IOS_TRACK_OFFSET, 0, -IOS_TRACK_OFFSET, 0)
         if self.vertical:
             apply_icon(self.previous, 'up', 'Previous page', size=18)
             apply_icon(self.following, 'down', 'Next page', size=18)

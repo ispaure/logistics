@@ -138,6 +138,9 @@ class Readers:
 
     def update_session(self, owner):
         if owner.session is not None and owner.book_record is not None:
+            # Workspace restoration deliberately stores identities, not names.
+            # Rehydrate the title before bind() presents the restored reader.
+            owner.session.title = owner.book_record['name']
             owner.session.view['position'] = owner.book_record['position']
 
     def show_catalog(self):

@@ -6,6 +6,16 @@ from .appearance import apple_color
 from .palette import android_palette
 
 _sliders = weakref.WeakSet()
+IOS_TRACK_OFFSET = 14
+
+
+class PageSlider(toga.Slider):
+    def _create(self):
+        if self.factory.Slider.__module__.startswith('toga_iOS.'):
+            self._reader_track_offset = IOS_TRACK_OFFSET
+            from .ios_reader_progress import ReaderSlider
+            return ReaderSlider(interface=self)
+        return super()._create()
 
 
 def refresh_progress():

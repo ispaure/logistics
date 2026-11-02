@@ -1,5 +1,43 @@
 # Video Player development
 
+See the [desktop parity implementation brief](desktop-parity.md) for the current
+mobile-to-desktop gap analysis and delivery sequence, excluding HDR.
+
+## Desktop parity implementation
+
+Desktop open actions now use `ui/vlc_backend.py`; `ui/backend.py` retains the Qt
+adapter and its audio-ownership regression. Providers, capability URLs, progress
+and settings remain outside the decoder. `services/video_runtime.py` owns pinned
+VideoLAN NuGet archives for macOS/Windows, archive and payload verification,
+serialized installation and process-lifetime library handles. Linux uses its
+distribution's LibVLC 3 libraries/plugins; project guest preparation and the
+Fedora test image declare those native prerequisites.
+
+`ui/surface.py` paints SDR memory frames in Qt, avoiding native sibling-window
+stacking across overlays and docking. Its queue retains at most one pending
+image. Native metadata corrects coded padding, sample aspect and rotation before
+presentation. This path copies frames into host memory; it is not a zero-copy
+GPU renderer. Caption playback selects software decoding when VLC 3 cannot blend
+onto opaque hardware pictures, including VideoToolbox CVPN. Normal movies retain
+automatic hardware decoding. Font changes replace the instance because VLC's
+text-renderer options are instance scoped; they preserve held position and Pause.
+
+`ui/presentation.py` owns stable overlay geometry, input lock, requested state,
+transport-wait tokens and frame/clock starvation handling. `ui/lifecycle.py` owns
+desktop sleep/lock notifications, default-output loss and display-awake leases.
+`services/desktop_video_access.py` supplies process credential scope; a changed
+session retires playback instead of retaining an old external authority.
+`ui/receivers.py` delegates receiver streaming to VLC; the provider server remains
+loopback-only. `ui/source_folder.py` acquires a separate provider lease before
+the video closes. Sidecar resources remain retained until decoder/transport teardown.
+
+`test_video_desktop_parity.py` exercises actual LibVLC frames/audio across the
+existing codec matrix, rendered SRT/VTT/ASS/SSA cues, a rendered font-size change,
+native chapters, offsets, overlay geometry, Pause/readiness ordering and browser
+lease handoff. Existing Qt, range, resume and privacy regressions remain required.
+Host checks do not establish physical audible sync, receiver playback or native
+sleep/lock timing on every OS. HDR output work remains excluded.
+
 ## Mobile HDR output
 
 See the [HDR Play/Pause investigation](hdr-play-pause.md) for the native-frame
@@ -429,7 +467,7 @@ Python integration test against the rebuilt host bridge cover the exact limit
 and oversized rejection for plain and encrypted remotes.
 
 Remote video streams use a shared, bounded 128 MiB memory LRU across HTTP
-streams, with 1 MiB provider ranges and a four-chunk, 4 MiB read-ahead queue
+streams, with 1 MiB provider ranges and a twelve-chunk, 12 MiB read-ahead queue
 per response. `buffering.py` centralizes these adjustable limits. Rewinding into
 retained ranges reuses their bytes instead of starting another download. The producer overlaps cloud
 fetches with decoder consumption; queued chunks recheck access before delivery.

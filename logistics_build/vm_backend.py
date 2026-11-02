@@ -73,6 +73,16 @@ def _run_attempt(args):
     staged = False
     transfer_attempted = False
     try:
+        if not args.container_image:
+            # Application-native dependencies belong to Logistics, not the
+            # reusable manager's interpreter bootstrap. Tests still run as uid.
+            packages = (['libvlc5', 'vlc-plugin-base', 'vlc-plugin-video-output']
+                if args.distribution == 'ubuntu' else
+                ['vlc-libs', 'vlc-plugins-base', 'vlc-plugin-ffmpeg', 'vlc-plugin-freetype'])
+            command = (['apt-get', 'install', '-y', '--no-remove', *packages]
+                if args.distribution == 'ubuntu' else ['dnf', 'install', '-y', *packages])
+            result['video_native_packages'] = packages
+            client.execute(vm, command, timeout=600)
         transfer_started = time.monotonic()
         transfer_attempted = True
         result['transferred_sha256'] = client.stage(vm, args.snapshot, workspace, token, account['uid'], account['gid'],

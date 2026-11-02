@@ -1,5 +1,10 @@
 # Desktop and mobile video playback audit
 
+This October 29 comparison is a historical baseline. Desktop implementation has
+since changed to LibVLC with overlays, sidecars, sync controls and receiver UI;
+see the [current implementation](development.md#desktop-parity-implementation)
+and [parity delivery brief](desktop-parity.md) for current scope and acceptance.
+
 Source audit and focused validation: October 29, 2026. This records implemented
 behavior and remaining gaps; it is not blanket physical-device certification.
 

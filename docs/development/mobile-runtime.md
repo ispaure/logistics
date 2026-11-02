@@ -586,13 +586,17 @@ without a fixed 320-point cap. File storage icons and captions share the native
 title area beneath the filename on iOS/iPadOS and Android. UIKit uses the same
 centered, horizontally scrollable subtitle as folder headers (12-point icons,
 caption text at 75% of the title size), including when UIKit narrows the title
-beside a vertical bar. Native mounting removes the content row from fullscreen
+beside a vertical bar. Restored library sessions rehydrate their display name
+from the library record before presenting the reader; names remain absent from
+the persisted workspace manifest. Native mounting removes the content row from fullscreen
 restoration so it cannot return as a duplicate.
 When UIKit places reader actions along a side, the reader puts the filename and
 storage subtitle in its first row, with six points above and below. The document
 starts after that row regardless of the progress control’s axis. The container
-keeps the hardware’s top safe inset without reserving a second navigation-title
-strip. Fullscreen hides the row; returning to a horizontal navigation bar moves
+uses UIKit's occlusion regions across the available reader width for top
+clearance when that API is available. This avoids retaining a rectangular status
+inset belonging to the side controls; older systems retain their window-safe
+top inset. Fullscreen hides the row; returning to a horizontal navigation bar moves
 the title back to UIKit. Only a horizontal footer’s passive caption may extend
 toward the home indicator.
 The inset calculation finds the mounted title inside the container being laid
@@ -601,10 +605,15 @@ previous route must not leave the old navigation strip above the new title.
 `viewer_layout_probe.py` measures clearance after opening and rotating.
 The `--probe reader-title` scenario checks imported and provider comics and EPUBs, including
 fullscreen restoration and optional simulator hinge transitions.
-iOS reader footers retain the full home-gesture safe inset. The complete page
-button and slider hit areas stay above the indicator, even when the visible
-slider track would fit closer. Container layout and floating-bar fallback honor
-the same window-safe bottom; keyboard and tab-bar clearance remain independent.
+iOS horizontal reader footers place their passive page/chapter caption four
+points above the bottom edge when a home-gesture inset is present. The complete
+48-point page button and slider row sits immediately above the caption, with
+two points between them, rather than reserving a blank strip below the controls.
+The iOS reader slider and page arrow glyphs draw 14 points below the native
+center while retaining the full touch row. This placement is set when the
+reader slider is created and does not depend on a later viewport notification.
+Container layout and floating-bar fallback account for the passive caption tail;
+keyboard and tab-bar clearance remain independent.
 Android retains its existing system-navigation clearance.
 The reusable `reader_space_probe.py` checks title/subtitle mounting, a single
 48-point footer, the iOS bottom gap and fullscreen restoration; run it with the

@@ -73,6 +73,8 @@
     "ios/widgets/WidgetSettings.swift",
     "ios_content_background.py",
     "ios_reader_chrome.py",
+    "ios_system_occlusions.py",
+    "ios_reader_progress.py",
     "ios_storage.py",
     "ios_toolbar.py",
     "ios_workspace_columns.py",

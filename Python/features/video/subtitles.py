@@ -4,12 +4,12 @@ from dataclasses import dataclass
 import re
 
 MAX_SUBTITLE = 8 * 1024 * 1024
-STAMP = r'(\d{1,3}):(\d{2}):(\d{2})[,.](\d{3})'
-TIMING = re.compile(STAMP + r'\s+-->\s+' + STAMP)
+STAMP = r'(?:(\d{1,3}):)?(\d{2}):(\d{2})[,.](\d{3})'
+TIMING = re.compile(STAMP + r'\s+-->\s+' + STAMP + r'(?:\s+[^\r\n]+)?')
 
 
 def timestamp(parts):
-    hours, minutes, seconds, milliseconds = map(int, parts)
+    hours, minutes, seconds, milliseconds = (int(part or 0) for part in parts)
     if minutes > 59 or seconds > 59:
         raise ValueError('Invalid subtitle timestamp.')
     return ((hours * 60 + minutes) * 60 + seconds) * 1000 + milliseconds
@@ -41,7 +41,7 @@ class Subtitles:
                     cues.append(Cue(start, end, caption))
                     break
         if not cues:
-            raise ValueError('No valid SRT subtitle cues were found (use UTF-8).')
+            raise ValueError('No valid SRT/WebVTT subtitle cues were found (use UTF-8).')
         if len(cues) > 100000:
             raise ValueError('Too many subtitle cues.')
         self.cues = sorted(cues, key=lambda cue: cue.start)

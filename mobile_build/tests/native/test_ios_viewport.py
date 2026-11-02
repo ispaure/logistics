@@ -82,6 +82,62 @@ class ViewportTests(unittest.TestCase):
         loop.run_until_complete(exercise())
 
 
+class WindowOcclusionTests(unittest.TestCase):
+    def setUp(self):
+        self.loop = asyncio.new_event_loop()
+        self.addCleanup(self.loop.close)
+        self.navigation = SimpleNamespace(view=Mock(), navigationBar=Mock())
+        self.secondary = SimpleNamespace(view=Mock(), navigationBar=Mock())
+        self.app = SimpleNamespace(active_host=True, loop=self.loop,
+            native_host=SimpleNamespace(adapter=SimpleNamespace(navigation=[self.navigation])),
+            adaptive=SimpleNamespace(secondary=self.secondary), resize_workspace=Mock())
+
+    def test_root_only_changes_refresh_bar_owners_and_reclaim_idle_clearance(self):
+        from unittest.mock import patch
+        from mobile.ios_system_occlusions import observe_window_occlusions
+        native = object()
+
+        async def exercise():
+            with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=((867, 0, 84, 124),)) as regions:
+                # No leaf layout or window-size notification is delivered.
+                for height in (124, 216, 124):
+                    regions.return_value = ((867, 0, 84, height),)
+                    observe_window_occlusions(self.app, native)
+                    observe_window_occlusions(self.app, native)
+                    await asyncio.sleep(0)
+                self.assertEqual(self.app.resize_workspace.call_count, 3)
+                for owner in (self.navigation, self.secondary):
+                    self.assertEqual(owner.view.setNeedsLayout.call_count, 3)
+                    self.assertEqual(owner.navigationBar.setNeedsLayout.call_count, 3)
+                    self.assertEqual(owner.view.layoutIfNeeded.call_count, 3)
+                # Stable geometry must not keep invalidating menus/layout.
+                observe_window_occlusions(self.app, native)
+                await asyncio.sleep(0)
+                self.assertEqual(self.app.resize_workspace.call_count, 3)
+                regions.assert_called_with(native)
+        self.loop.run_until_complete(exercise())
+
+    def test_updates_coalesce_and_retired_windows_do_not_refresh(self):
+        from unittest.mock import patch
+        from mobile.ios_system_occlusions import observe_window_occlusions
+        self.app.adaptive.secondary = self.navigation
+
+        async def exercise():
+            with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=((382, 0, 84, 170),)) as regions:
+                observe_window_occlusions(self.app, object())
+                regions.return_value = ((382, 0, 84, 250),)
+                observe_window_occlusions(self.app, object())
+                await asyncio.sleep(0)
+                self.assertEqual(self.navigation.view.setNeedsLayout.call_count, 1)
+                self.assertEqual(self.app.resize_workspace.call_count, 1)
+                regions.return_value = ()
+                observe_window_occlusions(self.app, object())
+                self.app.active_host = False
+                await asyncio.sleep(0)
+                self.assertEqual(self.app.resize_workspace.call_count, 1)
+        self.loop.run_until_complete(exercise())
+
+
 class AndroidViewportTests(unittest.TestCase):
     def test_unchanged_global_layout_does_not_reenter_responsive_panels(self):
         from mobile.layout_events import native_resize_changed

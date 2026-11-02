@@ -8,7 +8,7 @@ from services.documents.video_authorization import resume_authorization
 class VideoResumeGuard(qt.QObject):
     verified = qt.Signal(bool, int)
 
-    def __init__(self, window):
+    def __init__(self, window, *, authorization=None):
         super().__init__(window)
         self.window = window
         self.blocked = False
@@ -16,7 +16,7 @@ class VideoResumeGuard(qt.QObject):
         self.closed = False
         self.busy = False
         self.password_gate = None
-        self.authorization = resume_authorization(window.content.provider)
+        self.authorization = authorization or resume_authorization(window.content.provider)
         self.password_gate = self.authorization.password_gate
         original = window.takeCentralWidget()
         self.stack = qt.QStackedWidget()
@@ -69,6 +69,8 @@ class VideoResumeGuard(qt.QObject):
             return
         self.blocked = True
         window = self.window
+        window.requested_play = False
+        window.network_hold = False
         for name in ("tools_menu", "chapter_menu"):
             menu = getattr(window, name, None)
             if menu is not None:
@@ -76,13 +78,16 @@ class VideoResumeGuard(qt.QObject):
                 menu.clear()
         self.title = window.windowTitle()
         window.setWindowTitle("Session video locked")
-        window.resume_at = window.player.position() or window.resume_at
+        window.resume_at = window.player.position()
+        self.was_muted = window.audio.isMuted()
         window.audio.setMuted(True)
+        window.caption.clear()
+        self.stack.setCurrentIndex(1)
+        self.stack.repaint()  # Conceal before a native stop waits for network I/O.
         window.player.stop()
         window.player.setSource(qt.QUrl())
         window.caption.clear()
         window.transport.suspend()
-        self.stack.setCurrentIndex(1)
 
     def unlock(self):
         if self.closed or self.busy or not self.blocked:
@@ -136,6 +141,8 @@ class VideoResumeGuard(qt.QObject):
             return
         try:
             self.window.content.check_access()
+            if any(check() for check in getattr(self.window, 'process_checks', ())):
+                raise PermissionError('The protecting credential session changed.')
         except (OSError, ValueError, PermissionError):
             self.status.setText(
                 "Credentials were locked or revoked. Unlock them and reopen this video."
@@ -144,9 +151,12 @@ class VideoResumeGuard(qt.QObject):
         self.blocked = False
         self.window.transport.resume()
         self.window.player.setSource(qt.QUrl(self.window.transport.url))
-        self.window.audio.setMuted(False)
+        self.window.audio.setMuted(self.was_muted)
         self.window.setWindowTitle(self.title)
         self.stack.setCurrentIndex(0)
+        restore = getattr(self.window, 'restore_sidecars', None)
+        if restore is not None:
+            restore()
         self.status.clear()
         self.confirmation.hide()
         self.hint.setText("Enter the session password to resume video.")

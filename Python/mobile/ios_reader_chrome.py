@@ -67,6 +67,15 @@ def install():
     # Leave unregistered windows and ordinary routes under UIKit's normal policy.
     containers.UINavigationController = LogisticsReadingNavigationController
     original_layout = AppleNavigation.layout_content
+    original_window_layout = AppleNavigation.layout_window
+
+    def layout_window(adapter, container):
+        original_window_layout(adapter, container)
+        from .ios_system_occlusions import observe_window_occlusions
+        window = adapter.window._impl.native
+        observe_window_occlusions(_hosts.get(window.ptr.value), container.native)
+
+    AppleNavigation.layout_window = layout_window
 
     def layout_content(container):
         if getattr(container, '_logistics_layout_active', False):

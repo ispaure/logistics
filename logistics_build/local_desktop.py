@@ -26,11 +26,13 @@ def main():
     host_environment = verify_host(load())
     from PySide6.QtCore import qVersion
     verify_qt()
+    from services.video_runtime import binding
+    vlc = binding()
     from commonUtils.runtime.streams.downloads import provision
     from services.software import get_software
     executable = provision(*get_software('rclone'))
     version = subprocess.check_output([str(executable), 'version'], text=True, timeout=30).splitlines()[0]
-    print(json.dumps(dict(test_environment=host_environment, qt=qVersion(), rclone=version, rclone_path=str(executable),
+    print(json.dumps(dict(test_environment=host_environment, qt=qVersion(), libvlc=vlc.libvlc_get_version().decode(), rclone=version, rclone_path=str(executable),
                           preparation_seconds=time.monotonic() - started)))
     return 0
 

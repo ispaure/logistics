@@ -218,3 +218,41 @@ rejects native action frames that intersect them. Host regressions separately
 cover region expansion/removal without a size change and retained actions/menus.
 Ordinary simulator panel sweeps do not establish physical-device acceptance of
 another app's expanded media island.
+
+Window-level invalidation is owned by `mobile/ios_system_occlusions.py`. The
+root native layout queries current reserved regions even when the toolkit's
+equal-size window callback suppresses `on_resize`. A changed region coalesces
+one deferred refresh of the owning navigation views and bars, including the
+paired-document navigation, before the shared workspace projection refreshes.
+Unchanged regions retain the live button groups and menus. This supplements
+the leaf-container observer; individual panels do not add Island offsets.
+
+### Dynamic Island validation scope
+
+The earlier external-media captures did not demonstrate a transition: their
+before/after reserved-region frames and native action positions were identical.
+Those captures cannot establish that every panel adapts when media starts or
+stops. The original panel sweeps and host cache-invalidation regressions remain
+separate checks; true two-app Split View is still an outstanding acceptance gate.
+
+A focused November 1 investigation used a separate native audio app and the
+current comic reader on an owned iOS 27.1 Duo simulator. Starting and terminating
+that audio app changed the open-landscape occlusion height from 120 to 212 and
+back to 120 points; Close and overflow moved down 92 points and returned. On the
+closed front display, the occlusion changed from 170 to 250 and back to 170
+points; the controls moved down 80 points and returned. These runs verify actual
+system-region changes rather than injected frames or unchanged snapshots.
+They do not establish physical-device behavior, other runtime versions, every
+panel, or either side of real two-app Split View. The test apps and their owned
+simulators were removed without changing the main installed app or its data.
+
+A subsequent physical iOS 27.2 screenshot pair demonstrated the reported gap:
+the expanded media/status region overlapped Close while the application controls
+retained their idle positions. The cached reader-layout file was older than the
+capture and did not contain native navigation-item frames, so its unchanged
+geometry is not evidence of current UIKit behavior. The shared root observer
+has host regressions for root-only changes, contraction, coalescing and retired
+windows; its simulator run observes actual changing root regions. A signed
+device package is prepared separately; physical verification of that correction
+and real two-app Split View remain gates until the package is installed and
+the corresponding states are captured.

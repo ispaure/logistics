@@ -34,6 +34,7 @@ class DesktopVideoPrivacyTests(QtTestCase):
             document_protection=SimpleNamespace(resume_authorization=lambda: proof)), check_access=Mock())
         window.player = Mock(position=lambda: 1234)
         window.audio = Mock()
+        window.audio.isMuted.return_value = True
         window.transport = Mock(url="http://127.0.0.1/test")
         window.caption = Mock()
         window.resume_at = 0
@@ -66,6 +67,7 @@ class DesktopVideoPrivacyTests(QtTestCase):
         guard.unlock()
         self.wait_until(lambda: not guard.busy)
         self.assertFalse(guard.blocked)
+        window.audio.setMuted.assert_called_with(True)  # Preserve user mute after unlock.
         window.player.play.assert_not_called()
         guard.application_state(qt.Qt.ApplicationState.ApplicationInactive)
         self.assertTrue(guard.blocked)
