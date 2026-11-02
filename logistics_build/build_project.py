@@ -329,6 +329,8 @@ class LogisticsProject:
                 raise ValueError('Choose an explicit release channel/tag, separate from app version and mobile build numbers.')
             command = (str(self.interpreter), '-m', 'logistics_build.build_project', 'release', '--tag', release_tag,
                        '--commit', source['logistics_commit'], '--root', str(self.root))
+            if re.fullmatch(r'[0-9a-f]{40}', revision):
+                command += ('--published-commit',)
             if source.get('run_overrides', {}).get('testing.reuse_verified_results') == 'off':
                 command += ('--no-test-reuse',)
             return Plan('Logistics', operation, dict(source, release_tag=release_tag),
@@ -689,6 +691,8 @@ def main():
     parser.add_argument('--test-evidence-request', type=Path)
     parser.add_argument('--test-evidence-sha256')
     parser.add_argument('--no-test-reuse', action='store_true')
+    parser.add_argument('--published-commit', action='store_true',
+                        help='Tag an exact commit already published on GitHub without pushing development branches.')
     args = parser.parse_args()
     if args.command == 'verify':
         values, sources = manager_settings.settings(args.root / 'mobile_build')
@@ -728,9 +732,9 @@ def main():
         result = client.wait(run, args.commit, timeout=13800, cancelled=cancelled,
                              progress=lambda value: print(json.dumps(value), flush=True))
         return int(result.get('status') != 'completed')
-    if git(args.root, 'status', '--porcelain') or git(args.root, 'rev-parse', 'HEAD') != args.commit:
+    if not args.published_commit and (git(args.root, 'status', '--porcelain') or git(args.root, 'rev-parse', 'HEAD') != args.commit):
         raise ValueError('Commit intended source before requesting a release.')
-    if args.test_evidence_request and not args.no_test_reuse:
+    if args.test_evidence_request and not args.no_test_reuse and not args.published_commit:
         from logistics_build.release_test_evidence import prepare_export, publish_note
         try:
             proof = prepare_export(args.root, client.repository, args.test_evidence_request,
@@ -742,7 +746,8 @@ def main():
                 print('No eligible local receipts; hosted checks will run fresh.', flush=True)
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RuntimeError):
             print('Local evidence export unavailable or rejected; hosted checks independently verify any existing proof.', flush=True)
-    return release_source(args.root, client, args.tag, args.commit, cancelled, reuse_test_results=not args.no_test_reuse)
+    return release_source(args.root, client, args.tag, args.commit, cancelled,
+                          reuse_test_results=not args.no_test_reuse, published_commit=args.published_commit)
 
 
 def github_client(values, root):
@@ -754,23 +759,30 @@ def github_client(values, root):
     return GitHub(values['github.repository'],token)
 
 
-def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True):
+def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True, published_commit=False):
     if not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', tag or ''):
         raise ValueError('Select an explicit supported release tag.')
-    if git(root, 'status', '--porcelain') or git(root, 'rev-parse', 'HEAD') != commit:
+    if published_commit:
+        if (not re.fullmatch(r'[0-9a-f]{40}', commit or '')
+                or client.request('GET', client.base + '/commits/' + commit).get('sha') != commit):
+            raise ValueError('Published release source must be an exact commit already on GitHub.')
+        if git(root, 'rev-parse', commit + '^{commit}') != commit:
+            raise ValueError('Published release source is unavailable locally.')
+    elif git(root, 'status', '--porcelain') or git(root, 'rev-parse', 'HEAD') != commit:
         raise ValueError('Commit intended source before requesting a release.')
     remote = subprocess.check_output(['git', 'ls-remote', '--tags', 'origin', 'refs/tags/' + tag], cwd=root, text=True, timeout=30)
     if remote.strip():
         raise ValueError('Release tag already exists; it will never be moved.')
     shared = root / 'Python/commonUtils'
-    if git(shared, 'status', '--porcelain'):
+    if not published_commit and git(shared, 'status', '--porcelain'):
         raise ValueError('Commit intended shared changes first.')
-    branch = git(shared, 'branch', '--show-current')
-    if not branch:
-        raise ValueError('Select the intended commonUtils publication branch before releasing.')
-    subprocess.run(['git', 'push', 'origin', branch], cwd=shared, check=True, timeout=120)
     channel = tag.split('-')[1].split('.')[0]
-    subprocess.run(['git', 'push', 'origin', commit + ':refs/heads/' + channel], cwd=root, check=True, timeout=120)
+    if not published_commit:
+        branch = git(shared, 'branch', '--show-current')
+        if not branch:
+            raise ValueError('Select the intended commonUtils publication branch before releasing.')
+        subprocess.run(['git', 'push', 'origin', branch], cwd=shared, check=True, timeout=120)
+        subprocess.run(['git', 'push', 'origin', commit + ':refs/heads/' + channel], cwd=root, check=True, timeout=120)
     tag_command = ['git', 'tag', tag, commit] if reuse_test_results else [
         'git', 'tag', '-a', tag, commit, '-m', 'Logistics source release\n\nBuild-Manager-Reuse: off']
     subprocess.run(tag_command, cwd=root, check=True, timeout=30)

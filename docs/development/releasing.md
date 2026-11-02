@@ -17,6 +17,11 @@ git push origin v1.0.0
 
 Only pushed `v*` tags publish releases. Running **Source release** manually in
 Actions builds a downloadable `release-zip` test artifact without publishing.
+For a manager release selected by a full 40-character commit ID, publication
+verifies that exact commit already exists on GitHub, then tags it without pushing
+development branches. This permits releasing validated source while another chat
+has advanced the checkout. Newer working edits and local evidence from that
+checkout are excluded; the tagged commit's hosted gates still apply.
 Packaging uses tracked files, excludes Git metadata and development caches, and
 preserves script permissions. Existing releases can receive a missing
 `release.zip`; an existing asset is never overwritten. Existing notes and draft

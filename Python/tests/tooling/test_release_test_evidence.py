@@ -191,6 +191,10 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         plan = project.github_plan('Release', 'macos', source, self.base / 'release-work', {},
                                    'HEAD', 'v0.1.0-alpha.1')
         self.assertNotIn('--no-test-reuse', plan.phases[0].argv)
+        self.assertNotIn('--published-commit', plan.phases[0].argv)
+        plan = project.github_plan('Release', 'macos', source, self.base / 'release-work', {},
+                                   source['logistics_commit'], 'v0.1.0-alpha.1')
+        self.assertIn('--published-commit', plan.phases[0].argv)
 
     def test_off_release_creates_a_new_annotated_policy_tag_without_moving_a_tag(self):
         from logistics_build.build_project import release_source
@@ -214,3 +218,39 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         self.assertIn('-a', tag)
         self.assertIn('Build-Manager-Reuse: off', tag[-1])
         self.assertNotIn('-f', tag)
+
+    def test_published_release_tags_reviewed_commit_without_touching_newer_work(self):
+        from logistics_build.build_project import release_source
+        from threading import Event
+        from unittest.mock import Mock
+        commit = self.git('rev-parse', 'HEAD')
+        (self.root / 'newer-work.py').write_text('uncommitted work')
+        commands = []
+        client = Mock()
+        client.base = 'https://api.github.com/repos/owner/project'
+        client.request.return_value = {'sha': commit}
+        def run(command, **kwargs):
+            commands.append(command)
+            if command[:2] == ['git', 'tag']:
+                raise RuntimeError('Fixture stops before tag push')
+        with patch('logistics_build.build_project.subprocess.check_output', side_effect=[commit, '']), \
+             patch('logistics_build.build_project.subprocess.run', side_effect=run):
+            with self.assertRaisesRegex(RuntimeError, 'Fixture stops'):
+                release_source(self.root, client, 'v0.1.0-alpha.1', commit, Event(), published_commit=True)
+        client.request.assert_called_once_with('GET', client.base + '/commits/' + commit)
+        self.assertEqual(commands, [['git', 'tag', 'v0.1.0-alpha.1', commit]])
+        self.assertEqual((self.root / 'newer-work.py').read_text(), 'uncommitted work')
+
+    def test_published_release_rejects_unverified_remote_source_before_tagging(self):
+        from logistics_build.build_project import release_source
+        from threading import Event
+        from unittest.mock import Mock
+        client = Mock()
+        client.base = 'https://api.github.com/repos/owner/project'
+        client.request.return_value = {'sha': 'e' * 40}
+        commit = self.git('rev-parse', 'HEAD')
+        with patch('logistics_build.build_project.subprocess.run') as run:
+            with self.assertRaisesRegex(ValueError, 'already on GitHub'):
+                release_source(self.root, client, 'v0.1.0-alpha.1', commit,
+                               Event(), published_commit=True)
+        run.assert_not_called()
