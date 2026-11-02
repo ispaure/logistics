@@ -78,7 +78,7 @@ def _run_attempt(args):
             # reusable manager's interpreter bootstrap. Tests still run as uid.
             packages = (['libvlc5', 'vlc-plugin-base', 'vlc-plugin-video-output']
                 if args.distribution == 'ubuntu' else
-                ['vlc-libs', 'vlc-plugins-base', 'vlc-plugin-ffmpeg', 'vlc-plugin-freetype'])
+                ['vlc-libs', 'vlc-plugins-base', 'vlc-plugin-ffmpeg', 'vlc-plugins-extra'])
             command = (['apt-get', 'install', '-y', '--no-remove', *packages]
                 if args.distribution == 'ubuntu' else ['dnf', 'install', '-y', *packages])
             result['video_native_packages'] = packages
