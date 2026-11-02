@@ -108,17 +108,48 @@ def action_state(buttons):
                  for button in buttons)
 
 
-def mount_actions(controller, owner, buttons, *, overflow=True):
+def supplemental_fits(controller, count):
+    """Reserve touch slots between the current system region and destination bar."""
+    if not count or not vertical_edge(controller):
+        return True
+    tabs = controller.tabBarController
+    tabs = tabs() if callable(tabs) else tabs
+    if tabs is None or tabs.tabBar.isHidden():
+        return True
+    view = controller.view
+    bar = tabs.tabBar
+    frame = bar.convertRect(bar.bounds, toView=view)
+    bounds = view.bounds
+    # A horizontal destination bar does not share the vertical action column.
+    if frame.size.height <= frame.size.width:
+        return True
+    start = float(bounds.origin.y)
+    left, right = float(frame.origin.x), float(frame.origin.x + frame.size.width)
+    for x, y, width, height in system_occlusions(controller):
+        if min(right, x + width) > max(left, x):
+            start = max(start, y + height)
+    # The public tab-bar frame spans the entire side, including empty space.
+    # Budget 44-point targets with 16 points between independent groups for
+    # its visible destinations, Back/Close, overflow and supplemental controls.
+    end = float(bounds.origin.y + bounds.size.height - view.safeAreaInsets.bottom)
+    slots = len(list(bar.items or ())) + count + 2
+    return end - start >= slots * 60
+
+
+def mount_actions(controller, owner, buttons, *, overflow=True, supplemental=None):
     """Mount semantic groups in natural order; UIKit handles vertical ordering."""
     from rubicon.objc import ObjCClass, Block, ObjCBlock, objc_id, ns_from_py, SEL
     nav = controller.navigationItem
     buttons = list(buttons)
+    supplemental = None if supplemental is None else list(supplemental)
+    collapsed = bool(supplemental) and not supplemental_fits(controller, len(supplemental))
     edge = vertical_edge(controller)
     use_overflow = overflow and bool(edge)
     grouped = bool(nav.respondsToSelector(SEL('setTrailingItemGroups:')))
     pointer = getattr(controller, 'ptr', None)
     signature = (pointer.value if pointer is not None else id(controller),
-                 action_state(buttons), edge, overflow, system_occlusions(controller))
+                 action_state(buttons), edge, overflow, system_occlusions(controller),
+                 action_state(supplemental or ()), collapsed)
     mounted = getattr(owner, '_ios_toolbar_mount', None)
     if grouped and mounted is not None and mounted[0] == signature:
         _, groups, pinned, additional = mounted
@@ -126,9 +157,12 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
         # actual ownership too: another screen can have reused this controller.
         if (list(nav.trailingItemGroups) == groups and nav.pinnedTrailingGroup == pinned
                 and nav.additionalOverflowItems == additional):
+            if supplemental is not None:
+                mount_leading(controller, [] if collapsed else supplemental)
             return owner._ios_toolbar_items
     menus = [button for button in buttons if getattr(button, 'control_icon', None) in ('more', 'overflow')
              and button._impl.native.menu is not None] if use_overflow else []
+    extra = supplemental if collapsed else []
     actions = [button for button in buttons if button not in menus]
     groups, pinned, ordinary = [], [], []
     for group in action_groups(actions):
@@ -152,10 +186,30 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
         nav.rightBarButtonItems = [*pinned, *reversed(ordinary)]
     # Load live menus at presentation time: document/privacy/busy guards and
     # refreshed menu callbacks remain owned by their original action owners.
-    if menus:
+    if menus or extra:
+        # Supplemental leading controls cannot be compressed by UIKit. When
+        # the shared column runs out of space, keep their live actions in the
+        # same native overflow menu instead of overlapping destination tabs.
+        extra_actions, handlers = [], []
+        for button in extra:
+            item = bar_item(button)
+            def invoke(action, button=button):
+                if button.enabled:
+                    button._impl.native.performSelector(SEL('onPress:'), withObject=None)
+            handler = Block(invoke, None, objc_id)
+            handlers.append(handler)
+            action = ObjCClass('UIAction').actionWithTitle(item.title, image=item.image,
+                                                         identifier=None, handler=handler)
+            action.attributes = 0 if button.enabled else 1
+            extra_actions.append(action)
+        owner._ios_supplemental_handlers = handlers
+        owner._ios_supplemental_actions = extra_actions
         def provide(completion):
-            children = [child for button in menus if button.enabled and button._impl.native.menu is not None
-                        for child in button._impl.native.menu.children]
+            for button, action in zip(extra, extra_actions):
+                action.attributes = 0 if button.enabled else 1
+            children = list(extra_actions)
+            children.extend(child for button in menus if button.enabled and button._impl.native.menu is not None
+                            for child in button._impl.native.menu.children)
             ObjCBlock(completion, None, objc_id)(ns_from_py(children))
         provider = Block(provide, None, objc_id)
         nav.additionalOverflowItems = ObjCClass('UIDeferredMenuElement').elementWithUncachedProvider(provider)
@@ -164,6 +218,8 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
         nav.additionalOverflowItems = None
         owner._ios_overflow_provider = None
     owner._ios_toolbar_items = [button._ios_action_item for button in actions]
+    if supplemental is not None:
+        mount_leading(controller, [] if collapsed else supplemental)
     if grouped:
         owner._ios_toolbar_mount = (signature, groups, nav.pinnedTrailingGroup, nav.additionalOverflowItems)
     return owner._ios_toolbar_items

@@ -7,7 +7,7 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from mobile.ios_toolbar import action_groups, bar_item, mount_actions, mount_leading, vertical_edge, prepare_form
+from mobile.ios_toolbar import action_groups, bar_item, mount_actions, mount_leading, vertical_edge, prepare_form, supplemental_fits
 
 
 class Button:
@@ -38,8 +38,10 @@ class ToolbarTests(TestCase):
         group.alloc.return_value.initWithBarButtonItems.side_effect = group_factory
         deferred = Mock()
         deferred.elementWithUncachedProvider.side_effect = lambda callback: callback
+        action = Mock()
+        action.actionWithTitle.side_effect = lambda title, **kwargs: NS(title=title, **kwargs)
         self.objc = NS(ObjCClass=lambda name: {'UIBarButtonItem': item, 'UIBarButtonItemGroup': group,
-            'UIDeferredMenuElement': deferred}[name], SEL=lambda name: name, Block=lambda f, *args: f,
+            'UIDeferredMenuElement': deferred, 'UIAction': action}[name], SEL=lambda name: name, Block=lambda f, *args: f,
             ObjCBlock=lambda completion, *args: completion, objc_id=object, ns_from_py=lambda value: value)
         self.patch = patch.dict('sys.modules', {'rubicon.objc': self.objc})
         self.patch.start();self.addCleanup(self.patch.stop)
@@ -47,6 +49,42 @@ class ToolbarTests(TestCase):
         traits.respondsToSelector.return_value = True
         self.controller = NS(traitCollection=traits, navigationItem=Mock())
         self.owner = NS()
+
+    def test_supplemental_budget_tracks_system_region_without_window_resize(self):
+        rect = NS(origin=NS(x=382, y=0), size=NS(width=84, height=678))
+        bar = Mock(bounds=rect, items=list(range(5)))
+        bar.isHidden.return_value = False
+        bar.convertRect.return_value = rect
+        self.controller.tabBarController = NS(tabBar=bar)
+        self.controller.view = NS(bounds=rect, safeAreaInsets=NS(bottom=28))
+        with patch('mobile.ios_toolbar.system_occlusions', return_value=((382, 0, 84, 170),)):
+            self.assertTrue(supplemental_fits(self.controller, 1))
+        with patch('mobile.ios_toolbar.system_occlusions', return_value=((382, 0, 84, 250),)):
+            self.assertFalse(supplemental_fits(self.controller, 1))
+        bar.isHidden.return_value = True
+        self.assertTrue(supplemental_fits(self.controller, 1))
+
+    def test_supplemental_moves_to_live_overflow_and_returns_when_space_recovers(self):
+        find, more = Button('find', 'Search this folder'), Button('more', 'Folder actions')
+        more._impl.native.menu = NS(children=['folder-action'])
+        with patch('mobile.ios_toolbar.supplemental_fits', return_value=False):
+            mount_actions(self.controller, self.owner, [more], supplemental=[find])
+        nav = self.controller.navigationItem
+        self.assertEqual(nav.leadingItemGroups, [])
+        children = []
+        nav.additionalOverflowItems(lambda values: children.extend(values))
+        self.assertEqual(children[0].title, 'Search this folder')
+        self.assertEqual(children[1], 'folder-action')
+        children[0].handler(None)
+        find._impl.native.performSelector.assert_called_once_with('onPress:', withObject=None)
+        find.enabled = False
+        nav.additionalOverflowItems(lambda values: None)
+        self.assertEqual(children[0].attributes, 1)
+        children[0].handler(None)
+        self.assertEqual(find._impl.native.performSelector.call_count, 1)
+        with patch('mobile.ios_toolbar.supplemental_fits', return_value=True):
+            mount_actions(self.controller, self.owner, [more], supplemental=[find])
+        self.assertEqual(nav.leadingItemGroups[0].barButtonItems, [find._ios_action_item])
 
     def test_native_items_keep_live_enabled_state_and_menu(self):
         button = Button('find', 'Search files')

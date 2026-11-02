@@ -89,14 +89,29 @@ class ViewerLayoutProbe(LogisticsMobile):
             row['footer'] = geometry(self, footer.widget)
             row['slider'] = geometry(self, footer.slider)
             row['vertical'] = footer.vertical
+            if sys.platform == 'ios':
+                from .rotation_checks import assert_control_bounds
+                from mobile.reader_edges import footer_touch_extension
+                window = self.main_window._impl.native
+                touch_extension = footer_touch_extension(view, float(window.safeAreaInsets.bottom))
+                row['allowed_touch_extension'] = touch_extension
+                row['touch_targets'] = {}
+                for label, control in [('Previous page', footer.previous),
+                                       ('Next page', footer.following), ('Page position', footer.slider)]:
+                    row['touch_targets'][label] = geometry(self, control)
+                    native = control._impl.native
+                    rect = native.convertRect(native.bounds, toView=window)
+                    try:
+                        assert_control_bounds(rect, window, label, bottom_extension=touch_extension)
+                    except AssertionError:
+                        row['errors'].append(label + ' touch target extends beyond safe bounds')
             x, y, width, height = row['footer']
             left, top, right, bottom = row['safe']
             row['bottom_gap'] = bottom - y - height
-            from mobile.reader_edges import passive_caption_tail
-            extension = (min(passive_caption_tail(view),
-                max(0, float(self.main_window._impl.native.safeAreaInsets.bottom) - 4))
+            from mobile.reader_edges import footer_bottom_extension
+            extension = (footer_bottom_extension(view, float(self.main_window._impl.native.safeAreaInsets.bottom))
                 if sys.platform == 'ios' else 0)
-            row['passive_caption_extension'] = extension
+            row['footer_extension'] = extension
             row['edge_clearance'] = footer.widget.style.margin_bottom
             if abs(row['bottom_gap'] + extension - row['edge_clearance']) > 2:
                 row['errors'].append('Footer is not at the safe bottom')
@@ -121,16 +136,25 @@ class ViewerLayoutProbe(LogisticsMobile):
                         row['errors'].append('Reader title overlaps content or is not at the safe top')
             if not footer.vertical:
                 row['transport'] = geometry(self, footer.row)
-                if row['transport'][1] + row['transport'][3] > bottom + 1:
-                    row['errors'].append('Reader transport enters the home-gesture strip')
+                if row['transport'][1] + row['transport'][3] > bottom + row.get('allowed_touch_extension', 0) + 1:
+                    row['errors'].append('Reader transport exceeds its selected bottom placement')
                 row['caption'] = geometry(self, footer.spacer)
                 if not 44 <= row['transport'][3] <= 50:
                     row['errors'].append('Horizontal footer lost its compact touch row')
                 from commonUtils.ui.readers.layout import READER_LAYOUT
                 thumb_bottom = row['slider'][1] + row['slider'][3] / 2 + READER_LAYOUT.thumb_extent / 2
+                if sys.platform == 'ios':
+                    slider = footer.slider._impl.native
+                    track = slider.trackRectForBounds(slider.bounds)
+                    thumb = slider.thumbRectForBounds(slider.bounds, trackRect=track, value=float(slider.value))
+                    thumb = slider.convertRect(thumb, toView=self.main_window._impl.native)
+                    row['slider_thumb'] = [float(thumb.origin.x), float(thumb.origin.y),
+                                           float(thumb.size.width), float(thumb.size.height)]
+                    thumb_bottom = float(thumb.origin.y + thumb.size.height)
                 row['caption_thumb_gap'] = row['caption'][1] - thumb_bottom
-                if not 4 <= row['caption_thumb_gap'] <= 8:
-                    row['errors'].append('Progress caption is not close to and clear of the thumb')
+                minimum_gap = -4 if sys.platform == 'ios' else 4
+                if not minimum_gap <= row['caption_thumb_gap'] <= 8:
+                    row['errors'].append('Progress caption does not match the selected footer spacing')
                 if row['caption'][2] < width - 2:
                     row['errors'].append('Progress caption does not span the footer for centered text')
                 label = footer.spacer._impl.native

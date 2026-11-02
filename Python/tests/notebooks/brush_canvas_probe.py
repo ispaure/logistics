@@ -22,12 +22,12 @@ check(!state.native_pen||!ctx.getContextAttributes().desynchronized,'Native prev
 check(eraserKind==='partial'&&eraserRadius===16,'Partial eraser must be the default');
 $('erase').click();check(mode==='erase'&&eraserDialog.open,'Eraser button must show settings');
 check($('eraserSize').options.length===3,'Expected three eraser sizes');
-$('eraserKind').value='whole';$('eraserKind').dispatchEvent(new Event('change'));
+$('eraserWhole').click();
 $('eraserSize').value='32';$('eraserSize').dispatchEvent(new Event('change'));
 check(eraserKind==='whole'&&eraserRadius===32,'Eraser controls did not change settings');
 $('closeEraser').click();
 $('erase').click();check(eraserDialog.open&&eraserKind==='whole','Pressing active eraser must reopen settings');
-$('eraserKind').value='partial';$('eraserKind').dispatchEvent(new Event('change'));
+$('eraserPartial').click();
 $('eraserSize').value='16';$('eraserSize').dispatchEvent(new Event('change'));
 $('closeEraser').click();
 // Exercise the actual shared pointer path, inspecting the queued command without sending it.

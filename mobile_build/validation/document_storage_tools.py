@@ -123,7 +123,7 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
         # Reuse only an exact native source build. Python and tests are restaged;
         # a stale compiled adapter must never masquerade as current acceptance.
         from hashlib import sha256
-        native_sources = source_app.parents[4] / 'build/logisticsmobile/ios/xcode/Support'
+        native_sources = source_app.parents[2] / 'Support'
         hashes = {}
         for source in (SOURCE / 'Python/features/video/mobile/ios').glob('*.m'):
             compiled = native_sources / source.name
@@ -136,6 +136,9 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
         info = app / 'Info.plist'
         metadata = plistlib.loads(info.read_bytes())
         metadata['CFBundleIdentifier'] = bundle
+        # Managed test shells normally launch tests.logisticsmobile. Route
+        # through the restaged application entry point for the selected probe.
+        metadata['MainModule'] = 'logisticsmobile'
         info.write_bytes(plistlib.dumps(metadata))
         for directory in ('PlugIns', 'Extensions'):
             shutil.rmtree(app / directory, ignore_errors=True)

@@ -1,3 +1,4 @@
+renderEraserChoices();
 continuousInk = true;
 // Desktop bounds work to display frames; mobile paints delivered pen batches immediately.
 frameBatchedInk = true;

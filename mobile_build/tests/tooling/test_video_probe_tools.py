@@ -16,6 +16,21 @@ from mobile_build.validation.video_probe_tools import prepare
 
 
 class VideoProbeRestagingTests(unittest.TestCase):
+    def test_release_apk_is_rejected_before_staging_or_starting_an_emulator(self):
+        from mobile_build.validation.video_probe_tools import run
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch('mobile_build.validation.video_probe_tools.deployment_environment', return_value={}), \
+                    patch('mobile_build.validation.video_probe_tools.tools_environment', return_value=({}, None)), \
+                    patch('mobile_build.validation.video_probe_tools.build_tools', return_value=root), \
+                    patch('mobile_build.validation.video_probe_tools.subprocess.check_output', return_value=b'package: release\n'), \
+                    patch('mobile_build.validation.video_probe_tools.prepare') as stage, \
+                    patch('mobile_build.validation.video_probe_tools.AndroidEmulator') as emulator:
+                with self.assertRaisesRegex(ValueError, 'Debug APK'):
+                    run(root / 'release.apk', root / 'evidence')
+                stage.assert_not_called()
+                emulator.assert_not_called()
+
     def test_cloud_probe_replaces_old_feature_bytecode_and_keeps_native_binary(self):
         with TemporaryDirectory() as directory:
             workspace = Path(directory)

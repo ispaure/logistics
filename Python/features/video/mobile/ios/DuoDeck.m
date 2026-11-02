@@ -44,13 +44,16 @@ static char LGVideoActionHandlerKey, LGVideoDialogHandlersKey;
 - (BOOL)shouldRemovePresentersView { return NO; }
 - (CGRect)frameOfPresentedViewInContainerView {
     LGVideoDeckSettings *settings = (LGVideoDeckSettings *)self.presentedViewController;
-    CGRect area = CGRectInset([settings.owner.view convertRect:settings.owner.tabletopArea toView:self.containerView], 12, 12);
+    // Leave a reachable dismissal gutter on every lower-panel edge, including
+    // for long chapter/track lists. The upper video panel stays untouched.
+    CGRect area = CGRectInset([settings.owner.view convertRect:settings.owner.tabletopArea toView:self.containerView], 24, 24);
     if (!CGRectIsEmpty(self.keyboard)) {
         CGRect keyboard = [self.containerView convertRect:self.keyboard fromView:nil];
         if (CGRectIntersectsRect(area, keyboard)) area.size.height = MAX(44, CGRectGetMinY(keyboard) - area.origin.y);
     }
     CGFloat height = MIN(MAX(44, area.size.height), settings.preferredContentSize.height);
-    return CGRectMake(area.origin.x, CGRectGetMaxY(area) - height, area.size.width, height);
+    CGFloat width = MIN(360, MAX(0, area.size.width));
+    return CGRectMake(CGRectGetMidX(area) - width / 2, CGRectGetMaxY(area) - height, width, height);
 }
 - (void)presentationTransitionWillBegin {
     self.backdrop = [[UIView alloc] init];
@@ -97,13 +100,29 @@ static char LGVideoActionHandlerKey, LGVideoDialogHandlersKey;
     header.spacing = 10;
     header.layoutMarginsRelativeArrangement = YES;
     header.layoutMargins = UIEdgeInsetsMake(16, 20, 12, 20);
+    UIStackView *heading = [[UIStackView alloc] init];
+    heading.axis = UILayoutConstraintAxisHorizontal;
+    heading.alignment = UIStackViewAlignmentCenter;
+    heading.spacing = 12;
+    [header addArrangedSubview:heading];
     for (NSString *text in @[self.dialog.title ?: @"", self.dialog.message ?: @""]) {
         if (!text.length) continue;
         UILabel *label = [[UILabel alloc] init]; label.text = text; label.numberOfLines = 0;
         label.font = [UIFont preferredFontForTextStyle:[text isEqualToString:self.dialog.title] ? UIFontTextStyleHeadline : UIFontTextStyleSubheadline];
         label.adjustsFontForContentSizeCategory = YES;
         label.textColor = UIColor.labelColor;
-        [header addArrangedSubview:label];
+        if ([text isEqualToString:self.dialog.title]) [heading addArrangedSubview:label];
+        else [header addArrangedSubview:label];
+    }
+    if (!self.dialog.textFields.count) {
+        UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
+        [close setImage:[UIImage systemImageNamed:@"xmark"] forState:UIControlStateNormal];
+        close.accessibilityLabel = @"Close menu";
+        close.accessibilityIdentifier = @"video.deck.settings.close";
+        [close.widthAnchor constraintEqualToConstant:44].active = YES;
+        [close.heightAnchor constraintEqualToConstant:44].active = YES;
+        [close addTarget:self action:@selector(closeMenu:) forControlEvents:UIControlEventTouchUpInside];
+        [heading addArrangedSubview:close];
     }
     for (UITextField *field in self.dialog.textFields) {
         [field removeFromSuperview];
@@ -112,6 +131,9 @@ static char LGVideoActionHandlerKey, LGVideoDialogHandlersKey;
         [header addArrangedSubview:field];
     }
     self.tableView.tableHeaderView = header;
+}
+- (void)closeMenu:(id)sender {
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];

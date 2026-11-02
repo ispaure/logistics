@@ -157,6 +157,10 @@ async def android_controls(owner):
         value.setAccessible(True)
         return value.get(native)
     root, controls, scroll = field('root'), field('controls'), field('controlsScroll')
+    # Geometry needs visible controls throughout all rotations. Otherwise the
+    # fullscreen auto-hide timer can remove their layout midway through this audit.
+    owner.native.pause()
+    await until(lambda: not android_player(owner).isPlaying())
     density = owner.app._impl.native.getResources().getDisplayMetrics().density
     samples = []
     out = Path(owner.app.paths.cache) / 'video-ui'
@@ -180,7 +184,8 @@ async def android_controls(owner):
                 continue  # Collapsed Undo seek has no touch target until a seek.
             if isinstance(view, jclass('android.widget.Button')):
                 label = str(view.getContentDescription())
-                assert view.getWidth() / density >= 47.5 and view.getHeight() / density >= 47.5, label
+                assert view.getWidth() / density >= 47.5 and view.getHeight() / density >= 47.5, (
+                    label, view.getWidth() / density, view.getHeight() / density, orientation)
                 view.requestRectangleOnScreen(jclass('android.graphics.Rect')(0, 0, view.getWidth(), view.getHeight()), True)
                 await asyncio.sleep(.05)
                 location = jclass('android.graphics.Rect')()
@@ -369,8 +374,9 @@ async def exercise(app):
                 assert native_value(player, 'hasVideoOut')
                 colors = None
                 player.pause()
-            if not speed_checked:
-                rows.append(dict(name='playback-speed', samples=await playback_speed(owner, android)))
+            if not speed_checked or path.name == 'hevc-aac.mkv':
+                rows.append(dict(name='playback-speed' if not speed_checked else 'playback-speed-hevc-mkv',
+                                 file=path.name, samples=await playback_speed(owner, android)))
                 speed_checked = True
             if not fullscreen_checked and not decode_only:
                 # Longer focused fixtures leave time to observe the real timer.

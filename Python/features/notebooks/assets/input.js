@@ -207,14 +207,28 @@ let eraserKind = 'partial', eraserRadius = 16;
 const eraserDialog = document.createElement('dialog');
 eraserDialog.id = 'eraserDialog';
 eraserDialog.setAttribute('aria-labelledby', 'eraserTitle');
-eraserDialog.innerHTML = '<h2 id="eraserTitle">Eraser</h2><label>Type <select id="eraserKind" aria-label="Eraser type"><option value="partial">Erase parts of strokes</option><option value="whole">Erase whole strokes</option></select></label><label>Size <select id="eraserSize" aria-label="Eraser size"><option value="8">Small</option><option value="16" selected>Medium</option><option value="32">Large</option></select></label><button id="closeEraser" type="button">Done</button>';
+eraserDialog.innerHTML = '<h2 id="eraserTitle">Eraser</h2><div class="eraser-types" role="group" aria-label="Eraser type"><button id="eraserPartial" type="button" aria-label="Erase parts of strokes" aria-pressed="true"></button><button id="eraserWhole" type="button" aria-label="Erase whole strokes" aria-pressed="false"></button></div><label>Size <select id="eraserSize" aria-label="Eraser size"><option value="8">Small</option><option value="16" selected>Medium</option><option value="32">Large</option></select></label><button id="closeEraser" type="button">Done</button>';
 document.body.append(eraserDialog);
-$('eraserKind').onchange = () => {
-  eraserKind = $('eraserKind').value;
-  selected.clear();
-  draw();
-  if (typeof syncChrome === 'function') syncChrome()
-};
+function renderEraserChoices() {
+  $('eraserPartial').innerHTML = icon(glyphs.erase) + '<span>Partial</span>';
+  $('eraserWhole').innerHTML = icon(glyphs.eraseWhole) + '<span>Whole stroke</span>'
+}
+for (const [kind, id, caption] of [
+  ['partial', 'eraserPartial', 'Partial'],
+  ['whole', 'eraserWhole', 'Whole stroke']
+]) {
+  const button = $(id);
+  button.textContent = caption;
+  button.onclick = () => {
+    eraserKind = kind;
+    for (const [value, control] of [['partial', 'eraserPartial'], ['whole', 'eraserWhole']]) {
+      $(control).setAttribute('aria-pressed', String(value === kind))
+    }
+    selected.clear();
+    draw();
+    if (typeof syncChrome === 'function') syncChrome()
+  }
+}
 $('eraserSize').onchange = () => eraserRadius = Number($('eraserSize').value);
 $('closeEraser').onclick = () => eraserDialog.close();
 eraserDialog.onclick = e => {if (e.target === eraserDialog) {

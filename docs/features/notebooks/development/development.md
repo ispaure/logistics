@@ -175,6 +175,10 @@ RGBA precedence, Shader overlap, live/completed pixel agreement and bounded
 preview work after 2,000 samples. It saves contact sheets and concise results
 under ignored `test-results/`. Run it with the desktop runtime and
 `PYTHONPATH=Python:.`, passing `--output test-results/notebook-brushes/rendering`.
+The eraser settings expose Partial and Whole Stroke as separate icon buttons
+with accessible pressed states, rather than a nested type dropdown. The same
+choices and shared handlers are used by desktop and mobile presentations;
+the brush probe exercises both choices and the retained size control.
 The model suite tests all offered brush/color/width combinations and RGBA through
 move, undo, cross-notebook copy and recovery. Imported native eraser objects
 are preserved read-only rather than drawn with

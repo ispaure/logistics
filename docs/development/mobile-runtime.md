@@ -605,10 +605,13 @@ previous route must not leave the old navigation strip above the new title.
 `viewer_layout_probe.py` measures clearance after opening and rotating.
 The `--probe reader-title` scenario checks imported and provider comics and EPUBs, including
 fullscreen restoration and optional simulator hinge transitions.
-iOS horizontal reader footers place their passive page/chapter caption four
-points above the bottom edge when a home-gesture inset is present. The complete
-48-point page button and slider row sits immediately above the caption, with
-two points between them, rather than reserving a blank strip below the controls.
+iOS horizontal reader footers use the selected midpoint between the original
+edge placement and the raised layout. Bottom extension and caption spacing
+are averaged together in portrait and landscape. This deliberately permits a
+small lower portion of the full 48-point touch row inside the home-gesture inset
+(six points for a one-line caption on a 34-point inset). Native checks allow only
+that measured footer extension; other controls retain strict safe bounds. The
+caption remains noninteractive so it cannot intercept slider touches.
 The iOS reader slider and page arrow glyphs draw 14 points below the native
 center while retaining the full touch row. This placement is set when the
 reader slider is created and does not depend on a later viewport notification.

@@ -252,7 +252,21 @@ retained their idle positions. The cached reader-layout file was older than the
 capture and did not contain native navigation-item frames, so its unchanged
 geometry is not evidence of current UIKit behavior. The shared root observer
 has host regressions for root-only changes, contraction, coalescing and retired
-windows; its simulator run observes actual changing root regions. A signed
-device package is prepared separately; physical verification of that correction
-and real two-app Split View remain gates until the package is installed and
-the corresponding states are captured.
+windows; its simulator run observes actual changing root regions. The signed
+device package was installed in place on the physical Duo with user approval.
+The user reports that the outer-display reader now adapts correctly in both
+idle and active media states. A subsequent outer-display folder screenshot
+shows a separate capacity problem: the navigation overflow button overlaps the
+first destination tab while all five destinations remain expanded. The shared
+toolbar renderer budgets touch slots for the visible destination tabs,
+Back/Close, overflow and supplemental leading actions against current system
+regions. When space is insufficient, supplemental Search joins the existing
+native overflow menu and returns below Back when space recovers. This avoids
+changing destination membership or moving Back into the system reservation.
+Native outer-display idle/audio/stopped checks verify both projections and
+reject navigation-control collisions with destination tabs. UIKit's vertical
+compression preference and parent invalidation alone did not resolve the
+reproduced collision. UIKit retains ownership of Back's position; its hit area
+started five points below the reserved region in these simulator samples.
+Physical acceptance of this supplemental-action change, unfolded-reader verification
+and real two-app Split View remain separate gates.

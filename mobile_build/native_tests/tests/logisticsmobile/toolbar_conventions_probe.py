@@ -73,6 +73,18 @@ def native_geometry(app):
             overlap = (min(x + width, left + w) - max(x, left),
                        min(y + height, top + h) - max(y, top))
             assert min(overlap) <= 1, ('Native action overlaps system UI', item, occlusions)
+    # System overflow and Back are not necessarily in our explicit item groups.
+    # Include their control frames when checking the shared vertical bar against
+    # destination tabs; checking only the Island misses action/tab collisions.
+    tabs = [button for button in buttons if button['kind'] == '_UITabButton']
+    bars = [button for button in buttons if button['kind'] == '_UIButtonBarButton']
+    for button in bars:
+        x, y, width, height = button['frame']
+        for tab in tabs:
+            left, top, w, h = tab['frame']
+            overlap = (min(x + width, left + w) - max(x, left),
+                       min(y + height, top + h) - max(y, top))
+            assert min(overlap) <= 1, ('Native action overlaps destination tab', button, tab)
     return dict(controllers=controller(window.rootViewController), buttons=buttons,
                 items=items, occlusions=occlusions, pose=pose_snapshot(app))
 

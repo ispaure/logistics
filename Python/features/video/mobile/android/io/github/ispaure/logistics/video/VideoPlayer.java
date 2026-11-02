@@ -150,6 +150,13 @@ public final class VideoPlayer {
         vlc = new LibVLC(activity, options);
         player = new MediaPlayer(vlc);
         root = new FrameLayout(activity) {
+            @Override protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
+                super.onSizeChanged(width, height, oldWidth, oldHeight);
+                // Insets can arrive before rotation updates our bounds. Repeat
+                // their calculation after layout so old landscape dimensions
+                // cannot collapse the portrait controls to zero width.
+                if (width > 0 && height > 0) post(this::requestApplyInsets);
+            }
             @Override protected void onMeasure(int widthSpec, int heightSpec) {
                 // Choose the rows before children are measured. A change during
                 // layout would place stale full-width rows side by side.

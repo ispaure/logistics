@@ -170,7 +170,7 @@ def main(output):
                 probe.idle()
                 if mode == 'erase':
                     probe.wait(lambda: probe.js('eraserDialog.open'), 'eraser settings')
-                    probe.js("(()=>{$('eraserKind').value=" + json.dumps(eraser_kind) + ";$('eraserKind').onchange();$('closeEraser').click();return true})()")
+                    probe.js("(()=>{$(" + json.dumps("eraserWhole" if eraser_kind == "whole" else "eraserPartial") + ").click();$('closeEraser').click();return true})()")
                 box = probe.js('canvas.getBoundingClientRect().toJSON()')
                 x = int(box['left'] + point[0] / 1404 * box['width'])
                 y = int(box['top'] + point[1] / 1872 * box['height'])

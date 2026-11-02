@@ -446,6 +446,23 @@
                     !CGRectContainsRect(CGRectInset(self.video.tabletopArea, -1, -1), frame)) {
                     [self finish:[NSString stringWithFormat:@"Settings escaped the lower panel: %@", NSStringFromCGRect(frame)]]; return;
                 }
+                CGRect lower = self.video.tabletopArea;
+                if (frame.size.width > 360.5 || CGRectGetMinX(frame) - CGRectGetMinX(lower) < 23 ||
+                    CGRectGetMaxX(lower) - CGRectGetMaxX(frame) < 23) {
+                    [self finish:@"Lower menu has no reachable side dismissal gutters"]; return;
+                }
+                UIView *close = nil;
+                if (!menu.textFields.count) {
+                    // Find the public, accessible close control in the table header.
+                    close = nil;
+                    UIStackView *header = (UIStackView *)((LGVideoDeckSettings *)presented).tableView.tableHeaderView;
+                    for (UIView *row in header.arrangedSubviews) if ([row isKindOfClass:UIStackView.class])
+                        for (UIView *child in ((UIStackView *)row).arrangedSubviews)
+                            if ([child.accessibilityIdentifier isEqualToString:@"video.deck.settings.close"]) close = child;
+                    if (!close || close.bounds.size.width < 44 || close.bounds.size.height < 44) {
+                        [self finish:@"Lower selection menu lacks an accessible X close target"]; return;
+                    }
+                }
                 UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithBounds:self.window.bounds];
                 UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
                     [self.window drawViewHierarchyInRect:self.window.bounds afterScreenUpdates:YES];
@@ -463,6 +480,7 @@
                     self.video.command = ^(NSString *name, NSString *value) { self.deckCommand = [NSString stringWithFormat:@"%@:%@", name, value]; };
                     [settings tableView:settings.tableView didSelectRowAtIndexPath:[NSIndexPath indexPathForRow:1 inSection:0]];
                 } else if (index == 0) [deckPresentation dismiss:nil];
+                else if (index == 2) [(UIButton *)close sendActionsForControlEvents:UIControlEventTouchUpInside];
                 else if (index == 1) {
                     LGVideoDeckSettings *settings = (LGVideoDeckSettings *)presented;
                     // Select a real speed row through the production table delegate.

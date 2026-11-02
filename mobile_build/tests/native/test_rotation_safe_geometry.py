@@ -46,6 +46,30 @@ class ReaderTitleLayoutTests(unittest.TestCase):
             compact_apple_reader(container)
         self.assertEqual(container.top_inset, 82)
 
+    def test_midpoint_footer_allows_only_its_selected_lower_touch_padding(self):
+        container = self.fixture(vertical=False, side=True, safe_top=0)
+        footer = container.content.interface.children[0]._reader_page_footer
+        footer.row.layout.content_height = 48
+        footer.widget.layout.content_height = 66
+        footer.slider = NS(_reader_track_offset=14)
+        footer.spacer = NS(layout=NS(content_height=16))
+        footer.badge = NS(style=NS(margin_top=2))
+        window = container.native.window
+        window.bounds = rectangle(0, 0, 900, 600)
+        window.safeAreaInsets.left = window.safeAreaInsets.right = 0
+        with patch('mobile.appearance.reserve_navigation'):
+            compact_apple_reader(container)
+        row_bottom = 600 - container.bottom_inset - (66 - 48)
+        self.assertEqual(row_bottom, 572)  # Six points below the safe edge at 566.
+        with self.assertRaises(AssertionError):
+            rotation_checks.assert_control_bounds(
+                rectangle(4, row_bottom - 48, 48, 48), window, 'Ordinary control')
+        rotation_checks.assert_control_bounds(
+            rectangle(4, row_bottom - 48, 48, 48), window, 'Previous page', bottom_extension=6)
+        with self.assertRaises(AssertionError):
+            rotation_checks.assert_control_bounds(
+                rectangle(4, row_bottom - 46, 48, 48), window, 'Previous page', bottom_extension=6)
+
     def test_new_reader_compacts_before_the_selected_route_changes(self):
         container = self.fixture(vertical=False, side=True, safe_top=0)
         app = container.content.interface.app

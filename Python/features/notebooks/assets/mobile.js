@@ -1,3 +1,4 @@
+renderEraserChoices();
 (function() {
 
   continuousInk = true;

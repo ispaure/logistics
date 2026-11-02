@@ -15,21 +15,39 @@ def page_footer(view):
 
 
 def passive_caption_tail(view):
-    """Only the noninteractive caption may enter the home-gesture strip."""
+    """Measure the noninteractive space below the reader's touch row."""
     footer = page_footer(view)
     if footer is None or footer.vertical:
         return 0
     return max(0, footer.widget.layout.content_height - footer.row.layout.content_height)
 
 
+def _caption_margins(footer, home):
+    height = footer.spacer.layout.content_height
+    original = max(-10, min(2, home - 4 - height)) if home > 4 else -10
+    return original, 2
+
+
 def footer_bottom_extension(view, home):
     footer = page_footer(view)
     if footer is None or footer.vertical:
         return 0
-    # A lowered track and arrow glyphs use the lower part of their touch row.
-    # Keep the caption near the edge, directly below those controls.
+    tail, limit = passive_caption_tail(view), max(0, home - 4)
     offset = getattr(getattr(footer, 'slider', None), '_reader_track_offset', 0)
-    return min(passive_caption_tail(view) + offset, max(0, home - 4))
+    if not offset:
+        return min(tail, limit)
+    # User-selected midpoint between the original low footer and the raised
+    # version. Average both caption tails as well as their bottom extensions.
+    original, raised = _caption_margins(footer, home)
+    current = footer.badge.style.margin_top
+    original_tail = max(0, tail + original - current)
+    raised_tail = max(0, tail + raised - current)
+    return (min(original_tail + offset, limit) + min(raised_tail, limit)) / 2
+
+
+def footer_touch_extension(view, home):
+    """The intentional lower hit padding of the selected midpoint footer."""
+    return max(0, footer_bottom_extension(view, home) - passive_caption_tail(view))
 
 
 def apple_reader_top(container, window):
@@ -128,14 +146,11 @@ def refresh_progress_edges(footer):
         if not footer.vertical:
             from .screen_privacy import native_value
             window = native_value(widget._impl.native, 'window')
-            height = footer.spacer.layout.content_height
-            if window is not None and height > 0:
-                home = float(window.safeAreaInsets.bottom)
-                # Keep the caption near the edge and the complete control row
-                # immediately above it, rather than leaving a blank band.
-                margin = max(-10, min(2, home - 4 - height)) if home > 4 else -10
-                if footer.badge.style.margin_top != margin:
-                    footer.badge.style.margin_top = margin
+            home = float(window.safeAreaInsets.bottom) if window is not None else 0
+            original, raised = _caption_margins(footer, home)
+            margin = (original + raised) / 2
+            if footer.badge.style.margin_top != margin:
+                footer.badge.style.margin_top = margin
         return
     # UIKit safe areas already include display curvature. Never infer a radius
     # from a model name or a private screen property. Older Android releases

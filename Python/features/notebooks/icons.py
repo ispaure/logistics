@@ -4,6 +4,7 @@ ICON_SCRIPT = r'''
 const glyphs={
 pen:'<path d="m5 19 2-6L17 3l4 4-10 10-6 2Zm2-6 4 4M15 5l4 4M4 21h16"/>',
 erase:'<path d="m4 13 9-9a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-8 8H9l-5-5a1.5 1.5 0 0 1 0-2Zm4-4 9 8M13 20h9"/>',
+eraseWhole:'<path d="M3 8c2-6 4 6 7 0s5 6 7 0M17 15l5 5m0-5-5 5"/>',
 select:'<path d="M7 4C3 5 2 9 4 12s8 5 13 2 4-8 0-10C14 2 10 3 7 4Z" stroke-dasharray="2.5 3"/><path d="m12 12 2 9 2-4 4-2-8-3Z"/>',
 undo:'<path d="m8 5-5 5 5 5M3 10h10a7 7 0 0 1 7 7v2"/>',
 redo:'<path d="m16 5 5 5-5 5m5-5H11a7 7 0 0 0-7 7v2"/>',

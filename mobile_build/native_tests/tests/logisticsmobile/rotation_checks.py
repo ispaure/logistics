@@ -161,11 +161,13 @@ def assert_visible_controls(app):
     count = 0
     seen = set()
     from commonUtils.ui.native.keyboard import native_value
-    def visit(widget):
+    def visit(widget, footer_view=None):
         nonlocal count
         if id(widget) in seen:
             return
         seen.add(id(widget))
+        if getattr(widget, '_reader_page_footer', None) is not None:
+            footer_view = widget
         native = widget._impl.native
         owner = native.window
         owner = owner() if callable(owner) else owner
@@ -175,7 +177,9 @@ def assert_visible_controls(app):
             if rect.size.width > 0 and rect.size.height > 0:
                 count += 1
                 label = getattr(widget, 'accessible_name', None) or getattr(widget, 'text', type(widget).__name__)
-                assert_control_bounds(rect, window, label)
+                from mobile.reader_edges import footer_touch_extension
+                extension = footer_touch_extension(footer_view, float(window.safeAreaInsets.bottom)) if footer_view else 0
+                assert_control_bounds(rect, window, label, bottom_extension=extension)
         # Promoted actions retain callbacks outside the Toga content tree.
         for field in ('title_actions', '_ios_toolbar_buttons', '_ios_toolbar_leading'):
             for control in getattr(widget, field, ()):
@@ -183,7 +187,7 @@ def assert_visible_controls(app):
         # Scrollable form content is deliberately allowed beyond its viewport.
         if not isinstance(widget, toga.ScrollContainer):
             for child in widget.children:
-                visit(child)
+                visit(child, footer_view)
     visit(app.body)
     # UIKit bar items retain Toga callbacks, but mount UIKit-owned controls:
     # the original UIButton has no window and cannot provide their geometry.
@@ -228,14 +232,14 @@ def assert_bar_control_bounds(rect, bounds, label):
     assert rect.origin.y + rect.size.height <= bounds.origin.y + bounds.size.height + 1, details
 
 
-def assert_control_bounds(rect, window, label):
+def assert_control_bounds(rect, window, label, *, bottom_extension=0):
     safe, size = window.safeAreaInsets, window.bounds.size
     details = (label, float(rect.origin.x), float(rect.origin.y),
                float(rect.size.width), float(rect.size.height))
     assert rect.origin.x >= safe.left - 1, details
     assert rect.origin.x + rect.size.width <= size.width - safe.right + 1, details
     assert rect.origin.y >= safe.top - 1, details
-    assert rect.origin.y + rect.size.height <= size.height - safe.bottom + 1, details
+    assert rect.origin.y + rect.size.height <= size.height - safe.bottom + bottom_extension + 1, details
 
 
 async def exercise_rotation(app, *, record=None, cycles=2, panels=None):

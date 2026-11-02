@@ -132,6 +132,9 @@ def run(apk, output, *, cloud=False, rclone=None, decode_only=False):
     output.mkdir(parents=True, exist_ok=False)
     environment, _ = tools_environment(deployment_environment())
     tools = build_tools(environment)
+    metadata = subprocess.check_output([str(tools / 'aapt2'), 'dump', 'badging', str(apk)], env=environment)
+    if b'application-debuggable' not in metadata.splitlines():
+        raise ValueError('A managed Debug APK is required: Release APKs disallow run-as report collection.')
     with scratch() as workspace:
         unsigned = prepare(apk, workspace, cloud=cloud, rclone=rclone, decode_only=decode_only)
         provenance = workspace / 'video-cloud-fixtures/fixture-tool.json'
@@ -190,11 +193,15 @@ def run(apk, output, *, cloud=False, rclone=None, decode_only=False):
                     if captured.returncode == 0 and not decode_only:
                         screens = output / 'screens'
                         screens.mkdir(exist_ok=True)
-                        with tarfile.open(fileobj=BytesIO(captured.stdout)) as archive:
-                            for member in archive.getmembers():
-                                if member.isfile() and Path(member.name).suffix in {'.png', '.json'}:
-                                    with archive.extractfile(member) as stream:
-                                        (screens / Path(member.name).name).write_bytes(stream.read())
+                        try:
+                            with tarfile.open(fileobj=BytesIO(captured.stdout)) as archive:
+                                for member in archive.getmembers():
+                                    if member.isfile() and Path(member.name).suffix in {'.png', '.json'}:
+                                        with archive.extractfile(member) as stream:
+                                            (screens / Path(member.name).name).write_bytes(stream.read())
+                        except tarfile.TarError as error:
+                            # Preserve the original probe failure and still save logcat.
+                            (output / 'screenshot-capture-error.txt').write_text(str(error))
                     (output / 'logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', timeout=30))
                 finally:
                     emulator.cleanup()

@@ -156,6 +156,7 @@ class PageFooter:
         # Reclaim the blank lower portion of the transport's 48-point hit row.
         # The caption remains below the thumb and cannot intercept its touches.
         if not vertical and type(self.badge._impl).__module__.startswith('toga_iOS.'):
+            self.badge.style.margin_top = -4
             self.badge._impl.native.userInteractionEnabled = False
         from .appearance import surface
         surface(self.spacer, background='transparent', foreground='text' if vertical else 'muted')

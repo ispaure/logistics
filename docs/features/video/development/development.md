@@ -677,6 +677,10 @@ fields through a native table controller and a custom presentation controller.
 Both the sheet and its dismissal backdrop are bounded by the current lower
 reserved region, including keyboard exclusion. Long menus scroll; text prompts
 retain explicit Apply/Cancel actions. A pose change dismisses that presentation.
+Selection menus are centered at a maximum width of 360 points, with at least
+24-point side dismissal gutters and an accessible 44-point X close button in
+the heading. The shared presentation applies to subtitles, chapters, playback
+and the other lower-panel settings menus.
 Ordinary iPhone, iPad and unfolded playback keep the existing UIKit alerts and
 popovers.
 
