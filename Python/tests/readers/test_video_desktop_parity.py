@@ -22,14 +22,22 @@ class DesktopVideoParityTests(QtTestCase):
         from features.video.ui.player import VideoWindow
         from features.video.ui.backend import QtPlayback
         from features.video.ui.vlc_backend import VLCPlayback
+        from PySide6.QtMultimedia import QMediaFormat
         from logistics_build.build_retention import scratch
         from tests.readers.video_fixtures import bundled_movie
         with scratch() as root:
             path = bundled_movie('speed-with-audio.mkv', root)
-            for factory in (QtPlayback, lambda owner: VLCPlayback(owner, interactive=False)):
+            factories = [lambda owner: VLCPlayback(owner, interactive=False)]
+            # Qt is the retained compatibility adapter. The default VLC path
+            # must also work on Linux hosts without a Qt Multimedia decoder.
+            if QMediaFormat().supportedFileFormats(QMediaFormat.ConversionMode.Decode):
+                factories.append(QtPlayback)
+            for factory in factories:
                 with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'settings'):
                     window = VideoWindow(ResourceChoice(LocalFiles(root), path.name), backend_factory=factory)
                 window.audio.setVolume(0)
+                if hasattr(window.player, 'native'):
+                    window.player.native.audio_output_set('adummy')
                 try:
                     window.show()
                     self.wait_until(lambda: window.have_frame and window.player.position() > 500, timeout=20)
@@ -221,12 +229,18 @@ class DesktopVideoParityTests(QtTestCase):
                     window.player.videoSink().videoFrameChanged.connect(
                         lambda frame: frames.append(frame.toImage()) if frame.isValid() else None)
                     try:
+                        # A cloud guest has no speaker device; the dummy output
+                        # still decodes audio and exposes the native statistics.
+                        window.player.native.audio_output_set('adummy')
                         window.show()
                         stats = window.player.vlc.MediaStats()
                         def decoded():
                             return (frames and window.player.media.get_stats(stats)
                                 and stats.decoded_audio > 0)
-                        self.wait_until(decoded, timeout=25)
+                        self.wait_until(decoded, timeout=25, message=lambda: repr(dict(
+                            frames=len(frames), audio=stats.decoded_audio,
+                            video=stats.decoded_video, state=str(window.player.native.get_state()),
+                            tracks=window.player.native.audio_get_track_description())))
                         self.assertFalse(frames[-1].isNull())
                         window.pause_requested()
                         window.seek_to(1000)

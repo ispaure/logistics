@@ -10,7 +10,10 @@ Windows and macOS offer a checksum-verified LibVLC runtime download on first use
 an installed VLC application is not required. Linux uses the distribution's
 LibVLC 3 libraries and codec/subtitle plugins. On Ubuntu, install `libvlc5`,
 `vlc-plugin-base` and `vlc-plugin-video-output`; Fedora needs `vlc-libs`,
-`vlc-plugins-base`, `vlc-plugin-ffmpeg` and `vlc-plugin-freetype`.
+`vlc-plugins-base`, `vlc-plugin-ffmpeg` and `vlc-plugins-extra`, plus
+`libavcodec-freeworld` from RPM Fusion Free for the complete codec set. Follow
+[Fedora's codec guidance](https://fedoraproject.org/wiki/Hardware_Video_Acceleration)
+when enabling that repository.
 
 Opening a video starts playback automatically. Use the Play/Pause, back/forward ten-second buttons, seek bar, mute button and
 volume slider over the video. Controls hide after three seconds of active

@@ -4,7 +4,7 @@ import ctypes
 from threading import Lock
 
 from commonUtils.ui import pyside as qt
-from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData, QVideoFrame
+from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
 
 from .backend import PlaybackCapabilities
 
@@ -191,7 +191,7 @@ class VLCPlayer(qt.QObject):
             if self._source_size is not None and image.size() != self._source_size:
                 image = image.scaled(self._source_size, qt.Qt.AspectRatioMode.IgnoreAspectRatio,
                     qt.Qt.TransformationMode.SmoothTransformation)
-            self.video.videoSink().setVideoFrame(QVideoFrame(image))
+            self.video.videoSink().setImage(image)
             self.presentation_current = True
             self._paused_preview_target = None
             if self._pause_after_open:
@@ -229,7 +229,7 @@ class VLCPlayer(qt.QObject):
         self._displayed = 0
         self._source_size = None
         self._languages = {}
-        self.videoSink().setVideoFrame(QVideoFrame())
+        self.videoSink().setImage(qt.QImage())
         if not url.isEmpty():
             self.media = self.instance.media_new_location(url.toString())
             for option in (':network-caching=3000', ':no-sub-autodetect-file', ':no-video-title-show'):
@@ -611,7 +611,7 @@ class VLCPlayer(qt.QObject):
         if self.media is not None:
             self.media.release()
             self.media = None
-        self.videoSink().setVideoFrame(QVideoFrame())
+        self.videoSink().setImage(qt.QImage())
         self.audio.closed = True
         self.native.release()
         self.instance.release()

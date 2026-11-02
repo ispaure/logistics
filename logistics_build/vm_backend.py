@@ -76,13 +76,22 @@ def _run_attempt(args):
         if not args.container_image:
             # Application-native dependencies belong to Logistics, not the
             # reusable manager's interpreter bootstrap. Tests still run as uid.
+            if args.distribution == 'fedora':
+                installed = client.execute_idempotent(vm, ['python3', '-c',
+                    "import subprocess; print(subprocess.run(['rpm','-q','rpmfusion-free-release'],capture_output=True).returncode == 0)"])
+                if installed.strip() != b'True':
+                    version = environments['fedora_image'].split(':')[1]
+                    client.execute_idempotent(vm, ['dnf', 'install', '-y',
+                        f'https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-{version}.noarch.rpm'], timeout=600)
             packages = (['libvlc5', 'vlc-plugin-base', 'vlc-plugin-video-output']
                 if args.distribution == 'ubuntu' else
-                ['vlc-libs', 'vlc-plugins-base', 'vlc-plugin-ffmpeg', 'vlc-plugins-extra'])
+                ['vlc-libs', 'vlc-plugins-base', 'vlc-plugin-ffmpeg', 'vlc-plugins-extra', 'libavcodec-freeworld'])
             command = (['apt-get', 'install', '-y', '--no-remove', *packages]
                 if args.distribution == 'ubuntu' else ['dnf', 'install', '-y', *packages])
             result['video_native_packages'] = packages
-            client.execute(vm, command, timeout=600)
+            # Installing the same explicit package set is idempotent, including
+            # when Parallels loses the result of an already completed install.
+            client.execute_idempotent(vm, command, timeout=600)
         transfer_started = time.monotonic()
         transfer_attempted = True
         result['transferred_sha256'] = client.stage(vm, args.snapshot, workspace, token, account['uid'], account['gid'],

@@ -14,8 +14,9 @@ distribution's LibVLC 3 libraries/plugins; project guest preparation and the
 Fedora test image declare those native prerequisites.
 
 `ui/surface.py` paints SDR memory frames in Qt, avoiding native sibling-window
-stacking across overlays and docking. Its queue retains at most one pending
-image. Native metadata corrects coded padding, sample aspect and rotation before
+stacking across overlays and docking. Its image sink does not require a Qt
+Multimedia decoder plugin; VLC supplies the decoded pixels directly. Its queue
+retains at most one pending image. Native metadata corrects coded padding, sample aspect and rotation before
 presentation. This path copies frames into host memory; it is not a zero-copy
 GPU renderer. Caption playback selects software decoding when VLC 3 cannot blend
 onto opaque hardware pictures, including VideoToolbox CVPN. Normal movies retain
