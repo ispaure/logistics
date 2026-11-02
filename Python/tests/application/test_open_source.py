@@ -23,6 +23,9 @@ class OpenSourceTests(unittest.TestCase):
         self.assertEqual(android, set(config['tool']['briefcase']['app']['logisticsmobile']['android']['build_gradle_dependencies']))
         from mobile_build.build_support.video_build import VLC_REVISION
         self.assertEqual(next(entry['version'] for entry in entries if entry['name'] == 'VLCKit'), VLC_REVISION)
+        rclone = next(entry for entry in entries if entry['name'] == 'rclone')
+        desktop = json.loads((ROOT / 'software_manifest.json').read_text())['rclone']
+        self.assertEqual({item['version'] for item in desktop.values()}, {rclone['version']})
 
     def test_desktop_downloaded_vlc_notices_are_read_without_installing(self):
         with TemporaryDirectory() as directory:
@@ -68,6 +71,11 @@ class OpenSourceTests(unittest.TestCase):
         self.assertIn('VLCKit', {notice.name for notice in ios})
         self.assertNotIn('Onyx pen SDK', {notice.name for notice in ios})
         self.assertIn('Rick Lupton', next(item.text for item in ios if item.name == 'rmscene'))
+        for platform in ('darwin', 'win32', 'linux'):
+            rclone = next(item for item in bundled_notices(ROOT, platform) if item.name == 'rclone')
+            self.assertEqual(rclone.license, 'MIT')
+            self.assertIn('Nick Craig-Wood', rclone.text)
+        self.assertNotIn('rclone', {item.name for item in ios})
         for entry in json.loads((ROOT / 'services/licenses/native.json').read_text()):
             for name in entry.get('files', ()):
                 self.assertGreater((ROOT / 'services/licenses' / name).stat().st_size, 1000)
@@ -80,9 +88,11 @@ class OpenSourceTests(unittest.TestCase):
             (native / 'module-LICENSE').write_text('Upstream Go module notice')
             (native / 'Go-LICENSE').write_text('Go copyright')
             (native / 'manifest.json').write_text(json.dumps([
-                dict(module='example.org/module', version='v1', notices=[dict(file='module-LICENSE')])]))
+                dict(module='github.com/rclone/rclone', version='v1.74.1', notices=[dict(file='module-LICENSE')])]))
             notices = bundled_notices(root, 'ios')
-            self.assertIn('Upstream Go module notice', next(item.text for item in notices if item.name == 'example.org/module'))
+            rclone = next(item for item in notices if item.name == 'github.com/rclone/rclone')
+            self.assertEqual(rclone.version, 'v1.74.1')
+            self.assertIn('Upstream Go module notice', rclone.text)
             self.assertIn('Go copyright', next(item.text for item in notices if item.name == 'Go runtime'))
 
     def test_staged_runtime_does_not_need_repository_or_network(self):

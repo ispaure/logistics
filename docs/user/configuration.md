@@ -11,6 +11,8 @@ show or hide its value. Clearing the field hides it again.
 Open **Settings → Open-source licenses** to search the installed desktop runtime's
 components and read their license notices offline. Select a component to view
 and copy its notice and source address.
+The pinned rclone CLI has its own MIT notice in this list; desktop LibVLC notices
+are also included after its managed runtime is downloaded.
 
 ## Configuration layers
 

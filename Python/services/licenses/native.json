@@ -153,5 +153,19 @@
     "source": "https://developers.google.com/ml-kit/terms",
     "note": "Google ML Kit is provided under its own terms, rather than the app's MIT license. GenAI additional terms: https://developers.google.com/ml-kit/genai-terms . These publisher terms are available online.",
     "module": "com.google.mlkit:genai-prompt"
+  },
+  {
+    "name": "rclone",
+    "version": "1.74.1",
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "license": "MIT",
+    "source": "https://github.com/rclone/rclone/tree/v1.74.1",
+    "files": [
+      "rclone-1.74.1.txt"
+    ]
   }
 ]
