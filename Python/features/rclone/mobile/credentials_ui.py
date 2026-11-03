@@ -374,12 +374,15 @@ class CredentialWorkflow:
         if not cloud.app.checkpoint():
             return
         cloud.show_cloud(present=False)
+        destination = cloud.app.native_host.state.destination
+        resume = {'home': cloud.app.show_home, 'files': cloud.app.show_locations,
+                  'documents': cloud.app.show_documents_hub}.get(destination, cloud.app.show_home)
         choices = cloud.home_unlock_candidates()
         if choices:
-            cloud.show_retained_unlock(choices[0][0], destination='home',
-                                      resume=cloud.app.show_home, choices=choices)
+            cloud.show_retained_unlock(choices[0][0], destination=destination,
+                                      resume=resume, choices=choices)
         else:
-            cloud.app.show_home()
+            resume()
 
     def retained_credential_associations(self):
         cloud = self.cloud

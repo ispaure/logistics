@@ -266,6 +266,8 @@ def sync_screen(app, view, destination):
         return
     controller = app.native_host.adapter.content_controller(destination)
     screens = app.routes.screens[destination]
+    if not screens and hasattr(view, '_destination_actions'):
+        controller = app.native_host.adapter.parent
     if screens:
         folder = app.routes.folders.screens.get((destination, screens[-1][0]))
         if folder is not None:
@@ -283,8 +285,8 @@ def sync_screen(app, view, destination):
         if button.parent is not None:
             button.parent.remove(button)
         button.app, button.window = app, app.main_window
-    mount_actions(controller, view, buttons)
-    if leading:
+    mount_actions(controller, view, buttons, overflow=getattr(view, '_ios_toolbar_overflow', True))
+    if leading or hasattr(view, '_ios_toolbar_leading'):
         mount_leading(controller, leading, replaces_back=getattr(view, '_ios_toolbar_replaces_back', False))
     for widget in getattr(view, '_ios_toolbar_hidden', ()):
         if widget.parent is not None:

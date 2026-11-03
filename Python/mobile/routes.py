@@ -97,6 +97,13 @@ class MobileRoutes(Routes):
                     view.parent.remove(view)
 
     def trim(self, destination, count, *, native=True):
+        library = getattr(self.app, 'vault_browser', None)
+        action_view = getattr(library, 'file_action_view', None)
+        removed_action = action_view is not None and any(
+            contains(panel, action_view) for _, panel, _ in self.screens[destination][count:])
+        library_view = getattr(library, 'view', None)
+        removed_library = library_view is not None and any(
+            contains(panel, library_view) for _, panel, _ in self.screens[destination][count:])
         removed = [screen[0] for screen in self.screens[destination][count:]]
         if 'import-credentials-password' in removed:
             owner = self.app.__dict__.get('_cloud_controller')
@@ -111,6 +118,8 @@ class MobileRoutes(Routes):
                 if browser is not None:
                     browser._notes_location = None
         super().trim(destination, count, native=native)
+        if removed_action or removed_library:
+            library.clear_file_action()
         for route in removed:
             self.origins.pop((destination, route), None)
             self.folders.forget(destination, route)
@@ -153,6 +162,8 @@ class MobileRoutes(Routes):
     def back(self):
         library = getattr(self.app, 'vault_browser', None)
         if library is not None and contains(self.body(), getattr(library, 'file_action_view', None)):
+            if not self.guard():
+                return True
             # File forms return to their originating pane for toolbar Back
             # and the Android system-Back fallback alike.
             library.return_from_file_action()
@@ -223,9 +234,16 @@ class MobileRoutes(Routes):
         screens = self.screens[destination]
         count = len(screens)
         previous = screens[-1][0] if screens else ''
+        library = getattr(self.app, 'vault_browser', None)
+        action_view = getattr(library, 'file_action_view', None)
+        action_side = (getattr(library, 'file_action_side', None)
+                       if action_view is not None and contains(self.body(destination), action_view) else None)
         origin = self.origins.get((destination, screens[-1][0])) if screens else None
         super().native_popped(navigation)
         popped = len(screens) < count
+        if (popped and action_side is not None and library.valid()
+                and self.host.state.destination == destination and contains(self.body(destination), library.view)):
+            library.sidebar.show(action_side)
         if popped and previous == 'text-destination':
             picker = getattr(self.app, '_editor_picker', None)
             if picker is not None:

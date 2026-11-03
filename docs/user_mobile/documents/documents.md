@@ -16,11 +16,31 @@ tab resumes any document already displayed within Documents; otherwise it shows
 the list. Tap Documents again to see the list.
 
 Home provides Open/New actions and five recent files. **See all in Documents**
-opens the full workspace, where **All open** puts the active document first and
-provides close controls. **Recent** lists closed history entries, and **Saved
-documents** lists other saved text and Markdown files. **Search documents**
-filters all three sections by filename. **Open Books & Comics library** is available
-below those lists. Empty lists show plain informational text without a rounded block.
+opens Documents. **Libraries** is first and selected by default at app startup.
+Beside it, the **heart** opens your favourite files. **Open**, **Recent** and
+**Saved** follow. Each collection displays one list. Open puts the active document first and provides close controls;
+closing a view keeps its saved file. Recent lists closed history entries. Saved
+lists other saved text, Markdown and notebook documents. Libraries displays
+discovered Notes libraries followed by configured Comics libraries, under
+**Notes** and **Comics** headings. Tap a library directly to open it.
+
+**Search local documents** searches filenames recursively through Local,
+Shared files, Received Files and unlocked LocalCrypt storage, including files
+you have never opened. It does not search file contents or online remotes.
+While text is entered, results replace the collection buttons and lists.
+Clear the search to return to the previous collection. Locked LocalCrypt
+filenames remain hidden until you unlock their credentials. Unavailable
+locations are reported rather than treated as an empty successful search.
+
+Home, Workspaces and Documents share an **Unlock LocalCrypt** action whenever
+retained credentials are available to unlock. Android places it at the right of
+each overview's action row. iOS uses the native trailing actions, including
+Duo's side bar on its folded and unfolded displays. UIKit chooses the bar's
+edge after rotation. Unlocking returns to
+the overview where you started. Documents also provides Open and New actions;
+its overview has no collapsible hamburger menu.
+When a vertical action bar has too little space, **Document actions** (**…**)
+contains Open and New while Unlock remains directly available.
 
 In **New document**, enter a name and choose Plain text, Markdown or Notebook.
 Tap **Choose location** to leave the keyboard and open the folder browser. Select

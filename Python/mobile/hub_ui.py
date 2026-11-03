@@ -332,11 +332,6 @@ class HubUI:
         status_row = toga.Box(
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.app._home_status_row = status_row
-        if self._home_content_state[1]:
-            unlock = surface(icon_button('storage_crypt', 'Unlock credentials',
-                on_press=self.app.show_home_unlock), foreground='text')
-            status_row.add(unlock)
-            box.add(status_row)
         self.home_continue = None
         self.home_actions = toga.Box(children=[
             toga.Button('Open Document', on_press=self.open_hub_file, style=Pack(height=72, flex=1, margin_right=8)),
@@ -395,16 +390,34 @@ class HubUI:
         self.home_sections.reflow(self.app, 'home')
 
     def reflow_documents_hub(self):
-        self.documents_sections.reflow(self.app, 'documents')
+        # Native labels do not wrap on iOS. Keep full source paths readable
+        # without letting a long result enlarge the folded-phone viewport.
+        from commonUtils.ui.native.forms import fit_text
+        width = self.adaptive.content_width('documents', margin=64)
+        def fit(widget):
+            if isinstance(widget, toga.Label):
+                fit_text(widget, width)
+            for child in widget.children:
+                fit(child)
+        fit(self.document_results)
 
     def build_documents_hub(self):
         from commonUtils.ui.native.event_loop import DebouncedCallback
         previous = getattr(self, '_document_search_delay', None)
         if previous is not None:
             previous.cancel()
+        search = getattr(self, '_documents_file_search', None)
+        if search is not None:
+            search.stop_local_search()
+        from .notes_discovery import cancel
+        cancel(self.app)
+        comics = getattr(self, '_document_comics_discovery', None)
+        if comics is not None:
+            comics.cancel()
         self._document_search_delay = DebouncedCallback(self.refresh_document_list)
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        self.document_search = toga.TextInput(placeholder='Search documents',
+        box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16), flex=1))
+        box._documents_overview = True
+        self.document_search = toga.TextInput(placeholder='Search local documents',
             value=getattr(self, 'documents_query', ''), on_change=self.search_documents,
             style=Pack(height=48, flex=1))
         self.app._documents_status_row = toga.Box(children=[self.document_search],
@@ -414,25 +427,145 @@ class HubUI:
         self.document_categories = {}
         self.document_launchers = PanelGrid([], self.main_window.size.width)
         self.document_open_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_open_list._open_documents = True
         self.document_recent_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_saved_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_notes_list = toga.Box(style=Pack(direction=COLUMN))
-        from .notes_discovery import populate as populate_notes
-        populate_notes(self.app, self.document_notes_list)
-        history = toga.Box(children=[self.document_recent_list, self.document_saved_list], style=Pack(direction=COLUMN))
-        if self.app.feature_enabled('books') or self.app.feature_enabled('comics'):
-            history.add(toga.Button('Open Books & Comics library', on_press=self.show_library, style=Pack(height=48)))
-        box.add(self.document_notes_list, self.document_open_list, history)
+        self.document_comics_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_favourites_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_libraries_list = toga.Box(children=[self.document_notes_list, self.document_comics_list],
+                                                style=Pack(direction=COLUMN))
+        self._document_libraries_ready = False
+        self.document_search_results = toga.Box(style=Pack(direction=COLUMN))
+        self.document_results = toga.Box(style=Pack(direction=COLUMN))
+        from .folder_hub_style import source_tab
+        self.document_views = toga.Box(style=Pack(direction=ROW, margin_bottom=12))
+        self.document_view_buttons = {}
+        self.documents_view = getattr(self, 'documents_view', 'Libraries')
+        for name in ('Libraries', 'Favourites', 'Open', 'Recent', 'Saved'):
+            def choose(widget=None, name=name, **kwargs):
+                self.documents_view = name
+                self.show_document_collection()
+            button = (icon_button('favourite', 'Favourites', on_press=choose) if name == 'Favourites'
+                      else toga.Button(name, on_press=choose,
+                                       style=Pack(flex=1.4 if name == 'Libraries' else 1, height=48)))
+            source_tab(button, self.documents_view == name)
+            self.document_view_buttons[name] = button
+            self.document_views.add(button)
+        box.add(self.document_views,
+                toga.ScrollContainer(horizontal=False, content=self.document_results, style=Pack(flex=1)))
+        from .document_search import DocumentSearch
+        self._documents_file_search = DocumentSearch(self.app, self.publish_document_search)
+        self.documents_sections = box
         self.refresh_document_list()
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
-        self.documents_sections = HubSections(box, history)
+        return box
+
+    def show_document_collection(self):
+        if not hasattr(self, 'document_results'):
+            return
+        from .folder_hub_style import source_tab
+        query = bool(getattr(self, 'documents_query', '').strip())
+        parent = self.document_views.parent
+        if query and parent is not None:
+            parent.remove(self.document_views)
+        elif not query and parent is None:
+            index = self.documents_sections.children.index(self.app._documents_status_row) + 1
+            self.documents_sections.insert(index, self.document_views)
+        for name, button in self.document_view_buttons.items():
+            source_tab(button, self.documents_view == name)
+        selected = self.document_search_results if query else {
+            'Open': self.document_open_list, 'Recent': self.document_recent_list,
+            'Saved': self.document_saved_list, 'Libraries': self.document_libraries_list,
+            'Favourites': self.document_favourites_list}[self.documents_view]
+        if list(self.document_results.children) != [selected]:
+            self.document_results.clear()
+            self.document_results.add(selected)
+        if not query and self.documents_view == 'Libraries' and not self._document_libraries_ready:
+            self.populate_document_libraries()
+        if not query and self.documents_view == 'Favourites':
+            from .favourites import populate
+            self.document_favourites_list.clear()
+            populate(self.app, self.document_favourites_list, heading=False)
         self.reflow_documents_hub()
-        return self.documents_sections
+
+    def populate_document_libraries(self):
+        self._document_libraries_ready = True
+        from .notes_discovery import populate
+        populate(self.app, self.document_notes_list, title='Notes', refresh=False)
+        self.document_comics_list.clear()
+        self.document_comics_list.add(heading('Comics'))
+        if not self.app.feature_enabled('comics'):
+            self.document_comics_list.add(empty_document_row('Comics is disabled.'))
+            return
+        catalog = self.app.reader_manager().catalog
+        target = self.document_comics_list
+        target.add(empty_document_row('Finding libraries…'))
+        async def discover():
+            await catalog.refresh_library_folders()
+            if target is not self.document_comics_list or not self.app.active_host:
+                return
+            target.clear()
+            target.add(heading('Comics'))
+            rows = []
+            for record in catalog.library_records:
+                if not self.app.library_folder_visible(record):
+                    continue
+                async def open_library(widget=None, record=record, **kwargs):
+                    if self.app.checkpoint():
+                        await catalog.library_host.open_folder(record)
+                button = list_button(toga.Button(record['name'], on_press=open_library,
+                                                  style=Pack(height=48)))
+                button_icons(button, [('folder_hub', record['source'])])
+                rows.append(button)
+            target.add(document_list(rows, 'No Comics libraries found.'))
+            if 'could not' in catalog.book_status.text:
+                target.add(empty_document_row(catalog.book_status.text))
+        old = getattr(self, '_document_comics_discovery', None)
+        if old is not None:
+            old.cancel()
+        self._document_comics_discovery = self.app.loop.create_task(discover())
+
+    def publish_document_search(self, hits, failures):
+        target = self.document_search_results
+        target.clear()
+        rows = []
+        for hit in hits:
+            async def open_result(widget=None, source=hit['source'], **kwargs):
+                if not self.app.checkpoint():
+                    return
+                if source['type'] == 'managed':
+                    return self.app.stored_document_opener(source['resource'])()
+                if source['type'] == 'notebook':
+                    from features.notebooks.mobile.documents import open_notebook
+                    return await open_notebook(self.app, key=source['resource'])
+                from .document_sources import reopen_file
+                try:
+                    await reopen_file(self.app, source)
+                except (OSError, ValueError) as error:
+                    await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
+            button = list_button(toga.Button(hit['name'], on_press=open_result, style=Pack(height=48)))
+            from .browser_ui import middle_filename
+            middle_filename(button)
+            button_icons(button, [('storage_local', 'Local document'), *(
+                [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [])])
+            row = toga.Box(children=[button, empty_document_row(hit['location'] + ' · ' + hit['path'])],
+                           style=Pack(direction=COLUMN))
+            rows.append(row)
+        target.add(document_list(rows, 'No matching local documents.'))
+        if failures:
+            target.add(empty_document_row('Some local locations could not be searched.'))
+        self.reflow_documents_hub()
 
     def search_documents(self, widget, **kwargs):
         self.documents_query = widget.value
+        self._documents_file_search.stop_local_search()
+        self.document_search_results.clear()
+        if widget.value.strip():
+            self.document_search_results.add(empty_document_row('Searching local filenames…'))
+        self.show_document_collection()
         self._document_search_delay()
 
     async def clear_recent_documents(self, widget=None, **kwargs):
@@ -450,39 +583,38 @@ class HubUI:
             return
         from .workspace import Session
         query = getattr(self, 'documents_query', '').strip().casefold()
-        def matches(summary):
-            return not query or query in summary[0].casefold()
+        if query:
+            self.document_search_results.clear()
+            self.document_search_results.add(empty_document_row('Searching local filenames…'))
+            self._documents_file_search.start(query)
+            self.show_document_collection()
+            return
+        self._documents_file_search.stop_local_search()
         for section in (self.document_open_list, self.document_recent_list, self.document_saved_list):
             for child in list(section.children):
                 section.remove(child)
         sessions = [session for session in self.workspace.sessions.values() if self.session_visible(session)]
         sessions.sort(key=lambda session: session.id != self.workspace.active)
         entries = self.document_open_list
-        entries.add(heading('All open'))
-        entries.add(toga.Label('Closing keeps saved files. You’ll be asked about unsaved edits.',
-                              style=Pack(font_size=12, margin_bottom=8)))
         rows = []
         for session in sessions:
             summary = self.session_summary(session)
-            if matches(summary):
-                rows.append(self.session_panel(session, close=True, summary=summary))
-        entries.add(document_list(rows,
-            'No matching open documents.' if query else 'No open documents.'))
+            rows.append(self.session_panel(session, close=True, summary=summary))
+        entries.add(document_list(rows, 'No open documents.'))
+        if rows:
+            entries.add(empty_document_row('Close a view with ×. Your saved file stays.'))
         recent = self.recent_items(excluding=[session.identity for session in sessions])
         clear = surface(toga.Button('Clear', on_press=self.clear_recent_documents,
             style=Pack(height=44, margin_top=8)), radius=0, background='transparent',
             foreground='accent', outlined=False, eink_outlined=False)
-        self.document_recent_list.add(toga.Box(children=[heading('Recent'), clear],
-            style=Pack(direction=ROW, align_items=CENTER, gap=12)))
+        self.document_recent_list.add(toga.Box(children=[toga.Box(style=Pack(flex=1)), clear],
+            style=Pack(direction=ROW, align_items=CENTER)))
         rows = []
         for session, summary in recent:
-            if matches(summary):
-                rows.append(self.recent_row(session, summary))
-        self.document_recent_list.add(document_list(rows,
-            'No matching recent documents.' if query else 'No closed recent documents.'))
+            rows.append(self.recent_row(session, summary))
+        self.document_recent_list.add(document_list(rows, 'No closed recent documents.'))
         represented = {session.identity for session in sessions}
         represented.update(session.identity for session, _ in recent)
-        self.document_saved_list.add(heading('Saved documents'))
         rows = []
         for record in self.store.cached_summaries():
             if not self.app.feature_enabled('text_editor'):
@@ -490,17 +622,15 @@ class HubUI:
             if ('managed-text', record.id) in represented:
                 continue
             summary = record.name, text_document_kind(record.name), []
-            if matches(summary):
-                session = Session('', 'managed-text', record.id, summary[1], title=record.name)
-                rows.append(self.recent_row(session, summary))
+            session = Session('', 'managed-text', record.id, summary[1], title=record.name)
+            rows.append(self.recent_row(session, summary))
         from features.notebooks.mobile.documents import repository
         for key, name in (repository(self.app).list() if self.app.feature_enabled('notebooks') else ()):
             if ('notebook', key) not in represented:
                 summary = name, 'notebook', []
-                if matches(summary):
-                    rows.append(self.recent_row(Session('', 'notebook', key, 'notebook', title=name), summary))
-        self.document_saved_list.add(document_list(rows,
-            'No matching saved documents.' if query else 'No other saved documents.'))
+                rows.append(self.recent_row(Session('', 'notebook', key, 'notebook', title=name), summary))
+        self.document_saved_list.add(document_list(rows, 'No other saved documents.'))
+        self.show_document_collection()
 
     async def open_document_category(self, category):
         extensions = {

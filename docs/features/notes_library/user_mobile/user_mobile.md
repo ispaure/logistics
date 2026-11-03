@@ -14,6 +14,13 @@ Use Files, Calendar and Links to navigate, and the library's close control to
 leave. Unsaved changes retain their save/discard/cancel choices. Folder-backed
 Markdown uses the [shared mobile editing controls](../../text_editor/user_mobile/user_mobile.md).
 
+Notes Library accepts Markdown files up to 16 MiB. Reading allows up to 96 MiB
+of rendered HTML and 128 MiB for the final private page. Embedded images share a
+48 MiB file-byte budget per render; each image remains limited to 8 MiB and 16
+megapixels. Images request lazy loading as you scroll. Formatted editing retains
+its 1 MiB source limit; larger notes open in Source mode for editing. Preview
+errors appear in a popup and retain the current document.
+
 The landing page offers **Open Document** and, for writable libraries,
 **New Document**. On iOS, the title sits between the Files and Links pane buttons;
 long names pan within that space, respecting the system's motion preferences.
@@ -118,16 +125,23 @@ upper-left Files button or swipe right across the document to browse; swipe left
 in the drawer or tap outside it to return to reading. Choose a note to close the
 drawer. The upper-right Links button, or a left swipe across the document,
 opens **Backlinks** and **Outgoing links**. Swipe right in that drawer to
-close it. At 864 usable points of library width or more, Files and Calendar stay
+close it. At 864 usable points of library width or more, the library panel stays
 beside the document; Links always opens on demand. Resizing preserves the current
-note and the selected Files or Calendar tab.
+note and the selected panel tab.
 Horizontal tables, selected text and zoomed pages retain their ordinary gestures.
 
 Floating Files and Links panels dim the content behind them and block its controls until the
 panel closes. Tap the dimmed area to dismiss either panel; there is no panel X.
-The storage/editability caption in Files uses a subdued italic style.
+The library drawer uses the full usable screen height. Its tabs stay at the top;
+the library name and storage/editability caption stay at the bottom. Files has
+a compact footer for New document, New folder, Collapse all folders and Library
+actions. Tap the library name to browse its root; it also accepts file drops.
+File rows keep the existing font size and touch height.
 
-The left drawer has **Files** and **Calendar** tabs. Calendar starts on the current
+The left panel has **Files**, **Search** and **Calendar** tabs. Files uses the
+available height for its folder tree. Search keeps its query and results in a
+separate tab, with **In documents** and **File names** scope buttons. Returning
+to Files shows the tree even while a search query is retained. Calendar starts on the current
 month; use its arrows to browse months. A dot marks a day with a note named
 `YYYY-MM-DD.md` anywhere in the library. Tap to open it, choosing a folder if
 several notes share that date. A missing day offers confirmation before creating
@@ -136,14 +150,15 @@ daily notes. Refresh daily notes after files are changed outside the library.
 Calendar reads filenames only and keeps its index in memory, with a 10,000-entry
 and 100-folder-level limit; a failed scan does not offer creation.
 
-In Files, hold a file or folder for **Move / rename…**, **Copy…**, or **Delete…**,
+In Files, hold a file or folder name for the same **Move / rename…**, **Copy…**,
+or **Delete…** options as its **…** button,
 as supported by the location. Destinations stay inside this library and must have
 existing parent folders. Copy and move refuse existing names; delete asks for
 confirmation and permanently removes the selected item and its contents. Links
 are not rewritten. Cancelling the action menu or its move/copy form returns to
 the pane that opened it. Android Back does the same, keeping the open document
-and its history unchanged. The search choices are **Search in File Names** and
-**Search within Documents**. Searches also inspect unopened folders, excluding
+and its history unchanged. Search offers **File names** and **In documents**.
+Searches also inspect unopened folders, excluding
 hidden configuration.
 
 Opening a Markdown document shows a full-pane **Opening document…** screen with
@@ -176,6 +191,6 @@ while resizing the writing area. Keyboard dismissal restores the previous
 navigation visibility; destination tabs can remain hidden while a document is open.
 
 Each Notes Library file/folder row has **…** actions for Move / rename, Copy and
-Delete when supported by its storage. Hold and drag a filename onto a folder
-to move it, or onto **Library root** to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
+Delete when supported by its storage. Hold and drag its icon onto a folder
+to move it, or onto the library name in the footer to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
 confirmation and existing copy/move destinations are preserved.

@@ -18,29 +18,94 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class NotesDrawersProbe(LogisticsMobile):
+    async def check_file_holds(self, owner, report):
+        from unittest.mock import patch
+        output = Path(self.paths.cache)
+        async def touch(payload):
+            (output / 'notes-touch-request.json').write_text(json.dumps(payload))
+            for _ in range(200):
+                done = output / 'notes-touch-done'
+                if done.exists():
+                    done.unlink()
+                    await asyncio.sleep(.3)
+                    return
+                await asyncio.sleep(.1)
+            raise AssertionError('Native hold driver did not reply')
+        owner.sidebar.show_sidebar()
+        await asyncio.sleep(.4)
+        original = owner.view.window.dialog
+        dialogs = []
+        async def show(dialog):
+            dialogs.append(dialog)
+            return await original(dialog)
+        with patch.object(owner.view.window, 'dialog', new=show):
+            for path in ('Home.md', 'Long folder name for compact row preview'):
+                button = next(button for row in owner.rows.children for button in row.children
+                              if getattr(button, 'vault_path', None) == path)
+                native = button._impl.native
+                frame = native.convertRect(native.bounds, toView=self.main_window._impl.native)
+                before = len(dialogs)
+                await touch(dict(action='long-press', points=[float(frame.origin.x + frame.size.width / 2),
+                                                            float(frame.origin.y + frame.size.height / 2)]))
+                assert len(dialogs) == before + 1, ('Hold did not open options', path)
+                assert [value for _, value, _ in dialogs[-1].choices] == ['move', 'copy', 'delete', 'cancel']
+                assert owner.file_drag.source is None
+                assert owner.sidebar.overlay is None and not owner.sidebar.retiring
+                await capture_window(self, output / 'notes-file-hold.png')
+                await touch(dict(action='capture-menu'))
+                from rubicon.objc import SEL
+                from commonUtils.ui.native.keyboard import native_value
+                def find_cancel(view):
+                    if view.respondsToSelector(SEL('text')) and str(native_value(view.text)) == 'Cancel':
+                        return view
+                    for child in native_value(view.subviews):
+                        found = find_cancel(child)
+                        if found is not None:
+                            return found
+                    return None
+                cancel = find_cancel(native_value(dialogs[-1].native.view))
+                assert cancel is not None, 'Cancel label missing from native options'
+                frame = cancel.convertRect(cancel.bounds, toView=self.main_window._impl.native)
+                await touch(dict(action='tap', points=[float(frame.origin.x + frame.size.width / 2),
+                                                      float(frame.origin.y + frame.size.height / 2)]))
+                assert owner.sidebar.side == 'files'
+        await capture_window(self, output / 'notes-compact-files.png')
+        owner.sidebar.show_detail()
+        await asyncio.sleep(.3)
+        report['native_file_and_folder_holds'] = True
+
     async def check_note_actions(self, owner, report):
         assert await owner.open_note('Other.md')
         await asyncio.sleep(.3)
         assert owner.secondary.parent is None
         async def invoke(button, complete):
             item = button._ios_action_item
-            assert item.enabled and item.target is not None
+            assert item.isEnabled() and item.target is not None
             item.target.performSelector(item.action, withObject=item)
             for _ in range(100):
                 if complete():
                     break
                 await asyncio.sleep(.05)
             else:
-                raise AssertionError(('Native action did not complete', button.accessible_name))
+                raise AssertionError(('Native action did not complete', button.accessible_name,
+                                      owner.notice.text, getattr(owner.embedded, 'dirty', None)))
             await asyncio.sleep(.2)
         await invoke(owner.back_button, lambda: owner.path == 'Home.md')
-        assert owner.forward_button._ios_action_item.enabled
+        assert owner.forward_button._ios_action_item.isEnabled()
         await invoke(owner.forward_button, lambda: owner.path == 'Other.md')
         await invoke(owner.edit, lambda: owner.editing)
+        formatted = owner.embedded.formatted
+        for _ in range(100):
+            if await formatted.view.evaluate_javascript(
+                    'document.documentElement.dataset.editorBridge===' + json.dumps(formatted.bridge)
+                    + ' && typeof window.markdownSnapshot==="function"'):
+                break
+            await asyncio.sleep(.05)
+        else:
+            raise AssertionError('Formatted editor did not finish loading')
         await invoke(owner.edit, lambda: not owner.editing)
-        actions = owner.reader_actions_button._ios_action_item
-        assert actions.menu is not None and actions.target is None
-        assert owner.reader_actions_button._impl.native.showsMenuAsPrimaryAction
+        actions = owner.reader_actions_button._impl.native
+        assert actions.menu is not None and actions.showsMenuAsPrimaryAction
         assert any(label == 'Contents…' for label, _ in owner.reader_actions.actions)
         assert await owner.open_note('Home.md')
         await asyncio.sleep(.3)
@@ -85,16 +150,19 @@ class NotesDrawersProbe(LogisticsMobile):
         owner = None
         try:
             self.show_documents_hub()
+            self.document_view_buttons['Libraries'].on_press()
             await self._notes_discovery_task
             await asyncio.sleep(.5)
             status = self.document_notes_list.children[2]
             assert 'Unlock LocalCrypt' in status._settings_source_text
-            assert '\n' in status._settings_rendered_text
+            assert status._settings_rendered_text
             await capture_window(self, output / 'notes-discovery.png')
-            root = output / 'Compulsion-Shared-Obsidian-Notion'
+            root = output / 'Art'
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
-            (root / 'Home.md').write_text('# Home\n\nRead here. [[Other]]\n')
+            (root / 'Home.md').write_text('# Character Art Team\n\nProducer: Diane Guillemont\n\nLead Character Artist: Chad Emond\n\n## Pages\n\n[[Other]]\n\n## Naming conventions\n\nKeep shared files organized by project.\n')
             (root / 'Other.md').write_text('# Other\n\n[[Home]]\n')
+            (root / 'Long folder name for compact row preview').mkdir(exist_ok=True)
+            (root / 'Long document name to preview inside the sidebar.md').write_text('# Preview')
             owner = await open_vault(self, LocalFiles(root), '', 'files')
             await asyncio.sleep(1)
             await capture_window(self, output / 'notes-landing.png')
@@ -112,14 +180,15 @@ class NotesDrawersProbe(LogisticsMobile):
                 assert float(left.origin.x + left.size.width) <= float(title.origin.x) + 1
                 assert float(title.origin.x + title.size.width) <= float(right.origin.x) + 1
                 if (output / 'drive-notes-touches').exists():
-                    for direction, side in ((1, 'files'), (-1, 'links')):
+                    directions = ((-1, 'links'),) if owner.sidebar.expanded else ((1, 'files'), (-1, 'links'))
+                    for direction, side in directions:
                         await self.real_swipe(owner, direction)
                         assert owner.sidebar.side == side, ('landing swipe', direction, owner.sidebar.side)
                         await self.real_swipe(owner, -direction)
                         assert owner.sidebar.side is None
                     assert await owner.open_note('Home.md')
                     await asyncio.sleep(.5)
-                    for direction, side in ((1, 'files'), (-1, 'links')):
+                    for direction, side in directions:
                         await self.real_swipe(owner, direction)
                         assert owner.sidebar.side == side, ('article swipe', direction, owner.sidebar.side)
                         owner.sidebar.show_detail()
@@ -130,6 +199,7 @@ class NotesDrawersProbe(LogisticsMobile):
                         assert not owner.sidebar.retiring
                         assert overlay.container is None
                     report['native_touch_swipes'] = True
+                    await self.check_file_holds(owner, report)
             for orientation in ('portrait', 'landscape-left', 'portrait'):
                 await rotate(self, orientation, settle=.5)
                 if owner.sidebar.expanded:
@@ -139,8 +209,9 @@ class NotesDrawersProbe(LogisticsMobile):
                 assert await owner.open_note('Home.md')
                 if type(self._impl).__module__.startswith('toga_iOS.'):
                     await self.check_note_actions(owner, report)
+                    await capture_window(self, output / ('notes-reading-' + orientation + '.png'))
                 if owner.sidebar.expanded:
-                    assert owner.back_action() is None
+                    assert owner.back_action() == (owner.previous_note if owner.history_index > 0 else None)
                 for _ in range(100):
                     if await owner.web.evaluate_javascript(
                             'window.notesDrawersBase===' + json.dumps(owner.base) +

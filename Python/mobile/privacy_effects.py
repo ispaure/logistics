@@ -3,6 +3,9 @@
 
 def retire_stale_content(app):
     """Retire revoked sources; dirty drafts retain their own protected lifetime."""
+    hub = getattr(app, '_hub_controller', None)
+    if hub is not None:
+        hub.credentials_changed()
     output = getattr(app, 'audio_output', None)
     if output is not None:
         # Publication may be a queued startup/metadata update after a fresh Play.

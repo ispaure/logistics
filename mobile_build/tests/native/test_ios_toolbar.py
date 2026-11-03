@@ -64,6 +64,28 @@ class ToolbarTests(TestCase):
         bar.isHidden.return_value = True
         self.assertTrue(supplemental_fits(self.controller, 1))
 
+    def test_supplemental_budget_has_no_activity_height_cap(self):
+        rect = NS(origin=NS(x=382, y=0), size=NS(width=84, height=678))
+        bar = Mock(bounds=rect, items=list(range(5)))
+        bar.isHidden.return_value = False
+        bar.convertRect.return_value = rect
+        self.controller.tabBarController = NS(tabBar=bar)
+        self.controller.view = NS(bounds=rect, safeAreaInsets=NS(bottom=28))
+        with patch('mobile.ios_toolbar.system_occlusions') as regions:
+            # Extend far beyond the previously observed 250-point activity,
+            # then contract without resizing the window or changing bar items.
+            for height, fits in ((170, True), (250, False), (400, False),
+                                 (650, False), (170, True)):
+                with self.subTest(height=height):
+                    regions.return_value = ((382, 0, 84, height),)
+                    self.assertEqual(supplemental_fits(self.controller, 1), fits)
+            # Separate activity/status reservations must use the lowest edge,
+            # even if the regions arrive out of vertical order.
+            regions.return_value = ((382, 220, 84, 80), (382, 0, 84, 120))
+            self.assertFalse(supplemental_fits(self.controller, 1))
+            regions.return_value = ((0, 0, 84, 650), (382, 0, 84, 170))
+            self.assertTrue(supplemental_fits(self.controller, 1))
+
     def test_supplemental_moves_to_live_overflow_and_returns_when_space_recovers(self):
         find, more = Button('find', 'Search this folder'), Button('more', 'Folder actions')
         more._impl.native.menu = NS(children=['folder-action'])

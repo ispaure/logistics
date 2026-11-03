@@ -8,18 +8,22 @@ from commonUtils.formats.markdown.image_sources import folder_image_source
 
 
 class MarkdownMedia:
-    def __init__(self, provider, document, *, root=None, entry=None, resolve=None):
+    def __init__(self, provider, document, *, root=None, entry=None, resolve=None,
+                 max_image_bytes=16 * 1024 * 1024):
         self.provider, self.document, self.root = provider, provider.relative(document), root
         from types import SimpleNamespace
         self.image_provider = SimpleNamespace(relative=provider.relative, open=provider.open, entry=entry) if entry else provider
-        self.images = folder_image_source(self.image_provider, document, root=root, resolve=resolve)
+        self.max_image_bytes = max_image_bytes
+        self.images = folder_image_source(self.image_provider, document, root=root, resolve=resolve,
+                                         max_total_bytes=max_image_bytes)
         self.videos, self.closed, self.lock = {}, False, RLock()
         self.resolve = resolve
 
     def render_source(self, *, resolve=None):
         """Each render gets a fresh raster budget; video leases stay document-owned."""
         from features.video.formats import VIDEO_EXTENSIONS
-        images = folder_image_source(self.image_provider, self.document, root=self.root, resolve=resolve or self.resolve)
+        images = folder_image_source(self.image_provider, self.document, root=self.root, resolve=resolve or self.resolve,
+                                     max_total_bytes=self.max_image_bytes)
         def source(target):
             with self.lock:
                 if self.closed:

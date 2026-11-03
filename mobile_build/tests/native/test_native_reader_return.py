@@ -23,6 +23,43 @@ class Navigation:
 
 
 class NativeReaderReturnTests(unittest.TestCase):
+    def test_native_pop_from_library_file_form_restores_origin_and_clears_form_context(self):
+        library_view = toga.Box(children=[toga.Label('Open document')])
+        self.routes.show(library_view, route='notes-library:fixture')
+        form = toga.Box(children=[toga.Label('Rename file')])
+        library = SimpleNamespace(view=library_view, file_action_view=form, file_action_side='files',
+                                  valid=Mock(return_value=True), sidebar=SimpleNamespace(show=Mock()))
+        def clear():
+            library.file_action_view = None
+            library.file_action_side = None
+        library.clear_file_action = Mock(side_effect=clear)
+        self.app.vault_browser = library
+        self.routes.show(form, route='notes-manage')
+        self.pop()
+        self.assertIs(self.routes.body().children[0], library_view)
+        self.assertIsNone(library.file_action_view)
+        library.clear_file_action.assert_called_once()
+        library.sidebar.show.assert_called_once_with('files')
+
+    def test_native_pop_past_library_does_not_reopen_its_drawer(self):
+        library_view = toga.Box(children=[toga.Label('Open document')])
+        self.routes.show(library_view, route='notes-library:fixture')
+        form = toga.Box(children=[toga.Label('Copy file')])
+        library = SimpleNamespace(view=library_view, file_action_view=form, file_action_side='files',
+                                  valid=Mock(return_value=True), sidebar=SimpleNamespace(show=Mock()))
+        def clear():
+            library.file_action_view = None
+            library.file_action_side = None
+        library.clear_file_action = Mock(side_effect=clear)
+        self.app.vault_browser = library
+        self.routes.show(form, route='notes-copy')
+        nav = self.navigation[self.host.destinations.index('files')]
+        nav.viewControllers[:] = nav.viewControllers[:1]
+        self.routes.native_popped(nav)
+        self.assertIs(self.routes.body().children[0], self.browser)
+        self.assertIsNone(library.file_action_view)
+        library.sidebar.show.assert_not_called()
+
     def setUp(self):
         self.host = NativeNavigationHost(DESTINATION_ITEMS)
         self.app = SimpleNamespace(select_destination=Mock(return_value=True),

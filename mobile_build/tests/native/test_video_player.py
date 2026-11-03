@@ -375,7 +375,14 @@ class VideoBuildTests(unittest.TestCase):
         owner = Path(__file__).resolve().parents[3] / 'Python/features/video/mobile/ios'
         for native in owner.glob('*.m'):
             for helper in re.findall(r'#import "([^"\n]+\.m)"', native.read_text()):
-                self.assertIn('features/video/mobile/ios/' + helper, sources)
+                if (owner / helper).is_file():
+                    self.assertIn('features/video/mobile/ios/' + helper, sources)
+                else:
+                    import json
+                    host = Path(__file__).resolve().parents[3] / 'Python/mobile'
+                    modules = json.loads((host / 'mobile_sources.json').read_text())['modules']
+                    self.assertIn('ios/' + helper, modules)
+                    self.assertTrue((host / 'ios' / helper).is_file())
         self.assertEqual(document_feature('movie.MKV'), 'video')
 
 

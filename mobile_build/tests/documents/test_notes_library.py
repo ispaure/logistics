@@ -354,7 +354,7 @@ class NotesLibraryTests(unittest.TestCase):
         (self.vault / 'Destination').mkdir()
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
-            self.assertIn(owner.root_drop_button, owner.files_content.children)
+            self.assertIn(owner.root_drop_button, owner.panel_identity.children)
             await owner.open_note('Vault/Home.md')
             owner.sidebar.show_sidebar()
             from mobile.favourites import catalog, reference
@@ -781,6 +781,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.app.remember_credential_association('Synthetic.zip', ['Secret'], session_only=True)
                 self.assertEqual(self.app.existing_crypt_locations(), {'LocalCrypt: Secret': 'Secret'})
                 self.app.show_documents_hub()
+                self.app.document_view_buttons['Libraries'].on_press()
                 while True:
                     discovery = self.app._notes_discovery_task
                     await discovery
@@ -847,6 +848,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.app.clear_private_catalog()
                 self.assertIsNone(owner.path)
                 self.app.show_documents_hub()
+                self.app.document_view_buttons['Libraries'].on_press()
                 await self.app._notes_discovery_task
                 self.assertFalse(self.app.document_notes_list.children[1].children)
             finally:
@@ -866,6 +868,7 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertFalse(any(getattr(child, 'text', '') == 'Open as Notes Library'
                                  for child, _ in self.app.folder_action_controls))
             self.app.show_documents_hub()
+            self.app.document_view_buttons['Libraries'].on_press()
             await self.app._notes_discovery_task
             button = next(child for child in self.app.document_notes_list.children[1].children
                           if getattr(child, 'text', '') == 'Notes')

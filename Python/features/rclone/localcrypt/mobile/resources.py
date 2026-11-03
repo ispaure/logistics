@@ -5,6 +5,7 @@ import base64
 import os
 import re
 import stat
+from threading import Event, Thread
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
@@ -19,6 +20,31 @@ from features.rclone.localcrypt.note_lookup import CryptNoteLookup
 from features.rclone.access import ResourceAccess
 from features.rclone.localcrypt.mobile.locations import LocalCryptLocation, OfflineCryptLocation
 from features.rclone.mobile.service import native_service
+
+
+@contextmanager
+def write_progress(client, output, stream, cancelled):
+    """Observe native fd writes without buffering plaintext or touching widgets."""
+    report = getattr(stream, 'transfer_progress', None)
+    stopped = Event()
+    def watch():
+        cancelling = False
+        while not stopped.wait(.25):
+            if cancelled() and not cancelling:
+                cancelling = True
+                try:
+                    client.cancel()
+                except (OSError, ValueError):
+                    pass  # Access checks still reject publication after cancellation.
+            if report is not None:
+                report(os.fstat(output.fileno()).st_size)
+    watcher = Thread(target=watch, name='localcrypt-write-progress', daemon=True)
+    watcher.start()
+    try:
+        yield
+    finally:
+        stopped.set()
+        watcher.join()
 
 
 class CryptTransferStream(RangeReader):
@@ -319,8 +345,9 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
                         self.client.request('crypt_encode' if legacy_text else 'crypt_write_buffer', remote=self.remote, identity=self.identity,
                                             path=self.mapping(path), fd=output.fileno(), data=base64.b64encode(data).decode())
                     else:
-                        self.client.request('crypt_raw_write', remote=self.remote, identity=self.identity,
-                                            path=self.mapping(path), fd=fd, output_fd=output.fileno(), **values)
+                        with write_progress(self.client, output, stream, cancelled):
+                            self.client.request('crypt_raw_write', remote=self.remote, identity=self.identity,
+                                                path=self.mapping(path), fd=fd, output_fd=output.fileno(), **values)
                 check_cancelled(cancelled)
                 self.mapping(path)  # Revalidate the credential session before publication.
                 rename_exclusive(temporary, target)

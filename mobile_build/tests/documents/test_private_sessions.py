@@ -324,8 +324,12 @@ class PrivateSessionTests(unittest.TestCase):
         self.assertFalse(self.app.private_sessions.activate(owner.session.id))
         self.app.show_documents_hub()
         def texts(widget):
-            return [getattr(widget, 'text', '')] + [text for child in getattr(widget, 'children', ()) for text in texts(child)]
-        self.assertFalse(any('Sensitive-title' in text for text in texts(self.app.build_documents_hub().content)))
+            children = list(getattr(widget, 'children', ()))
+            content = getattr(widget, 'content', None)
+            if content is not None and content not in children:
+                children.append(content)
+            return [getattr(widget, 'text', '')] + [text for child in children for text in texts(child)]
+        self.assertFalse(any('Sensitive-title' in text for text in texts(self.app.build_documents_hub())))
         self.assertEqual(self.app.recent_documents.sessions(), [])
         # Even an incorrectly cleared transient flag cannot persist a private provider.
         owner.session.transient = False

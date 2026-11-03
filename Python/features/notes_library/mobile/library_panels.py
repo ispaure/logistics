@@ -1,4 +1,4 @@
-"""Files/calendar drawer and contextual file commands for the Notes Library."""
+"""Files, Search and Calendar panels with a pinned library footer."""
 import asyncio
 import calendar
 import posixpath
@@ -30,49 +30,128 @@ class LibraryPanels:
         metadata = children[1]
         metadata.style.font_size = CAPTION_FONT
         metadata.style.font_style = 'italic'
+        metadata.style.margin_bottom = 0
         self.host.presentation.surface(metadata, radius=0, background='transparent', foreground='muted',
                                        outlined=False, eink_outlined=False)
         self.files_content = toga.Box(children=[], style=Pack(direction=COLUMN, flex=1))
         for child in children[2:]:
             self.tree.remove(child)
-            self.files_content.add(child)
+            if child not in (self.search, self.search_mode):
+                self.files_content.add(child)
+        self.rows_scroll = self.files_content.children[0]
+        self.search_scope = toga.Box(style=Pack(direction=ROW))
+        self.search_scope_buttons = {}
+        for label, value in (('In documents', 'Search within Documents'), ('File names', 'Search in File Names')):
+            def choose(widget=None, value=value, **kwargs):
+                self.search_mode.value = value
+            button = toga.Button(label, on_press=choose, style=Pack(flex=1, height=44, font_size=CONTROL_FONT))
+            self.search_scope_buttons[value] = button
+            self.search_scope.add(button)
+        self.search_content = toga.Box(children=[self.search, self.search_scope],
+            style=Pack(direction=COLUMN, flex=1, gap=4))
         self.tree.clear()
+        self.tree.style.margin = 0
+        self.host.presentation.surface(self.tree, radius=0, background='alternate', foreground='text', outlined=False)
         self.panel_tabs = {}
+        self.panel_tab_indicators = {}
         tabs = self.host.presentation.surface(toga.Box(style=Pack(direction=ROW)),
-            radius=11, background='alternate', outlined=False)
-        for name in ('Files', 'Calendar'):
+            radius=0, background='transparent', outlined=False)
+        for name in ('Files', 'Search', 'Calendar'):
             def select(widget=None, name=name, **kw):
                 if self.panel_tab != name:
                     self.select_panel_tab(name)
             button = toga.Button(name, on_press=select,
-                style=Pack(flex=1, height=48, font_size=CONTROL_FONT, margin=2))
-            self.host.tab_style(button, name == self.panel_tab)
+                style=Pack(height=46, font_size=CONTROL_FONT))
             self.panel_tabs[name] = button
-            tabs.add(button)
+            indicator = toga.Box(style=Pack(height=2))
+            self.panel_tab_indicators[name] = indicator
+            tabs.add(toga.Box(children=[button, indicator], style=Pack(direction=COLUMN, flex=1)))
+            self.style_panel_tab(name, name == self.panel_tab)
         self.calendar_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
         self.calendar_scroll = toga.ScrollContainer(content=self.calendar_content, horizontal=False, style=Pack(flex=1))
         self.panel_body = toga.Box(children=[self.files_content], style=Pack(direction=COLUMN, flex=1))
-        self.tree.add(tabs, metadata, self.panel_body)
+        self.panel_body.style.margin_left = self.panel_body.style.margin_right = 8
+        self.panel_body.style.margin_top = 8
+        self.panel_actions = toga.Box(style=Pack(direction=ROW, gap=4))
+        self.panel_footer = toga.Box(children=[self.panel_actions],
+            style=Pack(direction=COLUMN, margin_left=8, margin_right=8, margin_bottom=8))
+        self.panel_identity = toga.Box(children=[metadata], style=Pack(direction=ROW, align_items='center'))
+        self.panel_footer.add(self.panel_identity)
+        self.panel_metadata = metadata
+        self.tree.add(tabs, self.panel_body, self.panel_footer)
         self.search_mode.items = ['Search within Documents', 'Search in File Names']
         self.search_mode.value = 'Search within Documents'
+        self.sync_search_scope()
+
+    def sync_search_scope(self):
+        for value, button in getattr(self, 'search_scope_buttons', {}).items():
+            self.host.tab_style(button, self.search_mode.value == value)
+
+    def style_panel_tab(self, name, selected):
+        button = self.panel_tabs[name]
+        self.host.tab_style(button, selected)
+        self.host.presentation.surface(button, radius=0, background='transparent',
+            foreground='text' if selected else 'muted', outlined=False)
+        self.host.presentation.surface(self.panel_tab_indicators[name], radius=0,
+            background='accent' if selected else 'transparent', outlined=False)
+
+    def install_panel_actions(self):
+        """Reuse the library's existing commands, keeping the tree viewport clear."""
+        presentation = self.host.presentation
+        actions = [('edit', 'New document', self.new_note, 'create'),
+                   ('folder_add', 'New folder', lambda widget=None, **kw: self.manage_entry(folder=True), 'create'),
+                   ('collapse', 'Collapse all folders', self.collapse_folders, None)]
+        for icon, label, callback, capability in actions:
+            if capability is None or self.library.supports(capability):
+                button = presentation.icon_button(icon, label, on_press=callback)
+                presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
+                self.panel_actions.add(button)
+        self.panel_actions.add(toga.Box(style=Pack(flex=1)))
+        self.panel_menu_button = presentation.icon_button('more', 'Library actions')
+        presentation.surface(self.panel_menu_button, radius=0, background='transparent', foreground='muted', outlined=False)
+        self.panel_actions.add(self.panel_menu_button)
+        self.panel_menu = self.host.commands(self.panel_menu_button,
+            [('Browse library root', self.browse_library_root), ('All documents', self.host.show_documents)],
+            self.browse_library_root)
+
+    async def browse_library_root(self, widget=None, **kwargs):
+        if not self.valid():
+            return
+        await self.reveal_folder(self.root)
+
+    def collapse_folders(self, widget=None, **kwargs):
+        if not self.valid():
+            return
+        self.expanded = {self.root}
+        self.render_tree()
 
     def select_panel_tab(self, name):
         if not self.valid() or name not in self.panel_tabs:
             return
         self.panel_tab = name
-        selected = self.files_content if name == 'Files' else self.calendar_scroll
+        selected = {'Files': self.files_content, 'Search': self.search_content,
+                    'Calendar': self.calendar_scroll}[name]
+        if name in ('Files', 'Search') and self.rows_scroll.parent is not selected:
+            if self.rows_scroll.parent is not None:
+                self.rows_scroll.parent.remove(self.rows_scroll)
+            selected.add(self.rows_scroll)
         if self.panel_body.children != [selected]:
             self.panel_body.clear()
             self.panel_body.add(selected)
         for key, button in self.panel_tabs.items():
-            self.host.tab_style(button, key == name)
-        if name == 'Calendar':
+            self.style_panel_tab(key, key == name)
+        if name == 'Files' and self.panel_actions.parent is None:
+            self.panel_footer.insert(0, self.panel_actions)
+        elif name != 'Files' and self.panel_actions.parent is not None:
+            self.panel_footer.remove(self.panel_actions)
+        if name != 'Search':
             self.search_generation += 1
             if self.search_task is not None:
                 if not self.search_task.done():
                     self.search_paused = True
                     self.search_task.cancel()
                 self.search_task = None
+        if name == 'Calendar':
             self.render_tree()  # Cancel unfinished work for the unmounted tab.
             self.refresh_calendar()
         else:
@@ -80,7 +159,7 @@ class LibraryPanels:
             if self.calendar_task is not None:
                 self.calendar_task.cancel()
             self.render_tree()
-            if self.search_paused:
+            if name == 'Search':
                 self.search_changed()
         self.sidebar.refresh_gestures()
 
@@ -215,6 +294,11 @@ class LibraryPanels:
                 if getattr(row, '_notes_selected', None) != selected:
                     self.host.highlight_entry(row, selected)
                     self.host.highlight_entry(button, selected)
+                    if not selected:
+                        self.host.presentation.surface(row, radius=0, background='transparent',
+                            foreground='text', outlined=False, eink_outlined=False)
+                        self.host.presentation.surface(button, radius=0, background='transparent',
+                            foreground='text', outlined=False, eink_outlined=False)
                     row._notes_selected = selected
 
     def bind_file_hold(self, button, path, *, directory=False):
@@ -223,8 +307,7 @@ class LibraryPanels:
                 self.host.loop.create_task(self.file_actions(path))
         button.notes_file_actions = show
         if hasattr(self, 'file_drag') and self.library.supports('rename'):
-            self.file_drag.bind(button, path, target=directory)
-            return
+            self.file_drag.bind(button, path, source=False, target=directory)
         backend = type(button._impl).__module__
         if backend.startswith('toga_iOS.'):
             from rubicon.objc import ObjCClass, SEL, objc_method
@@ -254,6 +337,10 @@ class LibraryPanels:
     def release_file_hold(self, button):
         if hasattr(self, 'file_drag'):
             self.file_drag.unbind(button)
+            icon = getattr(button, '_notes_drag_icon', None)
+            if icon is not None:
+                self.file_drag.unbind(icon)
+                button._notes_drag_icon = None
         binding = getattr(button, '_notes_hold', None)
         backend = type(button._impl).__module__
         if binding is not None and backend.startswith('toga_iOS.'):
@@ -282,6 +369,11 @@ class LibraryPanels:
         dialog.title, dialog.message = PurePosixPath(path).name, 'Choose a file action.'
         request = self.file_action_request = getattr(self, 'file_action_request', 0) + 1
         side, epoch, destination = self.sidebar.side, self.epoch, self.host.destination()
+        if side is not None:
+            # The floating panel lives above the controller's alert layer.
+            # Retire it before presenting the same menu for … and long press.
+            self.sidebar.show_detail()
+            self.sidebar.finish_dismissals()
         action = await self.view.window.dialog(dialog)
         if (not self.valid() or self.epoch != epoch or self.file_action_request != request
                 or self.host.destination() != destination):
@@ -320,12 +412,16 @@ class LibraryPanels:
         if self.file_command_busy or not self.file_action_current(view):
             return
         side = getattr(self, 'file_action_side', None)
-        self.file_action_view = None
-        self.file_action_side = None
-        self.file_action_destination = None
+        self.clear_file_action()
         self.present()
         if side is not None:
             self.sidebar.show(side)
+
+    def clear_file_action(self):
+        self.file_action_request = getattr(self, 'file_action_request', 0) + 1
+        self.file_action_view = None
+        self.file_action_side = None
+        self.file_action_destination = None
 
     def copy_entry_form(self, path, *, return_side=None):
         name = toga.TextInput(value=posixpath.relpath(path, self.root or '.'), style=Pack(height=48))
@@ -356,12 +452,20 @@ class LibraryPanels:
         self.show_file_action(form, route='notes-copy', title='Copy', return_side=return_side)
 
     async def delete_entry(self, path):
+        if not self.valid() or self.file_command_busy:
+            return
+        epoch, request, destination = self.epoch, getattr(self, 'file_action_request', 0), self.host.destination()
+        def current():
+            return (self.valid() and not self.file_command_busy and self.epoch == epoch
+                    and getattr(self, 'file_action_request', 0) == request and self.host.destination() == destination)
         change = PathChange(deleted=path)
         removed = change.removes
         if self.path and removed(self.path) and not await self.prepare_leave():
             return
+        if not current():
+            return
         if not await self.view.window.dialog(toga.ConfirmDialog('Delete ' + PurePosixPath(path).name + '?',
-                'Permanently delete this item and its contents? Links are not rewritten.')) or not self.valid():
+                'Permanently delete this item and its contents? Links are not rewritten.')) or not current():
             return
         self.file_command_busy = True
         try:
@@ -403,9 +507,12 @@ class LibraryPanels:
             self.file_command_busy = False
 
     def dispose_panels(self):
-        self.file_action_view = None
-        self.file_action_side = None
-        self.file_action_destination = None
+        if hasattr(self, 'panel_menu'):
+            self.panel_menu.dispose()
+        if hasattr(self, 'root_drop_button'):
+            self.root_drop_button.text = 'Notes Library'
+            self.root_drop_button.enabled = False
+        self.clear_file_action()
         self.calendar_generation += 1
         if self.calendar_task is not None:
             self.calendar_task.cancel()
