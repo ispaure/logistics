@@ -712,6 +712,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         for row in rows:
             item = qt.QTreeWidgetItem([row['name']])
             item.setData(0, qt.Qt.ItemDataRole.UserRole, (row['path'], row['directory']))
+            self.decorate_entry(item, row['path'], row['directory'])
             self.items[row['path']] = item
             if row['directory']:
                 item.setChildIndicatorPolicy(qt.QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
