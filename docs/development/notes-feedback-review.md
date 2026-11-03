@@ -54,3 +54,13 @@ dispatch, comic/EPUB visits, reader lifetime, mobile Markdown editing and shared
 Markdown image/heading rendering. These host checks are not certification of
 physical Android/iOS gesture delivery, native WebView codecs or device layout.
 No release gate or full-project test round is implied by this review.
+
+## Follow-up media refresh review
+
+Cached video streams now validate their source revision before reuse. Replacing
+a video retires the old content/transport and admits a fresh stream; deleting it
+or revoking access retires cached playback instead of returning a stale URL.
+Unchanged videos keep their existing stream. Focused regressions verify those
+lifetimes and read replacement bytes through the new playback URL. Existing
+LocalCrypt media and mobile library checks cover integration with the shared
+desktop/mobile callback.
