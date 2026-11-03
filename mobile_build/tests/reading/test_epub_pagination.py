@@ -18,6 +18,25 @@ class Book:
 
 
 class PaginationTests(unittest.TestCase):
+    def test_page_visit_back_is_bounded_and_failed_publication_keeps_target(self):
+        from mobile.reading.history import PageVisits
+        async def exercise():
+            visits = PageVisits()
+            for index in range(105):
+                visits.visit((0, index))
+            self.assertEqual(len(visits.previous), 100)
+            async def fail(position):
+                raise ValueError('Page unavailable')
+            with self.assertRaises(ValueError):
+                await visits.back(fail)
+            self.assertEqual(visits.previous[-1], (0, 103))
+            async def publish(position):
+                visits.visit(position)
+            await visits.back(publish)
+            self.assertEqual(visits.current, (0, 103))
+            self.assertEqual(visits.previous[-1], (0, 102))
+        asyncio.run(exercise())
+
     def test_counts_unknown_chapters_without_changing_the_current_page(self):
         async def exercise():
             request = [None]

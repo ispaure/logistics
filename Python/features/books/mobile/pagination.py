@@ -25,6 +25,8 @@ class MobilePagination:
         self.chapter = self.page = 0
         self.columns = 1
         self.error = False
+        from mobile.reading.history import PageVisits
+        self.visits = PageVisits()
 
     @property
     def book(self):
@@ -57,6 +59,10 @@ class MobilePagination:
             return
         changed = self.pages.reset(value['layout'])
         self.page, self.columns = value['index'], value['columns']
+        if not changed:
+            self.visits.visit((self.chapter, self.page))
+        elif self.visits.current is None:
+            self.visits.visit((self.chapter, self.page))
         self.pages.record(self.chapter, value['count'])
         if changed:
             self.error = False

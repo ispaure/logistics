@@ -338,6 +338,12 @@ class ReaderLifecycleTests(TestCase):
                     owner = self.app.private_sessions.active
                     self.assert_close_control(owner.crypt_view)
                     await owner.move_private_page(2)
+                    action = self.app.reader_back_action(owner.crypt_view)
+                    self.assertIsNotNone(action)
+                    await action()
+                    self.assertEqual(owner._provider_displayed_index, 0)
+                    self.assertIn(owner.session.id, self.app.workspace.sessions)
+                    await owner.move_private_page(2)
                     owner.crypt_view._reader_close_button.on_press()
                     self.assert_closed(owner)
                     self.assertTrue(await open_file(), self.app.cloud_status.value)

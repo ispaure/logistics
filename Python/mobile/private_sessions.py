@@ -424,6 +424,11 @@ class PrivateSessions:
             if reader.book is not None:
                 owner._provider_epub_locations = {reader.book.spine[index]: offset}
             await owner.move_private_page(index)
+        # Initial resume is one opening, not a user visit to the placeholder page.
+        for name in ('comic_navigation', 'pdf_navigation'):
+            navigation = getattr(reader, name, None)
+            if navigation is not None:
+                navigation.visits.previous.clear()
         session.kind = ('image' if getattr(reader, 'image_document', False) else 'pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
                         else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
         session.title = Path(reader.name).name

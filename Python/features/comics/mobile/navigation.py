@@ -17,6 +17,8 @@ class ComicNavigation:
         self.right_anchored = False
         self.resume_half = 0
         self.layout_reload = False
+        from mobile.reading.history import PageVisits
+        self.visits = PageVisits()
 
     def commit(self, indices):
         """Publish navigation only after native rendering succeeds."""
@@ -24,6 +26,8 @@ class ComicNavigation:
             self.resume_half = 0
         self.visible = indices
         self.page, self.half, self.split = self.prepared
+        if not self.layout_reload:
+            self.visits.visit((self.page, self.half))
         self.viewport = self.prepared_viewport
         self.right_anchored = self.prepared_right_anchored
         if self.split or not self.prepared_relayout:
