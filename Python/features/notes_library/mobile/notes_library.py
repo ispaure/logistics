@@ -22,6 +22,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
 from features.notes_library.notes import NotesLibrary, MAX_NOTE, MARKDOWN, document_kind
 from ..notes import breadcrumb_folders, fit_breadcrumbs
+from ..navigation import PathChange, MutationResult
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.search.names import natural_name_key, search_terms
 from commonUtils.search.providers import search_resources, SearchResult
@@ -1418,14 +1419,14 @@ class VaultBrowser(LibraryPanels):
                 try:
                     self.host.relocate_references(self.provider, source, destination)
                 except (OSError, ValueError, PermissionError):
-                    return True
-                return False
+                    return MutationResult(destination, reference_errors=['Some saved references could not be updated.'])
+                return MutationResult(destination)
             worker = asyncio.create_task(asyncio.to_thread(move))
             # Retire the worker before releasing its guard. A cancellation after
             # commit must still reconcile saved references and the current note.
             while True:
                 try:
-                    saved_reference_error = await asyncio.shield(worker)
+                    mutation = await asyncio.shield(worker)
                     break
                 except asyncio.CancelledError:
                     if worker.cancelled():
@@ -1436,14 +1437,12 @@ class VaultBrowser(LibraryPanels):
                 return False
             if moving_open:
                 self.retire_editor()
-            def remap(path):
-                return destination + path[len(source):] if path is not None and (
-                    path == source or path.startswith(source + '/')) else path
-            self.history = [remap(path) for path in self.history]
-            self.positions = {remap(path): value for path, value in self.positions.items()}
-            self.path, self.selected_path = remap(self.path), destination
-            self.expanded = {remap(path) for path in self.expanded} | {posixpath.dirname(destination)}
-            paths = {remap(path) for path in self.folders} | {
+            change = PathChange(source, mutation.destination)
+            self.history, self.history_index = change.history(self.history, self.history_index)
+            self.positions = change.positions(self.positions)
+            self.path, self.selected_path = change.remap(self.path), destination
+            self.expanded = {change.remap(path) for path in self.expanded} | {posixpath.dirname(destination)}
+            paths = {change.remap(path) for path in self.folders} | {
                 self.root, posixpath.dirname(source), posixpath.dirname(destination)}
             self.folders.clear()
             self.folder_pages.clear()
@@ -1460,7 +1459,7 @@ class VaultBrowser(LibraryPanels):
             self.refresh_library_indexes()
             self.refresh_reader_actions()
             self.notice.text = ('Moved ' + PurePosixPath(destination).name
-                               + ('; some saved references could not be updated.' if saved_reference_error else ''))
+                               + ('; some saved references could not be updated.' if mutation.reference_errors else ''))
             return True
         except OperationCancelled:
             return False

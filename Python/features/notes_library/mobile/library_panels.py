@@ -9,6 +9,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.operations import OperationCancelled
 from features.notes_library import library_files
+from ..navigation import PathChange
 from services.documents.authoring.document_dialogs import DocumentTypeDialog
 
 
@@ -320,8 +321,8 @@ class LibraryPanels:
         self.host.show_view(form, destination=self.destination, route='notes-copy', title='Copy')
 
     async def delete_entry(self, path):
-        def removed(current):
-            return current == path or current.startswith(path + '/')
+        change = PathChange(deleted=path)
+        removed = change.removes
         if self.path and removed(self.path) and not await self.prepare_leave():
             return
         if not await self.view.window.dialog(toga.ConfirmDialog('Delete ' + PurePosixPath(path).name + '?',
@@ -336,10 +337,9 @@ class LibraryPanels:
                 await asyncio.to_thread(self.host.relocate_references, self.provider, path, None)
             except (OSError, ValueError, PermissionError):
                 self.notice.text = 'Deleted; some saved references could not be updated.'
-            retained_index = sum(not removed(current) for current in self.history[:self.history_index + 1]) - 1
-            self.history = [current for current in self.history if not removed(current)]
+            self.history, retained_index = change.history(self.history, self.history_index)
             self.search_rows = [row for row in self.search_rows if not removed(row['path'])]
-            self.positions = {current: value for current, value in self.positions.items() if not removed(current)}
+            self.positions = change.positions(self.positions)
             self.expanded = {current for current in self.expanded if not removed(current)}
             self.folders = {current: rows for current, rows in self.folders.items() if not removed(current)}
             if self.path and removed(self.path):
