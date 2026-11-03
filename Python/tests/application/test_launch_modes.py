@@ -186,6 +186,28 @@ class LaunchModeTests(QtTestCase):
         window._update_offer_visibility()
         self.assertFalse(button.isVisible())
 
+    def test_release_controls_reserve_space_above_the_scrollable_launch_page(self):
+        window = self.window
+        surface = window.launch_surface
+        window.updates = Mock(available={'commit': 'a' * 40})
+        for width in (1250, 850):
+            window.dlg.resize(width, 800)
+            window._update_offer_visibility()
+            self.app.processEvents()
+            header_bottom = max(surface.version_label.geometry().bottom(),
+                                surface.update_button.geometry().bottom())
+            self.assertGreaterEqual(window.launch_stack.y(), header_bottom + 12)
+            headings = window.landing.findChildren(qt.QLabel, 'sectionTitle')
+            self.assertTrue(all(label.mapTo(surface, qt.QPoint()).y() > header_bottom for label in headings))
+        window.updates.available = None
+        window._update_offer_visibility()
+        self.app.processEvents()
+        self.assertGreaterEqual(window.launch_stack.y(), surface.version_label.geometry().bottom() + 12)
+        window._launch('hub')
+        self.app.processEvents()
+        self.assertEqual(surface.layout().contentsMargins().top(), 0)
+        self.assertEqual(window.launch_stack.y(), 0)
+
     def test_settings_remains_above_content_and_returns_to_original_tool(self):
         window = self.window
         window._launch('git')

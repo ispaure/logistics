@@ -1,8 +1,8 @@
 # Files and documents in Logistics
 
-Logistics starts with a launch chooser. The left half lists File Browser,
+Logistics starts with a launch chooser. **Features** on the left lists File Browser,
 Workspaces, Bulk Rename and enabled features with their own navigation buttons.
-Favourites appear above recent files in the right half. Workspace choices open
+Favourites appear above recent files in the right third. Workspace choices open
 with the sidebar by default. **Appearance & shared controls → Menus → Launch with
 sidebar** can switch launch-page choices to focused workspaces without it.
 Disabled features are absent. Use Settings to enable them, and their cards appear
@@ -12,9 +12,8 @@ navigation controls rather than launch cards.
 On Windows, the launch terminal minimizes once the chooser is displayed. You can
 restore it from the taskbar to inspect startup output.
 
-Click **Read & edit** below the feature cards to expand its document tools; it
-starts collapsed on the launch page. The separate New / Open Document chooser
-shows its tools immediately. The section always includes Markdown Editor. Enabled
+**Read & edit** appears below Favourites and Recent on the right, with its tools
+always visible in one column. The section always includes Markdown Editor. Enabled
 features add their registered document tools, such as Text Editor, EPUB Reader, Comic Reader,
 Image Viewer and Archives. **Open…** picks a file; **New** appears where creation is supported.
 Cancelling keeps the chooser visible. Opened documents use the shared workspace.
@@ -24,9 +23,14 @@ icons and source/state labels. Read-only documents include **(Read-Only)**.
 Session-only document titles keep **(🕵️ Session-Only)** without the remote name;
 the source remains visible in the storage row.
 
-The launch page gives each side half the available content width, up to a total
-of 1200 pixels. Narrow windows stack favourites and recents below the choices.
-Workspace and document-format cards each form a single column on the left.
+The launch page gives feature choices two-thirds of the available content width
+and the right column one-third, up to a total of 1200 pixels. Narrow windows
+stack the right column below the feature choices. Feature cards use two columns
+when each card has at least 340 pixels of width; otherwise they use one column.
+Read & edit cards remain one per row. All four section headings use the same
+large title style, aligned at the top rather than vertically centering the page.
+A 48-pixel gap separates the columns. Release information and any update button
+keep their own space above the scrollable launch content.
 The separate New / Open Document chooser uses up to three cards per row,
 reducing its columns in narrower windows. Cards settle before the first paint.
 Workspace and document cards highlight on hover; clickable workspace cards and New/Open buttons also

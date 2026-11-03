@@ -44,30 +44,52 @@ class LandingAppearanceTests(QtTestCase):
         )
         page.set_tool_launchers([(str(i), 'Workspace ' + str(i), detail, 'git')
                                  for i, detail in enumerate(descriptions)])
-        page.read_edit_toggle.click()
         page.set_document_launchers({str(i): DocumentLauncherContribution(
             str(i), 'Text Editor', lambda: None, 'text', i, lambda: None,
             description='Read and edit documents in this format.') for i in range(6)})
         return page
 
-    def test_read_edit_starts_collapsed_and_title_toggles_the_cards(self):
-        page = LandingPage()
-        self.addCleanup(page.deleteLater)
-        self.assertTrue(page.document_section.isHidden())
-        page.read_edit_toggle.click()
-        self.assertFalse(page.document_section.isHidden())
-        page.read_edit_toggle.click()
-        self.assertTrue(page.document_section.isHidden())
+    def test_section_headers_replace_welcome_and_share_the_large_font(self):
+        page = self.page(SLATE_LIGHT)
+        page.resize(1250, 800)
+        page.show()
+        self.app.processEvents()
+        page._settle_layout()
+        headings = {label.text(): label for label in page.findChildren(qt.QLabel, 'sectionTitle')}
+        self.assertEqual(set(headings), {'Features', 'Favourites', 'Recent', 'Read & edit'})
+        for label in headings.values():
+            self.assertAlmostEqual(label.font().pointSizeF(), point_size(19.5), places=1)
+            self.assertTrue(label.font().bold())
+        self.assertEqual(headings['Features'].mapTo(page, qt.QPoint()).y(),
+                         headings['Favourites'].mapTo(page, qt.QPoint()).y())
+        labels = [label.text() for label in page.findChildren(qt.QLabel)]
+        self.assertNotIn('Welcome to Logistics', labels)
+        self.assertNotIn('Choose your workspace, or open something to read or edit.', labels)
 
-    def test_launch_columns_share_width_and_saved_lists_stack_on_the_right(self):
+    def test_read_edit_is_visible_below_saved_lists_with_one_card_per_row(self):
+        page = self.page(SLATE_LIGHT)
+        page.resize(1250, 800)
+        page.show()
+        self.app.processEvents()
+        page._settle_layout()
+        recent = page.recent_layout.itemAt(0).widget()
+        self.assertTrue(page.document_section.isVisible())
+        self.assertIs(page.document_section.parentWidget(), page.saved_files)
+        self.assertGreater(page.document_section.y(), recent.geometry().bottom())
+        self.assertEqual(page.document_grid.getItemPosition(1)[:2], (1, 0))
+        self.assertEqual(page._document_columns, 1)
+
+    def test_launch_columns_use_two_to_one_width_and_saved_lists_stack_on_the_right(self):
         page = self.page(SLATE_LIGHT)
         page.resize(1250, 800)
         page.show()
         self.app.processEvents()
         page._settle_layout()
         self.assertNotIn('hub', page.buttons)
-        self.assertLessEqual(abs(page.choices.width() - page.saved_files.width()), 1)
-        self.assertGreater(page.saved_files.x(), page.choices.geometry().right())
+        self.assertLessEqual(abs(page.choices.width() - 2 * page.saved_files.width()), 2)
+        self.assertEqual(page.saved_files.x() - page.choices.geometry().right() - 1, 48)
+        self.assertEqual(page.tool_grid.getItemPosition(1)[:2], (0, 1))
+        self.assertEqual(page.tool_grid.getItemPosition(2)[:2], (1, 0))
         favourites = page.favourites_layout.itemAt(0).widget()
         recent = page.recent_layout.itemAt(0).widget()
         self.assertLess(favourites.y(), recent.y())
@@ -75,6 +97,7 @@ class LandingAppearanceTests(QtTestCase):
         self.app.processEvents()
         page._settle_layout()
         self.assertGreater(page.saved_files.y(), page.choices.geometry().bottom())
+        self.assertEqual(page.tool_grid.getItemPosition(1)[:2], (1, 0))
 
     def test_long_saved_filenames_preserve_columns_and_reopen_the_full_entry(self):
         from types import SimpleNamespace
@@ -90,7 +113,7 @@ class LandingAppearanceTests(QtTestCase):
             page.show()
             self.app.processEvents()
             page._settle_layout()
-            self.assertLessEqual(abs(page.choices.width() - page.saved_files.width()), 1)
+            self.assertLessEqual(abs(page.choices.width() - 2 * page.saved_files.width()), 2)
             for layout in (page.favourites_layout, page.recent_layout):
                 container = layout.itemAt(1).widget()
                 button = container.findChild(qt.QPushButton)
@@ -181,9 +204,10 @@ class LandingAppearanceTests(QtTestCase):
                     def eventFilter(self, watched, event):
                         if event.type() == qt.QEvent.Type.Paint:
                             frames.append(geometry())
-                            for cards in (page._tool_cards, page._document_cards):
-                                for i, card in enumerate(cards[:-page._document_columns]):
-                                    below = cards[i + page._document_columns]
+                            for cards, columns in ((page._tool_cards, page._tool_columns),
+                                                   (page._document_cards, page._document_columns)):
+                                for i, card in enumerate(cards[:-columns]):
+                                    below = cards[i + columns]
                                     gap = below.y() - card.y() - card.height()
                                     if gap < 16:
                                         bad_gaps.append((card.geometry().getRect(), below.geometry().getRect(), gap))
