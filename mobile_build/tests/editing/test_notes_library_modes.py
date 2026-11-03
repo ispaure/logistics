@@ -34,7 +34,7 @@ class NotesLibraryModeTests(unittest.TestCase):
             async def search(query):
                 owner.search.value = query
                 await owner.search_task
-                return [row.children[-1] for row in owner.rows.children]
+                return [next(child for child in row.children if hasattr(child, 'vault_path')) for row in owner.rows.children]
 
             buttons = await search('orange')
             self.assertEqual([button.text for button in buttons],
@@ -45,7 +45,7 @@ class NotesLibraryModeTests(unittest.TestCase):
             with patch.object(owner.library, 'read', side_effect=AssertionError('read note body')):
                 owner.search_mode.value = 'Search in File Names'
                 await owner.search_task
-                buttons = [row.children[-1] for row in owner.rows.children]
+                buttons = [next(child for child in row.children if hasattr(child, 'vault_path')) for row in owner.rows.children]
             self.assertEqual([button.text for button in buttons], ['Red sea TURTLE.md', 'Turtle red folder'])
             self.assertEqual([row.children[0].style.width for row in owner.rows.children], [0, 0])
             self.assertNotIn('Vault/Projects', owner.folders)
@@ -111,24 +111,25 @@ class NotesLibraryModeTests(unittest.TestCase):
                 self.assertFalse(await offer_vault(self.app, browser, self.provider, 'Vault', rows))
         self.run_async(exercise())
 
-    def test_opening_a_local_workspace_keeps_the_chosen_library_visible(self):
+
+    def test_workspaces_browse_notes_folders_without_prompt_on_every_visit(self):
         import shutil
         from services.documents.locations import collection_path
         from mobile.routes import contains
         shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
         async def exercise():
-            await self.app.show_files(local_root=True)
-            parent_location = self.app.file_loaded_location
-            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='notes')) as dialog:
-                self.assertTrue(await self.app.show_files(location=('Local files', 'Notes')))
-                self.assertEqual(dialog.await_count, 1)
-            owner = self.app.vault_browser
-            self.assertEqual(owner.root, 'Notes')
-            self.assertTrue(contains(self.app.body, owner.view))
-            self.assertEqual(self.app.file_path, '')
-            self.assertEqual(self.app.file_location.value, '')
-            self.assertEqual(self.app.file_loaded_location, parent_location)
-            self.assertEqual((self.app.file_storage.value, self.app.file_location.value), parent_location)
+            for cold in (True, False, False):
+                if cold:
+                    self.app.show_locations()
+                else:
+                    self.app.routes.back()
+                with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='notes')) as dialog:
+                    self.assertTrue(await self.app.show_files(location=('Local files', 'Notes')))
+                    dialog.assert_not_awaited()
+                self.assertEqual(self.app.file_path, 'Notes')
+                self.assertTrue(contains(self.app.body, self.app.files_view))
+                self.assertIsNotNone(self.app.file_browser.tree)
+                self.assertIsNone(getattr(self.app, 'vault_browser', None))
         self.run_async(exercise())
 
     def test_folder_choice_keeps_parent_contents_until_files_are_chosen(self):
@@ -157,73 +158,6 @@ class NotesLibraryModeTests(unittest.TestCase):
 
         self.run_async(exercise())
 
-    def test_cold_folder_choice_does_not_present_or_populate_file_browser(self):
-        import shutil
-        from services.documents.locations import collection_path
-        from mobile.routes import contains
-        shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
-
-        async def exercise():
-            self.app.show_locations()
-            previous_body = self.app.body
-
-            async def choose(dialog):
-                self.assertIs(self.app.body, previous_body)
-                self.assertFalse(contains(self.app.body, self.app.files_view))
-                self.assertIsNone(self.app.file_browser.tree)
-                return 'notes'
-
-            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=choose)):
-                self.assertTrue(await self.app.show_files(location=('Local files', 'Notes')))
-            self.assertTrue(contains(self.app.body, self.app.vault_browser.view))
-            self.assertIsNone(self.app.file_browser.tree)
-
-        self.run_async(exercise())
-
-    def test_repeated_folder_request_waits_for_the_pending_choice(self):
-        import shutil
-        from services.documents.locations import collection_path
-        from mobile.obsidian import offer_vault as original_offer
-        shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
-
-        async def exercise():
-            await self.app.show_files(local_root=True)
-            parent_tree = self.app.file_browser.tree
-            entered, repeated, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
-            calls = 0
-            async def offer(*args):
-                nonlocal calls
-                calls += 1
-                if calls == 2:
-                    repeated.set()
-                return await original_offer(*args)
-            async def choose(dialog):
-                entered.set()
-                await release.wait()
-                return 'files'  # Browse Files
-            with patch('mobile.obsidian.offer_vault', new=offer), \
-                    patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=choose)) as dialog:
-                first = asyncio.create_task(self.app.browser_file_location(('Local files', 'Notes')))
-                second = None
-                try:
-                    await asyncio.wait_for(entered.wait(), 5)
-                    second = asyncio.create_task(self.app.browse_files())
-                    await asyncio.wait_for(repeated.wait(), 5)
-                    await asyncio.sleep(0)
-                    self.assertFalse(second.done())
-                    self.assertIs(self.app.file_browser.tree, parent_tree)
-                    self.assertEqual(self.app.file_path, '')
-                    self.assertEqual(dialog.await_count, 1)
-                    release.set()
-                    self.assertEqual(await asyncio.gather(first, second), [False, True])
-                    self.assertEqual(self.app.file_path, 'Notes')
-                finally:
-                    release.set()
-                    await first
-                    if second is not None:
-                        await second
-
-        self.run_async(exercise())
 
     def test_repeated_notes_choice_opens_one_library(self):
         async def exercise():
@@ -275,75 +209,6 @@ class NotesLibraryModeTests(unittest.TestCase):
 
         self.run_async(exercise())
 
-    def test_dismissing_folder_choice_keeps_parent_and_allows_retry(self):
-        import shutil
-        from services.documents.locations import collection_path
-        shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
-
-        async def exercise():
-            await self.app.show_files(local_root=True)
-            tree = self.app.file_browser.tree
-            location = self.app.file_loaded_location
-            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as dialog:
-                self.assertFalse(await self.app.browser_file_location(('Local files', 'Notes')))
-                self.assertIs(self.app.file_browser.tree, tree)
-                self.assertEqual((self.app.file_storage.value, self.app.file_location.value), location)
-                self.assertFalse(await self.app.browser_file_location(('Local files', 'Notes')))
-                self.assertEqual(dialog.await_count, 2)
-
-        self.run_async(exercise())
-
-    def test_pending_choice_cannot_open_folder_superseded_by_another_read(self):
-        import shutil
-        from threading import Event
-        from services.documents.locations import collection_path
-        shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
-        (collection_path(self.app.private_root) / 'Other').mkdir()
-
-        async def exercise():
-            await self.app.show_files(local_root=True)
-            provider = self.app.file_provider_for('Local files')
-            original = provider.list
-            entered, release = Event(), Event()
-            dialog_entered, dialog_release = asyncio.Event(), asyncio.Event()
-            def slow(path='', **kwargs):
-                if path == 'Other':
-                    entered.set()
-                    release.wait(5)
-                return original(path, **kwargs)
-            async def choose(dialog):
-                dialog_entered.set()
-                await dialog_release.wait()
-                return 'notes'
-            with patch.object(provider, 'list', side_effect=slow), \
-                    patch.object(self.app, 'file_provider_for', return_value=provider), \
-                    patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=choose)), \
-                    patch('mobile.obsidian.open_vault', new=AsyncMock(return_value=object())) as opened:
-                first = asyncio.create_task(self.app.browser_file_location(('Local files', 'Notes')))
-                second = None
-                try:
-                    await asyncio.wait_for(dialog_entered.wait(), 5)
-                    second = asyncio.create_task(self.app.browser_file_location(('Local files', 'Other')))
-                    for _ in range(100):
-                        if entered.is_set():
-                            break
-                        await asyncio.sleep(.01)
-                    self.assertTrue(entered.is_set())
-                    dialog_release.set()
-                    self.assertFalse(await first)
-                    opened.assert_not_awaited()
-                    self.assertEqual(self.app.file_location.value, 'Other')
-                    release.set()
-                    self.assertTrue(await second)
-                    self.assertEqual(self.app.file_path, 'Other')
-                finally:
-                    dialog_release.set()
-                    release.set()
-                    await first
-                    if second is not None:
-                        await second
-
-        self.run_async(exercise())
 
     def test_cancelled_same_folder_read_cannot_reset_a_newer_request(self):
         import shutil
@@ -395,25 +260,6 @@ class NotesLibraryModeTests(unittest.TestCase):
 
         self.run_async(exercise())
 
-    def test_leaving_folder_choice_does_not_publish_pending_folder(self):
-        import shutil
-        from services.documents.locations import collection_path
-        shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
-
-        async def exercise():
-            await self.app.show_files(local_root=True)
-            parent_tree = self.app.file_browser.tree
-
-            async def leave(dialog):
-                self.app.show_documents_hub()
-                return 'cancel'
-
-            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=leave)):
-                self.assertFalse(await self.app.show_files(location=('Local files', 'Notes')))
-            self.assertIs(self.app.file_browser.tree, parent_tree)
-            self.assertEqual(self.app.file_path, '')
-
-        self.run_async(exercise())
 
     def test_leaving_during_folder_read_does_not_show_a_late_choice(self):
         import shutil
@@ -471,33 +317,6 @@ class NotesLibraryModeTests(unittest.TestCase):
             self.assertEqual(self.app.cloud_client.calls, [('list', '')])
         self.run_async(exercise())
 
-    def test_same_workspace_prompts_again_after_back_and_library_close(self):
-        import shutil
-        from services.documents.locations import collection_path
-        from mobile.routes import contains
-        shutil.copytree(self.vault, collection_path(self.app.private_root) / 'Notes')
-        async def exercise():
-            self.app.show_locations()
-            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='files')) as dialog:
-                await self.app.show_files(location=('Local files', 'Notes'))
-                self.assertEqual(dialog.await_count, 1)
-                await self.app.browse_files()
-                self.assertEqual(dialog.await_count, 1)  # Refresh is the same visit.
-                self.app.routes.back()
-                await self.app.show_files(location=('Local files', 'Notes'))
-                self.assertEqual(dialog.await_count, 2)
-                self.app.routes.back()
-            for _ in range(2):
-                with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='notes')) as dialog:
-                    await self.app.show_files(location=('Local files', 'Notes'))
-                    self.assertEqual(dialog.await_count, 1)
-                owner = self.app.vault_browser
-                self.assertTrue(contains(self.app.body, owner.view))
-                owner.close()
-                self.assertEqual(self.app.native_host.state.destination, 'files')
-                self.assertFalse(self.app.routes.screens['files'])
-                self.assertFalse(contains(self.app.body, self.app.files_view))
-        self.run_async(exercise())
 
     def test_notes_keep_an_independent_provider_when_browser_access_closes(self):
         from commonUtils.runtime.resources.local import LocalFiles
