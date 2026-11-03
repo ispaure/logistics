@@ -168,12 +168,12 @@ explicit saved opt-in for background speech; it defaults to off. See
 
 ## Notes Library and Documentation Library
 
-Opening a folder with an `.obsidian` subfolder offers **Open as Notes Library**
-or **Browse Files** before displaying the folder. Your previous screen stays
-visible while you choose. Dismissing the prompt leaves that screen in place.
-Browsing opens the ordinary folder view. Notes Library keeps
-actual filenames in its sidebar; refreshes of the current folder do not repeat
-the choice. Returning from a parent folder offers it again.
+Open **Documents → Notes Library** to see libraries found in Local and unlocked
+LocalCrypt storage. Discovery looks for an `.obsidian` directory at the storage
+root and up to two folders below it. Use **Refresh libraries** after adding or
+moving one. Unlock credentials first to see encrypted libraries. Workspaces
+opens folders directly without a Notes Library prompt or menu choice. Notes
+Library keeps actual filenames in its sidebar.
 
 In writable libraries, **••• → New folder…** creates a folder beside the selected
 note or inside the selected folder. **Rename / move selected…** accepts a new
@@ -217,7 +217,7 @@ creation, renaming or moving. Notes editing and file organization belong to
 Logistics' Notes Library.
 
 
-From a Local or unlocked LocalCrypt location, choose **Open as Notes Library**
+From **Documents → Notes Library**, choose a Local or unlocked LocalCrypt library
 when the folder contains an `.obsidian` directory. Cloud folders never offer
 library mode; download or sync a local copy first. Individual cloud Markdown
 files can still be opened in the standalone read-only viewer.

@@ -64,10 +64,6 @@ class RemoteBrowserView(qt.QMainWindow):
         install_browser_location(self.file_browser, self.provider)
         from features.application import registry
         self.notes_offer = None
-        if registry.is_feature_enabled('text_editor'):
-            from features.text_editor.ui.notes_offer import NotesFolderOffer
-            self.notes_offer = NotesFolderOffer(self.file_browser)
-            self.notes_offer.progress.completed.connect(lambda *args: self.idle.emit())
         self.operation = OperationProgress(self)
         self.operation.completed.connect(self._completed)
         layout.addWidget(self.file_browser)

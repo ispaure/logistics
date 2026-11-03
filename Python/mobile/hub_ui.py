@@ -415,10 +415,13 @@ class HubUI:
         self.document_open_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_recent_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_saved_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_notes_list = toga.Box(style=Pack(direction=COLUMN))
+        from .notes_discovery import populate as populate_notes
+        populate_notes(self.app, self.document_notes_list)
         history = toga.Box(children=[self.document_recent_list, self.document_saved_list], style=Pack(direction=COLUMN))
         if self.app.feature_enabled('books') or self.app.feature_enabled('comics'):
             history.add(toga.Button('Open Books & Comics library', on_press=self.show_library, style=Pack(height=48)))
-        box.add(self.document_open_list, history)
+        box.add(self.document_notes_list, self.document_open_list, history)
         self.refresh_document_list()
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))

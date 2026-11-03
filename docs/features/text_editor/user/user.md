@@ -240,12 +240,9 @@ the opening Markdown heading (falling back to the filename). The sidebar does
 not create, rename or move files, even when Alt/Option enables page editing.
 
 **Notes Library** is Logistics' workspace for writing notes. Sidebar entries keep
-their actual filenames. When you enter a folder containing an `.obsidian`
-subfolder, a dialog offers **Open as Notes Library** and **Browse Files** before
-displaying its contents. The previous folder stays visible while you choose.
-**Cancel** leaves it unchanged. **Browse Files** continues the original folder
-navigation, tree expansion or column selection. The choice applies to that visit;
-refreshing the same folder does not offer it again.
+their actual filenames. Use **Open as Notes Library** in the workspace action
+panel for a local folder containing an `.obsidian` directory. Browsing folders
+opens their files directly without a mode prompt.
 
 For writable libraries, use **New Document**, **New folder** and **Rename / Move…**
 in the sidebar. Drag an entry onto a folder to move it; drop on empty sidebar

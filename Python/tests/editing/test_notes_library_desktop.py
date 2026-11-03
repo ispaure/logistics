@@ -580,11 +580,8 @@ class NotesLibraryDesktopTests(QtTestCase):
             with patch('features.rclone.executable.get_rclone_path', return_value=binary):
                 view = CryptBrowserView(fixture.item)
             view.show()
-            offer = view.notes_offer
-            self.wait_until(lambda: offer.location is not None and not offer.progress.busy)
-            self.assertIsNotNone(offer.candidate, offer.progress.message.text())
-            self.assertTrue(offer.dialog.isVisible())
-            self.assertIsNone(view.file_browser.views.root)
+            self.assertIsNone(view.notes_offer)
+            self.wait_until(lambda: view.file_browser.views.root is not None)
             view.close()
             # Seed the synthetic cloud crypt with the same vault marker and nested note.
             environment, source, destination = session.launch(
