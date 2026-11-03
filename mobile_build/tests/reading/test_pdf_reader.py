@@ -1,5 +1,6 @@
 """Mobile session integration using Toga's official dummy backend."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -202,13 +203,13 @@ class PDFMobileTests(unittest.TestCase):
                 app.loop.run_until_complete(check())
 
     def test_cold_local_pdf_open_initializes_provider_controls(self):
-        with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
+        with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf), ExitStack() as fixture_cleanup:
             root = Path(directory)
             LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             local = root / 'cold.pdf'
             local.write_bytes(PDF)
             self.assertFalse(hasattr(app, 'cloud_view'))
@@ -237,13 +238,13 @@ class PDFMobileTests(unittest.TestCase):
                 return super().request(action, **values)
             def crypt_remotes(self):
                 return []
-        with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
+        with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf), ExitStack() as fixture_cleanup:
             root = Path(directory)
             LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             client = app.cloud_client = Client()
             client.supports_streaming = False
             client.files['remote.pdf'] = PDF

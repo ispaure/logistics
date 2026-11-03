@@ -1,5 +1,6 @@
 """Local documents and alternate content providers do not require rclone I/O."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -88,13 +89,13 @@ with TemporaryDirectory() as folder:
                 os.replace(stage, self._locate(path))
 
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as folder:
+        with TemporaryDirectory() as folder, ExitStack() as fixture_cleanup:
             root = Path(folder)
             LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.set_feature_enabled('rclone', False, refresh=False)
             data = root / 'alternate'
             data.mkdir()

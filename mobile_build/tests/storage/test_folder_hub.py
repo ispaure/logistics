@@ -20,13 +20,13 @@ from mobile_build.tests.support.mirror import MirrorClient
 class FolderHubTests(unittest.TestCase):
     def test_local_tab_survives_picker_rebuild_and_cold_app_start(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             def launch():
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-                self.addCleanup(close_loop, app.loop)
-                self.addCleanup(app.main_window.close)
+                fixture_cleanup.callback(close_loop, app.loop)
+                fixture_cleanup.callback(app.main_window.close)
                 app.build_folder_picker(choices={})
                 return app
             app = launch()

@@ -16,7 +16,7 @@ from logistics_build import vm_backend, windows_backend
 class GuestToolPreparationTests(unittest.TestCase):
     def test_linux_catalog_keeps_existing_runtime_and_uv_pins(self):
         catalog = json.loads(Path(vm_backend.__file__).with_name('build_manager_tools.json').read_text())
-        self.assertEqual(linux_parameters(**catalog['linux']), dict(python='3.12.2', uv_version='0.12.18'))
+        self.assertEqual(linux_parameters(**catalog['linux']), dict(python='3.12.2', uv_version='0.13.4'))
         self.assertEqual(vm_backend.BOOTSTRAP, LINUX_BOOTSTRAP)
 
     def test_windows_preparation_delegates_with_project_pins_and_keeps_receipt(self):
@@ -34,7 +34,7 @@ class GuestToolPreparationTests(unittest.TestCase):
             self.assertEqual(parameters['python'], 'cpython-3.12.2-windows-x86_64')
             self.assertEqual(parameters['guest_architecture'], 'ARM64')
             self.assertEqual(parameters['python_architecture'], 'x86_64')
-            self.assertEqual(parameters['tools']['uv']['version'], '0.12.18')
+            self.assertEqual(parameters['tools']['uv']['version'], '0.13.4')
             self.assertEqual(result, json.loads(output.read_text()))
             self.assertEqual(result['status'], 'prepared')
             self.assertEqual(result['original_state'], 'stopped')

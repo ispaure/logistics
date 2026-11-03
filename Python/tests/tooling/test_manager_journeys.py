@@ -250,6 +250,22 @@ class JourneyAdapterTests(unittest.TestCase):
         builds = [json.loads((self.root / (target + '.validation.build.json')).read_text()) for target in ('ios', 'android')]
         self.assertTrue(builds[0][1] <= builds[1][0] or builds[1][1] <= builds[0][0])
 
+    def test_mobile_delivery_has_worker_priority_without_dropping_desktop_gates(self):
+        with patch.object(self.project, 'backend_options', return_value=['This Mac', 'Fedora container', 'Windows VM']):
+            plan = self.make(platforms=['macos', 'linux', 'windows', 'ios', 'android'],
+                             backends={'macos': 'This Mac', 'linux': 'Fedora container', 'windows': 'Windows VM',
+                                       'ios': 'This Mac', 'android': 'This Mac'})
+        mobile = ('ios.', 'android.', 'testflight.', 'firebase.')
+        mobile_positions = [i for i, phase in enumerate(plan.phases) if phase.id.startswith(mobile)]
+        desktop_positions = [i for i, phase in enumerate(plan.phases)
+                             if phase.id.startswith(('macos.', 'linux.', 'windows.'))]
+        self.assertLess(max(mobile_positions), min(desktop_positions))
+        self.assertEqual(set(plan.journey['platforms']), {'macos', 'linux', 'windows', 'ios', 'android'})
+        for step, own_gate in (('firebase.upload', 'android.validated'), ('testflight.upload', 'ios.validated')):
+            dependencies = transitive_dependency_ids(plan, step)
+            self.assertIn(own_gate, dependencies)
+            self.assertFalse(any(gate in dependencies for gate in ('macos.validated', 'linux.validated', 'windows.validated')))
+
     def test_validation_has_no_preparation_or_external_effects_and_no_cleanup_deadlock(self):
         plan = self.make('validate', destinations=[])
         self.assertEqual(plan.journey['destinations'], {})

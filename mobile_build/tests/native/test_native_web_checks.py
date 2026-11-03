@@ -18,9 +18,12 @@ class NativeWebCheckTests(unittest.IsolatedAsyncioTestCase):
         state = dict(platform_backend='toga_iOS.widgets.webview', ancestors=['large state'] * 1000)
         with patch.object(web_checks, 'native_state', return_value=state), \
                 patch.object(web_checks.asyncio, 'wait', new=AsyncMock(return_value=(set(), set()))), \
+                patch.object(web_checks.sys, 'platform', 'ios'), \
+                patch.object(web_checks.asyncio, 'sleep', new=AsyncMock()) as pause, \
                 patch('builtins.print') as output:
             with self.assertRaisesRegex(RuntimeError, 'did not render'):
                 await wait_for_text(view, '\U0001f600' * 1000)
+            pause.assert_awaited_once_with(60)
         signal = next(call.args[0] for call in output.call_args_list
                       if call.args[0].startswith('LOGISTICS_NATIVE_WEBVIEW_STALL='))
         self.assertLess(len(signal.encode()), 1000)

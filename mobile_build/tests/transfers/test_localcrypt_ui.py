@@ -1,5 +1,6 @@
 """Official Toga dummy backend: encrypted copies never enter persistent editors."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -38,13 +39,13 @@ class LocalCryptUITests(unittest.TestCase):
                 raise AssertionError(action)
             def crypt_remotes(self): return []
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             root = Path(directory).resolve()
             LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.cloud_client = Client()
             app.show_cloud(present=False)
             key = seed_offline_copy(app.crypt_copies)
