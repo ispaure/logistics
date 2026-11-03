@@ -112,6 +112,9 @@ async def exercise_localcrypt(app, passed):
 
     for name in ('note.md', 'text.txt'):
         await open_copy(name)
+        if name == 'note.md':
+            assert not hasattr(app.provider_sessions().active.crypt_view, '_workspace_frame')
+            assert not hasattr(app.provider_sessions().active.crypt_view, '_workspace_menu_button')
         assert app.provider_sessions().active.crypt_text.value
         await close_copy()
     for name, password in (('plain.cbz', ''), ('encrypted.cbz', 'synthetic-archive-password')):

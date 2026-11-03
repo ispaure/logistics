@@ -17,6 +17,22 @@ WORKSPACE_HEIGHT = 500
 
 
 class WorkspaceNavigationTests(unittest.TestCase):
+    def test_file_markdown_reader_has_no_drawer_but_keeps_document_actions(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.provider_documents import ProviderDocuments
+        app = self.app
+        path = Path(self.directory.name) / 'Standalone.md'
+        path.write_text('# Standalone note')
+        async def exercise():
+            await app.open_crypt(copies=ProviderDocuments(LocalFiles(path.parent)), key=path.name)
+        app.loop.run_until_complete(exercise())
+        owner = app.private_sessions.active
+        self.assertIsNotNone(owner)
+        self.assertTrue(owner.crypt_view._standalone_markdown)
+        self.assertFalse(hasattr(owner.crypt_view, '_workspace_frame'))
+        self.assertFalse(hasattr(owner.crypt_view, '_workspace_menu_button'))
+        self.assertIsNotNone(owner.crypt_actions)
+
     def test_standalone_markdown_preview_has_no_file_drawer_button(self):
         import toga
         preview = toga.Box(children=[toga.WebView()])
