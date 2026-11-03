@@ -17,6 +17,19 @@ from features.rclone.ui.credential_unlock import CredentialUnlockDialog, choose_
 
 
 class CredentialImportTests(QtTestCase):
+    def test_change_password_requires_matching_confirmation_before_dispatch(self):
+        path = credentials.import_credential_package(self.make_zip())
+        context = configuration.get_credential_config_path(path).with_suffix('.session')
+        session.remember(context, {'Fixture': {'type': 'local'}}, state_password='old', state_identity='a' * 64)
+        page = self.page()
+        self.assertTrue(page.change_password_button.isEnabled())
+        with patch.object(qt.QInputDialog, 'getText', side_effect=[('new', True), ('different', True)]) as prompt, \
+                patch('features.rclone.credential_password.change_password') as change:
+            page.change_password_button.click()
+        self.assertEqual(prompt.call_count, 2)
+        change.assert_not_called()
+        self.assertIn('match', page.status_label.text())
+
     def setUp(self):
         self.temporary = TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

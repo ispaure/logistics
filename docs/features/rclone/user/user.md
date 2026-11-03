@@ -557,3 +557,14 @@ Search waits until you stop typing for 0.4 seconds, then searches the current
 folder and every subfolder. Results include relative paths to distinguish equal
 filenames. Desktop LocalCrypt uses one recursive listing per search. Search
 reports listing errors instead of silently treating a partial scan as complete.
+
+## Change a loaded credential ZIP password
+
+In **Settings → Features → rclone**, select the loaded package and choose
+**Change ZIP password…** beside Unlock/Lock. Enter the new password twice. Saved
+configurations may also ask for the current ZIP password. Unsaved private edits
+must be resolved first. Logistics verifies the new encrypted ZIP in memory before
+replacing the original, republishes the loaded credentials and migrates matching
+protected reader history, favourites and desktop Recent. The password change
+retains credential members and contents. If history cannot migrate, its original
+ciphertext is kept; the status explains that it still needs the previous password.
