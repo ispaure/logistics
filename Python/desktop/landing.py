@@ -85,7 +85,7 @@ class LandingPage(qt.QWidget):
         content = self.content = qt.QWidget()
         content.installEventFilter(self)
         content.setMinimumWidth(240)
-        content.setMaximumWidth(880)
+        content.setMaximumWidth(1200 if not documents_only else 880)
         content.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
         layout = qt.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -102,38 +102,71 @@ class LandingPage(qt.QWidget):
         introduction.setWordWrap(True)
         layout.addWidget(introduction)
         self.buttons = {}
+        self.columns = qt.QGridLayout()
+        self.columns.setContentsMargins(0, 0, 0, 0)
+        self.columns.setHorizontalSpacing(24)
+        self.columns.setVerticalSpacing(24)
+        layout.addLayout(self.columns)
+        self.choices = qt.QWidget()
+        choices_layout = qt.QVBoxLayout(self.choices)
+        choices_layout.setContentsMargins(0, 0, 0, 0)
+        choices_layout.setSpacing(16)
+        self.columns.addWidget(self.choices, 0, 0)
         if not documents_only:
-            hub = LaunchCard('Open full hub with sidebar', 'All your tools, folders and documents in one place.', 'hub')
-            hub.clicked.connect(lambda: self.launch_requested.emit('hub'))
-            self.buttons['hub'] = hub
-            self._watch_card(hub)
-            layout.addWidget(hub)
             self.tool_grid = qt.QGridLayout()
             self.tool_grid.setSpacing(16)
-            layout.addLayout(self.tool_grid)
+            choices_layout.addLayout(self.tool_grid)
             hint = qt.QLabel('Workspaces open with the sidebar by default. Change this under Appearance & shared controls → Menus.')
             hint.setWordWrap(True)
-            layout.addWidget(hint)
-            layout.addSpacing(8)
-        title = qt.QLabel('Read & edit')
-        title.setObjectName('sectionTitle')
-        layout.addWidget(title)
-        self.document_grid = qt.QGridLayout()
+            choices_layout.addWidget(hint)
+            choices_layout.addSpacing(8)
+        self.document_section = qt.QWidget()
+        self.document_grid = qt.QGridLayout(self.document_section)
+        self.document_grid.setContentsMargins(0, 0, 0, 0)
         self.document_grid.setSpacing(16)
-        layout.addLayout(self.document_grid)
+        if documents_only:
+            title = qt.QLabel('Read & edit')
+            title.setObjectName('sectionTitle')
+            choices_layout.addWidget(title)
+        else:
+            self.read_edit_toggle = qt.QToolButton()
+            self.read_edit_toggle.setText('Read && edit')
+            self.read_edit_toggle.setAccessibleName('Read & edit')
+            self.read_edit_toggle.setCheckable(True)
+            self.read_edit_toggle.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            self.read_edit_toggle.setArrowType(qt.Qt.ArrowType.RightArrow)
+            self.read_edit_toggle.setCursor(qt.Qt.CursorShape.PointingHandCursor)
+            self.read_edit_toggle.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Fixed)
+            self.read_edit_toggle.setStyleSheet('QToolButton { text-align: left; font-weight: bold; padding: 8px; }')
+            self.read_edit_toggle.toggled.connect(self._toggle_document_section)
+            choices_layout.addWidget(self.read_edit_toggle)
+            self.document_section.hide()
+        choices_layout.addWidget(self.document_section)
+        choices_layout.addStretch()
         self.editor_buttons = {}
         self.editor_new_buttons = {}
         self._launcher_signature = None
         self._catalog_subscriptions = []
         self.saved_lists_changed.connect(self.refresh_saved_lists)
+        self.saved_files = qt.QWidget()
+        saved_layout = qt.QVBoxLayout(self.saved_files)
+        saved_layout.setContentsMargins(0, 0, 0, 0)
+        saved_layout.setSpacing(16)
         self.favourites_layout = qt.QVBoxLayout()
-        layout.addLayout(self.favourites_layout)
+        saved_layout.addLayout(self.favourites_layout)
         self.recent_layout = qt.QVBoxLayout()
-        layout.addLayout(self.recent_layout)
+        saved_layout.addLayout(self.recent_layout)
+        saved_layout.addStretch()
+        self.columns.addWidget(self.saved_files, 1, 0)
         centered.addWidget(content, 0, qt.Qt.AlignmentFlag.AlignHCenter)
         centered.addStretch()
         self.scroll.viewport().installEventFilter(self)
         self._fit_content()
+
+    def _toggle_document_section(self, expanded):
+        self.document_section.setVisible(expanded)
+        self.read_edit_toggle.setArrowType(qt.Qt.ArrowType.DownArrow if expanded else qt.Qt.ArrowType.RightArrow)
+        self._schedule_layout()
 
     def eventFilter(self, watched, event):
         if self._preparing_layout:
@@ -196,9 +229,8 @@ class LandingPage(qt.QWidget):
                 self.scroll.widget().layout().activate()
                 self._fit_content()
                 self.content.layout().activate()
-                for card in self._tool_cards + self._document_cards + [self.buttons.get('hub')]:
-                    if card is not None:
-                        card.layout().activate()
+                for card in self._tool_cards + self._document_cards:
+                    card.layout().activate()
                 self._fit_card_heights()
                 self.content.layout().invalidate()
                 self.content.layout().activate()
@@ -240,11 +272,6 @@ class LandingPage(qt.QWidget):
             for card in cards:
                 if card.minimumHeight() != height or card.maximumHeight() != height:
                     card.setFixedHeight(height)
-        hub = self.buttons.get('hub')
-        if hub is not None:
-            height = max(88, self._layout_text_height(hub.layout()) + 2)
-            if hub.minimumHeight() != height or hub.maximumHeight() != height:
-                hub.setFixedHeight(height)
 
     @classmethod
     def _layout_text_height(cls, layout):
@@ -272,11 +299,21 @@ class LandingPage(qt.QWidget):
 
     def _fit_content(self):
         margin = 16 if self._documents_only else 36
-        width = max(240, min(880, self.scroll.viewport().width() - 2 * margin))
+        width = max(240, min(880 if self._documents_only else 1200, self.scroll.viewport().width() - 2 * margin))
         if self.content.minimumWidth() != width or self.content.maximumWidth() != width:
             self.content.setFixedWidth(width)
-        three_column_width = 840
-        columns = 3 if width >= three_column_width else 2 if width >= 560 else 1
+        split = not self._documents_only and width >= 720
+        position = (0, 1) if split else (1, 0)
+        if self.columns.getItemPosition(self.columns.indexOf(self.saved_files))[:2] != position:
+            self.columns.removeWidget(self.saved_files)
+            self.columns.addWidget(self.saved_files, *position)
+        # Saved filenames and large fonts must not steal width from the tools.
+        choices_width = (width - self.columns.horizontalSpacing()) // 2 if split else width
+        self.choices.setFixedWidth(choices_width)
+        self.saved_files.setFixedWidth(width - self.columns.horizontalSpacing() - choices_width if split else width)
+        self.columns.setColumnStretch(0, 1)
+        self.columns.setColumnStretch(1, int(split))
+        columns = (3 if width >= 840 else 2 if width >= 560 else 1) if self._documents_only else 1
         self._document_columns = columns
         if hasattr(self, 'tool_grid'):
             self._arrange_cards(self.tool_grid, self._tool_cards, columns)
@@ -306,7 +343,7 @@ class LandingPage(qt.QWidget):
             self.tool_grid.removeWidget(card)
             card.hide(); card.deleteLater()
         self._tool_cards = []
-        self.buttons = {'hub': self.buttons['hub']}
+        self.buttons = {}
         for key, title, detail, icon in entries:
             button = LaunchCard(title, detail, icon)
             button.clicked.connect(lambda checked=False, key=key: self.launch_requested.emit(key))

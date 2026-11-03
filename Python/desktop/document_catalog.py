@@ -172,6 +172,8 @@ def populate(layout, parent, *, recent=False):
         line = qt.QHBoxLayout(container)
         line.setContentsMargins(0, 0, 0, 0)
         button = qt.QPushButton(row['title'])
+        button.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Fixed)
+        button.setToolTip(row['title'])
         button.clicked.connect(lambda checked=False, row=row: reopen(row, parent))
         line.addWidget(button, 1)
         if not recent:

@@ -1,17 +1,21 @@
 # Files and documents in Logistics
 
-Logistics starts with a launch chooser. **Open full hub with sidebar** opens all
-available destinations. Below it, File Browser is always available; Workspaces,
-Bulk Rename and enabled features with their own navigation buttons open workspaces
+Logistics starts with a launch chooser. The left half lists File Browser,
+Workspaces, Bulk Rename and enabled features with their own navigation buttons.
+Favourites appear above recent files in the right half. Workspace choices open
 with the sidebar by default. **Appearance & shared controls → Menus → Launch with
-sidebar** can switch launch-page choices to focused workspaces without it. Disabled features are absent. Use Settings to
-enable them, and their cards appear without restarting the app.
+sidebar** can switch launch-page choices to focused workspaces without it.
+Disabled features are absent. Use Settings to enable them, and their cards appear
+without restarting the app. Settings, Documents and Debug use their existing
+navigation controls rather than launch cards.
 
 On Windows, the launch terminal minimizes once the chooser is displayed. You can
 restore it from the taskbar to inspect startup output.
 
-The **Read & edit** section always includes Markdown Editor. Enabled features add
-their registered document tools, such as Text Editor, EPUB Reader, Comic Reader,
+Click **Read & edit** below the feature cards to expand its document tools; it
+starts collapsed on the launch page. The separate New / Open Document chooser
+shows its tools immediately. The section always includes Markdown Editor. Enabled
+features add their registered document tools, such as Text Editor, EPUB Reader, Comic Reader,
 Image Viewer and Archives. **Open…** picks a file; **New** appears where creation is supported.
 Cancelling keeps the chooser visible. Opened documents use the shared workspace.
 
@@ -20,10 +24,12 @@ icons and source/state labels. Read-only documents include **(Read-Only)**.
 Session-only document titles keep **(🕵️ Session-Only)** without the remote name;
 the source remains visible in the storage row.
 
-Cards adapt to the available width: up to three per row in landscape windows,
-fewer columns in narrower windows. Wider views give cards more room. Cards
-settle into their layout before the chooser first appears. Workspace and document
-cards highlight on hover; clickable workspace cards and New/Open buttons also
+The launch page gives each side half the available content width, up to a total
+of 1200 pixels. Narrow windows stack favourites and recents below the choices.
+Workspace and document-format cards each form a single column on the left.
+The separate New / Open Document chooser uses up to three cards per row,
+reducing its columns in narrower windows. Cards settle before the first paint.
+Workspace and document cards highlight on hover; clickable workspace cards and New/Open buttons also
 show a hand cursor. Long lists
 scroll vertically with the scrollbar or mouse wheel. The New / Open Document
 chooser is a utility tab and is omitted from the document list and document counts.
@@ -374,8 +380,11 @@ options are in **Feature settings**. Reading positions, account data and recover
 records remain personal data, outside software defaults. The path above each
 editor shows exactly which INI will change.
 
-Launch and Documents pages keep their central content compact on wide windows,
-with a maximum width of 880 pixels. Cards retain their compact 88-pixel minimum height, grow to fit wrapped text, and share the tallest height within each tool or document group. They recalculate after font and width changes.
+The launch page has a maximum content width of 1200 pixels; the separate
+New / Open Document chooser keeps its maximum width of 880 pixels. Cards retain
+their compact 88-pixel minimum height, grow to fit wrapped text, and share the
+tallest height within each tool or document group. They recalculate after font
+and width changes.
 
 The upper right of the launch page shows a subdued grey release tag, short commit
 and commit time in your local timezone. Hover over it for the full commit and
