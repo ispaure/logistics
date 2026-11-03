@@ -92,7 +92,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
     revoked = qt.Signal()
     aux_snapshot = qt.Signal(int, object)
 
-    def __init__(self, factory, label, *, remote=False, root=""):
+    def __init__(self, factory, label, *, remote=False, root="", document_only=False):
         super().__init__()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle('Notes Library — ' + label)
@@ -219,6 +219,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             release = provider.acquire() if hasattr(provider, 'acquire') else lambda: None
             try:
                 library = NotesLibrary(provider, root)
+                if document_only:
+                    return provider, release, library, [], {}
                 with operation(provider, cancelled):
                     rows = provider.list(library.root, cancelled=cancelled)
                 if vault_root(provider, library.root, rows) is None:
@@ -829,6 +831,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
 def open_notes(factory, label, *, remote=False, root=""):
     from commonUtils.ui.document_host import show_document
     from services.documents.ui.editors import retain
-    window = NotesLibraryWindow(factory, label, remote=remote, root=root)
+    from .library_workspace import TabbedNotesLibrary
+    window = TabbedNotesLibrary(factory, label, remote=remote, root=root)
     retain(window)
     return show_document(window)

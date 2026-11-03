@@ -844,3 +844,21 @@ the encoded file spelling. Probes retain cancellation and credential checks and
 validate physical paths before inspecting them. No additional plaintext index is
 persisted. Focused provider tests check real encrypted landing-note detection and
 that a folder page batch never reads document content.
+
+## Scoped desktop library tabs
+
+`ui/library_workspace.py` hosts independent document-only Notes Library owners
+inside `ScopedTabBar` groups, using the IDE's bounded horizontal drag geometry.
+The outer owner retains folder/search/calendar navigation; inner owners retain
+editors, resource sessions and workers. Provider leases are shared without
+revoking sibling tabs. Group focus controls active file references and Save;
+shortcuts stay within each child widget. Mutation preparation resolves drafts,
+and successful moves/deletes remap or retire affected tabs. Close waits for
+cooperative worker retirement. Focused tab tests cover independent drafts,
+side-by-side groups, native Save-key dispatch, rename placement and LocalCrypt
+lease release. Existing desktop library tests cover favourite reopening through
+the tabbed host.
+
+The tab host also routes New to the shared library navigator and scopes inner
+shortcuts to their document subtree; Save has one active child handler. Focus
+changes inside side-by-side editors update the active document reference.

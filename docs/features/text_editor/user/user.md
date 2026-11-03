@@ -383,3 +383,12 @@ inside the selected library; no recursive attachment scan is performed.
 The Notes Library sidebar's **…** selection control opens Move / rename, Copy and
 Delete for the selected file or folder. Right-clicking an entry opens the same
 menu, including entries in search results. Folder operations include their contents.
+
+## Notes Library document groups
+
+Opening sidebar entries keeps each document in its own inner tab. Drag an inner
+tab to another header to reorder it, or to the left/right side of a document to
+create a neighbouring group (up to three). The tab's context menu offers the same
+moves. Inner tabs stay within the library. Each document retains its draft while
+you switch tabs; Save applies to the focused document. Closing a tab or library
+resolves unsaved edits. File moves update affected tabs and preserve their groups.
