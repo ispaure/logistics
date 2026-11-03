@@ -24,7 +24,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 
 def editor_runtime():
     # Load the HTML builder without importing/initializing the Toga backend.
-    owner = Path(__file__).parents[1] / 'features/text_editor/mobile'
+    owner = Path(__file__).parents[1] / 'services/documents/authoring'
     namespace = dict(escape=escape, json=json, re=re, uuid4=uuid4,
                      MarkdownIt=MarkdownIt, web_patterns=web_patterns, formatting_svg=formatting_svg)
     for filename, name in [('markdown_script.py', 'SCRIPT'), ('markdown_live_script.py', 'LIVE_SCRIPT'),

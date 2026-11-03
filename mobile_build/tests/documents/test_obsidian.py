@@ -240,7 +240,9 @@ class ObsidianTests(unittest.TestCase):
         self.assertEqual(list(owner.sidebar.view.children), [owner.article])
         self.assertEqual(owner.sidebar.side, 'files')
         owner.reflow(900)
-        self.assertEqual(list(owner.sidebar.view.children), [owner.article])
+        self.assertEqual(list(owner.sidebar.view.children), [owner.tree, owner.article])
+        self.assertIsNone(owner.sidebar.overlay)
+        self.assertFalse(owner.sidebar.sidebar_open)
         self.assertIs(owner.toolbar.parent, owner.view)
         self.assertNotIn(owner.toolbar, owner.article.children)
         self.assertTrue(all(button.parent is owner.secondary for button in
@@ -249,6 +251,7 @@ class ObsidianTests(unittest.TestCase):
         self.assertIsNone(owner.speech.button.parent)
         self.assertIn('Read aloud…', [label for label, _ in owner.reader_actions.actions])
         owner.reflow(390)
+        self.assertEqual(list(owner.sidebar.view.children), [owner.article])
         self.assertIs(owner.toolbar.parent, owner.view)
         owner.reflow(900)
         self.assertTrue(self.run_async(owner.open_editor()))

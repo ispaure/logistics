@@ -345,6 +345,7 @@ class NotesLibraryDesktopTests(QtTestCase):
 
     def test_video_embeds_have_inline_controls_in_reading_and_formatted_editing(self):
         import shutil
+        from PySide6.QtMultimedia import QMediaFormat
         with self.temporary_directory() as directory:
             root = Path(directory)
             source = '# Video\n\n![[potato.mp4]]\n\nFollowing text\n'
@@ -363,8 +364,10 @@ class NotesLibraryDesktopTests(QtTestCase):
             frames = []
             card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
             card.play.click()
-            self.wait_until(lambda: any(frames) and card.player.position() > 0,
-                            message='Embedded video did not decode a frame')
+            self.assertFalse(card.player.source().isEmpty())
+            if QMediaFormat().supportedFileFormats(QMediaFormat.ConversionMode.Decode):
+                self.wait_until(lambda: any(frames) and card.player.position() > 0,
+                                message='Embedded video did not decode a frame')
             self.assertIn('Following text', window.viewer.browser.toPlainText())
             window.viewer.set_editing(True)
             self.wait_until(lambda: bool(window.viewer.formatted_editor.inline_videos.cards))
@@ -375,7 +378,9 @@ class NotesLibraryDesktopTests(QtTestCase):
             from commonUtils.runtime.resources.selection import ResourceChoice
             players = []
             def open_player(provider, path, parent):
-                player = VideoWindow(ResourceChoice(provider, path))
+                from features.video.ui.vlc_backend import VLCPlayback
+                player = VideoWindow(ResourceChoice(provider, path),
+                                     backend_factory=lambda owner: VLCPlayback(owner, interactive=False))
                 player.audio.setMuted(True)
                 player.show()
                 players.append(player)

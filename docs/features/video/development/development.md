@@ -71,7 +71,10 @@ scrolling, long labels, larger fonts, lock geometry, preference writes and
 favourites. `test_video_decode.py` and `test_video_desktop_parity.py` retain real
 Qt/VLC decoding, subtitle, chapter and playback-state coverage. Regular Markdown
 and library integration checks distinguish lazy paused inline cards from full
-platform-player dispatch. These host checks do not establish physical display,
+platform-player dispatch. Layout and full-player integration use the production
+VLC backend; inline Qt frame decoding is checked when that host provides a Qt
+decoder, while its controls and resource lifetime remain covered on every host.
+These host checks do not establish physical display,
 receiver or native mobile presentation quality. Desktop HDR output remains
 unavailable because the current surface receives SDR memory frames.
 
@@ -137,7 +140,8 @@ history only, without adding video to restored open documents. Recent entry
 activation resolves current credentials again and dispatches to the native player,
 including offline encrypted copies whose stored keys have no filename extension.
 
-`ui/player.py` integrates Qt Multimedia/FFmpeg into desktop document hosting.
+`ui/player.py` integrates the VLC playback adapter into desktop document hosting,
+with the Qt Multimedia adapter retained for compatibility.
 It provides seeking, volume, embedded audio/subtitle selection, bounded UTF-8 SRT
 captions, fullscreen and policy-checked floating playback. LocalCrypt browser
 activation dispatches directly to the retained provider-backed player.

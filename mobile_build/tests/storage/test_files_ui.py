@@ -301,7 +301,8 @@ class FileUITests(unittest.TestCase):
                 browser.search.value = 'nested'
                 while browser.tasks:
                     await __import__('asyncio').gather(*tuple(browser.tasks))
-                self.assertEqual([entry.label for entry in browser.entries], ['sub/nested.md'])
+                self.assertEqual([entry.label for entry in browser.entries], ['nested.md'])
+                self.assertEqual(browser.entries[0].payload['path'], 'books/sub/nested.md')
                 await browser.activate_entry(browser.entries[0])
                 self.assertEqual(app.selected_file()[1], 'books/sub/nested.md')
                 browser.close_search_button.on_press()

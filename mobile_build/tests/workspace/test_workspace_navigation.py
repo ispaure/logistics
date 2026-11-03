@@ -212,7 +212,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
         from mobile.preferences import Preferences
         app = self.app
         backend = type(app._impl)
-        with patch.object(backend, '__module__', 'toga_iOS.app'), patch('mobile.external_display.sync'):
+        with patch.object(backend, '__module__', 'toga_iOS.app'), patch('mobile.external_display.sync'), \
+                patch.object(app, 'refresh_native_theme'):
             self.assertFalse(app.folder_path_visible('Books/Legacy-old'))
             self.assertFalse(app.folder_path_visible('Legacy-old/book.cbz', directory=False))
             self.assertTrue(app.folder_path_visible('Books/Legacy-file.cbz', directory=False))

@@ -899,9 +899,9 @@ class HubDocumentTests(unittest.TestCase):
         with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='md')):
             app.loop.run_until_complete(app.new_hub_document())
         form = app.editor_picker()
-        self.assertIn(form.creation_type, form.name_view.children)
+        self.assertIn(form.creation_formats.cards, form.name_view.children)
         form.save_as_name.value = 'Trip.markdown'
-        form.creation_type.value = 'Markdown (.md)'
+        form.creation_formats.buttons['Markdown (.md)'].on_press()
         app.loop.run_until_complete(form.choose_creation_location())
         app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())

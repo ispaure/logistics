@@ -106,13 +106,14 @@ class StorageUITests(unittest.TestCase):
                     with patch('mobile.storage_ui.all_files_allowed', return_value=True), \
                             patch.object(self.app, 'checkpoint', return_value=True) as checkpoint, \
                             patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=confirm)), \
-                            patch('mobile.storage_ui.asyncio.to_thread', new_callable=AsyncMock) as worker:
+                            patch('mobile.storage_ui.' + {'copy': 'switch_location', 'recover': 'recover_location',
+                                  'empty': 'start_empty_location', 'wipe': 'wipe_destination'}[action]) as worker:
                         operation = {'copy': self.app.change_collection_storage,
                                      'recover': self.app.recover_collection_storage,
                                      'empty': self.app.start_empty_collection,
                                      'wipe': self.app.wipe_collection_storage}[action]
                         self.app.loop.run_until_complete(operation(self.app.collection_copy))
-                    worker.assert_not_awaited()
+                    worker.assert_not_called()
                     self.assertFalse(self.app._storage_changing)
                     self.assertTrue(self.app.collection_drive.enabled)
                     self.assertTrue(self.app.collection_copy.enabled)
