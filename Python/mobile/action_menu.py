@@ -310,6 +310,8 @@ class ActionMenu:
             host = owner.app if isinstance(owner, FeatureOwner) else owner
             app = getattr(host, 'app', host)
             session = getattr(host, 'session', None)
+            from .favourites import favourite
+            actions.append(('Favourite file', lambda: favourite(app, host)))
             from .document_sources import folder_action
             folder_titles = {'Show in folder', 'Show cached copy in folder'}
             if session is not None and session.provider == 'library':

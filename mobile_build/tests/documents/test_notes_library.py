@@ -44,6 +44,24 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_favourite_reopens_note_inside_its_library(self):
+        from mobile.obsidian import open_vault
+        from mobile.favourites import reference, catalog, reopen
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            await owner.open_note('Vault/Home.md')
+            source, title, opener, cipher = reference(self.app)
+            self.assertIsNone(cipher)
+            catalog(self.app).remember(source, title, opener, favourite=True)
+            row = catalog(self.app).entries()[0]
+            owner.close()
+            self.assertTrue(await reopen(self.app, row))
+            restored = self.app.vault_browser
+            self.assertEqual(restored.path, 'Home.md')
+            self.assertEqual(restored.provider.root, self.vault)
+            restored.close()
+        self.run_async(exercise())
+
     def test_system_back_restores_browsing_after_each_document_kind(self):
         from mobile.obsidian import open_vault
         from features.notebooks.notebook import Notebook
