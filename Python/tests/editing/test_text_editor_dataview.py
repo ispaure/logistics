@@ -16,6 +16,24 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class DataViewTests(QtTestCase):
+    def test_custom_view_matches_case_on_case_sensitive_encrypted_storage(self):
+        from unittest.mock import patch
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '_Resources/dataview').mkdir(parents=True)
+            (root / '_Resources/dataview/folder-index-recursive.js').write_text('dv.paragraph("found");')
+            library = NotesLibrary(LocalFiles(root))
+            files = ViewFiles(library, 'Home.md')
+            requested = '_Resources/Dataview/folder-index-recursive'
+            # macOS can mask the issue; model exact, case-sensitive provider reads.
+            original = files.read
+            def read(path, cancelled):
+                return None if '/Dataview/' in path else original(path, cancelled)
+            with patch.object(files, 'read', side_effect=read):
+                reply = files.request(dict(id=1, kind='view', path=requested))
+            self.assertEqual(reply['value']['code'], 'dv.paragraph("found");')
+            self.assertNotIn('error', reply)
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
