@@ -1,5 +1,6 @@
 """ZIP retention, saved-package migration and password-only session unlock."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -74,7 +75,7 @@ class CredentialPackageTests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.show_cloud(present=False)
             app.cloud_client = client = CacheClient()
@@ -121,7 +122,7 @@ class CredentialPackageTests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.show_cloud(present=False)
             app.cloud_client = CacheClient()
@@ -200,7 +201,7 @@ class CredentialPackageTests(unittest.TestCase):
                     self.assertIn('Personal', app.credential_groups())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = None
 
     def test_unencrypted_zip_is_not_retained_as_session_credentials(self):
@@ -266,5 +267,5 @@ class CredentialPackageTests(unittest.TestCase):
                     self.assertIn('Secret', [row.value for row in app.cloud_remote.items])
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = None

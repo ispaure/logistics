@@ -1,5 +1,6 @@
 """Bound UI work without relying on machine-dependent timing thresholds."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -22,7 +23,7 @@ class ResponsivenessTests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(self.temp.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
 
     def test_settings_are_lazy_and_native_selection_does_not_reenter_navigation(self):

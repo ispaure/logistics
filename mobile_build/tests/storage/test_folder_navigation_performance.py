@@ -1,5 +1,6 @@
 """Navigation work stays bounded without weakening local resource boundaries."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.EXTENDED
@@ -25,7 +26,7 @@ class FolderNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         app.show_cloud(present=False)
         return app
@@ -277,4 +278,4 @@ class FolderNavigationTests(unittest.TestCase):
                 app.loop.run_until_complete(check())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

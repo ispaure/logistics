@@ -1,5 +1,6 @@
 """Native privacy policy, including Rubicon's callable custom getters."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -226,7 +227,7 @@ class ResumeLockTests(unittest.TestCase):
         self.addCleanup(setattr, CloudClient.credential_state, 'session_privacy', CloudClient.credential_state.session_privacy)
         CloudClient.credential_state.session_privacy = None
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.privacy = self.app.screen_privacy
         self.addCleanup(self.privacy.dispose)

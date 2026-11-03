@@ -1,5 +1,6 @@
 """Single-surface Markdown editing and retained native source ownership."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -23,7 +24,7 @@ class SourceEditorTests(unittest.TestCase):
         for owner in self.app.text_views.values():
             owner.dispose()
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.temporary.cleanup()
 

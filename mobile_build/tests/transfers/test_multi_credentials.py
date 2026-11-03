@@ -1,5 +1,6 @@
 """Mixed saved/session package metadata drives both platforms' shared Workspaces."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -20,7 +21,7 @@ class MultiCredentialUITests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(self.directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         records = [dict(package_name='Personal.zip', saved=True, remotes=['Main'], aliases={'Main':'Main'}),
                    dict(package_name='Legacy.zip', saved=False, remotes=['Legacy-Books'], aliases={'Legacy-Books':'Legacy-Books'})]

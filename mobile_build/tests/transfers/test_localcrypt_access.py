@@ -1,5 +1,6 @@
 """LocalCrypt resource sessions close independently and never revive old grants."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 import base64
@@ -361,7 +362,7 @@ class LocalCryptAccessTests(unittest.TestCase):
             finally:
                 app.loop.run_until_complete(browser.close())
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_browser_close_preserves_independent_reader_and_other_browser(self):
         with TemporaryDirectory() as root:

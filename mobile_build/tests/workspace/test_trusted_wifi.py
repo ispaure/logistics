@@ -1,5 +1,6 @@
 """Trusted-network resume never stores secrets or authorizes unrelated gates."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -129,7 +130,7 @@ class WifiSettingsTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             box = SettingsCategories(app).category('Workspaces')
             choice, manage = controls(app, box)
@@ -187,7 +188,7 @@ class WifiSettingsTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             decision = app.loop.create_future()
             async def ask(dialog):
@@ -238,7 +239,7 @@ class WifiSettingsTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             decision = app.loop.create_future()
             state = 'prompt'
@@ -276,7 +277,7 @@ class WifiSettingsTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             with patch.object(app, 'show_view'), \
                     patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog, \

@@ -1,5 +1,6 @@
 """Anchored workspace commands retain mapping identity and current busy guards."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -101,5 +102,5 @@ class ColdWorkspaceTransferTests(TestCase):
                     app.loop.run_until_complete(exercise())
                 finally:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None

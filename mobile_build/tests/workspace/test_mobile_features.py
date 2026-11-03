@@ -1,5 +1,6 @@
 """Feature selection persists, gates real openings and preserves user documents."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -18,6 +19,16 @@ from services.documents.mobile_notebooks import open_notebook
 
 
 class MobileFeatureTests(unittest.TestCase):
+    def test_startup_does_not_scan_hidden_libraries_before_documents_is_opened(self):
+        app = self.app
+        self.assertNotIn('readers', app.__dict__)
+        self.assertIsNone(getattr(app, '_notes_discovery_task', None))
+        app.show_documents_hub()
+        self.assertEqual(app.documents_view, 'Libraries')
+        self.assertIsNotNone(app._notes_discovery_task)
+        self.run_async(app._notes_discovery_task)
+        self.run_async(app.hub_controller()._document_comics_discovery)
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         self.root = Path(self.directory.name)
@@ -28,7 +39,7 @@ class MobileFeatureTests(unittest.TestCase):
     def tearDown(self):
         self.app.main_window.close()
         self.app.loop.run_until_complete(self.app.loop.shutdown_default_executor())
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 

@@ -1,5 +1,6 @@
 """Persistent local search shares desktop terms without persisting private names."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -133,4 +134,4 @@ class BackgroundSearchTests(unittest.TestCase):
                 release.set()
                 app.loop.run_until_complete(browser.close())
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

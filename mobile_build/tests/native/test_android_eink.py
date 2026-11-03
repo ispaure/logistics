@@ -1,5 +1,6 @@
 """Opt-in Android presentation policy, persistence and settings boundaries."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -105,7 +106,7 @@ class AndroidEInkTests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(folder)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.show_settings()
             self.assertFalse(hasattr(app, 'android_eink_choice'))

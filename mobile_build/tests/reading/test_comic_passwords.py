@@ -1,5 +1,6 @@
 """Native widget password retry/close flow with an isolated archive callback."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -71,4 +72,4 @@ class ComicPasswordUITests(unittest.TestCase):
                 self.assertTrue(app.reader_manager().catalog.library_store.path(record['id'], '.cbz').exists())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

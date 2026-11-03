@@ -1,5 +1,6 @@
 """Conversation UI state and recovery using Toga's explicit dummy backend."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -43,7 +44,7 @@ class ChatUITests(unittest.TestCase):
             app.loop.run_until_complete(asyncio.gather(app.chat_render_task, return_exceptions=True))
         app.chat_actions.dispose()
         app.main_window.close()
-        app.loop.close()
+        close_loop(app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 

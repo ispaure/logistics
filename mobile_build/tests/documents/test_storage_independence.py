@@ -1,5 +1,6 @@
 """Local documents and alternate content providers do not require rclone I/O."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -92,7 +93,7 @@ with TemporaryDirectory() as folder:
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.set_feature_enabled('rclone', False, refresh=False)
             data = root / 'alternate'

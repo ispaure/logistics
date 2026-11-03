@@ -173,18 +173,37 @@ def record_ios_stall(path, row):
     pid = row.get('pid')
     if sys.platform != 'darwin' or type(pid) is not int or pid <= 1:
         return
+    receipt = path.with_name('ios-webview-stall-' + str(pid) + '.json')
+    record = dict(pid=pid, received_ns=time.time_ns(), sent_ns=row.get('sent_ns'))
+    def save(status):
+        record['status'] = status
+        try:
+            receipt.write_text(json.dumps(record, indent=2) + '\n')
+        except OSError:
+            pass
     try:
-        process = subprocess.run(['ps', '-p', str(pid), '-o', 'comm='],
+        if receipt.exists():
+            return
+        save('received')
+        process = subprocess.run(['ps', '-ww', '-p', str(pid), '-o', 'comm='],
             capture_output=True, text=True, timeout=5, check=False)
-        if process.returncode or not process.stdout.strip().endswith('/Logistics Mobile.app/Logistics Mobile'):
+        record.update(process_exit_code=process.returncode, executable=process.stdout.strip()[:4096])
+        if process.returncode:
+            save('process-unavailable')
+            return
+        if not process.stdout.strip().endswith('/Logistics Mobile.app/Logistics Mobile'):
+            save('unexpected-executable')
             return
         output = path.with_name('ios-webview-stall-' + str(pid) + '.sample.txt')
         if output.exists():
             return
-        subprocess.run(['sample', str(pid), '3', '-file', str(output)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
-    except (OSError, subprocess.TimeoutExpired):
-        pass  # Diagnostics never alter the native acceptance result.
+        result = subprocess.run(['sample', str(pid), '3', '-file', str(output)],
+            capture_output=True, text=True, timeout=10, check=False)
+        record.update(sample_exit_code=result.returncode, sample_stderr=result.stderr[-2000:])
+        save('sampled' if result.returncode == 0 and output.is_file() else 'sample-failed')
+    except (OSError, subprocess.TimeoutExpired) as error:
+        record['error'] = type(error).__name__ + ': ' + str(error)[:500]
+        save('capture-error')  # Diagnostics never alter native acceptance.
 
 
 def _progress(path, stopped):
@@ -241,7 +260,7 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
             verify_prebuilt_android()
         else:
             raise ValueError('Android cached test reuse requires explicit exact local source verification.')
-    command = [sys.executable, '-m', 'briefcase', 'run', 'android' if target == 'android' else 'iOS',
+    command = [sys.executable, '-u', '-m', 'briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if no_update:
         command.append('--no-update')

@@ -1,5 +1,6 @@
 """Library views keep document identity and release inactive decoder content."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -49,7 +50,7 @@ class ReaderSessionTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_comic_page_focus_swipes_boundaries_and_manga_direction(self):
         import asyncio
@@ -116,7 +117,7 @@ class ReaderSessionTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_late_password_prompt_does_not_focus_a_hidden_or_superseded_reader(self):
         import asyncio
@@ -288,7 +289,7 @@ class ReaderSessionTests(unittest.TestCase):
                 self.assertTrue(app.reader_manager().catalog.library_store.path(first['id'], '.epub').exists())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_compact_controls_and_appearance_preserve_chapter(self):
         with TemporaryDirectory() as directory:
@@ -318,7 +319,7 @@ class ReaderSessionTests(unittest.TestCase):
                 self.assertEqual(app.preferences.values['reading_theme'], 'dark')
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
 
 class ReaderResumeTests(unittest.TestCase):
@@ -333,7 +334,7 @@ class ReaderResumeTests(unittest.TestCase):
 
     def tearDown(self):
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 

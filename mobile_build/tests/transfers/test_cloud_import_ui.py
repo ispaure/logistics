@@ -1,5 +1,6 @@
 """Exercise choose/password/load, retries and bounded picker access."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -22,7 +23,7 @@ class AutomaticCredentialImportTests(unittest.TestCase):
         LogisticsMobile.storage_root = self.root
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
 
         class Client(CacheClient):
@@ -178,7 +179,7 @@ class CredentialImportUITests(unittest.TestCase):
                 self.assertIn('No crypt remote', app.cloud_remote_help.text)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_zip_is_selected_before_password_and_failed_load_can_retry_without_picker(self):
         class Client:
@@ -229,7 +230,7 @@ class CredentialImportUITests(unittest.TestCase):
                 self.assertEqual(app.cloud_password.value, '')
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_cancelling_selection_keeps_loaded_remotes(self):
         class Client:
@@ -248,7 +249,7 @@ class CredentialImportUITests(unittest.TestCase):
                 self.assertFalse(app.cloud_import.enabled)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_oversized_zip_is_rejected_before_loading(self):
         with TemporaryDirectory() as directory:

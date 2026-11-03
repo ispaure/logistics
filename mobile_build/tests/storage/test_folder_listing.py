@@ -1,5 +1,6 @@
 """Folder reads publish only into the browser and credentials that requested them."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -185,5 +186,5 @@ class FolderListingAdapterTests(unittest.TestCase):
                     finally:
                         release.set()
                         app.main_window.close()
-                        app.loop.close()
+                        close_loop(app.loop)
                         LogisticsMobile.storage_root = None

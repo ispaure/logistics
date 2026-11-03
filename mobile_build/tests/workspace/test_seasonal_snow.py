@@ -1,5 +1,6 @@
 """Snow preferences persist and high contrast removes the native decoration."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -33,7 +34,7 @@ class SeasonalSnowTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Snow settings test', 'io.github.ispaure.snowtest')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.show_settings()
             app.settings_navigation.choose('Appearance')

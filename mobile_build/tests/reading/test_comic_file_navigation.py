@@ -1,5 +1,6 @@
 """Adjacent volumes remain readable across storage and session handoffs."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -55,7 +56,7 @@ class ComicFileNavigationTests(unittest.TestCase):
             finally:
                 if app is not None:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                 LogisticsMobile.storage_root = None
 
     def exercise(self, storage):
@@ -127,5 +128,5 @@ class ComicFileNavigationTests(unittest.TestCase):
             finally:
                 if app is not None:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                 LogisticsMobile.storage_root = None

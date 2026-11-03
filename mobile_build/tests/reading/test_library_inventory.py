@@ -1,5 +1,6 @@
 """Library record caches invalidate on source revisions and expose copies only."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -68,7 +69,7 @@ class LibraryInventoryTests(TestCase):
         LogisticsMobile.storage_root = self.store.root / 'App'
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         catalog = app.reader_manager().catalog
         async def exercise(discover):
@@ -91,7 +92,7 @@ class LibraryInventoryTests(TestCase):
         LogisticsMobile.storage_root = self.store.root / 'App'
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         catalog = app.reader_manager().catalog
         async def exercise():
