@@ -26,6 +26,7 @@ class MobileWorkflowTests(unittest.TestCase):
         self.directory.cleanup()
 
     def test_browser_return_retains_dirty_drafts_and_back_closes_clean_readers(self):
+        import asyncio
         import base64
         from zipfile import ZipFile
         app = self.app
@@ -38,10 +39,16 @@ class MobileWorkflowTests(unittest.TestCase):
             archive.writestr('page.webp', base64.b64decode('UklGRhwAAABXRUJQVlA4TA8AAAAvAYAAEAcQ/Y8CBiKi/wEA'))
         app.loop.run_until_complete(app.browser_file_location(('Local files', 'Shelf')))
         browser = app.file_browser
-        panel, tree = app.body, browser.tree
+        panel, folder_tree = app.body, browser.folder_tree
+        async def finish_search():
+            while pending := [task for task in browser.work.tasks if not task.done()]:
+                await asyncio.gather(*pending)
+                await asyncio.sleep(0)
         for filename in ('Comic.cbz', 'Notes.md', 'Comic.cbz'):
             browser.search.value = filename
             browser.render()
+            app.loop.run_until_complete(asyncio.wait_for(finish_search(), 5))
+            search_tree = browser.tree
             entry = next(item for item in browser.entries if item.label == filename)
             app.loop.run_until_complete(browser.activate_entry(entry))
             self.assertEqual(app.native_host.state.destination, 'files')
@@ -59,7 +66,8 @@ class MobileWorkflowTests(unittest.TestCase):
             else:
                 self.assertNotIn(owner.session.id, app.workspace.sessions)
             self.assertIs(app.body, panel)
-            self.assertIs(browser.tree, tree)
+            self.assertIs(browser.folder_tree, folder_tree)
+            self.assertIs(browser.tree, search_tree)
             self.assertEqual(app.file_path, 'Shelf')
             self.assertEqual(browser.search.value, filename)
             self.assertFalse(getattr(app, '_comic_chrome_hidden', False))

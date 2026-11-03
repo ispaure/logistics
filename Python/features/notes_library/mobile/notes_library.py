@@ -268,10 +268,14 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.view._document_title_controls = (self.menu, self.links_button)
         self.view._native_reader_buttons = self.native_note_buttons
         self.sidebar.on_change = self.refresh_chrome
-        self.welcome = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
+        welcome_body = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
                                           align_items=CENTER, justify_content=CENTER))
+        # The empty-library actions exceed a compact landscape viewport. Keep
+        # both actions reachable when there is insufficient room to center them.
+        self.welcome = toga.ScrollContainer(content=welcome_body, horizontal=False,
+                                             style=Pack(flex=1))
         self.welcome_content = toga.Box(style=Pack(direction=COLUMN, width=280))
-        self.welcome.add(self.welcome_content)
+        welcome_body.add(self.welcome_content)
         self.open_card = toga.Button('Open Document', on_press=lambda widget: self.sidebar.show_sidebar(), style=Pack(height=48, margin_top=20))
         self.new_card = toga.Button('New Document', on_press=self.new_note, style=Pack(height=48, margin_top=8))
         host.presentation.surface(self.open_card, radius=12)
