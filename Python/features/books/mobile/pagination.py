@@ -25,7 +25,7 @@ class MobilePagination:
         self.chapter = self.page = 0
         self.columns = 1
         self.error = False
-        from mobile.reading.history import PageVisits
+        from services.documents.page_visits import PageVisits
         self.visits = PageVisits()
 
     @property

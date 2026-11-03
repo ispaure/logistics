@@ -637,7 +637,7 @@ class VLCPlayback:
         if self.receivers is None:
             from .receivers import VLCReceivers
             self.receivers = VLCReceivers(self.player)
-        self.receivers.menu(owner, anchor)
+        owner.show_settings('cast')
 
     def retire(self):
         if not self.player.retired:

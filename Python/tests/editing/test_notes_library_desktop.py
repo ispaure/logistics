@@ -371,28 +371,32 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertEqual(window.viewer.markdown_text(), source)
             media = window.library.image_source('Home.md')
             transports = [transport for _, transport in media.videos.values()]
-            window.open_note('Media/potato.mp4')
-            self.wait_until(lambda: not window.progress.busy)
-            self.assertTrue(all(transport.closed.is_set() for transport in transports))
-            preview = window.file_preview
-            card = preview.browser.video
-            self.assertIs(window.document_stack.currentWidget(), preview)
-            self.assertTrue(card.play.isVisible())
-            self.assertTrue(card.seek.isVisible())
-            self.assertTrue(card.player.source().isEmpty())
-            frames = []
-            card.audio.setMuted(True)
-            card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
-            card.play.click()
-            self.wait_until(lambda: any(frames) and card.player.position() > 0,
-                            message='Direct library video did not decode a frame')
-            card.play.click()
+            from features.video.ui.player import VideoWindow
+            from commonUtils.runtime.resources.selection import ResourceChoice
+            players = []
+            def open_player(provider, path, parent):
+                player = VideoWindow(ResourceChoice(provider, path))
+                player.audio.setMuted(True)
+                player.show()
+                players.append(player)
+                return player
+            with patch('desktop.document_catalog.open_resource', side_effect=open_player):
+                window.open_note('Media/potato.mp4')
+            player = players[0]
+            self.assertTrue(player.speed_button.isVisible())
+            self.assertTrue(player.fullscreen_button.isVisible())
+            self.assertEqual(player.choice.path, 'Media/potato.mp4')
             self.assertFalse(card.player.isPlaying())
-            transport = preview.preview.transport
-            window.close()
+            self.assertIs(window.document_stack.currentWidget(), window.viewer)
+            self.wait_until(lambda: player.have_frame and player.player.position() > 0,
+                            message='Full library video player did not decode a frame')
+            transport = player.transport
+            player.close()
             self.assertTrue(transport.closed.is_set())
+            window.close()
+            self.assertTrue(all(transport.closed.is_set() for transport in transports))
 
-    def test_localcrypt_video_plays_in_library_and_retires_on_navigation(self):
+    def test_localcrypt_video_link_opens_full_player_with_original_provider(self):
         from io import BytesIO
         from features.rclone import executable
         from tests.local_crypt_fixture import crypt_fixture
@@ -414,27 +418,12 @@ class NotesLibraryDesktopTests(QtTestCase):
                 self.wait_until(lambda: bool(window.viewer.browser.inline_videos.cards))
                 embedded = next(iter(window.viewer.browser.inline_videos.cards.values()))
                 self.assertTrue(embedded.play.isVisible())
-                window.open_note('Clip.mp4', resolve_link=True)
-                self.wait_until(lambda: not window.progress.busy)
-                preview = window.file_preview.preview
-                card = window.file_preview.browser.video
-                self.assertEqual(preview.path, 'Media/Clip.mp4')
-                self.assertTrue(card.play.isVisible())
-                self.assertTrue(card.seek.isVisible())
-                card.audio.setMuted(True)
-                frames = []
-                card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
-                card.play.click()
-                self.wait_until(lambda: any(frames) and card.player.position() > 0,
-                                message='Encrypted library video did not decode a frame')
-                evidence = Path(__file__).parents[3] / 'test-results/library-video'
-                evidence.mkdir(parents=True, exist_ok=True)
-                window.grab().save(str(evidence / 'localcrypt-direct.png'))
-                transport, content = preview.transport, preview.video
-                window.open_note('note.md')
-                self.wait_until(lambda: not window.progress.busy)
-                self.assertTrue(transport.closed.is_set())
-                self.assertTrue(content.closed)
+                with patch('desktop.document_catalog.open_resource') as opened:
+                    window.open_note('Clip.mp4', resolve_link=True)
+                    self.wait_until(lambda: not window.progress.busy)
+                    opened.assert_called_once_with(provider, 'Media/Clip.mp4', window)
+                self.assertEqual(window.history[window.index], 'note.md')
+                self.assertFalse(embedded.player.isPlaying())
             finally:
                 window.close()
 

@@ -105,12 +105,14 @@ such as `[[Topics/Tech]]`. Lookup stops after 10,000 entries.
 
 ## Embedded source files in Notes Library
 
-Every file selected in Files opens inside Notes Library. Images (PNG, JPEG,
+Images and documents selected in Files open inside Notes Library. Images (PNG, JPEG,
 WebP and GIF) display in the detail pane; PDFs have Previous page and Next page
 controls. Image previews use an 8 MiB/16-megapixel limit; PDFs use a 32 MiB limit.
-Videos such as MP4 open a player in the same pane, with Play/Pause and a position
-slider. Video embeds such as `![[clip.mp4]]` also show playback controls in
-Markdown. Playback starts when you press Play; opening the page does not preload
+Videos such as MP4 open the full desktop Video Player, preserving the current
+library note and using the same source and credentials. That player offers
+resume, autoplay, tracks, subtitles and the full playback tools. Video embeds
+such as `![[clip.mp4]]` stay inside Markdown with simple Play/Pause and seeking
+controls, paused at the beginning of each new embed. Playback starts when you press Play; opening the page does not preload
 the whole video. Images and videos use the same lookup as file links: beside the
 note, from the library root, then a unique matching path elsewhere in the library.
 Use an explicit path if several files match. If an embedded image cannot load,

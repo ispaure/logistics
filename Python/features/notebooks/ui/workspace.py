@@ -200,7 +200,7 @@ class NotebookWorkspace(qt.QWidget):
         self.layout.addWidget(self.operation)
 
     def appearance_stylesheet(self):
-        from mobile.palette import DARK, LIGHT
+        from services.appearance_palette import DARK, LIGHT
         palette = qt.QApplication.palette()
         role = qt.QPalette.ColorRole
         colors = {name: palette.color(value).name() for name, value in {

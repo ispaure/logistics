@@ -15,20 +15,35 @@ LibVLC 3 libraries and codec/subtitle plugins. On Ubuntu, install `libvlc5`,
 [Fedora's codec guidance](https://fedoraproject.org/wiki/Hardware_Video_Acceleration)
 when enabling that repository.
 
-Opening a video starts playback automatically. Use the Play/Pause, back/forward ten-second buttons, seek bar, mute button and
-volume slider over the video. Controls hide after three seconds of active
-playback; move the pointer or click the picture to reveal them. Pausing, loading,
-menus and keyboard focus keep them available. The movie stays centered when
-controls appear or hide. Buttons have tooltips and keyboard focus.
-The audio/subtitle selectors and secondary actions stack in narrow windows,
-including floating playback. Space toggles playback; Left/Right skip ten seconds;
-**M** toggles mute. **Full screen** or **F** toggles fullscreen;
-Escape returns to the normal window. The audio selector chooses an embedded
-audio track. The subtitle selector chooses an embedded track or turns subtitles
-off. **Load subtitles…** accepts UTF-8 SRT, WebVTT, ASS and SSA without a plaintext
-temporary file. Matching sidecars are discovered after playback starts, with at
-most 32 matching files and an 8 MiB limit per file. The picker also browses other
-folders in the current provider.
+Opening a video starts playback automatically. The filename and source are in a
+header above the picture. Its icons add the file to **Favourites**, **Show in
+folder**, enter a **Floating window**, and **Cast** when the decoder supports it.
+The timeline and icon controls stay in a deck below the picture. Play/Pause,
+ten-second skips, Previous/Next and Mute are directly available. The volume slider
+moves into Audio settings in narrow windows.
+
+**Speed**, **Picture**, **Audio**, **Subtitles**, **Chapters**, **Current folder**
+and **Playback** open scrollable settings beside the picture, or below it in narrow
+windows. In short narrow windows, an open settings pane provides a category
+selector in place of the secondary icon row; closing it restores the icons.
+Filename, track names and status messages expose their full text in tooltips
+when space is limited. **Picture** offers Fit, Fill and Original size. Desktop
+currently displays SDR frames; the native iOS HDR brightness selector is not
+available with this desktop renderer.
+
+The deck stays visible in a normal window. In fullscreen, it hides after three
+seconds of active playback; moving the pointer or clicking reveals it. Pausing,
+loading, settings and keyboard focus keep it available. Its allocated space stays
+reserved when hidden or locked, so revealing controls does not cover or move the
+picture. Buttons have tooltips, accessible names and keyboard focus.
+Space toggles playback; Left/Right skip ten seconds; **M** toggles mute.
+**Full screen** or **F** toggles fullscreen. Escape closes settings, unlocks
+controls, or returns to the normal window. Audio and Subtitle settings choose
+embedded tracks, matching sidecars or Subtitles off. **Choose subtitle file…**
+accepts UTF-8 SRT, WebVTT, ASS and SSA without a plaintext temporary file.
+Matching sidecars are discovered after playback starts, with at most 32 matching
+files and an 8 MiB limit per file. The picker also browses other folders in the
+current provider.
 Private subtitles must belong to the video's storage, so their credentials cannot
 silently outlive the player. Ordinary subtitles can also accompany private video.
 
@@ -43,7 +58,7 @@ touch and keyboard actions; the visible Unlock button or Escape restores them.
 **Floating window** detaches an ordinary local video and keeps its window on top.
 Use **Return to document size** to restore the previous window geometry.
 **Cast…** discovers VLC-compatible receivers and offers a return-to-window action.
-Discovery can take a few seconds; reopen the menu to refresh it. Session-only
+Discovery can take a few seconds; use **Refresh receivers** in the Cast pane. Session-only
 credentials disable casting and floating, including while another session-only
 credential package is loaded. Desktop LocalCrypt currently uses
 a session credential context, so its floating action remains unavailable even if

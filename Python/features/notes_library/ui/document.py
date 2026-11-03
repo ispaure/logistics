@@ -280,6 +280,9 @@ class DocumentPresentation:
             self.defer_after_save(lambda: self.open_note(path, remember=remember, fragment=fragment,
                                                         index=index, resolve_link=resolve_link))
             return
+        from services.documents.file_preview import is_video_file
+        if not resolve_link and is_video_file(path):
+            return self.open_video_file(path)
         self.viewer.speech.stop()
         self.remember_position()
         self.pending = ('note', path, remember, fragment, index)
@@ -293,6 +296,20 @@ class DocumentPresentation:
                 cancelled=cancelled, notebooks_enabled=notebooks_enabled,
                 stage=lambda message: self.progress.progress_changed.emit(0, 0, message))
         self.progress.start(read, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
+
+
+    def open_video_file(self, path):
+        if self.closing or self.locked or not self.check_provider():
+            return
+        try:
+            from services.documents.ui.editors import open_document_resource
+            window = open_document_resource(self.provider, self.library.contained(path), self)
+            for view in (self.viewer.browser, self.viewer.formatted_editor):
+                for card in view.inline_videos.cards.values():
+                    card.player.pause()
+            return window
+        except (OSError, ValueError, PermissionError) as error:
+            self.viewer.status.setText(str(error))
 
 
     def open_other_file(self, path):
@@ -575,6 +592,10 @@ class DocumentPresentation:
             return
         path, remember, fragment, index = values
         path = result.path
+        if result.kind == 'video':
+            self.open_video_file(path)
+            self.discard_note_result(result)
+            return
         self.folder_pages.update(result.folder_pages)
         self.refresh_document_entries()
         if remember:

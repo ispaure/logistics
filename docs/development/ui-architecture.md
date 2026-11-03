@@ -16,7 +16,8 @@ See [worker lifetime and cancellation](architecture.md#long-running-workflows-an
 ### Desktop hover initialization
 
 Desktop startup uses commonUtils' `initialize_q_app()`, including its macOS
-window-entry recovery. This covers Home cards, File Browser and other Qt windows
+window-entry and missing-move recovery. Main-window display also queues one macOS
+activation after the first event-loop turn. This covers Home cards, File Browser and other Qt windows
 through the shared event path. Hover colors remain owned by the theme and widget
 styles. See commonUtils' desktop UI setup guide for the recovery contract and
 `test_pointer_entry.py` for the synthetic missing-entry regression.

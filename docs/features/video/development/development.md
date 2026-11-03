@@ -23,7 +23,7 @@ onto opaque hardware pictures, including VideoToolbox CVPN. Normal movies retain
 automatic hardware decoding. Font changes replace the instance because VLC's
 text-renderer options are instance scoped; they preserve held position and Pause.
 
-`ui/presentation.py` owns stable overlay geometry, input lock, requested state,
+`ui/presentation.py` owns stable reserved chrome geometry, input lock, requested state,
 transport-wait tokens and frame/clock starvation handling. `ui/lifecycle.py` owns
 desktop sleep/lock notifications, default-output loss and display-awake leases.
 `services/desktop_video_access.py` supplies process credential scope; a changed
@@ -51,6 +51,29 @@ codec, caption, chapter and speed gates run when FFmpeg is absent. Their manifes
 records generator provenance and checksums; regenerate with
 `PYTHONPATH=Python:. python -m tests.readers.video_fixtures`. Generated custom-duration
 and controlled-stall fixtures still require FFmpeg and use disposable workspaces.
+
+## Docked desktop controls
+
+`ui/chrome.py` reserves separate header, picture and footer allocations.
+`ui/panels.py` places scrollable playback settings beside the picture at wide
+sizes and below it at narrow sizes. Short narrow windows replace the secondary
+icon row with a settings-category selector while a pane is open. The footer's
+minimum height protects transport controls from vertical compression. Header and
+footer retain their allocations while fullscreen chrome is hidden or locked.
+`ui/icons.py` supplies feature-owned line glyphs through commonUtils' existing
+palette-aware icon renderer. Favourites use `desktop.document_catalog`, including
+its credential-aware persistence. Casting discovery uses the same settings pane;
+receiver admission still rechecks external-playback authority.
+
+`test_video_layout.py` checks seven window sizes from 1000×720 to 320×320 across
+all seven ordinary settings panels, bounds and control intersections, usable
+scrolling, long labels, larger fonts, lock geometry, preference writes and
+favourites. `test_video_decode.py` and `test_video_desktop_parity.py` retain real
+Qt/VLC decoding, subtitle, chapter and playback-state coverage. Regular Markdown
+and library integration checks distinguish lazy paused inline cards from full
+platform-player dispatch. These host checks do not establish physical display,
+receiver or native mobile presentation quality. Desktop HDR output remains
+unavailable because the current surface receives SDR memory frames.
 
 ## Mobile HDR output
 

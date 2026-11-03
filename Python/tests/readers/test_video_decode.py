@@ -60,7 +60,7 @@ class VideoDecodeTests(QtTestCase):
                         self.assertLessEqual(point.x() + button.width(), window.width())
                         self.assertLessEqual(point.y() + button.height(), window.height())
                         timeline = window.seek.mapTo(window, qt.QPoint(0, 0))
-                        self.assertGreaterEqual(timeline.y(), point.y() + button.height())
+                        self.assertLessEqual(timeline.y() + window.seek.height(), point.y())
                     window.grab().save(str(output / f'{width}x{height}.png'))
                 window.fullscreen_button.click()
                 self.assertTrue(window.isFullScreen())
@@ -78,7 +78,7 @@ class VideoDecodeTests(QtTestCase):
                 window.close()
                 self.wait_until(lambda: release.called, drain_deferred=True)
 
-    def test_embedded_chapter_menu_seeks_without_resuming_pause(self):
+    def test_embedded_chapter_panel_seeks_without_resuming_pause(self):
         from logistics_build.build_retention import scratch
         from tests.readers.video_fixtures import chapter_movie
         from features.video.ui.player import VideoWindow
@@ -94,8 +94,9 @@ class VideoDecodeTests(QtTestCase):
                 window.chapters.click()
                 self.wait_until(lambda: window.chapter_data is not None)
                 self.assertEqual([row.title for row in window.chapter_data], ['Opening', 'Second scene'])
-                self.assertIsNotNone(window.chapter_menu)
-                window.chapter_menu.actions()[1].trigger()
+                self.assertEqual(window.panel_name, 'chapters')
+                buttons = window.settings_scroll.widget().findChildren(qt.QPushButton)
+                buttons[1].click()
                 self.wait_until(lambda: window.player.position() >= 5900)
                 self.assertEqual(window.player.playbackState(), QMediaPlayer.PlaybackState.PausedState)
             finally:

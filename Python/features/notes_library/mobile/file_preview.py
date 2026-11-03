@@ -5,7 +5,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from services.documents.mobile_views import retire_webview
 from commonUtils.ui.native.inline_html import set_inline_html
-from ..file_preview import FilePreview
+from services.documents.file_preview import FilePreview
 from ..preparation import PreparedDocument
 from .preparation import read_prepared
 

@@ -69,6 +69,8 @@ class VideoResumeGuard(qt.QObject):
             return
         self.blocked = True
         window = self.window
+        if hasattr(window, 'close_settings'):
+            window.close_settings()
         window.requested_play = False
         window.network_hold = False
         for name in ("tools_menu", "chapter_menu"):

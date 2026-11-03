@@ -16,12 +16,15 @@ def clock(milliseconds):
     return f'{seconds // 3600}:{seconds // 60 % 60:02}:{seconds % 60:02}'
 
 
-from .controls import PlaybackTools, CachedSlider
+from .controls import PlaybackTools
 from .backend import QtPlayback
 from .presentation import PlaybackPresentation
+from .chrome import DockedChrome
+from .panels import PlaybackPanels
+from .icons import video_icon
 
 
-class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
+class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPanels, qt.QMainWindow):
     idle = qt.Signal()
     queue_result = qt.Signal(object)
     chapter_result = qt.Signal(object)
@@ -120,152 +123,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
             self.toggle_play()
 
     def build(self):
-        self.backend = self.backend_factory(self)
-        self.player, self.audio = self.backend.player, self.backend.audio
-        body = qt.QWidget()
-        self.setCentralWidget(body)
-        layers = qt.QStackedLayout(body)
-        layers.setContentsMargins(0, 0, 0, 0)
-        layers.setStackingMode(qt.QStackedLayout.StackingMode.StackAll)
-        self.overlay = qt.QWidget()
-        overlay_layout = qt.QVBoxLayout(self.overlay)
-        from commonUtils.ui.readers.layout import READER_LAYOUT
-        overlay_layout.setContentsMargins(*READER_LAYOUT.desktop_margins)
-        overlay_layout.setSpacing(READER_LAYOUT.spacing)
-        self.video = self.backend.video
-        palette = self.video.palette()
-        palette.setColor(qt.QPalette.ColorRole.Window, qt.QColor('black'))
-        self.video.setPalette(palette)
-        self.video.setAutoFillBackground(True)
-        self.video_viewport = qt.QScrollArea()
-        self.video_viewport.setFrameShape(qt.QFrame.Shape.NoFrame)
-        self.video_viewport.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
-        self.video_viewport.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.video_viewport.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.video_viewport.setStyleSheet("background: black;")
-        self.video_viewport.setWidget(self.video)
-        layers.addWidget(self.video_viewport)
-        layers.addWidget(self.overlay)
-        layers.setCurrentWidget(self.overlay)
-        self.wait_indicator = qt.QLabel('Buffering…', self.overlay)
-        self.wait_indicator.setStyleSheet('color: white; background: rgba(0, 0, 0, 180); padding: 12px;')
-        self.wait_indicator.setAccessibleName('Waiting for video data')
-        self.wait_indicator.adjustSize()
-        self.wait_indicator.hide()
-        self.identity = qt.QLabel()
-        self.identity.setTextFormat(qt.Qt.TextFormat.PlainText)
-        from services.documents.storage import document_sources
-        private = any(getattr(source, 'private', False) for source in document_sources(self.content.provider))
-        source = 'Cloud file' if self.content.remote else 'Local encrypted file' if private else 'Local file'
-        self.identity.setText(Path(self.content.path).name + '\n' + source)
-        self.identity.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
-        self.identity.setWordWrap(True)
-        self.identity.setMinimumWidth(0)
-        self.identity.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
-        self.identity.setStyleSheet('color: white; background: rgba(0, 0, 0, 180); padding: 8px;')
-        overlay_layout.addWidget(self.identity)
-        overlay_layout.addStretch(1)
-        self.caption = qt.QLabel()
-        self.caption.setTextFormat(qt.Qt.TextFormat.PlainText)
-        self.caption.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
-        self.caption.setWordWrap(True)
-        self.caption.setStyleSheet('font-size: 22px; color: white; background: black;')
-        overlay_layout.addWidget(self.caption)
-        self.caption.hide()
-        self.unlock_button = qt.QPushButton('Unlock controls (Escape)')
-        overlay_layout.addWidget(self.unlock_button)
-        self.unlock_button.hide()
-        self.chrome = qt.QWidget()
-        self.chrome.setAutoFillBackground(True)
-        layout = qt.QVBoxLayout(self.chrome)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(READER_LAYOUT.spacing)
-        overlay_layout.addWidget(self.chrome)
-        row = qt.QHBoxLayout()
-        self.seek = CachedSlider(qt.Qt.Orientation.Horizontal)
-        self.seek.setAccessibleName('Video position')
-        self.seek.sliderReleased.connect(lambda: self.seek_to(self.seek.value()))
-        row.addWidget(self.seek, 1)
-        self.time = qt.QLabel('0:00:00 / 0:00:00')
-        row.addWidget(self.time)
-        timeline = row
-        row = qt.QHBoxLayout()
-        self.backward = self.control_button('Back 10 seconds', 'SP_MediaSeekBackward', lambda: self.skip(-10000))
-        self.play = self.control_button('Play', 'SP_MediaPlay', self.toggle_play)
-        self.forward = self.control_button('Forward 10 seconds', 'SP_MediaSeekForward', lambda: self.skip(10000))
-        self.backward.setToolTip('Back 10 seconds (Left)')
-        self.play.setToolTip('Play (Space)')
-        self.forward.setToolTip('Forward 10 seconds (Right)')
-        for button in (self.backward, self.play, self.forward):
-            row.addWidget(button)
-        row.addStretch()
-        self.mute = self.control_button('Mute', 'SP_MediaVolume', lambda: self.audio.setMuted(not self.audio.isMuted()))
-        self.mute.setCheckable(True)
-        self.mute.setToolTip('Mute (M)')
-        self.audio.mutedChanged.connect(self.update_mute)
-        row.addWidget(self.mute)
-        self.volume = qt.QSlider(qt.Qt.Orientation.Horizontal)
-        self.volume.setAccessibleName('Volume')
-        self.volume.setRange(0, 100)
-        self.volume.setValue(80)
-        self.volume.setMaximumWidth(100)
-        self.volume.valueChanged.connect(lambda value: self.audio.setVolume(value / 100))
-        row.addWidget(self.volume)
-        layout.addLayout(row)
-        self.track_layout = qt.QGridLayout()
-        self.audio_tracks, self.subtitle_tracks = qt.QComboBox(), qt.QComboBox()
-        self.audio_label, self.subtitle_label = qt.QLabel('Audio'), qt.QLabel('Subtitles')
-        self.audio_label.setBuddy(self.audio_tracks)
-        self.subtitle_label.setBuddy(self.subtitle_tracks)
-        for combo in (self.audio_tracks, self.subtitle_tracks):
-            combo.setMinimumWidth(0)
-            combo.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Fixed)
-            combo.setMinimumHeight(32)
-        self.audio_tracks.setAccessibleName('Audio track')
-        self.subtitle_tracks.setAccessibleName('Subtitles')
-        self.audio_tracks.activated.connect(lambda index: self.player.setActiveAudioTrack(self.audio_tracks.itemData(index)))
-        self.subtitle_tracks.activated.connect(self.select_subtitle)
-        for index, widget in enumerate((self.audio_label, self.audio_tracks, self.subtitle_label, self.subtitle_tracks)):
-            self.track_layout.addWidget(widget, 0, index)
-        self.track_layout.setColumnStretch(1, 1)
-        self.track_layout.setColumnStretch(3, 1)
-        layout.addLayout(self.track_layout)
-        self.action_layout = qt.QGridLayout()
-        self.attach = qt.QPushButton('Load SRT…')
-        self.attach.clicked.connect(self.load_subtitles)
-        from commonUtils.ui.readers.reader_chrome import ReaderFullscreen, reader_button
-        self.fullscreen_action = qt.QAction('Full screen', self)
-        self.fullscreen_action.setCheckable(True)
-        self.fullscreen = ReaderFullscreen(self, self.fullscreen_action)
-        self.fullscreen_action.triggered.connect(self.toggle_fullscreen)
-        self.fullscreen_button = reader_button(self, 'Full screen', action=self.fullscreen_action, icon='fullscreen')
-        self.fullscreen_button.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.fullscreen_button.setToolTip(self.fullscreen_action.text() + ' (F)')
-        self.fullscreen_action.changed.connect(lambda: self.fullscreen_button.setToolTip(self.fullscreen_action.text() + ' (F)'))
-        self.floating = qt.QPushButton('Floating window')
-        self.floating.setCheckable(True)
-        self.floating.setEnabled(not (self.content.restricted or self.process_contexts))
-        self.floating.clicked.connect(self.toggle_floating)
-        self.chapters = qt.QPushButton('Chapters…')
-        self.chapters.clicked.connect(self.show_chapters)
-        self.chapter_result.connect(self.chapters_loaded)
-        self.action_buttons = (self.attach, self.chapters, self.fullscreen_button, self.floating)
-        if self.backend.capabilities.receivers:
-            self.cast_button = qt.QPushButton('Cast…')
-            self.cast_button.clicked.connect(self.show_receivers)
-            self.cast_button.setEnabled(not (self.content.restricted or self.process_contexts))
-            self.action_buttons += (self.cast_button,)
-        for column, button in enumerate(self.action_buttons):
-            button.setMinimumHeight(32)
-            self.action_layout.addWidget(button, 0, column)
-        layout.addLayout(self.action_layout)
-        self.status = qt.QLabel('Cloud streaming · encrypted resume. Green: cached ranges (approx.). Start over is in Playback.'
-                               if self.content.remote else 'Ready. Press Play to start.')
-        self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
-        self.status.setWordWrap(True)
-        self.status.setMinimumWidth(0)
-        layout.addWidget(self.status)
-        layout.addLayout(timeline)
+        self.build_chrome()
         self.player.positionChanged.connect(self.position_changed)
         self.player.durationChanged.connect(self.duration_changed)
         self.player.tracksChanged.connect(self.refresh_tracks)
@@ -284,16 +142,6 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
             shortcut = qt.QShortcut(qt.QKeySequence(key), self)
             shortcut.activated.connect(action)
 
-    def control_button(self, label, icon, action):
-        button = qt.QToolButton()
-        button.setIcon(self.style().standardIcon(getattr(qt.QStyle.StandardPixmap, icon)))
-        button.setText(label)
-        button.setAccessibleName(label)
-        button.setToolTip(label)
-        button.setMinimumSize(36, 36)
-        button.clicked.connect(action)
-        return button
-
     def update_play(self, state):
         if hasattr(self, 'requested_play') and not self.network_hold:
             if state == QMediaPlayer.PlaybackState.PausedState:
@@ -302,7 +150,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
                 self.requested_play = True
         playing = getattr(self, 'requested_play', False) or state == QMediaPlayer.PlaybackState.PlayingState
         label = 'Pause' if playing else 'Play'
-        self.play.setIcon(self.style().standardIcon(qt.QStyle.StandardPixmap.SP_MediaPause if playing else qt.QStyle.StandardPixmap.SP_MediaPlay))
+        video_icon(self.play, 'pause' if playing else 'play')
         self.play.setText(label)
         self.play.setAccessibleName(label)
         self.play.setToolTip(label + ' (Space)')
@@ -313,7 +161,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
         label = 'Unmute' if muted else 'Mute'
         self.mute.setText(label)
         self.mute.setChecked(muted)
-        self.mute.setIcon(self.style().standardIcon(qt.QStyle.StandardPixmap.SP_MediaVolumeMuted if muted else qt.QStyle.StandardPixmap.SP_MediaVolume))
+        video_icon(self.mute, 'muted' if muted else 'speaker')
         self.mute.setAccessibleName(label)
         self.mute.setToolTip(label + ' (M)')
 
@@ -329,21 +177,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if not hasattr(self, 'action_buttons'):
-            return
-        self.wait_indicator.move(self.overlay.rect().center() - self.wait_indicator.rect().center())
-        self.wait_indicator.raise_()
-        narrow = self.width() < 520
-        widgets = (self.audio_label, self.audio_tracks, self.subtitle_label, self.subtitle_tracks)
-        for widget in widgets:
-            self.track_layout.removeWidget(widget)
-        self.track_layout.setColumnStretch(3, 0 if narrow else 1)
-        for index, widget in enumerate(widgets):
-            self.track_layout.addWidget(widget, index // 2 if narrow else 0, index % 2 if narrow else index)
-        for button in self.action_buttons:
-            self.action_layout.removeWidget(button)
-        for index, button in enumerate(self.action_buttons):
-            self.action_layout.addWidget(button, index // 2 if narrow else 0, index % 2 if narrow else index)
+        self.reflow_chrome()
 
     def toggle_play(self):
         self.startup_pending = False
@@ -391,6 +225,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
             self.last_frame = self.last_clock = monotonic()
             self.player.setPosition(min(self.resume_at, max(0, duration - 1000)))
             self.resume_at = None
+        self.position_changed(self.player.position())
 
     def position_changed(self, position):
         self.last_clock = monotonic()
@@ -423,6 +258,8 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
         self.subtitle_tracks.setCurrentIndex(self.subtitle_tracks.findData(selected))
 
     def select_subtitle(self, index):
+        if not self.controls_allowed():
+            return
         selected = self.subtitle_tracks.itemData(index)
         if selected is None:
             return
@@ -440,6 +277,8 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
         self.position_changed(self.player.position())
 
     def load_subtitles(self):
+        if not self.controls_allowed():
+            return
         from services.documents.ui.editors import choose_editor_resource
         from features.video.subtitles import Subtitles, MAX_SUBTITLE
         # A private video's subtitle picker starts in the same encrypted folder.
@@ -558,29 +397,13 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
             'Playback could not continue. Press Play to retry from this position.'))
 
     def show_chapters(self):
-        if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
-            return
-        try:
-            self.content.check_access()
-        except (OSError, ValueError, PermissionError):
-            self.status.setText('Unlock the video before opening chapters.')
+        if not self.controls_allowed():
             return
         if hasattr(self.player, 'chapters'):
             self.chapter_data = self.player.chapters()
-        if self.chapter_data is not None:
-            if not self.chapter_data:
-                self.status.setText('This video has no supported embedded chapters.')
-                return
-            menu = self.chapter_menu = qt.QMenu(self)
-            for chapter in self.chapter_data:
-                action = menu.addAction(f'{clock(chapter.start_ms)} · {chapter.title}')
-                action.triggered.connect(lambda checked=False, position=chapter.start_ms: self.seek_to(position))
-            menu.popup(self.chapters.mapToGlobal(qt.QPoint(0, self.chapters.height())))
+        self.show_settings('chapters')
+        if self.chapter_data is not None or (self.chapter_worker is not None and self.chapter_worker.is_alive()):
             return
-        if self.chapter_worker is not None and self.chapter_worker.is_alive():
-            return
-        self.chapters.setEnabled(False)
-        self.chapters.setText('Loading chapters…')
         def load():
             from features.video.chapters import read_chapters
             try:
@@ -595,14 +418,11 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
     def chapters_loaded(self, result):
         if self.closing or self.chapter_cancelled.is_set():
             return
-        self.chapters.setText('Chapters…')
-        self.chapters.setEnabled(True)
         rows, error = result
         if error:
             self.status.setText('Could not read chapters. Check access and try again.')
-            return
         self.chapter_data = rows
-        self.show_chapters()
+        self.refresh_settings('chapters')
 
     def seek_to(self, position):
         if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
@@ -647,7 +467,10 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, qt.QMainWindow):
             self.floating_geometry = window.saveGeometry()
         window.setWindowFlag(qt.Qt.WindowType.WindowStaysOnTopHint, floating)
         self.floating.setChecked(floating)
-        self.floating.setText('Return to document size' if floating else 'Floating window')
+        label = 'Return to document size' if floating else 'Floating window'
+        self.floating.setText(label)
+        self.floating.setToolTip(label)
+        self.floating.setAccessibleName(label)
         if floating:
             window.resize(560, 420)
         elif getattr(self, 'floating_geometry', None) is not None:

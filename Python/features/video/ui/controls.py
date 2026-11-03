@@ -6,8 +6,6 @@ from time import monotonic
 from commonUtils.ui import pyside as qt
 from services.documents.video_settings import SettingsStore
 from features.video.session import (
-    ASPECTS,
-    RATES,
     FolderQueue,
     parse_time,
 )
@@ -38,19 +36,6 @@ class PlaybackTools:
         self.body_layout = self.chrome.layout()
         self.queue = None
         self.tools_menu = None
-        self.attach.setText('Load subtitles…')
-        self.tools_button = qt.QPushButton("Playback…")
-        self.tools_button.clicked.connect(self.show_tools)
-        self.action_buttons += (self.tools_button,)
-        for button in self.action_buttons:
-            button.setSizePolicy(
-                qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Fixed
-            )
-        self.action_layout.addWidget(self.tools_button, 0, len(self.action_buttons) - 1)
-        self.undo_button = qt.QPushButton("Undo seek")
-        self.undo_button.clicked.connect(self.undo_seek)
-        self.body_layout.addWidget(self.undo_button)
-        self.undo_button.hide()
         self.seek.setToolTip(
             "Green strip: approximate cached byte ranges. Variable bitrate may shift the time mapping."
         )
@@ -86,13 +71,17 @@ class PlaybackTools:
         except (OSError, ValueError):
             self.seek.ranges = ()
         if monotonic() > self.undo_deadline:
+            visible = self.undo_button.isVisible()
             self.undo_button.hide()
+            if visible:
+                self.reflow_chrome()
 
     def remember_seek(self, position):
         if abs(position - self.player.position()) >= 10000:
             self.undo_position = self.player.position()
             self.undo_deadline = monotonic() + 8
             self.undo_button.show()
+            self.reflow_chrome()
 
     def undo_seek(self):
         if self.undo_position is not None and monotonic() <= self.undo_deadline:
@@ -101,6 +90,7 @@ class PlaybackTools:
             self.undo_deadline = 0
             self.seek_to(position)
             self.undo_button.hide()
+            self.reflow_chrome()
             self.undo_deadline = 0
 
     def go_to_time(self):
@@ -116,6 +106,8 @@ class PlaybackTools:
                 self.status.setText(str(error))
 
     def change_setting(self, key, value):
+        if not self.controls_allowed():
+            return
         try:
             self.settings = self.settings_store.save(
                 asdict(replace(self.settings, **{key: value}))
@@ -136,6 +128,9 @@ class PlaybackTools:
         )
         self.apply_aspect()
         self.prefer_languages()
+        self.speed_button.setText(f'{self.settings.rate:g}×')
+        self.speed_button.setToolTip(f'Speed · {self.settings.rate:g}× · pitch preserved')
+        self.picture_button.setToolTip('Picture size · ' + self.settings.aspect.title())
 
     def apply_aspect(self):
         # A scroll viewport clips original-size frames without forcing them to fit.
@@ -181,105 +176,8 @@ class PlaybackTools:
                     select(index)
                     break
 
-    def ask_setting(self, key, label, current):
-        value, accepted = qt.QInputDialog.getText(
-            self, "Playback preferences", label, text=str(current)
-        )
-        if accepted:
-            try:
-                self.change_setting(
-                    key, int(value) if key.endswith("_ms") else value.strip()
-                )
-            except ValueError as error:
-                self.status.setText(str(error))
-
     def show_tools(self):
-        if self.closing or (
-            self.resume_guard is not None and self.resume_guard.blocked
-        ):
-            return
-        try:
-            self.content.check_access()
-        except (OSError, ValueError):
-            return
-        menu = self.tools_menu = qt.QMenu(self)
-        menu.addAction('Lock controls', lambda: self.lock_controls(True))
-        menu.addAction('Show in folder', self.show_in_folder)
-        menu.addAction("Go to time… (G)", self.go_to_time)
-        menu.addAction("Start over", lambda: self.seek_to(0))
-        undo = menu.addAction("Undo seek (Ctrl+Z)", self.undo_seek)
-        undo.setEnabled(monotonic() <= self.undo_deadline)
-        rate = menu.addMenu("Speed · pitch preserved")
-        for value in RATES:
-            action = rate.addAction(
-                f"{value:g}×",
-                lambda checked=False, v=value: self.change_setting("rate", v),
-            )
-            action.setCheckable(True)
-            action.setChecked(value == self.settings.rate)
-        aspect = menu.addMenu("Picture size")
-        for value in ASPECTS:
-            label = "Fill (crop edges)" if value == "fill" else value.title()
-            action = aspect.addAction(
-                label, lambda checked=False, v=value: self.change_setting("aspect", v)
-            )
-            action.setCheckable(True)
-            action.setChecked(value == self.settings.aspect)
-        subtitles = menu.addMenu("Subtitles and languages")
-        subtitles.addAction("Load subtitles…", self.load_subtitles)
-        scope = '' if self.backend.capabilities.embedded_subtitle_adjustment else 'External '
-        for value in (0.75, 1.0, 1.25, 1.5, 2.0):
-            subtitles.addAction(
-                f"{scope}subtitle size {value:g}×",
-                lambda checked=False, v=value: self.change_setting("subtitle_scale", v),
-            )
-        for key, label in [
-            ("subtitle_delay_ms", scope + "subtitle delay (ms; positive = later)"),
-            (
-                "audio_language",
-                "Preferred audio language code (e.g. fr; blank = default)",
-            ),
-            (
-                "subtitle_language",
-                "Preferred subtitle language code (e.g. en; blank = default)",
-            ),
-        ]:
-            subtitles.addAction(
-                label + "…",
-                lambda checked=False, k=key, text=label: self.ask_setting(
-                    k, text, getattr(self.settings, k)
-                ),
-            )
-        if self.backend.capabilities.audio_delay:
-            subtitles.addAction('Audio delay (ms; positive = later)…',
-                lambda: self.ask_setting('audio_delay_ms', 'Audio delay (ms; positive = later)', self.settings.audio_delay_ms))
-        if not self.backend.capabilities.embedded_subtitle_adjustment:
-            limitation = subtitles.addAction('Embedded subtitle size/delay: unavailable with this decoder')
-            limitation.setEnabled(False)
-        queue_menu = menu.addMenu("Current folder")
-        if self.queue is None:
-            self.load_queue()
-            queue_menu.addAction("Loading…").setEnabled(False)
-        else:
-            for row in self.queue.rows():
-                action = queue_menu.addAction(
-                    row["name"], lambda checked=False, p=row["path"]: self.queue_open(p)
-                )
-                action.setCheckable(True)
-                action.setChecked(row["current"])
-        queue_menu.addAction("Previous (P)", lambda: self.queue_move(-1))
-        queue_menu.addAction("Next (N)", lambda: self.queue_move(1))
-        auto = queue_menu.addAction(
-            "Play next automatically",
-            lambda: self.change_setting(
-                "autoplay_next", not self.settings.autoplay_next
-            ),
-        )
-        auto.setCheckable(True)
-        auto.setChecked(self.settings.autoplay_next)
-        menu.popup(
-            self.tools_button.mapToGlobal(qt.QPoint(0, self.tools_button.height()))
-        )
+        self.show_settings('playback')
 
     def load_queue(self, then=None):
         if self.queue is not None:
@@ -306,6 +204,11 @@ class PlaybackTools:
     def queue_loaded(self, queue):
         self.queue = queue
         self.queue_worker = None
+        if queue is None:
+            if self.panel_name == 'queue':
+                self.status.setText('Could not list this folder. Close and reopen Current folder to retry.')
+        else:
+            self.refresh_settings('queue')
         pending, self.queue_pending = getattr(self, "queue_pending", None), None
         if queue is not None and pending and not self.closing:
             pending()

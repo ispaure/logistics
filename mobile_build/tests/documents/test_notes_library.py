@@ -257,16 +257,25 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertIn('<video ', blocks[0]['html'])
             self.assertIn('![[potato.mp4]]', blocks[0]['source'])
             transports = [transport for _, transport in media.videos.values()]
-            self.assertTrue(await owner.open_note('Vault/Media/potato.mp4'), owner.notice.text)
-            self.assertTrue(all(transport.closed.is_set() for transport in transports))
-            self.assertEqual(owner.embedded.kind, 'file')
-            direct = owner.embedded.preview
-            html = direct.page()
-            self.assertIn('<video controls playsinline preload="none"', html)
-            self.assertIn(direct.video_url, html)
-            transport = direct.transport
+            from unittest.mock import AsyncMock
+            self.app.set_feature_enabled('video', True, refresh=False)
+            with patch.object(owner.web, 'evaluate_javascript', new_callable=AsyncMock) as pause, patch(
+                    'features.video.mobile.player.open_video', new_callable=AsyncMock, return_value=True) as native:
+                for video in ('Vault/Media/potato.mp4', 'potato.mp4'):
+                    self.assertTrue(await owner.open_note(video, resolve_link=video == 'potato.mp4'), owner.notice.text)
+                self.assertEqual(pause.await_count, 2)
+            self.assertEqual(native.await_count, 2)
+            native.assert_awaited_with(self.app, self.provider, 'Vault/Media/potato.mp4')
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            self.assertIsNone(owner.embedded)
+            # Native mobile HTML embeds are deliberately simple and lazy. No
+            # full-player resume preferences or autoplay enter page rendering.
+            self.assertIn('controls playsinline preload="none"', html)
+            self.assertNotIn('autoplay', html)
+            self.assertNotIn('#t=', html)
+            self.assertNotIn('autoplay', blocks[0]['html'])
             owner.dispose()
-            self.assertTrue(transport.closed.is_set())
+            self.assertTrue(all(transport.closed.is_set() for transport in transports))
             self.assertIsNone(media('potato.mp4'))
         self.run_async(exercise())
 

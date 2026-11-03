@@ -81,6 +81,7 @@ def mobile_presentation(app):
     from mobile.document_sources import folder_action
     from mobile.fold_layout import reserved_divisions, division
     from mobile.layout_participants import participants
+    from mobile.favourites import favourite_resource
 
     return MobilePresentation(
         icon_button=icon_button,
@@ -103,6 +104,7 @@ def mobile_presentation(app):
         reserved_divisions=reserved_divisions,
         fold_division=lambda widget: division(app, widget),
         register_layout=lambda *args, **kwargs: participants(app).register(*args, **kwargs),
+        favourite_resource=lambda provider, path, **kwargs: favourite_resource(app, provider, path, **kwargs),
     )
 
 
@@ -226,6 +228,10 @@ def notes_host(app):
             except OSError:
                 pass  # Optional measurement must not interrupt document opening.
     async def open_resource(provider, path):
+        from features.video.formats import VIDEO_EXTENSIONS
+        if Path(path).suffix.lower() in VIDEO_EXTENSIONS:
+            from services.documents.mobile_storage import open_provider_document
+            return await open_provider_document(app, provider, path)
         from mobile.favourites import resource_reference
         from mobile.document_sources import reopen_file
         source, _ = resource_reference(app, provider, path)

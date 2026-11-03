@@ -49,7 +49,7 @@ class PDFNavigation:
         self._spread_starts = {}
         self._stops = {}
         self._layout = None
-        from mobile.reading.history import PageVisits
+        from services.documents.page_visits import PageVisits
         self.visits = PageVisits()
 
     def commit(self, indices, viewport):

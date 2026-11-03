@@ -1,10 +1,16 @@
-"""Memory-only file previews shared by the desktop and mobile library panes."""
+"""Memory-only document preview content, shared by desktop and mobile hosts."""
 from base64 import b64encode
 from html import escape
 from pathlib import PurePosixPath
 from dataclasses import dataclass
 from commonUtils.runtime.operations import check_cancelled
 from services.documents.storage import DocumentResource, document_operation
+
+
+def is_video_file(path):
+    """Document admission owns container routing, independent of the host UI."""
+    from features.video.formats import VIDEO_EXTENSIONS
+    return PurePosixPath(path).suffix.lower() in VIDEO_EXTENSIONS
 
 
 @dataclass(frozen=True)

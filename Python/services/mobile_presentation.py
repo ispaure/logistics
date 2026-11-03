@@ -110,3 +110,5 @@ class MobilePresentation:
     reserved_divisions: Callable[[Any], tuple[Any, ...]]
     fold_division: Callable[[Any], Any]
     register_layout: Callable[..., Any]
+
+    favourite_resource: Callable | None = None

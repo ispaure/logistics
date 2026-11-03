@@ -5,7 +5,6 @@
     "connection_index.py",
     "dataview.py",
     "dataview_script.py",
-    "file_preview.py",
     "library_files.py",
     "link_policy.py",
     "mobile/__init__.py",

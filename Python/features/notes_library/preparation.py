@@ -1,5 +1,6 @@
 """Prepared document ownership before a platform publishes its new view."""
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 from .notes import MAX_NOTE, breadcrumb_folders, document_kind
 
 
@@ -40,8 +41,13 @@ def prepare_document(library, path, *, current='', resolve_link=False,
         folders = breadcrumb_folders(library.root, path)
         result.folder_pages = library.folder_pages(
             [{'path': folder, 'directory': True} for folder in folders], cancelled=cancelled)
-        if result.kind is None:
-            from .file_preview import FilePreview
+        from services.documents.file_preview import is_video_file
+        if is_video_file(path):
+            result.kind = 'video'
+        if result.kind == 'video':
+            pass  # The UI opens the platform player; no preview transport is needed.
+        elif result.kind is None:
+            from services.documents.file_preview import FilePreview
             result.preview = FilePreview.open(provider, path, cancelled=cancelled)
             result.rendered = result.preview.content()
         elif result.kind == 'text':

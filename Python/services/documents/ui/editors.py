@@ -9,6 +9,18 @@ from commonUtils.ui.resources.picker import choose_resource, ResourceTaskDialog
 _windows = []
 
 
+def favourite_document(window):
+    """Project a document into the desktop's credential-aware favourites list."""
+    from desktop.document_catalog import remember
+    remember(window, favourite=True)
+
+
+def open_document_resource(provider, path, parent=None):
+    """Use the desktop's format dispatcher while retaining the supplied provider."""
+    from desktop.document_catalog import open_resource
+    return open_resource(provider, path, parent)
+
+
 def local_document_choice(path):
     path = Path(path)
     return ResourceChoice(LocalFiles(path.parent), path.name, lambda: None)

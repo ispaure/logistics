@@ -3,6 +3,7 @@
   "modules": [
     "__init__.py",
     "access_policy.py",
+    "appearance_palette.py",
     "audio_output.py",
     "build_version.py",
     "documents/__init__.py",
@@ -19,6 +20,7 @@
     "documents/credential_state.py",
     "documents/destinations.py",
     "documents/entry_icons.py",
+    "documents/file_preview.py",
     "documents/history_controls.py",
     "documents/limits.py",
     "documents/locations.py",
@@ -32,6 +34,7 @@
     "documents/mobile_views.py",
     "documents/mutations.py",
     "documents/names.py",
+    "documents/page_visits.py",
     "documents/protection.py",
     "documents/provider_documents.py",
     "documents/readers.py",

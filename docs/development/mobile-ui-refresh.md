@@ -927,7 +927,7 @@ that updated native case still needs a simulator/emulator run.
 
 ## Slate palette and menu touch targets (local follow-up)
 
-`mobile.palette` owns Qt-free mobile roles based on desktop Slate's
+`services.appearance_palette` owns the shared toolkit-free roles based on desktop Slate's
 current default colours, including the 6% blue tint on dark neutral surfaces.
 Light cards use near-white `#fafbfc`; the window uses `#f0f2f6`. Mobile does not
 import Qt or synchronize desktop custom theme preferences. `appearance` adapts
