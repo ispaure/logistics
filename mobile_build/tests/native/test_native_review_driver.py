@@ -13,20 +13,26 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
     def app(self, *, changes=1, finish=True):
         result = asyncio.get_running_loop().create_future()
         calls = []
-        status = State(text='Review complete')
-        button = State(enabled=True)
-        async def confirm():
-            calls.append(True)
-            if len(calls) <= changes:
-                status.text = 'Files changed or could not be checked. Review the current results and confirm again.'
-            else:
-                status.text = 'Checking that the completed review is still current…'
-                button.enabled = False
-                if finish:result.set_result(True)
-        button.on_press = confirm
-        view = State(children=[None, None, status, None, None, State(children=[None, button])])
+        view = State(model=dict(complete=True, can_confirm=True, can_early=True, notice=''),
+                     ready=True, closed=False, revision=1, delivered_revision=1)
         app = State(_transfer_review_view=view, transfer_task=result,
-            main_window=State(dialog=None), transfer_message='Transferring fixture')
+            main_window=State(dialog=None), cloud_status=State(value='Ready'),
+            transfer_message='Transferring fixture')
+        async def evaluate(script):
+            if '#approve' not in script or not view.model['can_confirm']:
+                return False
+            await app.main_window.dialog(object())
+            calls.append(True)
+            view.revision += 1
+            view.delivered_revision = view.revision
+            if len(calls) <= changes:
+                view.model['notice'] = 'Files changed. Review the updated results before confirming again.'
+            else:
+                view.model['notice'] = 'Checking that the completed review is still current…'
+                view.model['can_confirm'] = False
+                if finish:result.set_result(True)
+            return True
+        view.web = State(evaluate_javascript=evaluate)
         self.addCleanup(lambda: result.cancel() if not result.done() else None)
         return app, calls
 
@@ -63,6 +69,18 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(calls), 2)
         self.assertTrue(app.transfer_task.result())
 
+    async def test_approval_waits_for_the_current_rendered_revision(self):
+        app, calls = self.app(changes=0)
+        view = app._transfer_review_view
+        view.delivered_revision = 0
+        task = asyncio.create_task(approve_transfer(app, timeout=1))
+        await asyncio.sleep(.06)
+        self.assertFalse(task.done())
+        self.assertEqual(calls, [])
+        view.delivered_revision = view.revision
+        await task
+        self.assertEqual(len(calls), 1)
+
     async def test_repeated_changes_fail_instead_of_auto_approving_forever(self):
         app, calls = self.app(changes=10)
         with self.assertRaisesRegex(AssertionError, 'three fresh confirmations'):
@@ -78,7 +96,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
     async def test_early_review_waits_for_actual_held_result_not_just_visible_incomplete(self):
         from threading import Event
         app, _ = self.app(changes=0, finish=False)
-        app._transfer_review_view.children[3] = State(value='Review incomplete')
+        app._transfer_review_view.model.update(complete=False, can_confirm=False)
         held = Event()
         task = asyncio.create_task(wait_for_held_review(app, held, timeout=2))
         await asyncio.sleep(.06)
@@ -89,7 +107,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_held_native_result_fails_with_a_bound(self):
         from threading import Event
         app, _ = self.app(changes=0, finish=False)
-        app._transfer_review_view.children[3] = State(value='Review incomplete')
+        app._transfer_review_view.model.update(complete=False, can_confirm=False)
         with self.assertRaisesRegex(AssertionError, 'never reached the held-result fixture'):
             await wait_for_held_review(app, Event(), timeout=.01)
         self.assertFalse(app.transfer_task.cancelled())
