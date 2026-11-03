@@ -140,6 +140,7 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
             await library.open_editor()
             editor = library.embedded
             await editor.choose_mode(False)
+            library.search_mode.value = 'Search within Documents'
             library.search.value = 'needle'
             await library.search_task
             self.assertEqual([row['path'] for row in library.search_rows], ['Vault/Home.md'])

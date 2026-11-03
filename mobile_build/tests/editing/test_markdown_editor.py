@@ -219,7 +219,7 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertNotIn(owner.save_button, owner.toolbar.children)
         self.app.show_preview()
         self.assertIs(owner.preview_edit.parent, owner.preview_toolbar)
-        self.assertIs(owner.preview_box._workspace_menu_button.parent, owner.preview_toolbar)
+        self.assertFalse(hasattr(owner.preview_box, '_workspace_menu_button'))
 
     def test_provider_preview_conversion_runs_in_worker(self):
         import threading
