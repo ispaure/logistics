@@ -59,9 +59,10 @@ class MobilePagination:
             return
         changed = self.pages.reset(value['layout'])
         self.page, self.columns = value['index'], value['columns']
-        if not changed:
-            self.visits.visit((self.chapter, self.page))
-        elif self.visits.current is None:
+        if changed:
+            self.visits.previous.clear()
+            self.visits.current = (self.chapter, self.page)
+        else:
             self.visits.visit((self.chapter, self.page))
         self.pages.record(self.chapter, value['count'])
         if changed:
@@ -123,3 +124,11 @@ class MobilePagination:
     async def seek_page(self, chapter, page):
         if chapter == self.chapter and self.view is not None and await wait_chapter_ready(self.view):
             await self.view.evaluate_javascript(f'window.reader && window.reader.seekPage({int(page)})')
+            # Native page events arrive asynchronously after JS execution.
+            # Keep Back in restore mode until the requested page is published.
+            for _ in range(50):
+                if self.chapter != chapter or self.bridge is None or self.bridge.closed:
+                    return
+                if self.page == page:
+                    return
+                await asyncio.sleep(.01)
