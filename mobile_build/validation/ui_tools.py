@@ -168,8 +168,27 @@ def record_android_emulator(logs):
         log(Severity.WARNING, 'Android emulator diagnostics', str(error))
 
 
+def record_ios_stall(path, row):
+    """Sample only the identified test app, while its render deadline runs."""
+    pid = row.get('pid')
+    if sys.platform != 'darwin' or type(pid) is not int or pid <= 1:
+        return
+    try:
+        process = subprocess.run(['ps', '-p', str(pid), '-o', 'comm='],
+            capture_output=True, text=True, timeout=5, check=False)
+        if process.returncode or not process.stdout.strip().endswith('/Logistics Mobile.app/Logistics Mobile'):
+            return
+        output = path.with_name('ios-webview-stall-' + str(pid) + '.sample.txt')
+        if output.exists():
+            return
+        subprocess.run(['sample', str(pid), '3', '-file', str(output)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        pass  # Diagnostics never alter the native acceptance result.
+
+
 def _progress(path, stopped):
-    """Tail immutable checkpoint strings only; never inspect live native frames."""
+    """Tail checkpoints and preserve an explicitly signalled iOS stall."""
     last_memory = 0
     with path.open(errors='replace') as stream:
         while True:
@@ -185,6 +204,12 @@ def _progress(path, stopped):
                 log(Severity.INFO, 'Native checkpoint', line.split('LOGISTICS_NATIVE_CASE=',1)[1].strip())
             elif 'LOGISTICS_NATIVE_DETAIL=' in line:
                 log(Severity.INFO, 'Native detail', line.split('LOGISTICS_NATIVE_DETAIL=',1)[1].strip())
+            elif path.name.startswith('ios-') and 'LOGISTICS_NATIVE_WEBVIEW_STALL=' in line:
+                try:
+                    row = json.loads(line.split('LOGISTICS_NATIVE_WEBVIEW_STALL=', 1)[1])
+                    record_ios_stall(path, row)
+                except (ValueError, AttributeError):
+                    pass
             elif 'LOGISTICS_NATIVE_TIMING=' in line:
                 try:
                     row = json.loads(line.split('LOGISTICS_NATIVE_TIMING=',1)[1])
