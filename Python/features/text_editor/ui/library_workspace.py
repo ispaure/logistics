@@ -134,6 +134,8 @@ class LibraryTabs(qt.QStackedWidget):
         if not self.documents and not self.owner.closing:
             self.owner.clear_document()
             self.setCurrentWidget(self.owner.welcome)
+        elif self.documents and not self.retaining_groups:
+            self.activate(self.active_group)
 
     def trim_groups(self):
         if self.retaining_groups:
