@@ -33,6 +33,7 @@ class MarkdownStorage:
 
     def bind_window(self, window):
         self.window = window
+        window.destroyed.connect(lambda: getattr(self.resources, 'close', lambda: None)())
         self.operation = OperationProgress(window)
         self.operation.completed.connect(self._written)
         content = qt.QWidget(window)
@@ -120,6 +121,7 @@ class MarkdownStorage:
                 return
             self.window.destroyed.connect(release)
             self.resource.close()
+            getattr(self.resources, 'close', lambda: None)()
             self.resource = DocumentResource(provider, target, max_bytes=8 * 1024 * 1024, independent=False)
             self.provider, self.path, self.data = provider, provider.root / target, data
             self.resources = {}
@@ -142,6 +144,11 @@ class MarkdownStorage:
         if kind == qt.QTextDocument.ResourceType.ImageResource:
             return qt.QImage.fromData(data) if data else qt.QImage()
         return qt.QByteArray(data or b'')
+
+    def video_source(self, url):
+        if self.resource.closed:
+            return None
+        return getattr(self.resources, 'videos', {}).get(Path(url.toLocalFile()))
 
 
 from services.documents.markdown import prepare_markdown
@@ -169,10 +176,13 @@ class PrivateMarkdownWindow(MarkdownWindow):
 
     def retire_private_content(self):
         viewer, storage = self.viewer, self.viewer.storage
+        viewer.browser.inline_videos.clear()
+        viewer.formatted_editor.inline_videos.clear()
         viewer.speech.stop()
         if viewer._diagram_renderer:
             viewer._diagram_renderer.cancel()
         storage.resource.close()
+        getattr(storage.resources, 'close', lambda: None)()
         storage.data, storage.resources = b'', {}
         blockers = [qt.QSignalBlocker(widget) for widget in
                     (viewer, viewer.editor, viewer.formatted_editor, viewer.browser)]

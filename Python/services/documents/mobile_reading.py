@@ -42,6 +42,9 @@ def close_document_reader(reader):
     """Retire a reader acquired by an opening or retained by one session."""
     if reader is None:
         return
+    media = getattr(reader, '_markdown_media', None)
+    if media is not None:
+        media.close()
     try:
         pdf = getattr(reader, 'pdf', None)
         if pdf is not None:
