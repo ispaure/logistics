@@ -89,15 +89,6 @@ class FilesUI:
                 if rows is None or getattr(app, 'navigation_generation', None) != origin:
                     restore_location()
                     return False
-                # Resolve the folder's mode before changing the visible browser.
-                from .obsidian import offer_vault
-                choice = await offer_vault(self.app, browser, provider, path, rows)
-                if choice:
-                    restore_location()
-                    return True
-                if choice is None:
-                    restore_location()
-                    return False
                 if (self.app.navigation_generation != origin
                         or not listing.accepts(work, request)):
                     restore_location()

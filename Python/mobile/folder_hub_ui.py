@@ -463,21 +463,6 @@ class FolderHubUI:
         if self.cloud_busy:
             actions.append(('Cancel current request', self.cancel_mirror_transfer
                 if getattr(self, 'transfer_busy', False) else self.cancel_cloud))
-        async def notes():
-            if self.folder_picker_choices.get(name) != snapshot:
-                return
-            from .notes_actions import offer_notes
-            box = page.children[0].content
-            button = toga.Button('Open as Notes Library')
-            await offer_notes(self.app, snapshot, box, button, status)
-            if button in box.children and button.on_press is not None:
-                await button.on_press()
-            else:
-                if not status.text:
-                    status.text = 'No Notes Library found in this folder.'
-                self.show_view(page, destination='files', route='folder-options', title=snapshot['name'])
-        if not self.cloud_busy or entry['source'] == 'Local':
-            actions.append(('Open as Notes Library', notes))
         return actions
 
     def choose_folder(self, name):
@@ -611,16 +596,6 @@ class FolderHubUI:
         page = toga.Box(children=[scroll], style=Pack(direction=COLUMN, flex=1, margin=12))
         if present:
             self.show_view(page, destination='files', route='folder-options', title=entry['name'])
-        from .notes_actions import offer_notes
-        notes_button = toga.Button('Open as Notes Library', style=Pack(height=48))
-        self.folder_action_controls.append((notes_button, entry['source'] == 'Remote'))
-        notes_button._requires_crypt_session = entry['source'] == 'LocalCrypt'
-        host = getattr(self, 'app', self)
-        if present:
-            previous = getattr(host, '_notes_offer_task', None)
-            if previous is not None and not previous.done():
-                previous.cancel()
-            host._notes_offer_task = host.loop.create_task(offer_notes(host, dict(entry), box, notes_button, self.folder_picker_status))
         return page
 
 

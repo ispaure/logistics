@@ -727,31 +727,14 @@ commonUtils owns Documentation Library (`ui.markdown.wiki.WikiPanel` and
 `ui.native.markdown.MarkdownWikiView`): heading-based labels and a navigation-only
 sidebar. Alt/Option enables document editing without enabling tree mutations.
 Logistics owns filename-based notes, provider mutations and Obsidian-folder
-choices under `features/text_editor/`. Desktop uses `ui/notes_offer.py` with a
-cancellable probe and a window-modal choice before directory publication. Both
-filesystem and provider browsers use commonUtils' `directory_gate` continuation
-hook; initial provider listings are gated before model publication too. Tree
-expansion and column selection retain their original continuation. Dismissal,
-close and superseding requests cannot resume an old choice, and provider access
-is rechecked for either action. History positions change only when a directory
-is published. Mobile checks the immediate folder
-listing through `mobile/obsidian.offer_vault` before publishing browser contents
-or presenting a newly constructed browser. The existing screen stays visible
-until the choice completes; choosing Notes Library bypasses browser publication.
-Pending listings are revalidated after the dialog so navigation away or a
-superseding request cannot publish the folder. Mobile also captures navigation
-generation before reading and restores browser location controls to their last
-published folder when the request is abandoned or opens a library instead.
-Repeated requests for the same folder await one pending choice; only the newest
-listing may publish or restore its controls. The requested location is captured
-before reading so a previous prompt cannot open a superseded folder. Dismissing
-the native prompt is distinct from choosing **Browse Files** and leaves the
-previous folder visible; an abandoned choice does not count as a completed visit.
-Cancelling the waiting task also dismisses the native Android/iOS alert, allowing
-a later request to present a fresh choice without leaving an orphaned dialog.
-Refresh and native back-stack
-restoration do not repeat the mobile choice. Stale navigation and credential
-responses cannot open a library.
+choices under `features/text_editor/`. Desktop folder navigation publishes files directly; Notes Library remains an
+explicit workspace action. Mobile Workspaces also browses directly without a
+mode choice or Notes Library menu entry. The Documents hub owns asynchronous
+`mobile/notes_discovery.py` discovery of `.obsidian` directory markers in Local
+and unlocked LocalCrypt roots, through two child-folder levels. Scans are
+cancellable, generation-checked and bounded by entry/folder limits. They read
+names/metadata only, close scan providers, and create a fresh provider when a
+library is opened. Locked names are never saved to a discovery index.
 
 Notes creation and moves validate containment and provider capabilities in
 `NotesLibrary`. Desktop moves resolve unsaved edits before dispatch; successful

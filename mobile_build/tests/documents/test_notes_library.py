@@ -44,6 +44,22 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_documents_discovers_libraries_two_folders_down_without_reading_notes(self):
+        from mobile.notes_discovery import find_libraries
+        (self.root / 'One/Two/.obsidian').mkdir(parents=True)
+        (self.root / 'One/Two/TooDeep/.obsidian').mkdir(parents=True)
+        (self.root / '.hidden/.obsidian').mkdir(parents=True)
+        provider = LocalFiles(self.root)
+        with patch.object(provider, 'open', side_effect=AssertionError('Discovery must not read documents')), \
+                patch.object(provider, 'list', wraps=provider.list) as listing:
+            found = find_libraries(provider)
+        self.assertIn('Vault', found)
+        self.assertIn('One/Two', found)
+        self.assertNotIn('One/Two/TooDeep', found)
+        self.assertNotIn('.hidden', found)
+        self.assertFalse(any('.obsidian' in call.args[0] for call in listing.call_args_list))
+
+
     def test_favourite_reopens_note_inside_its_library(self):
         from mobile.obsidian import open_vault
         from mobile.favourites import reference, catalog, reopen
@@ -344,7 +360,7 @@ class NotesLibraryTests(unittest.TestCase):
                 client.clear()
         self.run_async(exercise())
 
-    def test_actions_open_local_in_workspaces_and_close_session(self):
+    def test_documents_discovers_local_library_without_workspace_prompt(self):
         from services.documents.locations import collection_path
         folder = collection_path(self.app.private_root) / 'Notes'
         shutil.copytree(self.vault, folder)
@@ -353,14 +369,17 @@ class NotesLibraryTests(unittest.TestCase):
             restore = getattr(self.app, 'cloud_restore_task', None)
             if restore is not None:await restore
             entry = dict(source='Local', kind='local', value='Notes', name='Notes', copies=[])
-            page = self.app.show_picker_folder(entry)
-            await self.app._notes_offer_task
-            button = next(child for child, _ in self.app.folder_action_controls
-                if getattr(child, 'text', '') == 'Open as Notes Library')
+            self.app.show_picker_folder(entry)
+            self.assertFalse(any(getattr(child, 'text', '') == 'Open as Notes Library'
+                                 for child, _ in self.app.folder_action_controls))
+            self.app.show_documents_hub()
+            await self.app._notes_discovery_task
+            button = next(child for child in self.app.document_notes_list.children[1].children
+                          if getattr(child, 'text', '') == 'Notes · Local')
             self.assertIsNotNone(button.parent)
             await button.on_press()
             owner = self.app.vault_browser
-            self.assertEqual(self.app.native_host.state.destination, 'files')
+            self.assertEqual(self.app.native_host.state.destination, 'documents')
             self.assertEqual(owner.session.provider, 'notes-library')
             self.assertIn(owner.session.id, self.app.workspace.sessions)
             self.assertIsNotNone(owner.search)

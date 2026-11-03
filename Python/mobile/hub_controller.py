@@ -34,6 +34,7 @@ class HubController(HubUI):
         "document_open_list",
         "document_recent_list",
         "document_saved_list",
+        "document_notes_list",
         "home_actions",
         "home_content",
         "home_continue",

@@ -19,7 +19,7 @@ class LibraryModeTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
-    def test_real_workspace_browser_offers_root_vault(self):
+    def test_real_workspace_browser_opens_root_vault_without_prompt(self):
         from desktop.file_browser import BrowserView
         with self.temporary_directory() as directory:
             root = Path(directory)
@@ -28,13 +28,7 @@ class LibraryModeTests(QtTestCase):
             view.show()
             try:
                 binding = view._extensions_by_feature['text_editor']
-                offer = binding.controller.notes_offer
-                self.wait_until(lambda: offer.dialog is not None)
-                self.assertIsNotNone(offer.candidate, offer.progress.message.text())
-                self.assertTrue(offer.dialog.isVisible())
-                self.assertIsNone(view.file_browser.navigation.directory)
-                self.assertIsNone(view.file_browser.views.root)
-                self.choose(offer, 'Browse Files')
+                self.assertFalse(hasattr(binding.controller, 'notes_offer'))
                 self.wait_until(lambda: view.file_browser.navigation.directory == root)
             finally:
                 view.close()

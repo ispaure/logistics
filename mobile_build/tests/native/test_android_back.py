@@ -55,7 +55,7 @@ class AndroidBackTests(unittest.TestCase):
                             entry = dict(source='Local' if kind == 'local' else 'LocalCrypt',
                                          kind=kind, value=path if kind == 'local' else label, name='Notes')
                             self.assertTrue(app.loop.run_until_complete(app.open_picker_folder(entry)))
-                            dialog.assert_awaited()
+                            dialog.assert_not_awaited()
                             self.assertEqual(app.files_view._folder_entry_location, (label, path))
                             app.loop.run_until_complete(app.browser_file_folder(
                                 next(row for row in app.file_rows.values() if row['name'] == 'Child')))
