@@ -712,6 +712,32 @@ class NotesLibraryTests(unittest.TestCase):
                 provider.mkdir('Nested')
                 provider.create_file('Home.md', BytesIO(b'# Private home'))
                 provider.create_file('Nested/Next.md', BytesIO(b'# Private nested note'))
+                self.app.cloud_crypt_remotes = {'Secret'}
+                self.app.set_loaded_remote_names(['Secret'])
+                self.app.remember_credential_association('Synthetic.zip', ['Secret'], session_only=True)
+                self.assertEqual(self.app.existing_crypt_locations(), {'LocalCrypt: Secret': 'Secret'})
+                self.app.show_documents_hub()
+                while True:
+                    discovery = self.app._notes_discovery_task
+                    await discovery
+                    if discovery is self.app._notes_discovery_task:
+                        break
+                buttons = self.app.document_notes_list.children[1].children
+                self.assertIn('LocalCrypt: Secret', [button.text for button in buttons],
+                              self.app.document_notes_list.children[2].text)
+                detected = next(button for button in buttons if button.text == 'LocalCrypt: Secret')
+                await detected.on_press()
+                self.assertIsNotNone(getattr(self.app, 'vault_browser', None),
+                                     self.app.document_notes_list.children[2].text)
+                discovered = self.app.vault_browser
+                self.assertEqual(self.app.native_host.state.destination, 'documents')
+                self.assertTrue(discovered.provider.private)
+                self.assertTrue(await discovered.open_note('Home.md'), discovered.notice.text)
+                self.assertTrue(await discovered.open_note('Nested/Next.md'), discovered.notice.text)
+                await discovered.navigate_history(-1)
+                self.assertEqual(discovered.path, 'Home.md')
+                self.assertNotIn('Synthetic.zip', self.app.preferences.values.get('remote_packages', ''))
+                discovered.close()
                 # Real cipher names must match across different parent paths.
                 with patch.object(provider, 'list', side_effect=AssertionError('Decoded unrelated filenames')):
                     self.assertEqual(NotesLibrary(provider).link('Home.md', 'Next'), ('Nested/Next.md', ''))
@@ -741,10 +767,22 @@ class NotesLibraryTests(unittest.TestCase):
                                 break
                             await asyncio.sleep(.01)
                         self.assertEqual(owner.path, 'Home.md')
+                remote_update = self.root / 'remote-update'
+                (remote_update / '.obsidian').mkdir(parents=True)
+                (remote_update / 'Home.md').write_text('# Pulled while open')
+                client.request('mirror_sync', remote='Secret', path='', identity=client.connection_identity('Secret'),
+                               local_path=str(remote_update.resolve()), run=uuid4().hex, push=True, decrypted=True)
+                client.request('mirror_sync', remote='Secret', path='', identity=client.connection_identity('Secret'),
+                               local_path=str(provider.root.resolve()), run=uuid4().hex, push=False)
+                self.assertEqual(owner.path, 'Home.md')
+                self.assertEqual(owner.library.read('Home.md'), b'# Pulled while open')
                 client.clear()
                 self.assertFalse(await owner.open_note('Home.md'))
                 self.app.clear_private_catalog()
                 self.assertIsNone(owner.path)
+                self.app.show_documents_hub()
+                await self.app._notes_discovery_task
+                self.assertFalse(self.app.document_notes_list.children[1].children)
             finally:
                 client.clear()
         self.run_async(exercise())

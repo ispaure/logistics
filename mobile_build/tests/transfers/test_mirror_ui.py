@@ -158,6 +158,43 @@ async def drive_review(app, *, declined=False, early=False):
 
 
 class MirrorUITests(unittest.TestCase):
+    def test_pull_replaces_an_open_document_without_losing_its_unsaved_draft(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from features.text_editor.resources import LocalTextCopies
+        class Client(MirrorClient):
+            def restore(self, **kwargs): return []
+            def crypt_remotes(self): return []
+            def cancel(self): pass
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            client = app.cloud_client = Client()
+            app.show_cloud(present=False)
+            store = app.mirror_store()
+            job, _ = store.create(client, 'Remote', 'folder')
+            target = store.target(job) / 'note.txt'
+            async def exercise():
+                copies = LocalTextCopies(LocalFiles(store.target(job)))
+                self.assertTrue(await app.open_crypt(copies=copies, key='note.txt'))
+                owner = app.private_sessions.active
+                self.assertEqual(owner.crypt_text.value, 'first')
+                owner.crypt_text.value = 'Unsaved local draft'
+                client.data['folder/note.txt'] = b'Updated remote content'
+                app.start_mirror_pull(job['id'])
+                with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+                    self.assertTrue(await drive_review(app))
+                self.assertEqual(target.read_bytes(), b'Updated remote content')
+                self.assertIn(owner.session.id, app.workspace.sessions)
+                self.assertEqual(owner.crypt_text.value, 'Unsaved local draft')
+                await owner.save_crypt()
+                self.assertIn('edits retained', owner.crypt_title.text)
+                self.assertEqual(target.read_bytes(), b'Updated remote content')
+                self.assertEqual(owner.crypt_text.value, 'Unsaved local draft')
+            app.loop.run_until_complete(exercise())
+
     def test_back_from_review_cancels_without_writing(self):
         class Client(MirrorClient):
             def restore(self, **kwargs): return []

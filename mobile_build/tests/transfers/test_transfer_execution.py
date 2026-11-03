@@ -34,7 +34,7 @@ class TransferExecutionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_two_requests_waiting_for_restore_admit_only_one_writer(self):
         ready = asyncio.Event()
-        async def restore():
+        async def restore(operation):
             await ready.wait()
             return True
         self.view.ready.side_effect = restore
