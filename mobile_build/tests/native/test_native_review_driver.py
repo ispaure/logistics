@@ -6,10 +6,42 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace as State
 import unittest
-from mobile_build.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review, save_transfer_settings, cancel_review
+from mobile_build.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review, save_transfer_settings, cancel_review, press_review
 
 
 class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_click_waits_for_native_acceptance_after_a_stale_revision(self):
+        from unittest.mock import AsyncMock
+        from features.rclone.transfers.mobile.surface import TransferSurface
+        handler = AsyncMock()
+        view = State(ready=True, closed=False, revision=1, delivered_revision=1,
+            pending=None, host=State(active_host=True), model=dict(can_early=True), handler=handler)
+        clicks = []
+        async def evaluate(script):
+            revision = view.revision
+            clicks.append(revision)
+            if len(clicks) == 1:
+                # Native comparison progress lands after the DOM click, before
+                # its navigation message is dispatched. Keep the real guard.
+                view.revision += 1
+                view.delivered_revision = view.revision
+            await TransferSurface.dispatch(view, 'early', dict(revision=str(revision)))
+            return True
+        view.web = State(evaluate_javascript=evaluate)
+        await press_review(view, 'early', timeout=1)
+        self.assertEqual(clicks, [1, 2])
+        handler.assert_awaited_once_with('early', dict(revision='2'))
+
+    async def test_dom_click_without_native_acceptance_fails(self):
+        from unittest.mock import AsyncMock
+        handler = AsyncMock()
+        view = State(ready=True, closed=False, revision=1, delivered_revision=1,
+            handler=handler, web=State(evaluate_javascript=AsyncMock(return_value=True)))
+        with self.assertRaisesRegex(AssertionError, 'not accepted: early'):
+            await press_review(view, 'early', timeout=.01)
+        handler.assert_not_awaited()
+        self.assertIs(view.handler, handler)
+
     def test_review_cancellation_uses_native_ios_back(self):
         from unittest.mock import Mock, patch
         from commonUtils.runtime.platform import OS
@@ -37,9 +69,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         app = State(_transfer_review_view=view, transfer_task=result,
             main_window=State(dialog=None), cloud_status=State(value='Ready'),
             transfer_message='Transferring fixture')
-        async def evaluate(script):
-            if '#approve' not in script or not view.model['can_confirm']:
-                return False
+        async def handle(action, args):
             await app.main_window.dialog(object())
             calls.append(True)
             view.revision += 1
@@ -50,6 +80,11 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
                 view.model['notice'] = 'Checking that the completed review is still current…'
                 view.model['can_confirm'] = False
                 if finish:result.set_result(True)
+        view.handler = handle
+        async def evaluate(script):
+            if '#approve' not in script or not view.model['can_confirm']:
+                return False
+            await view.handler('approve', dict(revision=str(view.revision)))
             return True
         view.web = State(evaluate_javascript=evaluate)
         self.addCleanup(lambda: result.cancel() if not result.done() else None)

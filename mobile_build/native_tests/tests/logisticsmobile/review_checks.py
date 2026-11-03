@@ -23,12 +23,32 @@ async def press_review(view, action, *, timeout=30):
     script = ('(() => { const button = document.querySelector(' + json.dumps(selector)
               + '); if (!button || button.disabled || !button.getClientRects().length) return false; '
               + 'button.click(); return true; })()')
-    deadline = asyncio.get_running_loop().time() + timeout
-    while asyncio.get_running_loop().time() < deadline:
-        if rendered_review(view) and await view.web.evaluate_javascript(script):
-            return
-        await asyncio.sleep(.05)
-    raise AssertionError('Native review action was not rendered/enabled: ' + action)
+    accepted = asyncio.Event()
+    handler = view.handler
+    async def observed(command, args):
+        if command == action:
+            accepted.set()
+        return await handler(command, args)
+    view.handler = observed
+    clicks = 0
+    try:
+        deadline = asyncio.get_running_loop().time() + timeout
+        while asyncio.get_running_loop().time() < deadline:
+            if rendered_review(view):
+                clicks += bool(await view.web.evaluate_javascript(script))
+            if accepted.is_set():
+                print('LOGISTICS_NATIVE_REVIEW_ACTION=' + json.dumps(dict(
+                    action=action, accepted=True, clicks=clicks, revision=view.revision)), flush=True)
+                return
+            # A click can race comparison progress and be correctly rejected
+            # by the native revision guard. Retry the current rendered action;
+            # only entry into its guarded handler acknowledges acceptance.
+            await asyncio.sleep(.05)
+        raise AssertionError('Native review action was not accepted: ' + action
+            + f'; clicks={clicks}; revision={view.revision}; delivered={view.delivered_revision}')
+    finally:
+        if view.handler is observed:
+            view.handler = handler
 
 
 def cancel_review(app):
@@ -184,7 +204,10 @@ async def exercise_reviews(app):
         result = request(action, **values)
         if action == 'mirror_review':
             held.set()
-            if not released.wait(30):
+            # The held worker must outlive the separate 30-second render,
+            # native-action and retirement assertions. Their deadlines remain
+            # unchanged; finally releases this failsafe on any earlier failure.
+            if not released.wait(90):
                 raise RuntimeError('Native review fixture was not released')
             returned.set()
         if action == 'mirror_sync':
