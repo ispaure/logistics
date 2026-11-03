@@ -33,19 +33,19 @@ async def press_review(view, action, *, timeout=30):
     clicks = 0
     try:
         deadline = asyncio.get_running_loop().time() + timeout
-        while asyncio.get_running_loop().time() < deadline:
+        while asyncio.get_running_loop().time() < deadline and not accepted.is_set():
             if rendered_review(view):
                 clicks += bool(await view.web.evaluate_javascript(script))
-            if accepted.is_set():
-                print('LOGISTICS_NATIVE_REVIEW_ACTION=' + json.dumps(dict(
-                    action=action, accepted=True, clicks=clicks, revision=view.revision)), flush=True)
-                return
             # A click can race comparison progress and be correctly rejected
             # by the native revision guard. Retry the current rendered action;
             # only entry into its guarded handler acknowledges acceptance.
-            await asyncio.sleep(.05)
-        raise AssertionError('Native review action was not accepted: ' + action
-            + f'; clicks={clicks}; revision={view.revision}; delivered={view.delivered_revision}')
+            if not accepted.is_set():
+                await asyncio.sleep(.05)
+        if not accepted.is_set():
+            raise AssertionError('Native review action was not accepted: ' + action
+                + f'; clicks={clicks}; revision={view.revision}; delivered={view.delivered_revision}')
+        print('LOGISTICS_NATIVE_REVIEW_ACTION=' + json.dumps(dict(
+            action=action, accepted=True, clicks=clicks, revision=view.revision)), flush=True)
     finally:
         if view.handler is observed:
             view.handler = handler

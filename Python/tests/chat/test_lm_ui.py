@@ -143,8 +143,7 @@ class LMUITests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         self.server.daemon_threads = True
         self.server.url = f'http://127.0.0.1:{self.server.server_port}/v1'
@@ -388,10 +387,8 @@ class LMUITests(QtTestCase):
             for workspace in ide.views:
                 for document in workspace.documents.values():
                     document.document().setModified(False)
-            ide.prepare_close()
-            self.until(lambda: all(workspace.worker is None for workspace in ide.views))
-            ide.deleteLater()
-            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            # The managed Qt directory closes the IDE, waits for its workers
+            # and destroys its filesystem watchers before removing the files.
         self.addCleanup(cleanup_ide)
         ide.store.projects[project.id] = project
         workspace = ide.open_project(project)

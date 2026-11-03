@@ -10,6 +10,28 @@ from mobile_build.native_tests.tests.logisticsmobile.review_checks import approv
 
 
 class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_delayed_native_acceptance_does_not_issue_an_extra_click(self):
+        from unittest.mock import AsyncMock
+        from features.rclone.transfers.mobile.surface import TransferSurface
+        handler = AsyncMock()
+        view = State(ready=True, closed=False, revision=1, delivered_revision=1,
+            pending=None, host=State(active_host=True), model=dict(can_confirm=True), handler=handler)
+        clicks = []
+        tasks = []
+        async def evaluate(script):
+            clicks.append(view.revision)
+            def delivered():
+                tasks.append(asyncio.create_task(TransferSurface.dispatch(
+                    view, 'approve', dict(revision=str(view.revision)))))
+            asyncio.get_running_loop().call_later(.01, delivered)
+            return True
+        view.web = State(evaluate_javascript=evaluate)
+        await press_review(view, 'approve', timeout=1)
+        await asyncio.sleep(.03)
+        await asyncio.gather(*tasks)
+        self.assertEqual(clicks, [1])
+        handler.assert_awaited_once()
+
     async def test_click_waits_for_native_acceptance_after_a_stale_revision(self):
         from unittest.mock import AsyncMock
         from features.rclone.transfers.mobile.surface import TransferSurface

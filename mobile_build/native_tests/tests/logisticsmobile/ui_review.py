@@ -277,10 +277,12 @@ async def exercise_ui_review(app):
     pending = asyncio.create_task(app.main_window.dialog(dialog))
     await asyncio.sleep(.2)
     if get_os() is OS.IOS:
-        assert [str(action.title) for action in dialog._impl.native.actions] == ['OK', 'Cancel']
+        from .dialog_driver import presented_ios_dialog
+        native = await presented_ios_dialog(dialog)
+        assert [str(action.title) for action in native.actions] == ['OK', 'Cancel']
         await capture('transfer-confirmation')
-        dialog._impl.native.dismissViewControllerAnimated(False, completion=None)
-        dialog._impl.response(False)
+        from .dialog_driver import respond_ios_dialog
+        await respond_ios_dialog(dialog, False)
     else:
         native = dialog._impl.native
         assert str(native.getButton(-1).getText()) == 'OK'
