@@ -7,8 +7,8 @@ from services.documents.catalog import DocumentCatalog
 from services.documents.credential_state import DesktopCredentialCipher
 
 
-def catalog():
-    return DocumentCatalog(cache_directory(create=False))
+def catalog(*, recent=False):
+    return DocumentCatalog(cache_directory(create=False), recent=recent)
 
 
 def unlocked_ciphers():
@@ -57,7 +57,7 @@ def reference(window):
 
 def remember(window, *, favourite=False):
     source, title, opener, cipher = reference(window)
-    catalog().remember(source, title, opener, favourite=favourite, cipher=cipher)
+    catalog(recent=not favourite).remember(source, title, opener, favourite=favourite, cipher=cipher)
 
 
 def favourite(window):
@@ -142,7 +142,7 @@ def populate(layout, parent, *, recent=False):
         if item.widget() is not None:
             item.widget().deleteLater()
     try:
-        rows = catalog().entries('recent' if recent else 'favourites', ciphers=unlocked_ciphers())
+        rows = catalog(recent=recent).entries('recent' if recent else 'favourites', ciphers=unlocked_ciphers())
     except (OSError, ValueError, PermissionError):
         rows = []
     title = qt.QLabel('Recent' if recent else 'Favourites')

@@ -12,6 +12,20 @@ from unittest.mock import patch
 
 
 class DocumentCatalogTests(TestCase):
+    def test_clearing_recent_preserves_favourites_and_locked_recent_is_removable(self):
+        from services.documents.history_controls import clear_recent_files
+        with TemporaryDirectory() as directory:
+            favourites = DocumentCatalog(directory)
+            recent = DocumentCatalog(directory, recent=True)
+            source = dict(type='local', path='/notes/Home.md')
+            favourites.remember(source, 'Home', {}, favourite=True)
+            recent.remember(source, 'Home', {})
+            (recent.root / ('a' * 64 + '.zip')).write_bytes(b'locked ciphertext')
+            clear_recent_files(directory)
+            self.assertEqual(recent.entries('recent'), [])
+            self.assertEqual(len(favourites.entries()), 1)
+            self.assertFalse(list(recent.root.iterdir()))
+
     def test_favourite_replaces_opening_mode_and_history_is_bounded(self):
         with TemporaryDirectory() as directory:
             catalog = DocumentCatalog(directory)

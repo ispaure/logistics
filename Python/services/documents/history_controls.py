@@ -34,6 +34,13 @@ def clear_recent_files(root, *, mobile=False):
             root / owner / "recent.json"
             for owner in ("Readers", "TextEditor", "Books", "Comics")
         ]
+        directory = root / 'DocumentRecent'
+        if directory.is_symlink():
+            raise ValueError('Linked recent history was preserved.')
+        for path in directory.iterdir() if directory.exists() else ():
+            if path.is_symlink() or not path.is_file() or path.suffix not in {'.json', '.zip'}:
+                raise ValueError('Unexpected recent history was preserved.')
+            path.unlink()
     for path in set(paths):
         if path.is_symlink() or path.parent.is_symlink():
             raise ValueError("Linked recent-file history was preserved.")

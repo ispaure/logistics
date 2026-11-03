@@ -53,6 +53,11 @@ class DocumentPane(qt.QWidget):
         from desktop.location_context import document_title
         self.view_title = document_title(self.document)
         self.storage_location.refresh()
+        try:
+            from .document_catalog import remember
+            remember(self.document)
+        except (OSError, ValueError, PermissionError):
+            pass  # Unsaved, locked or unreadable history must not block a reader.
         self.title_changed.emit(self.view_title)
 
     def prepare_close(self):
@@ -170,6 +175,7 @@ class DocumentsPage(qt.QWidget):
         window.show()
         from commonUtils.ui.workspaces.workspace_menus import sync_native_menus
         sync_native_menus(record["dock"].window(), window)
+        record['dock'].widget().refresh_title()
         self.changed.emit()
 
     def _docking_changed(self, window, floating):
