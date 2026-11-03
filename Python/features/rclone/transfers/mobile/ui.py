@@ -194,7 +194,7 @@ class MirrorUI(TransferReviewUI):
         finally:
             self.set_cloud_busy(False)
 
-    async def mirror_connection_ready(self):
+    async def mirror_connection_ready(self, *, preserve_documents=False):
         self.show_cloud(present=False)
         restore = getattr(self, 'cloud_restore_task', None)
         if restore is not None and not restore.done():
@@ -202,7 +202,7 @@ class MirrorUI(TransferReviewUI):
         if self.cloud_busy or self.cloud_client is None:
             self.transfer_message = 'Wait for the current request, or load the matching connection in Settings.'
             return False
-        if not self.clear_private_reader():
+        if not preserve_documents and not self.clear_private_reader():
             self.transfer_message = 'Save or close provider edits before transferring their local files.'
             return False
         return True
@@ -391,9 +391,10 @@ class TransferExecutionPresentation:
     def __init__(self, controller):
         self.controller = controller
 
-    async def ready(self):
+    async def ready(self, operation):
         self.origin = self.controller.navigation_generation
-        return await self.controller.mirror_connection_ready()
+        return await self.controller.mirror_connection_ready(
+            preserve_documents=operation in {'pull', 'download', 'create'})
 
     def connection(self):
         client = self.controller.cloud_client

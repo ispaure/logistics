@@ -209,6 +209,14 @@ devices, fold layouts or compatibility with APIs outside the documented subset.
 
 ## Notes document ownership
 
+Documents automatically discovers marked libraries in Local and unlocked
+LocalCrypt within its bounded two-folder scan. The mobile Notes Library suite
+checks Local discovery and opening without a workspace prompt. Its native-bridge
+case also discovers and opens a real encrypted library with session-only
+credentials, navigates nested notes and history, verifies the credential
+association remains nonpersistent, and checks the entry disappears after locking.
+This host integration coverage does not certify physical-device presentation.
+
 Direct note links probe their contained provider path without listing sibling
 files. Bare wiki names first try the current folder and library root; unresolved
 names still require a bounded vault scan and duplicate matches are rejected.

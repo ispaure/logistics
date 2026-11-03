@@ -291,7 +291,7 @@ class TransferReviewUI:
         self.transfer_task = self.loop.create_task(run())
 
     async def review_transfer(self, key, *, push, remote, folder, storage, local_folder=None, specific=False):
-        if not await self.mirror_connection_ready():
+        if not await self.mirror_connection_ready(preserve_documents=not push):
             return False
         self.transfer_busy = True
         self.set_cloud_busy(True)

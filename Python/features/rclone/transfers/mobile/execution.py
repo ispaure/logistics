@@ -102,7 +102,7 @@ class TransferState:
 
 
 class TransferPresentation(Protocol):
-    async def ready(self) -> bool: ...
+    async def ready(self, operation: str) -> bool: ...
     def connection(self) -> tuple: ...
     def current(self, client, generation: int) -> bool: ...
     def unavailable(self) -> None: ...
@@ -130,7 +130,7 @@ class TransferExecution:
         state, view = self.state, self.view
         if state.busy:
             return False
-        if not await view.ready():
+        if not await view.ready(operation):
             view.unavailable()
             return False
         # Two callers can both have awaited credential restoration. Admit only

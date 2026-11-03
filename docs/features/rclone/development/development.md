@@ -104,6 +104,13 @@ add more host forwarding. Existing examples are `RemoteBrowserPresentation`,
 Adapters translate those effects into controls and navigation; workflow owners keep
 state, cancellation and stale-result rejection.
 
+Mobile Pull and downloads keep open provider documents and their unsaved drafts alive through
+both review and execution readiness. Destination files can be replaced by the
+reviewed transfer; saving an older draft still checks its original revision and
+retains the draft on conflict. Push retains its existing save-or-close preflight.
+`test_mirror_ui.py` covers pulling over the same file held by an open editor and
+refusing a subsequent stale save without overwriting the pulled bytes.
+
 ## Validation
 
 ```sh
