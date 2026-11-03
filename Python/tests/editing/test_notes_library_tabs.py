@@ -44,6 +44,19 @@ class NotesLibraryTabTests(QtTestCase):
                 reveal.assert_called_once_with('')
             owner.close()
 
+    def test_native_image_preview_does_not_serialize_html(self):
+        from features.notes_library.file_preview import PreviewContent
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            image = qt.QImage(2, 2, qt.QImage.Format.Format_RGB32)
+            image.fill(qt.QColor('white'))
+            self.assertTrue(image.save(str(root / 'image.png')))
+            owner = self.opened(root)
+            with patch.object(PreviewContent, 'html', side_effect=AssertionError('Native image needs no HTML')):
+                child = self.note(owner, 'image.png')
+                self.assertFalse(child.file_preview.browser.pixmap.isNull())
+            owner.close()
+
     def test_browsing_reuses_active_tab_and_cancel_keeps_draft(self):
         with self.temporary_directory() as directory:
             owner = self.opened(Path(directory))
@@ -207,7 +220,7 @@ class NotesLibraryTabTests(QtTestCase):
                         self.assertIs(child.document_stack.currentWidget(), child.file_preview)
                         if path == 'Document.pdf':
                             self.assertEqual(child.file_preview.preview.count, 2)
-                            with patch.object(child.file_preview.preview, 'page', side_effect=ValueError('Cannot render page')):
+                            with patch.object(child.file_preview.preview, 'content', side_effect=ValueError('Cannot render page')):
                                 child.file_preview.show_page(1)
                                 self.wait_until(lambda: not child.file_preview.busy)
                             self.assertEqual(child.file_preview.index, 0)

@@ -43,7 +43,7 @@ def prepare_document(library, path, *, current='', resolve_link=False,
         if result.kind is None:
             from .file_preview import FilePreview
             result.preview = FilePreview.open(provider, path, cancelled=cancelled)
-            result.rendered = result.preview.page()
+            result.rendered = result.preview.content()
         elif result.kind == 'text':
             from commonUtils.persistence.text import decode_bytes
             result.resource = DocumentResource(provider, path, max_bytes=MAX_NOTE)

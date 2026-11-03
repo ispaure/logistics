@@ -350,7 +350,7 @@ class DocumentPresentation:
         return self.viewer.save_document()
 
 
-    def show_file(self, preview, html):
+    def show_file(self, preview, content):
         self.clear_document()
         self.viewer.status.clear()
         if getattr(self, 'file_preview', None) is None:
@@ -359,7 +359,7 @@ class DocumentPresentation:
             self.file_preview.idle.connect(self.file_preview_idle)
             self.operation_footer.layout().addWidget(self.file_preview.operation, 1)
             self.document_stack.addWidget(self.file_preview)
-        self.file_preview.load(preview, html)
+        self.file_preview.load(preview, content)
         self.document_resource_path = self.provider.root / preview.path
         self.document_provider = self.provider
         self.document_stack.setCurrentWidget(self.file_preview)
