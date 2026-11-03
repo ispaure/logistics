@@ -11,8 +11,8 @@ _lock = RLock()
 
 
 class DocumentCatalog:
-    def __init__(self, root):
-        self.root = Path(root) / 'DocumentCatalog'
+    def __init__(self, root, *, recent=False):
+        self.root = Path(root) / ('DocumentRecent' if recent else 'DocumentCatalog')
 
     def path(self, cipher=None):
         identity = cipher.identity if cipher is not None else 'local'

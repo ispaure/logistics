@@ -471,3 +471,8 @@ on the landing page. Adding the same file again updates its opening method;
 adding it inside Notes Library makes the favourite reopen that library and note.
 Use the × beside a favourite to remove it. Session-Only favourites stay encrypted
 with the credential ZIP password and appear after that credential is unlocked.
+
+The landing page also lists the ten most recently opened files below Favourites.
+Recent entries use the same viewer context and credential protections. **Settings
+→ Reader history → Clear all recent files** clears this list without removing
+favourites or document files.
