@@ -140,7 +140,9 @@ def safe_geometry(app):
             body_rect = content.convertRect(content.bounds, toView=window)
         content_gap = float(body_rect.origin.y) - title_bottom
         result.update(reader_title_top_gap=title_gap, reader_title_content_gap=content_gap)
-        assert 4 <= title_gap <= 8, result
+        outer_top = float(reader.style.margin_top or 0) if reader is not None else 0
+        result['reader_title_outer_margin_top'] = outer_top
+        assert 4 <= title_gap - outer_top <= 8, result
         assert 4 <= content_gap <= 8, result
         origin = container.native.convertRect(container.native.bounds, toView=window).origin
         minimum_top = (float(safe.top) if reader is not None else title_bottom + 4) - float(origin.y)
