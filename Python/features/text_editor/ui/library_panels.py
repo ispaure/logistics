@@ -77,6 +77,21 @@ class LibraryPanels:
             tree.setContextMenuPolicy(qt.Qt.ContextMenuPolicy.CustomContextMenu)
             tree.customContextMenuRequested.connect(lambda point, tree=tree: self.file_actions(tree, point))
 
+    def decorate_entry(self, item, path, directory):
+        landing = directory and bool(self.folder_pages.get(path))
+        kind = qt.QStyle.StandardPixmap.SP_DirIcon if directory else qt.QStyle.StandardPixmap.SP_FileIcon
+        icon = self.style().standardIcon(kind)
+        if landing:
+            pixmap = icon.pixmap(24, 24)
+            painter = qt.QPainter(pixmap)
+            badge = self.style().standardIcon(qt.QStyle.StandardPixmap.SP_FileIcon).pixmap(14, 14)
+            painter.drawPixmap(10, 10, badge)
+            painter.end()
+            icon = qt.QIcon(pixmap)
+        item.setIcon(0, icon)
+        item.setToolTip(0, ('Folder with same-named note' if landing else 'Folder' if directory else 'File')
+                        + ' · ' + path)
+
     def request_aux(self, kind, work):
         self.aux_generation += 1
         self.aux_pending = (self.aux_generation, kind, work)
@@ -160,6 +175,7 @@ class LibraryPanels:
         for row in self.search_rows[:self.search_shown]:
             item = qt.QTreeWidgetItem([posixpath.relpath(row['path'], self.library.root or '.')])
             item.setData(0, qt.Qt.ItemDataRole.UserRole, (row['path'], row['directory']))
+            self.decorate_entry(item, row['path'], row['directory'])
             self.search_results.addTopLevelItem(item)
         self.search_more.setVisible(len(self.search_rows) > self.search_shown)
 
