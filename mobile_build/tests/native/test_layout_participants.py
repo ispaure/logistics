@@ -1,5 +1,6 @@
 """Layout subscriptions retire independently of host and native widget lifetimes."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -68,5 +69,5 @@ class LayoutParticipantTests(unittest.TestCase):
             finally:
                 app.active_host = True
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = None

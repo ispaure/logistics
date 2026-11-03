@@ -1,5 +1,6 @@
 """Storage settings gate switching on permission, active work and confirmation."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -40,7 +41,7 @@ class StorageUITests(unittest.TestCase):
         LogisticsMobile.storage_root = private
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         sdk = patch('mobile.storage_ui.android_sdk', return_value=30)
         sdk.start()

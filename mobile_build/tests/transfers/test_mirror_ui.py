@@ -1,4 +1,5 @@
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -169,7 +170,7 @@ class MirrorUITests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
@@ -204,7 +205,7 @@ class MirrorUITests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.cloud_client = Client()
             app.show_cloud(present=False)
@@ -269,7 +270,7 @@ class MirrorUITests(unittest.TestCase):
                     app.loop.run_until_complete(exercise())
                 finally:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None
 
     def test_native_review_replaces_partial_snapshots_and_publishes_final_cleanup(self):
@@ -323,7 +324,7 @@ class MirrorUITests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
@@ -369,7 +370,7 @@ class MirrorUITests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
@@ -427,7 +428,7 @@ class MirrorUITests(unittest.TestCase):
                                          client.data[job['prefix'] + '/' + filename])
                     finally:
                         app.main_window.close()
-                        app.loop.close()
+                        close_loop(app.loop)
                         LogisticsMobile.storage_root = None
 
     def test_completed_review_detects_changes_after_confirmation(self):
@@ -438,7 +439,7 @@ class MirrorUITests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
@@ -474,7 +475,7 @@ class MirrorUITests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
@@ -541,7 +542,7 @@ class MirrorUITests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         view = toga.Box()
         app.transfer_busy = True
@@ -602,7 +603,7 @@ class MirrorUITests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_pull_continues_while_writing_without_taking_documents_away(self):
         started, release = Event(), Event()
@@ -660,4 +661,4 @@ class MirrorUITests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

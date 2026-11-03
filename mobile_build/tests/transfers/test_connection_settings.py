@@ -1,5 +1,6 @@
 """Connection settings preserve credentials while separating setup and diagnostics."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -20,7 +21,7 @@ class ConnectionSettingsTests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.app.cloud_client = SimpleNamespace(package_name='', generation=0, package_records=(),
                                                 add_smb=Mock(), cancel=lambda: None)

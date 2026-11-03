@@ -240,6 +240,10 @@ loop. Cleanup failures retain owned roots under ignored `test-results/mobile-fix
 and name the retained path in the error. These contexts require synchronous tests.
 Pass an existing root only when its owner keeps it alive until app cleanup; that
 owner must also retain it if draining fails.
+Existing explicit app fixtures use `commonUtils.testing.event_loop.close_loop()`
+before removing their root. A bare `loop.close()` leaves default-executor
+filesystem workers alive. Inside a temporary-directory context, use `mobile_app()`
+there too; a later unittest cleanup runs after that directory has already exited.
 `mirror.py`, `readers.py`, `pdf.py` and `localcrypt.py` own backend fakes and
 document fixtures reused across test files. Import them directly rather than
 importing another `test_*.py` module for these helpers.

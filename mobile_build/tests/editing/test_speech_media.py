@@ -1,5 +1,6 @@
 """Lock-screen command routing, credential policy and process ownership."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -39,7 +40,7 @@ class SpeechMediaTests(unittest.TestCase):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.loop = asyncio.new_event_loop()
-        self.addCleanup(self.loop.close)
+        self.addCleanup(close_loop, self.loop)
         self.app = NS(loop=self.loop, preferences=Preferences(Path(self.temp.name)), screen_privacy=NS(inactive=False))
 
     def player(self, gate=None, valid=lambda: True, title=''):

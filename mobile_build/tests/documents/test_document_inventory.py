@@ -1,5 +1,6 @@
 """Inventories retain metadata only and leave full recovery validation to open."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -60,7 +61,7 @@ class DocumentInventoryTests(TestCase):
         LogisticsMobile.storage_root = self.store.root / 'App'
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         threads = []
         original = app.store.summaries
@@ -83,7 +84,7 @@ class DocumentInventoryTests(TestCase):
         LogisticsMobile.storage_root = self.store.root / 'App'
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         old = app.store.summaries()[0]
         app.new_document()

@@ -1,5 +1,6 @@
 """Hidden metadata stays presentation-only through local/live/indexed browsing."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -32,7 +33,7 @@ class HiddenBrowserTests(unittest.TestCase):
 
     def tearDown(self):
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.temp.cleanup()
         self.cache_temp.cleanup()

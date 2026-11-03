@@ -1,5 +1,6 @@
 """Transfer feedback preserves navigation and leaves local reader commands usable."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -60,7 +61,7 @@ class TransferFeedbackTests(TestCase):
         LogisticsMobile.storage_root = Path(temporary.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.app.cloud_client = RemoteClient()
         self.app.show_cloud(present=False)

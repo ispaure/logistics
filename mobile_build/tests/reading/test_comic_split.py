@@ -1,5 +1,6 @@
 """Portrait wide-page navigation across imported and provider reader surfaces."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -68,7 +69,7 @@ class ComicSplitTests(unittest.TestCase):
                     app.loop.run_until_complete(exercise())
                 finally:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None
 
     def test_halves_follow_direction_overlap_resume_and_keep_failed_view(self):
@@ -186,7 +187,7 @@ class ComicSplitTests(unittest.TestCase):
                     app.loop.run_until_complete(exercise())
                 finally:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None
 
     def test_duo_round_trip_keeps_right_page_in_imported_and_provider_readers(self):
@@ -260,7 +261,7 @@ class ComicSplitTests(unittest.TestCase):
                     app.loop.run_until_complete(exercise())
                 finally:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None
 
     def test_duo_wide_half_survives_relayout_and_fold_margin_is_blank(self):

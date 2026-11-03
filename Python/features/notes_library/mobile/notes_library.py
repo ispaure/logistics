@@ -800,7 +800,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 self.host.highlight_entry(button, selected)
                 if not selected:
                     self.host.presentation.surface(row, radius=0, background='transparent',
-                        foreground='text', outlined=False, eink_outlined=False)
+                        outlined=False, eink_outlined=False)
                     self.host.presentation.surface(button, radius=0, background='transparent',
                         foreground='text', outlined=False, eink_outlined=False)
                 row._notes_selected = selected

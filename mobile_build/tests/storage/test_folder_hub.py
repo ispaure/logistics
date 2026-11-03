@@ -1,5 +1,6 @@
 """Mobile masks, physical discovery, session associations and transfer destination safety."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -24,7 +25,7 @@ class FolderHubTests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             def launch():
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-                self.addCleanup(app.loop.close)
+                self.addCleanup(close_loop, app.loop)
                 self.addCleanup(app.main_window.close)
                 app.build_folder_picker(choices={})
                 return app
@@ -536,7 +537,7 @@ class FolderHubTests(unittest.TestCase):
                                      for name in app.folder_picker_choices))
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_discovery_failure_on_tab_entry_keeps_recovery_page_and_retry_works(self):
         from mobile.app import LogisticsMobile
@@ -660,7 +661,7 @@ class FolderHubTests(unittest.TestCase):
                     self.assertIsNone(app.change_file_storage())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_pulled_ciphertext_stays_browsable_after_replacing_cloud_account(self):
         from features.rclone.mobile.credential_state import NativeCredentialState
@@ -754,7 +755,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertTrue(app.mirror_store().target(crypt).exists())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_explicit_browse_actions_follow_existing_copies_and_mapped_scope(self):
         from mobile.app import LogisticsMobile
@@ -797,7 +798,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertNotIn(app.cloud_remote, app.cloud_view.children)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_locked_localcrypt_mapping_stays_local_without_inferred_cloud(self):
         from mobile.app import LogisticsMobile
@@ -850,7 +851,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertCountEqual(buttons(), ['Browse Local'])
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_ambiguous_transfer_chooser_routes_to_selected_copy(self):
         from mobile.app import LogisticsMobile
@@ -871,7 +872,7 @@ class FolderHubTests(unittest.TestCase):
                         (pull if push else review).assert_not_called()
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_unmapped_local_delete_requires_confirmation_and_keeps_siblings(self):
         from mobile.app import LogisticsMobile
@@ -905,7 +906,7 @@ class FolderHubTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_mapped_local_and_localcrypt_confirm_before_scanning_and_wipe_new_contents(self):
         from mobile.app import LogisticsMobile
@@ -937,7 +938,7 @@ class FolderHubTests(unittest.TestCase):
                     self.assertNotIn(job['id'], MirrorJobs(directory).jobs)
                 finally:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None
 
     def test_ini_is_authoritative_and_discovery_never_creates_remote_folders(self):
@@ -1081,4 +1082,4 @@ class FolderHubTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

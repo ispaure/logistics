@@ -1,5 +1,6 @@
 """Boundary guidance is directional, transient and requires a deliberate repeat."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -26,7 +27,7 @@ class ComicFeedbackTests(unittest.TestCase):
         self.owner.app = self.app
         self.owner.session = NS(id='comic')
         self.adjacent = AsyncMock()
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(clear, self.app)
 
     def swipe(self, direction, *, rtl=False, available=True, owner=None):

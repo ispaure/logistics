@@ -1,5 +1,6 @@
 """Owned picker state, cancellation and stale worker publication boundaries."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -26,7 +27,7 @@ class EditorPickerTests(unittest.TestCase):
     def tearDown(self):
         self.app.active_host = True
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 

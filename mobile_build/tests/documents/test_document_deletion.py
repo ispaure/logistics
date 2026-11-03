@@ -1,5 +1,6 @@
 """Confirmed managed-document deletion preserves cancellation and neighboring drafts."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -21,7 +22,7 @@ class DocumentDeletionTests(unittest.TestCase):
 
     def tearDown(self):
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
@@ -108,6 +109,8 @@ class DocumentDeletionTests(unittest.TestCase):
                 # Build the root while this document is present, then open its
                 # reader over that retained root, as a Recent row would do.
                 app.show_home() if destination == 'home' else app.show_documents_hub()
+                if destination == 'documents':
+                    app.document_view_buttons['Open'].on_press()
                 self.assertIn(name, texts(app.routes.roots[destination]))
                 app.show_documents(resume=True)
                 observed = []

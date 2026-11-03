@@ -1,5 +1,6 @@
 """Reader paging owns swipes while Workspaces retains the source folder."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -62,7 +63,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_volume_paging_uses_real_library_owner_and_stops_on_appearance_route(self):
         from mobile.android_volume_pages import VolumePages, target
@@ -103,7 +104,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_all_documents_from_home_reader_keeps_session_and_can_resume(self):
         with TemporaryDirectory() as directory:
@@ -142,7 +143,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_folder_open_keeps_workspaces_and_back_restores_browser(self):
         with TemporaryDirectory() as directory:
@@ -198,7 +199,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_slide_direction_tracks_page_order_and_manga(self):
         for rtl in (False, True):

@@ -1,5 +1,6 @@
 """Native size and inset changes wake responsive layouts without navigation."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -85,7 +86,7 @@ class ViewportTests(unittest.TestCase):
 class WindowOcclusionTests(unittest.TestCase):
     def setUp(self):
         self.loop = asyncio.new_event_loop()
-        self.addCleanup(self.loop.close)
+        self.addCleanup(close_loop, self.loop)
         self.navigation = SimpleNamespace(view=Mock(), navigationBar=Mock())
         self.secondary = SimpleNamespace(view=Mock(), navigationBar=Mock())
         self.app = SimpleNamespace(active_host=True, loop=self.loop,

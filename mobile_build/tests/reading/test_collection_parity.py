@@ -1,5 +1,6 @@
 """Collection forms retire private metadata on host navigation and suspension."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -58,4 +59,4 @@ class CollectionPrivacyUITests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
