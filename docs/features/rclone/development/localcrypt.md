@@ -235,6 +235,18 @@ per-package lists; these references do not create plaintext document copies.
 EPUBBook accepts an optional generic archive source so portable reading can use
 memory without a temporary file. Ordinary EPUB filesystem behavior is unchanged.
 
+Each native `crypt_archive` request reuses one authenticated 64 KiB plaintext
+block while parsing ZIP headers and inflating the selected member. Small ZIP
+reads otherwise restart the crypt decryptor and authenticate the same block
+repeatedly. The cache is request-local, synchronized and cleared before the
+descriptor closes; cancellation applies to cache hits too. It is not shared
+between pages, requests or credential sessions. Archive/header validation,
+inner-member authentication and Python's before/after revision checks remain
+in force. `archive_blocks_test.go` covers range boundaries, reuse, concurrent
+reads, cancellation, ciphertext corruption and exact member content; its
+`BenchmarkCryptArchivePage` compares uncached and cached archive reads using a
+synthetic deflated member. This benchmark excludes image decoding and display.
+
 Mobile folder Pull/Push streams files to the selected Local or LocalCrypt copy.
 Reader support includes text/Markdown editing up to 1 MiB, EPUB chapter text and
 PNG/JPEG/WebP CBZ pages.
