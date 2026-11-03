@@ -44,6 +44,41 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_cancelled_source_preparation_retires_resource_after_worker_finishes(self):
+        from threading import Event
+        from mobile.obsidian import open_vault
+        from features.notes_library.mobile.library_text import LibraryText
+        from services.documents.storage import DocumentResource
+        entered, finish = Event(), Event()
+        resources = []
+        original = DocumentResource.read
+        (self.vault / 'draft.txt').write_text('draft')
+        def read(resource, **kwargs):
+            resources.append(resource)
+            entered.set()
+            if not finish.wait(3):
+                raise ValueError('Preparation did not finish')
+            return original(resource, **kwargs)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            with patch.object(DocumentResource, 'read', read):
+                task = asyncio.create_task(LibraryText.open(owner, 'Vault/draft.txt'))
+                try:
+                    self.assertTrue(await asyncio.to_thread(entered.wait, 2))
+                    task.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+                    self.assertFalse(resources[0].closed)
+                finally:
+                    finish.set()
+                for _ in range(200):
+                    if resources[0].closed:
+                        break
+                    await asyncio.sleep(.01)
+                self.assertTrue(resources[0].closed)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_nested_encoded_image_embeds_and_failure_reasons_reach_preview_and_editor(self):
         from mobile.obsidian import open_vault
         from commonUtils.tests.formats.test_gif_headers import GIF

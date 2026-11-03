@@ -6,6 +6,8 @@ from toga.style.pack import COLUMN
 from commonUtils.persistence.text import decode_bytes
 from services.documents.storage import DocumentResource
 from ..notes import MAX_NOTE
+from ..preparation import PreparedDocument
+from .preparation import read_prepared
 from .library_tools import LibraryTools
 
 
@@ -34,20 +36,26 @@ class LibraryText(LibraryTools):
 
     @classmethod
     async def open(cls, library, path):
-        resource = DocumentResource(library.provider, path, max_bytes=MAX_NOTE)
         epoch = library.epoch
         inputs = cls.preparation_inputs(library, path)
+        def read_snapshot():
+            result = PreparedDocument(path, cls.kind)
+            try:
+                result.resource = DocumentResource(library.provider, path, max_bytes=MAX_NOTE)
+                data = result.resource.read(cancelled=lambda: not library.valid() or library.epoch != epoch)
+                result.snapshot = decode_bytes(data, path=library.provider.root / path)
+                result.rendered = cls.prepare(result.snapshot.text, **inputs)
+                return result
+            except BaseException:
+                result.close()
+                raise
+        result = await read_prepared(read_snapshot)
         try:
-            def read_snapshot():
-                data = resource.read(cancelled=lambda: not library.valid() or library.epoch != epoch)
-                snapshot = decode_bytes(data, path=library.provider.root / path)
-                return snapshot, cls.prepare(snapshot.text, **inputs)
-            snapshot, prepared = await asyncio.to_thread(read_snapshot)
             if not library.valid() or library.epoch != epoch:
                 raise ValueError('Notes Library closed.')
-            return cls(library, path, snapshot, resource, prepared=prepared)
+            return cls(library, path, result.snapshot, result.resource, prepared=result.rendered)
         except BaseException:
-            resource.close()
+            result.close()
             raise
 
     @property

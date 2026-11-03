@@ -192,9 +192,6 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
 
     def completed(self, result, error):
         kind, *values = self.pending
-        pages = {}
-        if kind == 'note' and result is not None:
-            result, pages = result
         if self.closing or self.locked:
             if kind == 'initial' and result:
                 result[1]()
@@ -302,7 +299,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             if getattr(self, 'reveal_path', None) is not None:
                 self.reveal_folder(self.reveal_path)
         else:
-            self.publish_note(values, result, pages)
+            self.publish_note(values, result)
         self.idle.emit()
 
     def selected_parent(self):
