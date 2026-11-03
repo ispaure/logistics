@@ -110,6 +110,83 @@ class NotesDrawerTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_wide_files_does_not_offer_noop_open_or_back_actions(self):
+        from toga.style.pack import NONE, PACK
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.reflow(900)
+            with self.subTest('welcome action with pinned Files'):
+                self.assertEqual(owner.open_card.style.display, NONE)
+                self.assertFalse(owner.menu.enabled)
+            owner.reflow(390)
+            self.assertEqual(owner.open_card.style.display, PACK)
+            self.assertTrue(owner.menu.enabled)
+            owner.sidebar.show_sidebar()
+            await owner.open_note('Vault/Home.md')
+            self.assertEqual(owner.back_action(), owner.return_to_browsing)
+            owner.reflow(900)
+            self.assertEqual(owner.open_card.style.display, NONE)
+            self.assertIsNone(owner.back_action())
+            self.assertIsNone(owner._document_return_side)
+            owner.reflow(390)
+            self.assertIsNone(owner.back_action())
+            owner.sidebar.show_sidebar()
+            await owner.open_note('Vault/Projects/Plan.MD')
+            owner.reflow(900)
+            self.assertEqual(owner.back_action(), owner.previous_note)
+            await owner.back_action()()
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_widening_during_a_note_read_does_not_restore_a_stale_files_return(self):
+        from dataclasses import replace
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.reflow(390)
+            owner.sidebar.show_sidebar()
+            entered, release = Event(), Event()
+            load = owner.library.load_note
+            def delayed(*args, **kwargs):
+                entered.set()
+                if not release.wait(5):
+                    raise RuntimeError('Test did not release note read')
+                return load(*args, **kwargs)
+            with patch.object(owner, 'host', replace(owner.host, render=lambda: None)), \
+                    patch.object(owner.library, 'load_note', side_effect=delayed):
+                task = asyncio.create_task(owner.open_note('Vault/Home.md'))
+                try:
+                    self.assertTrue(await asyncio.to_thread(entered.wait, 2))
+                    owner.reflow(900)
+                finally:
+                    release.set()
+                    opened = await task
+            self.assertTrue(opened)
+            self.assertTrue(owner.sidebar.expanded)
+            self.assertIsNone(owner._document_return_side)
+            self.assertIsNone(owner.back_action())
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_returning_to_links_refreshes_connections_for_the_current_document(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.reflow(390)
+            await owner.open_note('Vault/Home.md')
+            await owner.show_links()
+            self.assertEqual(owner.link_rows.children[0].text, 'Home.md')
+            await owner.open_note('Vault/Projects/Plan.MD')
+            owner.reflow(900)
+            self.assertEqual(owner.back_action(), owner.return_to_browsing)
+            owner.back_action()()
+            if owner.links_refresh_task is not None:
+                await owner.links_refresh_task
+            self.assertEqual(owner.sidebar.side, 'links')
+            self.assertEqual(owner.link_rows.children[0].text, 'Plan.MD')
+            self.assertEqual(owner.back_action(), owner.sidebar.show_detail)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_android_popup_observes_child_touches_and_releases_its_listener(self):
         from mobile.notes_drawers import NotesDrawers
         owner = NotesDrawers.__new__(NotesDrawers)
