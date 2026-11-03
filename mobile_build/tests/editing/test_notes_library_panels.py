@@ -12,6 +12,53 @@ from features.notes_library import library_files
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
+    def test_filename_search_default_and_tabs_retain_independent_rows(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertEqual(owner.search_mode.value, 'Search in File Names')
+            files, files_scroll = owner.rows, owner.rows_scroll
+            original = tuple(files.children)
+            with patch.object(owner.library, 'read_text', side_effect=AssertionError('Filename search read content')):
+                owner.search.value = 'Plan'
+                await owner.search_task
+            search, search_scroll = owner.rows, owner.rows_scroll
+            self.assertIsNot(search, files)
+            self.assertIsNot(search_scroll, files_scroll)
+            results = tuple(search.children)
+            self.assertTrue(results)
+            self.assertEqual(tuple(files.children), original)
+            owner.select_panel_tab('Files')
+            self.assertIs(owner.rows, files)
+            self.assertEqual(tuple(owner.rows.children), original)
+            owner.select_panel_tab('Search')
+            self.assertIs(owner.rows, search)
+            self.assertEqual(tuple(owner.rows.children), results)
+            owner.dispose()
+            self.assertFalse(files.children)
+            self.assertFalse(search.children)
+        self.run_async(exercise())
+
+    def test_cooperative_search_render_does_not_expose_partial_row_replacement(self):
+        (self.vault / 'First.md').write_text('First')
+        (self.vault / 'Second.md').write_text('Second')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            files = tuple(owner.rows.children)
+            owner.search.value = 'Plan'
+            await owner.search_task
+            before = tuple(owner.rows.children)
+            owner.search_rows = [row for row in owner.folders[owner.root]
+                                 if row['name'] in ('First.md', 'Second.md')]
+            observed = [before]
+            for _ in owner.tree_updates():
+                observed.append(tuple(owner.rows.children))
+            after = tuple(owner.rows.children)
+            self.assertNotEqual(before, after)
+            self.assertTrue(all(rows == before or rows == after for rows in observed))
+            self.assertEqual(tuple(owner._row_panels['Files']['rows'].children), files)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_panel_container_surfaces_do_not_request_native_text_color(self):
         from dataclasses import replace
         import toga

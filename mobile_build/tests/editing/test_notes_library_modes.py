@@ -30,6 +30,7 @@ class NotesLibraryModeTests(unittest.TestCase):
 
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.search_mode.value = 'Search within Documents'
 
             async def search(query):
                 owner.search.value = query

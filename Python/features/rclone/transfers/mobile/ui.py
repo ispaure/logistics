@@ -80,7 +80,9 @@ class MirrorUI(TransferReviewUI):
                 provider = native_service(client).localcrypt.open(LocalCryptLocation(
                     collection_path(self.private_root, True), remote, namespace=job['identity'],
                     storage_root=self.private_root, create=False, cipher_identity=job['cipher_identity']))
-                result['LocalCrypt: ' + remote + ' (pulled)'] = provider
+                # Name the actual saved copy, keeping distinct storage namespaces
+                # selectable without adding a transfer-status annotation.
+                result['LocalCrypt: ' + remote + ' · ' + job['target']] = provider
             except (OSError, ValueError):
                 continue
         return result
@@ -378,7 +380,7 @@ class MirrorUI(TransferReviewUI):
                 or generation != getattr(client, 'generation', None)):
             provider.close()
             return False
-        label = 'LocalCrypt: ' + remote + ' (pulled)'
+        label = 'LocalCrypt: ' + remote + ' · ' + job['target']
         self.file_roots[label] = provider
         self.update_file_locations()
         self.files_view._folder_entry_location = (label, folder)

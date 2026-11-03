@@ -58,6 +58,7 @@ class NotesHost:
     open_timing: Callable = None
     open_resource: Callable = None
     relocate_references: Callable = lambda provider, source, destination: None
+    remember_document: Callable = lambda owner: None
 
 
 from .library_panels import LibraryPanels, CONTROL_FONT
@@ -101,6 +102,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.library_title = library_name(provider, self.root)
         self.history, self.history_index = [], -1
         self.positions = {}
+        self.recent_notes = []
         self.session = None
         self.embedded = None
         self.editing = False
@@ -196,7 +198,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             on_change=self.search_changed,
             style=Pack(height=48),
         )
-        self.search_mode = toga.Selection(items=["Documents", "Names only"], style=Pack(height=48))
+        self.search_mode = toga.Selection(items=["Names only", "Documents"], style=Pack(height=48))
         self.search_mode.on_change = self.search_changed
         self.tree.insert(2, self.search)
         self.tree.insert(3, self.search_mode)
@@ -447,9 +449,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if self.toolbar.parent is not None:
                 self.toolbar.parent.remove(self.toolbar)
             parent.insert(0, self.toolbar)
-        self.rows.style.width = (
-            max(0, self.sidebar.policy.sidebar_width - 24)
-        )
+        for state in self._row_panels.values():
+            state['rows'].style.width = max(0, self.sidebar.policy.sidebar_width - 24)
         self.menu.enabled = not self.sidebar.expanded
         self.refresh_chrome()
 
@@ -831,18 +832,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             desired.append(self._rows_message)
         changed = list(self.rows.children) != desired
         if changed:
-            for row in list(self.rows.children):
-                if row not in desired:
-                    self.rows.remove(row)
-                    yield
-            for index, row in enumerate(desired):
-                if row.parent is not self.rows:
-                    self.rows.insert(index, row)
-                    yield
-                elif self.rows.children[index] is not row:
-                    self.rows.remove(row)
-                    self.rows.insert(index, row)
-                    yield
+            # Build controls cooperatively offscreen, then replace the visible
+            # batch without yielding between removals/insertions. Toga refreshes
+            # once for each bulk call rather than laying out every row in turn.
+            self.rows.clear()
+            self.rows.add(*desired)
         for key, row in list(self._row_cache.items()):
             if key not in new_rows:
                 # A cancelled cleanup must not expose an unbound cached row.
@@ -1226,11 +1220,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         task = getattr(self, 'tree_task', None)
         if task is not None:
             task.cancel()
-        for row in getattr(self, '_row_cache', {}).values():
-            for button in row.children:
-                if hasattr(button, 'vault_path'):
-                    self.release_file_hold(button)
-        self._row_cache = {}
+        self.dispose_panel_rows()
         self.dispose_panels()
         self.retire_editor()
         self.sidebar.dispose()
@@ -1262,6 +1252,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.edit.enabled = False
         self.notice.text = "Reopen Notes Library from the location actions."
         self.history.clear()
+        self.recent_notes.clear()
         self.positions.clear()
         if self.session is not None and self.session.id in self.host.workspace.sessions:
             self.host.workspace.close(self.session.id, guard=lambda session: True)
