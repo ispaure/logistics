@@ -31,6 +31,54 @@ class PrivateFiles(RemoteFiles):
 
 
 class NotesLibraryDesktopTests(QtTestCase):
+    def test_breadcrumbs_link_only_folder_notes_and_follow_every_document_kind(self):
+        from features.notes_library.notes import fit_breadcrumbs
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Topics/Plain').mkdir(parents=True)
+            (root / 'Topics/Topics.md').write_text('# Topics')
+            image = qt.QImage(20, 20, qt.QImage.Format.Format_RGB32)
+            image.fill(qt.QColor('blue'))
+            image.save(str(root / 'Topics/Plain/Image.png'))
+            for name, data in [('Current.md', b'# Current'),
+                               ('Data.json', b'{}'), ('Unknown.bin', b'\x00')]:
+                (root / 'Topics/Plain' / name).write_bytes(data)
+            window = self.open_library(root)
+            self.assertTrue(window.items['Topics'].font(0).underline())
+            for name in ('Current.md', 'Image.png', 'Data.json', 'Unknown.bin'):
+                window.open_note('Topics/Plain/' + name)
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertEqual(window.breadcrumbs.entries,
+                    [('Topics', 'Topics/Topics.md'), ('Plain', None), (name, None)])
+                self.assertIn('href="0"', window.breadcrumbs.text())
+                self.assertNotIn('href="1"', window.breadcrumbs.text())
+                window.breadcrumbs.resize(260, 30)
+                window.breadcrumbs.render_path()
+                self.assertIn(name, window.breadcrumbs.text())
+            window.breadcrumbs.linkActivated.emit('0')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Topics/Topics.md')
+            window.navigate(-1)
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Topics/Plain/Unknown.bin')
+            fitted = fit_breadcrumbs(['Technology', 'Accessories', 'Devices', 'Sennheiser', 'Current Page.md'], 45)
+            self.assertEqual(fitted[-1], 'Current Page.md')
+            self.assertTrue(all(value.endswith('…') for value in fitted[:-1]))
+            self.assertLessEqual(len(' / '.join(value for value in fitted if value)), 45)
+            long_name = 'A very long current filename.md'
+            self.assertEqual(fit_breadcrumbs(['An even longer ancestor folder', long_name], 36)[-1], long_name)
+            deep = fit_breadcrumbs(['Deep ancestor'] * 100 + ['Current.md'], 80, minimum=6, padding=4)
+            self.assertEqual(deep[-1], 'Current.md')
+            self.assertTrue(any(deep[:-1]))
+            self.assertLessEqual(sum(max(6, len(value)) + 7 for value in deep[:-1] if value) + len(deep[-1]), 80)
+            palette = window.breadcrumbs.palette()
+            palette.setColor(qt.QPalette.ColorRole.WindowText, qt.QColor('#abcdef'))
+            window.breadcrumbs.setPalette(palette)
+            self.assertIn('#abcdef', window.breadcrumbs.text())
+            window.clear_document()
+            self.assertEqual(window.breadcrumbs.text(), '')
+            window.close()
+
     def test_failed_and_late_cancelled_note_attempts_retire_media_and_keep_current(self):
         from services.documents.markdown import prepare_markdown
         with self.temporary_directory() as directory:

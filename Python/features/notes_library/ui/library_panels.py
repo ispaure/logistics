@@ -97,6 +97,9 @@ class LibraryPanels:
     def decorate_entry(self, item, path, directory):
         landing = directory and bool(self.folder_pages.get(path))
         item.setIcon(0, entry_icon(directory, landing_page=landing))
+        font = item.font(0)
+        font.setUnderline(landing)
+        item.setFont(0, font)
         item.setToolTip(0, ('Folder with same-named note' if landing else 'Folder' if directory else 'File')
                         + ' · ' + path)
 
@@ -108,7 +111,7 @@ class LibraryPanels:
                 entry = item.data(0, qt.Qt.ItemDataRole.UserRole)
                 if entry:
                     path, directory = entry
-                    item.setIcon(0, entry_icon(directory, landing_page=bool(self.folder_pages.get(path))))
+                    self.decorate_entry(item, path, directory)
                 iterator += 1
 
     def request_aux(self, kind, work):
@@ -212,7 +215,10 @@ class LibraryPanels:
 
     def choose_result(self, item, *args):
         path, directory = item.data(0, qt.Qt.ItemDataRole.UserRole)
-        if directory:
+        page = self.folder_pages.get(path) if directory else None
+        if page:
+            self.open_note(page)
+        elif directory:
             self.search.clear()
             self.filter()
             self.reveal_folder(path)

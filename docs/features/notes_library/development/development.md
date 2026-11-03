@@ -42,6 +42,23 @@ separately and keep raw evidence outside the wiki.
 
 ## Notes Library data views
 
+Notes Library owns breadcrumb presentation for every embedded document kind.
+Ancestor landing pages use the same bounded provider probes as sidebar folders,
+including files opened before their ancestors are expanded. Probes run off the
+UI thread; links follow the existing document navigation/save/history path.
+Desktop places a shrinking rich-text path beside history; mobile uses a compact
+row below the document controls. Only folders with a same-named `.md` are links
+and underlined, both in the path and in Files. The shared fitting policy reserves
+space for the current filename before shortening ancestors. Closing or locking
+the library clears the displayed path.
+
+Focused validation covers folder-note underlines, inactive ancestors, filename
+priority, file-type transitions and history in desktop/mobile host suites. Native
+iPhone simulator and Android emulator Notes Library probes also exercise folder
+links for Markdown, images, source files and unsupported files, with screenshots
+reviewed for narrow layouts. Both runners remove their QA app and disposable
+device. This does not certify physical-device gestures or every tablet layout.
+
 `notes.document_kind` and `DOCUMENTS` define filename-only routing for Markdown,
 source text and notebook files. Provider listing and content search share this
 supported-type boundary; hidden configuration stays excluded. Explicit links may
