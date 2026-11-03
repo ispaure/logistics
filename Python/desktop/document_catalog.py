@@ -140,6 +140,7 @@ def populate(layout, parent, *, recent=False):
     while layout.count():
         item = layout.takeAt(0)
         if item.widget() is not None:
+            item.widget().hide()
             item.widget().deleteLater()
     try:
         store = catalog(recent=recent)

@@ -23,6 +23,30 @@ class Settings(qt.QWidget):
 
 
 class LaunchModeTests(QtTestCase):
+    def test_landing_retires_private_favourite_labels_on_credential_lock(self):
+        from pathlib import Path
+        from types import SimpleNamespace
+        from features.rclone.credential_sessions import CredentialSessions
+        from services.documents.credential_state import DesktopCredentialCipher
+        from desktop.landing import LandingPage
+        from services.documents.catalog import DocumentCatalog
+        sessions = CredentialSessions()
+        context = Path('/fixture/landing.session')
+        with self.temporary_directory() as directory, patch('features.rclone.session.registry', sessions), \
+                patch('features.rclone.session.paths', sessions.paths), \
+                patch('features.rclone.session.on_forget', sessions.on_forget), \
+                patch('desktop.document_catalog.cache_directory', return_value=Path(directory)):
+            sessions.remember(context, {}, state_password='secret', state_identity='c' * 64)
+            cipher = DesktopCredentialCipher(SimpleNamespace(context=context))
+            DocumentCatalog(directory).remember(dict(type='crypt', path='private.md'), 'Private favourite', {}, favourite=True, cipher=cipher)
+            page = LandingPage()
+            page.show()
+            self.assertIn('Private favourite', [button.text() for button in page.findChildren(qt.QPushButton)])
+            sessions.forget(context)
+            self.wait_until(lambda: not any(button.text() == 'Private favourite' and button.isVisible()
+                                           for button in page.findChildren(qt.QPushButton)))
+            page.close()
+
     def test_feature_browser_location_opens_in_the_existing_browser_destination(self):
         from types import SimpleNamespace
         window = self.window
