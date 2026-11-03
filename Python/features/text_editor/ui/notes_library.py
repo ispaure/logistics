@@ -79,6 +79,8 @@ class NotesTree(qt.QTreeWidget):
         target = self.itemAt(event.position().toPoint())
         role = qt.Qt.ItemDataRole.UserRole
         path, _ = source.data(0, role)
+        if path == self.owner.library.root:
+            return
         parent = self.owner.library.root
         if target is not None:
             target_path, directory = target.data(0, role)
@@ -714,6 +716,14 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
     def populate(self, path, rows, pages=None):
         self.folder_pages.update(pages or {})
         parent = self.items.get(path)
+        if path == self.library.root and parent is None:
+            parent = qt.QTreeWidgetItem(['Library root'])
+            parent.setData(0, qt.Qt.ItemDataRole.UserRole, (path, True))
+            parent.setFlags(parent.flags() & ~qt.Qt.ItemFlag.ItemIsDragEnabled)
+            parent.setIcon(0, self.style().standardIcon(qt.QStyle.StandardPixmap.SP_DirIcon))
+            parent.setToolTip(0, 'Drop a file or folder here to move it to the library root')
+            self.tree.addTopLevelItem(parent)
+            self.items[path] = parent
         if parent:
             parent.takeChildren()
         self.loaded.add(path)
@@ -725,6 +735,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             if row['directory']:
                 item.setChildIndicatorPolicy(qt.QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
             (parent.addChild if parent else self.tree.addTopLevelItem)(item)
+        if path == self.library.root and parent is not None:
+            parent.setExpanded(True)
         if self.search and self.search.text():
             self.filter()
 

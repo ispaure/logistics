@@ -365,6 +365,9 @@ class LibraryPanels:
             return
         tree.setCurrentItem(item)
         path, _ = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        if path == self.library.root:
+            self.viewer.status.setText('The library root is a drop destination. Select one of its files or folders for actions.')
+            return
         menu = qt.QMenu(self)
         if self.library.supports('rename'):
             menu.addAction('Move / rename…', lambda: self.rename_path(path))

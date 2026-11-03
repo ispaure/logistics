@@ -216,11 +216,14 @@ class LibraryPanels:
                     self.host.highlight_entry(button, selected)
                     row._notes_selected = selected
 
-    def bind_file_hold(self, button, path):
+    def bind_file_hold(self, button, path, *, directory=False):
         def show():
             if self.valid():
                 self.host.loop.create_task(self.file_actions(path))
         button.notes_file_actions = show
+        if hasattr(self, 'file_drag') and self.library.supports('rename'):
+            self.file_drag.bind(button, path, target=directory)
+            return
         backend = type(button._impl).__module__
         if backend.startswith('toga_iOS.'):
             from rubicon.objc import ObjCClass, SEL, objc_method
@@ -248,6 +251,8 @@ class LibraryPanels:
             button._impl.native.setOnLongClickListener(button._notes_hold)
 
     def release_file_hold(self, button):
+        if hasattr(self, 'file_drag'):
+            self.file_drag.unbind(button)
         binding = getattr(button, '_notes_hold', None)
         backend = type(button._impl).__module__
         if binding is not None and backend.startswith('toga_iOS.'):

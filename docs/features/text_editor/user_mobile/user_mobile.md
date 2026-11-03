@@ -281,6 +281,6 @@ while resizing the writing area. Keyboard dismissal restores the previous
 navigation visibility; destination tabs can remain hidden while a document is open.
 
 Each Notes Library file/folder row has **…** actions for Move / rename, Copy and
-Delete when supported by its storage. Long-pressing the filename opens the same
-menu. Folder actions apply to the folder and its contents; deletion asks for
+Delete when supported by its storage. Hold and drag a filename onto a folder
+to move it, or onto **Library root** to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
 confirmation and existing copy/move destinations are preserved.

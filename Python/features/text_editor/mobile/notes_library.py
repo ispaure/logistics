@@ -242,6 +242,19 @@ class VaultBrowser(LibraryPanels):
         self.refresh_reader_actions()
         self.refresh_chrome()
         self.init_panels()
+        from .library_drag import LibraryDrag
+        self.file_drag = LibraryDrag(self)
+        async def browse_root(widget=None, **kwargs):
+            self.selected_path = self.root
+            self.expanded.add(self.root)
+            if self.root not in self.folders:
+                await self.load_folder(self.root)
+            self.render_tree()
+            self.refresh_reader_actions()
+        self.root_drop_button = toga.Button('Library root', on_press=browse_root, style=Pack(height=48))
+        self.files_content.insert(2, self.root_drop_button)
+        if self.library.supports('rename'):
+            self.file_drag.bind(self.root_drop_button, self.root, source=False, target=True)
         self.reflow(host.content_width(destination))
 
     def refresh_chrome(self):
@@ -623,7 +636,7 @@ class VaultBrowser(LibraryPanels):
                 )
                 self.host.middle_filename(button)
                 button.vault_path = path
-                self.bind_file_hold(button, path)
+                self.bind_file_hold(button, path, directory=directory)
                 row = toga.Box(
                     children=[
                         toga.Box(style=Pack(width=depth * 20)),
@@ -714,7 +727,7 @@ class VaultBrowser(LibraryPanels):
 
     async def _open_note(self, path, *, remember=True, fragment="", resolve_link=False):
         started = perf_counter()
-        if not self.valid():
+        if not self.valid() or (getattr(self, '_moving_entry', False) and not getattr(self, '_reopening_after_move', False)):
             return False
         if not await self.prepare_leave():
             return False
@@ -1244,6 +1257,61 @@ class VaultBrowser(LibraryPanels):
             return selected
         return posixpath.dirname(selected) if selected else self.root
 
+    async def move_entry_to(self, source, destination):
+        if not self.valid() or self.file_command_busy or not self.library.supports('rename'):
+            return False
+        self.file_command_busy = True
+        side = self.sidebar.side
+        article_enabled = self.article.enabled
+        try:
+            source, destination = self.contained(source), self.contained(destination)
+            moving_open = bool(self.path and (self.path == source or self.path.startswith(source + '/')))
+            if moving_open and not await self.prepare_leave():
+                return False
+            self._moving_entry = True
+            self.article.enabled = False
+            self.epoch += 1
+            await asyncio.to_thread(self.library.move, source, destination, cancelled=lambda: not self.valid())
+            if not self.valid():
+                return False
+            if moving_open:
+                self.retire_editor()
+            def remap(path):
+                return destination + path[len(source):] if path is not None and (
+                    path == source or path.startswith(source + '/')) else path
+            self.history = [remap(path) for path in self.history]
+            self.positions = {remap(path): value for path, value in self.positions.items()}
+            self.path, self.selected_path = remap(self.path), destination
+            self.expanded = {remap(path) for path in self.expanded} | {posixpath.dirname(destination)}
+            paths = {remap(path) for path in self.folders} | {
+                self.root, posixpath.dirname(source), posixpath.dirname(destination)}
+            self.folders.clear()
+            self.folder_pages.clear()
+            for path in sorted(paths):
+                await self.load_folder(path)
+            if moving_open:
+                self._reopening_after_move = True
+                try:
+                    await self.open_note(self.path, remember=False)
+                finally:
+                    self._reopening_after_move = False
+            if side is not None:
+                self.sidebar.show(side)
+            self.refresh_library_indexes()
+            self.refresh_reader_actions()
+            self.notice.text = 'Moved ' + PurePosixPath(destination).name
+            return True
+        except OperationCancelled:
+            return False
+        except (OSError, ValueError) as error:
+            if self.valid():
+                self.notice.text = fill(str(error)[:180], width=28)
+            return False
+        finally:
+            self._moving_entry = False
+            self.article.enabled = article_enabled
+            self.file_command_busy = False
+
     def manage_entry(self, *, folder=False, move=False):
         if not self.valid() or not self.library.supports('rename' if move else 'create'):
             return False
@@ -1260,43 +1328,30 @@ class VaultBrowser(LibraryPanels):
         async def submit(widget=None, **kwargs):
             if not self.valid() or self.file_command_busy:
                 return
+            if move:
+                submit_button.enabled = cancel.enabled = False
+                try:
+                    if await self.move_entry_to(source, posixpath.join(self.root, name.value)):
+                        self.present()
+                    else:
+                        status.text = self.notice.text
+                finally:
+                    submit_button.enabled = cancel.enabled = True
+                return
             self.file_command_busy = True
             submit_button.enabled = cancel.enabled = False
             try:
-                moving_open = bool(move and self.path and (self.path == source or self.path.startswith(source + '/')))
-                if moving_open and not await self.prepare_leave():
-                    return
-                if move:
-                    destination = posixpath.join(self.root, name.value)
-                    await asyncio.to_thread(self.library.move, source, destination, cancelled=lambda: not self.valid())
-                    if not self.valid():
-                        return
-                    if moving_open:
-                        self.retire_editor()
-                    def remap(path):
-                        return destination + path[len(source):] if path is not None and (
-                            path == source or path.startswith(source + '/')) else path
-                    self.history = [remap(path) for path in self.history]
-                    self.positions = {remap(path): value for path, value in self.positions.items()}
-                    self.path, self.selected_path = remap(self.path), destination
-                    self.expanded = {remap(path) for path in self.expanded}
-                    paths = {remap(path) for path in self.folders}
-                    paths.add(posixpath.dirname(destination))
-                else:
-                    await asyncio.to_thread(self.library.create_folder, name.value, parent,
-                                            cancelled=lambda: not self.valid())
-                    paths = set(self.folders) | {parent}
+                await asyncio.to_thread(self.library.create_folder, name.value, parent,
+                                        cancelled=lambda: not self.valid())
                 if not self.valid():
                     return
                 self.epoch += 1
+                paths = set(self.folders) | {parent, self.root}
                 self.folders.clear()
-                for path in sorted(paths | {self.root}):
+                for path in sorted(paths):
                     await self.load_folder(path)
-                if self.search.value:
-                    self.search_changed()
+                self.refresh_library_indexes()
                 self.present()
-                if moving_open:
-                    await self.open_note(self.path, remember=False)
                 self.refresh_reader_actions()
             except OperationCancelled:
                 return
@@ -1319,6 +1374,8 @@ class VaultBrowser(LibraryPanels):
             self.page_search.show()
 
     def dispose(self):
+        if hasattr(self, 'file_drag'):
+            self.file_drag.dispose()
         self.cancel_data_views()
         task = getattr(self, 'tree_task', None)
         if task is not None:

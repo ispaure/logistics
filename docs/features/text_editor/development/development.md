@@ -862,3 +862,17 @@ the tabbed host.
 The tab host also routes New to the shared library navigator and scopes inner
 shortcuts to their document subtree; Save has one active child handler. Focus
 changes inside side-by-side editors update the active document reference.
+
+## Library file dragging
+
+Desktop Files includes a non-draggable Library root row as an explicit drop
+destination. Mobile `library_drag.py` uses Android local drag listeners and UIKit
+local drag/drop interactions; native payloads contain an opaque per-library token,
+not a document path or bytes. Filename holds start drags; row ellipsis buttons
+retain mutation menus. Bindings retire with recycled rows and the library owner.
+`move_entry_to` shares move-form and drag publication, resolves edits, blocks
+competing note navigation during a move, remaps histories/positions and refreshes
+loaded folders while retaining the browsing drawer. Root moves, self/descendant
+drops and collisions preserve source files. Host checks cover file/folder/root
+moves, current-note remapping and existing calendar/create flows. These checks do
+not certify native finger-drag appearance or physical-device gesture delivery.
