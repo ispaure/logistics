@@ -41,6 +41,26 @@ class Client:
 
 
 class LocalCryptAccessTests(unittest.TestCase):
+    def test_native_write_progress_reports_bytes_and_cancels_without_reading_plaintext(self):
+        from threading import Event
+        from features.rclone.localcrypt.mobile.resources import write_progress
+        cancelled, reported, stopped = Event(), Event(), Event()
+        client = SimpleNamespace(cancel=lambda: stopped.set())
+        values = []
+        def progress(done):
+            values.append(done)
+            reported.set()
+        stream = SimpleNamespace(transfer_progress=progress)
+        with TemporaryDirectory() as root:
+            with (Path(root) / 'encrypted-stage').open('wb') as output:
+                output.write(b'ciphertext')
+                output.flush()
+                with write_progress(client, output, stream, cancelled.is_set):
+                    self.assertTrue(reported.wait(3))
+                    cancelled.set()
+                    self.assertTrue(stopped.wait(3))
+                self.assertTrue(values)
+                self.assertEqual(values[0], len(b'ciphertext'))
     def test_note_metadata_converts_distinct_sizes_in_bounded_guarded_batches(self):
         with TemporaryDirectory() as root:
             client = Client()

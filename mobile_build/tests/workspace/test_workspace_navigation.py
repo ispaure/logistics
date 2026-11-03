@@ -387,16 +387,16 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 with self.subTest(action=name):
                     setattr(item, name, [object()] if name.endswith(('Items', 'Groups')) else object())
                     bar.setNavigationBarHidden.reset_mock()
-                    self.navigation.sync_destination_bar('home')
+                    self.navigation.sync_destination_bar('chat')
                     bar.setNavigationBarHidden.assert_called_once_with(False, animated=False)
                     delattr(item, name)
             bar.viewControllers = [object(), object()]  # UIKit More owns Back.
             bar.setNavigationBarHidden.reset_mock()
-            self.navigation.sync_destination_bar('home')
+            self.navigation.sync_destination_bar('chat')
             bar.setNavigationBarHidden.assert_called_once_with(False, animated=False)
             bar.setNavigationBarHidden.reset_mock()
             with patch.object(self.app, '_reader_chrome_hidden', True, create=True):
-                self.navigation.sync_destination_bar('home')
+                self.navigation.sync_destination_bar('chat')
             bar.setNavigationBarHidden.assert_not_called()
         finally:
             self.app.native_host.adapter = original
@@ -934,22 +934,22 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertTrue(app.routes.back())
             self.assertEqual(app.native_host.state.destination, 'files')
 
-    def test_overview_drawer_keeps_overview_and_editor_draft(self):
+    def test_focused_overview_keeps_overview_and_editor_draft(self):
         app = self.app
         owner = app.editor_view
         owner.editor.value = 'Draft before opening the overview'
         app.show_documents_hub()
         overview = app.body.children[0]
-        frame = overview._workspace_frame
+        self.assertFalse(hasattr(overview, '_workspace_frame'))
         with patch.object(self.navigation, 'width', return_value=390):
-            frame.menu.on_press()
+            app.document_view_buttons['Recent'].on_press()
             self.assertIs(app.body.children[0], overview)
-            self.assertEqual(list(frame.row.children),
-                             [self.navigation.browser('documents').widget, frame.main])
-            self.assertLess(self.navigation.browser('documents').widget.style.width, 390)
-            self.assertTrue(frame.compact_open)
-            frame.menu.on_press()
-            self.assertEqual(list(frame.row.children), [frame.main])
+            self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+            app.document_search.value = 'Draft'
+            self.assertIsNone(app.document_views.parent)
+            self.assertEqual(list(app.document_results.children), [app.document_search_results])
+            app.document_search.value = ''
+            self.assertEqual(list(app.document_results.children), [app.document_recent_list])
             self.assertEqual(owner.editor.value, 'Draft before opening the overview')
 
     def test_files_hamburger_works_on_first_tab_selection_without_refresh(self):

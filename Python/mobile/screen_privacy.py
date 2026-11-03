@@ -190,7 +190,7 @@ class ScreenPrivacy:
             gate.lock(reason='lifecycle')
         picker = getattr(self.app, '_editor_picker', None)
         if picker is not None:
-            picker.cancel()
+            picker.cancel(interrupted=True)
         # Cover synchronously before releasing anything or taking a snapshot.
         self.refresh()
         self.app.retire_private_comic_batch()

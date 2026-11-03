@@ -15,6 +15,9 @@ class HubController(HubUI):
         "reflow_home",
         "reflow_documents_hub",
         "build_documents_hub",
+        "show_document_collection",
+        "populate_document_libraries",
+        "publish_document_search",
         "search_documents",
         "refresh_document_list",
         "clear_recent_documents",
@@ -35,6 +38,15 @@ class HubController(HubUI):
         "document_recent_list",
         "document_saved_list",
         "document_notes_list",
+        "documents_query",
+        "documents_view",
+        "document_views",
+        "document_view_buttons",
+        "document_results",
+        "document_search_results",
+        "document_libraries_list",
+        "document_favourites_list",
+        "document_comics_list",
         "home_actions",
         "home_content",
         "home_continue",
@@ -45,8 +57,30 @@ class HubController(HubUI):
 
     def __init__(self, app):
         self.app = app
+        self.documents_query = ''
+        self.documents_view = 'Libraries'
         from .layout_participants import participants
         participants(app).register('document-hubs', self, HubUI.reflow_layout, order=20)
+
+    def stop_local_search(self):
+        search = getattr(self, '_documents_file_search', None)
+        if search is not None:
+            search.stop_local_search()
+        for name in ('_document_comics_discovery', '_document_search_delay'):
+            task = getattr(self, name, None)
+            if task is not None:
+                task.cancel()
+
+    def credentials_changed(self):
+        self.stop_local_search()
+        from .notes_discovery import cancel
+        cancel(self.app)
+        for name in ('document_notes_list', 'document_comics_list', 'document_search_results', 'document_favourites_list'):
+            target = getattr(self, name, None)
+            if target is not None:
+                target.clear()
+        self._document_libraries_ready = False
+        self.refresh_document_list()
 
     adaptive = HostAttribute("adaptive")
     checkpoint = HostService("checkpoint")

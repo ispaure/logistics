@@ -83,6 +83,12 @@ They remain available after returning up the folder stack.
 An entry's three dots show commands in place: a native dropdown anchored to the dots on both Android and iOS. Selecting Rename or Move opens its form;
 opening the menu itself keeps you in the listing. Changing folders, refreshing
 the listing or locking the browser dismisses old row commands.
+Long file moves show copy/encryption and verification progress. Keep the move
+screen open; other navigation waits until it finishes or Cancel completes its
+cleanup. Logistics prevents automatic screen sleep during the move and restores
+the previous setting afterward. Switching apps or manually locking the device
+stops the move; return to inspect the result before retrying. Local moves within
+one filesystem use a direct move without copying the file's contents.
 The three dots beside a folder in the main Workspaces list also open an anchored
 menu, with Browse, Pull, Push and Delete commands as applicable. Transfer review
 and deletion confirmation still open after choosing a command.

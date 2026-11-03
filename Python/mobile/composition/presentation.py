@@ -172,6 +172,8 @@ def speech_presentation(app):
 
 def notes_host(app):
     from features.notes_library.mobile.notes_library import NotesHost
+    from features.notes_library.notes import MAX_NOTE, MAX_RENDERED_HTML, MAX_IMAGE_HTML
+    from commonUtils.ui.native.markdown_preview import MarkdownPreviewLimits
     from ..appearance import list_button
     from ..browser_ui import middle_filename, entry_icon, highlight_entry
     from ..markdown_speech import MarkdownSpeech
@@ -180,6 +182,13 @@ def notes_host(app):
     from ..notes_drawers import NotesDrawers
     from ..folder_hub_style import source_tab
     from ..appearance import accessible_name
+
+    preview_limits = MarkdownPreviewLimits(source_bytes=MAX_NOTE, html_bytes=MAX_RENDERED_HTML,
+        image_html_bytes=MAX_IMAGE_HTML, lazy_images=True)
+
+    async def show_error(title, message):
+        import toga
+        await app.main_window.dialog(toga.ErrorDialog(title, message))
 
     def tab_style(button, selected):
         source_tab(button, selected)
@@ -238,6 +247,7 @@ def notes_host(app):
         return await reopen_file(app, source)
 
     return NotesHost(
+        show_error=show_error,
         open_resource=open_resource,
         relocate_references=lambda provider, source, destination: relocate(app, provider, source, destination),
         tab_style=tab_style,
@@ -273,7 +283,7 @@ def notes_host(app):
         entry_icon=entry_icon,
         highlight_entry=highlight_entry,
         preview=lambda text, **kwargs: obsidian.markdown_preview(
-            text, int(app.preferences.values["markdown_font_size"]), local_links=True, **kwargs
+            text, int(app.preferences.values["markdown_font_size"]), local_links=True, limits=preview_limits, **kwargs
         ),
     )
 

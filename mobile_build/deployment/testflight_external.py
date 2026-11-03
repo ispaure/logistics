@@ -103,6 +103,39 @@ def wait_for_build(client, config, number, version, *, sleep=time.sleep, clock=t
         sleep=sleep, clock=clock)
 
 
+def beta_detail(client, config, build_id, *, enable_notifications=False,
+                sleep=time.sleep, clock=time.monotonic):
+    """Wait for this processed build's separately published beta metadata.
+
+    A definitive 404 can follow a successful processing lookup or even the
+    relationship GET. Only that known rejection is retried, never an uncertain
+    write, upload, group assignment or review submission.
+    """
+    deadline = clock() + config['processing_timeout_seconds']
+    allowed = {'READY_FOR_BETA_SUBMISSION', 'WAITING_FOR_BETA_REVIEW', 'IN_BETA_REVIEW',
+               'BETA_APPROVED', 'READY_FOR_BETA_TESTING', 'IN_BETA_TESTING'}
+    while True:
+        try:
+            detail = client.request('GET', '/v1/builds/' + build_id + '/buildBetaDetail')['data']
+            state = detail['attributes']['externalBuildState']
+            if state not in allowed:
+                raise ValueError('External testing needs attention in App Store Connect: ' + state +
+                                 '. Complete encryption/review requirements there, then run distribute again.')
+            if enable_notifications:
+                client.request('PATCH', '/v1/buildBetaDetails/' + detail['id'], body={'data': {
+                    'type': 'buildBetaDetails', 'id': detail['id'], 'attributes': {'autoNotifyEnabled': True}}})
+            return detail
+        except RuntimeError as error:
+            if not str(error).startswith('App Store Connect HTTP 404:'):
+                raise
+            remaining = deadline - clock()
+            if remaining <= 0:
+                raise RuntimeError('Apple beta distribution metadata is still unavailable. '
+                    'Distribute this same uploaded build after it becomes available; do not re-upload.') from error
+            print('Waiting for Apple beta distribution metadata…', flush=True)
+            sleep(min(config['poll_interval_seconds'], remaining))
+
+
 def distribute(workspace, prepared=None):
     prepared = prepared or prepare()
     if prepared is None:
@@ -121,14 +154,9 @@ def distribute(workspace, prepared=None):
         found = wait_for_build(client, config, build['build_number'], build['version'])
         build_id = found['id']
         report['build_id'] = build_id
-        detail = client.request('GET', '/v1/builds/' + build_id + '/buildBetaDetail')['data']
+        detail = beta_detail(client, config, build_id)
         state = detail['attributes']['externalBuildState']
         report['external_state'] = state
-        allowed = {'READY_FOR_BETA_SUBMISSION', 'WAITING_FOR_BETA_REVIEW', 'IN_BETA_REVIEW',
-                   'BETA_APPROVED', 'READY_FOR_BETA_TESTING', 'IN_BETA_TESTING'}
-        if state not in allowed:
-            raise ValueError('External testing needs attention in App Store Connect: ' + state +
-                             '. Complete encryption/review requirements there, then run distribute again.')
         localizations = client.list('/v1/builds/' + build_id + '/betaBuildLocalizations', limit=200)
         existing = [v for v in localizations if v['attributes']['locale'] == config['locale']]
         if len(existing) > 1:
@@ -143,8 +171,9 @@ def distribute(workspace, prepared=None):
             client.request('POST', '/v1/betaBuildLocalizations', body={'data': {
                 'type': 'betaBuildLocalizations', 'attributes': {'locale': config['locale'], 'whatsNew': config['what_to_test']},
                 'relationships': {'build': {'data': {'type': 'builds', 'id': build_id}}}}})
-        client.request('PATCH', '/v1/buildBetaDetails/' + detail['id'], body={'data': {
-            'type': 'buildBetaDetails', 'id': detail['id'], 'attributes': {'autoNotifyEnabled': True}}})
+        detail = beta_detail(client, config, build_id, enable_notifications=True)
+        state = detail['attributes']['externalBuildState']
+        report['external_state'] = state
         # Relationship POST is additive; never remove the group's earlier builds.
         linked = client.list('/v1/betaGroups/' + group['id'] + '/relationships/builds', limit=200)
         if not any(item['id'] == build_id for item in linked):

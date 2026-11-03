@@ -1,0 +1,106 @@
+"""Native Notes Library action wiring and header allocation across device sizes."""
+import asyncio
+import json
+from pathlib import Path
+import traceback
+
+from commonUtils.testing.stages import TestStage
+from commonUtils.runtime.resources.local import LocalFiles
+from mobile.obsidian import open_vault
+from .notes_drawers_probe import NotesDrawersProbe
+from .fixtures import capture_window
+from .rotation_checks import rotate
+
+TEST_STAGE = TestStage.REGRESSION
+
+
+class NotesHeaderProbe(NotesDrawersProbe):
+    async def probe(self):
+        from rubicon.objc import CGPoint
+        output = Path(self.paths.cache)
+        report = dict(success=False, samples=[])
+        owner = None
+        try:
+            root = output / 'Art'
+            (root / '.obsidian').mkdir(parents=True, exist_ok=True)
+            (root / 'Home.md').write_text('# Home\n\n[[Other]]\n')
+            (root / 'Other.md').write_text('# Other\n\n[[Home]]\n')
+            folder = root / '3D Character Art'
+            folder.mkdir(exist_ok=True)
+            (folder / '3D Character Art.md').write_text(
+                '# Character Art Team\n\nProducer: Diane Guillemont\n\n'
+                'Lead Character Artist: Chad Emond\n\n## Pages\n\n[[../Home]]\n\n'
+                '## Naming conventions\n\nKeep shared files organized by project.\n')
+            owner = await open_vault(self, LocalFiles(root), '', 'files')
+            for orientation in ('portrait', 'landscape-left', 'portrait'):
+                await rotate(self, orientation, settle=.5)
+                assert await owner.open_note('Home.md')
+                await self.check_note_actions(owner, report)
+                assert await owner.open_note('3D Character Art/3D Character Art.md')
+                await asyncio.sleep(.5)
+                assert owner.secondary.parent is None
+                window = self.main_window._impl.native
+                for button in (owner.menu, owner.links_button, *owner.breadcrumbs.children):
+                    if not hasattr(button, 'on_press') or not button.enabled:
+                        continue
+                    native = button._impl.native
+                    point = native.convertPoint(CGPoint(native.bounds.size.width / 2,
+                                                        native.bounds.size.height / 2), toView=window)
+                    hit = window.hitTest(point, withEvent=None)
+                    while hit is not None and hit != native:
+                        hit = hit.superview
+                    assert hit == native, ('Header control is covered', getattr(button, 'accessible_name', button.text))
+                header = owner.view._document_title_header
+                title = owner.view._document_title_view
+                title_frame = title.convertRect(title.bounds, toView=window)
+                article_frame = owner.web._impl.native.convertRect(owner.web._impl.native.bounds, toView=window)
+                assert title_frame.origin.y + title_frame.size.height <= article_frame.origin.y
+                assert header.parent is (owner.article if owner.sidebar.expanded else owner.view)
+                await capture_window(self, output / ('notes-reading-' + orientation + '.png'))
+                evidence = output / 'viewer-layout'
+                evidence.mkdir(exist_ok=True)
+                owner.sidebar.show_sidebar()
+                await asyncio.sleep(.3)
+                assert list(owner.panel_tabs) == ['Files', 'Search', 'Calendar']
+                assert owner.search.parent is owner.search_content
+                assert owner.rows_scroll.parent is owner.files_content
+                assert owner.panel_actions.parent is owner.panel_footer
+                assert owner.root_drop_button.parent is owner.panel_identity
+                if not owner.sidebar.expanded:
+                    overlay = owner.sidebar.overlay
+                    assert overlay.edge_panel
+                    bounds = overlay.container.native.frame
+                    safe = window.safeAreaInsets
+                    assert abs(float(bounds.origin.y) - float(safe.top)) < 2
+                    assert abs(float(bounds.origin.y + bounds.size.height)
+                               - float(window.bounds.size.height - safe.bottom)) < 2
+                await capture_window(self, evidence / ('sidebar-files-' + orientation + '.png'))
+                owner.select_panel_tab('Search')
+                owner.search.value = 'Home'
+                await owner.search_task
+                await asyncio.sleep(.3)
+                assert owner.search_rows
+                assert owner.rows_scroll.parent is owner.search_content
+                assert owner.panel_actions.parent is None
+                await capture_window(self, evidence / ('sidebar-search-' + orientation + '.png'))
+                owner.select_panel_tab('Calendar')
+                await owner.calendar_task
+                await asyncio.sleep(.3)
+                assert owner.panel_body.children == [owner.calendar_scroll]
+                await capture_window(self, evidence / ('sidebar-calendar-' + orientation + '.png'))
+                owner.select_panel_tab('Files')
+                owner.sidebar.show_detail()
+                await asyncio.sleep(.3)
+                report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
+                    title_width=float(title_frame.size.width), document_width=float(article_frame.size.width)))
+            report['success'] = True
+        except Exception:
+            report['error'] = traceback.format_exc()
+        finally:
+            if owner is not None:
+                owner.dispose()
+        (output / 'notes-header-result.json').write_text(json.dumps(report, indent=2))
+
+
+def main():
+    return NotesHeaderProbe('Notes header QA', 'io.github.ispaure.logisticsnotebookqa')

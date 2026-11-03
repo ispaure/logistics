@@ -187,7 +187,75 @@ class ExternalDistributionTests(unittest.TestCase):
                     'locale': 'en-US', 'whatsNew': 'Owner notes'}}] if path.endswith('/betaBuildLocalizations')
                     else original_listing(path, **kw))
                 external.distribute(self.workspace(directory), (client, self.config, self.group))
-                self.assertEqual([c.args[0] for c in client.request.call_args_list], ['GET', 'PATCH'])
+                self.assertEqual([c.args[0] for c in client.request.call_args_list if c.args[0] != 'GET'], ['PATCH'])
+
+    def test_beta_metadata_waits_for_missing_relationship_and_reloads_after_patch_404(self):
+        client = Mock()
+        missing = RuntimeError('App Store Connect HTTP 404: The specified resource does not exist.')
+        detail = lambda identity: {'data': {'id': identity, 'attributes': {'externalBuildState': 'READY_FOR_BETA_TESTING'}}}
+        client.request.side_effect = [missing, detail('old-detail'), missing, detail('current-detail'), {}]
+        sleep = Mock()
+        result = external.beta_detail(client, self.config, 'build', enable_notifications=True,
+            sleep=sleep, clock=Mock(side_effect=[0, 0, 30]))
+        self.assertEqual(result['id'], 'current-detail')
+        self.assertEqual(sleep.call_args_list, [((30,),), ((30,),)])
+        self.assertEqual([(c.args[0], c.args[1]) for c in client.request.call_args_list], [
+            ('GET', '/v1/builds/build/buildBetaDetail'),
+            ('GET', '/v1/builds/build/buildBetaDetail'),
+            ('PATCH', '/v1/buildBetaDetails/old-detail'),
+            ('GET', '/v1/builds/build/buildBetaDetail'),
+            ('PATCH', '/v1/buildBetaDetails/current-detail')])
+
+    def test_beta_metadata_timeout_does_not_trigger_upload_or_review(self):
+        client = Mock()
+        client.request.side_effect = RuntimeError('App Store Connect HTTP 404: Not ready.')
+        sleep = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'same uploaded build.*do not re-upload'):
+            external.beta_detail(client, self.config, 'build', enable_notifications=True,
+                sleep=sleep, clock=Mock(side_effect=[0, 0, 60]))
+        sleep.assert_called_once_with(30)
+        self.assertEqual(client.request.call_count, 2)
+        self.assertTrue(all(c.args[0] == 'GET' for c in client.request.call_args_list))
+
+    def test_distribution_uses_refreshed_review_state_before_submitting(self):
+        client = self.client()
+        original = client.request.side_effect
+        lookups = 0
+        def request(method, path, **kwargs):
+            nonlocal lookups
+            result = original(method, path, **kwargs)
+            if path.endswith('/buildBetaDetail'):
+                lookups += 1
+                if lookups > 1:
+                    result['data']['attributes']['externalBuildState'] = 'WAITING_FOR_BETA_REVIEW'
+            return result
+        client.request.side_effect = request
+        with TemporaryDirectory() as directory:
+            workspace = self.workspace(directory)
+            external.distribute(workspace, (client, self.config, self.group))
+            report = json.loads((workspace / 'external-distribution.json').read_text())
+        self.assertEqual(report['external_state'], 'WAITING_FOR_BETA_REVIEW')
+        self.assertFalse(any(c.args[1] == '/v1/betaAppReviewSubmissions' for c in client.request.call_args_list))
+
+    def test_beta_metadata_does_not_retry_unknown_writes_or_other_api_errors(self):
+        from build_manager.providers import ProviderOutcomeUnknown
+        for error in [ProviderOutcomeUnknown('App Store Connect outcome is unknown. Reconcile first.'),
+                      RuntimeError('App Store Connect HTTP 401: Unauthorized'),
+                      RuntimeError('App Store Connect HTTP 422: Invalid metadata')]:
+            with self.subTest(error=str(error)):
+                client = self.client()
+                original = client.request.side_effect
+                def request(method, path, **kwargs):
+                    if method == 'PATCH':
+                        raise error
+                    return original(method, path, **kwargs)
+                client.request.side_effect = request
+                sleep = Mock()
+                with self.assertRaises(type(error)):
+                    external.beta_detail(client, self.config, 'build', enable_notifications=True,
+                        sleep=sleep, clock=lambda: 0)
+                sleep.assert_not_called()
+                self.assertEqual(client.request.call_count, 2)
 
     def test_compliance_rejection_and_unknown_states_stop_before_mutation(self):
         for state in ['MISSING_EXPORT_COMPLIANCE', 'IN_EXPORT_COMPLIANCE_REVIEW', 'BETA_REJECTED', 'NOT_APPLICABLE', 'UNKNOWN']:

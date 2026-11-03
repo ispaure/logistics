@@ -188,6 +188,40 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertEqual((destination / 'Source/child.txt').read_text(), 'Keep bytes')
         self.assertFalse(source.exists())
 
+    def test_iphone_received_video_moves_to_shared_movies_without_reading_bytes(self):
+        from commonUtils.runtime.platform import OS
+        from mobile.local_sources import SharedFiles
+        from services.documents.locations import MobileLocalFiles
+        self.picker.clear()
+        self.run_async(self.app.show_files(location=('Local files', '')))
+        shared = Path(self.temp.name) / 'Shared'
+        received = shared / 'Received Files'
+        received.mkdir(parents=True)
+        (shared / 'Movies').mkdir()
+        source = received / 'Movie.mkv'
+        # Sparse fixture: moving 40 GiB must not read or duplicate its content.
+        with source.open('wb') as stream:
+            stream.write(b'video fixture')
+            stream.truncate(40 * 1024 ** 3)
+        before = source.stat()
+        provider = MobileLocalFiles(received)
+        self.app.file_roots['Received Files'] = provider
+        self.app.file_roots['Shared files'] = SharedFiles(shared)
+        self.run_async(self.picker.show_destination(source.name,
+            FileOperationRequest('move', provider, source.name)))
+        self.run_async(self.picker.browser_editor_location(('Shared files', 'Movies')))
+        with patch('commonUtils.runtime.platform.get_os', return_value=OS.IOS), \
+                patch.object(LocalFiles, 'open', side_effect=AssertionError('Must not read video')), \
+                patch.object(LocalFiles, 'create_file', side_effect=AssertionError('Must not copy video')):
+            self.run_async(self.picker.confirm_editor_file())
+        target = shared / 'Movies/Movie.mkv'
+        self.assertFalse(source.exists())
+        self.assertEqual((target.stat().st_ino, target.stat().st_size), (before.st_ino, before.st_size))
+        self.assertIsNone(self.picker._work)
+        self.assertFalse(self.app.cloud_busy)
+        self.assertIsNone(self.picker.destination_action)
+        self.assertIn('Move finished.', self.app.file_status.value)
+
     def test_conflict_and_cancel_preserve_both_locations(self):
         source, destination = self.prepare_move()
         (destination / 'source.txt').write_text('Existing destination')
@@ -199,6 +233,48 @@ class DestinationWorkflowTests(unittest.TestCase):
         task = self.picker.cancel_text_destination()
         self.run_async(task)
         self.assertEqual(source.read_text(), 'Keep bytes')
+
+    def test_move_progress_blocks_navigation_and_interruption_retires_before_unlocking(self):
+        from unittest.mock import Mock
+        from commonUtils.runtime.operations import check_cancelled
+        source, destination = self.prepare_move()
+        started, release = Event(), Event()
+        awake = Mock()
+        from mobile.document_mutations import DocumentMutation
+        def delayed(plan, cancelled):
+            plan.progress(phase='Copying', done=5_000_000, total=10_000_000, files=0, total_files=1)
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError('Move fixture timed out')
+            check_cancelled(cancelled)
+        async def exercise():
+            with patch('mobile.keep_awake.AwakeLease', return_value=awake), \
+                    patch.object(DocumentMutation, 'execute', delayed):
+                task = asyncio.create_task(self.picker.confirm_editor_file())
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 5))
+                    await asyncio.sleep(.3)
+                    self.assertIn('Copying · 50%', self.picker.save_as_status.value)
+                    self.assertEqual(self.picker.move_progress.value, 50)
+                    self.assertIs(self.picker.panel.children[0], self.picker.move_notice)
+                    self.assertIs(self.picker.save_as_status.parent, self.picker.move_notice)
+                    self.assertFalse(self.app.select_destination('settings'))
+                    self.assertFalse(self.picker.save_as_name.enabled)
+                    self.picker.cancel(interrupted=True)
+                    self.assertTrue(self.picker.moving())
+                    awake.close.assert_not_called()
+                finally:
+                    release.set()
+                    await task
+                self.assertFalse(self.picker.moving())
+                self.assertFalse(self.app.cloud_busy)
+                awake.close.assert_called_once_with()
+                self.assertIn('leaving the app or locking', self.picker.save_as_status.value)
+                self.assertIsNone(self.picker.move_progress.parent)
+                self.assertTrue(self.picker.save_as_name.enabled)
+        self.run_async(exercise())
+        self.assertTrue(source.exists())
+        self.assertEqual(list(destination.iterdir()), [])
 
     def test_read_only_destination_disables_save_and_folder_creation(self):
         from commonUtils.runtime.resources.provider import ResourceCapabilities

@@ -93,7 +93,11 @@ def compact_apple_reader(container):
     if window is None:
         return False
     changed = False
-    if reader is not None:
+    from .ios_toolbar import vertical_edge
+    if reader is not None and vertical_edge(getattr(container, 'controller', None)):
+        # A content title can also be retained beside pane buttons on ordinary
+        # iPhones/iPads. Their horizontal native actions still occupy the top
+        # safe area; only a vertical bar lets the title reclaim that space.
         top = apple_reader_top(container, window)
         if abs(container.top_inset - top) > .5:
             container.top_inset = top

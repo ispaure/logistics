@@ -14,6 +14,49 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
     tearDown = fixtures.ObsidianTests.tearDown
     run_async = fixtures.ObsidianTests.run_async
 
+    def test_formatted_preview_failure_uses_popup_and_keeps_source_mode(self):
+        async def exercise():
+            library = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await library.open_note('Vault/Home.md'))
+            source = (self.vault / 'Home.md').read_text()
+            with patch('services.documents.authoring.markdown_editor.FormattedMarkdownInput.load',
+                       side_effect=ValueError('Private HTML limit')), \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                self.assertTrue(await library.open_editor())
+                editor = library.embedded
+                self.assertEqual(editor.view.children, [editor.source])
+                self.assertEqual(editor.source.value, source)
+                dialog.assert_awaited_once()
+                self.assertFalse(await editor.choose_mode(True))
+                self.assertEqual(dialog.await_count, 2)
+                self.assertEqual(editor.view.children, [editor.source])
+                self.assertEqual(editor.text, source)
+                self.assertEqual(library.notice.text, '')
+        self.run_async(exercise())
+
+    def test_navigation_during_source_fallback_popup_retires_pending_editor(self):
+        from features.notes_library.mobile.library_document import LibraryMarkdown
+        disposed = []
+        original = LibraryMarkdown.dispose
+        def dispose(editor):
+            disposed.append(editor)
+            original(editor)
+        async def exercise():
+            library = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await library.open_note('Vault/Home.md'))
+            async def popup(dialog):
+                self.assertTrue(await library.open_note('Vault/Projects/Plan.MD'))
+            with patch('services.documents.authoring.markdown_editor.FormattedMarkdownInput.load',
+                       side_effect=ValueError('Private HTML limit')), \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=popup)), \
+                    patch.object(LibraryMarkdown, 'dispose', new=dispose):
+                self.assertFalse(await library.open_editor())
+            self.assertEqual(library.path, 'Vault/Projects/Plan.MD')
+            self.assertIsNone(library.embedded)
+            self.assertEqual(len(disposed), 1)
+            self.assertTrue(disposed[0].closed)
+        self.run_async(exercise())
+
     def test_markdown_creation_keeps_supported_filename_extensions(self):
         import toga
         from dataclasses import replace

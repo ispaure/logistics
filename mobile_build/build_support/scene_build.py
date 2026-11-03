@@ -27,9 +27,14 @@ def configure(project):
     support = Path(project) / 'Support'
     support.mkdir(exist_ok=True)
     shutil.copyfile(source, support / source.name)
+    awake = Path(__file__).resolve().parents[2] / 'Python/mobile/ios/ScreenAwake.m'
+    shutil.copyfile(awake, support / awake.name)
     include = '#import "../Support/ScrollingTitle.m"'
     previous = launcher.read_text()
     text = previous
+    awake_include = '#import "../Support/ScreenAwake.m"'
+    if awake_include not in text:
+        text = awake_include + '\n' + text
     if include not in text:
         text = include + '\n' + text
     original = 'UIApplicationMain(argc, argv, nil, @"PythonAppDelegate")'

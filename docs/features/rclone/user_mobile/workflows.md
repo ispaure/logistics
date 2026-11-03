@@ -23,6 +23,11 @@ including Documents and configured library shortcuts. Empty-folder changes
 participate in the mobile review and its final recheck.
 Progress displays the latest reported totals, without queuing older updates
 ahead of browsing when native rendering is busy.
+While a transfer runs in the foreground, Logistics prevents automatic screen
+sleep and restores the prior sleep setting after completion, failure or Cancel.
+This does not prevent manual locking or keep the app running indefinitely after
+switching to another app; credential locking and platform background limits still
+apply.
 Transfer details include **Back** and stay in the tab from which they were opened;
 leaving the screen keeps the transfer running. Switching tabs dismisses transfer
 details, so returning to a tab never reopens them automatically. The progress screen shows the current phase, percentage, copied files and MB.
