@@ -87,15 +87,17 @@ when the folder contains an `.obsidian` directory. Cloud folders never offer
 library mode; download or sync a local copy first. Individual cloud Markdown
 files can still be opened in the standalone read-only viewer.
 
-The library opens with **Files** over the full-width document. Use the upper-left
-Files button or swipe right from the document's left edge to browse; swipe left
+On narrow screens, **Files** opens over the full-width document. Use the
+upper-left Files button or swipe right across the document to browse; swipe left
 in the drawer or tap outside it to return to reading. Choose a note to close the
-drawer. The upper-right Links button, or a left swipe from the document's right
-edge, opens **Backlinks** and **Outgoing links**. Swipe right in that drawer to
-close it. These floating panels work on phones, tablets and Duo in both orientations.
+drawer. The upper-right Links button, or a left swipe across the document,
+opens **Backlinks** and **Outgoing links**. Swipe right in that drawer to
+close it. At 864 usable points of library width or more, Files and Calendar stay
+beside the document; Links always opens on demand. Resizing preserves the current
+note and the selected Files or Calendar tab.
 Horizontal tables, selected text and zoomed pages retain their ordinary gestures.
 
-Files and Links dim the content behind them and block its controls until the
+Floating Files and Links panels dim the content behind them and block its controls until the
 panel closes. Tap the dimmed area to dismiss either panel; there is no panel X.
 The storage/editability caption in Files uses a subdued italic style.
 
