@@ -11,6 +11,23 @@ from mobile_build.native_tests.tests.logisticsmobile.navigation_trace import nat
 
 
 class NativeWebCheckTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stall_signal_survives_briefcase_line_limit_without_accepting_a_stall(self):
+        import json
+        from mobile_build.native_tests.tests.logisticsmobile import web_checks
+        view = SimpleNamespace(url='app-document://test/', evaluate_javascript=AsyncMock())
+        state = dict(platform_backend='toga_iOS.widgets.webview', ancestors=['large state'] * 1000)
+        with patch.object(web_checks, 'native_state', return_value=state), \
+                patch.object(web_checks.asyncio, 'wait', new=AsyncMock(return_value=(set(), set()))), \
+                patch('builtins.print') as output:
+            with self.assertRaisesRegex(RuntimeError, 'did not render'):
+                await wait_for_text(view, '\U0001f600' * 1000)
+        signal = next(call.args[0] for call in output.call_args_list
+                      if call.args[0].startswith('LOGISTICS_NATIVE_WEBVIEW_STALL='))
+        self.assertLess(len(signal.encode()), 1000)
+        value = json.loads(signal.split('=', 1)[1])
+        self.assertGreater(value['pid'], 1)
+        self.assertEqual(value['expected'], '\U0001f600' * 40)
+
     def test_native_load_events_are_bounded_and_capture_preapproved_navigation(self):
         view = SimpleNamespace(_impl=SimpleNamespace(_allowed_url='https://logistics.invalid/test/'))
         native = SimpleNamespace(interface=view, URL='https://logistics.invalid/test/',
