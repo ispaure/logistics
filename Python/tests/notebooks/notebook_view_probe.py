@@ -246,7 +246,14 @@ def main(output):
                         owner.resize(width - 40, height - 100)
                         QTest.qWait(150)
                         assert js(view, 'viewportResizePending&&canvas.getBoundingClientRect().width') == paper_width
-                        js(view, 'finish({pointerId:700},true)')
+                        clears = js(view, """(()=>{
+                            const clear=ctx.clearRect;let count=0;
+                            ctx.clearRect=function(...args){count++;return clear.apply(this,args)};
+                            try{finish({pointerId:700},true);return count}
+                            finally{ctx.clearRect=clear}
+                        })()""")
+                        assert clears == 1, ('Cancellation with a pending viewport resize replayed the page', clears)
+
                         assert js(view, '!viewportResizePending&&canvas.getBoundingClientRect().width') != paper_width
                         owner.resize(width, height)
                         QTest.qWait(150)
