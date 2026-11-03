@@ -361,7 +361,8 @@ current folder, then the library root, then a unique matching path suffix across
 visible subfolders. Extensionless links receive `.md`. Explicit `./` and `../`
 links keep relative semantics; hidden configuration and paths outside the library
 remain excluded. Lookup is cancellable and limited to 10,000 listed entries,
-with no persistent index or decoded-name cache. Ambiguous names require an
+with no persistent index. Local directory-name listings may be reused in bounded
+revision-validated session memory and are cleared on retirement. Ambiguous names require an
 explicit path. Desktop and mobile use the same resolver, including LocalCrypt's
 decoded provider paths. Mobile's shared renderer also recognizes bare `[[Tech]]`
 links in formatted headings. Root-vault offers are covered by actual desktop
@@ -587,3 +588,23 @@ live provider probes; connection scans supply their detached path/suffix invento
 Neither changes the other's I/O strategy. Desktop/mobile link, containment, media
 and encrypted file-operation regressions cover this boundary. Dataview keeps its
 separate explicit path contract.
+
+## Connection scan reuse
+
+`connection_index.py` retains parsed link targets and word/character counts, never
+note bodies, in at most 8 MiB of accounted session data and 5,000 entries. Desktop
+document panes share their library's index; each pane keeps independent media and
+editor state. Scans still validate the visible inventory and each note's provider
+revision, so external edits are observed without a file watcher. Providers without
+revisions read afresh. Serialized body admission coalesces simultaneous reads of
+unchanged notes; cancellation remains cooperative and retirement does not wait
+for the admission lock. Writes/mutations invalidate retained entries. Closing a
+child leaves siblings' index intact; library retirement clears it and prevents
+late workers from repopulating it. Original scan count and byte limits still apply
+to reused data. Focused connection tests verify reuse, external edits, concurrent
+reads and library lifetime, alongside desktop/mobile workflow regressions.
+
+Dataview retains upfront index preparation for its synchronous `dv.pages()` and
+`app.vault.getMarkdownFiles()` compatibility API. Deferring that request by
+re-executing authored scripts would change execution semantics; no script replay
+is introduced by the connection optimization.

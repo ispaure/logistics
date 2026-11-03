@@ -2,6 +2,7 @@
   "schema": 1,
   "modules": [
     "__init__.py",
+    "connection_index.py",
     "dataview.py",
     "dataview_script.py",
     "file_preview.py",

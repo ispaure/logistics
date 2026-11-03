@@ -232,6 +232,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
                 return
             source, deleted, created = values
             mutation = result
+            self.library.connection_index.invalidate()
             destination = mutation.destination
             if source is not None or deleted is not None:
                 try:

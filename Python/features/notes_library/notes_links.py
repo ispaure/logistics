@@ -64,14 +64,13 @@ def connections(library, current, *, cancelled=lambda: False, visible=lambda pat
     total = words = characters = 0
     for path in sorted(notes):
         check_cancelled(cancelled)
-        data = library.read(path, cancelled=cancelled)
-        total += len(data)
+        note = library.connection_index.note(library, path, cancelled=cancelled)
+        total += note['size']
         if total > 64 * 1024 * 1024:
             raise ValueError('Library exceeds the 64 MiB connection scan limit.')
-        text = data.decode('utf-8-sig')
         if path == current:
-            words, characters = len(text.split()), len(text)
-        for target in Targets(text).targets:
+            words, characters = note['words'], note['characters']
+        for target in note['targets']:
             check_cancelled(cancelled)
             resolved = resolve(path, target)
             if resolved == current and path != current:
