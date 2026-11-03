@@ -22,6 +22,36 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativePreflightTests(unittest.TestCase):
+    def test_android_stall_does_not_inspect_local_or_physical_devices(self):
+        with TemporaryDirectory() as directory, patch.dict(ui_tools.os.environ, {}, clear=True), \
+                patch.object(ui_tools.subprocess, 'run') as run:
+            path = Path(directory) / 'android-native-ui.log'
+            ui_tools.record_android_stall(path, {})
+            run.assert_not_called()
+            with patch.dict(ui_tools.os.environ, {'GITHUB_ACTIONS': 'true', 'ANDROID_HOME': '/sdk'}):
+                run.return_value = SimpleNamespace(stdout=b'List of devices attached\nphysical-device\tdevice\n')
+                ui_tools.record_android_stall(path, {})
+                self.assertEqual(run.call_count, 1)
+                receipt = json.loads(path.with_name('android-focus-stall.json').read_text())
+                self.assertEqual(receipt['status'], 'no-single-hosted-emulator')
+
+    def test_android_stall_retains_hosted_emulator_screen_and_window_evidence(self):
+        with TemporaryDirectory() as directory, patch.dict(ui_tools.os.environ,
+                {'GITHUB_ACTIONS': 'true', 'ANDROID_HOME': '/sdk'}), \
+                patch.object(ui_tools.subprocess, 'run') as run:
+            path = Path(directory) / 'android-native-ui.log'
+            run.side_effect = [SimpleNamespace(stdout=b'List of devices attached\nemulator-5554\tdevice\n'),
+                              *[SimpleNamespace(stdout=b'evidence', returncode=0) for _ in range(4)]]
+            ui_tools.record_android_stall(path, {'reason': 'keyboard'})
+            receipt = json.loads(path.with_name('android-focus-stall.json').read_text())
+            self.assertEqual(receipt['status'], 'captured')
+            self.assertEqual(receipt['serial'], 'emulator-5554')
+            self.assertEqual(path.with_name('android-focus-stall-screen.png').read_bytes(), b'evidence')
+            for call in run.call_args_list[1:]:
+                self.assertEqual(call.args[0][1:3], ['-s', 'emulator-5554'])
+            ui_tools.record_android_stall(path, {})
+            self.assertEqual(run.call_count, 5)
+
     def test_ios_stall_samples_only_the_identified_test_app(self):
         with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'):
             path = Path(directory) / 'ios-native-ui.log'
@@ -33,7 +63,7 @@ class NativePreflightTests(unittest.TestCase):
                 self.assertEqual(run.call_count, 2 if permitted else 1)
                 if permitted:
                     self.assertEqual(run.call_args.args[0][:3], ['sample', str(pid), '3'])
-                    self.assertIn('-mayDie', run.call_args.args[0])
+                    self.assertNotIn('-mayDie', run.call_args.args[0])
                     self.assertEqual(run.call_args.kwargs['timeout'], 60)
             for invalid in (None, True, 1, -1, '123'):
                 with patch.object(ui_tools.subprocess, 'run') as run:
@@ -47,6 +77,22 @@ class NativePreflightTests(unittest.TestCase):
             receipt = json.loads((Path(directory) / 'ios-webview-stall-123.json').read_text())
             self.assertEqual(receipt['status'], 'capture-error')
             self.assertIn('TimeoutExpired', receipt['error'])
+
+    def test_ios_stall_requires_thread_stacks_not_just_a_successful_tool_exit(self):
+        for graph, status in (('Call graph:\n\nBinary Images:\n', 'empty-sample'),
+                              ('Call graph:\n Thread_123 DispatchQueue_1\n', 'sampled')):
+            with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'):
+                path = Path(directory) / 'ios-native-ui.log'
+                def command(args, **kwargs):
+                    if args[0] == 'sample':
+                        Path(args[-1]).write_text(graph)
+                    return SimpleNamespace(returncode=0,
+                        stdout='/tmp/Fixture/Logistics Mobile.app/Logistics Mobile\n', stderr='')
+                with patch.object(ui_tools.subprocess, 'run', side_effect=command):
+                    ui_tools.record_ios_stall(path, dict(pid=123))
+                receipt = json.loads(path.with_name('ios-webview-stall-123.json').read_text())
+                self.assertEqual(receipt['status'], status)
+                self.assertEqual(receipt['thread_stacks_present'], status == 'sampled')
 
     def test_late_stall_signal_preserves_process_unavailability_and_transport_timestamps(self):
         with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'), \

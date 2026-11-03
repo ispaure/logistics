@@ -197,16 +197,61 @@ def record_ios_stall(path, row):
         output = path.with_name('ios-webview-stall-' + str(pid) + '.sample.txt')
         if output.exists():
             return
-        # Hosted symbol processing can exceed the collection interval. Read
-        # process metadata before it exits and retain a bounded chance to finish
-        # analysis after the app's unchanged render deadline has elapsed.
-        result = subprocess.run(['sample', str(pid), '3', '-mayDie', '-file', str(output)],
+        # Collect stacks before costly symbol analysis. The failed native check
+        # retains its app/view long enough for analysis, without extending the
+        # render acceptance deadline or accepting a late result.
+        result = subprocess.run(['sample', str(pid), '3', '-file', str(output)],
             capture_output=True, text=True, timeout=60, check=False)
         record.update(sample_exit_code=result.returncode, sample_stderr=result.stderr[-2000:])
-        save('sampled' if result.returncode == 0 and output.is_file() else 'sample-failed')
+        captured = output.read_text(errors='replace') if output.is_file() else ''
+        has_stacks = 'Thread_' in captured or 'DispatchQueue_' in captured
+        record['thread_stacks_present'] = has_stacks
+        save('sampled' if result.returncode == 0 and has_stacks else
+             'empty-sample' if result.returncode == 0 else 'sample-failed')
     except (OSError, subprocess.TimeoutExpired) as error:
         record['error'] = type(error).__name__ + ': ' + str(error)[:500]
         save('capture-error')  # Diagnostics never alter native acceptance.
+
+
+def record_android_stall(path, row):
+    """Read failure evidence only from the hosted job's single emulator."""
+    if os.environ.get('GITHUB_ACTIONS') != 'true':
+        return
+    sdk = os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT')
+    if not sdk:
+        return
+    adb = Path(sdk) / 'platform-tools/adb'
+    receipt = path.with_name('android-focus-stall.json')
+    if receipt.exists():
+        return
+    record = dict(reason=row, status='received')
+    try:
+        devices = subprocess.run([str(adb), 'devices'], capture_output=True, timeout=5, check=True)
+        online = [line.split()[0] for line in devices.stdout.decode().splitlines()[1:]
+                  if len(line.split()) == 2 and line.split()[1] == 'device']
+        if len(online) != 1 or not online[0].startswith('emulator-') or not online[0][9:].isdigit():
+            record['status'] = 'no-single-hosted-emulator'
+            return
+        record.update(serial=online[0], commands={})
+        deadline = time.monotonic() + 14
+        for name, args in (
+                ('screen.png', ['exec-out', 'screencap', '-p']),
+                ('windows.txt', ['shell', 'dumpsys', 'window', 'windows']),
+                ('input-method.txt', ['shell', 'dumpsys', 'input_method']),
+                ('last-anr.txt', ['shell', 'dumpsys', 'activity', 'lastanr'])):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            result = subprocess.run([str(adb), '-s', online[0], *args],
+                capture_output=True, timeout=min(5, remaining), check=False)
+            path.with_name('android-focus-stall-' + name).write_bytes(result.stdout)
+            record['commands'][name] = result.returncode
+        record['status'] = ('captured' if len(record['commands']) == 4
+                            and not any(record['commands'].values()) else 'partial')
+    except (OSError, subprocess.SubprocessError) as error:
+        record.update(status='capture-error', error=str(error)[:500])
+    finally:
+        receipt.write_text(json.dumps(record, indent=2) + '\n')
 
 
 def _progress(path, stopped):
@@ -231,6 +276,12 @@ def _progress(path, stopped):
                     row = json.loads(line.split('LOGISTICS_NATIVE_WEBVIEW_STALL=', 1)[1])
                     record_ios_stall(path, row)
                 except (ValueError, AttributeError):
+                    pass
+            elif path.name.startswith('android-') and 'LOGISTICS_NATIVE_ANDROID_STALL=' in line:
+                try:
+                    row = json.loads(line.split('LOGISTICS_NATIVE_ANDROID_STALL=', 1)[1])
+                    record_android_stall(path, row)
+                except (ValueError, AttributeError, OSError):
                     pass
             elif 'LOGISTICS_NATIVE_TIMING=' in line:
                 try:

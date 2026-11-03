@@ -1,4 +1,5 @@
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -166,12 +167,12 @@ class MirrorUITests(unittest.TestCase):
             def restore(self, **kwargs): return []
             def crypt_remotes(self): return []
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
             store = app.mirror_store()
@@ -201,12 +202,12 @@ class MirrorUITests(unittest.TestCase):
             def restore(self, **kwargs): return []
             def crypt_remotes(self): return []
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.cloud_client = Client()
             app.show_cloud(present=False)
             job, _ = app.mirror_store().create(app.cloud_client, 'Remote', 'folder')
@@ -320,12 +321,12 @@ class MirrorUITests(unittest.TestCase):
         class Client(MirrorClient):
             def crypt_remotes(self): return []
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
             store = app.mirror_store()
@@ -366,12 +367,12 @@ class MirrorUITests(unittest.TestCase):
                 if action == 'mirror_sync' and started.is_set():
                     assert retired.is_set(), 'Transfer started before comparison retired'
                 return super().request(action, **values)
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
             job, _ = app.mirror_store().create(client, 'Remote', 'folder')
@@ -435,12 +436,12 @@ class MirrorUITests(unittest.TestCase):
         class Client(MirrorClient):
             def crypt_remotes(self): return []
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
             job, _ = app.mirror_store().create(client, 'Remote', 'folder')
@@ -471,12 +472,12 @@ class MirrorUITests(unittest.TestCase):
             def restore(self, **kwargs): return []
             def crypt_remotes(self): return []
             def cancel(self): pass
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             client = app.cloud_client = Client()
             app.show_cloud(present=False)
             store = app.mirror_store()

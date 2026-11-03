@@ -1,5 +1,6 @@
 """Failed provider construction retires its controls, preserving the active reader."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -31,12 +32,12 @@ class ProviderViewTests(TestCase):
             view.adopt(Mock())
 
     def test_failure_after_content_construction_retires_unpublished_controls(self):
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.show_cloud(present=False)
             previous = app.crypt_reader
             drafts = []

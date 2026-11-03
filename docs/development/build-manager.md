@@ -33,6 +33,12 @@ and an unused channel tag, then waits for the existing gated release workflow.
 An existing tag is never moved. These capabilities do not grant permission to
 publish a project; the operator still chooses and confirms the operation.
 
+Combined delivery plans give ready mobile validation, preparation and delivery
+phases scheduling priority over desktop work. Each tester upload keeps its own
+platform validation and prepared-artifact prerequisites; every selected desktop
+validation gate remains in the plan. Prepared uploads still require artifact and
+destination review before execution.
+
 Local macOS, Fedora and Windows commands use the project-owned desktop
 plans. Sequential iOS and accelerated local Android backends are implemented and
 have complete local acceptance evidence. Windows is implemented; its complete declared plan requires a guest account

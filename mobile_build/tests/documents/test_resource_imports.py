@@ -1,5 +1,6 @@
 """Repeated private-copy opens preserve resource identity across launches."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -70,7 +71,7 @@ class ResourceImportTests(unittest.TestCase):
     def test_ios_shared_local_epub_opens_and_reopens_without_duplicate_import(self):
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
         from services.documents.locations import use_shared_local, _shared_local_roots
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             root = Path(directory).resolve()
             private, documents = root / 'Application Support/Logistics', root / 'Documents'
             private.mkdir(parents=True)
@@ -82,12 +83,12 @@ class ResourceImportTests(unittest.TestCase):
             path = local / 'book.epub'
             path.write_bytes(epub.read_bytes())
             LogisticsMobile.storage_root = private
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             use_shared_local(private, documents)
             self.addCleanup(_shared_local_roots.pop, private, None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.show_cloud(present=False)
             app.loop.run_until_complete(app.open_download(path=path))
             owner = app.reader_manager().active

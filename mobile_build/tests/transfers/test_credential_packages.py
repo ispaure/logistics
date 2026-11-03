@@ -1,5 +1,6 @@
 """ZIP retention, saved-package migration and password-only session unlock."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -70,13 +71,13 @@ class CredentialPackageTests(unittest.TestCase):
             self.assertFalse(cache.index.exists())
 
     def test_unlock_repairs_older_remote_only_crypt_metadata_and_survives_relock(self):
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             root = Path(directory)
             LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.show_cloud(present=False)
             app.cloud_client = client = CacheClient()
             client.loaded = False
@@ -117,13 +118,13 @@ class CredentialPackageTests(unittest.TestCase):
             self.assertEqual(CredentialPackages(vault, CacheClient()).items[key]['crypt_remotes'], ['Secret'])
 
     def test_retained_packages_show_locked_cloud_rows_and_unlock_from_settings(self):
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             root = Path(directory)
             LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.show_cloud(present=False)
             app.cloud_client = CacheClient()
             app.cloud_client.loaded = False

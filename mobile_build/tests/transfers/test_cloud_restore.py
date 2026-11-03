@@ -1,4 +1,5 @@
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -186,12 +187,12 @@ class SavedConnectionStartupTests(TestCase):
             def cancel(self):
                 pass
 
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.cloud_client = Client()
             session = Session('recent', 'file-reference', 'file', 'markdown')
             session.source = dict(type='remote', remote='Drive', identity='identity', key='Notes.md')

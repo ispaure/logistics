@@ -1,5 +1,6 @@
 """Snow preferences persist and high contrast removes the native decoration."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -31,11 +32,11 @@ class SeasonalSnowTests(unittest.TestCase):
 
     def test_appearance_switch_saves_and_failed_save_restores_choice(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Snow settings test', 'io.github.ispaure.snowtest')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             app.show_settings()
             app.settings_navigation.choose('Appearance')
             self.assertTrue(app.snow_choice.value)
