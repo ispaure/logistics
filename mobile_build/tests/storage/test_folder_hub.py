@@ -307,6 +307,9 @@ class FolderHubTests(unittest.TestCase):
                     raise TimeoutError('Synthetic discovery was not released')
                 return {}
             async def check():
+                discovery = getattr(app, '_notes_discovery_task', None)
+                if discovery is not None:
+                    await discovery
                 with patch.object(app, 'existing_crypt_locations', side_effect=discover) as query:
                     task = asyncio.create_task(app.refresh_hub_crypt_locations())
                     try:

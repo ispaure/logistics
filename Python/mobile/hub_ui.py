@@ -208,7 +208,8 @@ def _home_state(hub, recent):
             getattr(getattr(hub.app, 'recovery_notice', None), 'text', ''), hub.workspace.error,
             getattr(hub.app, '_favourites_version', 0),
             tuple(record.get('document_cache_id') for record in
-                  getattr(getattr(hub.app, 'cloud_client', None), 'package_records', ())))
+                  getattr(getattr(hub.app, 'cloud_client', None), 'package_records', ())
+                  if record.get('document_cache_id')))
 
 
 class HubUI:

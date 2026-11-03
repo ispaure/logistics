@@ -14,9 +14,10 @@ TEST_STAGE = TestStage.REGRESSION
 class DockedVideoTests(QtTestCase):
     def make_player(self, root, *, backend_factory=None):
         from features.video.ui.player import VideoWindow
+        from features.video.ui.vlc_backend import VLCPlayback
         from tests.readers.video_fixtures import bundled_movie
         movie = bundled_movie('speed-with-audio.mkv', root)
-        options = {} if backend_factory is None else dict(backend_factory=backend_factory)
+        options = dict(backend_factory=backend_factory or (lambda owner: VLCPlayback(owner, interactive=False)))
         with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'state'):
             window = VideoWindow(ResourceChoice(LocalFiles(root), movie.name), **options)
         window.startup_pending = False

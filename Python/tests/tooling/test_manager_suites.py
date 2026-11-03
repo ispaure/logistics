@@ -2,7 +2,7 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-from build_manager.test_manifest import discover as _discover
+from build_manager.test_manifest import resolve_test_group_suites as _resolve_suites
 """Named suite routing and required release evidence; no live provider/device work."""
 import json
 from dataclasses import replace
@@ -218,7 +218,7 @@ class ManagerSuiteTests(unittest.TestCase):
             runtime = Phase('android-runtime', (sys.executable, '-c', 'pass'), str(root), artifacts=(str(root/'runtime.json'),))
             prepared = Plan('Logistics', 'Prepare Firebase', source, (build,), str(root/'workspace'), effect='build')
             tests = Plan('Logistics', 'Test', source, (native, runtime), str(root/'workspace'))
-            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('logistics_build.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
+            with patch('build_manager.test_manifest.resolve_test_group_suites', side_effect=lambda root, group: _resolve_suites(ROOT, group)), patch('logistics_build.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
                 plan = project.make_plan('Reviewed Firebase workflow', 'android', 'This Mac')
             rows = {phase.id: phase for phase in plan.phases}
             host_gates = ('test-structure', 'commonutils.smoke', 'portable-contracts.smoke',
@@ -253,7 +253,7 @@ class ManagerSuiteTests(unittest.TestCase):
             phases = tuple(Phase(kind,(sys.executable,'-c','pass'),str(root),artifacts=(str(root/(kind+'.json')),)) for kind in ('iphone','duo','ipad'))
             prepared = Plan('Logistics','Prepare TestFlight',source,(build,),str(root/'workspace'),effect='build')
             native = Plan('Logistics','Test',source,phases,str(root/'workspace'))
-            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('logistics_build.build_retention.clean'), patch.object(project,'_make_plan',side_effect=[prepared,native]) as make:
+            with patch('build_manager.test_manifest.resolve_test_group_suites', side_effect=lambda root, group: _resolve_suites(ROOT, group)), patch('logistics_build.build_retention.clean'), patch.object(project,'_make_plan',side_effect=[prepared,native]) as make:
                 plan = project.make_plan('Reviewed TestFlight workflow','ios','This Mac',include_ipad=False)
             self.assertTrue(make.call_args_list[1].kwargs['include_ipad'])
             gate = next(phase for phase in plan.phases if phase.id=='release-acceptance')
