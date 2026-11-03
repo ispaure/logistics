@@ -12,6 +12,101 @@ from features.notes_library import library_files
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
+    def test_footer_commands_browse_root_and_collapse_without_changing_document(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Projects/Plan.MD')
+            owner.sidebar.show_sidebar()
+            await owner.root_drop_button.on_press()
+            self.assertEqual(owner.selected_path, owner.root)
+            self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+            self.assertEqual(owner.panel_tab, 'Files')
+            await owner.toggle_folder('Vault/Projects')
+            collapse = next(button for button in owner.panel_actions.children
+                            if getattr(button, 'accessible_name', '') == 'Collapse all folders')
+            collapse.on_press()
+            self.assertEqual(owner.expanded, {owner.root})
+            self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+            actions = [label for label, _ in owner.panel_menu.actions]
+            self.assertEqual(actions, ['Browse library root', 'All documents'])
+            owner.dispose()
+            collapse.on_press()
+            await owner.root_drop_button.on_press()
+            self.assertEqual(owner.expanded, set())
+            self.assertEqual(owner.root_drop_button.text, 'Notes Library')
+        self.run_async(exercise())
+
+    def test_menu_result_from_removed_library_visit_cannot_reopen_a_form(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.sidebar.show_sidebar()
+            entered, answer = asyncio.Event(), self.app.loop.create_future()
+            async def dialog(choice):
+                entered.set()
+                return await answer
+            with patch.object(self.app.main_window, 'dialog', new=dialog):
+                pending = asyncio.create_task(owner.file_actions('Vault/Home.md'))
+                await entered.wait()
+                replacement = toga.Label('Another Files screen')
+                self.app.routes.show(replacement, destination='files', root=True)
+                answer.set_result('move')
+                await pending
+            self.assertIsNone(owner.file_action_view)
+            self.assertIs(self.app.routes.body().children[0], replacement)
+        self.run_async(exercise())
+
+    def test_late_delete_confirmation_after_navigation_or_new_menu_cannot_delete(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            for change in ('leave-library', 'new-form', 'different-document'):
+                owner.present()
+                entered, answer = asyncio.Event(), self.app.loop.create_future()
+                async def dialog(choice):
+                    entered.set()
+                    return await answer
+                with self.subTest(change=change), patch.object(self.app.main_window, 'dialog', new=dialog):
+                    pending = asyncio.create_task(owner.delete_entry('Vault/Projects/Plan.MD'))
+                    await entered.wait()
+                    if change == 'leave-library':
+                        self.app.routes.show(toga.Label('Another Files screen'), destination='files', root=True)
+                    elif change == 'new-form':
+                        owner.manage_entry(folder=True)
+                    else:
+                        await owner.open_note('Vault/Home.md')
+                    answer.set_result(True)
+                    await pending
+                    self.assertTrue((self.vault / 'Projects/Plan.MD').exists())
+                    self.assertFalse(owner.file_command_busy)
+        self.run_async(exercise())
+
+    def test_returning_to_library_retires_form_callbacks_in_same_destination(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.copy_entry_form('Vault/Home.md')
+            form = owner.file_action_view
+            next(child for child in form.children if isinstance(child, toga.TextInput)).value = 'Retired copy.md'
+            owner.present()
+            self.assertIsNone(owner.file_action_view)
+            next(child for child in form.children if isinstance(child, toga.Button) and child.text == 'Cancel').on_press()
+            await next(child for child in form.children if isinstance(child, toga.Button) and child.text == 'Copy').on_press()
+            self.assertFalse((self.vault / 'Retired copy.md').exists())
+            self.assertIsNone(owner.file_action_view)
+        self.run_async(exercise())
+
+    def test_file_form_back_respects_route_guard(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.manage_entry(folder=True)
+            form = owner.file_action_view
+            with patch.object(self.app.routes, 'guard', return_value=False):
+                self.assertTrue(self.app.routes.back())
+            self.assertIs(owner.file_action_view, form)
+            owner.return_from_file_action()
+        self.run_async(exercise())
+
     def test_file_action_callbacks_cannot_change_files_or_destination_after_switching_tabs(self):
         import toga
         async def exercise():
@@ -114,6 +209,8 @@ class NotesLibraryPanelTests(unittest.TestCase):
             owner.sidebar.show_sidebar()
             history = list(owner.history)
             async def dismiss(dialog):
+                self.assertIsNone(owner.sidebar.overlay)
+                self.assertEqual(owner.sidebar.retiring, [])
                 owner.sidebar.show_detail()
                 return 'cancel'  # Android Back and the native Cancel button.
             with patch.object(self.app.main_window, 'dialog', new=dismiss):
@@ -247,26 +344,38 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual(owner.panel_body.children, [owner.files_content])
             self.assertIsNone(owner.calendar_scroll.parent)
             self.assertEqual(owner.panel_tabs['Files'].style.font_weight, 'bold')
-            self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('surface', 'text'))
-            self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('alternate', 'muted'))
+            self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('transparent', 'text'))
+            self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('transparent', 'muted'))
             owner.search.value = 'Plan'
             await owner.search_task
+            self.assertEqual(owner.panel_tab, 'Search')
+            self.assertIs(owner.search.parent, owner.search_content)
+            self.assertIsNone(owner.search_mode.parent)
+            self.assertIs(owner.rows_scroll.parent, owner.search_content)
+            self.assertIsNone(owner.panel_actions.parent)
             owner.select_panel_tab('Calendar')
             self.assertEqual(owner.panel_body.children, [owner.calendar_scroll])
             self.assertIsNone(owner.files_content.parent)
             self.assertEqual(owner.panel_tabs['Calendar'].style.font_weight, 'bold')
-            self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('surface', 'text'))
-            self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('alternate', 'muted'))
+            self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('transparent', 'text'))
+            self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('transparent', 'muted'))
             await owner.calendar_task
             owner.select_panel_tab('Files')
             self.assertEqual(owner.panel_body.children, [owner.files_content])
             self.assertIsNone(owner.calendar_scroll.parent)
             self.assertEqual(owner.search.value, 'Plan')
+            self.assertIs(owner.rows_scroll.parent, owner.files_content)
+            self.assertEqual({child.vault_path for row in owner.rows.children for child in row.children
+                              if hasattr(child, 'vault_path')},
+                             {'Vault/Projects', 'Vault/attachment.txt', 'Vault/Home.md'})
+            self.assertIs(owner.root_drop_button.parent, owner.panel_identity)
+            self.assertIs(owner.panel_footer.parent, owner.tree)
+            self.assertIs(owner.panel_actions.parent, owner.panel_footer)
             owner.select_panel_tab('invalid')
             self.assertEqual(owner.panel_body.children, [owner.files_content])
         self.run_async(exercise())
 
-    def test_calendar_pauses_search_and_files_resume_the_current_query(self):
+    def test_calendar_pauses_search_and_search_tab_resumes_the_current_query(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
             entered, release = asyncio.Event(), asyncio.Event()
@@ -287,11 +396,52 @@ class NotesLibraryPanelTests(unittest.TestCase):
                     self.assertIsNone(owner.search_task)
                 owner.select_panel_tab('Files')
                 await asyncio.sleep(0)
+                self.assertEqual(run.await_count, 1)
+                self.assertIsNone(owner.search_task)
+                owner.select_panel_tab('Search')
+                await asyncio.sleep(0)
                 self.assertEqual(run.await_count, 2)
                 self.assertEqual(run.await_args.args[0], 'Plan')
                 release.set()
                 await owner.search_task
                 await owner.calendar_task
+        self.run_async(exercise())
+
+    def test_filename_holds_keep_actions_separate_from_icon_drags(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            button = next(button for row in owner.rows.children for button in row.children
+                          if getattr(button, 'vault_path', None) == 'Vault/Projects')
+            with patch.object(owner.file_drag, 'bind') as bind:
+                owner.bind_file_hold(button, button.vault_path, directory=True)
+                bind.assert_called_once_with(button, button.vault_path, source=False, target=True)
+            with patch.object(owner, 'file_actions', new=AsyncMock()) as actions:
+                button.notes_file_actions()
+                await asyncio.sleep(0)
+                actions.assert_awaited_once_with(button.vault_path)
+            native = Mock()
+            impl = type('AndroidButton', (), {'__module__': 'toga_android.widgets.button'})()
+            impl.native = native
+            android_button = SimpleNamespace(_impl=impl)
+            with patch.dict(sys.modules, {
+                    'android.view': SimpleNamespace(View=SimpleNamespace(OnLongClickListener=object)),
+                    'java': SimpleNamespace(dynamic_proxy=lambda interface: object)}), \
+                    patch.object(owner.file_drag, 'bind') as bind, \
+                    patch.object(owner, 'file_actions', new=AsyncMock()) as actions:
+                owner.bind_file_hold(android_button, button.vault_path, directory=True)
+                bind.assert_called_once_with(android_button, button.vault_path, source=False, target=True)
+                self.assertTrue(native.setOnLongClickListener.call_args.args[0].onLongClick(native))
+                await asyncio.sleep(0)
+                actions.assert_awaited_once_with(button.vault_path)
+                owner.release_file_hold(android_button)
+            icon = button._notes_drag_icon
+            with patch.object(owner.file_drag, 'unbind') as unbind:
+                owner.release_file_hold(button)
+                self.assertEqual([call.args[0] for call in unbind.call_args_list], [button, icon])
+            owner.dispose()
         self.run_async(exercise())
 
     def test_cancelled_row_cleanup_does_not_reuse_a_row_with_detached_file_actions(self):
@@ -443,10 +593,11 @@ class NotesLibraryPanelTests(unittest.TestCase):
             owner.sidebar.show_sidebar()
             self.assertTrue(owner.sidebar.overlay.dim)
             self.assertFalse(owner.sidebar.overlay.passthrough_controls)
-            self.assertEqual(owner.tree.children[1].style.font_style, 'italic')
-            self.assertEqual(owner.tree.children[1].style.font_size, 10)
+            self.assertEqual(owner.panel_metadata.style.font_style, 'italic')
+            self.assertEqual(owner.panel_metadata.style.font_size, 10)
             self.assertEqual(owner.links.children[0].text, 'Links')
-            self.assertEqual(list(owner.panel_tabs), ['Files', 'Calendar'])
+            self.assertEqual(list(owner.panel_tabs), ['Files', 'Search', 'Calendar'])
+            self.assertTrue(owner.sidebar.overlay.edge_panel)
             owner.sidebar.reflow(296)  # A 320-unit view minus the host inset.
             self.assertEqual(owner.sidebar.policy.sidebar_width, 264)
             owner.sidebar.show_links()

@@ -43,7 +43,7 @@ class FileOperationRequest:
     destination: FileDestination | None = None
     plaintext_approved: bool = False
 
-    def execute(self, cancelled, *, destination=None):
+    def execute(self, cancelled, *, destination=None, progress=None):
         check_cancelled(cancelled)
         if self.kind == 'new':
             part = resource_path(self.target)
@@ -63,7 +63,7 @@ class FileOperationRequest:
             return delete_resource(self.provider, self.path, cancelled=cancelled)
         if self.kind == 'move':
             return move_resource(self.provider, self.path, destination or self.destination.resolve(), self.target,
-                                 cancelled=cancelled)
+                                 cancelled=cancelled, progress=progress)
         raise ValueError('Unknown file operation: ' + self.kind)
 
 

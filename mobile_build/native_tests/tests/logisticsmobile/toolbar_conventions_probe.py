@@ -50,6 +50,9 @@ def native_geometry(app):
             r = region.frame
             occlusions.append([float(r.origin.x), float(r.origin.y), float(r.size.width), float(r.size.height)])
     navigation = app.native_host.adapter.navigation_for(app.native_host.state.destination)
+    outer = app.native_host.adapter.outer_navigation
+    if not outer.isNavigationBarHidden():
+        navigation = outer
     nav = navigation.topViewController.navigationItem
     groups = [*nav.leadingItemGroups, *nav.trailingItemGroups]
     if nav.pinnedTrailingGroup is not None:

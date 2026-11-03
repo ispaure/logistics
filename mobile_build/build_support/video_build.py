@@ -34,6 +34,7 @@ def configure_ios(project):
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, support / 'VideoPlayer.m')
+    shutil.copyfile(ROOT / 'Python/mobile/ios/ScreenAwake.m', support / 'ScreenAwake.m')
     for helper in source.parent.glob('*.m'):
         shutil.copyfile(helper, support / helper.name)
     launcher = project / 'LogisticsMobile/main.m'

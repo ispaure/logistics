@@ -160,6 +160,13 @@ pagination and processing waits live in the pinned manager's
 the project's `requirements-testflight.txt`; no signing dependency is added to
 the mobile app payload.
 
+Apple can report a build as processed before its beta-distribution metadata is
+available to every API endpoint. Distribution waits within the configured
+processing timeout for an explicit 404 from that build's beta-details lookup or
+notification update, refreshing the details before another update. Other write
+errors and uncertain outcomes stop the operation. The wait never repeats the
+upload, group assignment or beta-review submission.
+
 One-time local setup:
 
 1. In App Store Connect, open **Users and Access → Integrations → App Store Connect

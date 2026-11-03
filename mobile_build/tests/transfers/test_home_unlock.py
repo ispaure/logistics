@@ -67,13 +67,15 @@ class HomeUnlockTests(unittest.TestCase):
         with patch.object(type(app._impl), '__module__', 'toga_iOS.app'):
             app.show_legacy_session = False
             app.show_home()
-            header = app.home_content.children[0]
-            self.assertEqual(len(header.children), 1)
-            unlock = header.children[0]
-            self.assertEqual(unlock.control_icon, 'storage_crypt')
-            self.assertEqual(unlock.accessible_name, 'Unlock credentials')
+            root = app.routes.roots['home'].children[0]
+            header, actions = root._destination_actions
+            unlock = actions[0]
+            self.assertIs(unlock.parent, header)
+            self.assertIs(header.children[-1], unlock)
+            self.assertEqual(unlock.control_icon, 'storage_unlocked')
+            self.assertEqual(unlock.accessible_name, 'Unlock LocalCrypt')
             self.assertEqual((unlock.style.width, unlock.style.height), (48, 48))
-            self.assertEqual(unlock._impl._surface_roles, ('surface', 'text', False))
+            self.assertEqual(unlock._impl._surface_roles, ('surface', 'accent', False))
             unlock.on_press()
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertEqual(app.routes.screens['home'][-1][0], 'unlock-credential')

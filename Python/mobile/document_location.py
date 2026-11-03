@@ -79,7 +79,8 @@ def remove_location_row(view):
 
 def side_title_header(view):
     header = getattr(view, '_document_title_header', None)
-    return header if header is not None and header.parent is view else None
+    parent = getattr(view, '_document_title_parent', view)
+    return header if header is not None and header.parent is parent else None
 
 
 def side_title_reader(view):
@@ -219,16 +220,16 @@ def mount_apple_title(view, controller, title):
             frame.top_controls += 1
         if not getattr(view, '_reader_fullscreen', False):
             if not was_mounted:
-                view.insert(0, header)
+                getattr(view, '_document_title_parent', view).insert(0, header)
             place_title_in_header(header, view._document_title_view, state[1])
         elif was_mounted:
-            view.remove(header)
+            header.parent.remove(header)
     else:
         if frame is not None and header in frame.controls:
             frame.controls.remove(header)
             frame.top_controls -= 1
         if was_mounted:
-            view.remove(header)
+            header.parent.remove(header)
         if getattr(controller.navigationItem, 'titleView', None) != view._document_title_view:
             controller.navigationItem.titleView = view._document_title_view
     if was_mounted != (side_title_header(view) is not None):

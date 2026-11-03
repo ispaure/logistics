@@ -19,6 +19,7 @@ class LibraryMarkdown(LibraryText):
 
     def build_input(self, prepared):
         library, path = self.library, self.path
+        self.open_warning = None
         self.formatted = FormattedMarkdownInput(self.changed,
             font_size=library.host.presentation.font_size('markdown'),
             image_source=lambda: library.library.image_source(path), private=not library.access.policy.persistent,
@@ -29,7 +30,7 @@ class LibraryMarkdown(LibraryText):
             self.formatted.load(self.text, prepared=prepared)
             self.view.add(self.formatted.view)
         except ValueError as error:
-            library.notice.text = str(error)
+            self.open_warning = str(error)
             self.view.add(self.source_input())
 
     async def choose_mode(self, formatted=True):
@@ -60,7 +61,7 @@ class LibraryMarkdown(LibraryText):
             return True
         except ValueError as error:
             if current():
-                self.library.notice.text = str(error)
+                await self.library.document_error('Formatted editing unavailable', error)
             return False
 
     async def flush(self):

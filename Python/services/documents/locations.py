@@ -90,6 +90,13 @@ def collection_path(private_root, crypt=False):
 class MobileLocalFiles(LocalFiles):
     """Ordinary mobile files, including Android mounts without rename flags."""
 
+    def local_move_path(self, path):
+        from commonUtils.runtime.platform import get_os, OS
+        if (get_os() is OS.IOS and not self.private and self.storage_namespace == 'local'
+                and type(self)._physical is LocalFiles._physical):
+            return self._locate(path)
+        return super().local_move_path(path)
+
     def rename(self, source, destination):
         from commonUtils.persistence.publication import mutation_lock
         from commonUtils.runtime.platform import get_os, OS

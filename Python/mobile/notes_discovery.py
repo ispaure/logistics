@@ -1,4 +1,4 @@
-"""Bounded, asynchronous Notes Library discovery for the Documents hub."""
+"""Cancellable, asynchronous Notes Library discovery for the Documents hub."""
 import asyncio
 from pathlib import PurePosixPath
 import toga
@@ -23,33 +23,31 @@ def cancel(app):
 
 
 def find_libraries(provider, *, cancelled=lambda: False):
-    pending, found, count, folders = [('', 0)], [], 0, 0
+    from collections import deque
+    pending, found, seen = deque(['']), [], set()
     with operation(provider, cancelled):
         while pending:
             check_cancelled(cancelled)
-            folder, depth = pending.pop(0)
-            folders += 1
-            if folders > 200:
-                raise ValueError('Library discovery reached its 200-folder limit.')
+            folder = pending.popleft()
+            if folder in seen:
+                continue
+            seen.add(folder)
             rows = provider.list(folder, cancelled=cancelled)
-            count += len(rows)
-            if count > 10000:
-                raise ValueError('Library discovery reached its 10,000-entry limit.')
             if vault_root(provider, folder, rows) is not None:
                 found.append(folder)
-            if depth < 2:
-                pending.extend((row['path'], depth + 1) for row in rows
-                               if row['directory'] and not row['name'].startswith('.'))
-                if len(pending) > 200:
-                    raise ValueError('Library discovery reached its 200-folder limit.')
+                # A library owns its subtree; nested notebooks aren't libraries.
+                continue
+            pending.extend(row['path'] for row in rows
+                           if row['directory'] and not row['name'].startswith('.'))
     return found
 
 
-def populate(app, container):
-    if not app.feature_enabled('notes_library'):
-        return
+def populate(app, container, *, title='Notes Library', refresh=True):
     container.clear()
-    container.add(toga.Label('Notes Library', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
+    container.add(toga.Label(title, style=Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8)))
+    if not app.feature_enabled('notes_library'):
+        container.add(toga.Label('Notes Library is disabled.'))
+        return
     rows = toga.Box(style=Pack(direction='column'))
     status = FittedLabel('Looking for libraries…', style=Pack(font_size=12))
     container.add(rows, status)
@@ -70,14 +68,10 @@ def populate(app, container):
                 and generation == getattr(client, 'generation', None)
                 and app.feature_enabled('notes_library'))
     def discover():
-        from commonUtils.runtime.resources.local import LocalFiles
-        from services.documents.locations import collection_path
-        from features.rclone.localcrypt.mobile.resources import encrypted_storage
-        factories = []
-        local = collection_path(app.private_root)
-        if local.is_dir():
-            factories.append(('Local', lambda: LocalFiles(local)))
+        roots = app.ordinary_file_roots(include_collections=False)
+        factories = [(label, lambda label=label: app.storage_provider(label, roots)) for label in roots]
         if app.feature_enabled('rclone'):
+            from features.rclone.localcrypt.mobile.resources import encrypted_storage
             for label, remote in app.existing_crypt_locations().items():
                 factories.append((label, lambda remote=remote: encrypted_storage(app.private_root, client, remote, create=False)))
             from features.rclone.mobile.service import native_service
@@ -127,15 +121,22 @@ def populate(app, container):
                 if root and encrypted:
                     caption += ' · ' + location
                 button = toga.Button(caption, on_press=open_library, style=Pack(height=48))
+                from .appearance import list_button, surface
+                list_button(button)
+                surface(button, radius=0, background='transparent', outlined=False, eink_outlined=False)
                 kinds = [('storage_local', 'On-device library')]
                 if encrypted:
                     kinds.append(('storage_unlocked', 'Encrypted library, unlocked'))
                 button_icons(button, kinds)
                 middle_filename(button)
                 rows.add(button)
+            if rows.children:
+                from .appearance import surface
+                surface(rows, radius=16)
             status.text = ('Some locations could not be checked.' if errors else '' if found
-                           else 'No libraries found within two folders. Unlock LocalCrypt credentials to include encrypted libraries.')
+                           else 'No Notes libraries found. Unlock LocalCrypt to include encrypted libraries.')
         except (asyncio.CancelledError, OperationCancelled):
             return
     app._notes_discovery_task = app.loop.create_task(scan())
-    container.add(toga.Button('Refresh libraries', on_press=lambda widget: populate(app, container), style=Pack(height=48)))
+    if refresh:
+        container.add(toga.Button('Refresh libraries', on_press=lambda widget: populate(app, container), style=Pack(height=48)))

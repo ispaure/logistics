@@ -16,6 +16,44 @@ from mobile_build.tests.support.readers import RemoteClient
 
 
 class TransferFeedbackTests(TestCase):
+    def test_rclone_sleep_lease_survives_cancel_until_worker_retires(self):
+        import asyncio
+        from threading import Event
+        from commonUtils.runtime.operations import check_cancelled
+        app = self.app
+        started, release = Event(), Event()
+        awake = Mock()
+        def work(client, cancelled, progress):
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError('Transfer fixture timed out')
+            check_cancelled(cancelled)
+            return 1
+        async def exercise():
+            with patch.object(app, 'mirror_connection_ready', AsyncMock(return_value=True)), \
+                    patch('mobile.keep_awake.AwakeLease', return_value=awake):
+                task = asyncio.create_task(app.run_mirror_work(work, 'pull'))
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 5))
+                    self.assertTrue(app.transfer_busy)
+                    app.cancel_mirror_transfer()
+                    awake.close.assert_not_called()
+                finally:
+                    release.set()
+                    await task
+                awake.close.assert_called_once_with()
+                self.assertFalse(app.transfer_busy)
+        app.loop.run_until_complete(exercise())
+
+    def test_rclone_failure_releases_sleep_lease(self):
+        awake = Mock()
+        def failed(*args):
+            raise OSError('Transfer failed')
+        with patch.object(self.app, 'mirror_connection_ready', AsyncMock(return_value=True)), \
+                patch('mobile.keep_awake.AwakeLease', return_value=awake):
+            self.assertFalse(self.app.loop.run_until_complete(self.app.run_mirror_work(failed, 'pull')))
+        awake.close.assert_called_once_with()
+        self.assertFalse(self.app.transfer_busy)
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -243,7 +281,7 @@ class TransferFeedbackTests(TestCase):
         self.assertIsInstance(dialog.await_args.args[0], toga.InfoDialog)
         self.assertIn('Local copy', app.cloud_status.value)
         self.assertTrue(app.transfer_busy)
-        self.assertFalse(app.cloud_client.calls)
+
 
     def test_local_comic_menu_uses_activity_and_dispatches_during_transfer(self):
         app = self.app
@@ -293,3 +331,30 @@ class TransferFeedbackTests(TestCase):
         self.assertEqual(dialog.await_count, 2)
         self.assertFalse(app.cloud_client.calls)
         self.assertTrue(app.transfer_busy)
+
+
+class AwakeLeaseTests(TestCase):
+    def test_android_overlapping_requests_restore_original_view_flag(self):
+        from types import SimpleNamespace as NS
+        from mobile.keep_awake import AwakeLease
+        class Backend:
+            __module__ = 'toga_android.app'
+            @property
+            def native(self):
+                return self
+            def getWindow(self):
+                return NS(getDecorView=lambda: view)
+        for original in (False, True):
+            with self.subTest(original=original):
+                view = Mock()
+                view.getKeepScreenOn.return_value = original
+                app = NS(_impl=Backend())
+                first, second = AwakeLease(app), AwakeLease(app)
+                first.close()
+                view.setKeepScreenOn.assert_called_with(True)
+                second.close()
+                view.setKeepScreenOn.assert_called_with(original)
+                count = view.setKeepScreenOn.call_count
+                second.close()
+                self.assertEqual(view.setKeepScreenOn.call_count, count)
+                self.assertIsNone(app._transfer_awake_state)

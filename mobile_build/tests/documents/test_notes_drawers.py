@@ -70,11 +70,13 @@ class NotesDrawerTests(unittest.TestCase):
         from mobile.notes_discovery import fit_discovery_status
         from mobile.layout_participants import LayoutFrame
         async def exercise():
-            self.app.show_documents_hub()
-            await self.app._notes_discovery_task
+            with patch.object(self.app, 'feature_enabled', return_value=True):
+                self.app.show_documents_hub()
+                self.app.document_view_buttons['Libraries'].on_press()
+                await self.app._notes_discovery_task
             status = self.app.document_notes_list.children[2]
             original = status._settings_source_text
-            self.assertIn('Unlock LocalCrypt credentials', original)
+            self.assertIn('Unlock LocalCrypt', original)
             fit_discovery_status(status, LayoutFrame(300, lambda destination: 240))
             narrow = status._settings_rendered_text
             self.assertGreater(len(narrow.splitlines()), 1)

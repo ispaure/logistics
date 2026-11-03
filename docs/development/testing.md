@@ -506,6 +506,11 @@ Native WebView probes retry only the transient `WKErrorDomain Code=5` evaluation
 error during document replacement. A successful string result must contain the
 expected replacement text and exclude retired private content; repeated errors,
 other failures and non-string results still fail the bounded check.
+An iOS WebView still waiting after 15 seconds signals the running test app's PID
+and native loading state. The host verifies the process executable before taking
+one bounded three-second thread sample for that PID. Sampling stays inside the
+existing render deadline, never retries navigation, and cannot turn a stalled
+view into passing evidence. Samples remain in ignored test logs.
 
 New pushes and PR updates cancel superseded checks for the same branch/PR;
 tag releases and manual runs retain their validation. Windows platform checks

@@ -90,6 +90,7 @@ async def favourite_resource(app, provider, path, *, kind):
                             dict(kind=kind), favourite=True, cipher=cipher)
     app._favourites_version = getattr(app, '_favourites_version', 0) + 1
     app.refresh_hub('home')
+    app.refresh_hub('documents')
 
 
 def resource_reference(app, provider, path, *, require_cipher=True):
@@ -185,8 +186,9 @@ async def reopen(app, row):
     return False
 
 
-def populate(app, container):
-    container.add(toga.Label('Favourites', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
+def populate(app, container, *, heading=True):
+    if heading:
+        container.add(toga.Label('Favourites', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
     try:
         store = catalog(app)
         rows = store.entries(ciphers=list(unlocked_ciphers(app)), strict=False)

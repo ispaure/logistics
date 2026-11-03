@@ -106,6 +106,15 @@ Apple note history, edit/view and Note actions are projected through
 overflow. The secondary content toolbar is detached on Apple. Files and Links
 remain in the title row. Android retains the secondary row inside the document
 pane, so expanding Files does not place note commands over the file list.
+The Apple content title reclaims the navigation strip only when the native bar
+is vertical. Horizontal bars retain their full safe inset so native actions
+cannot cover the title's Files and Links controls.
+
+`python -m mobile_build.validation.document_storage_tools ios --probe notes-header` exercises
+native note history and edit/view handlers, live action menus, header hit tests,
+long titles and portrait/landscape rotation. `--family all` includes iPhone,
+iPad and the Duo closed/open/partial postures with the reviewed `--duoctl`
+helper. It uses isolated QA applications and disposable simulators.
 
 Focused validation covers folder-note underlines, folder browsing, narrow/wide
 ancestry, file-type transitions and history in desktop/mobile host suites. Native
@@ -268,6 +277,21 @@ byte baseline.
 
 ## Notes Library ownership
 
+The mobile library panel owns top-aligned Files, Search and Calendar tabs.
+Files and Search reuse one retained scroll/list owner, mounted only in the
+selected panel. Files ignores a retained query; Search alone projects results
+and owns its query and two scope buttons. Leaving Search cancels its pending
+scan; returning restarts the retained query. Calendar remains independently
+cancellable. A pinned footer owns the library identity, root drop target and
+Files commands, outside the scrolling area. File row font and touch height are
+unchanged.
+
+Compact Files uses `SpeechOverlay(edge_panel=True)` to fill the window's usable
+height above document chrome while avoiding hardware/system occlusions. Other
+overlays retain their existing bounds. Wide allocations put the document title
+inside the article pane via `_document_title_parent`, allowing Files to extend
+alongside it; the shared title owner still tracks native mounting and fullscreen.
+
 On mobile, `notes-library:` routes own the full content area, including iPad and
 Duo layouts. The outer Workspaces folder column and app destination bar stay
 hidden until the library closes. The library floats Files on compact allocations
@@ -287,7 +311,7 @@ touch events, native drawer dismissal and compact/pinned layouts through rotatio
 
 `notes.py` provides toolkit-independent marker detection, rooted paths, bounded
 reads and immediate-child filtering. Note reads complete short provider reads
-through EOF or the 2 MiB ceiling plus one using `runtime.streams.read_up_to`, then
+through EOF or the 16 MiB ceiling plus one using `runtime.streams.read_up_to`, then
 apply the existing size, cancellation and revision checks before decoding.
 Desktop `notes_actions.py` contributes the
 location command; `ui/notes_library.py` owns its lazy library window and
@@ -329,6 +353,14 @@ Forms bind Cancel and Submit to their own retained view. Superseded menus,
 callbacks from replaced forms, and actions arriving after a destination change
 cannot mutate files or replace a newer presentation. Native dialog results also
 check the document epoch before restoring a drawer.
+UIKit native pops also restore the originating pane when they expose the same
+library beneath a file form. Route trimming clears the form context, including
+when navigation skips past the library, so callbacks from removed forms cannot
+mutate files. The explicit form-Back path respects the host route guard.
+Removing the library route also invalidates decisions from menus that have not
+opened a form yet. Delete rechecks the originating document epoch, action request
+and destination after unsaved-change and confirmation dialogs, before starting
+the filesystem mutation.
 
 `notes_links.py` builds connections on a worker only when Links opens. It uses the
 same Markdown/wiki-link parser as preview, resolves relative/root/unique suffix
@@ -525,8 +557,11 @@ footer placement, cancellation and cleanup.
 Desktop Files includes a non-draggable Library root row as an explicit drop
 destination. Mobile `library_drag.py` uses Android local drag listeners and UIKit
 local drag/drop interactions; native payloads contain an opaque per-library token,
-not a document path or bytes. Filename holds start drags; row ellipsis buttons
-retain mutation menus. Bindings retire with recycled rows and the library owner.
+not a document path or bytes. Icon holds start drags; filename holds and row
+ellipsis buttons open the same mutation menu. Folder names remain drop targets.
+Floating drawers retire before presenting the native menu so they cannot cover
+it; cancelling restores the originating drawer. Bindings retire with recycled
+rows and the library owner.
 `move_entry_to` shares move-form and drag publication, resolves edits, blocks
 competing note navigation during a move, remaps histories/positions and refreshes
 loaded folders while retaining the browsing drawer. Root moves, self/descendant
@@ -559,12 +594,26 @@ not evidence of a passing whole-repository architecture scan.
 
 ## Percent-encoded local links
 
-Mobile Markdown source admission remains bounded at 2 MiB. Private rendered
-pages have a separate 32 MiB in-memory HTML bound, allowing the renderer's
-24 MiB media-inclusive output plus host styling and scripts. The Android
+Markdown source admission is bounded at 16 MiB. Mobile Notes Library supplies an
+explicit shared-renderer profile with the same 16 MiB source bound, a 96 MiB
+HTML output bound and a 66 MiB encoded-image output budget. Other native preview
+consumers retain the shared renderer's smaller defaults. Notes Library media
+allows 48 MiB of raster bytes per render, retaining the 8 MiB/16-megapixel bound
+per image. Native image tags request lazy loading and asynchronous decoding.
+Private rendered pages have a separate 128 MiB in-memory HTML bound, allowing
+room for host links, styling and scripts. These are allocation guardrails, not
+measurements of maximum safe page sizes on each device. The Android
 appearance adapter respects each private surface's configured HTML bound.
 Opening failures dismiss the loading panel, retain the published document,
 and show a native error dialog instead of placing the error above the page.
+The HTML bound is checked after link rewriting and data-view decoration. Native
+HTML admission precedes history changes and editor retirement, so a synchronous
+WebView rejection preserves the current document and draft. Embedded file opens
+and PDF page-turn failures use the same host-owned dialog. Host regressions cover
+an image-heavy page above 32 MiB, Markdown source above 2 MiB, decoration growth, native rejection from both
+reading and editing, and retained page-turn state. Formatted-editor failures also
+show a dialog while retaining the Source fallback and its unchanged text. These
+host checks are not device proof.
 
 Note navigation, outgoing links and backlinks try one URL decode first, then the
 literal path spelling only when the decoded lookup has no matches. A decoded

@@ -39,6 +39,7 @@ class NotesHost:
     show_documents: Callable
     close_session: Callable
     show_view: Callable
+    show_error: Callable
     destination: Callable
     render: Callable
     speech: Callable
@@ -59,7 +60,7 @@ class NotesHost:
     relocate_references: Callable = lambda provider, source, destination: None
 
 
-from .library_panels import LibraryPanels
+from .library_panels import LibraryPanels, CONTROL_FONT
 from .library_opening import LibraryDocuments
 
 
@@ -82,12 +83,12 @@ def underline_folder_link(button):
 
 def compact_file_row_padding(button):
     """Reduce native horizontal gutters as well as the row's layout slots."""
-    default = 0 if getattr(button, 'control_icon', None) else 8
-    button._impl._content_inset = getattr(button._impl, '_content_inset', default) / 3
+    inset = 0 if getattr(button, 'control_icon', None) else 2
+    button._impl._content_inset = button._impl._content_trailing_inset = inset
     if type(button._impl).__module__.startswith('toga_android.'):
         native = button._impl.native
-        native.setPaddingRelative(round(native.getPaddingStart() / 3), native.getPaddingTop(),
-                                  round(native.getPaddingEnd() / 3), native.getPaddingBottom())
+        padding = button._impl.scale_in(2)
+        native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
 
 
 class VaultBrowser(LibraryDocuments, LibraryPanels):
@@ -288,15 +289,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.init_panels()
         from .library_drag import LibraryDrag
         self.file_drag = LibraryDrag(self)
-        async def browse_root(widget=None, **kwargs):
-            self.selected_path = self.root
-            self.expanded.add(self.root)
-            if self.root not in self.folders:
-                await self.load_folder(self.root)
-            self.render_tree()
-            self.refresh_reader_actions()
-        self.root_drop_button = toga.Button('Library root', on_press=browse_root, style=Pack(height=48))
-        self.files_content.insert(2, self.root_drop_button)
+        self.root_drop_button = toga.Button(self.library_title, on_press=self.browse_library_root,
+            style=Pack(height=36, flex=1, font_size=CONTROL_FONT))
+        self.host.presentation.surface(self.root_drop_button, radius=0, background='transparent', foreground='text', outlined=False)
+        self.host.list_button(self.root_drop_button)
+        self.host.middle_filename(self.root_drop_button)
+        self.panel_identity.insert(0, self.root_drop_button)
+        self.install_panel_actions()
         if self.library.supports('rename'):
             self.file_drag.bind(self.root_drop_button, self.root, source=False, target=True)
         self.reflow(host.content_width(destination))
@@ -313,10 +312,12 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.breadcrumbs.style.display = PACK if show else NONE
         self.refresh_breadcrumbs()
         header = getattr(self.view, '_document_title_header', None)
-        if header is not None and header.parent is self.view and self.view.children[0] is not header:
-            self.view.remove(header)
-            self.view.insert(0, header)
         parent = self.article if self.sidebar.expanded else self.view
+        self.view._document_title_parent = parent
+        if header is not None and (header.parent is not parent or parent.children[0] is not header):
+            if header.parent is not None:
+                header.parent.remove(header)
+            parent.insert(0, header)
         if show and not self.host.apple and self.secondary.parent is not parent:
             if self.secondary.parent is not None:
                 self.secondary.parent.remove(self.secondary)
@@ -540,6 +541,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.refresh_reader_actions()
 
     def search_changed(self, widget=None, **kwargs):
+        self.sync_search_scope()
+        if (getattr(self, 'panel_tab', 'Files') == 'Files' and widget is self.search
+                and search_terms(self.search.value or '')):
+            self.select_panel_tab('Search')
+            return
         tree_task = getattr(self, 'tree_task', None)
         if tree_task is not None and not tree_task.done():
             tree_task.cancel()
@@ -552,7 +558,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         terms = search_terms(self.search.value or '')
         self.search_paused = False
         if terms:
-            if getattr(self, 'panel_tab', 'Files') != 'Files':
+            if getattr(self, 'panel_tab', 'Files') != 'Search':
                 self.search_paused = True
                 return
             # Keep the current native results untouched until typing settles.
@@ -653,6 +659,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
     async def reveal_folder(self, path, *, select=True):
         self.search.value = ""
+        self.select_panel_tab('Files')
         folder = self.root
         for part in PurePosixPath(path).relative_to(self.root or ".").parts:
             self.expanded.add(folder)
@@ -673,7 +680,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         task = getattr(self, 'tree_task', None)
         if task is not None and not task.done():
             task.cancel()
-        if getattr(self, 'panel_tab', 'Files') != 'Files':
+        if getattr(self, 'panel_tab', 'Files') == 'Calendar':
             return
         from commonUtils.ui.native.text_size import native_backend
         updates = self.tree_updates()
@@ -700,7 +707,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         new_rows, desired = {}, []
         flattened = []
 
-        searching = bool(search_terms(self.search.value or ""))
+        searching = getattr(self, 'panel_tab', 'Files') == 'Search'
 
         def add(folder, depth=0):
             for entry in self.folders.get(folder, ()):
@@ -743,17 +750,19 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     toga.Button(label, on_press=choose, style=Pack(height=48, flex=1))
                 )
                 self.host.middle_filename(button)
-                # Keep the row height while giving horizontal padding to the
-                # filename: these gaps are one third of the standard browser's.
+                # Reserve the row's width for names, keeping its vertical size.
                 compact_file_row_padding(button)
                 button.vault_path = path
                 self.bind_file_hold(button, path, directory=directory)
                 entry_icon = self.host.entry_icon(directory, landing_page=page is not None)
-                entry_icon.style.margin_left /= 3
-                entry_icon.style.margin_right /= 3
+                entry_icon.style.width = entry_icon.style.height = 20
+                entry_icon.style.margin_left = entry_icon.style.margin_right = 2
+                if hasattr(self, 'file_drag') and self.library.supports('rename'):
+                    self.file_drag.bind(entry_icon, path, target=directory)
+                    button._notes_drag_icon = entry_icon
                 row = toga.Box(
                     children=[
-                        toga.Box(style=Pack(width=depth * 20)),
+                        toga.Box(style=Pack(width=depth * 12)),
                         entry_icon,
                         button,
                     ],
@@ -767,16 +776,20 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                         ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'],
                         on_press=expand,
                     )
-                    disclosure.style.width = 32  # 24-point glyph slot + two 4-point gutters.
+                    self.host.presentation.apply_icon(disclosure, 'down' if path in self.expanded else 'forward',
+                        ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'], size=16)
+                    disclosure.style.width = 24
                     disclosure.style.height = 48
                     compact_file_row_padding(disclosure)
+                    self.host.presentation.surface(disclosure, radius=0, background='transparent', foreground='muted', outlined=False)
                     row.insert(2, disclosure)
                 async def file_actions(widget=None, path=path, **kwargs):
                     await self.file_actions(path)
                 if any(self.library.supports(action) for action in ('rename', 'delete')):
                     actions = self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions)
-                    actions.style.width = 32
+                    actions.style.width = 28
                     compact_file_row_padding(actions)
+                    self.host.presentation.surface(actions, radius=0, background='transparent', foreground='muted', outlined=False)
                     row.add(actions)
             new_rows[key] = row
             self._row_cache[key] = row
@@ -785,6 +798,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if getattr(row, '_notes_selected', None) != selected:
                 self.host.highlight_entry(row, selected)
                 self.host.highlight_entry(button, selected)
+                if not selected:
+                    self.host.presentation.surface(row, radius=0, background='transparent',
+                        foreground='text', outlined=False, eink_outlined=False)
+                    self.host.presentation.surface(button, radius=0, background='transparent',
+                        foreground='text', outlined=False, eink_outlined=False)
                 row._notes_selected = selected
             if page is not None:
                 underline_folder_link(button)
@@ -797,7 +815,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     self.render_tree()
                 self._more_rows = toga.Button('Show more notes', on_press=more, style=Pack(height=48))
             desired.append(self._more_rows)
-        message = (self.search_status if searching and self.search_status else
+        message = ('Search file names or document contents.' if searching and not search_terms(self.search.value or '') else
+            self.search_status if searching and self.search_status else
             'No matching notes or folders.' if searching and not flattened else
             'No documents in this folder.' if not flattened else '')
         if message:

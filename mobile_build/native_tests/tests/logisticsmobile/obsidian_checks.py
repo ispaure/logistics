@@ -43,6 +43,7 @@ async def exercise_obsidian(app, encrypted):
                  if label == 'localcrypt' else nullcontext())
         with scope:
             app.show_documents_hub()
+            app.document_view_buttons['Libraries'].on_press()
             while True:
                 discovery = app._notes_discovery_task
                 await discovery

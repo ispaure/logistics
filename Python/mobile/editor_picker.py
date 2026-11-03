@@ -76,6 +76,11 @@ class PickerWork:
     location: tuple
     operation: PickerOperation
     presentation: PickerOperation
+    mutation: bool = False
+    interrupted: bool = False
+    committed: bool = False
+    awake: object = None
+    progress: object = None
 
 
 class EditorPicker:
@@ -130,13 +135,20 @@ class EditorPicker:
     def privacy_gates(self):
         return (self.operation.privacy_gate,) if self.operation.data is not None else ()
 
-    def cancel(self):
+    def cancel(self, *, interrupted=False):
         if self._work is not None:
+            self._work.interrupted = interrupted or self._work.interrupted
             self._work.cancel.set()
+
+    def moving(self):
+        return self._work is not None and self._work.mutation
 
     def clear(self):
         """Invalidate late results and forget picker-owned private material."""
         self.fit_keyboard(False)
+        notice = getattr(self, 'move_notice', None)
+        if notice is not None and notice.parent is not None:
+            notice.parent.remove(notice)
         self._epoch += 1
         self.cancel()
         self.creation_layout = None
@@ -208,6 +220,14 @@ class EditorPicker:
     def _finish_work(self, work):
         if self._work is work:
             self._work = None
+            if work.progress is not None:
+                work.progress.close()
+            if work.awake is not None:
+                work.awake.close()
+            if hasattr(self, 'move_progress'):
+                self.move_progress.stop()
+                if self.move_progress.parent is not None:
+                    self.move_progress.parent.remove(self.move_progress)
             self.set_cloud_busy(False)
             self.update_picker_actions()
             restore, self._restore_when_idle = self._restore_when_idle, None
@@ -372,6 +392,8 @@ class EditorPicker:
         self.save_as_name.on_change = self.update_effective_name
         self.update_effective_name()
         self.save_as_status = PickerMessage(self.app.main_window.size.width)
+        self.move_progress = toga.ProgressBar(max=None)
+        self.move_notice = toga.Box(style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
         title = getattr(destination_action, 'title', 'Move') if destination_action is not None else 'New document' if creation is not None else 'Open file' if mode == 'open' else 'Save As'
         primary = getattr(destination_action, 'primary', 'Move here') if destination_action is not None else 'Create here' if creation is not None else 'Open file' if mode == 'open' else 'Save here'
         self.picker_parent = icon_button('up', 'Parent folder', on_press=self.parent_editor_folder)
@@ -652,6 +674,7 @@ class EditorPicker:
         client = getattr(self.app, 'cloud_client', None)
         ready = ready and self._listed_credentials == (client, getattr(client, 'generation', None))
         self.save_as_storage.enabled = not self.cloud_busy
+        self.save_as_name.enabled = self._work is None
         if self.creation_type is not None:
             self.creation_type.enabled = self._work is None
             self.creation_formats.set_enabled(self._work is None)
@@ -741,8 +764,27 @@ class EditorPicker:
         if getattr(self.operation.destination_action, 'kind', '') == 'download':
             return await self.complete_download()
         work = self._begin_work()
+        work.mutation = True
+        self.save_as_name.enabled = False
+        self.save_as_status.value = 'Moving… Keep this screen open, or use Cancel to stop.'
         plan = None
         try:
+            from commonUtils.runtime.progress import CoalescedProgress
+            work.awake = self.app.acquire_awake_lease()
+            work.progress = CoalescedProgress(self.app.loop,
+                lambda values, unused: self.update_move_progress(values),
+                active=lambda: self._accepts(work), interval=.2)
+            # Keep progress above the browser rather than below the naming
+            # fields in its short scroll viewport (not visible on closed Duo).
+            if self.save_as_status.parent is not self.move_notice:
+                self.save_as_status.parent.remove(self.save_as_status)
+                self.move_notice.add(self.save_as_status)
+            if self.move_progress.parent is None:
+                self.move_notice.add(self.move_progress)
+            if self.move_notice.parent is None:
+                self.panel.insert(0, self.move_notice)
+            self.move_progress.max = None
+            self.move_progress.start()
             name = resource_name(self.save_as_name.value)
             provider = self.editor_provider(self.save_as_storage.value)
             target = '/'.join(p for p in (self.picker_folder.value, name) if p)
@@ -753,6 +795,8 @@ class EditorPicker:
                     'Move to unencrypted storage?',
                     'The destination will contain a decrypted copy. Continue?'))
                 if not confirmed or not self._accepts(work):
+                    if not confirmed and self._accepts(work):
+                        self.save_as_status.value = 'Move cancelled.'
                     return
             from .file_operations import FileOperationRequest, FileDestination
             destination = FileDestination(self.app.private_root, work.client, provider, work.credential_generation)
@@ -761,8 +805,12 @@ class EditorPicker:
             # Use the same guarded, verified mutation as other file commands.
             from .document_mutations import prepare_document_mutation
             from .file_operations import retiring_work
-            plan = await prepare_document_mutation(self.app, request)
-            await retiring_work(plan.execute, work.cancel, completed=plan.apply)
+            plan = await prepare_document_mutation(self.app, request,
+                progress=lambda **values: work.progress.publish(values))
+            def completed(result):
+                work.committed = True
+                plan.apply(result)
+            await retiring_work(plan.execute, work.cancel, completed=completed)
             if not self._accepts(work):
                 return
             self._finish_work(work)
@@ -771,12 +819,41 @@ class EditorPicker:
             await self.app.browse_files()
             self.app.file_status.value = 'Move finished. Destination verified before removing the source.'
         except Exception as error:
-            if self._accepts(work):
+            if work.operation is self.operation and self.active_host and work.cancel.is_set():
+                self.save_as_status.value = ('Move stopped after leaving the app or locking the device.'
+                    if work.interrupted else 'Move cancelled.') + '\nInspect both locations before retrying.'
+            elif self._accepts(work):
                 self.save_as_status.value = 'Move failed: ' + str(error)[:250] + '\nRefresh before retrying; inspect both locations.'
         finally:
-            if plan is not None:
-                plan.release()
-            self._finish_work(work)
+            try:
+                if work.operation is self.operation and self.active_host and work.cancel.is_set():
+                    if work.committed:
+                        self.save_as_status.value = 'Move completed before it could stop. Refresh to see the destination.'
+                    else:
+                        self.save_as_status.value = ('Move stopped after leaving the app or locking the device.'
+                            if work.interrupted else 'Move cancelled.') + '\nInspect both locations before retrying.'
+                if plan is not None:
+                    plan.release()
+            finally:
+                self._finish_work(work)
+
+    def update_move_progress(self, values):
+        done, total = values['done'], values['total']
+        phase = values['phase']
+        if total is not None and total > 0:
+            self.move_progress.stop()
+            self.move_progress.max = 100
+            self.move_progress.value = min(99, done * 100 / total)
+            phase += f' · {min(99, done * 100 // total)}% · {done / 1_000_000:,.1f} / {total / 1_000_000:,.1f} MB'
+        else:
+            if self.move_progress.max is not None:
+                self.move_progress.max = None
+                self.move_progress.start()
+            if done:
+                phase += f' · {done / 1_000_000:,.1f} MB written'
+        if values['total_files']:
+            phase += f" · {values['files']} / {values['total_files']} files verified"
+        self.save_as_status.value = phase + '\nKeep this screen open. Cancel stops the move safely.'
 
     async def complete_download(self):
         operation = self.operation
@@ -1020,7 +1097,8 @@ class EditorPicker:
             self.cancel()
             if self.operation.origin is not None or self.operation.destination_action is not None or self.operation.creation is not None:
                 self._restore_when_idle = (self.app.navigation_generation, dismissed)
-            self.save_as_status.value = 'Cancelling the operation. Your draft remains available.'
+            self.save_as_status.value = ('Stopping the move… Waiting for file cleanup.' if self.moving()
+                else 'Cancelling the operation. Your draft remains available.')
             return
         if not self.cloud_busy:
             origin = self.operation.origin

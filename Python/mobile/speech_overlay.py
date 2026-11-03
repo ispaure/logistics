@@ -39,12 +39,13 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False):
+    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False, edge_panel=False):
         self.leading = leading
         self.full_height = full_height or leading
         self.label = label
         self.passthrough_controls = passthrough_controls
         self.dim = dim
+        self.edge_panel = edge_panel
         self.backdrop = None
         self.owner = owner
         self.anchor = anchor
@@ -73,7 +74,7 @@ class SpeechOverlay:
         self.container = Container(on_refresh=lambda c: None)
         native = self.container.native
         native.backgroundColor = ObjCClass('UIColor').secondarySystemBackgroundColor()
-        native.layer.cornerRadius = 16
+        native.layer.cornerRadius = 0 if self.edge_panel else 16
         native.layer.shadowOpacity = .25
         native.layer.shadowRadius = 8
         native.accessibilityLabel = self.label or ('Chapters' if self.leading else 'Read aloud controls')
@@ -92,6 +93,8 @@ class SpeechOverlay:
             insets = window.safeAreaInsets
             left, top = float(insets.left), float(insets.top + 52)
             right, bottom = float(bounds.width - insets.right), float(bounds.height - insets.bottom - 12)
+            if self.edge_panel:
+                top, bottom = float(insets.top), float(bounds.height - insets.bottom)
             if self.full_height:
                 # Window safe areas do not include a child navigation bar. Use
                 # the actual document allocation so drawers avoid Duo's shared
@@ -99,7 +102,7 @@ class SpeechOverlay:
                 owner = self.owner._impl.native
                 frame = owner.convertRect(owner.bounds, toView=window)
                 safe = owner.safeAreaInsets
-                if frame.size.width > 0 and frame.size.height > 0:
+                if not self.edge_panel and frame.size.width > 0 and frame.size.height > 0:
                     left = max(left, float(frame.origin.x + safe.left))
                     right = min(right, float(frame.origin.x + frame.size.width - safe.right))
                     top = max(top, float(frame.origin.y + safe.top))
@@ -113,10 +116,11 @@ class SpeechOverlay:
                             right = min(right, x)
                         elif x + width <= (left + right) / 2:
                             left = max(left, x + width)
-            width = max(1, min(320, right - left - (56 if self.dim else 24)))
-            height = (max(1, bottom - top - 12)
+            width = max(1, min(320, right - left - (44 if self.edge_panel else 56 if self.dim else 24)))
+            height = (max(1, bottom - top - (0 if self.edge_panel else 12))
                       if self.full_height else self.panel.overlay_height)
-            x = left + 12 if self.leading else right - width - 12
+            gutter = 0 if self.edge_panel else 12
+            x = left + gutter if self.leading else right - width - gutter
             frame = CGRect((x, top), (width, height))
             if native.frame != frame:
                 native.frame = frame
@@ -149,6 +153,11 @@ class SpeechOverlay:
         from toga_android.container import Container
         from java import dynamic_proxy
         context = owner._impl.native.getContext()
+        def edge_bounds():
+            from android.graphics import Rect
+            bounds = Rect()
+            owner._impl.native.getWindowVisibleDisplayFrame(bounds)
+            return bounds
         root = FrameLayout(context)
         self.container = Container()
         self.container.init_container(root)
@@ -157,6 +166,8 @@ class SpeechOverlay:
                      context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(56 if self.dim else 24))
         height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
                   if self.full_height else self.container.scale_in(self.panel.overlay_height))
+        if self.edge_panel:
+            height = max(1, edge_bounds().height())
         self.container.set_content(self.panel._impl)
         self.container.resize_content(width, height)
         self.popup = PopupWindow(root, width, height, True)
@@ -178,7 +189,8 @@ class SpeechOverlay:
         if self.leading:
             self.popup.setAnimationStyle(0)  # Host owns drawer motion and E Ink policy.
         self.popup.showAtLocation(owner._impl.native, Gravity.TOP | (Gravity.LEFT if self.leading else Gravity.END),
-                                  self.container.scale_in(12), self.container.scale_in(96))
+                                  0 if self.edge_panel else self.container.scale_in(12),
+                                  edge_bounds().top if self.edge_panel else self.container.scale_in(96))
         if self.dim:
             from android.view import WindowManager
             decor = root.getRootView()
@@ -196,8 +208,13 @@ class SpeechOverlay:
                      context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(56 if self.dim else 24))
             height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
                       if self.full_height else self.container.scale_in(self.panel.overlay_height))
+            if self.edge_panel:
+                height = max(1, edge_bounds().height())
             self.container.resize_content(width, height)
-            self.popup.update(width, height)
+            if self.edge_panel:
+                self.popup.update(0, edge_bounds().top, width, height)
+            else:
+                self.popup.update(width, height)
         self.reposition = reposition
 
     def close(self):
