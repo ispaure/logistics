@@ -96,7 +96,7 @@ def vault_root(provider, directory, rows):
 
 
 class NotesLibrary:
-    def __init__(self, provider, root=''):
+    def __init__(self, provider, root='', *, connection_index=None):
         if not local_library(provider):
             raise ValueError('Notes Library requires a local copy. Download or sync this folder first.')
         self.provider, self.root = provider, provider.relative(root)
@@ -104,6 +104,9 @@ class NotesLibrary:
         self._link_lock = RLock()
         self._links_closed = False
         self._media = {}
+        from .connection_index import ConnectionIndex
+        self.connection_index = connection_index if connection_index is not None else ConnectionIndex()
+        self._owns_connection_index = connection_index is None
 
     def close(self):
         """Retire in-memory names, including work completing after revocation."""
@@ -111,6 +114,8 @@ class NotesLibrary:
             self._links_closed = True
             self._link_folders.clear()
             media, self._media = self._media, {}
+        if self._owns_connection_index:
+            self.connection_index.close()
         for source in media.values():
             source.close()
 

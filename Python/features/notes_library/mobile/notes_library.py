@@ -837,6 +837,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             task.cancel()
 
     def refresh_library_indexes(self):
+        self.library.connection_index.invalidate()
         if not self.valid():
             return
         if self.search.value:

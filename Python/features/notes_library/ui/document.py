@@ -402,6 +402,9 @@ class DocumentPresentation:
             self.close()
             return
         self.pending_close = False
+        if not error:
+            self.library.connection_index.invalidate()
+            self.document_saved.emit()
         if not self.resume_after_save(error) and not error:
             if self.search is not None and self.search.text():
                 self.filter()
@@ -549,6 +552,7 @@ class DocumentPresentation:
             self.storage.data = data
         completed(error)
         if not error:
+            self.library.connection_index.invalidate()
             self.document_saved.emit()
         self.progress.hide()
         self.idle.emit()
@@ -669,7 +673,7 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
         def acquire(report, cancelled):
             release = provider.acquire() if hasattr(provider, 'acquire') else lambda: None
             try:
-                return provider, release, NotesLibrary(provider, root)
+                return provider, release, NotesLibrary(provider, root, connection_index=workspace.library.connection_index)
             except BaseException:
                 release()
                 raise
