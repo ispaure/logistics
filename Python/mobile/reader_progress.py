@@ -47,6 +47,18 @@ def style_slider(slider):
             return dict(base, accent=colors[base is DARK])
     native_style_slider(slider, apple_color=apple, palette=palette, force_ltr=True,
                         reverse_fill=getattr(slider, '_reading_reverse_fill', False))
+    extent = getattr(slider, '_accent_thumb_extent', None)
+    if extent is not None and type(slider._impl).__module__.startswith('toga_android.'):
+        native = slider._impl.native
+        density = native.getResources().getDisplayMetrics().density
+        size = round(extent * density)
+        thumb = native.getThumb()
+        thumb.setSize(size, size)
+        native.setThumb(None)
+        native.setThumb(thumb)
+        native.setThumbOffset(size // 2)
+        native.setPadding(size // 2, 0, size // 2, 0)
+        native.setMinHeight(round(64 * density))
 
 
 class VerticalPageSlider(toga.Canvas):
