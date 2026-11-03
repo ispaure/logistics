@@ -288,7 +288,7 @@ class VaultBrowser(LibraryPanels):
         if not hasattr(self, 'secondary'):
             return
         if hasattr(self, 'open_card'):
-            self.open_card.style.display = NONE if self.sidebar.sidebar_open else PACK
+            self.open_card.style.display = NONE if self.sidebar.sidebar_open or self.sidebar.expanded else PACK
         left, right = self.host.toolbar_insets(self.secondary)
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
@@ -420,6 +420,8 @@ class VaultBrowser(LibraryPanels):
     def reflow(self, width):
         available = max(0, allocated_width(self.view, width) - 24)
         self.sidebar.reflow(available)
+        if self.sidebar.expanded and getattr(self, '_document_return_side', None) == 'files':
+            self._document_return_side = None
         self._breadcrumb_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
         # Compact browsing still needs its menu while the article is hidden.
         # Wide layouts keep document commands over their own article pane.
@@ -431,7 +433,7 @@ class VaultBrowser(LibraryPanels):
         self.rows.style.width = (
             max(0, self.sidebar.policy.sidebar_width - 24)
         )
-        self.menu.enabled = True
+        self.menu.enabled = not self.sidebar.expanded
         self.refresh_chrome()
 
     def refresh_reader_actions(self):
@@ -818,7 +820,7 @@ class VaultBrowser(LibraryPanels):
         return_side = getattr(self.sidebar, 'side', None)
         opened = await self._open_note(path, remember=remember, fragment=fragment, resolve_link=resolve_link)
         if opened and return_side is not None:
-            self._document_return_side = return_side
+            self._document_return_side = None if return_side == 'files' and self.sidebar.expanded else return_side
         return opened
 
     async def _open_note(self, path, *, remember=True, fragment="", resolve_link=False):
@@ -1095,6 +1097,9 @@ class VaultBrowser(LibraryPanels):
     def return_to_browsing(self):
         side, self._document_return_side = self._document_return_side, None
         self.sidebar.show(side)
+        if side == 'links':
+            self.link_rows.clear()
+            self.links_refresh_task = self.host.loop.create_task(self.show_links(refresh=True))
         self.host.render()
 
     async def previous_note(self, widget=None, **kwargs):

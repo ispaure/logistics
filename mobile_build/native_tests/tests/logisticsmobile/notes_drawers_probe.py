@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import traceback
 from uuid import uuid4
+from toga.style.pack import NONE
 
 from commonUtils.testing.stages import TestStage
 from commonUtils.runtime.resources.local import LocalFiles
@@ -36,7 +37,13 @@ class NotesDrawersProbe(LogisticsMobile):
             owner = await open_vault(self, LocalFiles(root), '', 'files')
             for orientation in ('portrait', 'landscape-left', 'portrait'):
                 await rotate(self, orientation, settle=.5)
+                if owner.sidebar.expanded:
+                    assert owner.open_card.style.display == NONE
+                    assert getattr(owner, '_document_return_side', None) is None
+                owner.sidebar.show_sidebar()
                 assert await owner.open_note('Home.md')
+                if owner.sidebar.expanded:
+                    assert owner.back_action() is None
                 for _ in range(100):
                     if await owner.web.evaluate_javascript(
                             'window.notesDrawersBase===' + json.dumps(owner.base) +
