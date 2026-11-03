@@ -19,8 +19,7 @@ def rendered_review(view):
 
 async def press_review(view, action, *, timeout=30):
     """Click the rendered native WebView action, including its revision bridge."""
-    selector = {'approve': '#approve', 'early': '#early',
-                'background': '[data-action="background"]'}[action]
+    selector = {'approve': '#approve', 'early': '#early'}[action]
     script = ('(() => { const button = document.querySelector(' + json.dumps(selector)
               + '); if (!button || button.disabled || !button.getClientRects().length) return false; '
               + 'button.click(); return true; })()')
@@ -30,6 +29,18 @@ async def press_review(view, action, *, timeout=30):
             return
         await asyncio.sleep(.05)
     raise AssertionError('Native review action was not rendered/enabled: ' + action)
+
+
+def cancel_review(app):
+    """Review cancellation belongs to the platform Back control."""
+    from commonUtils.runtime.platform import get_os, OS
+    if get_os() is OS.IOS:
+        navigation = app.native_host.adapter.navigation[app.native_host.destinations.index('files')]
+        navigation.popViewControllerAnimated(True)
+    elif get_os() is OS.ANDROID:
+        app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
+    else:
+        raise AssertionError('Review cancellation requires a real mobile navigation backend')
 
 
 async def completed_review(app, *, timeout=30):
@@ -143,7 +154,7 @@ async def exercise_reviews(app):
             await asyncio.sleep(.05)
         assert declined.await_count == 1
     assert store.path.read_bytes() == before
-    await press_review(view, 'background')
+    cancel_review(app)
     assert not await finish()
     app.start_mirror_pull(key)
     view = await ready()

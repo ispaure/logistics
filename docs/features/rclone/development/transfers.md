@@ -50,7 +50,8 @@ and host disposal clear private content and detach callbacks. Progress retained
 after credential revocation is redacted, including file paths.
 
 The full native review driver waits for the current model revision to reach the
-WebView, then clicks its rendered approval, early-review or cancellation button.
+WebView, then clicks its rendered approval or early-review button. Cancellation
+uses the platform Back control; review has no progress-background button.
 It preserves native confirmation, bounded fresh-review retries and comparison
 retirement checks; widget-child positions are not part of the driver contract.
 
