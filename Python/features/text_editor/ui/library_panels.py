@@ -31,7 +31,12 @@ class LibraryPanels:
             self.search.setPlaceholderText('Search Notes Library')
         side.insertWidget(1, self.search_mode)
         self.search_results = qt.QTreeWidget()
-        self.search_results.setHeaderHidden(True)
+        self.search_results.setHeaderLabels(['Name', 'Type', 'Size', 'Path'])
+        self.search_results.header().setStretchLastSection(False)
+        self.search_results.header().setSectionResizeMode(0, qt.QHeaderView.ResizeMode.Stretch)
+        for column in (1, 2):
+            self.search_results.header().setSectionResizeMode(column, qt.QHeaderView.ResizeMode.ResizeToContents)
+        self.search_results.setColumnWidth(3, 260)
         self.search_results.itemClicked.connect(self.choose_result)
         self.search_more = qt.QPushButton('Show more notes')
         self.search_more.clicked.connect(self.more_results)
@@ -173,7 +178,15 @@ class LibraryPanels:
     def render_results(self):
         self.search_results.clear()
         for row in self.search_rows[:self.search_shown]:
-            item = qt.QTreeWidgetItem([posixpath.relpath(row['path'], self.library.root or '.')])
+            from commonUtils.filesystem import format_size
+            from services.documents.storage import display_path
+            name = PurePosixPath(row['path']).name
+            item = qt.QTreeWidgetItem([name, 'Folder' if row['directory'] else PurePosixPath(name).suffix.lstrip('.').upper() or 'File',
+                '' if row['directory'] or row.get('size') is None else format_size(row['size']),
+                display_path(self.provider, row['path'])])
+            for column in range(4):
+                item.setToolTip(column, item.text(column))
+            item.setForeground(3, self.search_results.palette().brush(qt.QPalette.ColorRole.PlaceholderText))
             item.setData(0, qt.Qt.ItemDataRole.UserRole, (row['path'], row['directory']))
             self.decorate_entry(item, row['path'], row['directory'])
             self.search_results.addTopLevelItem(item)

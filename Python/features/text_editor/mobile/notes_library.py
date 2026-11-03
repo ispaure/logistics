@@ -596,7 +596,7 @@ class VaultBrowser(LibraryPanels):
                          if self.host.folder_visible(entry["path"], directory=entry["directory"])]
         else:
             add(self.root)
-        counts = Counter(entry["name"].casefold() for entry, _ in flattened) if searching else {}
+        counts = Counter(PurePosixPath(entry['path']).name.casefold() for entry, _ in flattened) if searching else {}
         for entry, depth in flattened[: self.shown]:
             path, directory = entry["path"], entry["directory"]
             page = self.folder_pages.get(path) if directory else None
@@ -611,7 +611,7 @@ class VaultBrowser(LibraryPanels):
                 else:
                     await self.open_note(path)
 
-            label = entry["name"]
+            label = PurePosixPath(path).name if searching else entry['name']
             if counts.get(label.casefold(), 0) > 1:
                 parent = posixpath.dirname(posixpath.relpath(path, self.root or "."))
                 label += " · " + (parent or "Library root")

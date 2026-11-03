@@ -85,7 +85,9 @@ class CryptBrowserView(qt.QMainWindow):
         protect_private_view(self, self.provider)
         self._release_provider = self.provider.acquire()
         self.destroyed.connect(self._release_provider)
-        self.file_browser = ResourceBrowser(self.provider, self, directory=directory, thumbnail=self._thumbnail, details=self._details, actions=(
+        from services.documents.storage import display_path
+        self.file_browser = ResourceBrowser(self.provider, self, directory=directory, thumbnail=self._thumbnail, details=self._details,
+            path_label=lambda path: display_path(self.provider, path), actions=(
             ('Move to…', lambda row: True, self.move_item),
             ('Edit comic metadata…', lambda row: row['directory'] or Path(row['path']).suffix.lower() in {'.cbz', '.zip'}, self.edit_metadata),
             ('Edit EPUB metadata…', lambda row: not row['directory'] and Path(row['path']).suffix.lower() == '.epub', self.edit_epub_metadata),))
