@@ -63,7 +63,8 @@ class ReaderTitleProbe(ViewerLayoutProbe):
                         assert title is not None, 'Missing native document title'
                         if sys.platform == 'ios' and path == comic:
                             from commonUtils.ui.native.panning_title import apple_title_class
-                            caption = next(child for child in title.subviews
+                            from commonUtils.ui.native.keyboard import native_value
+                            caption = next(child for child in native_value(title.subviews)
                                            if child.isKindOfClass(apple_title_class()))
                             moving = caption.movingText
                             if moving is not None:

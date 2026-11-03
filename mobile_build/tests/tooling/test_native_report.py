@@ -498,7 +498,8 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         markers = ('Error in handler: fixture', 'Error in handler cleanup: fixture',
                    'Error in async handler: fixture', 'Error in async handler cleanup: fixture',
                    'Task exception was never retrieved', 'Task was destroyed but it is pending',
-                   'Exception in callback fixture')
+                   'Exception in callback fixture',
+                   'objc: -[UIColor release]: message sent to deallocated instance 0x1234')
         with TemporaryDirectory() as directory:
             previous = Path.cwd()
             os.chdir(directory)

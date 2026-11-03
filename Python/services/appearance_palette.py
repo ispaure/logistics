@@ -6,7 +6,7 @@ cards use a near-white surface so large mobile screens avoid a stark white fill.
 LIGHT = dict(window='#f0f2f6', surface='#fafbfc', alternate='#f5f7fa',
              text='#202838', muted='#606b7c', border='#c5cedb', primary='#2563eb', accent='#2563eb', hover='#e3eaf7')
 DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
-            text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#75a7ff', accent='#75a7ff', hover='#3d4045')
+            text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#2563eb', hover='#3d4045')
 LIGHT.update(control_border='#7b8493', destructive='#c62828')
 DARK.update(control_border='#858c99', destructive='#ff8a80')
 for colors in (LIGHT, DARK):
@@ -53,25 +53,15 @@ def validate_accent(hue, saturation):
 
 
 def accent_colors(hue=221, saturation=83):
-    """Resolve readable light/dark accents without changing the live palette."""
+    """Resolve one vivid sRGB accent shared by light and dark appearance."""
     import colorsys
-    from commonUtils.ui.appearance.colors import contrast_ratio
     hue, saturation = validate_accent(hue, saturation)
-    result = []
-    for dark, colors in ((False, LIGHT), (True, DARK)):
-        if (hue, saturation) == DEFAULT_ACCENT:
-            color = '#75a7ff' if dark else '#2563eb'
-        else:
-            # Move toward the readable end while preserving hue and saturation.
-            for step in range(101):
-                lightness = .48 + step * .005 if dark else .48 - step * .0048
-                rgb = colorsys.hls_to_rgb(hue / 360, lightness, saturation / 100)
-                color = '#' + ''.join(f'{round(channel * 255):02x}' for channel in rgb)
-                if all(contrast_ratio(argb(color), argb(colors[role])) >= 4.5
-                       for role in ('window', 'surface', 'alternate', 'hover')):
-                    break
-        result.append(color)
-    return tuple(result)
+    if (hue, saturation) == DEFAULT_ACCENT:
+        color = '#2563eb'
+    else:
+        rgb = colorsys.hls_to_rgb(hue / 360, .5, saturation / 100)
+        color = '#' + ''.join(f'{round(channel * 255):02x}' for channel in rgb)
+    return color, color
 
 
 def set_accent(hue=221, saturation=83):

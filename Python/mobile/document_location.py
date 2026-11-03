@@ -103,10 +103,11 @@ def place_title_in_header(header, title, subtitle):
     from .folder_title import storage_title_height
     # UIKit may have compressed this view in a previous navigation bar.
     # Reserve its designed height before attaching or reusing it in the reader.
-    height = storage_title_height(subtitle)
+    content = getattr(header, '_title_content', header)
+    height = max(48, storage_title_height(subtitle)) if content is not header else storage_title_height(subtitle)
     if header.style.height != height:
         header.style.height = height
-    host = header._impl.native
+    host = content._impl.native
     if title.superview == host:
         return
     previous = getattr(header, '_mounted_title', None)
@@ -175,12 +176,14 @@ def mount_apple_title(view, controller, title):
     if not hasattr(view, '_document_storage_status') and not hasattr(view, '_document_path'):
         controller.navigationItem.titleView = None
         return
-    from .folder_title import storage_title
+    from .folder_title import storage_title, storage_title_height
     from .ios_toolbar import vertical_edge
     edge = vertical_edge(controller)
     bounds = controller.view.bounds.size
-    width = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
-    width = max(44, width - (32 if edge else 216))
+    available = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
+    controls = getattr(view, '_document_title_controls', ())
+    gutters = (32 if edge else 16) + 112 if controls else (32 if edge else 216)
+    width = max(44, available - gutters)
     state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width)
     changed = getattr(view, '_document_title_state', None) != state
     if changed:
@@ -192,12 +195,23 @@ def mount_apple_title(view, controller, title):
     header = getattr(view, '_document_title_header', None)
     was_mounted = side_title_header(view) is not None
     frame = getattr(view, '_reading_frame_owner', None)
-    if edge and (frame is not None or hasattr(view, '_document_path')):
+    if controls or edge and (frame is not None or hasattr(view, '_document_path')):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:
             header = view._document_title_header = toga.Box(style=Pack(margin_top=6, margin_bottom=6))
             header._empty_bar_title = empty_bar_title()
+            if controls:
+                header.style.direction = ROW
+                header.style.align_items = 'center'
+                header.style.margin_left = header.style.margin_right = 8
+                header._title_content = toga.Box(style=Pack(flex=1, height=storage_title_height(state[1]), margin_left=8, margin_right=8))
+                for button in controls:
+                    if button.parent is not None:
+                        button.parent.remove(button)
+                header.add(controls[0], header._title_content, controls[1])
+        if controls:
+            header._title_content.style.height = storage_title_height(state[1])
         if controller.navigationItem.titleView != header._empty_bar_title:
             controller.navigationItem.titleView = header._empty_bar_title
         if frame is not None and header not in frame.controls:

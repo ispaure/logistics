@@ -94,16 +94,21 @@ Notes Library owns breadcrumb presentation for every embedded document kind.
 Ancestor landing pages use the same bounded provider probes as sidebar folders,
 including files opened before their ancestors are expanded. Probes run off the
 UI thread; links follow the existing document navigation/save/history path.
-Desktop places a shrinking rich-text path beside history; mobile uses a compact
-row below the document controls. The retained Apple side-title row stays above
-commands and breadcrumbs when the library opens a note or returns from browsing.
-Only folders with a same-named `.md` are links and underlined, both in the path
-and in Files. The shared fitting policy reserves
-space for the current filename before shortening ancestors. Closing or locking
-the library clears the displayed path.
+Desktop places a shrinking rich-text path beside history. Mobile keeps the
+filename in its title and uses a folder-only breadcrumb below it. Document panes
+under 520 points show their containing folder; wider panes fit the ancestry.
+Folder breadcrumbs open a landing page when present, otherwise reveal the folder
+in Files. Files retains its separate rule that only landing-page names are
+underlined. Closing or locking the library clears the displayed path.
 
-Focused validation covers folder-note underlines, inactive ancestors, filename
-priority, file-type transitions and history in desktop/mobile host suites. Native
+Apple note history, edit/view and Note actions are projected through
+`_native_reader_buttons` into the native toolbar, including Duo adaptation and
+overflow. The secondary content toolbar is detached on Apple. Files and Links
+remain in the title row. Android retains the secondary row inside the document
+pane, so expanding Files does not place note commands over the file list.
+
+Focused validation covers folder-note underlines, folder browsing, narrow/wide
+ancestry, file-type transitions and history in desktop/mobile host suites. Native
 iPhone simulator and Android emulator Notes Library probes also exercise folder
 links for Markdown, images, source files and unsupported files, with screenshots
 reviewed for narrow layouts. Both runners remove their QA app and disposable
@@ -316,6 +321,14 @@ exclude horizontal scrolling, zoom and selection; drawer reverse swipes dismiss.
 Native pane buttons use UIKit's horizontal axis preference for header placement.
 Floating drawers measure their owner's safe allocation and active UIKit occlusion
 regions rather than the window alone, keeping them out of the status/action strip.
+File-action dialogs retain their originating drawer across native alert dismissal.
+Move/copy forms retain that pane while mounted; Cancel and the mobile route Back
+handler restore it without consuming document history. The mutation guard blocks
+return while a file operation is running, and disposal clears the retained form.
+Forms bind Cancel and Submit to their own retained view. Superseded menus,
+callbacks from replaced forms, and actions arriving after a destination change
+cannot mutate files or replace a newer presentation. Native dialog results also
+check the document epoch before restoring a drawer.
 
 `notes_links.py` builds connections on a worker only when Links opens. It uses the
 same Markdown/wiki-link parser as preview, resolves relative/root/unique suffix
@@ -545,6 +558,13 @@ reviewed desktop adapters are covered separately; those unrelated imports are
 not evidence of a passing whole-repository architecture scan.
 
 ## Percent-encoded local links
+
+Mobile Markdown source admission remains bounded at 2 MiB. Private rendered
+pages have a separate 32 MiB in-memory HTML bound, allowing the renderer's
+24 MiB media-inclusive output plus host styling and scripts. The Android
+appearance adapter respects each private surface's configured HTML bound.
+Opening failures dismiss the loading panel, retain the published document,
+and show a native error dialog instead of placing the error above the page.
 
 Note navigation, outgoing links and backlinks try one URL decode first, then the
 literal path spelling only when the decoded lookup has no matches. A decoded

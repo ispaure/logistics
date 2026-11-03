@@ -25,6 +25,64 @@ class NotesDrawerTests(unittest.TestCase):
     tearDown = fixtures.ObsidianTests.tearDown
     run_async = fixtures.ObsidianTests.run_async
 
+    def test_swipes_open_empty_library_and_duplicate_links_requests_do_not_toggle(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.reflow(390)
+            self.assertIsNone(owner.path)
+            self.assertTrue(owner.sidebar.open_swipe(1))
+            self.assertEqual(owner.sidebar.side, 'files')
+            owner.sidebar.show_detail()
+            self.assertTrue(owner.sidebar.open_swipe(-1))
+            await asyncio.sleep(0)
+            self.assertEqual(owner.sidebar.side, 'links')
+            await owner.show_links(toggle=False)
+            self.assertEqual(owner.sidebar.side, 'links')
+            await owner.show_links()
+            self.assertIsNone(owner.sidebar.side)
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_exit_keeps_overlay_until_motion_finishes_and_dispose_cancels_it(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.reflow(390)
+            owner.sidebar.show_sidebar()
+            overlay = owner.sidebar.overlay
+            with patch('mobile.notes_motion.slide_out', return_value=.02), patch.object(overlay, 'close') as close:
+                owner.sidebar.show_detail()
+                self.assertIsNone(owner.sidebar.overlay)
+                close.assert_not_called()
+                self.assertEqual(len(owner.sidebar.retiring), 1)
+                await asyncio.sleep(.04)
+                close.assert_called_once()
+                self.assertEqual(owner.sidebar.retiring, [])
+            owner.sidebar.show_links()
+            overlay = owner.sidebar.overlay
+            with patch('mobile.notes_motion.slide_out', return_value=10), patch.object(overlay, 'close') as close:
+                owner.sidebar.show_detail()
+                owner.dispose()
+                close.assert_called_once()
+                self.assertEqual(owner.sidebar.retiring, [])
+        self.run_async(exercise())
+
+    def test_documents_unlock_guidance_wraps_and_refits_after_resize(self):
+        from mobile.notes_discovery import fit_discovery_status
+        from mobile.layout_participants import LayoutFrame
+        async def exercise():
+            self.app.show_documents_hub()
+            await self.app._notes_discovery_task
+            status = self.app.document_notes_list.children[2]
+            original = status._settings_source_text
+            self.assertIn('Unlock LocalCrypt credentials', original)
+            fit_discovery_status(status, LayoutFrame(300, lambda destination: 240))
+            narrow = status._settings_rendered_text
+            self.assertGreater(len(narrow.splitlines()), 1)
+            self.assertEqual(' '.join(narrow.split()), ' '.join(original.split()))
+            fit_discovery_status(status, LayoutFrame(900, lambda destination: 840))
+            self.assertLess(len(status._settings_rendered_text.splitlines()), len(narrow.splitlines()))
+        self.run_async(exercise())
+
     def test_links_resolve_aliases_references_and_ignore_code_images_and_hidden_notes(self):
         (self.vault / 'Home.md').write_text('[[Projects/Plan.MD|Plan]] [Plan][p]\n\n[p]: Projects/Plan.MD\n'
             '\n`[[Ignored]]`\n\n```\n[[Ignored]]\n```\n\n![[Missing.png]] [[Missing]]')

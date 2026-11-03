@@ -54,7 +54,7 @@ def verify_native_diagnostics(path):
     markers = ('Error in handler:', 'Error in handler cleanup:',
                'Error in async handler:', 'Error in async handler cleanup:',
                'Task exception was never retrieved', 'Task was destroyed but it is pending',
-               'Exception in callback ')
+               'Exception in callback ', 'message sent to deallocated instance')
     with Path(path).open(errors='replace') as stream:
         for number, line in enumerate(stream, 1):
             if any(marker in line for marker in markers):
