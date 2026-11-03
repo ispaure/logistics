@@ -21,6 +21,7 @@ from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
 from features.notes_library.notes import NotesLibrary, MAX_NOTE, MARKDOWN, document_kind
+from ..notes import breadcrumb_folders, fit_breadcrumbs
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.search.names import natural_name_key, search_terms
 from commonUtils.search.providers import search_resources, SearchResult
@@ -64,6 +65,23 @@ class NotesHost:
 
 
 from .library_panels import LibraryPanels, LibraryOpening
+
+
+def underline_folder_link(button):
+    """Underline the native title without changing its filename or hit target."""
+    button.notes_folder_link = True
+    backend = type(button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        native = button._impl.native
+        title = ObjCClass('NSAttributedString').alloc().initWithString(button.text,
+            attributes={'NSUnderline': 1, 'NSFont': native.titleLabel.font,
+                        'NSColor': native.titleColorForState(0)})
+        native.setAttributedTitle(title, forState=0)
+    elif backend.startswith('toga_android.'):
+        native = button._impl.native
+        native.setPaintFlags(native.getPaintFlags() | 8)  # UNDERLINE_TEXT_FLAG
+    return button
 
 
 class VaultBrowser(LibraryPanels):
@@ -231,6 +249,11 @@ class VaultBrowser(LibraryPanels):
                 button.parent.remove(button)
             self.secondary.add(button)
         self.view.insert(1, self.secondary)
+        self.breadcrumbs = toga.Box(style=Pack(direction=ROW, margin_left=8, margin_right=8))
+        self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
+        self._breadcrumb_key = None
+        self._breadcrumb_width = 320
+        self.view.insert(2, self.breadcrumbs)
         self.view._native_reader_buttons = lambda: [self.links_button]
         self.sidebar.on_change = self.refresh_chrome
         self.welcome = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=20))
@@ -270,10 +293,21 @@ class VaultBrowser(LibraryPanels):
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
         show = self.path is not None and not self.sidebar.sidebar_open
+        self.breadcrumbs.style.display = PACK if show else NONE
+        self.refresh_breadcrumbs()
         if show and self.secondary.parent is None:
             self.view.insert(1, self.secondary)
         elif not show and self.secondary.parent is not None:
             self.secondary.parent.remove(self.secondary)
+        parent = self.article if self.sidebar.expanded else self.view
+        siblings = [child for child in parent.children if child is not self.breadcrumbs]
+        index = (siblings.index(self.secondary) + 1 if self.secondary.parent is parent
+                 else siblings.index(self.toolbar) + 1 if self.toolbar.parent is parent else 0)
+        if (self.breadcrumbs.parent is not parent or
+                list(parent.children).index(self.breadcrumbs) != index):
+            if self.breadcrumbs.parent is not None:
+                self.breadcrumbs.parent.remove(self.breadcrumbs)
+            parent.insert(index, self.breadcrumbs)
         editable = not self.path or PurePosixPath(self.path).suffix.lower() in MARKDOWN
         if editable and self.edit.parent is None:
             self.secondary.insert(2, self.edit)
@@ -283,6 +317,63 @@ class VaultBrowser(LibraryPanels):
             self._edit_chrome = self.editing
             self.host.presentation.apply_icon(self.edit, 'view' if self.editing else 'edit',
                                               'View document' if self.editing else 'Edit document')
+
+    async def breadcrumb_pages(self, path, cancelled):
+        folders = breadcrumb_folders(self.root, path)
+        return await asyncio.to_thread(self.library.folder_pages,
+            [{'path': folder, 'directory': True} for folder in folders], cancelled=cancelled)
+
+    def refresh_breadcrumbs(self):
+        if not self.path:
+            self.breadcrumbs.clear()
+            self._breadcrumb_key = None
+            return
+        folders = breadcrumb_folders(self.root, self.path)
+        entries = [(PurePosixPath(folder).name, self.folder_pages.get(folder)) for folder in folders]
+        entries.append((PurePosixPath(self.path).name, None))
+        key = (tuple(entries), self._breadcrumb_width)
+        if key == self._breadcrumb_key:
+            return
+        self._breadcrumb_key = key
+        self.breadcrumbs.clear()
+        def measure(value):
+            backend = type(self.breadcrumb_metrics._impl).__module__
+            if backend.startswith('toga_iOS.'):
+                from rubicon.objc import ObjCClass
+                native = self.breadcrumb_metrics._impl.native
+                return ObjCClass('NSString').stringWithString(value).sizeWithAttributes({'NSFont': native.font}).width
+            if backend.startswith('toga_android.'):
+                native = self.breadcrumb_metrics._impl.native
+                density = native.getResources().getDisplayMetrics().density
+                return native.getPaint().measureText(value) / density
+            return len(value) * 8
+        labels = fit_breadcrumbs([name for name, _ in entries],
+            max(0, self._breadcrumb_width - 16), measure, minimum=32, padding=12)
+        for index, ((name, page), label) in enumerate(zip(entries, labels)):
+            if not label:
+                continue
+            if self.breadcrumbs.children:
+                self.breadcrumbs.add(toga.Label('/', style=Pack(margin_top=12, width=12, font_size=13)))
+            if page:
+                async def open_folder(widget, path=page, **kwargs):
+                    await self.open_note(path)
+                button = self.host.list_button(toga.Button(label, on_press=open_folder,
+                    style=Pack(height=44, width=max(44, measure(label) + 12), font_size=13)))
+                button._impl._content_inset = 0
+                self.host.presentation.surface(button, radius=0, background='transparent', foreground='text', outlined=False)
+                backend = type(button._impl).__module__
+                if backend.startswith('toga_iOS.'):
+                    button._impl.native.titleLabel.font = self.breadcrumb_metrics._impl.native.font
+                    button._impl.native.accessibilityLabel = name
+                elif backend.startswith('toga_android.'):
+                    button._impl.native.setTextSize(0, self.breadcrumb_metrics._impl.native.getTextSize())
+                    button._impl.native.setContentDescription(name)
+                button.breadcrumb_path = page
+                underline_folder_link(button)
+                self.breadcrumbs.add(button)
+            else:
+                self.breadcrumbs.add(toga.Label(label,
+                    style=Pack(margin_top=12, font_size=13, flex=1 if index == len(entries) - 1 else 0)))
 
     async def prepare_leave(self):
         editor = self.embedded
@@ -329,6 +420,7 @@ class VaultBrowser(LibraryPanels):
     def reflow(self, width):
         available = max(0, allocated_width(self.view, width) - 24)
         self.sidebar.reflow(available)
+        self._breadcrumb_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
         # Compact browsing still needs its menu while the article is hidden.
         # Wide layouts keep document commands over their own article pane.
         parent = self.article if self.sidebar.expanded else self.view
@@ -617,10 +709,10 @@ class VaultBrowser(LibraryPanels):
             page = self.folder_pages.get(path) if directory else None
 
             async def choose(widget=None, path=path, directory=directory, page=page, **kwargs):
-                if searching and directory:
-                    await self.reveal_folder(path)
-                elif page is not None:
+                if page is not None:
                     await self.open_note(page)
+                elif searching and directory:
+                    await self.reveal_folder(path)
                 elif directory:
                     await self.toggle_folder(path)
                 else:
@@ -670,6 +762,8 @@ class VaultBrowser(LibraryPanels):
                 self.host.highlight_entry(row, selected)
                 self.host.highlight_entry(button, selected)
                 row._notes_selected = selected
+            if page is not None:
+                underline_folder_link(button)
             desired.append(row)
             yield
         if len(flattened) > self.shown:
@@ -781,6 +875,7 @@ class VaultBrowser(LibraryPanels):
                 self.host.loop.call_soon_threadsafe(publish)
             path, found_fragment, data = await asyncio.to_thread(self.library.load_note, path,
                 current=current, resolve_link=resolve_link, cancelled=cancelled, stage=stage)
+            pages = await self.breadcrumb_pages(path, cancelled)
             if self._media_open_epoch == epoch:
                 self._media_open_path = path
             if cancelled():
@@ -831,6 +926,7 @@ class VaultBrowser(LibraryPanels):
             self.forward_button.enabled = self.history_index < len(self.history) - 1
             self.up_button.enabled = True
             self.refresh_reader_actions()
+            self.folder_pages.update(pages)
             self.sidebar.show_detail()
             self.refresh_chrome()
             self.host.render()
@@ -1126,6 +1222,7 @@ class VaultBrowser(LibraryPanels):
             self.page_loading = LibraryOpening(self)
         self.page_loading.start(path)
         try:
+            pages = await self.breadcrumb_pages(path, lambda: not self.valid() or epoch != self.epoch)
             editor = await opener(self, path)
         except (OSError, ValueError, OperationCancelled) as error:
             if self.valid() and epoch == self.epoch:
@@ -1142,6 +1239,7 @@ class VaultBrowser(LibraryPanels):
         self.embedded = editor
         self.editing = True
         self.path = self.selected_path = path
+        self.folder_pages.update(pages)
         self.update_tree_selection()
         self.title.text = fill(PurePosixPath(path).name, width=28)
         self.speech.close()
@@ -1463,6 +1561,7 @@ class VaultBrowser(LibraryPanels):
         self.expanded.clear()
         self.rows.clear()
         self.path = self.selected_path = None
+        self.refresh_breadcrumbs()
         self.root = ""
         self.title.text = "Notes Library closed"
         self.edit.enabled = False

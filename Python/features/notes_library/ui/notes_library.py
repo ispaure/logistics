@@ -6,6 +6,52 @@ from .dataview import NotesMarkdownViewer
 from commonUtils.ui.readers.reader_chrome import reader_button
 from features.notes_library.notes import NotesLibrary, vault_root, operation, document_kind, MAX_NOTE
 from .library_panels import LibraryPanels
+from ..notes import breadcrumb_folders, fit_breadcrumbs
+
+
+class NotesBreadcrumbs(qt.QLabel):
+    """A shrinking path beside history, with links only to folder notes."""
+    def __init__(self, owner):
+        super().__init__()
+        self.owner, self.entries = owner, []
+        self.setMinimumWidth(0)
+        self.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
+        self.setTextFormat(qt.Qt.TextFormat.RichText)
+        self.setTextInteractionFlags(qt.Qt.TextInteractionFlag.LinksAccessibleByMouse |
+                                     qt.Qt.TextInteractionFlag.LinksAccessibleByKeyboard)
+        self.linkActivated.connect(self.activate)
+
+    def activate(self, index):
+        target = self.entries[int(index)][1]
+        if target:
+            self.owner.open_note(target)
+
+    def show_path(self, path):
+        folders = breadcrumb_folders(self.owner.library.root, path)
+        self.entries = [(PurePosixPath(folder).name, self.owner.folder_pages.get(folder)) for folder in folders]
+        self.entries.append((PurePosixPath(path).name, None))
+        self.setToolTip(' / '.join(label for label, _ in self.entries))
+        self.setAccessibleName(self.toolTip())
+        self.render_path()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.render_path()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if hasattr(self, 'entries') and event.type() in (qt.QEvent.Type.PaletteChange, qt.QEvent.Type.FontChange):
+            self.render_path()
+
+    def render_path(self):
+        from html import escape
+        labels = fit_breadcrumbs([label for label, _ in self.entries], self.contentsRect().width(),
+                                 self.fontMetrics().horizontalAdvance)
+        color = self.palette().color(qt.QPalette.ColorRole.WindowText).name()
+        self.setText(' / '.join(
+            f'<a href="{i}" style="color:{color};text-decoration:underline">{escape(label)}</a>'
+            if self.entries[i][1] else escape(label)
+            for i, label in enumerate(labels) if label))
 
 
 class PageStorage:
@@ -236,6 +282,11 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         for button in (self.back, self.forward, self.up):
             navigation.addWidget(button)
         self.viewer.navigation_toolbar.insertWidget(0, self.navigation)
+        self.breadcrumbs = NotesBreadcrumbs(self)
+        self.idle.connect(self.refresh_breadcrumb_path)
+        navigation.addWidget(self.breadcrumbs, 1)
+        self.navigation.setMinimumWidth(0)
+        self.navigation.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
         self.document_controls = controls
         self.document_stack.currentChanged.connect(self.place_navigation)
         controls.addStretch()
@@ -291,11 +342,20 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.tree.setEnabled(False)
         self.viewer.setEnabled(False)
 
+    def refresh_breadcrumb_path(self):
+        if self.library is not None and not self.locked and not self.closing and self.index >= 0:
+            self.breadcrumbs.show_path(self.history[self.index])
+
     def place_navigation(self, *args):
         if self.document_stack.currentWidget() is self.viewer:
             self.viewer.navigation_toolbar.insertWidget(0, self.navigation)
+            toolbar = self.viewer.navigation_toolbar
+            for index in range(toolbar.count()):
+                if toolbar.itemAt(index).spacerItem() is not None:
+                    toolbar.setStretch(index, 0)
+            toolbar.setStretchFactor(self.navigation, 1)
         else:
-            self.document_controls.insertWidget(0, self.navigation)
+            self.document_controls.insertWidget(0, self.navigation, 1)
 
     def show_sidebar(self, visible):
         self.panel_tabs.setVisible(not self.document_only)
@@ -344,10 +404,14 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.pending = ('note', path, remember, fragment, index)
         self.viewer.setEnabled(False)
         self.tree.setEnabled(False)
+        pages = {}
         def read(report, cancelled):
             current = self.history[self.index] if self.index >= 0 else ''
             resolved, _, data = self.library.load_note(path, current=current, resolve_link=resolve_link,
                 cancelled=cancelled, stage=lambda message: self.progress.progress_changed.emit(0, 0, message))
+            folders = breadcrumb_folders(self.library.root, resolved)
+            pages.update(self.library.folder_pages(
+                [{'path': folder, 'directory': True} for folder in folders], cancelled=cancelled))
             if document_kind(resolved) == 'text':
                 from services.documents.storage import DocumentResource
                 from commonUtils.persistence.text import decode_bytes
@@ -376,7 +440,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             self.progress.progress_changed.emit(0, 0, 'Preparing embedded media…')
             return resolved, prepare_markdown(self.provider, self.provider.root / resolved, data=data, cancelled=cancelled,
                                              image_source=self.library.image_source(resolved))
-        self.progress.start(read, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
+        def read_with_path(report, cancelled):
+            return read(report, cancelled), pages
+        self.progress.start(read_with_path, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
 
     def open_other_file(self, path):
         from desktop.document_catalog import open_resource
@@ -387,6 +453,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
 
     def completed(self, result, error):
         kind, *values = self.pending
+        pages = {}
+        if kind == 'note' and result is not None:
+            result, pages = result
         if self.closing or self.locked:
             if kind == 'initial' and result:
                 result[1]()
@@ -520,6 +589,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                 return
             path, remember, fragment, index = values
             path, result = result
+            self.folder_pages.update(pages)
+            self.refresh_entry_icons()
             if remember:
                 del self.history[self.index + 1:]
                 self.history.append(path)
@@ -861,6 +932,10 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.reveal_folder(parent)
 
     def clear_document(self):
+        self.breadcrumbs.entries = []
+        self.breadcrumbs.clear()
+        self.breadcrumbs.setToolTip('')
+        self.breadcrumbs.setAccessibleName('')
         self.viewer.browser.inline_videos.clear()
         self.viewer.formatted_editor.inline_videos.clear()
         self.viewer.clear_data_views()

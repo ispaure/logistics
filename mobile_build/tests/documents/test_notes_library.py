@@ -44,6 +44,39 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_breadcrumbs_and_underlines_follow_notes_images_and_source_files(self):
+        from mobile.obsidian import open_vault
+        from mobile_build.tests.support.pdf import PNG
+        (self.vault / 'Vault.md').write_text('# Library')
+        (self.vault / 'Projects/Projects.md').write_text('# Projects')
+        (self.vault / 'Projects/Plain').mkdir()
+        for name, data in [('Current.md', b'# Current'), ('Image.png', PNG),
+                           ('Data.json', b'{}'), ('Unknown.bin', b'\x00')]:
+            (self.vault / 'Projects/Plain' / name).write_bytes(data)
+        deep = self.vault.joinpath(*(['Nested'] * 30))
+        deep.mkdir(parents=True)
+        (deep / 'Current.md').write_text('# Deep note')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            for name in ('Current.md', 'Image.png', 'Data.json', 'Unknown.bin'):
+                self.assertTrue(await owner.open_note('Vault/Projects/Plain/' + name))
+                links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_path')]
+                self.assertEqual([child.breadcrumb_path for child in links],
+                                 ['Vault/Vault.md', 'Vault/Projects/Projects.md'])
+                self.assertTrue(all(child.notes_folder_link for child in links))
+                self.assertEqual(owner.breadcrumbs.children[-1].text, name)
+                self.assertTrue(any(getattr(child, 'text', '') == 'Plain' for child in owner.breadcrumbs.children))
+            await links[1].on_press()
+            self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
+            await owner.previous_note()
+            self.assertEqual(owner.path, 'Vault/Projects/Plain/Unknown.bin')
+            self.assertTrue(await owner.open_note(self.provider.relative(deep / 'Current.md')))
+            owner.reflow(220)
+            self.assertEqual(owner.breadcrumbs.children[-1].text, 'Current.md')
+            owner.dispose()
+            self.assertFalse(owner.breadcrumbs.children)
+        self.run_async(exercise())
+
     def test_library_markdown_and_source_editing_work_with_text_editor_disabled(self):
         from mobile.obsidian import open_vault
         self.app.set_feature_enabled('text_editor', False, refresh=False)

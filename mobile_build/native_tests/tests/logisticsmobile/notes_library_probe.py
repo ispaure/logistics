@@ -126,6 +126,33 @@ class NotesLibraryProbe(LogisticsMobile):
     def _is_apple(self):
         return type(self.main_window._impl).__module__.startswith('toga_iOS.')
 
+    async def check_breadcrumbs(self, owner, root, evidence):
+        from .fixtures import png_page
+        folder = root / 'Technology/Accessories/Devices'
+        folder.mkdir(parents=True)
+        (root / 'Technology/Technology.md').write_text('# Technology')
+        (root / 'Technology/Accessories/Accessories.md').write_text('# Accessories')
+        (folder / 'Current Page.md').write_text('# Current Page')
+        (folder / 'Image.png').write_bytes(png_page())
+        (folder / 'Data.json').write_text('{}')
+        (folder / 'Unknown.binary').write_bytes(b'\x00')
+        for name in ('Current Page.md', 'Image.png', 'Data.json', 'Unknown.binary'):
+            assert await owner.open_note('Technology/Accessories/Devices/' + name), owner.notice.text
+            await asyncio.sleep(.3)
+            links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_path')]
+            assert links, [getattr(child, 'text', '') for child in owner.breadcrumbs.children]
+            for button in links:
+                native = button._impl.native
+                if self._impl.__class__.__module__.startswith('toga_iOS.'):
+                    assert native.attributedTitleForState(0) is not None
+                else:
+                    assert native.getPaintFlags() & 8
+            assert owner.breadcrumbs.children[-1].text == name
+            await capture_window(self, evidence / ('notes-breadcrumb-' + name + '.png'))
+        await links[0].on_press()
+        assert owner.path.endswith('/Technology.md') or owner.path.endswith('/Accessories.md')
+        assert await owner.open_note('Home.md')
+
     async def probe(self):
         report = dict(success=False, samples=[])
         evidence = Path(self.paths.cache) / 'viewer-layout'
@@ -154,6 +181,8 @@ class NotesLibraryProbe(LogisticsMobile):
             assert owner.secondary.parent is owner.view
             await capture_window(self, evidence / 'notes-reading.png')
             session_ids = set(self.workspace.sessions)
+            await self.check_breadcrumbs(owner, root, evidence)
+            report['breadcrumbs_all_files'] = True
             assert await owner.open_editor()
             editor = owner.embedded
             web = editor.formatted.view

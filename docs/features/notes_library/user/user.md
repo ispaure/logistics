@@ -46,7 +46,13 @@ Right-click a file or folder for **Move / rename…**, **Copy…** or **Delete�
 as supported by the location. Copy refuses existing destinations. Delete asks
 for confirmation and permanently removes the selected item and its contents.
 Clicking a folder with a matching `Folder/Folder.md` opens that landing note;
-use the expansion arrow to browse its children.
+its name is underlined. Use the expansion arrow to browse its children.
+
+Every open file has a breadcrumb path beside the history arrows, including
+images, PDFs, source files, drawings and file-information previews. Underlined
+folders open their same-named Markdown page. Plain folder names have no action.
+When space is limited, ancestor names shorten first to preserve the current
+filename; hover over the desktop path to see its full names.
 
 The sidebar has **Files** and **Calendar** tabs. File search offers
 **Search within Notes Library** and **Search in File Names**, including unopened

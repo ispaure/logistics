@@ -12,6 +12,50 @@ DOCUMENTS = MARKDOWN | TEXT | {'.rmdoc'}
 MAX_NOTE = 2 * 1024 * 1024
 
 
+def breadcrumb_folders(root, path):
+    """Ancestors inside the selected library, including a named library root."""
+    parent = PurePosixPath(path).parent
+    boundary = PurePosixPath(root or '.')
+    parent.relative_to(boundary)
+    folders = []
+    while parent != PurePosixPath('.'):
+        folders.append(parent.as_posix())
+        if parent == boundary:
+            break
+        parent = parent.parent
+    return list(reversed(folders))
+
+
+def fit_breadcrumbs(labels, width, measure=len, *, minimum=0, padding=0):
+    """Shorten ancestors first, retaining the current filename and path order."""
+    if not labels:
+        return []
+    def elide(text, available):
+        if measure(text) <= available:
+            return text
+        while text and measure(text + '…') > available:
+            text = text[:-1]
+        return text + '…' if measure('…') <= available else ''
+    separator = measure(' / ')
+    current = labels[-1]
+    if len(labels) == 1:
+        return [elide(current, width)]
+    # Keep the complete filename whenever it fits, even if that means omitting
+    # the oldest ancestors. Only shorten the filename when it exceeds the row.
+    current = elide(current, width)
+    remaining = max(0, width - measure(current))
+    count = len(labels) - 1
+    while count and remaining < count * (separator + max(minimum, measure('…')) + padding):
+        count -= 1
+    result = [''] * (len(labels) - 1 - count)
+    for i, label in enumerate(labels[len(result):-1]):
+        available = max(0, (remaining - separator * (count - i)) / (count - i) - padding)
+        value = elide(label, available)
+        result.append(value)
+        remaining -= max(minimum, measure(value)) + padding + separator
+    return result + [current]
+
+
 def document_kind(path):
     """The library's shared, filename-only document routing contract."""
     suffix = PurePosixPath(path).suffix.lower()

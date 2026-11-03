@@ -23,6 +23,13 @@ appear in Files and open in the same library detail pane using the normal native
 code input. Use **••• → Save** or **Find / replace…**. Switching files retains the
 library history and asks before discarding unsaved edits.
 
+Folders with a same-named `Folder/Folder.md` page have underlined names in Files;
+tap the name to open that page, or use the arrow to expand the folder.
+A compact breadcrumb row below the document controls shows the path for every
+open file type, including images and PDFs. Underlined folders open their page;
+plain folder names have no action. Ancestor names shorten first on narrow
+screens so the current filename keeps priority.
+
 
 ## Notes Library and Documentation Library
 
