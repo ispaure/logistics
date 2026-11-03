@@ -32,11 +32,23 @@ def stamp(info):
     return info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
 
-def cleanup_candidates(root, decode, cancelled=lambda: False):
+def cleanup_candidates(root, decode, cancelled=lambda: False, *, decode_many=None):
     result = {}
-    for name, version in inventory(root, cancelled).items():
+    rows = inventory(root, cancelled)
+    names = [name for name, version in rows.items()
+             if stat.S_ISREG(version[2]) and Path(name).name.casefold() not in CLEANUP_NAMES]
+    labels = {}
+    if decode_many is not None:
+        decoded = decode_many(names, cancelled)
+        if (not isinstance(decoded, (list, tuple)) or len(decoded) != len(names)
+                or not all(isinstance(label, str) for label in decoded)):
+            raise ValueError('Incomplete cleanup filename mapping.')
+        labels = dict(zip(names, decoded))
+    for name, version in rows.items():
+        check_cancelled(cancelled)
         if stat.S_ISREG(version[2]):
-            label = name if Path(name).name.casefold() in CLEANUP_NAMES else decode(name, cancelled)
+            label = (name if Path(name).name.casefold() in CLEANUP_NAMES else
+                     labels[name] if decode_many is not None else decode(name, cancelled))
             if Path(label).name.casefold() in CLEANUP_NAMES:
                 result[name] = (label, version)
     return result

@@ -33,6 +33,15 @@ class LibraryTabs(qt.QStackedWidget):
                     self.activate(record['group'])
                 return
 
+    def parent_folder(self, child):
+        if child.index < 0 or child.closing:
+            return
+        group = self.documents[child]['group']
+        group.setCurrentWidget(child)
+        self.activate(group)
+        parent = str(PurePosixPath(self.path(child)).parent)
+        self.owner.reveal_folder('' if parent == '.' else parent)
+
     def add_group(self, position=None):
         group = qt.QTabWidget()
         group.setMinimumWidth(240)
@@ -56,10 +65,21 @@ class LibraryTabs(qt.QStackedWidget):
             return
         self.active_group = group
         child = group.currentWidget()
-        if child in self.documents and child.index >= 0 and not child.closing:
+        if child in self.documents and not child.closing:
             self.owner.activate_document(child)
 
-    def open(self, path, *, fragment='', remember=True, index=None):
+    def open(self, path, *, fragment='', remember=True, index=None, replace=False):
+        if replace and self.current is not None:
+            child = self.current
+            if child.progress.busy or child.closing:
+                return child
+            if getattr(self.owner, 'edit_created', None) == path:
+                child.edit_created, self.owner.edit_created = path, None
+            if self.path(child) != path:
+                child.open_note(path, fragment=fragment, remember=remember, index=index)
+            elif fragment:
+                child.viewer.browser.scrollToAnchor(fragment)
+            return child
         for child in self.documents:
             if not child.closing and self.path(child) == path:
                 group = self.documents[child]['group']
@@ -73,15 +93,11 @@ class LibraryTabs(qt.QStackedWidget):
         child = NotesLibraryWindow(lambda provider=provider: provider, self.label,
                                    root=self.owner.library.root, document_only=True)
         child.setWindowFlags(qt.Qt.WindowType.Widget)
-        for widget in (child.panel_tabs, child.links_tree, child.menu, child.links_button):
+        for widget in (child.panel_tabs, child.links_tree, child.menu):
             widget.hide()
-        child.back.clicked.disconnect()
-        child.forward.clicked.disconnect()
         child.up.clicked.disconnect()
-        child.back.clicked.connect(lambda: self.owner.navigate(-1))
-        child.forward.clicked.connect(lambda: self.owner.navigate(1))
-        child.up.clicked.connect(self.owner.parent_folder)
-        self.owner.operation_footer.layout().addWidget(child.operation_footer)
+        child.up.clicked.connect(lambda: self.parent_folder(child))
+        self.owner.operation_footer.layout().addWidget(child.operation_footer, 1)
         child.open_card.hide()
         child.new_card.hide()
         child.viewer.new_action.triggered.disconnect()
@@ -92,12 +108,18 @@ class LibraryTabs(qt.QStackedWidget):
         self.documents[child] = dict(group=group, path=path,
                                      pending=(path, fragment, remember, index))
         child.idle.connect(lambda child=child: self.ready(child))
+        child.document_saved.connect(lambda child=child: self.refresh_connections(exclude=child))
         child.destroyed.connect(lambda obj=None, child=child: self.detach(child))
         group.addTab(child, PurePosixPath(path).name)
         group.setCurrentWidget(child)
         self.setCurrentWidget(self.splitter)
         child.show()
         return child
+
+    def refresh_connections(self, *, exclude=None):
+        for child in self.documents:
+            if child is not exclude and not child.progress.busy and not child.closing:
+                child.refresh_connections()
 
     def ready(self, child):
         if child not in self.documents or not isValid(self.owner):
@@ -111,16 +133,14 @@ class LibraryTabs(qt.QStackedWidget):
         if pending is not None and child.library is not None and not child.closing:
             record['pending'] = None
             path, fragment, remember, index = pending
-            record['history'] = remember, index
-            child.open_note(path, fragment=fragment)
+            child.open_note(path, fragment=fragment, remember=remember, index=index)
             return
         if child.index >= 0 and not child.closing:
             record['path'] = self.path(child)
             group = record['group']
             group.setTabText(group.indexOf(child), PurePosixPath(record['path']).name)
-            if child is self.current:
-                remember, index = record.pop('history', (True, None))
-                self.owner.activate_document(child, remember=remember, index=index)
+        if child is self.current and not child.closing:
+            self.owner.activate_document(child)
         if child.progress._result[1]:
             self.owner.pending_close = False
         elif self.owner.pending_close or self.owner.closing:
@@ -130,6 +150,7 @@ class LibraryTabs(qt.QStackedWidget):
     def detach(self, child):
         record = self.documents.pop(child, None)
         if record is not None and isValid(child.operation_footer):
+            self.owner.operation_footer.layout().removeWidget(child.operation_footer)
             child.operation_footer.hide()
             child.operation_footer.deleteLater()
         if record is None or not isValid(self) or not isValid(self.owner) or not isValid(self.owner.up):
@@ -218,27 +239,34 @@ class LibraryTabs(qt.QStackedWidget):
         menu.exec(group.tabBar().mapToGlobal(point))
 
     def remap(self, source, destination, deleted):
-        reopen, selected = [], self.current
-        self.retaining_groups = True
-        try:
-            for child in list(self.documents):
-                path = self.path(child)
-                if deleted and (path == deleted or path.startswith(deleted + '/')):
-                    self.close_tab(child, approved=True)
-                elif source and (path == source or path.startswith(source + '/')):
-                    reopen.append((destination + path[len(source):], self.documents[child]['group'], child is selected))
-                    self.close_tab(child, approved=True)
-            for path, group, was_selected in reopen:
-                self.active_group = group
-                child = self.open(path)
-                if was_selected:
-                    selected = child
-            if selected in self.documents:
-                self.active_group = self.documents[selected]['group']
-                self.active_group.setCurrentWidget(selected)
-        finally:
-            self.retaining_groups = False
-            self.trim_groups()
+        def removed(path):
+            return bool(deleted and (path == deleted or path.startswith(deleted + '/')))
+
+        def relocated(path):
+            return destination + path[len(source):] if source and (
+                path == source or path.startswith(source + '/')) else path
+
+        for child in list(self.documents):
+            current = self.path(child)
+            if removed(current):
+                self.close_tab(child, approved=True)
+                continue
+            # Preserve history occurrences and cursor, even when the same file
+            # appears more than once or only an earlier visit was affected.
+            index = sum(not removed(path) for path in child.history[:child.index + 1]) - 1
+            child.history = [relocated(path) for path in child.history if not removed(path)]
+            child.index = index
+            child.positions = {relocated(path): value for path, value in child.positions.items()
+                               if not removed(path)}
+            path = relocated(current)
+            self.documents[child]['path'] = path
+            group = self.documents[child]['group']
+            group.setTabText(group.indexOf(child), PurePosixPath(path).name)
+            child.back.setEnabled(index > 0)
+            child.forward.setEnabled(0 <= index < len(child.history) - 1)
+            if path != current and not child.progress.busy:
+                child.open_note(path, remember=False, index=index)
+        self.activate(self.active_group)
 
 
 class TabbedNotesLibrary(NotesLibraryWindow):
@@ -251,11 +279,15 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         old.hide()
         old.setParent(self)
         self.document_tabs = tabs
+        self.viewer.status.clear()
         self.navigation.hide()
+        self.controls_bar.hide()
+        self.links_button.hide()
+        self.navigation.set_shortcuts_enabled(False)
         self.save_action.setShortcuts([])
         self.resize(1200, 800)
 
-    def open_note(self, path, *, remember=True, fragment='', index=None, resolve_link=False):
+    def open_note(self, path, *, remember=True, fragment='', index=None, resolve_link=False, new_tab=False):
         if self.document_tabs is None:
             return super().open_note(path, remember=remember, fragment=fragment, index=index, resolve_link=resolve_link)
         if self.progress.busy or self.library is None or self.locked or self.closing:
@@ -267,33 +299,39 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         except ValueError as error:
             self.viewer.status.setText(str(error))
             return
-        from features.notes_library.notes import document_kind
-        if document_kind(path) is None:
-            return self.open_other_file(path)
-        return self.document_tabs.open(path, fragment=fragment, remember=remember, index=index)
+        return self.document_tabs.open(path, fragment=fragment, remember=remember, index=index, replace=not new_tab)
 
     def activate_document(self, child, *, remember=True, index=None):
+        for document in self.document_tabs.documents:
+            document.operation_footer.setVisible(document is child)
         if child.index < 0:
+            self.clear_document()
+            self.idle.emit()
             return
-        path = child.history[child.index]
         self.document_resource_path = child.document_resource_path
         self.document_provider = child.provider
-        if index is not None:
-            self.index = index
-        elif remember and (self.index < 0 or self.history[self.index] != path):
-            del self.history[self.index + 1:]
-            self.history.append(path)
-            self.index = len(self.history) - 1
-        self.back.setEnabled(self.index > 0)
-        self.forward.setEnabled(0 <= self.index < len(self.history) - 1)
+        # The outer owner projects the focused document for shared library tools.
+        # Switching tabs must never append to any document's history.
+        self.history, self.index = list(child.history), child.index
+        self.back.setEnabled(child.index > 0)
+        self.forward.setEnabled(0 <= child.index < len(child.history) - 1)
         self.up.setEnabled(True)
-        for document in self.document_tabs.documents:
-            document.back.setEnabled(self.back.isEnabled())
-            document.forward.setEnabled(self.forward.isEnabled())
-            document.up.setEnabled(self.up.isEnabled())
-            document.operation_footer.setVisible(document is child)
         self.refresh_connections()
         self.idle.emit()
+
+    def navigate(self, offset):
+        if self.document_tabs is None:
+            return super().navigate(offset)
+        child = self.document_tabs.current
+        if child is not None:
+            child.navigate(offset)
+
+    def parent_folder(self):
+        if self.document_tabs is None:
+            return super().parent_folder()
+        child = self.document_tabs.current
+        if child is not None:
+            self.document_tabs.parent_folder(child)
 
     @property
     def document_saving(self):
@@ -313,11 +351,22 @@ class TabbedNotesLibrary(NotesLibraryWindow):
                 return
 
     def save_current_document(self):
-        if self.document_tabs is not None and self.document_tabs.current is not None:
-            return self.document_tabs.current.save_current_document()
-        return super().save_current_document()
+        if self.document_tabs is None:
+            return super().save_current_document()
+        child = self.document_tabs.current
+        return child.save_current_document() if child is not None and child.index >= 0 else False
 
     def mutate(self, *args, **kwargs):
+        if self.document_tabs is not None and any(
+                child.progress.busy and child.pending[0] == 'note'
+                for child in self.document_tabs.documents):
+            return
+        deleted = kwargs.get('deleted')
+        if self.document_tabs is not None and deleted and any(
+                self.document_tabs.path(child) == deleted or
+                self.document_tabs.path(child).startswith(deleted + '/')
+                for child in self.document_tabs.documents):
+            kwargs['leave'] = True
         super().mutate(*args, **kwargs)
         if self.document_tabs is not None and self.progress.busy:
             self.document_tabs.setEnabled(False)
@@ -329,12 +378,18 @@ class TabbedNotesLibrary(NotesLibraryWindow):
             self.document_tabs.setEnabled(True)
             if mutation is not None and not error:
                 self.document_tabs.remap(mutation[1], result[0], mutation[2])
+                self.document_tabs.refresh_connections()
 
     def clear_document(self):
         if self.document_tabs is None:
             return super().clear_document()
         self.document_resource_path = None
-        self.up.setEnabled(False)
+        self.document_provider = None
+        self.history, self.index = [], -1
+        for button in (self.back, self.forward, self.up):
+            button.setEnabled(False)
+        self.cancel_connections()
+        self.links_tree.clear()
 
     def clear_content(self):
         if self.document_tabs is not None:

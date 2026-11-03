@@ -34,7 +34,9 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 def diagnostics(entry_point):
     if entry_point.endswith('.document_creation_probe'):
-        return NATIVE_DIAGNOSTICS + ('creation-name.png', 'creation-location.png', 'creation-landscape-left.png', 'creation-portrait.png')
+        return NATIVE_DIAGNOSTICS + ('creation-landscape-left.png', 'creation-portrait.png') + tuple(
+            f'creation-{panel}-{pose}.png' for panel in ('formats', 'name', 'change-format', 'locations', 'location', 'folders')
+            for pose in ('portrait', 'landscape-left', 'landscape-right'))
     return NATIVE_DIAGNOSTICS + (SYNC_SCREENSHOTS if entry_point.endswith('.sync_status_probe') else ())
 
 
@@ -127,6 +129,10 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
         # a stale compiled adapter must never masquerade as current acceptance.
         from hashlib import sha256
         native_sources = source_app.parents[2] / 'Support'
+        # Focused builds put DerivedData beside their generated project inside
+        # a leased scratch workspace. Reuse that exact project's native inputs.
+        if not native_sources.is_dir() and (source_app.parents[4] / '.manager-scratch').is_file():
+            native_sources = source_app.parents[4] / 'build/logisticsmobile/ios/xcode/Support'
         hashes = {}
         for source in (SOURCE / 'Python/features/video/mobile/ios').glob('*.m'):
             compiled = native_sources / source.name
@@ -160,6 +166,9 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
                     increase_contrast=increase_contrast, duoctl=duoctl, pose=pose))
             except Exception as error:
                 reports.append(dict(success=False, family=label, error=str(error)))
+            (output / 'matrix.json').write_text(json.dumps(reports, indent=2))
+            print(json.dumps(dict(family=label, success=reports[-1]['success'],
+                                  error=reports[-1].get('error'))), flush=True)
         (output / 'matrix.json').write_text(json.dumps(reports, indent=2))
         if not all(row['success'] for row in reports):
             raise RuntimeError('Viewer matrix has failures; inspect matrix.json')
@@ -184,6 +193,10 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
     cache = console = console_stream = None
     try:
         client.boot(device)
+        if entry_point.endswith('.document_creation_probe'):
+            # Dismiss only the fresh QA simulator's first-use keyboard lesson.
+            client.invoke('spawn', device, 'defaults', 'write', 'com.apple.keyboard.preferences',
+                          'DidShowContinuousPathIntroduction', '-bool', 'true')
         if pose is not None:
             if duoctl is None:
                 raise ValueError('Duo pose matrix requires --duoctl with the reviewed simulator helper.')
@@ -258,6 +271,15 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 keyboard_capture.unlink()
                 (cache / 'viewer-layout/keyboard-capture-done').touch()
             report = cache / result_name
+            if entry_point.endswith('.document_creation_probe'):
+                request = cache / 'document-creation-evidence/keyboard-request.json'
+                if request.exists():
+                    pose = json.loads(request.read_text())['pose']
+                    if pose not in ('portrait', 'landscape-left', 'landscape-right'):
+                        raise ValueError('Unexpected creation keyboard pose')
+                    client.invoke('io', device, 'screenshot', str(output / f'keyboard-{pose}.png'))
+                    request.unlink()
+                    request.with_name('keyboard-done').touch()
             if report.exists():
                 result = json.loads(report.read_text())
                 (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
@@ -366,13 +388,13 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
-            if tablet:
+            if tablet or (device is None and entry_point.endswith('.document_creation_probe')):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
-                if result.returncode == 0 and pose in (b'portrait', b'landscape-left') and pose != last_orientation:
+                if result.returncode == 0 and pose in (b'portrait', b'landscape-left', b'landscape-right') and pose != last_orientation:
                     emulator.invoke('-s', serial, 'shell', 'wm', 'user-rotation', 'lock',
-                                    '1' if pose == b'landscape-left' else '0')
+                                    {b'landscape-left': '1', b'landscape-right': '3', b'portrait': '0'}[pose])
                     last_orientation = pose
             if memory_probe:
                 progress = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
@@ -400,6 +422,24 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                     print('Raw ink QA: ' + ready.stdout.decode().strip(), flush=True)
             value = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
+            if entry_point.endswith('.document_creation_probe'):
+                request = 'cache/document-creation-evidence/keyboard-request.json'
+                pending = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', request], env=env, capture_output=True, timeout=15)
+                try:
+                    keyboard_request = json.loads(pending.stdout) if pending.returncode == 0 else None
+                except json.JSONDecodeError:
+                    keyboard_request = None
+                if keyboard_request is not None:
+                    pose = keyboard_request['pose']
+                    if pose not in ('portrait', 'landscape-left', 'landscape-right'):
+                        raise ValueError('Unexpected creation keyboard pose')
+                    screen = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'screencap', '-p'],
+                        env=env, capture_output=True, check=True, timeout=15)
+                    (output / f'keyboard-{pose}.png').write_bytes(screen.stdout)
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', request)
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch',
+                                    'cache/document-creation-evidence/keyboard-done')
             if value.returncode == 0:
                 try:
                     result = json.loads(value.stdout)

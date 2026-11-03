@@ -15,6 +15,26 @@ from mobile_build.tests.support.mirror import MirrorClient
 
 
 class MirrorJobTests(unittest.TestCase):
+    def test_push_batches_cleanup_names_and_directory_validation(self):
+        with TemporaryDirectory() as directory:
+            store, client = MirrorJobs(directory), MirrorClient()
+            job, _ = store.create(client, 'Secret', 'private')
+            for i in range(300):
+                (store.target(job) / f'Folder{i}').mkdir()
+            original = client.request
+            batches = []
+            def request(action, **values):
+                if action == 'crypt_paths':
+                    batches.append(values['entries'])
+                    return [entry['path'] for entry in values['entries']]
+                return original(action, **values)
+            with patch.object(client, 'request', side_effect=request):
+                store.execute_push(job['id'], client)
+            directories = [batch for batch in batches if all(entry['directory'] for entry in batch)]
+            self.assertEqual(len(directories), 2)
+            self.assertEqual(sum(map(len, directories)), 300)
+            self.assertTrue(all(len(batch) <= 256 for batch in batches))
+
     def test_missing_final_progress_does_not_turn_successful_pull_into_failure(self):
         with TemporaryDirectory() as directory:
             store, client = MirrorJobs(directory), MirrorClient()

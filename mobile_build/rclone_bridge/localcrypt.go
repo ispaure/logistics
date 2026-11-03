@@ -292,6 +292,7 @@ func cryptPath(name, value, identity string, directory, decode bool) (map[string
 type cryptPathEntry struct {
 	Path      string `json:"path"`
 	Directory bool   `json:"directory"`
+	Encode    bool   `json:"encode,omitempty"`
 }
 
 // A folder page shares one credential lookup and native boundary crossing.
@@ -311,13 +312,42 @@ func cryptPaths(ctx context.Context, name, identity string, entries []cryptPathE
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		plain, err := cryptMappedPath(cipher, entry.Path, entry.Directory, true)
+		plain, err := cryptMappedPath(cipher, entry.Path, entry.Directory, !entry.Encode)
 		if err != nil {
 			return nil, err
 		}
 		result = append(result, plain)
 	}
 	return result, nil
+}
+
+// Size conversion needs only ciphertext lengths, never document bytes or paths.
+func cryptSizes(ctx context.Context, name, identity string, sizes []int64) ([]int64, error) {
+	if len(sizes) > 256 {
+		return nil, errors.New("too many encrypted sizes")
+	}
+	cipher, _, _, expected, err := cryptConnection(name)
+	if err != nil {
+		return nil, err
+	}
+	if identity == "" || identity != expected {
+		return nil, errors.New("crypt settings changed")
+	}
+	result := make([]int64, 0, len(sizes))
+	for _, size := range sizes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if size < 0 {
+			return nil, errors.New("invalid encrypted size")
+		}
+		plain, err := cipher.DecryptedSize(size)
+		if err != nil {
+			return nil, errors.New("invalid encrypted size")
+		}
+		result = append(result, plain)
+	}
+	return result, ctx.Err()
 }
 
 func cryptMappedPath(cipher *crypt.Cipher, value string, directory, decode bool) (string, error) {

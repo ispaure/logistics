@@ -182,6 +182,35 @@ class LandingAppearanceTests(QtTestCase):
                                     message='Card did not clear its hover when the pointer left')
                 page.hide()
 
+    def test_missing_native_entry_recovers_home_card_hover(self):
+        from commonUtils.ui.pyside.pointer_entry import PointerEntryRecovery
+        page = self.page(SLATE_LIGHT)
+        # Keep both card columns inside the offscreen backend's 800px screen;
+        # recovery deliberately requires real global hit testing.
+        page.resize(750, 600)
+        page.move(20, 40)
+        page.show()
+        page.activateWindow()
+        self.app.processEvents()
+        helper = PointerEntryRecovery(self.app)
+        self.addCleanup(helper.deleteLater)
+        self.addCleanup(self.app.removeEventFilter, helper)
+        for card in (page._tool_cards[0], page._document_cards[0]):
+            page.scroll.ensureWidgetVisible(card)
+            self.app.processEvents()
+            handle = page.windowHandle()
+            self.app.sendEvent(handle, qt.QEvent(qt.QEvent.Type.Leave))
+            label = card.findChild(qt.QLabel, 'launchTitle')
+            position = label.mapToGlobal(label.rect().center())
+            self.assertTrue(helper.eligible(page))
+            self.assertIs(self.app.widgetAt(position).window(), page)
+            self.app.sendEvent(handle, qt.QMouseEvent(
+                qt.QEvent.Type.MouseMove, qt.QPointF(page.mapFromGlobal(position)),
+                qt.QPointF(position), qt.Qt.MouseButton.NoButton,
+                qt.Qt.MouseButton.NoButton, qt.Qt.KeyboardModifier.NoModifier))
+            self.assertTrue(card.underMouse())
+            self.assertEqual(card.grab().toImage().pixelColor(10, 10), qt.QColor(SLATE_LIGHT.hover))
+
     def test_delayed_font_and_width_changes_never_paint_overlapping_rows(self):
         for colors in (SLATE_LIGHT, SLATE_DARK):
             with self.subTest(theme=colors.window):

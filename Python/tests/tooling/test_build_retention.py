@@ -4,9 +4,11 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import os
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import sys
 from unittest.mock import patch
 
 from logistics_build.build_retention import clean, enroll_output, scratch, storage_inventory
@@ -14,6 +16,36 @@ from build_manager.retention import lease
 
 
 class BuildRetentionTests(unittest.TestCase):
+    def test_scratch_command_keeps_document_history_out_of_parent_storage(self):
+        from logistics_build.build_retention import main
+        from services.documents.catalog import DocumentCatalog
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            live = root / 'live'
+            catalog = DocumentCatalog(live / 'Cache', recent=True)
+            catalog.remember(dict(type='local', path='/personal/Note.md'), 'Note.md', {})
+            before = catalog.path().read_bytes()
+            evidence = root / 'probe.json'
+            command = '''
+import json, os, sys
+from pathlib import Path
+from commonUtils.filesystem.storage import cache_directory
+from services.documents.catalog import DocumentCatalog
+store = DocumentCatalog(cache_directory(), recent=True)
+store.remember(dict(type='local', path=str(Path.cwd() / 'Welcome.md')), 'Welcome.md', {})
+Path(sys.argv[1]).write_text(json.dumps(dict(storage=os.environ['COMMONUTILS_STORAGE_ROOT'],
+    titles=[row['title'] for row in store.entries('recent')])))
+'''
+            arguments = ['retention', '--root', str(root), '--scratch', sys.executable, '-c', command, str(evidence)]
+            with patch.dict(os.environ, COMMONUTILS_STORAGE_ROOT=str(live)), patch.object(sys, 'argv', arguments):
+                self.assertEqual(main(), 0)
+                self.assertEqual(os.environ['COMMONUTILS_STORAGE_ROOT'], str(live))
+            result = json.loads(evidence.read_text())
+            self.assertEqual(result['titles'], ['Welcome.md'])
+            self.assertTrue(Path(result['storage']).is_relative_to(root / 'test-results/build-scratch'))
+            self.assertFalse(Path(result['storage']).exists())
+            self.assertEqual(catalog.path().read_bytes(), before)
+
     def setUp(self):
         # Project fixtures must never inventory the developer's real Xcode caches.
         mock = patch('logistics_build.xcode_storage.storage_group', return_value=dict(

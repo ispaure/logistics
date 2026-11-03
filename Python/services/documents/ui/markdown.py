@@ -140,15 +140,18 @@ class MarkdownStorage:
             self.provider._check_active()
         if not url.isLocalFile():
             url = qt.QUrl.fromLocalFile(str(self.path.parent) + '/').resolved(url)
-        data = self.resources.get(Path(url.toLocalFile()))
+        target = Path(url.toLocalFile()).resolve()
+        data = self.resources.get(target)
         if kind == qt.QTextDocument.ResourceType.ImageResource:
-            return qt.QImage.fromData(data) if data else qt.QImage()
+            reason = getattr(self.resources, 'errors', {}).get(target)
+            from commonUtils.ui.markdown.images import prepared_image
+            return prepared_image(data, reason)
         return qt.QByteArray(data or b'')
 
     def video_source(self, url):
         if self.resource.closed:
             return None
-        return getattr(self.resources, 'videos', {}).get(Path(url.toLocalFile()))
+        return getattr(self.resources, 'videos', {}).get(Path(url.toLocalFile()).resolve())
 
 
 from services.documents.markdown import prepare_markdown

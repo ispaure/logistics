@@ -76,6 +76,58 @@ establish native device rendering or complete binary-specific licensing.
 
 ## Unresolved publisher and provenance items
 
+### Notes Library Dataview compatibility — November 2, 2026
+
+Source, history and mobile manifests were reviewed for the current
+`features/notes_library/dataview*.py` implementation. No bundled Obsidian
+Dataview plugin, SDK or copied upstream implementation was identified. The
+reviewed runtime implements a small compatibility subset itself. This is a
+source review, not proof of independent authorship of every line or user script.
+The [upstream plugin's MIT license](https://github.com/blacksmithgu/obsidian-dataview/blob/master/LICENSE.txt)
+permits commercial redistribution with its copyright and permission notice
+retained when its code or substantial portions are included. Its complete,
+commit-pinned MIT text is retained offline as **Dataview compatibility
+acknowledgement** on every platform. This is a conservative acknowledgement, not
+a claim that the upstream plugin is bundled. It does not relicense Logistics or
+user scripts. Review any bundled third-party
+example scripts separately, and describe compatibility without implying affiliation.
+
+The publishing concern is execution: complete `dataviewjs` blocks run
+automatically while reading, and `dv.view` executes JavaScript from library files
+using `AsyncFunction`. `NotesLibrary` rejects remote-storage providers; downloaded
+or synced local copies can nevertheless contain imported scripts. The worker has
+no exposed general native/write API or page DOM; CSP blocks network requests,
+and host reads enforce library containment and resource limits. Those boundaries
+do not make the authored JavaScript declarative data.
+
+Before an Apple submission, explicitly disclose and demonstrate this behavior
+in review notes. Apple's current
+[agreement, section 3.3.1(B)](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/),
+permits downloaded interpreted code within the app's advertised purpose, without
+bypassing OS security or creating another app storefront. Bounded personal-note
+views have a plausible basis under that permission; JavaScript is not an
+automatic rejection. [Apple guidelines 2.5.2 and 4.7](https://developer.apple.com/app-store/review/guidelines/)
+make arbitrary feature-changing code and hosted software relevant review issues;
+WebKit execution alone does not establish approval. Do not assume private note
+scripts constitute a public plug-in marketplace. If Apple treats them under
+4.7, assess its additional consent, native API and software-index requirements.
+A declarative-only implementation would reduce this uncertainty. A trust switch
+would improve user control but would not settle the policy classification.
+[Google Play's policy](https://support.google.com/googleplay/android-developer/answer/16559646?hl=en)
+expressly distinguishes interpreted JavaScript from downloaded native executable
+code, while still requiring runtime-loaded scripts to comply with its policies.
+
+An initial desktop run during concurrent metadata edits passed nine tests and
+failed four. The subsequent current-source Dataview rerun passed all fourteen,
+including the Chromium test of the mobile preview's worker policy. The eleven
+notice tests and the review-sample library discovery/read test also passed.
+These host tests are not release validation; no native device or App Store
+submission was tested in this review.
+The [TestFlight guide](mobile-testflight.md#notes-library-data-view-disclosure-and-review-demonstration)
+owns copy-ready review disclosure, the synthetic sample generator and exact
+demonstration steps. Review information still needs to accompany the chosen
+build in App Store Connect; writing the local guide does not submit it.
+
 ### Onyx SDK investigation — November 2, 2026
 
 Six exact SDK versions declare BSD-3 in their publisher POMs; the seventh,

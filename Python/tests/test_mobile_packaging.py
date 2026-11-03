@@ -141,6 +141,8 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertFalse((payload / 'features/notebooks/workspace.py').exists())
             self.assertTrue((payload / 'mobile/app.py').is_file())
             self.assertTrue((payload / 'services/licenses/LGPL-2.1.txt').is_file())
+            self.assertEqual((payload / 'services/licenses/Dataview-MIT.txt').read_bytes(),
+                             (REPO / 'Python/services/licenses/Dataview-MIT.txt').read_bytes())
             self.assertTrue((payload / 'services/open_source.py').is_file())
             self.assertTrue((payload / 'mobile/settings/licenses.py').is_file())
             dependencies = json.loads((payload / 'mobile/open-source-dependencies.json').read_text())

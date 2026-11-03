@@ -26,6 +26,7 @@ ACTIONS = frozenset(
         "crypt_raw_read",
         "crypt_raw_write",
         "crypt_remotes",
+        "crypt_sizes",
         "crypt_stat",
         "crypt_thumbnail",
         "document_lists_open",

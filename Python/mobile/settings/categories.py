@@ -60,6 +60,9 @@ class SettingsCategories:
     def appearance(self):
         app = self.app
         box = self.category('Appearance')
+        from .accent import AccentControls
+        app.accent_controls = AccentControls(app)
+        box.add(app.accent_controls)
         app.snow_choice = toga.Switch('Seasonal snow',
             value=app.preferences.values['seasonal_snow'] == 'true', style=Pack(height=48))
         box.add(switch_row(app, 'Seasonal snow', app.snow_choice,

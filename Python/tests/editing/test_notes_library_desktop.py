@@ -31,6 +31,219 @@ class PrivateFiles(RemoteFiles):
 
 
 class NotesLibraryDesktopTests(QtTestCase):
+    def test_nested_images_and_videos_use_navigation_resolution_and_reject_ambiguity(self):
+        from features.notes_library.notes import NotesLibrary
+        from commonUtils.tests.formats.test_gif_headers import GIF
+        from commonUtils.ui.native.markdown_preview import markdown_body
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            folder = root / 'Archive/Katia Hair VFX Exploration'
+            folder.mkdir(parents=True)
+            (folder / 'photo.gif').write_bytes(GIF)
+            (folder / 'clip.mp4').write_bytes(b'video fixture')
+            library = NotesLibrary(LocalFiles(root))
+            self.addCleanup(library.close)
+            image = 'Katia%20Hair%20VFX%20Exploration/photo.gif'
+            video = 'Katia%20Hair%20VFX%20Exploration/clip.mp4'
+            load = library.image_source('Home.md')
+            self.assertEqual(library.link('Home.md', image)[0], 'Archive/Katia Hair VFX Exploration/photo.gif')
+            self.assertEqual(load(image), ('image/gif', GIF))
+            self.assertIn('<img', markdown_body(r'![Photo]\(' + image + ')', image_source=load))
+            self.assertEqual(load(video)[0], 'video/mp4')
+            owner = library._media['Home.md']
+            self.assertEqual(list(owner.videos), [library.link('Home.md', video)[0]])
+            # A conventional attachment folder must not silently win over an
+            # ambiguous library link, for either raster or video embeds.
+            (root / 'Attachments').mkdir()
+            (root / 'Attachments/photo.gif').write_bytes(GIF)
+            (root / 'Attachments/clip.mp4').write_bytes(b'video fixture')
+            for target in ('photo.gif', 'clip.mp4'):
+                with self.subTest(target=target):
+                    with self.assertRaisesRegex(ValueError, 'Several'):
+                        library.link('Home.md', target)
+                    html = markdown_body('![Media](' + target + ')', image_source=load)
+                    self.assertIn('Several', html)
+                    self.assertNotIn('<img', html)
+                    self.assertNotIn('<video', html)
+
+    def test_desktop_failed_image_keeps_source_and_readable_placeholder(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            source = '# Missing image\n\n![Photo](missing.png)\n'
+            (root / 'Home.md').write_text(source)
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            storage = window.viewer.storage
+            self.assertIn('not found', storage.resources.errors[(root / 'missing.png').resolve()])
+            image = storage.load_resource(qt.QTextDocument.ResourceType.ImageResource,
+                                          qt.QUrl.fromLocalFile(str(root / 'missing.png')))
+            self.assertFalse(image.isNull())
+            window.viewer.set_editing(True)
+            self.assertEqual(window.viewer.markdown_text(), source)
+            window.close()
+
+    def test_prepared_images_preserve_url_key_with_literal_filename_fallback(self):
+        from commonUtils.tests.formats.test_gif_headers import GIF
+        from services.documents.markdown import prepare_markdown
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            page = root / 'Home.md'
+            literal, decoded = root / 'Two%20Words.gif', root / 'Two Words.gif'
+            literal.write_bytes(GIF + b'literal')
+            data = b'![Photo](Two%20Words.gif)'
+            _, resources = prepare_markdown(LocalFiles(root), page, data=data)
+            self.assertEqual(resources[decoded], GIF + b'literal')
+            decoded.write_bytes(GIF + b'decoded')
+            _, resources = prepare_markdown(LocalFiles(root), page, data=data)
+            self.assertEqual(resources[decoded], GIF + b'decoded')
+
+    def test_viewer_preserves_encoded_target_for_literal_link_fallback(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve() / 'base%20folder'
+            root.mkdir()
+            (root / '.obsidian').mkdir()
+            (root / 'Home.md').write_text('# Home')
+            (root / 'Two%20Words.md').write_text('# Literal')
+            window = NotesLibraryWindow(lambda: LocalFiles(root), 'Encoded links')
+            from shiboken6 import isValid
+            self.addCleanup(lambda: window.close() if isValid(window) else None)
+            window.show()
+            self.wait_until(lambda: not window.progress.busy)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.follow_link('Two%20Words.md#literal')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Two%20Words.md')
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.follow_link(qt.QUrl.fromLocalFile(str(root / 'Two Words.md')))
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Two%20Words.md')
+            with patch.object(window, 'open_note') as opened:
+                window.viewer.follow_link('Two%2520Words.md#literal')
+                opened.assert_not_called()
+                outside = qt.QUrl.fromLocalFile(str(root / 'Two Words.md'))
+                outside.setHost('another-host')
+                window.viewer.follow_link(outside)
+                opened.assert_not_called()
+            (root / 'Two Words.md').write_text('# Decoded')
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.viewer.follow_link('Two%20Words.md#decoded')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.history[window.index], 'Two Words.md')
+
+    def test_embedded_notebook_progress_uses_outer_footer_and_retires_on_navigation(self):
+        from threading import Event
+        from shiboken6 import isValid
+        from features.notebooks.notebook import Notebook
+        from features.notes_library.ui.library_workspace import TabbedNotesLibrary
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '.obsidian').mkdir()
+            (root / 'Home.md').write_text('# Home')
+            (root / 'Drawing.rmdoc').write_bytes(Notebook.new('Drawing').to_bytes())
+            window = TabbedNotesLibrary(lambda: LocalFiles(root), 'Notebook progress')
+            self.addCleanup(lambda: window.close() if isValid(window) else None)
+            window.show()
+            self.wait_until(lambda: not window.progress.busy)
+            first = window.open_note('Home.md', new_tab=True)
+            self.wait_until(lambda: not first.progress.busy and first.index >= 0)
+            child = window.open_note('Drawing.rmdoc', new_tab=True)
+            self.wait_until(lambda: not child.progress.busy and child.canvas is not None)
+            canvas = child.canvas
+            canvas.perform({'op': 'add-page'})
+            started, release = Event(), Event()
+            save = canvas.document.save
+            def write(**kwargs):
+                started.set()
+                release.wait(5)
+                return save(**kwargs)
+            with patch.object(canvas.document, 'save', side_effect=write):
+                try:
+                    self.assertTrue(canvas.save_document())
+                    self.wait_until(started.is_set)
+                    self.app.processEvents()
+                    self.assertTrue(canvas.operation.isVisible())
+                    self.assertGreater(canvas.operation.mapTo(window, qt.QPoint()).y(),
+                                       window.split.geometry().bottom())
+                    self.assertGreater(canvas.operation.width(), window.split.width() * .9)
+                    group = window.document_tabs.active_group
+                    group.setCurrentWidget(first)
+                    self.app.processEvents()
+                    self.assertFalse(canvas.operation.isVisible())
+                    group.setCurrentWidget(child)
+                    self.app.processEvents()
+                    self.assertTrue(canvas.operation.isVisible())
+                finally:
+                    release.set()
+                    self.wait_until(lambda: not canvas.busy)
+            self.assertTrue(canvas.operation.isHidden())
+            self.assertEqual(len(Notebook.read((root / 'Drawing.rmdoc').read_bytes()).pages), 2)
+            previous = canvas.operation
+            window.open_note('Home.md')
+            self.wait_until(lambda: not child.progress.busy)
+            self.wait_until(lambda: not isValid(previous))
+            self.assertIsNone(canvas.operation)
+            window.open_note('Drawing.rmdoc')
+            self.wait_until(lambda: not child.progress.busy)
+            self.assertIs(canvas.operation.parentWidget(), child.operation_footer)
+            self.assertTrue(canvas.operation.isHidden())
+            self.assertTrue(window.document_tabs.close_tab(child))
+            window.close()
+
+    def test_standalone_loading_and_notices_stay_below_splitter(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            viewer = window.viewer
+            viewer.status.setText('Document notice')
+            self.app.processEvents()
+            self.assertGreater(viewer.status.mapTo(window, qt.QPoint()).y(),
+                               window.split.geometry().bottom())
+            def render(url, scroll=None):
+                self.app.processEvents()
+                self.assertTrue(viewer.page_loading.isVisible())
+                self.assertGreater(viewer.page_loading.mapTo(window, qt.QPoint()).y(),
+                                   window.split.geometry().bottom())
+                raise ValueError('Render failure')
+            with patch.object(viewer, '_render_page', side_effect=render):
+                with self.assertRaisesRegex(ValueError, 'Render failure'):
+                    viewer._render(qt.QUrl.fromLocalFile(str(root / 'Home.md')))
+            self.assertTrue(viewer.page_loading.isHidden())
+            viewer.status.clear()
+            self.wait_until(lambda: window.operation_footer.height() <= 1)
+            window.close()
+
+    def test_empty_search_notice_does_not_reserve_space_below_tree(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            window = self.open_library(root)
+            files = window.panel_tabs.widget(0)
+            self.app.processEvents()
+            self.assertTrue(window.search_notice.isHidden())
+            self.assertEqual(window.files_stack.geometry().bottom(), files.contentsRect().bottom())
+            full_height = window.files_stack.height()
+            window.search_notice.setText('Searching…')
+            self.app.processEvents()
+            self.assertFalse(window.search_notice.isHidden())
+            self.assertLess(window.files_stack.height(), full_height)
+            window.search_notice.setText('Some items could not be searched.')
+            self.assertFalse(window.search_notice.isHidden())
+            window.search_notice.setText('')
+            self.app.processEvents()
+            self.assertEqual(window.files_stack.height(), full_height)
+            window.search_notice.setText('Search failed.')
+            window.search_notice.clear()
+            self.app.processEvents()
+            self.assertTrue(window.search_notice.isHidden())
+            self.assertEqual(window.files_stack.geometry().bottom(), files.contentsRect().bottom())
+
     def test_breadcrumbs_link_only_folder_notes_and_follow_every_document_kind(self):
         from features.notes_library.notes import fit_breadcrumbs
         with self.temporary_directory() as directory:
@@ -136,13 +349,16 @@ class NotesLibraryDesktopTests(QtTestCase):
             root = Path(directory)
             source = '# Video\n\n![[potato.mp4]]\n\nFollowing text\n'
             (root / 'Home.md').write_text(source)
-            shutil.copyfile(Path(__file__).parents[1] / 'readers/fixtures/video/h264-aac.mp4', root / 'potato.mp4')
+            (root / 'Media').mkdir()
+            shutil.copyfile(Path(__file__).parents[1] / 'readers/fixtures/video/h264-aac.mp4', root / 'Media/potato.mp4')
             window = self.open_library(root)
             window.open_note('Home.md')
             self.wait_until(lambda: not window.progress.busy)
             self.wait_until(lambda: bool(window.viewer.browser.inline_videos.cards))
             self.assertEqual(len(window.viewer.browser.inline_videos.cards), 1)
             card = next(iter(window.viewer.browser.inline_videos.cards.values()))
+            self.assertTrue(card.play.isVisible())
+            self.assertTrue(card.player.source().isEmpty())
             card.audio.setMuted(True)
             frames = []
             card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
@@ -155,8 +371,72 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertEqual(window.viewer.markdown_text(), source)
             media = window.library.image_source('Home.md')
             transports = [transport for _, transport in media.videos.values()]
-            window.close()
+            window.open_note('Media/potato.mp4')
+            self.wait_until(lambda: not window.progress.busy)
             self.assertTrue(all(transport.closed.is_set() for transport in transports))
+            preview = window.file_preview
+            card = preview.browser.video
+            self.assertIs(window.document_stack.currentWidget(), preview)
+            self.assertTrue(card.play.isVisible())
+            self.assertTrue(card.seek.isVisible())
+            self.assertTrue(card.player.source().isEmpty())
+            frames = []
+            card.audio.setMuted(True)
+            card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
+            card.play.click()
+            self.wait_until(lambda: any(frames) and card.player.position() > 0,
+                            message='Direct library video did not decode a frame')
+            card.play.click()
+            self.assertFalse(card.player.isPlaying())
+            transport = preview.preview.transport
+            window.close()
+            self.assertTrue(transport.closed.is_set())
+
+    def test_localcrypt_video_plays_in_library_and_retires_on_navigation(self):
+        from io import BytesIO
+        from features.rclone import executable
+        from tests.local_crypt_fixture import crypt_fixture
+        from logistics_build.build_retention import scratch
+        if not executable.get_rclone_path().is_file():
+            self.skipTest('Pinned rclone executable not installed')
+        with scratch(Path.cwd()) as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+            provider = fixture.provider
+            provider.mkdir('Media')
+            movie = Path(__file__).parents[1] / 'readers/fixtures/video/h264-aac.mp4'
+            provider.create_file('Media/Clip.mp4', BytesIO(movie.read_bytes()))
+            provider.write_bytes('note.md', b'# Encrypted video\n\n![[Clip.mp4]]\n')
+            window = NotesLibraryWindow(lambda: provider, 'Encrypted video')
+            window.show()
+            try:
+                self.wait_until(lambda: not window.progress.busy)
+                window.open_note('note.md')
+                self.wait_until(lambda: not window.progress.busy)
+                self.wait_until(lambda: bool(window.viewer.browser.inline_videos.cards))
+                embedded = next(iter(window.viewer.browser.inline_videos.cards.values()))
+                self.assertTrue(embedded.play.isVisible())
+                window.open_note('Clip.mp4', resolve_link=True)
+                self.wait_until(lambda: not window.progress.busy)
+                preview = window.file_preview.preview
+                card = window.file_preview.browser.video
+                self.assertEqual(preview.path, 'Media/Clip.mp4')
+                self.assertTrue(card.play.isVisible())
+                self.assertTrue(card.seek.isVisible())
+                card.audio.setMuted(True)
+                frames = []
+                card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
+                card.play.click()
+                self.wait_until(lambda: any(frames) and card.player.position() > 0,
+                                message='Encrypted library video did not decode a frame')
+                evidence = Path(__file__).parents[3] / 'test-results/library-video'
+                evidence.mkdir(parents=True, exist_ok=True)
+                window.grab().save(str(evidence / 'localcrypt-direct.png'))
+                transport, content = preview.transport, preview.video
+                window.open_note('note.md')
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertTrue(transport.closed.is_set())
+                self.assertTrue(content.closed)
+            finally:
+                window.close()
 
     def click_name_editor(self, window, path):
         from PySide6.QtTest import QTest
@@ -233,11 +513,15 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertTrue(window.open_card.isHidden())
             window.open_note('Home.md')
             self.wait_until(lambda: not window.progress.busy)
-            self.assertGreaterEqual(window.viewer.navigation_toolbar.indexOf(window.navigation), 0)
+            self.assertEqual(window.viewer.navigation_toolbar.indexOf(window.navigation), 0)
+            self.assertTrue(window.viewer.navigation.isHidden())
+            self.app.processEvents()
+            self.assertLess(window.navigation.geometry().right(), window.viewer.toc_button.x())
+            self.assertLess(window.navigation.geometry().right(), window.viewer.edit_button.x())
             self.assertFalse(window.split.isCollapsible(0))
             window.close()
 
-    def test_miscellaneous_files_are_visible_and_use_the_document_router(self):
+    def test_miscellaneous_files_are_visible_and_open_inside_library(self):
         with self.temporary_directory() as directory:
             root = Path(directory)
             for name in ('clip.mp4', 'archive.bin', 'LICENSE', '.secret'):
@@ -245,9 +529,12 @@ class NotesLibraryDesktopTests(QtTestCase):
             window = self.open_library(root)
             self.assertTrue({'clip.mp4', 'archive.bin', 'LICENSE'} <= window.items.keys())
             self.assertNotIn('.secret', window.items)
-            with patch('desktop.document_catalog.open_resource') as opened:
-                window.open_note('clip.mp4')
-                opened.assert_called_once_with(window.provider, 'clip.mp4', window)
+            with patch('desktop.document_catalog.open_resource', side_effect=AssertionError('Must stay in library')):
+                window.open_note('archive.bin')
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertEqual(window.history[window.index], 'archive.bin')
+                self.assertIs(window.document_stack.currentWidget(), window.file_preview)
+                self.assertIn('No preview is available', window.file_preview.browser.toPlainText())
             window.close()
 
     def setUp(self):
@@ -1017,7 +1304,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 self.assertIn('Home',child.viewer.browser.toPlainText())
                 child=window.open_note('Nested/Next.md');self.wait_until(lambda:not child.progress.busy and child.index >= 0)
                 self.assertIn('nested note',child.viewer.browser.toPlainText())
-                window.navigate(-1);self.wait_until(lambda:not window.progress.busy)
+                window.navigate(-1);self.wait_until(lambda:not child.progress.busy)
                 self.assertEqual(window.history[window.index],'Home.md')
                 window.search.setText('Home')
                 self.assertFalse(window.items['Home.md'].isHidden())

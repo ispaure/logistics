@@ -36,7 +36,10 @@ App Store Connect configuration and distribution signing are separate steps:
    this workflow deliberately does not declare `ITSAppUsesNonExemptEncryption=false`.
    Use Apple's [beta export-compliance guide](https://developer.apple.com/help/app-store-connect/test-a-beta-version/provide-export-compliance-information-for-beta-builds)
    to determine the required declaration/documents. This is not an exemption assessment.
-5. Capture the intended mobile sources in the manager; current uncommitted mobile
+5. Prepare the [data-view review disclosure and demonstration](#notes-library-data-view-disclosure-and-review-demonstration)
+   for builds containing Notes Library scripting. Include it in both beta and
+   App Store review information, with the sample attachment or an accessible link.
+6. Capture the intended mobile sources in the manager; current uncommitted mobile
    files are supported. The pinned commonUtils source must still be committed. Pick a unique,
    increasing positive build number (at most nine digits) for every uploaded build.
 
@@ -335,6 +338,75 @@ LocalCrypt and LM chat require user-supplied configuration and are optional.
 Before requesting external beta review, provide a disposable sample book/comic
 and, if Apple needs to review connection features, reachable test services with
 review-only credentials through App Store Connect. Never supply personal keys.
+
+### Notes Library data-view disclosure and review demonstration
+
+Include the following in **Beta App Review Information → Notes** for external
+TestFlight review and **App Review Information → Notes** for an App Store version
+that includes data views. Merge it with the other feature instructions above;
+do not replace owner contact details or review credentials. The current external
+distribution helper does not write these review-note fields. This prepared text
+has not been submitted to Apple.
+
+Prepare the synthetic attachment from the repository root (choose a new output
+filename for later revisions; the generator refuses overwrites):
+
+```sh
+python3 -m mobile_build.validation.dataview_review --output test-results/app-review/dataview-review.zip
+```
+
+The ZIP contains an original Markdown note, a reusable JavaScript view, JSON data,
+an intentional rejected-read example and an empty `.obsidian` directory for library
+discovery. It contains no account, credentials, private notes or third-party script.
+Attach this ZIP to the selected version's App Review information where attachments
+are available. For beta review, supply it through a stable reviewer-accessible
+download link in the Notes field if an attachment is unavailable. Test that link
+without signing in and keep it available throughout review. Do not insert a local
+`test-results` path as an Apple-accessible URL. If the selected review flow cannot
+deliver the ZIP directly, provide an accessible demonstration video showing the
+same steps and arrange sample delivery through App Review communication.
+
+Copy-ready reviewer text (supply the actual attachment/link before submission):
+
+> Notes Library includes limited Dataview-compatible JavaScript views of personal
+> notes and JSON. Complete `dataviewjs` blocks execute automatically when a note
+> opens in reading mode; `dv.view` can execute a reusable `.js` file from that
+> library. There is currently no separate script trust prompt. This is executable
+> JavaScript, not just static Markdown. It runs in a disposable WebView worker
+> with network requests blocked. The host exposes bounded reads within the open
+> library, not a general native API or file-write API. Script output is displayed
+> without replacing the saved note. Imported or synced local libraries may contain
+> scripts; direct cloud folders cannot be opened as Notes Libraries. This feature
+> has no plug-in store and does not download native executable components. Source
+> notes, view scripts and JSON remain viewable and editable in the app.
+>
+> No login or remote service is needed for the supplied Data view review sample.
+> Launch the app once. In Apple's Files app, extract the supplied ZIP and copy
+> its `Data view review` folder into this app's shared `Local` folder under
+> On My iPhone/iPad. Keep the included `.obsidian` directory. In Logistics, enable
+> Settings → Features → Notes Library if needed, then open Documents → Notes
+> Library → Refresh libraries and select Data view review.
+>
+> Open Home.md in reading mode. Expect “Inline script complete”, an Inventory
+> table containing “Review pencils” with quantity 7, and “Reusable view complete”.
+> Use Edit and Source to inspect the original `dataviewjs` block. From the library's
+> Files pane open `views/inventory.js` to inspect its script, then `data/items.json`
+> to change quantity 7 to 9 and save. Reopen Home.md; its generated table should
+> show 9, while the saved Markdown retains the script. Open Blocked read.md to
+> see a visible Data view error for an attempted read outside the library.
+> Settings → About → Open-source licenses includes the Dataview upstream MIT
+> copyright and permission notice under Dataview compatibility acknowledgement.
+
+Before submitting, exercise these exact steps on the selected signed iPhone/iPad
+build, including file sharing and library discovery. Capture a short video of
+rendering, source editing, refresh and rejected reads for the review attachment.
+The host probe `document_storage_tools --probe notes-dataview` is additional
+native regression evidence; it does not certify the submitted build or the manual
+import workflow. Keep recordings/reports under ignored `test-results/`; public
+guides must not link to those local files. Apple's
+[App Review information guide](https://developer.apple.com/app-store/review/)
+describes reviewer notes and attachments. Do not claim Apple approval from a
+passing probe or from including this disclosure.
 
 ### Fields that still require the owner's values
 

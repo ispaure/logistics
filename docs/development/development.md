@@ -49,6 +49,8 @@ outputs; they are not source files to tweak.
 
 ## Current development references
 
+- [Mobile accent design and implementation](mobile-accent.md)
+
 Read only the contracts relevant to your change. Feature-specific implementation and test maps live in
 `docs/features/<feature>/development/`; source-package READMEs link there.
 

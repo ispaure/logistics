@@ -2,7 +2,6 @@
 
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 import base64
 import json
 import os
@@ -16,6 +15,8 @@ from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
 from features.rclone.mobile.service import native_service
 from features.rclone.localcrypt.mobile.resources import encrypted_copies
 
+TEST_STAGE = TestStage.REGRESSION
+
 
 class Client:
     generation = 0
@@ -27,6 +28,8 @@ class Client:
             return dict(identity='a' * 64, path=values['path'])
         if action == 'crypt_paths':
             return [item['path'] for item in values['entries']]
+        if action == 'crypt_sizes':
+            return values['sizes']
         if action == 'crypt_raw_read':
             return dict(data=base64.b64encode(b'fixture content').decode())
         if action == 'crypt_decode':
@@ -38,6 +41,128 @@ class Client:
 
 
 class LocalCryptAccessTests(unittest.TestCase):
+    def test_note_metadata_converts_distinct_sizes_in_bounded_guarded_batches(self):
+        with TemporaryDirectory() as root:
+            client = Client()
+            provider = self.provider(root, client)
+            for size in range(300):
+                (provider.root / f'Note{size}.md').write_bytes(b'x' * (size + 48))
+            (provider.root / 'Duplicate.md').write_bytes(b'x' * 48)
+            original = client.request
+            batches = []
+            def request(action, **values):
+                if action == 'crypt_sizes':
+                    batches.append(values['sizes'])
+                    self.assertEqual(values['identity'], provider.identity)
+                    return [size - 48 for size in values['sizes']]
+                return original(action, **values)
+            with patch.object(client, 'request', side_effect=request), patch.object(
+                    provider, 'open', side_effect=AssertionError('No document reads')):
+                rows = provider.note_file_entries()
+            self.assertEqual({row['size'] for row in rows}, set(range(300)))
+            self.assertEqual(len(rows), 301)
+            self.assertEqual(len(batches), 2)
+            self.assertTrue(all(len(batch) <= 256 for batch in batches))
+            self.assertEqual(sum(map(len, batches)), 300)
+            for invalid in (None, [], [True] * 256, [-1] * 256):
+                def malformed(action, **values):
+                    return invalid if action == 'crypt_sizes' else original(action, **values)
+                with patch.object(client, 'request', side_effect=malformed), self.assertRaisesRegex(ValueError, 'sizes'):
+                    provider.note_file_entries()
+            def revoke(action, **values):
+                result = request(action, **values)
+                if action == 'crypt_sizes':
+                    client.lock()
+                return result
+            with patch.object(client, 'request', side_effect=revoke), self.assertRaises(ValueError):
+                provider.note_file_entries()
+
+    def test_duplicate_note_lookup_does_not_remap_each_candidate(self):
+        if not hasattr(os, 'fwalk'):
+            self.skipTest('Descriptor-relative lookup is POSIX-specific')
+        with TemporaryDirectory() as root:
+            provider = self.provider(root, Client())
+            for i in range(300):
+                folder = provider.root / f'Folder{i}'
+                folder.mkdir()
+                (folder / 'Common.md').write_bytes(b'fixture')
+            with patch.object(provider, 'entry', side_effect=AssertionError('No per-candidate remapping')), patch.object(
+                    provider.client, 'request', wraps=provider.client.request) as requests:
+                self.assertEqual(len(provider.find_note_paths('Common.md')), 300)
+            mappings = [call for call in requests.call_args_list if call.args[0] == 'crypt_path']
+            self.assertLessEqual(len(mappings), 3)
+
+    def test_discovery_rejects_a_queued_directory_replaced_before_descent(self):
+        with TemporaryDirectory() as root:
+            provider = self.provider(root, Client())
+            folder = provider.root / 'Moving'
+            folder.mkdir()
+            (folder / 'Original.md').write_bytes(b'fixture')
+            check = provider._check_note_directory
+            def replace(path, before):
+                if path == folder:
+                    path.rename(provider.root / 'Retired')
+                    path.mkdir()
+                    (path / 'Replacement.md').write_bytes(b'fixture')
+                check(path, before)
+            with patch.object(provider, '_check_note_directory', side_effect=replace):
+                with self.assertRaisesRegex(ValueError, 'changed during discovery'):
+                    provider.note_file_paths()
+
+    def test_dataview_discovery_batches_sibling_folders_and_refreshes(self):
+        from features.notes_library.dataview import ViewFiles
+        from features.notes_library.notes import NotesLibrary
+        from commonUtils.runtime.operations import OperationCancelled
+        with TemporaryDirectory() as root:
+            client = Client()
+            provider = self.provider(root, client)
+            for i in range(300):
+                folder = provider.root / 'Topics' / f'Folder{i}'
+                folder.mkdir(parents=True)
+                (folder / 'Note.md').write_bytes(b'opaque fixture')
+            (provider.root / '.hidden').mkdir()
+            (provider.root / '.hidden/Secret.md').write_bytes(b'opaque fixture')
+            library = NotesLibrary(provider)
+            with patch.object(provider, 'list', side_effect=AssertionError('No per-folder listing')), patch.object(
+                    provider, 'open', side_effect=AssertionError('No content reads')), patch.object(
+                    client, 'request', wraps=client.request) as requests:
+                index = ViewFiles(library, 'Topics/Home.md').page_index(lambda: False)
+            self.assertEqual(len(index['pages']), 300)
+            batches = [call.kwargs['entries'] for call in requests.call_args_list if call.args[0] == 'crypt_paths']
+            self.assertEqual(len(batches), 4)
+            self.assertTrue(all(len(batch) <= 256 for batch in batches))
+            self.assertEqual(sum(entry['path'] == 'Note.md' for batch in batches for entry in batch), 1)
+            self.assertFalse(any(entry['path'] == 'Secret.md' for batch in batches for entry in batch))
+            with patch.object(provider, 'list', side_effect=AssertionError('No per-folder listing')):
+                metadata = ViewFiles(library, 'Topics/Home.md').page_index(lambda: False, metadata=True)
+            self.assertEqual(len(metadata['pages']), 300)
+            self.assertTrue(all(page['file']['size'] == len(b'opaque fixture') for page in metadata['pages']))
+            path = provider.root / 'Topics/Folder0/Note.md'
+            path.rename(path.with_name('Renamed.md'))
+            pages = provider.note_file_paths('Topics/Folder0')
+            self.assertEqual(pages, ['Topics/Folder0/Renamed.md'])
+            with self.assertRaises(OperationCancelled):
+                provider.note_file_paths(cancelled=lambda: True)
+            decode = provider._note_decode
+            def revoke(entries):
+                result = decode(entries)
+                client.lock()
+                return result
+            with patch.object(provider, '_note_decode', side_effect=revoke):
+                with self.assertRaises(ValueError):
+                    provider.note_file_paths()
+
+    def test_dataview_discovery_rejects_links_and_incomplete_batches(self):
+        with TemporaryDirectory() as root:
+            provider = self.provider(root, Client())
+            (provider.root / 'Note.md').write_bytes(b'opaque fixture')
+            with patch.object(provider, '_note_decode', return_value=[]):
+                with self.assertRaisesRegex(ValueError, 'Incomplete'):
+                    provider.note_file_paths()
+            (provider.root / 'Link.md').symlink_to(provider.root / 'Note.md')
+            with self.assertRaisesRegex(ValueError, 'Linked storage'):
+                provider.note_file_paths()
+
     def test_note_lookup_decodes_only_candidate_paths_and_preserves_matching_rules(self):
         from features.notes_library.notes import NotesLibrary
         from commonUtils.runtime.operations import OperationCancelled
@@ -46,25 +171,32 @@ class LocalCryptAccessTests(unittest.TestCase):
             provider = self.provider(root, client)
             for folder in ('Topics', 'Other', '.hidden', 'Topics/Nested'):
                 (provider.root / folder).mkdir(parents=True)
-            for name in ('Topics/Unique.md', '.hidden/Unique.md', 'Other/Unrelated.md', 'Topics/Nested/Deep.md'):
+            for name in ('Topics/Unique.md', '.hidden/Unique.md', 'Other/Unrelated.md', 'Topics/Nested/Deep.md',
+                         'Topics/Nested/Smoke_Color_04.mp4', '.hidden/Smoke_Color_04.mp4'):
                 (provider.root / name).write_bytes(b'opaque fixture')
             library = NotesLibrary(provider)
             with patch.object(provider, 'list', side_effect=AssertionError('Full folder listing')), patch.object(
                     client, 'request', wraps=client.request) as requests:
                 self.assertEqual(library.link('Start.md', 'Unique#section'), ('Topics/Unique.md', 'section'))
                 self.assertEqual(library.link('Start.md', 'Nested/Deep'), ('Topics/Nested/Deep.md', ''))
+                self.assertEqual(library.link('Start.md', 'Smoke_Color_04.mp4'),
+                                 ('Topics/Nested/Smoke_Color_04.mp4', ''))
                 decoded = [entry for call in requests.call_args_list if call.args[0] == 'crypt_paths'
                            for entry in call.kwargs['entries']]
                 self.assertTrue(decoded)
                 if hasattr(os, 'fwalk'):
                     self.assertTrue(all(not entry['directory'] for entry in decoded))
-                    self.assertTrue(all(Path(entry['path']).name in {'Unique.md', 'Deep.md'} for entry in decoded))
+                    self.assertTrue(all(Path(entry['path']).name in {'Unique.md', 'Deep.md', 'Smoke_Color_04.mp4'}
+                                        for entry in decoded))
                 else:
                     self.assertTrue(all(entry['directory'] for entry in decoded))
             self.assertEqual(provider.find_note_paths('Unique.md', root='Other'), [])
             (provider.root / 'Other/Unique.md').write_bytes(b'opaque duplicate')
             with self.assertRaisesRegex(ValueError, 'Several notes'):
                 library.link('Start.md', 'Unique')
+            (provider.root / 'Other/Smoke_Color_04.mp4').write_bytes(b'opaque duplicate')
+            with self.assertRaisesRegex(ValueError, 'Several notes'):
+                library.link('Start.md', 'Smoke_Color_04.mp4')
             with self.assertRaisesRegex(ValueError, 'not found'):
                 library.link('Start.md', 'Missing')
             with self.assertRaises(OperationCancelled):
@@ -137,6 +269,26 @@ class LocalCryptAccessTests(unittest.TestCase):
             with patch.object(client, 'request', side_effect=replace):
                 with self.assertRaisesRegex(ValueError, 'changed during lookup'):
                     provider.find_note_paths('Unique.md')
+
+    def test_fallback_rejects_a_directory_moved_during_decode(self):
+        from logistics_build.build_retention import scratch
+        with scratch(Path.cwd()) as root:
+            client = Client()
+            provider = self.provider(root, client)
+            for folder in ('Stable', 'Moving'):
+                (provider.root / folder).mkdir()
+                (provider.root / folder / 'Unique.md').write_bytes(b'opaque fixture')
+            original = client.request
+            def move(action, **values):
+                result = original(action, **values)
+                if action == 'crypt_paths' and (provider.root / 'Moving').exists():
+                    (provider.root / 'Moving').rename(provider.root / 'Moved')
+                return result
+            with patch.object(provider, '_ciphertext_note_paths', return_value=None), patch.object(
+                    client, 'request', side_effect=move):
+                with self.assertRaisesRegex(ValueError, 'changed during lookup'):
+                    provider.find_note_paths('Unique.md')
+            provider.close()
 
     def test_failed_archive_construction_releases_its_native_source(self):
         from commonUtils.runtime.resources.local import LocalFiles

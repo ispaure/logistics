@@ -18,6 +18,7 @@ from features.rclone import configuration, executable, session
 from .mapping import guard_ciphertext_path, is_linked, unlock, validate_ciphertext_tree
 from .read_cache import PrivateReadCache
 from .transport import CryptCommand
+from .note_lookup import CryptNoteLookup
 
 
 class LocalCryptFolder:
@@ -34,7 +35,7 @@ class LocalCryptFolder:
         return open_browser(self.connection)
 
 
-class CryptResources(LocalFiles):
+class CryptResources(CryptNoteLookup, LocalFiles):
     """Generic reader storage backed by a RAM-only crypt-to-local configuration."""
     private = True
     session_only = True  # Desktop LocalCrypt always owns a memory-only credential context.
@@ -115,20 +116,72 @@ class CryptResources(LocalFiles):
                                       input_data=input_data, input_writer=input_writer,
                                       limit=limit, cancelled=cancelled)
 
+    def _note_check(self):
+        self._check_active()
+
+    def _note_encode(self, name):
+        return self._commands.encode(name)
+
+    def _note_decode(self, entries):
+        # Encode directory names with a child so rclone applies its directory
+        # settings, including filename-encryption-off configurations, on decode.
+        probe = self.encrypted_path('.directory-probe').name if any(entry['directory'] for entry in entries) else ''
+        paths = [entry['path'] + '/' + probe if entry['directory'] else entry['path']
+                 for entry in entries]
+        decoded = self._commands.decode_many(paths)
+        result = []
+        for path, entry in zip(decoded, entries):
+            if entry['directory']:
+                if not path.endswith('/.directory-probe'):
+                    raise ValueError('Invalid decrypted directory name.')
+                path = path[:-len('/.directory-probe')]
+            result.append(path)
+        return result
+
+    def _note_guard(self, path):
+        return self._guard(path)
+
+    def note_file_entries(self, root='', *, cancelled=lambda: False):
+        """Validated note discovery plus sizes from one recursive crypt listing."""
+        root = self.relative(root)
+        with self.operation(cancelled):
+            paths = set(self.note_file_paths(root, cancelled=cancelled))
+            if not paths:
+                return []
+            rows = json.loads(self.command('lsjson', root, '--recursive', '--files-only',
+                '--exclude', '.*', '--no-modtime', '--no-mimetype',
+                limit=16 * 1024 * 1024, cancelled=cancelled))
+            if not isinstance(rows, list):
+                raise ValueError('Invalid encrypted note metadata.')
+            entries = {}
+            for row in rows:
+                check_cancelled(cancelled)
+                if not isinstance(row, dict) or not isinstance(row.get('Path'), str):
+                    raise ValueError('Invalid encrypted note metadata.')
+                path = '/'.join(part for part in (root, self.relative(row['Path'])) if part)
+                if path not in paths:
+                    continue
+                size = row.get('Size')
+                if type(size) is not int or size < 0 or path in entries:
+                    raise ValueError('Invalid encrypted note metadata.')
+                entries[path] = dict(path=path, size=size)
+            self._check_active()
+            check_cancelled(cancelled)
+            if entries.keys() != paths:
+                raise ValueError('Notes changed during discovery. Try again.')
+            return list(entries.values())
+
     def existing_files(self, paths, *, cancelled=lambda: False):
         """Probe landing notes without starting a process for each missing file."""
         paths = [self.relative(path) for path in paths]
         found = set()
         with self.operation(cancelled):
-            for offset in range(0, len(paths), 128):
+            encoded = self._commands.encode_many(paths)
+            for path, name in zip(paths, encoded):
                 check_cancelled(cancelled)
-                batch = paths[offset:offset + 128]
-                encoded = self._commands.encode_many(batch)
-                for path, name in zip(batch, encoded):
-                    check_cancelled(cancelled)
-                    target = self._guard(native_path(self.root) / self.relative(name))
-                    if target.is_file():
-                        found.add(path)
+                target = self._guard(native_path(self.root) / self.relative(name))
+                if target.is_file():
+                    found.add(path)
             self._check_active()
         return found
 

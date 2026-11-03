@@ -14,8 +14,156 @@ from features.notes_library.ui.notes_library import NotesLibraryWindow
 
 TEST_STAGE = TestStage.REGRESSION
 
+FILE_SIZES = r'''
+const files = app.vault.getMarkdownFiles();
+const rows = files.map(file => ({name: file.basename, path: file.path, size: file.stat.size}))
+    .sort((a, b) => b.size - a.size);
+function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 ** 2).toFixed(2)} MB`;
+}
+dv.table(["File", "Size"], rows.map(file => [dv.fileLink(file.path), formatSize(file.size)]));
+'''
+
+FOLDER_INDEX = r'''
+const currentFolder = dv.current().file.folder;
+const currentFolderName = currentFolder.split("/").pop();
+const pages = dv.pages(`"${currentFolder}"`).array();
+function compareNames(a, b) {
+    return a.file.name.localeCompare(b.file.name, undefined, { sensitivity: "base" });
+}
+function addInternalLink(container, page) {
+    const link = container.createEl("a", {
+        text: page.file.name, cls: "internal-link", href: page.file.path
+    });
+    link.dataset.href = page.file.path;
+}
+function getDirectChildFolders(folderPath) {
+    return [...new Set(pages.map(page => page.file.folder).filter(pageFolder => {
+        if (!pageFolder.startsWith(`${folderPath}/`)) return false;
+        const relativePath = pageFolder.slice(folderPath.length + 1);
+        return relativePath.length > 0 && !relativePath.includes("/");
+    }))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+function renderFolder(folderPath, container, skipIndex = false) {
+    const folderName = folderPath.split("/").pop();
+    const folderIndex = pages.find(page => page.file.folder === folderPath && page.file.name === folderName);
+    const directFiles = pages.filter(page => page.file.folder === folderPath &&
+        (!folderIndex || page.file.path !== folderIndex.file.path)).sort(compareNames);
+    for (const page of directFiles) addInternalLink(container.createEl("li"), page);
+    const childFolders = getDirectChildFolders(folderPath);
+    for (const childFolderPath of childFolders) {
+        const childFolderName = childFolderPath.split("/").pop();
+        const childFolderIndex = pages.find(page =>
+            page.file.folder === childFolderPath && page.file.name === childFolderName);
+        if (!childFolderIndex) continue;
+        const folderItem = container.createEl("li");
+        addInternalLink(folderItem, childFolderIndex);
+        const childList = folderItem.createEl("ul");
+        renderFolder(childFolderPath, childList);
+        if (childList.children.length === 0) childList.remove();
+    }
+}
+const rootList = dv.container.createEl("ul");
+renderFolder(currentFolder, rootList);
+'''
+
 
 class DataViewTests(QtTestCase):
+    def test_vault_file_sizes_render_inline_and_nested_views_without_content_reads(self):
+        from unittest.mock import patch
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Vault/Sub').mkdir(parents=True)
+            (root / 'Vault/views').mkdir()
+            (root / 'Vault/.hidden').mkdir()
+            for name, content in (('Vault/Tiny.md', 'é'), ('Vault/Sub/Large # [x].markdown', 'x' * 2048),
+                                  ('Vault/.hidden/Secret.md', 'secret'), ('Outside.md', 'outside')):
+                (root / name).write_text(content, encoding='utf-8')
+            (root / 'Vault/views/sizes.js').write_text(FILE_SIZES)
+            window = NotesLibraryWindow(lambda: LocalFiles(root), 'File sizes', root='Vault')
+            window.show()
+            self.wait_until(lambda: not window.progress.busy)
+            for code in (FILE_SIZES, 'await dv.view("views/sizes");'):
+                source = '```dataviewjs\n' + code + '\n```\n'
+                (root / 'Vault/Sub/Home.md').write_text(source)
+                files = ViewFiles(window.library, 'Vault/Sub/Home.md')
+                with patch.object(window.library.provider, 'open', side_effect=AssertionError('No content reads')):
+                    index = files.request(dict(id=1, kind='index', metadata=True))['value']
+                sizes = {page['file']['path']: page['file']['size'] for page in index['pages']}
+                self.assertEqual(sizes['Tiny.md'], 2)
+                self.assertEqual(sizes['Sub/Large # [x].markdown'], 2048)
+                self.assertNotIn('.hidden/Secret.md', sizes)
+                self.assertNotIn('Outside.md', sizes)
+                window.open_note('Vault/Sub/Home.md', remember=False)
+                self.wait_until(lambda: window.viewer.view_output is not None and
+                                'Loading data view' not in window.viewer.view_output, timeout=20)
+                result = window.viewer.view_output
+                self.assertNotIn('Data view error', result)
+                self.assertIn('Large%20%23%20%5Bx%5D.markdown', result)
+                self.assertIn('[Tiny](<../Tiny.md>) | 2 B', result)
+                self.assertIn('2\\.0 KB', result)
+                self.assertLess(result.index('Large%20'), result.index('[Tiny]'))
+                self.assertEqual((root / 'Vault/Sub/Home.md').read_text(), source)
+            window.close()
+
+    def test_recursive_folder_index_renders_inline_and_custom_view(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / '.obsidian').mkdir()
+            for name in ('Guide/Child/Deep', 'Guide/Empty', 'Guide/NoIndex', 'Guide2', 'views'):
+                (root / name).mkdir(parents=True)
+            for name in ('Guide/alpha.md', 'Guide/Beta.md', 'Guide/Child/Child.md',
+                         'Guide/Child/Deep/Deep.md', 'Guide/Child/Deep/Leaf # [x].md',
+                         'Guide/Empty/Empty.md', 'Guide/NoIndex/Invisible.md', 'Guide2/Other.md'):
+                (root / name).write_text('# ' + Path(name).stem)
+            (root / 'views/folders.js').write_text(FOLDER_INDEX)
+            window = NotesLibraryWindow(lambda: LocalFiles(root), 'Folder index')
+            window.show()
+            self.wait_until(lambda: not window.progress.busy)
+            for code in (FOLDER_INDEX, 'await dv.view("views/folders");'):
+                source = '# Guide\n\n```dataviewjs\n' + code + '\n```\n'
+                (root / 'Guide/Guide.md').write_text(source)
+                window.open_note('Guide/Guide.md', remember=False)
+                self.wait_until(lambda: not window.progress.busy and window.viewer.markdown_text() == source and
+                                window.viewer.view_output is not None and
+                                'Loading data view' not in window.viewer.view_output, timeout=20)
+                rendered = window.viewer.view_output
+                self.assertNotIn('Data view error', rendered)
+                self.assertIn('- [alpha](<alpha.md>)\n- [Beta](<Beta.md>)', rendered)
+                self.assertIn('- [Child](<Child/Child.md>)\n    - [Deep](<Child/Deep/Deep.md>)', rendered)
+                self.assertIn('        - [Leaf', rendered)
+                self.assertIn('Leaf%20%23%20%5Bx%5D.md', rendered)
+                self.assertIn('- [Empty](<Empty/Empty.md>)', rendered)
+                for excluded in ('Invisible', 'Other', '[Guide]'):
+                    self.assertNotIn(excluded, rendered)
+                self.assertIn('Leaf # [x]', window.viewer.browser.toPlainText())
+                self.assertEqual(window.viewer.markdown_text(), source)
+                self.assertEqual((root / 'Guide/Guide.md').read_text(), source)
+            target, _ = window.library.link('Guide/Guide.md', 'Child/Deep/Leaf%20%23%20%5Bx%5D.md')
+            self.assertEqual(target, 'Guide/Child/Deep/Leaf # [x].md')
+            window.close()
+
+    def test_page_index_is_library_relative_hidden_filtered_and_bounded(self):
+        from unittest.mock import patch
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Vault/Sub').mkdir(parents=True)
+            (root / 'Vault/.hidden').mkdir()
+            for name in ('Vault/Home.md', 'Vault/Sub/Sub.md', 'Vault/Sub/Extra.markdown', 'Vault/Sub/data.json',
+                         'Vault/.hidden/Secret.md', 'Outside.md'):
+                (root / name).write_text('content')
+            files = ViewFiles(NotesLibrary(LocalFiles(root), 'Vault'), 'Vault/Sub/Sub.md')
+            value = files.request(dict(id=1, kind='index'))['value']
+            self.assertEqual(value['current']['file'], dict(path='Sub/Sub.md', folder='Sub', name='Sub'))
+            self.assertEqual([page['file']['path'] for page in value['pages']],
+                             ['Home.md', 'Sub/Extra.markdown', 'Sub/Sub.md'])
+            with patch('features.notes_library.dataview.MAX_TOTAL', 1):
+                self.assertIn('8 MiB', files.request(dict(id=2, kind='index'))['error'])
+            with patch.object(files.library.provider, 'list_names', return_value=[{}] * 10001):
+                self.assertIn('10,000', files.request(dict(id=3, kind='index'))['error'])
+
     def test_custom_view_matches_case_on_case_sensitive_encrypted_storage(self):
         from unittest.mock import patch
         with self.temporary_directory() as directory:
@@ -231,7 +379,7 @@ class DataViewTests(QtTestCase):
                 'dv.header(2,"Inventory");dv.table(["Name","Quantity"],rows.map(r=>[r.name,r.quantity]));'
                 'dv.list(["One","Two"]);dv.paragraph("Done");')
             source = ('# Home\n\n```dataviewjs\nawait dv.view("views/custom", {path:"data.json"});\n```\n'
-                      '\n```dataviewjs\ndv.pages();\n```\n')
+                      '\n```dataviewjs\ndv.unsupported();\n```\n')
             (root / 'Home.md').write_text(source)
             window = NotesLibraryWindow(lambda: LocalFiles(root), 'Test')
             window.show()
@@ -268,7 +416,13 @@ class DataViewTests(QtTestCase):
         loaded = []
         web.loadFinished.connect(loaded.append)
         plan = view_plan('```dataviewjs\nconst data=JSON.parse(await dv.io.load("data.json"));'
-                         'dv.table(["Item"],data.map(x=>[x]));\n```\n')
+                         'dv.table(["Item"],data.map(x=>[x])); dv.paragraph("Before tree");'
+                         'const ordered=dv.container.createEl("ol");'
+                         'const item=ordered.createEl("li",{text:"Old text"});'
+                         'item.createEl("span",{text:"Removed child"}); item.textContent="First";'
+                         'ordered.createEl("li",{text:"Second"});\n' + FOLDER_INDEX +
+                         '\n' + FILE_SIZES +
+                         '\ndv.paragraph("After tree");\n```\n')
         web.setHtml(worker_policy(markdown_preview(plan.render())))
         self.wait_until(lambda: loaded, timeout=10)
         def evaluate(script):
@@ -284,6 +438,14 @@ class DataViewTests(QtTestCase):
             return bool(state['requests']) or state['done']
         self.wait_until(requested, timeout=10)
         request = states[-1]['requests'][0]
+        self.assertEqual(request['kind'], 'index')
+        index = dict(current=dict(file=dict(path='Home.md', folder='', name='Home')),
+                     pages=[dict(file=dict(path='Mobile.md', folder='', name='Mobile', size=2048))])
+        self.assertTrue(request['metadata'])
+        evaluate('window.logisticsDataView.reply(' + javascript(dict(id=request['id'], value=index)) + ')')
+        self.wait_until(requested, timeout=10)
+        request = states[-1]['requests'][0]
+        self.assertEqual(request['kind'], 'load')
         evaluate('window.logisticsDataView.reply(' + javascript(dict(id=request['id'], value='["Mobile"]')) + ')')
         def complete():
             state = json.loads(evaluate(POLL))
@@ -291,6 +453,15 @@ class DataViewTests(QtTestCase):
             return state['done']
         self.wait_until(complete, timeout=10)
         self.assertIn('| Mobile |', states[-1]['results'][0])
+        self.assertIn('- [Mobile](<Mobile.md>)', states[-1]['results'][0])
+        self.assertIn('| [Mobile](<Mobile.md>) | 2\\.0 KB |', states[-1]['results'][0])
+        result = states[-1]['results'][0]
+        self.assertIn('1. First\n2. Second', result)
+        self.assertNotIn('Old text', result)
+        self.assertNotIn('Removed child', result)
+        self.assertLess(result.index('Before tree'), result.index('1. First'))
+        self.assertLess(result.index('1. First'), result.index('- [Mobile]'))
+        self.assertLess(result.index('- [Mobile]'), result.index('After tree'))
 
     def test_close_waits_for_data_view_provider_read_before_releasing_access(self):
         from threading import Event

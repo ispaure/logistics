@@ -1,6 +1,6 @@
 """Local mobile folder providers; crypt naming/bytes stay in the native bridge."""
 from services.documents.locations import collection_path, _modified_time
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 import base64
 import os
 import re
@@ -15,6 +15,7 @@ from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import read_up_to
 from .content import CryptContentProvider
+from features.rclone.localcrypt.note_lookup import CryptNoteLookup
 from features.rclone.access import ResourceAccess
 from features.rclone.localcrypt.mobile.locations import LocalCryptLocation, OfflineCryptLocation
 from features.rclone.mobile.service import native_service
@@ -64,7 +65,7 @@ def native_transfer(client, record, path, encrypted):
         yield stream
 
 
-class CryptFiles(CryptContentProvider, LocalFiles):
+class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
     private = True
     supports_metadata_collections = True
 
@@ -142,162 +143,57 @@ class CryptFiles(CryptContentProvider, LocalFiles):
     def record(self, path):
         return dict(remote=self.remote, identity=self.identity, encrypted_path=self.mapping(path))
 
-    def _ciphertext_note_paths(self, name, root, encoded, top, cancelled):
-        """Use descriptor-relative traversal; decrypt only matching full paths.
-
-        Return None to retain the visible-tree limit semantics for unusually
-        deep or hidden-heavy trees. The caller then uses its bounded fallback.
-        """
-        def failed(error):
-            raise error  # Never accept an incomplete scan as a unique match.
-
-        candidates, count = [], 0
-        with closing(os.fwalk(top, follow_symlinks=False, onerror=failed)) as walk:
-            for folder, directories, files, descriptor in walk:
-                self._access.check()
-                if os.path.relpath(folder, top).count(os.sep) >= 128:
-                    return None
-                for index, child in enumerate((*directories, *files)):
-                    if index % 32 == 0:
-                        check_cancelled(cancelled)
-                    try:
-                        info = os.stat(child, dir_fd=descriptor, follow_symlinks=False)
-                    except FileNotFoundError:
-                        continue
-                    if stat.S_ISLNK(info.st_mode):
-                        return None  # The visible-tree fallback decides whether this is hidden configuration.
-                    directory = stat.S_ISDIR(info.st_mode)
-                    if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
-                        return None
-                    if re.fullmatch(r'.+\.[0-9a-f]{8}\.partial', child):
-                        continue
-                    count += 1
-                    if count > 10000:
-                        return None
-                    if not directory and child == encoded:
-                        physical = os.path.relpath(os.path.join(folder, child), self.root)
-                        candidates.append((Path(physical).as_posix(), info))
-        matches = []
-        for offset in range(0, len(candidates), 256):
-            check_cancelled(cancelled)
-            batch = candidates[offset:offset + 256]
-            self._access.check()
-            decoded = self.client.request('crypt_paths', remote=self.remote, identity=self.identity,
-                entries=[dict(path=path, directory=False) for path, _ in batch])
-            self._access.check()
-            if len(decoded) != len(batch):
-                raise ValueError('Incomplete encrypted note lookup.')
-            for plain, (_, before) in zip(decoded, batch):
-                check_cancelled(cancelled)
-                plain = self.relative(plain)
-                relative = PurePosixPath(plain).relative_to(root or '.')
-                if any(part.startswith('.') for part in relative.parts):
-                    continue
-                if plain != name and not plain.endswith('/' + name):
-                    continue
-                current = self.entry(plain)
-                revision = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
-                if current['directory'] or current['revision'] != revision:
-                    raise ValueError('Notes changed during lookup. Try again.')
-                matches.append(plain)
-        self._guard(top)
+    def _note_check(self):
         self._access.check()
-        check_cancelled(cancelled)
-        return matches
 
-    def find_note_paths(self, name, root='', *, cancelled=lambda: False):
-        """Match ciphertext basenames, decoding only candidates on POSIX hosts.
+    def _note_encode(self, name):
+        return self.mapping(name)
 
-        Other hosts and oversized/deep raw trees use a visible-tree scan with
-        batched directory decoding. Neither path retains a plaintext index.
-        """
-        name, root = self.relative(name), self.relative(root)
-        basename = PurePosixPath(name).name
+    def _note_decode(self, entries):
+        from ..path_batches import native_path_entries
+        return native_path_entries(self.client, self.remote, self.identity,
+            ((entry['path'], entry['directory']) for entry in entries), check=self._access.check)
+
+    def _note_guard(self, path):
+        return LocalFiles._guard(self, path)
+
+    def note_file_entries(self, root='', *, cancelled=lambda: False):
+        """Convert distinct ciphertext lengths in bounded native batches."""
         with self.operation(cancelled):
-            encoded = self.mapping(basename)
-            if not encoded or '/' in encoded:
-                raise ValueError('Invalid encrypted filename.')
-            top = self._locate(root)
-            if hasattr(os, 'fwalk'):
-                matches = self._ciphertext_note_paths(name, root, encoded, top, cancelled)
-                if matches is not None:
-                    return matches
-            pending = [(root, top)]
-            matches, count = [], 0
-            while pending:
-                directories = []
-                for parent, folder in pending:
-                    check_cancelled(cancelled)
-                    # Collection selection is checked for the whole traversal,
-                    # before and after. Keep per-folder ancestor/link guards
-                    # without rereading the same storage settings thousands of
-                    # times. Grant checks also fence each decode and publication.
-                    LocalFiles._guard(self, folder)
-                    with os.scandir(folder) as entries:
-                        for entry in entries:
-                            check_cancelled(cancelled)
-                            child = Path(entry.path)
-                            if entry.is_symlink() or (hasattr(Path, 'is_junction') and child.is_junction()):
-                                raise ValueError('Linked storage is not supported.')
-                            try:
-                                info = entry.stat(follow_symlinks=False)
-                            except FileNotFoundError:
-                                continue
-                            directory = stat.S_ISDIR(info.st_mode)
-                            if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
-                                raise ValueError('Choose an independent regular file or folder.')
-                            if re.fullmatch(r'.+\.[0-9a-f]{8}\.partial', child.name):
-                                continue
-                            count += 1
-                            if count > 10000:
-                                raise ValueError('Note lookup exceeds the 10,000-entry limit. Use an explicit note path.')
-                            if directory:
-                                directories.append((parent, child, info))
-                            elif entry.name == encoded:
-                                plain = '/'.join(part for part in (parent, basename) if part)
-                                if plain == name or plain.endswith('/' + name):
-                                    self._guard(child)
-                                    matches.append(plain)
-                    LocalFiles._guard(self, folder)
-                pending = []
-                for offset in range(0, len(directories), 256):
-                    check_cancelled(cancelled)
-                    batch = directories[offset:offset + 256]
-                    self._access.check()
-                    names = self.client.request('crypt_paths', remote=self.remote, identity=self.identity,
-                        entries=[dict(path=child.name, directory=True) for _, child, _ in batch])
-                    self._access.check()
-                    if len(names) != len(batch):
-                        raise ValueError('Incomplete encrypted folder lookup.')
-                    for decoded, (parent, child, before) in zip(names, batch):
-                        check_cancelled(cancelled)
-                        decoded = self.relative(decoded)
-                        if not decoded or '/' in decoded:
-                            raise ValueError('Invalid encrypted folder entry.')
-                        if decoded.startswith('.'):
-                            continue
-                        try:
-                            after = child.stat(follow_symlinks=False)
-                        except FileNotFoundError:
-                            continue
-                        if (before.st_dev, before.st_ino, before.st_mode) != (after.st_dev, after.st_ino, after.st_mode):
-                            continue
-                        pending.append(('/'.join(part for part in (parent, decoded) if part), child))
-            self._guard(top)
-            self._access.check()
-            check_cancelled(cancelled)
-            return matches
+            rows = super().note_file_entries(root, cancelled=cancelled)
+            sizes = list(dict.fromkeys(row['size'] for row in rows))
+            decoded = {}
+            for offset in range(0, len(sizes), 256):
+                check_cancelled(cancelled)
+                self._access.check()
+                batch = sizes[offset:offset + 256]
+                values = self.client.request('crypt_sizes', remote=self.remote, identity=self.identity, sizes=batch)
+                self._access.check()
+                check_cancelled(cancelled)
+                if (not isinstance(values, list) or len(values) != len(batch)
+                        or any(type(size) is not int or size < 0 for size in values)):
+                    raise ValueError('Invalid encrypted note sizes.')
+                decoded.update(zip(batch, values))
+            return [dict(row, size=decoded[row['size']]) for row in rows]
 
     def existing_files(self, paths, *, cancelled=lambda: False):
         """Bounded path encoding for Notes Library landing-note probes."""
         paths = [self.relative(path) for path in paths]
         found = set()
         with self.operation(cancelled):
-            for path in paths:
+            from ..path_batches import native_path_entries
+            def check():
                 check_cancelled(cancelled)
-                target = self._guard(self._physical(path))
+                self._access.check()
+            encoded = native_path_entries(self.client, self.remote, self.identity,
+                ((path, False) for path in paths), check=check, encode=True)
+            self._guard(self.root)
+            for path, name in zip(paths, encoded):
+                check()
+                target = self._note_guard(self.root / self.relative(name))
                 if target.is_file():
                     found.add(path)
+            self._guard(self.root)
             self._access.check()
         return found
 
@@ -330,11 +226,10 @@ class CryptFiles(CryptContentProvider, LocalFiles):
         for offset in range(0, len(children), 256):
             check_cancelled(cancelled)
             batch = children[offset:offset + 256]
-            names = self.client.request('crypt_paths', remote=self.remote, identity=self.identity,
+            names = self._note_decode(
                 # The parent path was already located and validated. Decode
                 # each basename once, rather than its ancestors for every row.
-                entries=[dict(path=child.name, directory=directory)
-                         for child, _, directory in batch])
+                [dict(path=child.name, directory=directory) for child, _, directory in batch])
             if len(names) != len(batch):
                 raise ValueError('Incomplete encrypted folder listing.')
             for plain, (child, info, directory) in zip(names, batch):

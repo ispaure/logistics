@@ -47,8 +47,8 @@ def main():
         elif action == 'storage_inventory':
             result = project.storage_inventory()
         elif action == 'storage_maintenance':
-            from logistics_build.build_retention import clean
-            result = dict(status='passed', removed=clean(ROOT, apply=True))
+            from logistics_build.build_retention import storage_maintenance
+            result = storage_maintenance(ROOT)
         elif action == 'enroll_storage':
             from logistics_build.storage_extras import enroll
             result = enroll(ROOT, values['kind'], values['location'])

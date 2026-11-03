@@ -59,13 +59,9 @@ def ios_toolbar_items(controller, *, leading=False):
 
 async def choose_creation_type(app, extension):
     """Select the format for unattended probes of the subsequent native screens."""
-    from unittest.mock import patch
-    from services.documents.authoring.document_dialogs import DocumentTypeDialog
-
-    async def select(dialog):
-        assert isinstance(dialog, DocumentTypeDialog)
-        assert extension in {value for _, value, _ in dialog.choices}
-        return extension
-
-    with patch.object(app.main_window, 'dialog', select):
-        await app.choose_document_type()
+    await app.choose_document_type()
+    picker = app.editor_picker()
+    assert hasattr(picker, 'creation_choices'), dict(active=app.active_host,
+        busy=app.cloud_busy, destination=app.native_host.state.destination,
+        startup=getattr(app, '_startup_in_progress', None))
+    picker.creation_type.value = next(label for label, ext in picker.creation_choices if ext == extension)

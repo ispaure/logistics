@@ -43,6 +43,7 @@ type bridgeRequest struct {
 	Decrypted           bool              `json:"decrypted"`
 	Directory           bool              `json:"directory"`
 	Entries             []cryptPathEntry  `json:"entries"`
+	Sizes               []int64           `json:"sizes"`
 	Decode              bool              `json:"decode"`
 	SourceRemote        string            `json:"source_remote"`
 	SourcePath          string            `json:"source_path"`

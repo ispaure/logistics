@@ -4,7 +4,7 @@
 
 Settings opens a category list: **App**, **Features**, **Read aloud**, **Markdown**, **Text**,
 **EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Privacy & Security**, **Reset**, **Help**, and **About**.
-Both platforms include **Appearance** for Seasonal snow; Android also offers
+Both platforms include **Appearance** for Accent color and Seasonal snow; Android also offers
 High contrast / E Ink there. On a phone, tap
 one category to see its options and use Back to return to the list.
 Categories and related options share rounded groups with inset dividers, like
@@ -58,6 +58,16 @@ guide, even with every feature off. Its pages, links, search and history stay
 available independently of Text Editor.
 
 ## Appearance and E Ink status
+
+**Accent color** offers Hue and Saturation sliders with a live tab preview.
+Both sliders' filled tracks and thumbs match the selected color while dragging.
+One accent choice applies throughout the app, with no separate regional colors.
+Drag to preview; release to save on this device. Brightness adjusts automatically
+for readable light and dark colors. **Reset to blue** restores the default.
+Selected tabs, navigation indicators, settings actions and native control tints
+use the accent. File/folder icons, workspace locked/unlocked icons and destructive
+actions retain their own colors. High contrast / E Ink remains black and white
+and remembers the accent for when that mode is turned off.
 
 **Seasonal snow** is on by default and saves immediately on this device.
 Decorative snow falls from December 15 through January 2, inclusive, each year,

@@ -92,10 +92,11 @@ async def favourite_resource(app, provider, path, *, kind):
     app.refresh_hub('home')
 
 
-def resource_reference(app, provider, path):
-    from services.documents.provider_documents import ProviderDocuments
+def resource_reference(app, provider, path, *, require_cipher=True):
+    from services.documents.mobile_storage import document_source
     from .document_sources import file_source, saved_connection
-    source = file_source(app, ProviderDocuments(provider), path, session_only=True)
+    copies, key = document_source(provider, path)
+    source = file_source(app, copies, key, session_only=True)
     if source is None:
         raise ValueError('This file has no reusable storage reference.')
     cipher = None
@@ -103,15 +104,45 @@ def resource_reference(app, provider, path):
         source = dict(source, path=str(Path(source['path']).resolve()))
     elif not saved_connection(app, source['remote'], source['identity']):
         cipher = MobileCredentialCipher(provider, app)
-        cipher.identity
+        try:
+            cipher.identity
+        except PermissionError:
+            if require_cipher:
+                raise
+            cipher = None
     return source, cipher
 
 
 def relocate(app, provider, source, destination=None):
-    source, cipher = resource_reference(app, provider, source)
-    target = resource_reference(app, provider, destination)[0] if destination is not None else None
-    catalog(app).relocate(source, target, cipher=cipher)
-    app._favourites_version = getattr(app, '_favourites_version', 0) + 1
+    from .document_sources import saved_connection
+    old_name, new_name = Path(source).name, Path(destination).name if destination is not None else ''
+    source, cipher = resource_reference(app, provider, source, require_cipher=False)
+    target = resource_reference(app, provider, destination, require_cipher=False)[0] if destination is not None else None
+    # Offline single-file copies have a stable record key. Rename their display
+    # title without changing that key or replacing a custom favourite label.
+    names = (old_name, new_name) if source == target else None
+    def update_history():
+        failed = False
+        for owner in (app.recent_documents, app.credential_document_lists):
+            try:
+                owner.relocate(source, target, names=names)
+            except (OSError, ValueError, PermissionError):
+                failed = True
+        app._favourites_version = getattr(app, '_favourites_version', 0) + 1
+        if failed:
+            app.recovery_notice.text = 'Files changed; some saved references could not be updated.'
+    try:
+        # A passwordless session cannot have a credential-encrypted favourite
+        # bucket. Never fall back to writing private references in plaintext.
+        if source['type'] == 'local' or cipher is not None or saved_connection(app, source['remote'], source['identity']):
+            catalog(app).relocate(source, target, cipher=cipher, names=names)
+    finally:
+        # History objects and their coalesced writes belong to the UI loop.
+        # Reconcile them even when a separate favourite catalog is unreadable.
+        if app.loop.is_running():
+            app.loop.call_soon_threadsafe(update_history)
+        else:
+            update_history()
 
 
 async def reopen(app, row):

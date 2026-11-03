@@ -178,6 +178,14 @@ class BrowserLocationRow(qt.QWidget):
 
 
 def install_browser_location(browser, provider=None):
+    if provider is not None and hasattr(browser, 'renamed'):
+        def relocated(source, destination):
+            from desktop.document_catalog import relocate
+            try:
+                relocate(provider, source, destination)
+            except (OSError, ValueError, PermissionError):
+                qt.QMessageBox.warning(browser, 'Rename', 'Files changed; some saved references could not be updated.')
+        browser.renamed.connect(relocated)
     row = BrowserLocationRow(browser, provider)
     browser.storage_location = row
     return row

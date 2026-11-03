@@ -1,6 +1,5 @@
 """Semantic colours for the pinned native backends, without changing document data."""
 import weakref
-from commonUtils.ui.appearance.colors import readable_accent
 from commonUtils.ui.native.appearance import (
     SurfacePainter, SurfaceStyle, DynamicAppleColors,
     accessible_name as accessible_name, set_android_background as _set_android_background,
@@ -14,13 +13,34 @@ _surfaces = weakref.WeakKeyDictionary()
 _template_icons = weakref.WeakSet()
 _android_boxes = weakref.WeakSet()
 _android_webviews = weakref.WeakSet()
+_accent_controls = weakref.WeakSet()
 
 
 _apple_palette = DynamicAppleColors(lambda dark: DARK if dark else LIGHT)
+_apple_accent = (LIGHT['accent'], DARK['accent'])
 
 
 def apple_color(role):
     return _apple_palette.color(role)
+
+
+def paint_accent_control(impl):
+    """Tint native controls without touching file/folder image assets."""
+    import toga
+    backend = type(impl).__module__
+    if backend.startswith('toga_iOS.'):
+        impl.native.tintColor = apple_color('accent')
+        if isinstance(impl.interface, toga.Switch):
+            impl.native_switch.onTintColor = apple_color('accent')
+    elif backend.startswith('toga_android.'):
+        if isinstance(impl.interface, toga.Switch) and not eink_enabled():
+            from android import R
+            from android.content.res import ColorStateList
+            colors = android_palette(impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
+            impl.native.setThumbTintList(ColorStateList([[R.attr.state_checked], []],
+                [argb(colors['accent']), argb(colors['muted'])]))
+            impl.native.setTrackTintList(ColorStateList([[R.attr.state_checked], []],
+                [(argb(colors['accent']) & 0xffffff) | 0x55000000, argb(colors['border'])]))
 
 
 def _prepare_surface_button(impl):
@@ -280,6 +300,13 @@ def install_appearance(app):
 
 
 def _install_ios_appearance(app):
+    from toga_iOS.widgets.switch import Switch
+    original_switch_create = Switch.create
+    def create_switch(impl):
+        original_switch_create(impl)
+        _accent_controls.add(impl)
+        paint_accent_control(impl)
+    Switch.create = create_switch
     from .ios_reader_chrome import install
     install()
     from rubicon.objc import objc_method, send_super, objc_id
@@ -408,6 +435,7 @@ def _install_ios_appearance(app):
         original = cls.create
         def create(impl, previous=original):
             previous(impl)
+            _accent_controls.add(impl)
             impl.native.backgroundColor = apple_color('surface')
             if not isinstance(impl, Selection):
                 impl.native.tintColor = apple_color('accent')
@@ -478,13 +506,14 @@ def _install_android_appearance(app):
         if isinstance(impl, TextInput):
             impl.native.setHintTextColor(impl.get_theme_color(R.attr.textColorSecondary))
             surface = impl.get_theme_color(MaterialR.attr.colorSurface)
-            foreground = impl.get_theme_color(R.attr.textColorPrimary)
-            accent = readable_accent(impl.get_theme_color(R.attr.colorAccent), foreground, surface)
+            accent = impl.get_theme_color(R.attr.colorAccent)
             normal = impl.get_theme_color(R.attr.colorControlNormal)
             impl.native.setBackgroundTintList(ColorStateList([[R.attr.state_focused], []], [accent, normal]))
             impl.native_toplevel.setBackgroundColor(surface)
         if isinstance(impl, Switch):
             paint_eink_switch(impl)
+            _accent_controls.add(impl)
+            paint_accent_control(impl)
         if isinstance(impl, Button):
             attribute = MaterialR.attr.colorSurface if getattr(impl, '_list_row', False) else R.attr.colorButtonNormal
             impl.native.setBackgroundTintList(ColorStateList.valueOf(impl.get_theme_color(attribute)))
@@ -538,9 +567,21 @@ def native_theme_configuration(app):
 
 def refresh_appearance(app):
     """Recolour live chrome without replacing editors or transfer owners."""
+    # UIKit caches dynamic providers by traits; a new accent also needs a new
+    # provider when the system appearance itself has not changed.
+    global _apple_palette, _apple_accent
+    accent = (LIGHT['accent'], DARK['accent'])
+    if type(app._impl).__module__.startswith('toga_iOS.') and accent != _apple_accent:
+        _apple_palette = DynamicAppleColors(lambda dark: DARK if dark else LIGHT)
+        _apple_accent = accent
     if type(app._impl).__module__.startswith('toga_android.'):
         from .palette import set_android_system_dark
         set_android_system_dark(native_theme_configuration(app) == 0x20)
+    for impl in list(_accent_controls):
+        paint_accent_control(impl)
+    picker = getattr(app, 'accent_controls', None)
+    if picker is not None:
+        picker.preview_color()
     from .page_animation import sync_preferences
     sync_preferences(app)
     from .reader_progress import refresh_progress
@@ -556,6 +597,7 @@ def refresh_appearance(app):
         if host is not None and window is not None:
             color = apple_color('window')
             window._impl.native.backgroundColor = color
+            window._impl.native.tintColor = apple_color('accent')
             window._impl.container.native.backgroundColor = color
             for body in host.bodies.values():
                 body._impl._default_background_color = color
@@ -637,7 +679,6 @@ def refresh_android_navigation(host):
     foreground = impl.get_theme_color(R.attr.textColorPrimary)
     accent = impl.get_theme_color(R.attr.colorAccent)
     background = impl.get_theme_color(MaterialR.attr.colorSurface)
-    accent = readable_accent(accent, foreground, background)
     colours = ColorStateList([[R.attr.state_checked], []], [accent, foreground])
     if not hasattr(host.adapter, '_eink_bar_styles'):
         host.adapter._eink_bar_styles = {}
@@ -662,6 +703,8 @@ def refresh_android_navigation(host):
                     bar.setElevation(elevation)
                 bar.setItemIconTintList(colours)
                 bar.setItemTextColor(colours)
+                bar.setItemActiveIndicatorColor(ColorStateList.valueOf(
+                    (accent & 0xffffff) | 0x22000000))
             bar.setBackgroundColor(background)
             if index == 1 and hasattr(bar, 'setRailDividerColor'):
                 bar.setRailDividerColor(argb('#000000') if eink_enabled() else 0)

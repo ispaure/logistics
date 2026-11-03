@@ -364,6 +364,38 @@ minimum height directly, so Android density conversion does not clip the status
 area. `test_document_creation.py` covers these paths,
 including iOS shared Documents and notebook validation followed by retry.
 
+New Document enters its retained naming form directly; there is no preceding
+format alert. `creation_layout.CreationFormats` presents enabled formats as
+described native buttons on wide layouts and collapses them to a selected-format/Change row
+when the remaining keyboard viewport is too small. Compact layouts instead pin
+Text, Markdown and reMarkable Notebook tabs above the name form, retaining the
+keyboard and focus when the selected format changes. Width/fold reflow switches
+between tabs and cards without replacing the selected format. Android tab labels
+use the live native font metrics and compound padding for wrapping and height,
+so the longer notebook title remains readable with the themed button font.
+It never reparents the name
+input. Change dismisses the keyboard before restoring the cards. Large
+allocations mount and load the location browser beside the naming form;
+compact allocations retain Name → Next → Location. Both paths use the same
+validation, provider guards and publication transaction. `CreationLocation` owns
+the surrounding Choose a folder heading, storage/folder actions and horizontally
+scrollable parent path links. Links use the browser's existing guarded location
+callback; the shared browser rows, Up/search controls and navigation behavior
+are retained. New folder enters the created folder before document publication,
+allowing nested and sibling folder creation. The wide Create here
+action publishes directly even while the naming pane owns the retained step.
+Opening from Home waits for pending initial connection restoration rather than
+dropping the request while the provider is busy. Native refreshes do not cancel
+the request; leaving its originating body or destination does.
+`test_document_creation.py` checks keyboard expansion, format/name/folder
+retention, I/O disabling and direct wide creation. The focused native
+`document_creation_probe.py`, run by `mobile_build.validation.document_storage_tools --probe creation`,
+checks real software keyboards, both landscape rotations and creation flows in
+owned simulators. The owning helper can build current native sources or reuse
+an explicitly supplied compatible shell. System keyboard screenshots are
+captured separately from app-window renders. Evidence is saved before removing
+the QA app and owned simulator.
+
 ## File loading panels
 
 `document_sources.opening_status` presents a temporary `file-loading:` route with

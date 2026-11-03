@@ -52,6 +52,7 @@ class NotebookStorageTests(unittest.TestCase):
             with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='rmdoc')):
                 self.run_async(self.app.choose_document_type())
             picker = self.app.editor_picker()
+            picker.creation_type.value = 'Remarkable Document (.rmdoc)'
             picker.save_as_name.value = 'Private sketch'
             self.run_async(picker.choose_creation_location())
         picker = self.app.editor_picker()

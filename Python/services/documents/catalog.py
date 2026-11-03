@@ -1,13 +1,47 @@
 """Bounded favourites and recent references, with credential-password buckets."""
 from hashlib import sha256
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from threading import RLock
 from time import time_ns
 from commonUtils.persistence import atomic_write_bytes
 
 LIMIT = 128 * 1024
 _lock = RLock()
+
+
+def _path_type(source):
+    path = source.get('path', '')
+    return PureWindowsPath if source.get('type') == 'local' and PureWindowsPath(path).is_absolute() else PurePosixPath
+
+
+def _path_suffix(path, source):
+    if not isinstance(path, str):
+        return None
+    key = 'key' if 'key' in source else 'path'
+    kind = _path_type(source)
+    try:
+        return kind(path).relative_to(kind(source[key]))
+    except ValueError:
+        return None
+
+
+def relocated_source(item, source, destination):
+    """Remap a logical path within the same storage/credential namespace."""
+    key = 'key' if 'key' in source else 'path'
+    if ({name: value for name, value in item.items() if name != key}
+            != {name: value for name, value in source.items() if name != key}):
+        return item
+    suffix = _path_suffix(item.get(key), source)
+    if suffix is None:
+        return item
+    return None if destination is None else dict(destination, **{key: str(_path_type(destination)(destination[key]) / suffix)})
+
+
+def relocated_title(title, before, after, *, names=None):
+    key = 'key' if 'key' in before else 'path'
+    old, new = names or (_path_type(before)(before[key]).name, _path_type(after)(after[key]).name)
+    return new if title == old else title
 
 
 class DocumentCatalog:
@@ -86,13 +120,9 @@ class DocumentCatalog:
             value['favourites'] = [row for row in value['favourites'] if row['id'] != identity]
             self.save(value, cipher)
 
-    def relocate(self, source, destination=None, *, cipher=None):
+    def relocate(self, source, destination=None, *, cipher=None, names=None):
         """Follow an app-owned move/delete while retaining each opening context."""
         key = 'key' if 'key' in source else 'path'
-        prefix = source[key]
-        scope = {name: value for name, value in source.items() if name != key}
-        def belongs(path):
-            return path == prefix or path.startswith(prefix.rstrip('/') + '/')
         with _lock:
             value = self.read(cipher)
             changed = False
@@ -100,16 +130,17 @@ class DocumentCatalog:
                 rows = []
                 for row in value[field]:
                     item = row['source']
-                    if ({name: data for name, data in item.items() if name != key} == scope
-                            and isinstance(item.get(key), str) and belongs(item[key])):
+                    updated = relocated_source(item, source, destination)
+                    if updated is not item:
                         changed = True
                         if destination is None:
                             continue
-                        item = dict(item, **{key: destination[key] + item[key][len(prefix):]})
+                        item = updated
                         opener = dict(row['opener'])
-                        if isinstance(opener.get('root'), str) and belongs(opener['root']):
-                            opener['root'] = destination[key] + opener['root'][len(prefix):]
-                        title = PurePosixPath(item[key]).name if row['title'] == PurePosixPath(row['source'][key]).name else row['title']
+                        suffix = _path_suffix(opener.get('root'), source)
+                        if suffix is not None:
+                            opener['root'] = str(_path_type(destination)(destination[key]) / suffix)
+                        title = relocated_title(row['title'], row['source'], item, names=names)
                         row = dict(row, id=self.identity(item), source=item, opener=opener, title=title)
                     rows.append(row)
                 value[field] = rows

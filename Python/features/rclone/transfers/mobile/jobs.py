@@ -15,6 +15,7 @@ from .records import MAX_RECORD_BYTES as MAX_RECORD_BYTES  # Legacy public const
 from .planning import CopyPlanner, resolved_job
 from .transport import sync_copy
 from features.rclone.mobile.bridge_protocol import crypt_path
+from features.rclone.localcrypt.path_batches import native_path_entries
 
 
 def copy_target(root, job):
@@ -203,13 +204,15 @@ class MirrorJobs:
             return {}
         prefix = crypt_path(client, remote=job['remote'], path=job['prefix'],
             identity=job['cipher_identity'], directory=True)
-        def decode(name, stopping):
+        def decode_many(names, stopping):
             self.check(client, job, stopping)
-            full = '/'.join(part for part in (job['prefix'], name) if part)
-            plain = crypt_path(client, remote=job['remote'], path=full,
-                identity=job['cipher_identity'])
-            return plain[len(prefix) + 1:] if prefix else plain
-        return cleanup_candidates(self.guard(self.target(job)), decode, cancelled)
+            entries = [('/'.join(part for part in (job['prefix'], name) if part), False) for name in names]
+            plain = native_path_entries(client, job['remote'], job['cipher_identity'], entries,
+                                        check=lambda: self.check(client, job, stopping))
+            if prefix and any(not path.startswith(prefix + '/') for path in plain):
+                raise ValueError('Invalid encrypted cleanup path.')
+            return [path[len(prefix) + 1:] if prefix else path for path in plain]
+        return cleanup_candidates(self.guard(self.target(job)), None, cancelled, decode_many=decode_many)
 
     def execute_push(self, key, client, *, options=None, cancelled=lambda: False, progress=lambda **kw: None):
         """Execution after shared review; crypt integrity remains mandatory."""
@@ -230,11 +233,12 @@ class MirrorJobs:
             if state is None:
                 raise ValueError('Pull this folder before pushing it.')
             if job['crypt']:
+                directories = [('/'.join(part for part in (job['prefix'], path) if part), True)
+                               for path, expected in state.items() if stat.S_ISDIR(expected[0][2])]
+                native_path_entries(client, job['remote'], job['cipher_identity'], directories,
+                                    check=lambda: self.check(client, job, cancelled))
                 for path, expected in state.items():
                     if stat.S_ISDIR(expected[0][2]):
-                        client.request('crypt_path', remote=job['remote'],
-                            identity=job['cipher_identity'], path='/'.join(part for part in (job['prefix'], path) if part),
-                            directory=True, decode=True)
                         continue
                     self.check(client, job, cancelled)
                     progress(phase='Validating encrypted files', files=0, done=0, total=0)

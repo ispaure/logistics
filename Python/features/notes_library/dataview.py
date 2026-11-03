@@ -14,7 +14,7 @@ from markdown_it import MarkdownIt
 from commonUtils.formats.markdown import split_frontmatter
 from commonUtils.runtime.operations import check_cancelled
 from services.documents.storage import DocumentResource
-from .notes import operation
+from .notes import MARKDOWN, operation
 
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 8 * 1024 * 1024
@@ -66,10 +66,65 @@ def view_plan(text):
 
 
 class ViewFiles:
-    """One render's read lease; no recursive discovery or persistent cleartext cache."""
+    """One render's bounded read lease, without a persistent cleartext cache."""
     def __init__(self, library, note):
         self.library, self.note = library, library.contained(note)
         self.requests = self.total = 0
+
+    def page_index(self, cancelled, *, metadata=False):
+        """Discover Markdown files inside this library and this render."""
+        def page(path, size=None):
+            relative = PurePosixPath(path).relative_to(self.library.root or '.').as_posix()
+            file = dict(path=relative, folder=posixpath.dirname(relative),
+                        name=PurePosixPath(relative).stem)
+            if size is not None:
+                file['size'] = size
+            return dict(file=file)
+        pages, folders, visited = [], [self.library.root], set()
+        count = 0
+        with operation(self.library.provider, cancelled):
+            discover_metadata = getattr(self.library.provider, 'note_file_entries', None)
+            discover = getattr(self.library.provider, 'note_file_paths', None)
+            if metadata and callable(discover_metadata):
+                entries = discover_metadata(self.library.root, cancelled=cancelled)
+                if len(entries) > 10000:
+                    raise ValueError('Data view page discovery exceeds 10,000 entries.')
+                pages = [page(self.library.contained(row['path']), row['size']) for row in entries]
+                folders = []
+            elif callable(discover) and not metadata:
+                paths = discover(self.library.root, cancelled=cancelled)
+                if len(paths) > 10000:
+                    raise ValueError('Data view page discovery exceeds 10,000 entries.')
+                pages = [page(self.library.contained(path)) for path in paths]
+                folders = []
+            while folders:
+                check_cancelled(cancelled)
+                folder = folders.pop()
+                if folder in visited:
+                    continue
+                visited.add(folder)
+                listing = getattr(self.library.provider, 'list_names', self.library.provider.list)
+                rows = listing(folder, cancelled=cancelled)
+                count += len(rows)
+                if count > 10000:
+                    raise ValueError('Data view page discovery exceeds 10,000 entries.')
+                for row in rows:
+                    check_cancelled(cancelled)
+                    if row['name'].startswith('.'):
+                        continue
+                    path = self.library.contained(row['path'])
+                    if posixpath.dirname(path) != folder:
+                        raise ValueError('Invalid data view folder entry.')
+                    if row['directory']:
+                        folders.append(path)
+                    elif PurePosixPath(path).suffix.lower() in MARKDOWN:
+                        pages.append(page(path, row['size'] if metadata else None))
+        value = dict(current=page(self.note), pages=sorted(pages, key=lambda row: row['file']['path']))
+        size = len(json.dumps(value).encode('utf-8'))
+        if self.total + size > MAX_TOTAL:
+            raise ValueError('Data view reads exceed the 8 MiB limit.')
+        self.total += size
+        return value
 
     def resolve(self, path, origin=None, *, view=False):
         if not isinstance(path, str) or not path or len(path) > 4096:
@@ -147,6 +202,8 @@ class ViewFiles:
             if self.requests > MAX_REQUESTS:
                 raise ValueError('Data views exceed the 128-request limit.')
             kind = message.get('kind')
+            if kind == 'index':
+                return dict(id=identity, value=self.page_index(cancelled, metadata=bool(message.get('metadata'))))
             path = self.resolve(message.get('path'), message.get('origin'), view=kind == 'view')
             if kind == 'load':
                 candidates = [path]

@@ -140,11 +140,15 @@ class CollectionFiles(MobileLocalFiles):
     def list(self, path='', *, cancelled=lambda: False):
         return local_folder_snapshot(self, path, cancelled=cancelled)
 
+    def list_names(self, path='', *, cancelled=lambda: False):
+        return local_folder_snapshot(self, path, cancelled=cancelled, names_only=True)
 
-def local_folder_snapshot(provider, path='', *, cancelled=lambda: False):
+
+def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_only=False):
     """List an ordinary mobile folder with provider guards at both boundaries."""
     path = provider.relative(path)
     folder = provider._locate(path)
+    before = folder.stat(follow_symlinks=False)
     from commonUtils.filesystem.local_access import check_local_path
     rows = []
     # Resolve collection configuration once at each snapshot boundary, not
@@ -163,6 +167,10 @@ def local_folder_snapshot(provider, path='', *, cancelled=lambda: False):
                 continue
             if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
                 raise ValueError('Choose an independent regular file or folder.')
+            if names_only:
+                rows.append(dict(name=child.name, path='/'.join(p for p in (path, child.name) if p),
+                                 directory=directory, size=info.st_size))
+                continue
             revision = ((info.st_dev, info.st_ino) if directory else
                 (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
             rows.append(dict(name=child.name, path='/'.join(p for p in (path, child.name) if p),
@@ -173,7 +181,10 @@ def local_folder_snapshot(provider, path='', *, cancelled=lambda: False):
                 modified=_modified_time(info.st_mtime)))
     check_cancelled(cancelled)
     provider._guard(folder)
-    return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
+    after = folder.stat(follow_symlinks=False)
+    if (before.st_dev, before.st_ino, before.st_mode) != (after.st_dev, after.st_ino, after.st_mode):
+        raise ValueError('Folder changed during listing. Try again.')
+    return rows if names_only else sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
 
 
 def _modified_time(timestamp):

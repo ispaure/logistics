@@ -10,7 +10,36 @@ from features.notes_library import library_files
 from .library_icons import entry_icon
 
 
-class LibrarySearchTree(qt.QTreeWidget):
+class SearchNotice(qt.QLabel):
+    """Reserve a sidebar row only while there is a search message."""
+    def __init__(self):
+        super().__init__()
+        self.hide()
+
+    def setText(self, text):
+        super().setText(text)
+        self.setVisible(bool(text))
+
+    def clear(self):
+        self.setText('')
+
+
+class FolderPageTree(qt.QTreeWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMouseTracking(True)
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        item = self.itemAt(event.position().toPoint())
+        point = event.position().toPoint()
+        linked_folder = (item is not None and item.font(0).underline()
+                         and self.columnAt(point.x()) == 0 and self.visualItemRect(item).contains(point))
+        self.viewport().setCursor(qt.Qt.CursorShape.PointingHandCursor if linked_folder
+                                  else qt.Qt.CursorShape.ArrowCursor)
+
+
+class LibrarySearchTree(FolderPageTree):
     def keyPressEvent(self, event):
         if event.key() in (qt.Qt.Key.Key_Return, qt.Qt.Key.Key_Enter) and self.currentItem() is not None:
             self.itemActivated.emit(self.currentItem(), self.currentColumn())
@@ -53,7 +82,7 @@ class LibraryPanels:
         self.search_more = qt.QPushButton('Show more notes')
         self.search_more.clicked.connect(self.more_results)
         self.search_more.hide()
-        self.search_notice = qt.QLabel()
+        self.search_notice = SearchNotice()
         self.files_stack = qt.QStackedWidget()
         side.removeWidget(self.tree)
         self.files_stack.addWidget(self.tree)
@@ -88,8 +117,9 @@ class LibraryPanels:
         self.links_tree.hide()
         self.links_button = qt.QPushButton('Links')
         self.links_button.setAccessibleName('Backlinks and outgoing links')
+        self.links_button.setCheckable(True)
         self.links_button.clicked.connect(self.toggle_links)
-        controls.addWidget(self.links_button)
+        self.viewer.navigation_toolbar.addWidget(self.links_button)
         for tree in (self.tree, self.search_results):
             tree.setContextMenuPolicy(qt.Qt.ContextMenuPolicy.CustomContextMenu)
             tree.customContextMenuRequested.connect(lambda point, tree=tree: self.file_actions(tree, point))
@@ -290,10 +320,11 @@ class LibraryPanels:
                 qt.QMessageBox.StandardButton.No) == qt.QMessageBox.StandardButton.Yes:
             self.mutate(lambda cancelled: self.library.create(key, self.library.root, cancelled=cancelled), created=True)
 
-    def toggle_links(self):
-        visible = not self.links_tree.isVisible()
-        self.links_tree.setVisible(visible)
-        if visible:
+    def toggle_links(self, checked=None):
+        visible = self.links_tree.isHidden() if checked is None else checked
+        self.links_button.setChecked(visible)
+        self.links_tree.setVisible(visible and self.document_stack.currentWidget() is self.viewer)
+        if visible and self.document_stack.currentWidget() is self.viewer:
             left = self.split.sizes()[0]
             self.split.setSizes([left, max(300, self.split.width() - left - 260), 260])
             self.refresh_connections()
@@ -322,7 +353,11 @@ class LibraryPanels:
         self.start_connections()
 
     def refresh_connections(self):
-        if not self.links_tree.isVisible() or self.library is None or self.locked:
+        # Hidden tabs still own their current note and may finish a read/save.
+        # Use the panel preference rather than ancestor visibility to avoid
+        # retaining another note's results until the next user interaction.
+        if (not self.links_button.isChecked() or self.document_stack.currentWidget() is not self.viewer
+                or self.library is None or self.locked):
             return
         self.cancel_connections()
         self.links_tree.clear()
@@ -374,11 +409,13 @@ class LibraryPanels:
         if item is None:
             return
         tree.setCurrentItem(item)
-        path, _ = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        path, directory = item.data(0, qt.Qt.ItemDataRole.UserRole)
         if path == self.library.root:
             self.viewer.status.setText('The library root is a drop destination. Select one of its files or folders for actions.')
             return
         menu = qt.QMenu(self)
+        if not directory and getattr(self, 'document_tabs', None) is not None:
+            menu.addAction('Open in new tab', lambda: self.open_note(path, new_tab=True))
         if self.library.supports('rename'):
             menu.addAction('Move / rename…', lambda: self.rename_path(path))
         if all(self.library.supports(action) for action in ('create', 'rename', 'delete')):

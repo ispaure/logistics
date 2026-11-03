@@ -79,6 +79,26 @@ Neither format needs to identify a crypt implementation.
 
 ## Privacy and lifetime
 
+Browser and Notes Library renames update favourites and recent references using
+logical provider paths, including descendants of renamed folders and the saved
+Notes Library opening root. Desktop LocalCrypt keeps these updates in the same
+credential-encrypted catalog; mobile also updates unlocked encrypted recent/open
+lists for documents that are closed. Failed renames leave references unchanged.
+Remote providers remain read-only and do not offer rename. The desktop and mobile
+`test_rename_references.py` suites cover these flows; desktop exercises standard,
+obfuscated and unencrypted filename modes with real rclone providers. Mobile's
+native crypt case requires the host bridge; host checks do not certify device UI.
+Mobile history reconciliation runs on the UI loop even if the separate favourite
+catalog fails. Restored encrypted-document placeholders follow the new identity.
+Downloaded encrypted files retain their stable record keys while their saved
+display titles follow a rename. Notes Library keeps its operation guard until a
+cancelled worker retires and reconciles any rename that already committed.
+Local catalog matching also handles Windows drive and UNC paths, including
+descendants and saved library roots. Desktop favourites and recent catalogs
+reconcile independently when either catalog fails. A separately open desktop
+text buffer retains its draft after a browser rename and rejects saving to the
+removed path; Save As can preserve those edits without recreating the old file.
+
 Private or remote resources cannot use ordinary recovery, history or saved
 workspace records. The host owns requested-lock dirty/busy decisions, revocation,
 screen privacy and confirmation before publishing private bytes to ordinary
@@ -398,6 +418,7 @@ and notebook presentation mount these beneath native titles. Reader rows join
 the existing ReadingFrame controls so immersive mode hides them with the other
 controls. Native remote resources expose credential package source, encryption
 and session-only metadata without granting publication capabilities.
+
 
 ## Notes Library and shared authoring
 

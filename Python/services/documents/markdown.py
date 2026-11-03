@@ -7,13 +7,14 @@ from urllib.request import url2pathname
 class MarkdownResources(dict):
     def __init__(self):
         super().__init__()
-        self.videos, self.media = {}, None
+        self.videos, self.media, self.errors = {}, None, {}
 
     def close(self):
         if self.media is not None:
             self.media.close()
             self.media = None
         self.videos.clear()
+        self.errors.clear()
         self.clear()
 
 
@@ -60,15 +61,30 @@ def prepare_markdown(provider, path, *, data=None, cancelled=lambda: False, imag
                 if image_source is not None:
                     image = image_source(reference)
                     if image is None:
+                        resources.errors[target.resolve()] = 'Image not found, unsupported, or outside the allowed folder.'
                         continue
                     _, value = image
                     if len(value) > budget:
+                        resources.errors[target.resolve()] = 'Images exceed the 32 MiB document budget.'
                         continue
                 else:
-                    value = read(target, min(budget, getattr(provider, 'max_resource', 8 * 1024 * 1024)))
+                    from commonUtils.formats.markdown import link_path_names
+                    for name in link_path_names(parts.path):
+                        candidate = path.parent / name
+                        provider.relative(candidate)
+                        try:
+                            value = read(candidate, min(budget, getattr(provider, 'max_resource', 8 * 1024 * 1024)))
+                            break
+                        except (FileNotFoundError, NotADirectoryError):
+                            continue
+                    else:
+                        resources.errors[target.resolve()] = 'File not found. Check the attachment path.'
+                        continue
                 budget -= len(value)
                 resources[target.resolve()] = value
-            except (ValueError, OSError):
+            except (ValueError, OSError) as error:
+                from commonUtils.formats.markdown.image_sources import image_failure_reason
+                resources.errors[target.resolve()] = image_failure_reason(error)
                 continue
             if budget <= 0:
                 break

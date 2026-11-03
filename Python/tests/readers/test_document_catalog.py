@@ -12,6 +12,49 @@ from unittest.mock import patch
 
 
 class DocumentCatalogTests(TestCase):
+    def test_windows_folder_and_file_renames_follow_native_paths(self):
+        with TemporaryDirectory() as directory:
+            catalog = DocumentCatalog(directory)
+            source = dict(type='local', path=r'C:\Notes\Folder\Home.md')
+            catalog.remember(source, 'Home.md', dict(editor='notes', root=r'C:\Notes\Folder'), favourite=True)
+            unrelated = dict(type='local', path=r'C:\Notes\Folder sibling\Home.md')
+            catalog.remember(unrelated, 'Other note', dict(editor='markdown'), favourite=True)
+            catalog.relocate(dict(type='local', path=r'C:\Notes\Folder'),
+                             dict(type='local', path=r'C:\Notes\Moved'))
+            expected = dict(type='local', path=r'C:\Notes\Moved\Home.md')
+            row = next((row for row in catalog.entries() if row['source'] == expected), None)
+            self.assertIsNotNone(row)
+            self.assertEqual(row['opener']['root'], r'C:\Notes\Moved')
+            catalog.relocate(expected, dict(type='local', path=r'C:\Notes\Moved\Renamed.md'))
+            row = next(row for row in catalog.entries() if row['title'] == 'Renamed.md')
+            self.assertEqual(row['source']['path'], r'C:\Notes\Moved\Renamed.md')
+            self.assertEqual(row['id'], catalog.identity(row['source']))
+            self.assertTrue(any(row['source'] == unrelated for row in catalog.entries()))
+
+    def test_unc_folder_rename_updates_windows_history_and_library_root(self):
+        with TemporaryDirectory() as directory:
+            catalog = DocumentCatalog(directory, recent=True)
+            source = dict(type='local', path=r'\\server\share\Folder\Note.md')
+            catalog.remember(source, 'Note.md', dict(editor='notes', root=r'\\server\share\Folder'))
+            catalog.relocate(dict(type='local', path=r'\\SERVER\share\Folder'),
+                             dict(type='local', path=r'\\server\share\Moved'))
+            row = catalog.entries('recent')[0]
+            self.assertEqual(row['source']['path'], r'\\server\share\Moved\Note.md')
+            self.assertEqual(row['opener']['root'], r'\\server\share\Moved')
+
+    def test_rename_respects_credential_namespace_and_folder_boundaries(self):
+        with TemporaryDirectory() as directory:
+            catalog = DocumentCatalog(directory)
+            source = dict(type='crypt', remote='Secret', namespace='one', key='Folder/Note.md')
+            others = [dict(source, namespace='two'), dict(source, remote='Other'),
+                      dict(source, key='Folder sibling/Note.md')]
+            for item in [source, *others]:
+                catalog.remember(item, 'Custom title', dict(kind='notes', root='Folder'), favourite=True)
+            catalog.relocate(dict(source, key='Folder'), dict(source, key='Moved'))
+            rows = catalog.entries()
+            self.assertEqual({row['id'] for row in rows}, {catalog.identity(item) for item in [dict(source, key='Moved/Note.md'), *others]})
+            self.assertTrue(all(row['title'] == 'Custom title' for row in rows))
+
     def test_moves_follow_paths_and_library_context_while_deletes_retire_references(self):
         with TemporaryDirectory() as directory:
             catalog = DocumentCatalog(directory)

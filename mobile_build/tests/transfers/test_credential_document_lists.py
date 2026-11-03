@@ -54,6 +54,60 @@ class ListBridge:
 
 
 class CredentialDocumentListTests(unittest.TestCase):
+    def test_rename_retargets_restored_open_placeholder_before_reopening(self):
+        self.client.unlock()
+        session = self.remember()
+        key = session.cache_id
+        self.cache.restore_open(key, self.cache.states[key]['open'])
+        placeholder = next(item for item in self.app.workspace.sessions.values()
+                           if item.provider == 'credential-reference')
+        source = session.cache_source
+        target = dict(source, key='Moved/Renamed.md')
+        self.cache.relocate(source, target)
+        self.assertEqual(placeholder.cache_source, target)
+        with patch.object(self.cache, 'reopen', new=AsyncMock(return_value=True)) as reopen:
+            self.assertTrue(self.app.loop.run_until_complete(self.cache.open(placeholder)))
+        reopen.assert_awaited_once_with(target)
+
+    def test_rename_merges_a_stale_restored_destination_without_duplicate_tabs(self):
+        self.client.unlock()
+        first, second = self.remember(), self.remember(1)
+        key = first.cache_id
+        self.cache.restore_open(key, self.cache.states[key]['open'])
+        original = next(item for item in self.app.workspace.sessions.values()
+                        if getattr(item, 'cache_source', None) == first.cache_source)
+        self.app.workspace.active = original.id
+        self.cache.relocate(first.cache_source, second.cache_source)
+        placeholders = [item for item in self.app.workspace.sessions.values()
+                        if item.provider == 'credential-reference']
+        self.assertEqual(len(placeholders), 1)
+        self.assertEqual(placeholders[0].cache_source, second.cache_source)
+        self.assertEqual(self.app.workspace.active, placeholders[0].id)
+
+    def test_folder_and_file_rename_update_encrypted_closed_history(self):
+        self.client.unlock()
+        source = dict(type='crypt', remote='Drive', identity='b' * 64,
+                      namespace='c' * 64, key='Private Ω/Note.md')
+        session = Session('', 'file-reference', 'fixture', 'markdown', title='Note.md')
+        self.cache.remember(session, source)
+        origin = dict(source, key='Private Ω')
+        target = dict(source, key='Moved Ω')
+        self.cache.relocate(origin, target)
+        source = dict(source, key='Moved Ω/Note.md')
+        target = dict(source, key='Moved Ω/Renamed.md')
+        self.cache.relocate(source, target)
+        for field in ('open', 'recent'):
+            row = self.cache.states['a' * 64][field][0]
+            self.assertEqual(row['source'], target)
+            self.assertEqual(row['title'], 'Renamed.md')
+            self.assertEqual(row['resource'], self.cache.references.reference_id(target))
+        path = self.cache.path('a' * 64)
+        self.assertNotIn(b'Renamed', path.read_bytes())
+        self.cache.states.clear()
+        with patch.object(self.cache, 'restore_open'):
+            self.cache.refresh()
+        self.assertEqual(self.cache.states['a' * 64]['recent'][0]['source'], target)
+
     def test_video_history_is_encrypted_and_never_restored_as_an_open_document(self):
         self.client.unlock()
         session = Session('', 'file-reference', 'video', 'video', title='Sensitive movie.mkv')

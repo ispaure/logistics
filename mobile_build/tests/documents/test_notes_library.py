@@ -44,6 +44,30 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_nested_encoded_image_embeds_and_failure_reasons_reach_preview_and_editor(self):
+        from mobile.obsidian import open_vault
+        from commonUtils.tests.formats.test_gif_headers import GIF
+        from services.documents.authoring.markdown_editor import editor_blocks
+        folder = self.vault / 'Archive/Katia Hair VFX Exploration'
+        folder.mkdir(parents=True)
+        (folder / 'photo.gif').write_bytes(GIF)
+        source = r'![Photo]\(Katia%20Hair%20VFX%20Exploration/photo.gif)' + '\n\n![Missing](absent.png)\n'
+        (self.vault / 'Home.md').write_text(source)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            with patch.object(owner.web, 'set_content') as publish:
+                self.assertTrue(await owner.open_note('Vault/Home.md'))
+            html = publish.call_args.args[1]
+            self.assertIn('<img src="data:image/gif;base64,', html)
+            self.assertIn('Image unavailable: Note not found', html)
+            blocks = editor_blocks(source, image_source=owner.library.image_source('Vault/Home.md'))
+            self.assertIn('<img', blocks[0]['html'])
+            self.assertEqual(blocks[0]['source'], source.split('\n\n')[0] + '\n')
+            self.assertIn('Image unavailable:', ''.join(block['html'] for block in blocks))
+            self.assertEqual(''.join(block['source'] for block in blocks), source)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_breadcrumbs_and_underlines_follow_notes_images_and_source_files(self):
         from mobile.obsidian import open_vault
         from mobile_build.tests.support.pdf import PNG
@@ -77,6 +101,92 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertFalse(owner.breadcrumbs.children)
         self.run_async(exercise())
 
+    def test_images_pdf_and_unknown_files_replace_article_without_leaving_library(self):
+        from mobile.obsidian import open_vault
+        from mobile_build.tests.support.pdf import PDF, PNG, native_pdf
+        (self.vault / 'Image.png').write_bytes(PNG)
+        (self.vault / 'Document.pdf').write_bytes(PDF)
+        (self.vault / 'Unknown.binary').write_bytes(b'\x00binary')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            sessions = set(self.app.workspace.sessions)
+            route = self.app.navigation_generation
+            with patch('features.pdf.document.PDFDocument.open', native_pdf):
+                for name in ('Image.png', 'Document.pdf', 'Unknown.binary'):
+                    target = name if name == 'Image.png' else 'Vault/' + name
+                    self.assertTrue(await owner.open_note(target, resolve_link=name == 'Image.png'), owner.notice.text)
+                    self.assertEqual(set(self.app.workspace.sessions), sessions)
+                    self.assertEqual(self.app.navigation_generation, route)
+                    self.assertEqual(owner.path, 'Vault/' + name)
+                    self.assertEqual(owner.embedded.kind, 'file')
+                    self.assertIn(owner.embedded.view, owner.article.children)
+                    if name == 'Document.pdf':
+                        self.assertEqual(owner.embedded.preview.count, 3)
+                        await owner.embedded.turn(1)
+                        self.assertEqual(owner.embedded.index, 1)
+                    previous = owner.embedded
+                self.assertTrue(await owner.open_note('Vault/Home.md'))
+                self.assertTrue(previous.closed)
+                self.assertEqual(previous.preview.path, '')
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_switching_to_file_preview_retires_previous_markdown_media(self):
+        from mobile.obsidian import open_vault
+        (self.vault / 'clip.mp4').write_bytes(b'video fixture')
+        (self.vault / 'Home.md').write_text('![[clip.mp4]]')
+        (self.vault / 'LICENSE').write_text('License')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            media = owner.library.image_source('Vault/Home.md')
+            transports = [transport for _, transport in media.videos.values()]
+            self.assertTrue(transports)
+            with patch.object(owner.web, 'set_content', wraps=owner.web.set_content) as publish:
+                self.assertTrue(await owner.open_note('LICENSE', resolve_link=True), owner.notice.text)
+            self.assertTrue(all(transport.closed.is_set() for transport in transports))
+            self.assertNotIn('<video', publish.call_args.args[1])
+            self.assertEqual(owner.path, 'Vault/LICENSE')
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_cancelled_page_worker_keeps_content_until_rendering_finishes(self):
+        from threading import Event
+        from mobile.obsidian import open_vault
+        from mobile_build.tests.support.pdf import PDF, native_pdf
+        (self.vault / 'Document.pdf').write_bytes(PDF)
+        entered, release = Event(), Event()
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            with patch('features.pdf.document.PDFDocument.open', native_pdf):
+                self.assertTrue(await owner.open_note('Vault/Document.pdf'))
+                preview = owner.embedded
+                original = preview.preview.page
+                def render(index):
+                    entered.set()
+                    release.wait(5)
+                    return original(index)
+                with patch.object(preview.preview, 'page', side_effect=render):
+                    task = asyncio.create_task(preview.turn(1))
+                    try:
+                        self.assertTrue(await asyncio.to_thread(entered.wait, 5))
+                        task.cancel()
+                        with self.assertRaises(asyncio.CancelledError):
+                            await task
+                        self.assertTrue(preview.busy)
+                        owner.dispose()
+                        self.assertEqual(preview.preview.path, 'Vault/Document.pdf')
+                    finally:
+                        release.set()
+                    for _ in range(100):
+                        if not preview.busy:
+                            break
+                        await asyncio.sleep(.01)
+                    self.assertFalse(preview.busy)
+                    self.assertEqual(preview.preview.path, '')
+        self.run_async(exercise())
+
     def test_library_markdown_and_source_editing_work_with_text_editor_disabled(self):
         from mobile.obsidian import open_vault
         self.app.set_feature_enabled('text_editor', False, refresh=False)
@@ -97,7 +207,8 @@ class NotesLibraryTests(unittest.TestCase):
     def test_video_embeds_stream_in_preview_and_editor_and_close_with_library(self):
         from mobile.obsidian import open_vault
         from services.documents.authoring.markdown_editor import editor_blocks
-        (self.vault / 'potato.mp4').write_bytes(b'video fixture')
+        (self.vault / 'Media').mkdir()
+        (self.vault / 'Media/potato.mp4').write_bytes(b'video fixture')
         source = '![[potato.mp4]]\n'
         (self.vault / 'Home.md').write_text(source)
         async def exercise():
@@ -111,8 +222,16 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertIn('<video ', blocks[0]['html'])
             self.assertIn('![[potato.mp4]]', blocks[0]['source'])
             transports = [transport for _, transport in media.videos.values()]
-            owner.dispose()
+            self.assertTrue(await owner.open_note('Vault/Media/potato.mp4'), owner.notice.text)
             self.assertTrue(all(transport.closed.is_set() for transport in transports))
+            self.assertEqual(owner.embedded.kind, 'file')
+            direct = owner.embedded.preview
+            html = direct.page()
+            self.assertIn('<video controls playsinline preload="none"', html)
+            self.assertIn(direct.video_url, html)
+            transport = direct.transport
+            owner.dispose()
+            self.assertTrue(transport.closed.is_set())
             self.assertIsNone(media('potato.mp4'))
         self.run_async(exercise())
 
@@ -362,6 +481,63 @@ class NotesLibraryTests(unittest.TestCase):
                     self.assertNotIn('Stale result', publish.call_args.args[1])
         self.run_async(exercise())
 
+    def test_percent_encoded_links_and_connections_prefer_decoded_then_literal(self):
+        from features.notes_library.notes_links import connections
+        library = NotesLibrary(self.provider, 'Vault')
+        raw = self.vault / 'Two%20Words.md'
+        decoded = self.vault / 'Projects/Two Words.md'
+        raw.write_text('# Literal')
+        home = self.vault / 'Home.md'
+        home.write_text('[Target](Two%20Words.md#heading)')
+        for target in ('Two%20Words.md#heading', 'Two%20Words#heading'):
+            self.assertEqual(library.link('Vault/Home.md', target), ('Vault/Two%20Words.md', 'heading'))
+        self.assertEqual(connections(library, 'Vault/Two%20Words.md')['incoming'], ['Vault/Home.md'])
+        decoded.write_text('# Decoded')
+        for target in ('Two%20Words.md#heading', 'Two%20Words#heading'):
+            self.assertEqual(library.link('Vault/Home.md', target), ('Vault/Projects/Two Words.md', 'heading'))
+        self.assertEqual(connections(library, 'Vault/Projects/Two Words.md')['incoming'], ['Vault/Home.md'])
+        self.assertEqual(connections(library, 'Vault/Two%20Words.md')['incoming'], [])
+        self.assertEqual(connections(library, 'Vault/Home.md')['outgoing'], ['Vault/Projects/Two Words.md'])
+        self.assertEqual(library.link('Vault/Home.md', 'Two%2520Words.md'), ('Vault/Two%20Words.md', ''))
+        (self.vault / 'Other').mkdir()
+        (self.vault / 'Other/Two Words.md').write_text('# Ambiguous decoded')
+        with self.assertRaisesRegex(ValueError, 'Several notes'):
+            library.link('Vault/Home.md', 'Two%20Words.md')
+        self.assertIn('Two%20Words.md#heading', connections(library, 'Vault/Home.md')['unresolved'])
+
+    def test_connections_apply_navigation_normalization_and_containment_before_fallback(self):
+        from features.notes_library.notes_links import connections
+        library = NotesLibrary(self.provider, 'Vault')
+        (self.vault / 'Projects/Two Words.md').write_text('# Target')
+        source = self.vault / 'Other/Source.md'
+        source.parent.mkdir()
+        target = 'Projects//Two%20Words.md'
+        source.write_text('[Target](' + target + ')')
+        self.assertEqual(library.link('Vault/Other/Source.md', target)[0], 'Vault/Projects/Two Words.md')
+        self.assertEqual(connections(library, 'Vault/Projects/Two Words.md')['incoming'], ['Vault/Other/Source.md'])
+        # Both literal names exist inside the vault, but their decoded targets
+        # are forbidden; a connection must not suggest they can be followed.
+        (self.vault / '%2e%2e').mkdir()
+        (self.vault / '%2e%2e/Outside.md').write_text('# Literal')
+        (self.vault / 'Bad%00Name.md').write_text('# Literal')
+        for target in ('%2e%2e/Outside.md', 'Bad%00Name.md'):
+            (self.vault / 'Home.md').write_text('[Target](' + target + ')')
+            with self.subTest(target=target):
+                with self.assertRaises(ValueError):
+                    library.link('Vault/Home.md', target)
+                links = connections(library, 'Vault/Home.md')
+                self.assertIn(target, links['unresolved'])
+                self.assertEqual(links['outgoing'], [])
+
+    def test_explicit_percent_encoded_note_paths_fall_back_without_escaping(self):
+        library = NotesLibrary(self.provider, 'Vault')
+        (self.vault / 'Projects/Two%20Words.md').write_text('# Literal')
+        self.assertEqual(library.link('Vault/Home.md', './Projects/Two%20Words.md'),
+                         ('Vault/Projects/Two%20Words.md', ''))
+        for target in ('%2e%2e/outside.md', '%2foutside.md', 'bad%5cname.md'):
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                library.link('Vault/Home.md', target)
+
     def test_direct_links_probe_only_the_target_without_listing_siblings(self):
         library = NotesLibrary(self.provider, 'Vault')
         with patch.object(self.provider, 'list', side_effect=AssertionError('Listed unrelated notes')):
@@ -445,7 +621,7 @@ class NotesLibraryTests(unittest.TestCase):
                     self.assertFalse(owner.forward_button.enabled)
                     owner.back_button.on_press()  # Native taps do not await returned coroutines.
                     for _ in range(100):
-                        if owner.path == 'Vault/Home.md':
+                        if owner.path == 'Vault/Home.md' and owner.history_index == 0:
                             break
                         await asyncio.sleep(.01)
                     self.assertEqual(owner.path, 'Vault/Home.md')

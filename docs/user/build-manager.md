@@ -266,3 +266,10 @@ In a manager checkout with the Build only goal, choose **Build only**, select
 It captures the selected source, retains its build report and stops before tests
 or installation. Desktop Build is not implemented. Store/tester preparation
 continues to use its existing project operation.
+
+
+Disposable scratch honors `.keep` pins anywhere in its tree. Adopted temporary
+checkouts and scratch also preserve live workflow holds on nested outputs; the
+enclosing directory cannot be swept while those holds remain active. Cleanup
+warnings appear in run results and status queries without changing the recorded
+build/test/delivery outcome.
