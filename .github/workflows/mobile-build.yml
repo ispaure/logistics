@@ -209,9 +209,15 @@ jobs:
         env:
           IOS_DEVICE: ${{ matrix.device }}
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
-          SIMCTL_CHILD_NSZombieEnabled: ${{ inputs.ios_object_diagnostics && 'YES' || '' }}
-          SIMCTL_CHILD_MallocStackLogging: ${{ inputs.ios_object_diagnostics && '1' || '' }}
+          IOS_OBJECT_DIAGNOSTICS: ${{ inputs.ios_object_diagnostics || false }}
         run: |
+          # Apple enables MallocStackLogging even when the variable is empty.
+          # Normal acceptance must omit these variables, rather than set ''.
+          if [ "$IOS_OBJECT_DIAGNOSTICS" = "true" ]; then
+            export SIMCTL_CHILD_NSZombieEnabled=YES SIMCTL_CHILD_MallocStackLogging=1
+          else
+            unset SIMCTL_CHILD_NSZombieEnabled SIMCTL_CHILD_MallocStackLogging
+          fi
           mkdir -p "$BRIEFCASE_HOME"
           # This disposable runner validates software-keyboard geometry.
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
