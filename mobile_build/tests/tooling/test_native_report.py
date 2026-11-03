@@ -33,7 +33,8 @@ class NativePreflightTests(unittest.TestCase):
                 self.assertEqual(run.call_count, 2 if permitted else 1)
                 if permitted:
                     self.assertEqual(run.call_args.args[0][:3], ['sample', str(pid), '3'])
-                    self.assertEqual(run.call_args.kwargs['timeout'], 10)
+                    self.assertIn('-mayDie', run.call_args.args[0])
+                    self.assertEqual(run.call_args.kwargs['timeout'], 60)
             for invalid in (None, True, 1, -1, '123'):
                 with patch.object(ui_tools.subprocess, 'run') as run:
                     ui_tools.record_ios_stall(path, dict(pid=invalid))

@@ -160,6 +160,15 @@ def safe_geometry(app):
     return result
 
 
+def promoted_controls(widget):
+    """Resolve both retained action lists and dynamic toolbar providers."""
+    for field in ('title_actions', '_ios_toolbar_buttons', '_ios_toolbar_leading'):
+        controls = getattr(widget, field, ())
+        if callable(controls):
+            controls = controls()
+        yield from controls or ()
+
+
 def assert_visible_controls(app):
     """Fixed controls must stay inside cutout/Home-indicator safe bounds."""
     if sys.platform != 'ios':
@@ -190,9 +199,8 @@ def assert_visible_controls(app):
                 extension = footer_touch_extension(footer_view, float(window.safeAreaInsets.bottom)) if footer_view else 0
                 assert_control_bounds(rect, window, label, bottom_extension=extension)
         # Promoted actions retain callbacks outside the Toga content tree.
-        for field in ('title_actions', '_ios_toolbar_buttons', '_ios_toolbar_leading'):
-            for control in getattr(widget, field, ()):
-                visit(control)
+        for control in promoted_controls(widget):
+            visit(control)
         # Scrollable form content is deliberately allowed beyond its viewport.
         if not isinstance(widget, toga.ScrollContainer):
             for child in widget.children:
@@ -233,6 +241,32 @@ async def settled_visible_controls(app):
                                     timeout=CONTROL_SETTLE_TIMEOUT)
 
 
+async def assert_welcome_actions_reachable(app):
+    """Exercise both ends of the empty Notes Library's scrollable actions."""
+    if sys.platform != 'ios':
+        return
+    owner = app.vault_browser
+    scroll = owner.welcome
+    original = scroll.vertical_position
+    window = app.main_window._impl.native
+    try:
+        for button, position in ((owner.open_card, 0),
+                                 (owner.new_card, scroll.max_vertical_position)):
+            if button not in owner.welcome_content.children:
+                continue
+            scroll.vertical_position = position
+            native = button._impl.native
+            if native.isHidden():
+                continue
+            # Toga's iOS ScrollContainer animates setContentOffset. Observe the
+            # completed movement rather than measuring a partial animation.
+            await wait_for_assertion(lambda: assert_control_bounds(
+                native.convertRect(native.bounds, toView=window), window, button.text),
+                timeout=CONTROL_SETTLE_TIMEOUT)
+    finally:
+        scroll.vertical_position = original
+
+
 def assert_bar_control_bounds(rect, bounds, label):
     details = (label, str(rect), str(bounds))
     assert rect.origin.x >= bounds.origin.x - 1, details
@@ -267,6 +301,8 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
                               panel=name, orientation=orientation, cycle=cycle)
                 controls = await measure(app, 'rotation-control-settle', settled_visible_controls(app),
                                          panel=name, orientation=orientation, cycle=cycle)
+                if name == 'notes-library':
+                    await assert_welcome_actions_reachable(app)
                 actual = panel_state(app)
                 assert actual == expected, (name, orientation, expected, actual)
                 with section(app, 'rotation-geometry', panel=name, orientation=orientation, cycle=cycle):
