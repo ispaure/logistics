@@ -17,6 +17,8 @@ reserved hinge band. Layout changes wait for the current pen contact to finish.
 Unfolding restores sheet ownership and the prior zoom; flat and vertical folds
 retain the ordinary presentation. Subscriptions and pending updates retire with
 the canvas, including protected notebooks.
+An initial or repeated absent-fold update is a no-op while the canvas is already
+flat, so delayed host geometry cannot dismiss an open brush picker.
 
 `notebook_mobile_ui_probe.py --laptop-only` checks three viewport sizes, tool
 selection, lower-canvas coordinate mapping and unfold restoration. The managed

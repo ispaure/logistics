@@ -403,8 +403,12 @@ renderEraserChoices();
     resize();
   }
   window.notebookFold = geometry => {
-    fold = Array.isArray(geometry) && geometry.length === 2 &&
+    const nextFold = Array.isArray(geometry) && geometry.length === 2 &&
       geometry.every(Number.isFinite) && geometry[0] > 0 && geometry[1] >= geometry[0] && geometry[1] < 1 ? geometry : null;
+    // Initial host geometry can arrive after the user opens a tool picker.
+    // An already-flat canvas needs no reparenting or panel dismissal.
+    if (fold === null && nextFold === null) return;
+    fold = nextFold;
     if (foldFrame === null) foldFrame = requestAnimationFrame(applyFold);
   };
 
