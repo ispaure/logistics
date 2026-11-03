@@ -411,6 +411,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             self.new_card.setEnabled(self.library.supports('create'))
             self.new_folder_button.setEnabled(self.library.supports('create'))
             self.rename_button.setEnabled(self.library.supports('rename'))
+            self.file_actions_button.setEnabled(any(self.library.supports(action) for action in ('rename', 'delete')))
             self.tree.setDragEnabled(self.library.supports('rename'))
             self.tree.setAcceptDrops(self.library.supports('rename'))
         elif kind == 'folder':
