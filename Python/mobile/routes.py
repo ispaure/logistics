@@ -388,6 +388,12 @@ class MobileRoutes(Routes):
                         browser.history.locations[:] = browser.history.locations[-1:]
                 return self.invoke_back(ascend)
 
+        if (destination == 'documents' and not self.screens[destination]
+                and not getattr(adaptive, 'in_detail', False)
+                and (getattr(app, 'documents_search_open', False)
+                     or bool(getattr(app, 'documents_query', '').strip()))):
+            return self.invoke_back(app.close_document_search)
+
         action = app.reader_back_action(body)
         if action is not None:
             return self.invoke_back(action)

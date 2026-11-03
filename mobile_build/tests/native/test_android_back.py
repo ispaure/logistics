@@ -35,6 +35,22 @@ class AndroidBackTests(unittest.TestCase):
             await asyncio.sleep(0)
         self.app.loop.run_until_complete(wait())
 
+    def test_documents_search_back_restores_collection_before_returning_home(self):
+        for query in ('', 'note'):
+            with self.subTest(query=query):
+                app = self.app
+                app.show_documents_hub()
+                app.document_view_buttons['Recent'].on_press()
+                app.open_document_search()
+                app.document_search.value = query
+                self.assertTrue(self.routes.system_back())
+                self.assertEqual(app.native_host.state.destination, 'documents')
+                self.assertFalse(app.documents_search_open)
+                self.assertIsNone(app.document_search.parent)
+                self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+                self.assertTrue(self.routes.system_back())
+                self.assertEqual(app.native_host.state.destination, 'home')
+
     def test_workspace_notes_browse_back_returns_to_entry_overview(self):
         from commonUtils.runtime.resources.local import LocalFiles
         app = self.app
