@@ -126,6 +126,12 @@ class NotesDrawers:
                     action = event.getActionMasked()
                     if action == 0:
                         self.start = (event.getRawX(), event.getRawY(), event.getEventTime())
+                    elif action == 2 and self.start is not None:
+                        x, y, _ = self.start
+                        dx, dy = event.getRawX()-x, event.getRawY()-y
+                        density = view.getContext().getResources().getDisplayMetrics().density
+                        if abs(dy)>10*density and abs(dx)<2*abs(dy):
+                            self.start = None
                     elif action == 1 and self.start is not None:
                         x, y, time = self.start
                         self.start = None
