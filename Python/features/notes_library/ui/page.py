@@ -115,15 +115,20 @@ class NotesLibraryPage(DocumentsPage):
         if isinstance(prepared[0], Exception):
             raise prepared[0]
         provider, identity, lease = prepared[0]
+        if self.closing or not registry.is_feature_enabled('notes_library'):
+            lease()
+            raise ValueError('Notes Library is closing or disabled. Reopen it after closing finishes.')
         for window, record in tuple(self.records.items()):
-            if (isValid(window) and not record['closed'] and not window.locked
+            if (isValid(window) and not record['closed'] and not window.locked and not window.closing
                     and getattr(window, 'library_session_identity', None) == identity):
+                if window.library is None and not window.progress.busy:
+                    # Failed initial loads hold no draft. Retry with the fresh provider.
+                    from commonUtils.ui.document_host import close_document
+                    close_document(window)
+                    continue
                 lease()
                 self.present(window)
                 return window
-        if not registry.is_feature_enabled('notes_library'):
-            lease()
-            raise ValueError('Enable Notes Library to open a library.')
         # Hold the prepared provider until the library's asynchronous acquisition.
         def release():
             nonlocal lease
@@ -138,8 +143,7 @@ class NotesLibraryPage(DocumentsPage):
                     release()
             window.idle.connect(acquired)
             window.destroyed.connect(release)
-            from services.documents.ui.editors import retain
-            retain(window)
+            self.present(window)
             return window
         except BaseException:
             release()

@@ -960,7 +960,15 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
 def open_notes(factory, label, *, remote=False, root=""):
     from commonUtils.ui.document_host import show_document, current_document_host
     host = current_document_host(destination='notes_library')
-    if host is not None and host.window().isVisible() and not host.closing:
+    application_host = current_document_host()
+    if host is not None or application_host is not None:
+        from features.application import registry
+        if not registry.is_feature_enabled('notes_library'):
+            raise ValueError('Enable Notes Library to open a library.')
+        if ((host is not None and host.closing)
+                or (application_host is not None and application_host.closing)):
+            raise ValueError('Notes Library is closing. Finish or cancel closing before opening a library.')
+    if host is not None:
         return host.open_library(factory, label, remote=remote, root=root)
     from services.documents.ui.editors import retain
     from .library_workspace import TabbedNotesLibrary

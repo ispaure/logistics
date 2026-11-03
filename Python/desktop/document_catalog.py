@@ -140,10 +140,10 @@ def reopen(row, parent=None):
             if window is None:
                 return None
             def ready():
-                if window.library is not None:
+                if window.library is not None and not window.progress.busy:
                     window.idle.disconnect(ready)
                     window.open_note(path)
-            if window.library is not None:
+            if window.library is not None and not window.progress.busy:
                 window.open_note(path)
             else:
                 window.idle.connect(ready)

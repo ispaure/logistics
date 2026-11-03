@@ -32,6 +32,5 @@ def actions(entry):
             from .ui.notes_library import open_notes
             return open_notes(factory, entry.name, remote=remote)
         commands.append(UIAction(name='Open as Notes Library',
-            callback=launch, description=('Read cloud notes in Documents.' if remote else
-                         'Edit Markdown notes in this local copy in Documents.')))
+            callback=launch, description='Edit Markdown notes in this local copy in Notes Library.'))
     return commands
