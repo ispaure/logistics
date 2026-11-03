@@ -29,8 +29,10 @@ class SettingsPageTests(QtTestCase):
             self.assertTrue(panel.text.isReadOnly())
             self.assertIn('Copyright Example', panel.text.toPlainText())
             panel.search.setText('missing')
+            self.wait_until(lambda: panel.components.count() == 0)
             self.assertEqual(panel.components.count(), 0)
             panel.search.setText('MIT')
+            self.wait_until(lambda: panel.components.count() == 1)
             self.assertEqual(panel.components.count(), 1)
             self.assertIn('Copyright Example', panel.text.toPlainText())
 
