@@ -3,9 +3,6 @@
 import ctypes
 from threading import Lock
 
-from commonUtils.ui import pyside as qt
-
-
 class VLCReceivers:
     def __init__(self, player):
         self.player = player
@@ -52,19 +49,15 @@ class VLCReceivers:
                 if renderer is not None:
                     renderer.release()
 
-    def menu(self, owner, anchor):
-        menu = qt.QMenu(owner)
-        menu.addAction('Stop casting / return to this window', lambda: self.choose(owner, None))
+    def rows(self):
+        rows = []
         with self.lock:
             for identity, renderer in self.items.items():
                 label = renderer.name()
                 if isinstance(label, bytes):
                     label = label.decode('utf-8', 'replace')
-                menu.addAction(str(label), lambda checked=False, key=identity: self.choose(owner, key))
-            if not self.items:
-                menu.addAction('Searching… Reopen Cast to refresh.').setEnabled(False)
-        menu.popup(anchor.mapToGlobal(qt.QPoint(0, anchor.height())))
-        owner.receiver_menu = menu
+                rows.append((identity, str(label)))
+        return rows
 
     def choose(self, owner, identity):
         if self.closed:

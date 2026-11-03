@@ -53,7 +53,7 @@ class MarkdownMediaTests(TestCase):
 
     def test_file_video_preview_retires_stream_when_final_validation_or_cancellation_fails(self):
         from contextlib import contextmanager
-        from features.notes_library.file_preview import FilePreview
+        from services.documents.file_preview import FilePreview
         from features.video.transport import VideoTransport
         from commonUtils.runtime.operations import OperationCancelled
         transports = []
@@ -66,7 +66,7 @@ class MarkdownMediaTests(TestCase):
             yield
             raise PermissionError('Access changed at publication')
         with patch('features.video.transport.VideoTransport', side_effect=transport):
-            with patch('features.notes_library.file_preview.document_operation', invalid):
+            with patch('services.documents.file_preview.document_operation', invalid):
                 with self.assertRaises(PermissionError):
                     FilePreview.open(self.provider, 'clip.mp4')
             self.assertEqual(len(transports), 1)
@@ -87,6 +87,16 @@ class MarkdownMediaTests(TestCase):
         self.video.write_bytes(b'first video bytes')
         self.media = MarkdownMedia(self.provider, 'Home.md', root='')
         self.addCleanup(self.media.close)
+
+    def test_mobile_markdown_embeds_are_lazy_paused_and_start_at_zero(self):
+        from commonUtils.ui.native.markdown_preview import markdown_body
+        source = self.media.render_source()
+        markdown = '![Movie](clip.mp4)'
+        for html in (markdown_body(markdown, image_source=source),):
+            self.assertIn('<video controls playsinline preload="none"', html)
+            self.assertNotIn('autoplay', html)
+            self.assertNotIn('#t=', html)
+            self.assertNotIn('currentTime', html)
 
     def test_changed_video_gets_a_new_stream_and_retires_old_revision(self):
         source = self.media.render_source()

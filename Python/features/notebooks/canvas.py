@@ -9,7 +9,7 @@ from .icons import ICON_SCRIPT
 def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=False, stylesheet=''):
     if desktop and mobile:
         raise ValueError('Choose one notebook presentation.')
-    from mobile.palette import css_variables
+    from services.appearance_palette import css_variables
     style = css_variables() + '\n' + asset('base.css')
     chrome = asset('controls.html')
     presentation = ''

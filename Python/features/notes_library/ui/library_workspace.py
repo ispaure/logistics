@@ -287,6 +287,10 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         except ValueError as error:
             self.viewer.status.setText(str(error))
             return
+        from services.documents.file_preview import is_video_file
+        if is_video_file(path):
+            document = self.document_tabs.current
+            return (document if document is not None else self).open_video_file(path)
         return self.document_tabs.open(path, fragment=fragment, remember=remember, index=index, replace=not new_tab)
 
     def activate_document(self, child, *, remember=True, index=None):

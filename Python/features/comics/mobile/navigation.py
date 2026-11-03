@@ -17,7 +17,7 @@ class ComicNavigation:
         self.right_anchored = False
         self.resume_half = 0
         self.layout_reload = False
-        from mobile.reading.history import PageVisits
+        from services.documents.page_visits import PageVisits
         self.visits = PageVisits()
 
     def commit(self, indices):

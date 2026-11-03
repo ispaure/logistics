@@ -132,7 +132,6 @@
     "reader_sessions.py",
     "reader_ui.py",
     "reading/__init__.py",
-    "reading/history.py",
     "reading/publication.py",
     "reading/sources.py",
     "recent_documents.py",

@@ -1,7 +1,7 @@
 # Playback tools
 
-Open **Playback…** for exact time entry, **Start over**, playback speed and picture
-size. Speeds range from 0.5× to 2× with pitch compensation when the decoder supports
+Use **Playback** for exact time entry, **Start over** and control locking.
+**Speed** and **Picture** have their own icon buttons and settings panes. Speeds range from 0.5× to 2× with pitch compensation when the decoder supports
 it. **Fit** preserves the complete image, **Fill** crops the edges to fill the
 available area, and **Original size** uses the video's native size and can clip
 large pictures. Fit is the default. These preferences survive reopening.
@@ -17,7 +17,7 @@ episode 10. Choose a video or use **Previous** / **Next** (**P** / **N**).
 within the current folder and source; it cannot bypass credential authorization.
 Folder listings run on a worker and may take time on cloud storage.
 
-**Subtitles and languages** accepts preferred language codes such as `fr` and
+**Audio** and **Subtitles** accept preferred language codes such as `fr` and
 `en`; blank uses the decoder default. Load UTF-8 SRT, VTT, ASS or SSA through the
 provider picker, or select a discovered matching sidecar. Subtitle size, subtitle
 delay and audio sync offset are adjustable; a positive delay means later.
@@ -39,3 +39,10 @@ Opening resumes automatically; use **Start over** to restart. Replacing the sour
 invalidates its old checkpoint. There is no decrypted movie cache on disk.
 
 See [mobile playback tools](../user_mobile/controls.md) for touch and fold controls.
+
+
+Videos opened as files from Notes Library use the full platform Video Player,
+including resume and ordinary autoplay. Markdown video embeds in Notes Library
+and standalone Markdown files keep simple inline Play/Pause and seeking controls.
+Each newly created embed starts paused at zero and does not load full-player
+resume state. Page rendering does not autoplay embedded media.

@@ -19,7 +19,7 @@ class Book:
 
 class PaginationTests(unittest.TestCase):
     def test_page_visit_back_is_bounded_and_failed_publication_keeps_target(self):
-        from mobile.reading.history import PageVisits
+        from services.documents.page_visits import PageVisits
         async def exercise():
             visits = PageVisits()
             for index in range(105):

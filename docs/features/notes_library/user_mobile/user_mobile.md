@@ -23,10 +23,12 @@ appear in Files and open in the same library detail pane using the normal native
 code input. Use **••• → Save** or **Find / replace…**. Switching files retains the
 library history and asks before discarding unsaved edits.
 
-All files in Files open inside the same library detail pane, including images
-and PDFs. PDFs have Previous page and Next page controls. Videos such as MP4
-show an in-pane player; press Play to start. Markdown video embeds also provide
-playback controls and do not preload the whole video when you open a page.
+Images and documents in Files open inside the library detail pane. PDFs have
+Previous page and Next page controls. Videos such as MP4 open the full native
+mobile Video Player with its resume, autoplay, tracks and playback tools. The
+current library page stays available when you return. Markdown video embeds
+keep simple inline controls and start paused at zero; they do not autoplay or
+preload the whole video when you open a page.
 Unsupported formats
 show file information in that pane. Image previews allow up to 8 MiB and 16
 megapixels; PDFs allow up to 32 MiB. Back and forward retrace files opened in the

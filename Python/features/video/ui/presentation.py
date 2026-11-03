@@ -114,6 +114,8 @@ class PlaybackPresentation:
             now - (max(self.last_frame, self.last_clock) if self.have_frame else self.last_frame) >= 3
             or self.network_hold))
         self.wait_indicator.setVisible(waiting)
+        if waiting:
+            self.show_controls()
         if (self.requested_play and self.have_frame and self.network_waits and not self.casting
                 and not self.network_hold
                 and (now - max(self.last_frame, self.last_clock) >= 3
@@ -131,11 +133,14 @@ class PlaybackPresentation:
         if self.closing or self.controls_locked:
             return
         self.chrome.show()
-        self.identity.show()
+        self.header.show()
+        self.reflow_chrome()
         self.hide_timer.start()
 
     def hide_controls(self):
         # Menus and keyboard focus must remain usable while chrome is visible.
+        if not self.window().isFullScreen() or self.settings_pane.isVisible():
+            return
         focus = qt.QApplication.focusWidget()
         if (not self.requested_play or not self.have_frame or self.network_hold
                 or qt.QAccessible.isActive()
@@ -145,13 +150,14 @@ class PlaybackPresentation:
             self.hide_timer.start()
             return
         self.chrome.hide()
-        self.identity.hide()
+        self.header.hide()
 
     def lock_controls(self, locked=True):
         self.controls_locked = locked
-        self.unlock_button.setVisible(locked)
+        self.close_settings()
+        self.unlock_container.setVisible(locked)
         self.chrome.setVisible(not locked)
-        self.identity.setVisible(not locked)
+        self.header.setVisible(not locked)
         if locked:
             self.hide_timer.stop()
             for name in ('tools_menu', 'chapter_menu', 'receiver_menu'):
@@ -165,6 +171,8 @@ class PlaybackPresentation:
     def escape_playback(self):
         if self.controls_locked:
             self.lock_controls(False)
+        elif self.settings_pane.isVisible():
+            self.close_settings()
         else:
             self.fullscreen.leave()
 
@@ -206,6 +214,7 @@ class PlaybackPresentation:
         return False
 
     def retire_presentation(self):
+        self.close_settings()
         self.requested_play = False
         self.network_hold = False
         self.watch_timer.stop()

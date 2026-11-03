@@ -91,7 +91,7 @@ class TransferSurface(toga.Box):
     def update(self, model):
         if self.closed:
             return
-        from mobile.palette import eink_enabled
+        from services.appearance_palette import eink_enabled
         import sys
         device = 'This device'
         if sys.platform == 'ios':

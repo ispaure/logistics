@@ -5,7 +5,8 @@ Application policies and orchestration live here. Reusable mechanisms and their 
 | Owner | Responsibility |
 | --- | --- |
 | `services/{access_policy,protection,session_auth}.py` | Pure permission questions, explicit process/window protection and portable resume challenges; see [access and privacy](access-privacy.md) |
-| `services/documents/` | Provider readers, archive access, document limits, ZIP password policy and portable preparation |
+| `services/documents/` | Provider readers, archive access, document limits, ZIP password policy, page visits and preview preparation |
+| `services/appearance_palette.py` | Shared Slate roles, accent and e-ink policy; native adaptation stays in `mobile/palette.py` |
 | `services/documents/ui/` | Desktop document pickers, window handoffs, privacy guards and password dialogs |
 | `services/folders/` | Folder entries, source aggregation, visibility and destructive-operation safety |
 | `services/folders/ui/` | Desktop index service lifetime |
@@ -35,6 +36,32 @@ fold division and owner-scoped layout subscriptions. Chat and notebook features
 consume those injected capabilities; only host composition imports the mobile
 geometry and subscription owners. The document WebView factory installs the
 editor keyboard-accessory policy before constructing a Markdown surface.
+
+## Shared reader and appearance state
+
+`services.documents.page_visits.PageVisits` owns bounded, session-only published
+page history for EPUB, comics and PDF. It retains the existing 100-step limit,
+restore guard and success-only Back retirement. Feature readers import it directly;
+mobile navigation still decides when system Back invokes it.
+
+`services.appearance_palette` owns the shared role dictionaries, accent validation,
+CSS variables and e-ink selection. `mobile.palette` adapts those same objects to
+Android appearance and native HTML updates, so changing the mobile accent or
+e-ink preference reaches notebook canvases and transfer surfaces without a
+feature importing the mobile host. Desktop notebooks still project the active Qt
+palette, using shared semantic destructive colours.
+
+`MobilePresentation.favourite_resource` lets video controls request the host's
+credential-aware favourite workflow. Host composition supplies the existing
+implementation; the feature reports success/errors without importing the mobile
+application's catalog. Desktop document opening/favourite handoffs use the shared
+`services.documents.ui.editors` boundary.
+
+`services.documents.file_preview` owns memory-only preview content, admission and
+format/backend selection. Notes Library supplies contained provider paths and
+retains document lifetime; it no longer owns the cross-format preview engine or
+imports video internals. Native desktop and HTML mobile adapters retain their
+existing rendering and retirement behavior.
 
 ## Desktop document page transitions
 

@@ -44,8 +44,24 @@ class NotesLibraryTabTests(QtTestCase):
                 reveal.assert_called_once_with('')
             owner.close()
 
+    def test_direct_video_uses_full_player_without_replacing_library_tab(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'clip.mp4').write_bytes(b'fixture')
+            owner = self.opened(root)
+            child = self.note(owner, 'A.md')
+            before = len(owner.document_tabs.documents)
+            with patch('desktop.document_catalog.open_resource') as opened:
+                result = owner.open_note('clip.mp4')
+                opened.assert_called_once_with(child.provider, 'clip.mp4', child)
+                self.assertIs(result, opened.return_value)
+            self.assertEqual(len(owner.document_tabs.documents), before)
+            self.assertIs(owner.document_tabs.current, child)
+            self.assertEqual(child.history[child.index], 'A.md')
+            owner.close()
+
     def test_native_image_preview_does_not_serialize_html(self):
-        from features.notes_library.file_preview import PreviewContent
+        from services.documents.file_preview import PreviewContent
         with self.temporary_directory() as directory:
             root = Path(directory)
             image = qt.QImage(2, 2, qt.QImage.Format.Format_RGB32)

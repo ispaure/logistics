@@ -16,6 +16,18 @@ from mobile_build.build_support.video_build import configure_android, configure_
 
 
 class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_favourite_uses_host_capability_and_reports_errors(self):
+        owner = self.player(restricted=False)
+        favourite = AsyncMock()
+        owner.app.presentation = SimpleNamespace(favourite_resource=favourite)
+        await owner.controls.command('favourite', '')
+        favourite.assert_awaited_once_with(owner.content.provider, owner.content.path, kind='video')
+        owner.native.status.assert_called_with('Added to favourites')
+        favourite.side_effect = ValueError('Storage unavailable')
+        await owner.controls.command('favourite', '')
+        owner.native.status.assert_called_with('Storage unavailable')
+        self.assertFalse(owner.closed)
+
     def player(self, *, restricted=True):
         from features.video.mobile.player import MobileVideo
         app = SimpleNamespace(audio_output=Mock(), active_host=True, private_root=Path('/unused'), loop=asyncio.get_running_loop())

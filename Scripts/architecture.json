@@ -5,7 +5,8 @@
     "services.local_storage",
     "services.documents.protection",
     "services.documents.video_authorization",
-    "services.documents.ui.private_views"
+    "services.documents.ui.private_views",
+    "services.appearance_palette"
   ],
   "host_adapter_policy": "Existing desktop presentation adapters; new dependencies require review. Mobile features must not import the mobile application.",
   "host_adapters": [
@@ -286,7 +287,8 @@
     "services.identifiers",
     "services.mobile_presentation",
     "services.workflow_host",
-    "services.audio_output"
+    "services.audio_output",
+    "services.documents.page_visits"
   ],
   "portable_packages": [
     "commonUtils.persistence",

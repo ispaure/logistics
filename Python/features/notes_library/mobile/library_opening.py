@@ -74,12 +74,38 @@ class LibraryDocuments:
         return opened
 
 
+    async def open_video_file(self, path):
+        path = self.contained(path)
+        if self.host.open_resource is None:
+            self.notice.text = 'Video playback is unavailable in this host.'
+            return False
+        try:
+            # Pause page media before handing audio to the native player. Keep
+            # the page and provider alive so returning from playback is immediate.
+            surfaces = [self.web]
+            formatted = getattr(self.embedded, 'formatted', None)
+            if formatted is not None:
+                surfaces.append(formatted.view)
+            for surface in surfaces:
+                await surface.evaluate_javascript("document.querySelectorAll('video').forEach(video => video.pause())")
+            if not self.valid():
+                return False
+            self.speech.close()
+            return bool(await self.host.open_resource(self.provider, path))
+        except (OSError, ValueError, PermissionError) as error:
+            self.notice.text = str(error)
+            return False
+
+
     async def _open_note(self, path, *, remember=True, fragment="", resolve_link=False):
         started = perf_counter()
         if not self.valid() or (getattr(self, '_moving_entry', False) and not getattr(self, '_reopening_after_move', False)):
             return False
         if not await self.prepare_leave():
             return False
+        from services.documents.file_preview import is_video_file
+        if not resolve_link and is_video_file(path):
+            return await self.open_video_file(path)
         if not resolve_link and document_kind(path) is None:
             from .file_preview import LibraryFilePreview
             return await self.open_embedded(path, LibraryFilePreview.open, remember=remember)
@@ -135,6 +161,8 @@ class LibraryDocuments:
                 self.page_loading.opening(path)
                 if document_kind(path) != 'markdown':
                     self.page_loading.finish()
+                    if is_video_file(path):
+                        return await self.open_video_file(path)
                     if document_kind(path) is None:
                         from .file_preview import LibraryFilePreview
                         return await self.open_embedded(path, LibraryFilePreview.open, remember=remember)
