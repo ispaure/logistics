@@ -153,10 +153,15 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.new_note_button = qt.QPushButton('New Document')
         self.new_folder_button = qt.QPushButton('New folder')
         self.rename_button = qt.QPushButton('Rename / Move…')
+        self.file_actions_button = qt.QToolButton()
+        self.file_actions_button.setText('…')
+        self.file_actions_button.setAccessibleName('Selection actions')
+        self.file_actions_button.setToolTip('Move, copy or delete the selected file or folder')
+        self.file_actions_button.clicked.connect(self.selected_file_actions)
         self.new_note_button.clicked.connect(self.new_note)
         self.new_folder_button.clicked.connect(lambda: self.new_entry(folder=True))
         self.rename_button.clicked.connect(self.rename_entry)
-        for button in (self.new_note_button, self.new_folder_button, self.rename_button):
+        for button in (self.new_note_button, self.new_folder_button, self.rename_button, self.file_actions_button):
             note_controls.addWidget(button)
         self.note_controls.setVisible(not remote)
         side.addWidget(self.note_controls)

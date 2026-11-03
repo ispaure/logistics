@@ -349,6 +349,14 @@ class LibraryPanels:
         if path:
             self.open_note(path)
 
+    def selected_file_actions(self):
+        tree = self.search_results if self.files_stack.currentWidget() is self.search_results else self.tree
+        item = tree.currentItem()
+        if item is None:
+            self.viewer.status.setText('Select a file or folder first.')
+            return
+        self.file_actions(tree, tree.visualItemRect(item).center())
+
     def file_actions(self, tree, point):
         if self.library is None or self.progress.busy or self.locked:
             return

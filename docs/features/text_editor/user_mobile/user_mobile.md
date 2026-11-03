@@ -279,3 +279,8 @@ Markdown viewer and cannot open as libraries. Source inspection does not enable 
 On iOS, opening the keyboard preserves the document’s native title and actions
 while resizing the writing area. Keyboard dismissal restores the previous
 navigation visibility; destination tabs can remain hidden while a document is open.
+
+Each Notes Library file/folder row has **…** actions for Move / rename, Copy and
+Delete when supported by its storage. Long-pressing the filename opens the same
+menu. Folder actions apply to the folder and its contents; deletion asks for
+confirmation and existing copy/move destinations are preserved.

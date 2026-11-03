@@ -379,3 +379,7 @@ In a Notes Library, resolution tries the note's folder, the library root, then
 `Attachments`, `Assets` and `Images` (including lowercase variants) for a bare
 filename. Explicit `./` and `../` paths stay relative to the note. Images remain
 inside the selected library; no recursive attachment scan is performed.
+
+The Notes Library sidebar's **…** selection control opens Move / rename, Copy and
+Delete for the selected file or folder. Right-clicking an entry opens the same
+menu, including entries in search results. Folder operations include their contents.
