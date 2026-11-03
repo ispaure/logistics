@@ -49,6 +49,11 @@ revision checks reject foreign or stale approval messages. Revocation, retiremen
 and host disposal clear private content and detach callbacks. Progress retained
 after credential revocation is redacted, including file paths.
 
+The full native review driver waits for the current model revision to reach the
+WebView, then clicks its rendered approval, early-review or cancellation button.
+It preserves native confirmation, bounded fresh-review retries and comparison
+retirement checks; widget-child positions are not part of the driver contract.
+
 Progress has explicit discovery, transfer, verification, complete, failed,
 conflicted and cancelled states. Unknown totals do not produce percentages, and
 verification is separate from successful completion. The Go bridge publishes at

@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
+import json
 from pathlib import Path
 
 from .transfer_fixtures import remote_files
@@ -11,32 +12,56 @@ from threading import Event
 from unittest.mock import AsyncMock, patch
 
 
-async def approve_transfer(app, *, timeout=60):
-    for _ in range(600):
+def rendered_review(view):
+    return (view is not None and not view.closed and view.ready and view.revision > 0
+            and view.delivered_revision == view.revision)
+
+
+async def press_review(view, action, *, timeout=30):
+    """Click the rendered native WebView action, including its revision bridge."""
+    selector = {'approve': '#approve', 'early': '#early',
+                'background': '[data-action="background"]'}[action]
+    script = ('(() => { const button = document.querySelector(' + json.dumps(selector)
+              + '); if (!button || button.disabled || !button.getClientRects().length) return false; '
+              + 'button.click(); return true; })()')
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        if rendered_review(view) and await view.web.evaluate_javascript(script):
+            return
+        await asyncio.sleep(.05)
+    raise AssertionError('Native review action was not rendered/enabled: ' + action)
+
+
+async def completed_review(app, *, timeout=30):
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
         view = getattr(app, '_transfer_review_view', None)
-        if view is not None and view.children[-1].children[1].enabled:
-            break
+        if rendered_review(view) and view.model.get('can_confirm'):
+            return view
         if app.transfer_task.done():
             raise AssertionError('Review exited before confirmation: ' + app.cloud_status.value)
         await asyncio.sleep(.05)
-    else:
-        raise AssertionError('Native review never completed: ' + app.cloud_status.value)
+    raise AssertionError('Native review never completed: ' + app.cloud_status.value)
+
+
+async def approve_transfer(app, *, timeout=60):
+    view = await completed_review(app)
     # A second completed scan can legitimately ask for confirmation again.
     # Follow that visible full-review flow; never use the incomplete-review action.
     deadline = asyncio.get_running_loop().time() + timeout
     confirmations = 0
     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
-        await view.children[-1].children[1].on_press()
+        await press_review(view, 'approve')
         while not app.transfer_task.done():
             current = getattr(app, '_transfer_review_view', None)
-            if (current is not None and current.children[-1].children[1].enabled
-                    and current.children[2].text.startswith('Files changed or could not be checked.')):
+            if (rendered_review(current) and current.model.get('can_confirm')
+                    and current.model.get('notice', '').startswith('Files changed')):
                 assert confirmations < 3, 'Native review kept changing after three fresh confirmations'
                 confirmations += 1
-                await current.children[-1].children[1].on_press()
+                await press_review(current, 'approve')
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                phase = current.children[2].text if current is not None else app.transfer_message
+                phase = current.model.get('notice', '') if current is not None else app.transfer_message
                 raise AssertionError('Native transfer timed out: ' + phase)
             await asyncio.wait([app.transfer_task], timeout=min(.1, remaining))
     assert await app.transfer_task, app.transfer_message
@@ -47,7 +72,8 @@ async def wait_for_held_review(app, held, *, timeout=30):
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         view = getattr(app, '_transfer_review_view', None)
-        if view is not None and 'incomplete' in view.children[3].value and held.is_set():
+        if (rendered_review(view) and not view.model.get('complete')
+                and view.model.get('can_early') and held.is_set()):
             return view
         if app.transfer_task.done():
             raise AssertionError('Native held review exited before its result was held: ' + app.transfer_message)
@@ -94,20 +120,13 @@ async def exercise_reviews(app):
     for partial in store.target(job).glob('*.partial'):
         partial.unlink()
     async def ready():
-        for _ in range(600):
-            view = getattr(app, '_transfer_review_view', None)
-            if view is not None and view.children[-1].children[1].enabled:
-                return view
-            if app.transfer_task.done():
-                raise AssertionError('Review exited before confirmation: ' + app.cloud_status.value)
-            await asyncio.sleep(.05)
-        raise AssertionError('Native review never completed: ' + app.cloud_status.value)
+        return await completed_review(app)
     async def finish(phase='review'):
         done, _ = await asyncio.wait([app.transfer_task], timeout=30)
         if not done:
             view = getattr(app, '_transfer_review_view', None)
-            status = view.children[2].text if view is not None else 'review closed'
-            details = view.children[3].value if view is not None else ''
+            status = view.model.get('notice', '') if view is not None else 'review closed'
+            details = str(view.model.get('rows', ())) if view is not None else ''
             raise AssertionError('Native reviewed transfer did not retire: '
                                  + phase + '; status=' + status + '; progress='
                                  + app.transfer_message + '; details=' + details[:2000])
@@ -115,29 +134,34 @@ async def exercise_reviews(app):
     before = store.path.read_bytes()
     app.start_mirror_pull(key)
     view = await ready()
-    assert view.children[0].text == 'Review Pull'
-    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=False)):
-        await view.children[-1].children[1].on_press()
+    assert view.model['operation'] == 'Pull'
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=False)) as declined:
+        await press_review(view, 'approve')
+        for _ in range(100):
+            if declined.await_count:
+                break
+            await asyncio.sleep(.05)
+        assert declined.await_count == 1
     assert store.path.read_bytes() == before
-    view.children[-1].children[0].on_press()
+    await press_review(view, 'background')
     assert not await finish()
     app.start_mirror_pull(key)
     view = await ready()
-    assert 'Review complete' in view.children[3].value
+    assert view.model['complete']
     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
-        await view.children[-1].children[1].on_press()
-    assert await finish(), app.transfer_message
+        await press_review(view, 'approve')
+        assert await finish(), app.transfer_message
     copies = ManagedCopies(provider)
     reader = await asyncio.to_thread(copies.open, logical)
     updated = await asyncio.to_thread(copies.save, reader, '# Native shared review writeback\n')
     assert updated.text == '# Native shared review writeback\n'
     app.start_mirror_review(key)
     view = await ready()
-    assert view.children[0].text == 'Review Push'
-    assert 'Replace: note.md' in view.children[3].value, view.children[3].value
+    assert view.model['operation'] == 'Push'
+    assert ('replace', 'note.md') in view.model['rows'], view.model['rows']
     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
-        await view.children[-1].children[1].on_press()
-    assert await finish(), app.transfer_message
+        await press_review(view, 'approve')
+        assert await finish(), app.transfer_message
     physical = provider._locate(logical)
     leaf = Path(provider.mapping(logical)).name
     assert (await remote_files(client, job, leaf))[leaf] == physical.read_bytes()
@@ -165,8 +189,8 @@ async def exercise_reviews(app):
             view = await wait_for_held_review(app, held)
             assert len(store.jobs) == count, 'Review published a mapping before approval'
             with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
-                await view.children[-2].on_press()
-            assert await finish(), app.transfer_message
+                await press_review(view, 'early')
+                assert await finish(), app.transfer_message
             assert len(store.jobs) == count + 1
         finally:
             released.set()
@@ -181,12 +205,12 @@ async def exercise_reviews(app):
                            cancelled=lambda: False, progress=lambda **kw: None)
     app.start_mirror_review(key)
     view = await ready()
-    assert 'Cleanup: .DS_Store' in view.children[3].value, view.children[3].value
-    assert 'Delete: .DS_Store' in view.children[3].value, view.children[3].value
+    assert ('cleanup', '.DS_Store') in view.model['rows'], view.model['rows']
+    assert ('delete', '.DS_Store') in view.model['rows'], view.model['rows']
     assert physical_junk.exists(), 'Review removed local generated junk'
     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
-        await view.children[-1].children[1].on_press()
-    assert await finish(), app.transfer_message
+        await press_review(view, 'approve')
+        assert await finish(), app.transfer_message
     assert not physical_junk.exists()
     leaf = Path(provider.mapping(junk)).name
     assert (await remote_files(client, job, leaf))[leaf] is None
@@ -205,8 +229,8 @@ async def exercise_reviews(app):
     (local / 'excluded.skip').write_bytes(b'keep local excluded bytes')
     app.begin_transfer_review(push=True, local_folder=folder, remote=job['remote'], specific=True)
     view = await ready()
-    assert 'Add: linked.txt' in view.children[3].value
-    assert 'excluded.skip' not in view.children[3].value
+    assert ('add', 'linked.txt') in view.model['rows']
+    assert all(path != 'excluded.skip' for _, path in view.model['rows'])
     # Fresh validation can ask for another completed review. Follow the same
     # bounded full-confirmation flow used by the other native transfer checks.
     await approve_transfer(app)
