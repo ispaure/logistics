@@ -38,6 +38,20 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = jobs(REPO / '.github/workflows/mobile-build.yml')
 
+    @unittest.skipUnless(shutil.which('bash'), 'Bash is required for workflow shell contracts')
+    def test_object_diagnostics_are_absent_when_disabled_and_explicit_when_enabled(self):
+        prefix = script(self.workflow['ios-ui'], 'Exercise panels, rotation and safe areas').split('mkdir -p', 1)[0]
+        names = ('SIMCTL_CHILD_NSZombieEnabled', 'SIMCTL_CHILD_MallocStackLogging')
+        command = shlex.quote(sys.executable) + ' -c ' + shlex.quote(
+            'import json,os;print(json.dumps([os.environ.get(n) for n in ' + repr(names) + ']))')
+        for enabled, expected in [('false', [None, None]), ('true', ['YES', '1'])]:
+            with self.subTest(enabled=enabled):
+                env = dict(os.environ, IOS_OBJECT_DIAGNOSTICS=enabled)
+                env.update({name: 'inherited' for name in names})
+                result = subprocess.run(['bash', '-c', prefix + command], env=env,
+                                        text=True, capture_output=True, check=True)
+                self.assertEqual(json.loads(result.stdout), expected)
+
     def test_parallel_devices_depend_only_on_one_ios_build(self):
         workflow = self.workflow
         self.assertIn('    needs: [environment, ios-build]\n', workflow['ios-ui'])
