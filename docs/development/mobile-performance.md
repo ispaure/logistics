@@ -1,5 +1,36 @@
 # Mobile performance implementation and verification
 
+## LocalCrypt comics and idle reader layout — 2026-11-03
+
+Synthetic encrypted comic testing found two independent costs. Native ZIP
+inflation repeatedly started crypt range decryptors for small reads within the
+same 64 KiB block. Request-local authenticated block reuse now bounds that work
+without creating plaintext files or retaining blocks between requests. On an
+Apple M3 Max, three `BenchmarkCryptArchivePage` runs with a 3 MiB deflated member
+have median archive-read times of 85.6 ms uncached and 9.0 ms with reuse. This
+includes archive parsing, member reads and base64 output, and excludes image
+decoding/display; it is not an iPhone energy measurement.
+
+A native Duo simulator profile also found a fullscreen bar feedback loop:
+reasserting hidden tabs queued keyboard layout, which called the host resize
+handler and reasserted the same hidden tabs. The profile recorded 977 host
+resize passes in five idle seconds. The shared Apple navigation owner now
+schedules layout only when tab visibility or sidebar presentation changes.
+The final source was tested with six generated 1200 × 1800 JPEG comic pages,
+twelve forward/backward page selections and a five-second profiled idle window.
+Idle process CPU time fell from 5.006 seconds to 0.036 seconds in those windows;
+the final profile has no repeating host-resize loop. These are separate synthetic
+simulator runs, not physical phone thermal or battery measurements.
+
+The full Go bridge suite, targeted race checks, shared keyboard/gesture checks,
+37 mobile reader/access checks, nine fullscreen/keyboard checks, test inventory
+and focused native comic run pass. The broader native LocalCrypt run stops in
+an unrelated Notes check expecting `_notes_offer_task`; it is not reported as
+passing. Physical iOS bridge compilation succeeded, but the isolated QA app
+could not be provisioned because Apple rejected authentication and the available
+profile did not cover Duo/QA capabilities. Nothing was installed on the physical
+phone. QA simulators/apps were removed and managed scratch workspaces retired.
+
 ## BOOX background publication and retained Home controls — 2026-10-20
 
 A separate diagnostic run isolates work outside the native vault request: Home

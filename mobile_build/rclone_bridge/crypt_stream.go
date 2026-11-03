@@ -116,7 +116,9 @@ func cryptArchive(ctx context.Context, name, encrypted, identity, password, memb
 		return nil, err
 	}
 	defer reader.file.Close()
-	return archiveContents(ctx, reader, reader.size, password, member, 10000, 16*1024*1024)
+	blocks := &archiveBlockReader{ctx: ctx, source: reader, size: reader.size}
+	defer blocks.close()
+	return archiveContents(ctx, blocks, reader.size, password, member, 10000, 16*1024*1024)
 }
 
 func archiveContents(ctx context.Context, reader io.ReaderAt, size int64, password, member string, maxMembers, maxRead int) (any, error) {

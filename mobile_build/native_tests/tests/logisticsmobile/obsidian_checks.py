@@ -23,24 +23,29 @@ async def exercise_obsidian(app, encrypted):
             provider.create_file('Native Obsidian Vault/' + path, BytesIO(data))
         from unittest.mock import patch
         from contextlib import nullcontext
-        entry = dict(source='Local' if label == 'local' else 'LocalCrypt',
-            kind='local' if label == 'local' else 'crypt',
-            value='Native Obsidian Vault' if label == 'local' else encrypted.remote,
-            name='Native Notes Library', copies=[])
-        # This fixture's crypt vault is a selected subfolder inside the native
-        # encrypted root. Production mapped roots use the same provider/scope.
-        scope = (patch('mobile.notes_actions.resolve_source', return_value=(provider, 'Native Obsidian Vault'))
+        # The synthetic encrypted root lives outside normal collections. Expose
+        # its real location through the linked-root registry, then exercise the
+        # same automatic Documents discovery and button as production.
+        scope = (patch.object(app, 'linked_crypt_locations',
+                    side_effect=lambda: {'LocalCrypt: Native check': encrypted.reopen()})
                  if label == 'localcrypt' else nullcontext())
         with scope:
-            app.show_picker_folder(entry)
-            await app._notes_offer_task
-        button = next(button for button, _ in app.folder_action_controls if button.text == 'Open as Notes Library')
-        assert button.parent is not None
-        await capture_window(app, output / (label + '-button.png'))
-        await button.on_press()
+            app.show_documents_hub()
+            while True:
+                discovery = app._notes_discovery_task
+                await discovery
+                if discovery is app._notes_discovery_task:
+                    break
+            suffix = ' · Local' if label == 'local' else ' · LocalCrypt: Native check'
+            button = next((button for button in app.document_notes_list.children[1].children
+                           if button.text == 'Native Obsidian Vault' + suffix), None)
+            assert button is not None, app.document_notes_list.children[2].text
+            assert button.parent is not None
+            await capture_window(app, output / (label + '-button.png'))
+            await button.on_press()
         owner = app.vault_browser
-        assert app.native_host.state.destination == 'files'
-        assert owner.destination == 'files'
+        assert app.native_host.state.destination == 'documents'
+        assert owner.destination == 'documents'
         assert owner.session.provider == 'notes-library'
         assert owner is not None and owner.provider.root == provider.root
         if label == 'localcrypt':
