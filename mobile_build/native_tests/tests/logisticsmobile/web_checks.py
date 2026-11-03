@@ -6,6 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import os
+import sys
 import time
 
 
@@ -97,5 +98,11 @@ async def wait_for_text(view, expected, *, absent=None, timeout=30):
         print('LOGISTICS_NATIVE_WEBVIEW_STATE=' + json.dumps(state), flush=True)
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+        if sys.platform == 'ios' and state.get('platform_backend', '').startswith('toga_iOS.'):
+            # Acceptance has already failed; do not await or accept a late
+            # render. Keep the process and native view available while the
+            # hosted sampler enumerates symbols and captures thread stacks.
+            # Exiting during that work can leave only a binary-image inventory.
+            await asyncio.sleep(60)
         raise RuntimeError(f'WebView did not render {expected!r}; last value={last!r}, url={view.url!r}, native={state!r}') from None
     await task
