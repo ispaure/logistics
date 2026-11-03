@@ -6,10 +6,29 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace as State
 import unittest
-from mobile_build.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review, save_transfer_settings
+from mobile_build.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review, save_transfer_settings, cancel_review
 
 
 class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
+    def test_review_cancellation_uses_native_ios_back(self):
+        from unittest.mock import Mock, patch
+        from commonUtils.runtime.platform import OS
+        navigation = State(popViewControllerAnimated=Mock())
+        app = State(native_host=State(destinations=['files'], adapter=State(navigation=[navigation])))
+        with patch('commonUtils.runtime.platform.get_os', return_value=OS.IOS):
+            cancel_review(app)
+        navigation.popViewControllerAnimated.assert_called_once_with(True)
+
+    def test_review_cancellation_uses_native_android_back(self):
+        from unittest.mock import Mock, patch
+        from commonUtils.runtime.platform import OS
+        dispatch = State(onBackPressed=Mock())
+        activity = State(getOnBackPressedDispatcher=lambda: dispatch)
+        app = State(native_host=State(adapter=State(impl=State(_native_activity=activity))))
+        with patch('commonUtils.runtime.platform.get_os', return_value=OS.ANDROID):
+            cancel_review(app)
+        dispatch.onBackPressed.assert_called_once_with()
+
     def app(self, *, changes=1, finish=True):
         result = asyncio.get_running_loop().create_future()
         calls = []
