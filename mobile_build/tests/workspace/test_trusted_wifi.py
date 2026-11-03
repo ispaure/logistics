@@ -1,5 +1,6 @@
 """Trusted-network resume never stores secrets or authorizes unrelated gates."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -127,11 +128,11 @@ class WifiSettingsTests(unittest.TestCase):
         from mobile.settings.categories import SettingsCategories
         from mobile.settings.trusted_wifi import controls, show
         import toga
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             box = SettingsCategories(app).category('Workspaces')
             choice, manage = controls(app, box)
             self.assertFalse(choice.value)
@@ -185,11 +186,11 @@ class WifiSettingsTests(unittest.TestCase):
         import toga
         from mobile.app import LogisticsMobile
         from mobile.settings.trusted_wifi import show
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             decision = app.loop.create_future()
             async def ask(dialog):
                 return await decision
@@ -236,11 +237,11 @@ class WifiSettingsTests(unittest.TestCase):
         import toga
         from mobile.app import LogisticsMobile
         from mobile.settings.trusted_wifi import show
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             decision = app.loop.create_future()
             state = 'prompt'
             async def request(app):
@@ -274,11 +275,11 @@ class WifiSettingsTests(unittest.TestCase):
         import asyncio
         from mobile.app import LogisticsMobile
         from mobile.settings.trusted_wifi import show
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             with patch.object(LogisticsMobile, 'storage_root', Path(directory)):
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             with patch.object(app, 'show_view'), \
                     patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog, \
                     patch('mobile.settings.trusted_wifi.access_state', return_value='settings'), \

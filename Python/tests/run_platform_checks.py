@@ -25,7 +25,7 @@ def main():
         parser.error('--prepare-only requires --install and never counts as platform validation')
     if args.install:
         # Export the committed lock rather than resolving transitive versions in CI.
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'uv==0.12.18'], check=True)
+        subprocess.run([sys.executable, '-m', 'pip', 'install', 'uv==0.13.4'], check=True)
         with tempfile.TemporaryDirectory() as directory:
             requirements = Path(directory) / 'requirements.txt'
             subprocess.run([sys.executable, '-m', 'uv', 'export', '--project', str(REPO / 'Python'),

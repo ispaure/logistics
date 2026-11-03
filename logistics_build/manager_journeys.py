@@ -262,6 +262,14 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
     # carry explicit effects and retain the existing session/artifact-scoped review.
     workspace = project.private / 'workspaces' / 'journeys' / uuid4().hex
     secrets = tuple(dict.fromkeys(secret for plan in plans for secret in plan.secret_environment))
+    # The executor chooses ready phases in plan order. Give mobile delivery
+    # branches their worker slots before desktop work, including signing and
+    # uploads once their own validation gate passes. All gates remain required.
+    mobile_prefixes = tuple(prefix for target, provider in (('ios', 'testflight'), ('android', 'firebase'))
+                            if provider in destinations or target + '-devices' in destinations
+                            for prefix in (target + '.', provider + '.'))
+    if mobile_prefixes:
+        phases.sort(key=lambda phase: not phase.id.startswith(mobile_prefixes))
     result = Plan('Logistics', 'Validate and deliver' if delivery else 'Validate selected platforms',
         dict(source, platform_plans=branch_sources), tuple(phases), str(workspace),
         backend='Per-platform execution choices', max_workers=4, capacities=capacities, resources=resources,

@@ -1,5 +1,6 @@
 """Configured collection folders, including encrypted and pulled copies."""
 
+from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -81,12 +82,12 @@ class LibraryCatalogTests(unittest.TestCase):
 
     def test_catalog_shows_folder_and_opens_its_browser(self):
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as fixture_cleanup:
             LogisticsMobile.storage_root = Path(directory)
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            fixture_cleanup.callback(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(close_loop, app.loop)
-            self.addCleanup(app.main_window.close)
+            fixture_cleanup.callback(close_loop, app.loop)
+            fixture_cleanup.callback(app.main_window.close)
             collection = app.private_root / 'LocalFiles' / 'Collection'
             (collection / 'Comics').mkdir(parents=True)
             (collection / 'remoteConfig.ini').write_text('[LogisticsComics]\nlibraries=Comics\n')

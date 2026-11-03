@@ -216,6 +216,12 @@ async def exercise_destination_edges(app):
             sample['input_active'] = bool(manager.isActive(native))
             sample['input_accepting_text'] = bool(manager.isAcceptingText())
             sample['input_attached'] = bool(native.isAttachedToWindow())
+            if not keyboard_settled:
+                print('LOGISTICS_NATIVE_ANDROID_STALL=' + json.dumps(dict(
+                    reason='destination-keyboard', orientation=orientation)), flush=True)
+                # The acceptance condition has already failed. Keep its native
+                # windows alive briefly for the hosted screenshot/window dump.
+                await asyncio.sleep(15)
             assert keyboard_settled, sample
             sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
             assert not sample['fullscreen_ime'], sample
