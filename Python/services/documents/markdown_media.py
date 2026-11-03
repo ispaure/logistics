@@ -56,8 +56,17 @@ class MarkdownMedia:
                 try:
                     candidate = self.provider.relative(candidate)
                     if candidate in self.videos:
-                        self.videos[candidate][0].check_access()
-                        return 'video/mp4', self.videos[candidate][1].url
+                        content, transport = self.videos[candidate]
+                        try:
+                            content.check()
+                        except (OSError, ValueError):
+                            del self.videos[candidate]
+                            try:
+                                transport.close()
+                            finally:
+                                content.close()
+                        else:
+                            return 'video/mp4', transport.url
                     if len(self.videos) >= 8:
                         return None
                     from features.video.playback import VideoContent
