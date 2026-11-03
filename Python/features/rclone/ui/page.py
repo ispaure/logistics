@@ -54,6 +54,8 @@ class RclonePage(pyside.QWidget):
         self.empty_notice.setWordWrap(True)
         self.remove_button = pyside.QPushButton('Forget Credentials')
         self.lock_button = pyside.QPushButton('Lock Package')
+        self.change_password_button = pyside.QPushButton('Change ZIP password…')
+        self._changing_password = False
 
         self.remote_list = pyside.QListWidget()
 
@@ -176,6 +178,7 @@ class RclonePage(pyside.QWidget):
         package_buttons = pyside.QHBoxLayout()
         package_buttons.addWidget(self.load_button)
         package_buttons.addWidget(self.lock_button)
+        package_buttons.addWidget(self.change_password_button)
 
         package_layout.addWidget(self.package_name)
         package_layout.addLayout(package_form)
@@ -229,6 +232,7 @@ class RclonePage(pyside.QWidget):
         self.clear_all_button.clicked.connect(self._clear_all_configs)
         self.clear_sessions_button.clicked.connect(self._clear_sessions)
         self.lock_button.clicked.connect(self._lock_selected)
+        self.change_password_button.clicked.connect(self._change_password)
 
     def refresh(self, *, selected_package_path=None, message='', focus_password=False):
         """Discover packages in a worker, retaining the previous list until success."""
@@ -427,6 +431,7 @@ class RclonePage(pyside.QWidget):
             configuration.get_credential_config_path(package.path).with_suffix('.session')) is not None
         self.lock_button.setEnabled(unlocked)
         self.lock_button.setVisible(unlocked)
+        self.change_password_button.setEnabled(package is not None and (unlocked or configuration.get_credential_config_path(package.path).is_file()))
         saved = bool(configuration.get_all_conf_paths())
         self.clear_all_button.setEnabled(saved)
         from features.rclone import desktop_catalog
@@ -467,6 +472,13 @@ class RclonePage(pyside.QWidget):
             message='Importing credential ZIP…')
 
     def _operation_completed(self, values, error):
+        if self._changing_password:
+            self._changing_password = False
+            self.load_operation.hide()
+            for widget in self._credential_controls():
+                widget.setEnabled(True)
+            self.refresh(message=error or values or 'Password change cancelled.')
+            return
         if self._discovering is not None:
             self._discovery_completed(values, error)
             return
@@ -551,7 +563,44 @@ class RclonePage(pyside.QWidget):
     def _credential_controls(self):
         return (self.credential_list, self.password_input, self.load_button,
                 self.import_button, self.refresh_button, self.remove_button, self.clear_all_button,
-                self.clear_sessions_button, self.lock_button)
+                self.clear_sessions_button, self.lock_button, self.change_password_button)
+
+    def _change_password(self):
+        package = self._get_selected_package()
+        if package is None or self.load_operation.busy:
+            return
+        context = self._selected_config_path(package)
+        from features.rclone import session
+        state = session.registry.state_credentials(context)
+        current = None
+        if state is not None:
+            state[1][:] = b'\0' * len(state[1])
+        else:
+            current, accepted = pyside.QInputDialog.getText(self, 'Current ZIP password',
+                'Current credential ZIP password:', pyside.QLineEdit.EchoMode.Password)
+            if not accepted:
+                return
+        password, accepted = pyside.QInputDialog.getText(self, 'Change ZIP password',
+            'New credential ZIP password:', pyside.QLineEdit.EchoMode.Password)
+        if not accepted:
+            return
+        confirmation, accepted = pyside.QInputDialog.getText(self, 'Confirm new ZIP password',
+            'Enter the new password again:', pyside.QLineEdit.EchoMode.Password)
+        if not accepted:
+            return
+        if not password or password != confirmation:
+            self.status_label.setText('New passwords must be non-empty and match. ZIP preserved.')
+            return
+        if not self._prepare_lock([context, context.with_suffix('.session')]):
+            return
+        from features.rclone.credential_password import change_password
+        self._changing_password = True
+        for widget in self._credential_controls():
+            widget.setEnabled(False)
+        self.password_input.clear()
+        self.load_operation.start(lambda report, cancelled: change_password(
+            package.path, context, password, current_password=current, cancelled=cancelled),
+            message='Changing credential ZIP password…')
 
     def _credentials_loaded(self, values, error):
         from features.rclone import session
