@@ -147,6 +147,9 @@ class TransferFeedbackTests(TestCase):
                 self.assertTrue(app._sync_status_controls[destination][3])
                 if destination == 'home':
                     self.assertIs(app._home_status_row.parent, app.home_content)
+                elif destination == 'documents':
+                    self.assertIs(button.parent, app._documents_status_row)
+                    self.assertIsNone(app.document_search.parent)
                 else:
                     self.assertGreater(len(button.parent.children), 1)
                 self.assertIn('42%', button.accessible_name)
