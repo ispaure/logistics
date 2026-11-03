@@ -96,7 +96,8 @@ def document_location(window):
         return choice.provider.root / choice.path, choice.provider
     viewer = getattr(window, 'viewer', None)
     if viewer is not None and getattr(viewer, 'current_path', None):
-        return viewer.current_path, getattr(getattr(viewer, 'storage', None), 'provider', None)
+        return viewer.current_path, (getattr(window, 'document_provider', None)
+                                     or getattr(getattr(viewer, 'storage', None), 'provider', None))
     book = getattr(getattr(window, 'reader', None), 'book', None)
     if book is not None:
         return book.path, book.source
@@ -192,6 +193,15 @@ class DocumentLocationRow(qt.QWidget):
         self.label.setWordWrap(True)
         row.addWidget(self.icon)
         row.addWidget(self.label, 1)
+        self.actions_button = qt.QToolButton()
+        self.actions_button.setText('…')
+        self.actions_button.setAccessibleName('File actions')
+        self.actions_button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = qt.QMenu(self.actions_button)
+        from desktop.document_catalog import favourite
+        menu.addAction('Favourite file', lambda: favourite(self.document))
+        self.actions_button.setMenu(menu)
+        row.addWidget(self.actions_button)
         self.refresh()
 
     def refresh(self):

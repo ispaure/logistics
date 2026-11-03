@@ -463,3 +463,11 @@ Local and LocalCrypt libraries start in edit mode and save to that same copy;
 Formatted and Source editing are both available. Cloud libraries remain read-only.
 Push and Pull retain both transfer endpoints in the actions panel. Private
 content remains in memory and stops being available when its credentials retire.
+
+## Favourite files
+
+Use **… → Favourite file** on an open document's storage row. Favourites appear
+on the landing page. Adding the same file again updates its opening method;
+adding it inside Notes Library makes the favourite reopen that library and note.
+Use the × beside a favourite to remove it. Session-Only favourites stay encrypted
+with the credential ZIP password and appear after that credential is unlocked.

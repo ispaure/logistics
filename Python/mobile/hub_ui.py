@@ -205,7 +205,10 @@ def _home_state(hub, recent):
              session.id in hub.workspace.sessions, deepcopy(session_source(hub.app, session)))
             for session, summary in recent]
     return (rows, bool(hub.app.home_unlock_candidates()),
-            getattr(getattr(hub.app, 'recovery_notice', None), 'text', ''), hub.workspace.error)
+            getattr(getattr(hub.app, 'recovery_notice', None), 'text', ''), hub.workspace.error,
+            getattr(hub.app, '_favourites_version', 0),
+            tuple(record.get('document_cache_id') for record in
+                  getattr(getattr(hub.app, 'cloud_client', None), 'package_records', ())))
 
 
 class HubUI:
@@ -367,6 +370,8 @@ class HubUI:
         self._home_recent_buttons = []
         for child in list(recent_box.children):
             recent_box.remove(child)
+        from .favourites import populate
+        populate(self.app, recent_box)
         recent_box.add(heading('Recent'))
         recent_rows = []
         for session, summary in recent:

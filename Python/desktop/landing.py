@@ -123,6 +123,8 @@ class LandingPage(qt.QWidget):
         self.editor_buttons = {}
         self.editor_new_buttons = {}
         self._launcher_signature = None
+        self.favourites_layout = qt.QVBoxLayout()
+        layout.addLayout(self.favourites_layout)
         centered.addWidget(content, 0, qt.Qt.AlignmentFlag.AlignHCenter)
         centered.addStretch()
         self.scroll.viewport().installEventFilter(self)
@@ -157,6 +159,8 @@ class LandingPage(qt.QWidget):
         super().paintEvent(event)
 
     def showEvent(self, event):
+        from .document_catalog import populate
+        populate(self.favourites_layout, self)
         self._settle_layout()
         self._layout_pending = True
         super().showEvent(event)

@@ -167,3 +167,11 @@ image bytes remain in memory. Notes Libraries also try library-root paths and
 common attachment folders when a relative image is missing.
 See the [Text Editor mobile guide](../../features/text_editor/user_mobile/user_mobile.md#images-in-folder-backed-markdown)
 for supported paths and image limits.
+
+## Favourite files
+
+Choose **Favourite file** in an opened document's **…** menu. Home lists favourites
+above Recent, with a Remove control. Favouriting a file again updates how it opens;
+a note favourited inside Notes Library reopens inside that library. Session-Only
+references use the credential ZIP password for encryption and remain hidden until
+that credential is unlocked.

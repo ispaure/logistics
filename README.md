@@ -64,8 +64,9 @@ settings icon at the bottom-left; clicking it opens settings and navigation choi
 Use **File Browser** for any folder, or **Workspaces** for configured libraries
 and remote storage. Workspaces groups **Local**, **Cloud** and **Home Server**
 locations beside a docked file browser and workspace actions. **Documents** collects open readers and editors; their tabs can
-be split or detached. Text, Markdown, notebook, EPUB and comic Open dialogs share a Local/LocalCrypt
-file picker; encrypted copies open in private readers or editors. Regular and private file browsers
+be split or detached. Use **Favourite file** in an opened document's **…** menu to pin its opening method on Home;
+Notes Library favourites reopen inside that library. Text, Markdown, notebook, EPUB and comic Open dialogs
+share a Local/LocalCrypt file picker; encrypted copies open in private readers or editors. Regular and private file browsers
 share list, tile and column views. **Settings** saves feature choices and configuration and
 provides links to each feature's help.
 
