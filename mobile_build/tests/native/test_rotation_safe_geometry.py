@@ -16,6 +16,18 @@ def rectangle(x, y, width, height):
 
 
 class ReaderTitleLayoutTests(unittest.TestCase):
+    def test_promoted_actions_include_dynamic_toolbar_provider_results(self):
+        first, second, third = object(), object(), object()
+        calls = []
+        def actions():
+            calls.append('resolved')
+            return (second,)
+        widget = NS(title_actions=[first], _ios_toolbar_buttons=actions,
+                    _ios_toolbar_leading=(third,))
+        self.assertEqual(list(rotation_checks.promoted_controls(widget)), [first, second, third])
+        self.assertEqual(calls, ['resolved'])
+        self.assertEqual(list(rotation_checks.promoted_controls(NS())), [])
+
     def setUp(self):
         edge = patch('mobile.ios_toolbar.vertical_edge', return_value=2)
         self.edge = edge.start()

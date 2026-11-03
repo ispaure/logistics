@@ -197,8 +197,11 @@ def record_ios_stall(path, row):
         output = path.with_name('ios-webview-stall-' + str(pid) + '.sample.txt')
         if output.exists():
             return
-        result = subprocess.run(['sample', str(pid), '3', '-file', str(output)],
-            capture_output=True, text=True, timeout=10, check=False)
+        # Hosted symbol processing can exceed the collection interval. Read
+        # process metadata before it exits and retain a bounded chance to finish
+        # analysis after the app's unchanged render deadline has elapsed.
+        result = subprocess.run(['sample', str(pid), '3', '-mayDie', '-file', str(output)],
+            capture_output=True, text=True, timeout=60, check=False)
         record.update(sample_exit_code=result.returncode, sample_stderr=result.stderr[-2000:])
         save('sampled' if result.returncode == 0 and output.is_file() else 'sample-failed')
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -310,7 +313,7 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
             raise
         finally:
             stopped.set()
-            if progress:progress.join(timeout=2)
+            if progress:progress.join(timeout=65 if target == 'ios' else 2)
             record_host_memory(path)
             if target == 'android' and not local:
                 record_android_emulator(logs)
