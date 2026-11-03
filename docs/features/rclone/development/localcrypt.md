@@ -18,6 +18,35 @@ change encryption, transfer routing or existing LocalCrypt mappings.
 
 ## Desktop
 
+`localcrypt/note_lookup.py` shares filename-only Notes Library discovery between
+desktop and mobile providers. `note_file_paths` scans ciphertext directories and
+batches basename decoding across sibling folders, reusing repeated decoded names
+within one call. This avoids one process/native request per folder for Dataview's
+page index. It prunes hidden directories before descent, retains the 10,000-entry
+limit, rejects links and shared/special files, checks directory identity after
+decoding, and validates cancellation and credentials before publication. No note
+content or persistent plaintext filename index is created. Desktop encrypted
+fixture tests cover cipher naming modes; mobile host tests cover batch bounds,
+name refresh, hidden-directory pruning and revocation during decoding.
+
+`localcrypt/path_batches.py` owns `map_path_entries`: callers supply `(path,
+directory)` pairs, a batch resolver and an access/cancellation check. It removes
+duplicate pairs within a call, preserves result order and bounds requests by
+both item count and a conservative 24 KiB argument budget. Partial or non-string
+result batches fail; access is checked before and after every batch. CLI encoding
+and decoding use up to 128 names per process. Native mapping uses up to 256 names
+per bridge call. The optional native entry field `encode: true` requests encoding;
+omitted fields retain decoding behavior. The mobile bridge must be rebuilt with
+payloads that use batched encoding.
+
+The same helper serves Dataview discovery, note-link lookup, folder listings and
+landing-note probes. Transfer comparison streams changed filenames in batches
+and maps directory rows together; cleanup previews map candidate filenames
+together. Mobile Push batches directory-name validation while retaining separate
+file-content authentication and the final inventory comparison. Directory
+discovery rechecks the identity of queued folders before descending, so ordinary
+directory replacement cannot publish names under a stale decoded prefix.
+
 New LocalCrypt copies require a crypt remote from session-only credentials
 (`session.credentials` with the originating ZIP association). A saved config alone
 does not satisfy this creation contract. The same session can supply online Cloud

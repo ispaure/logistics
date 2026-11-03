@@ -218,6 +218,14 @@
     [
       "notes_library",
       "notebooks"
+    ],
+    [
+      "notes_library",
+      "images"
+    ],
+    [
+      "notes_library",
+      "pdf"
     ]
   ],
   "portable_modules": [

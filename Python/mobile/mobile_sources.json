@@ -146,6 +146,7 @@
     "session_workflows/adapters.py",
     "session_workflows/transitions.py",
     "settings/__init__.py",
+    "settings/accent.py",
     "settings/audio.py",
     "settings/categories.py",
     "settings/forms.py",

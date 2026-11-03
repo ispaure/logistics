@@ -12,7 +12,7 @@ class LibraryTextEditor(qt.QWidget):
     saved = qt.Signal(str)
     idle = qt.Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, status=None):
         super().__init__(parent)
         self.resource = None
         self.snapshot = decode_bytes(b'')
@@ -38,7 +38,7 @@ class LibraryTextEditor(qt.QWidget):
         layout.addLayout(row)
         layout.addWidget(self.search)
         layout.addWidget(self.editor, 1)
-        self.status = qt.QLabel()
+        self.status = status if status is not None else qt.QLabel()
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         layout.addWidget(self.operation)

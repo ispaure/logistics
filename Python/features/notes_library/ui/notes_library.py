@@ -2,10 +2,11 @@
 from pathlib import Path, PurePosixPath
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
+from commonUtils.ui.appearance.status_line import StatusLine
 from .dataview import NotesMarkdownViewer
-from commonUtils.ui.readers.reader_chrome import reader_button
+from commonUtils.ui.markdown.navigation import MarkdownNavigation
 from features.notes_library.notes import NotesLibrary, vault_root, operation, document_kind, MAX_NOTE
-from .library_panels import LibraryPanels
+from .library_panels import LibraryPanels, FolderPageTree
 from ..notes import breadcrumb_folders, fit_breadcrumbs
 
 
@@ -54,6 +55,13 @@ class NotesBreadcrumbs(qt.QLabel):
             for i, label in enumerate(labels) if label))
 
 
+class NotesStatusLine(StatusLine):
+    """Keep an empty nested document footer out of the workspace layout."""
+    def setText(self, text):
+        super().setText(text)
+        self.setVisible(bool(text))
+
+
 class PageStorage:
     def __init__(self, window):
         self.window, self.data, self.path = window, b'', None
@@ -88,15 +96,30 @@ class PageStorage:
             return qt.QImage() if kind == qt.QTextDocument.ResourceType.ImageResource else qt.QByteArray()
         if not url.isLocalFile():
             url = qt.QUrl.fromLocalFile(str(self.path.parent) + '/').resolved(url)
-        data = self.resources.get(Path(url.toLocalFile()))
+        target = Path(url.toLocalFile()).resolve()
+        data = self.resources.get(target)
         if kind == qt.QTextDocument.ResourceType.ImageResource:
-            return qt.QImage.fromData(data) if data else qt.QImage()
+            from commonUtils.ui.markdown.images import prepared_image
+            return prepared_image(data, getattr(self.resources, 'errors', {}).get(target))
         return qt.QByteArray(data or b'')
 
     def video_source(self, url):
         if self.window.locked or not self.window.check_provider():
             return None
-        return getattr(self.resources, 'videos', {}).get(Path(url.toLocalFile()))
+        return getattr(self.resources, 'videos', {}).get(Path(url.toLocalFile()).resolve())
+    def open_markdown_link(self, target):
+        from urllib.parse import urlsplit
+        link = urlsplit(target)
+        if link.scheme == 'file' or link.path.startswith('/'):
+            if qt.QUrl(target).host() != qt.QUrl.fromLocalFile(str(self.path)).host():
+                self.window.viewer.status.setText('Choose a note inside this Notes Library.')
+                return
+            import posixpath
+            base = qt.QUrl.fromLocalFile(str(self.path.parent)).path(qt.QUrl.ComponentFormattingOption.FullyEncoded)
+            name = posixpath.relpath(link.path, base)
+            target = link._replace(scheme='', netloc='', path=name).geturl()
+        self.window.open_note(target, fragment=link.fragment, resolve_link=True)
+
     def open_link(self, path, fragment=''):
         owner = self.window
         if owner.library is not None:
@@ -124,7 +147,7 @@ class NotesNameDelegate(qt.QStyledItemDelegate):
         self.parent().owner.rename_tree_entry(path, editor.text())
 
 
-class NotesTree(qt.QTreeWidget):
+class NotesTree(FolderPageTree):
     """Internal drops request a provider move; only success changes the tree."""
     def __init__(self, owner):
         super().__init__()
@@ -166,6 +189,7 @@ class NotesTree(qt.QTreeWidget):
 
 class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
     idle = qt.Signal()
+    document_saved = qt.Signal()
     revoked = qt.Signal()
     aux_snapshot = qt.Signal(int, object)
 
@@ -184,6 +208,13 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.items, self.loaded = {}, set()
         self.storage = PageStorage(self)
         self.viewer = NotesMarkdownViewer(storage=self.storage, allow_edit=not remote)
+        old_status = self.viewer.status
+        self.viewer.status = NotesStatusLine(old_status.text(), self.viewer)
+        self.viewer.layout().replaceWidget(old_status, self.viewer.status)
+        old_status.hide()
+        old_status.deleteLater()
+        self.viewer.layout().setContentsMargins(0, 0, 0, 0)
+        self.viewer.layout().setSpacing(2)
         self.viewer.set_editing(False)
         self.viewer.browser.setPlaceholderText('Choose a document from the sidebar.')
         self.canvas = None
@@ -217,8 +248,6 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         welcome.addStretch()
         self.document_stack.addWidget(self.welcome)
         self.document_stack.addWidget(self.viewer)
-        self.viewer.back_button.hide()
-        self.viewer.forward_button.hide()
         if remote:
             self.viewer.find_action.setVisible(False)
             self.viewer.find_action.setEnabled(False)
@@ -266,27 +295,29 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.menu.setText('▤')
         self.menu.setAccessibleName('Browse Notes Library')
         self.menu.hide()
-        self.back = reader_button(self, 'Previous note', icon='previous')
-        self.forward = reader_button(self, 'Next note', icon='next')
-        self.up = reader_button(self, 'Browse parent folder', icon='up')
+        self.navigation = MarkdownNavigation(self, up=True)
+        self.breadcrumbs = NotesBreadcrumbs(self)
+        self.idle.connect(self.refresh_breadcrumb_path)
+        self.navigation.layout().addWidget(self.breadcrumbs, 1)
+        self.navigation.setMinimumWidth(0)
+        self.navigation.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
+        self.back = self.navigation.back_button
+        self.forward = self.navigation.forward_button
+        self.up = self.navigation.up_button
+        for button, label in ((self.back, 'Previous note'), (self.forward, 'Next note'),
+                              (self.up, 'Browse parent folder')):
+            button.setAccessibleName(label)
+            button.setToolTip(label)
         self.back.clicked.connect(lambda: self.navigate(-1))
         self.forward.clicked.connect(lambda: self.navigate(1))
         self.up.clicked.connect(self.parent_folder)
         self.back.setEnabled(False)
         self.forward.setEnabled(False)
         self.up.setEnabled(False)
-        controls = qt.QHBoxLayout()
-        self.navigation = qt.QWidget()
-        navigation = qt.QHBoxLayout(self.navigation)
-        navigation.setContentsMargins(0, 0, 0, 0)
-        for button in (self.back, self.forward, self.up):
-            navigation.addWidget(button)
-        self.viewer.navigation_toolbar.insertWidget(0, self.navigation)
-        self.breadcrumbs = NotesBreadcrumbs(self)
-        self.idle.connect(self.refresh_breadcrumb_path)
-        navigation.addWidget(self.breadcrumbs, 1)
-        self.navigation.setMinimumWidth(0)
-        self.navigation.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
+        self.controls_bar = qt.QWidget()
+        controls = qt.QHBoxLayout(self.controls_bar)
+        controls.setContentsMargins(0, 0, 0, 0)
+        self.viewer.place_navigation(self.navigation)
         self.document_controls = controls
         self.document_stack.currentChanged.connect(self.place_navigation)
         controls.addStretch()
@@ -310,15 +341,23 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.progress.completed.connect(self.completed)
         body = qt.QWidget()
         layout = qt.QVBoxLayout(body)
-        layout.addLayout(controls)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.controls_bar)
         layout.addWidget(self.split, 1)
         self.operation_footer = qt.QWidget()
-        footer = qt.QVBoxLayout(self.operation_footer)
+        footer = qt.QHBoxLayout(self.operation_footer)
         footer.setContentsMargins(0, 0, 0, 0)
-        footer.addWidget(self.progress)
+        footer.setSpacing(0)
+        footer.setSizeConstraint(qt.QLayout.SizeConstraint.SetMinAndMaxSize)
+        self.operation_footer.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Fixed)
+        footer.addWidget(self.progress, 1)
+        self.viewer.page_loading.setMaximumWidth(140)
+        footer.addWidget(self.viewer.page_loading, 0, qt.Qt.AlignmentFlag.AlignRight)
+        footer.addWidget(self.viewer.status, 1)
         layout.addWidget(self.operation_footer)
-        layout.addWidget(self.viewer.status)
         self.setCentralWidget(body)
+        self.place_navigation()
         self.revoked.connect(self.retire)
         self.pending = ('initial',)
         def initial(report, cancelled):
@@ -347,8 +386,14 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             self.breadcrumbs.show_path(self.history[self.index])
 
     def place_navigation(self, *args):
-        if self.document_stack.currentWidget() is self.viewer:
-            self.viewer.navigation_toolbar.insertWidget(0, self.navigation)
+        markdown = self.document_stack.currentWidget() is self.viewer
+        self.controls_bar.setVisible(not markdown and self.document_stack.currentWidget() is not self.welcome)
+        self.links_tree.setVisible(markdown and self.links_button.isChecked())
+        if not markdown:
+            self.cancel_connections()
+            self.links_tree.clear()
+        if markdown:
+            self.viewer.place_navigation(self.navigation)
             toolbar = self.viewer.navigation_toolbar
             for index in range(toolbar.count()):
                 if toolbar.itemAt(index).spacerItem() is not None:
@@ -356,6 +401,10 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             toolbar.setStretchFactor(self.navigation, 1)
         else:
             self.document_controls.insertWidget(0, self.navigation, 1)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh_connections()
 
     def show_sidebar(self, visible):
         self.panel_tabs.setVisible(not self.document_only)
@@ -393,8 +442,6 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         except ValueError as error:
             self.viewer.status.setText(str(error))
             return
-        if not resolve_link and document_kind(path) is None:
-            return self.open_other_file(path)
         if not self.can_leave_document():
             self.defer_after_save(lambda: self.open_note(path, remember=remember, fragment=fragment,
                                                         index=index, resolve_link=resolve_link))
@@ -412,6 +459,14 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             folders = breadcrumb_folders(self.library.root, resolved)
             pages.update(self.library.folder_pages(
                 [{'path': folder, 'directory': True} for folder in folders], cancelled=cancelled))
+            if document_kind(resolved) is None:
+                from ..file_preview import FilePreview
+                preview = FilePreview.open(self.provider, resolved, cancelled=cancelled)
+                try:
+                    return resolved, (preview, preview.page())
+                except BaseException:
+                    preview.close()
+                    raise
             if document_kind(resolved) == 'text':
                 from services.documents.storage import DocumentResource
                 from commonUtils.persistence.text import decode_bytes
@@ -439,17 +494,13 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             from services.documents.markdown import prepare_markdown
             self.progress.progress_changed.emit(0, 0, 'Preparing embedded media…')
             return resolved, prepare_markdown(self.provider, self.provider.root / resolved, data=data, cancelled=cancelled,
-                                             image_source=self.library.image_source(resolved))
+                                             image_source=self.library.image_source(resolved, cancelled=cancelled))
         def read_with_path(report, cancelled):
             return read(report, cancelled), pages
         self.progress.start(read_with_path, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
 
     def open_other_file(self, path):
-        from desktop.document_catalog import open_resource
-        try:
-            return open_resource(self.provider, self.library.contained(path), self)
-        except (OSError, ValueError) as error:
-            self.viewer.status.setText(str(error))
+        return self.open_note(path)
 
     def completed(self, result, error):
         kind, *values = self.pending
@@ -476,6 +527,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             if not error:
                 self.storage.data = data
             completed(error)
+            if not error:
+                self.document_saved.emit()
             self.progress.hide()
             self.idle.emit()
             if self.pending_close and not error:
@@ -597,6 +650,18 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                 self.index = len(self.history) - 1
             elif index is not None:
                 self.index = index
+            if document_kind(path) != 'markdown':
+                self.viewer.browser.inline_videos.clear()
+                self.viewer.formatted_editor.inline_videos.clear()
+                self.library.release_media(path)
+            if document_kind(path) is None:
+                self.show_file(*result)
+                self.back.setEnabled(self.index > 0)
+                self.forward.setEnabled(self.index < len(self.history) - 1)
+                self.up.setEnabled(True)
+                self.refresh_connections()
+                self.idle.emit()
+                return
             if PurePosixPath(path).suffix.lower() == '.rmdoc':
                 self.show_canvas(result)
                 self.back.setEnabled(self.index > 0)
@@ -617,6 +682,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                 self.canvas.dispose()
             if self.text_document is not None:
                 self.text_document.clear()
+            if getattr(self, 'file_preview', None) is not None:
+                self.file_preview.clear()
             self.document_stack.setCurrentWidget(self.viewer)
             self.save_drawing.setVisible(False)
             self.viewer.clear_data_views()
@@ -648,6 +715,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
     def discard_note_result(result):
         if result and PurePosixPath(result[0]).suffix.lower() == '.rmdoc':
             result[1].close()
+        elif result and document_kind(result[0]) is None:
+            result[1][0].close()
         elif result and document_kind(result[0]) == 'text':
             result[1][0].close()
         elif result and document_kind(result[0]) == 'markdown':
@@ -663,6 +732,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         return '' if parent == '.' else parent
 
     def can_leave_document(self):
+        preview = getattr(self, 'file_preview', None)
+        if preview is not None and self.document_stack.currentWidget() is preview:
+            return not preview.busy
         if self.text_document is not None and self.document_stack.currentWidget() is self.text_document:
             return self.text_document.can_leave()
         if self.canvas is None or self.document_stack.currentWidget() is not self.canvas:
@@ -686,18 +758,44 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
 
     @property
     def document_saving(self):
-        return (self.viewer.document_state.save_pending or bool(self.canvas and self.canvas.busy)
+        return (bool(getattr(self, 'file_preview', None) and self.file_preview.busy)
+                or self.viewer.document_state.save_pending or bool(self.canvas and self.canvas.busy)
                 or bool(self.text_document and self.text_document.busy))
 
     def save_current_document(self):
         current = self.document_stack.currentWidget()
+        if current is getattr(self, 'file_preview', None):
+            return False
         if current is self.text_document and self.text_document is not None:
             return self.text_document.save()
         if current is self.canvas and self.canvas is not None:
             return self.canvas.save_document()
         return self.viewer.save_document()
 
+    def show_file(self, preview, html):
+        self.clear_document()
+        self.viewer.status.clear()
+        if getattr(self, 'file_preview', None) is None:
+            from .file_preview import LibraryFilePreview
+            self.file_preview = LibraryFilePreview(self)
+            self.file_preview.idle.connect(self.file_preview_idle)
+            self.operation_footer.layout().addWidget(self.file_preview.operation, 1)
+            self.document_stack.addWidget(self.file_preview)
+        self.file_preview.load(preview, html)
+        self.document_resource_path = self.provider.root / preview.path
+        self.document_provider = self.provider
+        self.document_stack.setCurrentWidget(self.file_preview)
+
+    def file_preview_idle(self):
+        if self.closing or self.locked or self.pending_close:
+            self.close()
+        elif not self.resume_after_save(''):
+            self.idle.emit()
+
     def show_text(self, resource, snapshot):
+        self.viewer.status.clear()
+        if getattr(self, 'file_preview', None) is not None:
+            self.file_preview.clear()
         self.viewer.clear_data_views()
         if self.canvas is not None:
             self.canvas.dispose()
@@ -708,9 +806,11 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.document_provider = self.provider
         if self.text_document is None:
             from .library_text import LibraryTextEditor
-            self.text_document = LibraryTextEditor(self)
+            self.text_document = LibraryTextEditor(self, status=NotesStatusLine())
             self.text_document.saved.connect(self.text_saved)
             self.text_document.idle.connect(lambda: self.close() if self.closing or self.locked else None)
+            self.operation_footer.layout().addWidget(self.text_document.operation, 1)
+            self.operation_footer.layout().addWidget(self.text_document.status, 1)
             self.document_stack.addWidget(self.text_document)
         self.text_document.load(resource, snapshot, writable=self.library.writable)
         self.document_stack.setCurrentWidget(self.text_document)
@@ -734,6 +834,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         return False
 
     def show_canvas(self, document):
+        self.viewer.status.clear()
+        if getattr(self, 'file_preview', None) is not None:
+            self.file_preview.clear()
         self.viewer.clear_data_views()
         if self.text_document is not None:
             self.text_document.clear()
@@ -748,6 +851,17 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             from features.notebooks.ui.workspace import NotebookWorkspace
             owner = self
             class LibraryCanvas(NotebookWorkspace):
+                def open(self, book, key):
+                    super().open(book, key)
+                    owner.operation_footer.layout().addWidget(self.operation, 1)
+
+                def clear(self):
+                    operation = getattr(self, 'operation', None)
+                    if operation is not None:
+                        self.layout.addWidget(operation)
+                    super().clear()
+                    self.operation = None
+
                 def saved(self, document, error):
                     super().saved(document, error)
                     if error:
@@ -932,10 +1046,13 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.reveal_folder(parent)
 
     def clear_document(self):
+        self.viewer.status.clear()
         self.breadcrumbs.entries = []
         self.breadcrumbs.clear()
         self.breadcrumbs.setToolTip('')
         self.breadcrumbs.setAccessibleName('')
+        if getattr(self, 'file_preview', None) is not None:
+            self.file_preview.clear()
         self.viewer.browser.inline_videos.clear()
         self.viewer.formatted_editor.inline_videos.clear()
         self.viewer.clear_data_views()
@@ -1005,6 +1122,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             return False
         self._after_document_save = None
         self.closing = True
+        if getattr(self, 'file_preview', None) is not None:
+            self.file_preview.operation.request_cancel()
         self.viewer.clear_data_views()
         if self.text_document is not None:
             self.text_document.operation.request_cancel()
@@ -1014,7 +1133,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.cancel_connections()
         return (not self.progress.busy and not self.aux.busy and not self.connections_progress.busy
                 and not (self.viewer.data_views and self.viewer.data_views.progress.busy)
-                and not (self.text_document and (self.text_document.busy or self.text_document.search.busy)))
+                and not (self.text_document and (self.text_document.busy or self.text_document.search.busy))
+                and not (getattr(self, 'file_preview', None) and self.file_preview.busy))
 
     def request_close(self):
         from commonUtils.ui.document_host import CloseOutcome, close_document

@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.SMOKE
 import base64
+import asyncio
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -46,13 +47,49 @@ class DocumentCreationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
-    def test_type_choice_cancel_keeps_origin_and_does_not_publish(self):
+    def test_naming_form_replaces_type_alert_and_cancel_keeps_origin(self):
         origin = self.app.body
-        files = set(self.root.rglob('*'))
-        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='cancel')):
+        files = {p for p in self.root.rglob('*') if p.is_file()}
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
             self.app.loop.run_until_complete(self.app.choose_document_type())
+        dialog.assert_not_awaited()
+        self.app.editor_picker().cancel_text_destination()
         self.assertIs(self.app.body, origin)
-        self.assertEqual(set(self.root.rglob('*')), files)
+        self.assertEqual({p for p in self.root.rglob('*') if p.is_file()}, files)
+
+    def test_native_refresh_does_not_drop_creation_but_navigation_does(self):
+        app = self.app
+        pending = app.choose_document_type()
+        app.navigation_generation += 1
+        app.loop.run_until_complete(pending)
+        self.assertTrue(app.editor_picker().visible())
+        app.editor_picker().cancel_text_destination()
+        pending = app.choose_document_type()
+        app.show_documents_hub()
+        app.loop.run_until_complete(pending)
+        self.assertFalse(app.editor_picker().visible())
+
+    def test_new_request_waits_for_initial_connections_and_keeps_navigation_guard(self):
+        app = self.app
+        async def exercise(navigate):
+            ready = asyncio.Event()
+            app.set_cloud_busy(True)
+            async def restore():
+                await ready.wait()
+                app.set_cloud_busy(False)
+            app.cloud_startup_task = app.loop.create_task(restore())
+            pending = app.choose_document_type()
+            await asyncio.sleep(0)
+            self.assertIsNone(app.editor_picker().panel)
+            if navigate:
+                app.show_documents_hub()
+            ready.set()
+            await pending
+            self.assertEqual(app.editor_picker().visible(), not navigate)
+            if not navigate:
+                app.editor_picker().cancel_text_destination()
+        app.loop.run_until_complete(exercise(False))
+        app.loop.run_until_complete(exercise(True))
 
     def choose(self, name, kind='Plain text (.txt)', *, local=True):
         with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=dict((label, ext) for label, ext in __import__('mobile.document_choices', fromlist=['CHOICES']).CHOICES)[kind])):
@@ -78,7 +115,7 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertTrue(picker.visible())
         app.routes.back()
         self.assertIs(picker.panel, picker.name_panel)
-        self.assertIn(picker.creation_type, picker.name_view.children)
+        self.assertIn(picker.creation_formats.tabs, picker.name_content.children)
         self.assertFalse((self.root / 'LocalFiles/Trip.txt').exists())
         picker.creation_type.value = 'Markdown (.md)'
         self.assertEqual(picker.save_as_name.value, 'Trip.md')
@@ -118,7 +155,7 @@ class DocumentCreationTests(unittest.TestCase):
             width.return_value = 390
             layout.reflow()
             self.assertFalse(layout.paired)
-            self.assertIs(picker.edit_name.parent, picker.save_as_storage.parent)
+            self.assertIs(picker.edit_name.parent, picker.creation_location.heading)
             self.assertEqual(picker.editor_picker_location, ('Local', ''))
             self.assertIs(app.body, route)
             width.return_value = 810
@@ -157,6 +194,35 @@ class DocumentCreationTests(unittest.TestCase):
             self.assertTrue(picker.picker_primary.enabled)
             app.loop.run_until_complete(picker.confirm_editor_file())
             self.assertTrue((self.root / 'LocalFiles/Nested/Draft.txt').is_file())
+
+    def test_folder_parent_links_keep_document_pending_while_creating_siblings(self):
+        _, picker = self.choose('Draft')
+        browser = picker.editor_browser
+        for name in ('Projects', 'Notes'):
+            picker.show_new_folder()
+            picker.new_folder_name.value = name
+            self.app.loop.run_until_complete(picker.create_picker_folder())
+        self.assertEqual(picker.editor_picker_location, ('Local', 'Projects/Notes'))
+        links = [child for child in picker.creation_location.crumbs.children
+                 if hasattr(child, '_creation_parent_link')]
+        picker.show_new_folder()
+        self.assertFalse(links[0].enabled)
+        self.app.loop.run_until_complete(links[0].on_press())
+        self.assertEqual(picker.editor_picker_location, ('Local', 'Projects/Notes'))
+        picker.hide_new_folder()
+        self.app.loop.run_until_complete(links[1].on_press())
+        self.assertEqual(picker.editor_picker_location, ('Local', 'Projects'))
+        picker.show_new_folder()
+        picker.new_folder_name.value = 'Research'
+        self.app.loop.run_until_complete(picker.create_picker_folder())
+        self.assertIs(picker.editor_browser, browser)
+        self.assertTrue((self.root / 'LocalFiles/Projects/Notes').is_dir())
+        self.assertTrue((self.root / 'LocalFiles/Projects/Research').is_dir())
+        self.assertFalse(list((self.root / 'LocalFiles').rglob('Draft.txt')))
+        self.app.loop.run_until_complete(picker.confirm_editor_file())
+        self.assertTrue((self.root / 'LocalFiles/Projects/Research/Draft.txt').is_file())
+        picker.clear()
+        self.assertFalse(picker.creation_location.crumbs.children)
 
     def test_next_reads_current_name_and_storage_echo_keeps_nested_location(self):
         app = self.app
@@ -247,19 +313,133 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertNotEqual(picker.save_as_status.value, 'Loading folder…')
 
     def test_creation_keyboard_compaction_keeps_name_type_and_destination(self):
+        narrow = patch.object(self.app.adaptive, 'content_width', return_value=390)
+        narrow.start()
+        self.addCleanup(narrow.stop)
         _, picker = self.choose('Keep my name', 'Remarkable Document (.rmdoc)')
         name, kind = picker.save_as_name, picker.creation_type
         location = picker.editor_picker_location
         picker.show_creation_name()
         picker.fit_keyboard(True)
-        self.assertIn(kind, picker.name_view.children)
+        self.assertIn(picker.creation_formats.tabs, picker.name_content.children)
+        self.assertNotIn(picker.creation_formats.cards, picker.name_view.children)
+        self.assertTrue(picker.creation_formats.tabbed)
+        self.assertEqual([' '.join(button.text.split()) for button in picker.creation_formats.tab_buttons.values()],
+                         ['Text', 'Markdown', 'reMarkable Notebook'])
         self.assertIn(name, picker.name_view.children)
         self.assertNotIn(picker.save_as_storage, picker.name_panel.children)
         self.assertIs(picker.name_form.content, picker.name_view)
         self.assertEqual(name.value, 'Keep my name')
         picker.fit_keyboard(False)
+        self.assertIn(picker.creation_formats.tabs, picker.name_content.children)
         self.assertEqual(picker.editor_picker_location, location)
         self.assertEqual(kind.value, 'Remarkable Document (.rmdoc)')
+
+    def test_change_format_dismisses_keyboard_without_replacing_name_or_location(self):
+        with patch.object(self.app.adaptive, 'content_width', return_value=810):
+            _, picker = self.choose('Research', 'Markdown (.md)')
+        picker.show_creation_name()
+        field, location = picker.save_as_name, picker.editor_picker_location
+        picker.fit_keyboard(True)
+        with patch('mobile.keyboard.dismiss_picker_keyboard') as dismiss:
+            picker.creation_formats.change.on_press()
+        dismiss.assert_called_once_with(picker)
+        self.assertIs(picker.save_as_name, field)
+        self.assertIn(picker.creation_formats.cards, picker.name_view.children)
+        picker.creation_formats.buttons['Remarkable Document (.rmdoc)'].on_press()
+        self.assertEqual(picker.destination_filename(), 'Research.rmdoc')
+        self.assertEqual(picker.editor_picker_location, location)
+        self.assertIn('Research.rmdoc', picker.picker_destination.text)
+        self.assertFalse(list((self.root / 'LocalFiles').iterdir()))
+
+    def test_wide_entry_browses_immediately_and_create_does_not_require_next(self):
+        app = self.app
+        with patch.object(app.adaptive, 'content_width', return_value=810):
+            app.loop.run_until_complete(app.choose_document_type())
+            picker = app.editor_picker()
+            self.assertIs(picker.panel, picker.name_panel)
+            self.assertIs(picker.location_panel.parent, picker.creation_layout)
+            self.assertEqual(picker.editor_picker_location, ('All files', ''))
+            self.assertIsNone(picker.next_button.parent)
+            app.loop.run_until_complete(picker.browser_editor_location(('Local', '')))
+            picker.save_as_name.value = 'No extra step'
+            picker.creation_formats.buttons['Markdown (.md)'].on_press()
+            app.loop.run_until_complete(picker.confirm_editor_file())
+            self.assertTrue((self.root / 'LocalFiles/No extra step.md').is_file())
+
+    def test_format_cards_use_available_space_and_disable_during_io(self):
+        with patch.object(self.app.adaptive, 'content_width', return_value=810):
+            _, picker = self.choose('Space')
+        formats = picker.creation_formats
+        formats.fit(True, 280, 700)
+        self.assertTrue(formats.compact)
+        self.assertIsNone(formats.cards.parent)
+        formats.fit(True, 600, 400)
+        self.assertFalse(formats.compact)
+        formats.fit(True, 600, 280)
+        self.assertTrue(formats.compact)
+        work = picker._begin_work()
+        self.assertFalse(formats.change.enabled)
+        self.assertTrue(all(not button.enabled for button in formats.buttons.values()))
+        picker._finish_work(work)
+        self.assertTrue(formats.change.enabled)
+
+    def test_phone_tabs_switch_format_without_dismissing_keyboard_or_moving_name(self):
+        narrow = patch.object(self.app.adaptive, 'content_width', return_value=390)
+        narrow.start()
+        self.addCleanup(narrow.stop)
+        _, picker = self.choose('Phone draft')
+        picker.show_creation_name()
+        name, parent, location = picker.save_as_name, picker.save_as_name.parent, picker.editor_picker_location
+        picker.fit_keyboard(True)
+        with patch('mobile.keyboard.dismiss_picker_keyboard') as dismiss:
+            picker.creation_formats.tab_buttons['Markdown (.md)'].on_press()
+        dismiss.assert_not_called()
+        self.assertTrue(picker._compact_keyboard)
+        self.assertEqual(picker.destination_filename(), 'Phone draft.md')
+        self.assertIs(name.parent, parent)
+        self.assertEqual(picker.editor_picker_location, location)
+        self.assertIn(picker.creation_formats.tabs, picker.name_content.children)
+        self.assertIsNone(picker.creation_formats.row.parent)
+
+    def test_phone_tabs_switch_back_to_wide_cards_and_keep_selection(self):
+        with patch.object(self.app.adaptive, 'content_width', return_value=390) as width:
+            _, picker = self.choose('Resize')
+            picker.creation_formats.tab_buttons['Remarkable Document (.rmdoc)'].on_press()
+            width.return_value = 810
+            picker.creation_layout.reflow()
+            self.assertFalse(picker.creation_formats.tabbed)
+            self.assertIn(picker.creation_formats.cards, picker.name_view.children)
+            self.assertIsNone(picker.creation_formats.tabs.parent)
+            width.return_value = 390
+            picker.creation_layout.reflow()
+            self.assertTrue(picker.creation_formats.tabbed)
+            self.assertEqual(picker.destination_filename(), 'Resize.rmdoc')
+
+    def test_large_unpaired_form_keeps_cards(self):
+        with patch.object(self.app.adaptive, 'content_width', return_value=810):
+            _, picker = self.choose('Wide portrait')
+        # A horizontal fold can keep a large form on one page.
+        picker.creation_layout.paired = False
+        picker.creation_formats.fit(False, 700, 810)
+        self.assertFalse(picker.creation_formats.tabbed)
+        self.assertIn(picker.creation_formats.cards, picker.name_view.children)
+        self.assertIsNone(picker.creation_formats.tabs.parent)
+
+    def test_short_phone_keyboard_hides_redundant_labels_and_restores_them(self):
+        with patch.object(self.app.adaptive, 'content_width', return_value=390):
+            _, picker = self.choose('Short')
+        formats = picker.creation_formats
+        formats.fit(True, 90, 390)
+        self.assertIsNone(formats.name_label.parent)
+        self.assertIsNone(picker.effective_name.parent)
+        self.assertIn(picker.save_as_name, picker.name_view.children)
+        picker.save_as_name.value = '../invalid'
+        formats.fit(True, 90, 390)
+        self.assertIn(picker.effective_name, picker.name_view.children)
+        formats.fit(False, 600, 390)
+        self.assertIn(formats.name_label, picker.name_view.children)
+        self.assertEqual(picker.save_as_name.style.height, 48)
 
     def test_creation_starts_at_browse_all_files_and_can_return_from_collections(self):
         _, picker = self.choose('Anywhere', local=False)
@@ -267,7 +447,7 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertEqual(picker.editor_provider('All files').root, device_files(self.root).root)
         self.assertFalse(picker.picker_primary.enabled)
         self.assertFalse(picker.picker_new_folder.enabled)
-        self.assertEqual(picker.picker_primary.text, 'Create document')
+        self.assertEqual(picker.picker_primary.text, 'Create here')
         self.assertIn('Open a folder', picker.save_as_status.value)
         for name in ('Local', 'Received Files'):
             row = next(row for row in picker.editor_picker_rows.values() if row['name'] == name)
@@ -400,7 +580,7 @@ class DocumentCreationTests(unittest.TestCase):
         app.cloud_crypt_remotes = {'Secret'}
         _, picker = self.choose('First encrypted file')
         self.assertNotIn('LocalCrypt: Secret', picker.editor_storage_roots)
-        self.assertFalse(picker.save_as_status.children)
+        self.assertIn('Create a folder', picker.save_as_status.value)
 
     def test_session_capacity_rejects_creation_before_publishing(self):
         _, picker = self.choose('No capacity')

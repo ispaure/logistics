@@ -64,6 +64,41 @@ class TextEditorTests(QtTestCase):
         self.wait()
         return path, self.window.current
 
+    def test_browser_rename_cannot_recreate_an_old_file_when_saving_an_open_draft(self):
+        from desktop.file_browser import BrowserView
+        from services.documents.catalog import DocumentCatalog
+        store = DocumentCatalog(self.root / 'rename-catalog')
+        with patch('desktop.document_catalog.catalog', return_value=store), \
+                patch('features.application.registry.get_browser_extensions', return_value=[]):
+            for folder in (False, True):
+                with self.subTest(folder=folder):
+                    parent = self.root / ('folder-case' if folder else 'file-case')
+                    parent.mkdir()
+                    path, document = self.open(parent.name + '/note.txt', b'Original bytes')
+                    document.editor.setPlainText('Unsaved draft')
+                    document.editor.document().setModified(True)
+                    view = BrowserView(root_path=self.root)
+                    view.show()
+                    browser = view.file_browser
+                    self.wait_until(lambda: not browser.busy)
+                    original = parent if folder else path
+                    index = browser.model.index(str(original))
+                    self.wait_until(index.isValid)
+                    self.assertTrue(browser.model.setData(index, 'Renamed'))
+                    renamed = parent.with_name('Renamed') / 'note.txt' if folder else path.with_name('Renamed')
+                    with patch.object(self.window, 'show_error') as report:
+                        self.window.save_document(document)
+                        self.wait()
+                    self.assertTrue(report.called)
+                    self.assertFalse(path.exists())
+                    if folder:
+                        self.assertFalse(parent.exists())
+                    self.assertEqual(renamed.read_bytes(), b'Original bytes')
+                    self.assertEqual(document.editor.toPlainText(), 'Unsaved draft')
+                    self.assertTrue(document.modified)
+                    self.wait_until(lambda: not browser.busy)
+                    view.close()
+
     def test_open_save_round_trip_and_duplicate_documents(self):
         for name, data in [
             ("script.py", b"print(1)\r\n"),

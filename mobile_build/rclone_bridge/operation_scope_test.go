@@ -52,7 +52,7 @@ func TestLocalCryptReadsDuringTransferKeepCancellationAndRevocation(t *testing.T
 		}
 	}()
 	done := make(chan string, 8)
-	actions := []string{"crypt_describe", "crypt_stat", "crypt_range", "crypt_archive", "crypt_manifest", "connection_identity"}
+	actions := []string{"crypt_describe", "crypt_stat", "crypt_sizes", "crypt_range", "crypt_archive", "crypt_manifest", "connection_identity"}
 	for _, action := range actions {
 		go func() { done <- dispatch(action, string(input)) }()
 	}

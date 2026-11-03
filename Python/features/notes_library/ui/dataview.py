@@ -57,6 +57,7 @@ class DesktopViews(qt.QObject):
         self.generation = 0
         self.polling = False
         self.progress = OperationProgress(viewer)
+        viewer.storage.window.operation_footer.layout().addWidget(self.progress, 1)
         self.progress.hide()
         self.progress.completed.connect(self.read_completed)
         self.timer = qt.QTimer(self)

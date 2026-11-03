@@ -11,6 +11,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
 
 DEFAULTS = {'notes_library_migrated': 'true', 'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
+            'accent_hue': '221', 'accent_saturation': '83',
             'workspace_local_group': 'Others', 'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
             'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false', 'session_trusted_wifi': 'false', 'trusted_wifi_networks': '[]',
@@ -70,6 +71,8 @@ class Preferences:
         from services.mobile_features import disabled_features
         if values.keys() != DEFAULTS.keys():
             raise ValueError('Unknown mobile preference.')
+        from .palette import validate_accent
+        validate_accent(values['accent_hue'], values['accent_saturation'])
         disabled_features(values['disabled_features'])
         if values['notes_library_migrated'] != 'true':
             raise ValueError('Invalid Notes Library migration state.')

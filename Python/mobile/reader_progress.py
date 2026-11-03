@@ -29,7 +29,23 @@ def style_slider(slider):
         slider.paint_track()
         return
     # Manga reverses values explicitly; do not also reverse the native track.
-    native_style_slider(slider, apple_color=apple_color, palette=android_palette, force_ltr=True,
+    colors = getattr(slider, '_accent_preview', None)
+    apple = apple_color
+    palette = android_palette
+    if colors is not None:
+        from commonUtils.ui.native.appearance import DynamicAppleColors
+        from .palette import LIGHT, DARK, eink_enabled
+        if getattr(slider, '_accent_preview_key', None) != colors:
+            slider._accent_preview_key = colors
+            slider._accent_apple_colors = DynamicAppleColors(lambda dark:
+                dict(DARK if dark else LIGHT, accent=colors[bool(dark)]))
+        apple = slider._accent_apple_colors.color
+        def palette(dark=False):
+            base = android_palette(dark)
+            if eink_enabled():
+                return base
+            return dict(base, accent=colors[base is DARK])
+    native_style_slider(slider, apple_color=apple, palette=palette, force_ltr=True,
                         reverse_fill=getattr(slider, '_reading_reverse_fill', False))
 
 

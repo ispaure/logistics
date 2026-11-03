@@ -446,7 +446,7 @@ class VaultBrowser(LibraryPanels):
         if self.selected_path is not None and self.library.supports('rename'):
             actions.append(("Rename / move selected…", lambda: self.manage_entry(move=True)))
         if self.embedded is not None:
-            if self.library.writable:
+            if self.library.writable and getattr(self.embedded, 'kind', None) != 'file':
                 actions.append(('Save', self.embedded.save))
             if getattr(self.embedded, 'kind', None) == 'markdown':
                 actions.extend([('Formatted editing', self.embedded.choose_mode),
@@ -830,11 +830,8 @@ class VaultBrowser(LibraryPanels):
         if not await self.prepare_leave():
             return False
         if not resolve_link and document_kind(path) is None:
-            path = self.contained(path)
-            if self.host.open_resource is not None:
-                return await self.host.open_resource(self.provider, path)
-            self.notice.text = 'No viewer is available for this file type.'
-            return False
+            from .file_preview import LibraryFilePreview
+            return await self.open_embedded(path, LibraryFilePreview.open, remember=remember)
         if not resolve_link and document_kind(path) == 'text':
             return await self.open_text(path, remember=remember)
         if not resolve_link and PurePosixPath(path).suffix.lower() == '.rmdoc':
@@ -885,15 +882,19 @@ class VaultBrowser(LibraryPanels):
             fragment = found_fragment or fragment
             if resolve_link:
                 self.page_loading.opening(path)
-                if document_kind(path) in ('text', 'notebook'):
+                if document_kind(path) != 'markdown':
                     self.page_loading.finish()
+                    if document_kind(path) is None:
+                        from .file_preview import LibraryFilePreview
+                        return await self.open_embedded(path, LibraryFilePreview.open, remember=remember)
                     opener = self.open_text if document_kind(path) == 'text' else self.open_canvas
                     return await opener(path, remember=remember)
 
             def read():
                 stage('Preparing embedded media…')
                 plan = view_plan(data.decode("utf-8-sig"))
-                html = self.host.preview(plan.render() if plan.scripts else plan.source, image_source=self.library.image_source(path))
+                html = self.host.preview(plan.render() if plan.scripts else plan.source,
+                                         image_source=self.library.image_source(path, cancelled=cancelled))
                 self.access.validate_preview(html, MAX_NOTE)
                 return html, plan
 
@@ -1002,6 +1003,8 @@ class VaultBrowser(LibraryPanels):
         )
 
     def page_loaded(self, widget=None, url=None, **kwargs):
+        if self.editing or not self.valid():
+            return
         if (self._open_timing is not None and self._open_timing.get('published_epoch') == self.epoch
                 and 'dom_ready' not in self._open_timing['stages_ms']):
             self.mark_open_timing('dom_ready', self.epoch)
@@ -1243,6 +1246,9 @@ class VaultBrowser(LibraryPanels):
         self.retire_editor()
         self.embedded = editor
         self.editing = True
+        # Retain the reusable reader, but retire its old DOM and media when a
+        # source editor, drawing or file preview replaces the Markdown page.
+        set_inline_html(self.web, self.base, '<!doctype html><html><body></body></html>')
         self.path = self.selected_path = path
         self.folder_pages.update(pages)
         self.update_tree_selection()
@@ -1264,6 +1270,8 @@ class VaultBrowser(LibraryPanels):
         self.render_tree()
         self.sidebar.show_detail()
         self.host.render()
+        await asyncio.to_thread(self.library.release_media, path,
+                                active=lambda: self.valid() and self.epoch == epoch)
         return True
 
     async def open_editor(self, widget=None, **kwargs):

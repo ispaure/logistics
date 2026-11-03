@@ -13,6 +13,8 @@ var credentialScope sync.RWMutex
 
 func localCryptRead(action string) bool {
 	switch action {
+	case "crypt_sizes":
+		return true
 	case "crypt_remotes", "vault_info", "document_lists_seal", "document_lists_open", "remote_cache_archive", "crypt_path", "crypt_paths", "crypt_describe", "crypt_stat", "crypt_range", "crypt_raw_read", "crypt_decode", "crypt_archive", "crypt_manifest", "crypt_thumbnail", "connection_identity":
 		return true
 	}

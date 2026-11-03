@@ -146,6 +146,26 @@ class RecentDocuments:
             atomic_write_json(self.path, items, max_bytes=MAX_HISTORY_BYTES, durable_directory=True)
             self.items = items
 
+    def relocate(self, source, destination=None, *, names=None):
+        """Follow renamed files and descendants even when no reader is open."""
+        from services.documents.catalog import relocated_source, relocated_title
+        if self.error:
+            raise ValueError('Recent history could not be read; it was preserved.')
+        items = []
+        for item in self.items:
+            before = item.get('source')
+            after = relocated_source(before, source, destination) if before is not None else before
+            if before is not after:
+                if after is None:
+                    continue
+                item = dict(item, source=after, resource=self.reference_id(after),
+                            title=relocated_title(item['title'], before, after, names=names))
+            items.append(item)
+        items = self.normalize_items(items)
+        if items != self.items:
+            atomic_write_json(self.path, items, max_bytes=MAX_HISTORY_BYTES, durable_directory=True)
+            self.items = items
+
     def clear(self):
         """Clear reopen history while preserving documents and open sessions."""
         atomic_write_json(self.path, [], max_bytes=MAX_HISTORY_BYTES, durable_directory=True)

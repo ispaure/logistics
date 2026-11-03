@@ -131,6 +131,13 @@ class DocumentMutation:
                     raise ValueError('An open document changed on disk. Reload or use Save As before moving it.')
             self.notebooks.prepare(destination, target, cancelled)
             result = request.execute(cancelled, destination=destination)
+            reference_error = None
+            if request.kind == 'rename':
+                try:
+                    from .favourites import relocate
+                    relocate(self.app, request.provider, request.path, target)
+                except (OSError, ValueError, PermissionError) as error:
+                    reference_error = error
             updated = []
             try:
                 notebooks = self.notebooks.reopen(destination)
@@ -147,7 +154,7 @@ class DocumentMutation:
                 raise MutationIncomplete('The file was moved, but the editor could not follow it. '
                     'Edits are retained; use Save As and inspect the destination before retrying.',
                     MutationResult(destination_published=True, source_state='removed')) from error
-        return result, updated, notebooks
+        return result, updated, notebooks, reference_error
 
     def apply(self, result):
         from .private_sessions import PrivateSessions
@@ -211,6 +218,8 @@ class DocumentMutation:
                 app.credential_document_lists.notice()
         self.notebooks.apply(result[2])
         app.save_workspace()
+        if result[3] is not None:
+            raise ValueError('Files changed; some saved references could not be updated.') from result[3]
 
     def release(self):
         self.notebooks.release()

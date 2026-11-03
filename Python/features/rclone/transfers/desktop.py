@@ -62,51 +62,49 @@ def _compare(transfer, config_path, emit, cancelled):
     decoded = {}
     directory_probe = '.logistics-review-directory'
     encoded_probe = None
-    def decode(value, cancelled, *, reverse=False):
-        flags = ['--reverse'] if reverse else []
-        if provider is not None:
-            result = provider.command('cryptdecode', '', *flags, value, cancelled=cancelled).decode('utf-8')
-        else:
-            from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
-            environment, remote, _ = session.launch(config_path, item.remote + ':', '')
-            result = run_bytes([str(binary), '--config', session.NULL_CONFIG, 'cryptdecode', *flags, remote, value],
-                environment=environment, max_output=65536, cancelled=cancelled).decode('utf-8')
-        plain = result.partition('\t')[2].removeprefix(' ').removesuffix('\n')
-        return None if plain == 'Failed to decrypt' or not plain else plain
-    def display(path, cancelled, *, directory=False):
+    if provider is not None:
+        commands = provider._commands
+    elif item is not None:
+        from commonUtils.runtime.resources.lifetime import WorkerCancellation
+        from features.rclone.localcrypt.transport import CryptCommand
+        commands = CryptCommand(binary, config_path, WorkerCancellation(), lambda: check_cancelled(cancelled),
+                                closed=cancelled, remote=item.remote)
+    def display_many(paths, stopping, *, directory=False):
         nonlocal encoded_probe
+        check_cancelled(stopping)
         if item is None:
-            return path
-        key = (path, directory)
-        if key not in decoded:
-            value = path
+            return list(paths)
+        missing = list(dict.fromkeys(path for path in paths if (path, directory) not in decoded))
+        if missing:
+            values = missing
             if directory:
-                # cryptdecode decodes files. A synthetic final file component
-                # lets the cipher apply directory rules to every real component,
-                # including filename_encryption=off and unencrypted directories.
-                # This is a name-only operation; no probe is created on disk.
                 if encoded_probe is None:
-                    encoded_probe = decode(directory_probe, cancelled, reverse=True)
-                if encoded_probe is None:
-                    raise ValueError('Could not resolve encrypted directory names.')
-                value = path + '/' + encoded_probe
-            plain = decode(value, cancelled)
-            if directory and plain is not None:
-                suffix = '/' + directory_probe
-                if not plain.endswith(suffix):
-                    raise ValueError('Invalid encrypted directory review name.')
-                plain = plain[:-len(suffix)]
-            decoded[key] = path if plain is None else plain
-        return decoded[key]
+                    encoded_probe = commands.encode(directory_probe)
+                values = [path + '/' + encoded_probe for path in missing]
+            values = commands.decode_many(values)
+            check_cancelled(stopping)
+            for path, plain in zip(missing, values):
+                if directory:
+                    suffix = '/' + directory_probe
+                    if not plain.endswith(suffix):
+                        raise ValueError('Invalid encrypted directory review name.')
+                    plain = plain[:-len(suffix)]
+                decoded[path, directory] = plain
+        check_cancelled(stopping)
+        return [decoded[path, directory] for path in paths]
+    def display(path, stopping, *, directory=False):
+        return display_many([path], stopping, directory=directory)[0]
     def cleanup_plan(cancelled):
         if item is None or transfer.operation != 'Push':
             return {}
         from features.rclone.transfers.local_policy import cleanup_candidates
-        return cleanup_candidates(item.data, display, cancelled)
+        return cleanup_candidates(item.data, display, cancelled, decode_many=display_many)
     try:
         return scanner(binary, transfer.source, transfer.destination, config_path, transfer.options,
             display_path=display,
             display_directory=lambda path, cancelled: display(path, cancelled, directory=True),
+            display_paths=display_many,
+            display_directories=lambda paths, cancelled: display_many(paths, cancelled, directory=True),
             cleanup_plan=cleanup_plan)(emit, cancelled)
     finally:
         if provider is not None:

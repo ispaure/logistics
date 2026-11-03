@@ -1,5 +1,13 @@
 [
   {
+    "name": "Dataview compatibility acknowledgement",
+    "platforms": ["android", "ios", "darwin", "win32", "linux"],
+    "license": "MIT (upstream reference)",
+    "source": "https://github.com/blacksmithgu/obsidian-dataview/blob/46cde0bcbadf6f171eecda7305cf0e684189c953/LICENSE.txt",
+    "files": ["Dataview-MIT.txt"],
+    "note": "Logistics implements a limited Dataview-compatible API for personal notes. The upstream copyright and permission notice is retained as a compatibility acknowledgement. This does not mean the Obsidian Dataview plugin is bundled or that Logistics is affiliated with or endorsed by its author or Obsidian. The upstream MIT terms apply to upstream material; they do not replace Logistics' own license or the licenses of user-supplied scripts."
+  },
+  {
     "name": "Python runtime",
     "version": "3.12.2",
     "platforms": [

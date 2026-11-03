@@ -13,7 +13,7 @@ import sys
 import tempfile
 
 from build_manager.locking import workspace_lock
-from build_manager.retention import lease, linked, prune, prune_cache_groups, remove_tree, explicitly_pinned
+from build_manager.retention import lease, linked, prune, prune_cache_groups, remove_tree, explicitly_pinned, has_retention_protection, nested_workflow_hold_reason
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_MARKER = '.manager-build-output'
@@ -47,6 +47,16 @@ def enroll_output(name, root=ROOT):
     return path
 
 
+def owned_snapshot(path):
+    marker = path / '.manager-source.json'
+    return bool(re.fullmatch('[0-9a-f]{64}', path.name)) and not linked(marker) and marker.is_file()
+
+
+def owned_scratch(path):
+    marker = path / '.manager-scratch'
+    return not linked(marker) and marker.is_file()
+
+
 def device_group(root, platform):
     parent = Path(root) / 'mobile_build/.tools/build-manager/workspaces/devices' / platform
 
@@ -63,7 +73,7 @@ def device_group(root, platform):
         except (OSError, ValueError, TypeError, AttributeError):
             return False
 
-    return dict(root=parent, eligible=eligible, lock_path=lambda p: p / 'operation.lock')
+    return dict(root=parent, eligible=eligible, lock_path=lambda p: p / 'operation.lock', ownership_files=('recipe.json',))
 
 
 def device_access(path):
@@ -144,16 +154,16 @@ def snapshot_intermediates(root):
                    dict(root=cache_root, eligible=eligible, lock_path=lambda p, snapshot=snapshot: snapshot.with_suffix('.lock')))
 
 
-def clean(root=ROOT, *, apply=False, snapshots=True):
+def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
     root = Path(root)
     mobile = root / 'mobile_build'
     removed = []
     for provider in ('testflight', 'firebase'):
         removed += prune(mobile / 'build' / provider, eligible=lambda p: p.name.isdigit(), order_key=lambda p: int(p.name), apply=apply)
-    removed += prune(mobile / 'build', eligible=reviewed_output, age_days=7, apply=apply)
+    removed += prune(mobile / 'build', eligible=reviewed_output, ownership_files=(OUTPUT_MARKER,), age_days=7, apply=apply)
     if snapshots:
         removed += prune(mobile / '.tools/build-manager/snapshots',
-                         eligible=lambda p: bool(re.fullmatch('[0-9a-f]{64}', p.name)) and (p / '.manager-source.json').is_file(),
+                         eligible=owned_snapshot, ownership_files=('.manager-source.json',),
                          age_days=7, max_bytes=SNAPSHOT_BUDGET, grace_days=1/24,
                          apply=apply, lock_path=lambda p: p.with_suffix('.lock'))
         for platform in ('ios', 'android'):
@@ -168,16 +178,25 @@ def clean(root=ROOT, *, apply=False, snapshots=True):
                 removed += prune(**storage_group(root), age_days=1, max_bytes=12 * GIB,
                                  order_key=access_order, last_used=lambda p: access_order(p)[0], apply=apply)
             except (OSError, subprocess.SubprocessError) as error:
-                print('Xcode cache cleanup unavailable: ' + str(error), file=sys.stderr)
+                message = 'Xcode cache cleanup unavailable: ' + str(error)
+                print(message, file=sys.stderr)
+                if warnings is not None:
+                    warnings.append(message)
         from logistics_build.storage_extras import directory_groups, MARKER, clean_simulators
         for _, spec in directory_groups(root):
             removed += prune(**spec, keep=0, age_days=7,
                              last_used=lambda p: (p / MARKER).stat().st_mtime, apply=apply)
         if sys.platform == 'darwin':
-            removed += clean_simulators(root, apply=apply)
+            removed += clean_simulators(root, apply=apply, warnings=warnings)
     removed += prune(root / 'test-results/build-scratch',
-                     eligible=lambda p: (p / '.manager-scratch').is_file(), keep=1, age_days=1, apply=apply)
+                     eligible=owned_scratch, ownership_files=('.manager-scratch',), protection=nested_workflow_hold_reason, keep=1, age_days=1, apply=apply)
     return removed
+
+
+def storage_maintenance(root=ROOT):
+    warnings = []
+    removed = clean(root, apply=True, warnings=warnings)
+    return dict(status='incomplete' if warnings else 'passed', removed=removed, warnings=warnings)
 
 
 def clean_builds(mobile):
@@ -193,7 +212,7 @@ def clean_builds(mobile):
 
 @contextmanager
 def scratch(root=ROOT):
-    parent = Path(root) / 'test-results/build-scratch'
+    parent = Path(root).resolve() / 'test-results/build-scratch'
     parent.mkdir(parents=True, exist_ok=True)
     path = Path(tempfile.mkdtemp(prefix='run-', dir=parent))
     with lease(path):
@@ -202,8 +221,8 @@ def scratch(root=ROOT):
             yield path
         finally:
             # Retain reports outside this directory before leaving the context.
-            if not (path / '.keep').exists():
-                remove_tree(path)
+            if not has_retention_protection(path) and not nested_workflow_hold_reason(path):
+                remove_tree(path, ownership_files=('.manager-scratch',))
 
 
 def main():
@@ -215,7 +234,7 @@ def main():
     parser.add_argument('--enroll-output', action='append', default=[], metavar='NAME',
                         help='Enroll a reviewed disposable build folder; save useful evidence first. Does not prune.')
     parser.add_argument('--scratch', nargs=argparse.REMAINDER,
-                        help='Run a command in a disposable cwd; {workspace} arguments expand to its path')
+                        help='Run a command with disposable cwd and commonUtils storage; {workspace} arguments expand to its path')
     args = parser.parse_args()
     if args.enroll_directory or args.enroll_simulator:
         if args.apply or args.enroll_output or args.scratch or args.enroll_directory and args.enroll_simulator:
@@ -236,7 +255,11 @@ def main():
     if args.scratch:
         with scratch(args.root) as path:
             command = [value.replace('{workspace}', str(path)) for value in args.scratch]
-            return subprocess.call(command, cwd=path)
+            # Native probes can open document hosts that automatically record
+            # recent files. A disposable cwd alone still writes to the user's
+            # real cache; override inherited storage before the child imports UI.
+            environment = dict(os.environ, COMMONUTILS_STORAGE_ROOT=str(path / 'commonutils'))
+            return subprocess.call(command, cwd=path, env=environment)
     print(json.dumps(dict(apply=args.apply, expired=clean(args.root, apply=args.apply)), indent=2))
     return 0
 
@@ -253,12 +276,13 @@ def storage_groups(root=ROOT):
     groups = {
         'iOS / TestFlight': dict(root=mobile / 'build/testflight', eligible=lambda p: p.name.isdigit()),
         'Android / Firebase': dict(root=mobile / 'build/firebase', eligible=lambda p: p.name.isdigit()),
-        'Reviewed build outputs': dict(root=mobile / 'build', eligible=reviewed_output),
+        'Reviewed build outputs': dict(root=mobile / 'build', eligible=reviewed_output, ownership_files=(OUTPUT_MARKER,)),
         'Source snapshots': dict(root=mobile / '.tools/build-manager/snapshots',
-            eligible=lambda p: bool(re.fullmatch('[0-9a-f]{64}', p.name)) and (p / '.manager-source.json').is_file(),
+            eligible=owned_snapshot, ownership_files=('.manager-source.json',),
             lock_path=lambda p: p.with_suffix('.lock')),
         **{'Device workspaces / ' + platform: device_group(root, platform) for platform in ('ios', 'android')},
-        'Disposable scratch': dict(root=root / 'test-results/build-scratch', eligible=lambda p: (p / '.manager-scratch').is_file()),
+        'Disposable scratch': dict(root=root / 'test-results/build-scratch', eligible=owned_scratch, ownership_files=('.manager-scratch',),
+            protection=nested_workflow_hold_reason),
     }
     groups.update(device_intermediates(root))
     groups.update(snapshot_intermediates(root))

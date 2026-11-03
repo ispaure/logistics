@@ -17,6 +17,14 @@ from local_crypt_fixture import crypt_fixture
 from books_fixture import make_book
 
 
+def encrypted_package(package, password='synthetic-package-password'):
+    output = BytesIO()
+    with ZipFile(BytesIO(package)) as source, open_archive(output, 'w', password=password) as target:
+        for member in source.infolist():
+            target.writestr(member.filename, source.read(member))
+    return base64.b64encode(output.getvalue()).decode()
+
+
 def generate(destination):
     with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
         settings = dict(session.credentials(fixture.context)['Secret'], remote='Cloud:native-fixture')
@@ -39,7 +47,8 @@ def generate(destination):
             encrypted = fixture.provider.encrypted_path(name)
             copies[name] = dict(key=f'{index + 1:032x}', ciphertext=base64.b64encode(encrypted.read_bytes()).decode(),
                 record=dict(remote='Secret', encrypted_path=encrypted.name, identity=identity))
-        destination.write_text(json.dumps(dict(package=base64.b64encode(package.getvalue()).decode(), copies=copies), indent=2) + '\n')
+        destination.write_text(json.dumps(dict(package=base64.b64encode(package.getvalue()).decode(),
+            encrypted_package=encrypted_package(package.getvalue()), copies=copies), indent=2) + '\n')
 
 
 if __name__ == '__main__':

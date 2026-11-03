@@ -14,6 +14,70 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class MarkdownMediaTests(TestCase):
+    def test_cancelled_render_lookup_does_not_poison_later_render(self):
+        from features.notes_library.notes import NotesLibrary
+        from commonUtils.runtime.operations import OperationCancelled
+        from threading import Event
+        library = NotesLibrary(self.provider)
+        self.addCleanup(library.close)
+        stopped = Event()
+        source = library.image_source('Home.md', cancelled=stopped.is_set)
+        stopped.set()
+        with self.assertRaises(OperationCancelled):
+            source('clip.mp4')
+        self.assertFalse(library._media['Home.md'].videos)
+        self.assertIsNotNone(library.image_source('Home.md')('clip.mp4'))
+
+    def test_library_resolution_failure_retires_deleted_cached_video(self):
+        from features.notes_library.notes import NotesLibrary
+        library = NotesLibrary(self.provider)
+        self.addCleanup(library.close)
+        source = library.image_source('Home.md')
+        self.assertIsNotNone(source('clip.mp4'))
+        content, transport = library._media['Home.md'].videos['clip.mp4']
+        self.video.unlink()
+        with self.assertRaisesRegex(ValueError, 'not found'):
+            source('clip.mp4')
+        self.assertTrue(content.closed)
+        self.assertTrue(transport.closed.is_set())
+
+    def test_video_url_decoding_tries_literal_spelling_after_missing_decoded_name(self):
+        literal = self.root / 'two%20words.mp4'
+        literal.write_bytes(b'literal video')
+        source = self.media.render_source()
+        self.assertIsNotNone(source(literal.name))
+        self.assertIn(literal.name, self.media.videos)
+        (self.root / 'two words.mp4').write_bytes(b'decoded video')
+        self.assertIsNotNone(source(literal.name))
+        self.assertIn('two words.mp4', self.media.videos)
+
+    def test_file_video_preview_retires_stream_when_final_validation_or_cancellation_fails(self):
+        from contextlib import contextmanager
+        from features.notes_library.file_preview import FilePreview
+        from features.video.transport import VideoTransport
+        from commonUtils.runtime.operations import OperationCancelled
+        transports = []
+        def transport(content):
+            result = VideoTransport(content)
+            transports.append(result)
+            return result
+        @contextmanager
+        def invalid(*args):
+            yield
+            raise PermissionError('Access changed at publication')
+        with patch('features.video.transport.VideoTransport', side_effect=transport):
+            with patch('features.notes_library.file_preview.document_operation', invalid):
+                with self.assertRaises(PermissionError):
+                    FilePreview.open(self.provider, 'clip.mp4')
+            self.assertEqual(len(transports), 1)
+            self.assertTrue(transports[0].closed.is_set())
+            self.assertTrue(transports[0].content.closed)
+            with self.assertRaises(OperationCancelled):
+                FilePreview.open(self.provider, 'clip.mp4', cancelled=lambda: len(transports) > 1)
+        self.assertEqual(len(transports), 2)
+        self.assertTrue(transports[1].closed.is_set())
+        self.assertTrue(transports[1].content.closed)
+
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)

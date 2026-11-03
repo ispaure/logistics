@@ -115,6 +115,8 @@ func executeRequest(ctx context.Context, action string, request bridgeRequest) (
 		result, err = cryptPath(request.Remote, request.Path, request.Identity, request.Directory, request.Decode)
 	case "crypt_paths":
 		result, err = cryptPaths(ctx, request.Remote, request.Identity, request.Entries)
+	case "crypt_sizes":
+		result, err = cryptSizes(ctx, request.Remote, request.Identity, request.Sizes)
 	case "crypt_raw_read":
 		result, err = cryptRawRead(ctx, request.Remote, request.Path, request.Identity, request.FD)
 	case "crypt_stat":

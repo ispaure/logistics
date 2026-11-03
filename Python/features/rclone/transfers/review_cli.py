@@ -48,7 +48,8 @@ def _lines(arguments, environment, cancelled, consume):
 
 
 def scanner(binary, source, destination, config_path, options=TransferOptions(), *,
-            display_path=lambda path, cancelled: path, display_directory=None, cleanup_plan=lambda cancelled: {}):
+            display_path=lambda path, cancelled: path, display_directory=None, cleanup_plan=lambda cancelled: {},
+            display_paths=None, display_directories=None):
     def scan(emit, cancelled):
         revoked = session.revocation_check(config_path)
         launched = session.launch(config_path, source, destination)
@@ -67,10 +68,21 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
         digest = sha256()
         cleanup = cleanup_plan(cancelled)
         digest.update(json.dumps(cleanup, sort_keys=True).encode())
-        changes = {}
+        changes, pending = {}, {}
         def record_change(kind, path):
             changes[path] = (kind, path)
             emit(kind, path)
+        def flush():
+            if not pending:
+                return
+            names = list(pending)
+            labels = display_paths(names, cancelled)
+            if (not isinstance(labels, (list, tuple)) or len(labels) != len(names)
+                    or not all(isinstance(label, str) for label in labels)):
+                raise ValueError('Incomplete transfer filename mapping.')
+            for name, label in zip(names, labels):
+                record_change(pending[name], label)
+            pending.clear()
         sigils = {'+': 'add', '*': 'replace', '-': 'delete', '=': 'match'}
         def comparison(line):
             try:
@@ -80,6 +92,7 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
             message = record.get('msg', '') if isinstance(record, dict) else ''
             if re.match(r'^Attempt \d+/\d+ failed with', message):
                 changes.clear()
+                pending.clear()
                 replace_changes(emit, ())
             if message.startswith('Sync Logger: '):
                 parts = message.split(': ', 2)
@@ -93,13 +106,19 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
                             if code != '+':
                                 record_change('delete', cleanup[path][0])
                         else:
-                            record_change(sigils[code], display_path(path, cancelled))
+                            if display_paths is None:
+                                record_change(sigils[code], display_path(path, cancelled))
+                            else:
+                                pending[path] = sigils[code]
+                                if len(pending) >= 128:
+                                    flush()
         flags = options.cli_arguments()
         arguments = [str(binary), 'sync', '--config', config, '--dry-run', '--combined', '-',
                      '--use-json-log', '--log-level', 'DEBUG', '--create-empty-src-dirs', *flags, '--', src, dst]
         _lines(arguments, environment, cancelled, comparison)
         if cancelled():
             return ''
+        flush()
         replace_changes(emit, [*changes.values(), *[('cleanup', label) for label, _ in cleanup.values()]])
         # Record both trees for stale-review detection, including matching files.
         # Metadata is streamed to RAM, never written to plaintext report files.
@@ -127,12 +146,19 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
                                      separators=(',', ':')).encode())
         source_tree, destination_tree = trees
         directory_label = display_directory or display_path
-        for name in sorted(source_tree.keys() | destination_tree.keys()):
+        directories = [name for name in sorted(source_tree.keys() | destination_tree.keys())
+                       if source_tree.get(name, {}).get('IsDir', False) or destination_tree.get(name, {}).get('IsDir', False)]
+        labels = display_directories(directories, cancelled) if display_directories else [
+            directory_label(name, cancelled) for name in directories]
+        if (not isinstance(labels, (list, tuple)) or len(labels) != len(directories)
+                or not all(isinstance(label, str) for label in labels)):
+            raise ValueError('Incomplete transfer directory mapping.')
+        for name, label in zip(directories, labels):
             source_dir = source_tree.get(name, {}).get('IsDir', False)
             destination_dir = destination_tree.get(name, {}).get('IsDir', False)
             if source_dir or destination_dir:
                 kind = 'match' if source_dir and destination_dir else 'add' if source_dir else 'delete'
-                record_change(kind, directory_label(name, cancelled) + '/')
+                record_change(kind, label + '/')
         replace_changes(emit, [*changes.values(), *[('cleanup', label) for label, _ in cleanup.values()]])
         return '' if cancelled() else digest.hexdigest()
     return scan

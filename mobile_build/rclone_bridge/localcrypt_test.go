@@ -392,6 +392,59 @@ func TestINIEncryptedSaveRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCryptSizesBatchMatchesCipherAndGuards(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:size-fixture"), ""); err != nil {
+		t.Fatal(err)
+	}
+	cipher, _, _, identity, err := cryptConnection("Secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{0, 1, 65535, 65536, 65537, 131072, 1024 * 1024}
+	encrypted := make([]int64, len(want))
+	for index, size := range want {
+		encrypted[index] = cipher.EncryptedSize(size)
+	}
+	got, err := cryptSizes(context.Background(), "Secret", identity, encrypted)
+	if err != nil || len(got) != len(want) {
+		t.Fatalf("size conversion failed: %v", err)
+	}
+	for index, size := range got {
+		if size != want[index] {
+			t.Fatalf("size %d: got %d, want %d", index, size, want[index])
+		}
+	}
+	input, _ := json.Marshal(map[string]any{"remote": "Secret", "identity": identity, "sizes": encrypted})
+	var reply struct {
+		OK     bool    `json:"ok"`
+		Result []int64 `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(dispatch("crypt_sizes", string(input))), &reply); err != nil || !reply.OK || len(reply.Result) != len(want) {
+		t.Fatal("size wire request failed", err)
+	}
+	for _, bad := range []string{"", "changed"} {
+		if _, err := cryptSizes(context.Background(), "Secret", bad, encrypted); err == nil {
+			t.Fatal("missing or changed identity accepted")
+		}
+	}
+	for _, bad := range [][]int64{{-1}, {0}, {31}, {33}, make([]int64, 257)} {
+		if _, err := cryptSizes(context.Background(), "Secret", identity, bad); err == nil {
+			t.Fatal("invalid or unbounded size batch accepted")
+		}
+	}
+	ctx, stop := context.WithCancel(context.Background())
+	stop()
+	if _, err := cryptSizes(ctx, "Secret", identity, encrypted); err == nil {
+		t.Fatal("cancelled batch accepted")
+	}
+	clearSession()
+	if _, err := cryptSizes(context.Background(), "Secret", identity, encrypted); err == nil {
+		t.Fatal("locked credential accepted")
+	}
+}
+
 func TestCryptPathsBatchPreservesNamesAndCredentialGuards(t *testing.T) {
 	clearSession()
 	t.Cleanup(clearSession)
@@ -411,6 +464,19 @@ func TestCryptPathsBatchPreservesNamesAndCredentialGuards(t *testing.T) {
 	got, err := cryptPaths(context.Background(), "Secret", identity, entries)
 	if err != nil || strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("batch mismatch: %v, %v", got, err)
+	}
+	encodedEntries := make([]cryptPathEntry, 0, len(want))
+	for index, plain := range want {
+		encodedEntries = append(encodedEntries, cryptPathEntry{Path: plain, Directory: index == 0, Encode: true})
+	}
+	encoded, err := cryptPaths(context.Background(), "Secret", identity, encodedEntries)
+	if err != nil || len(encoded) != len(entries) {
+		t.Fatalf("encoding batch failed: %v", err)
+	}
+	for index, path := range encoded {
+		if path != entries[index].Path {
+			t.Fatal("encoding and decoding batches disagree")
+		}
 	}
 	for _, bad := range []string{"", "changed"} {
 		if _, err := cryptPaths(context.Background(), "Secret", bad, entries); err == nil {

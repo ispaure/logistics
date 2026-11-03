@@ -15,6 +15,31 @@ from features.rclone.session import NULL_CONFIG
 
 
 class ReviewTests(unittest.TestCase):
+    def test_cli_batches_review_names_and_discards_pending_retry_rows(self):
+        import json
+        from unittest.mock import Mock, patch
+        from features.rclone.transfers import review_cli
+        def lines(arguments, environment, cancelled, consume):
+            if arguments[1] == 'sync':
+                consume(json.dumps({'msg': 'Sync Logger: source: - stale.txt'}).encode())
+                consume(json.dumps({'msg': 'Attempt 1/3 failed with 1 errors and: retry'}).encode())
+                for i in range(300):
+                    consume(json.dumps({'msg': f'Sync Logger: source: + file{i}.md'}).encode())
+            else:
+                consume(b'[{"Path":"Folder","IsDir":true}]' if arguments[2] == 'Src:' else b'[]')
+        files = Mock(side_effect=lambda names, cancelled: ['plain/' + name for name in names])
+        directories = Mock(side_effect=lambda names, cancelled: ['plain/' + name for name in names])
+        with patch.object(review_cli, '_lines', side_effect=lines), patch.object(
+                review_cli.session, 'launch', return_value=None):
+            result = self.finish(ReviewScan(scanner('rclone', 'Src:', 'Dst:', NULL_CONFIG,
+                display_paths=files, display_directories=directories)))
+        self.assertTrue(result.complete, result.error)
+        self.assertEqual(files.call_count, 3)
+        self.assertEqual(directories.call_count, 1)
+        self.assertEqual(len(result.changes), 301)
+        self.assertNotIn(('delete', 'plain/stale.txt'), result.changes)
+        self.assertIn(('add', 'plain/Folder/'), result.changes)
+
     def test_large_reviews_complete_for_emitted_and_replaced_snapshots(self):
         rows = [('add', f'folder/{index}.txt') for index in range(10001)]
         rows += [('cleanup', f'generated/{index}/.DS_Store') for index in range(10001)]

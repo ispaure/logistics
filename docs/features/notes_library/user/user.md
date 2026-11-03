@@ -46,7 +46,7 @@ Right-click a file or folder for **Move / rename…**, **Copy…** or **Delete�
 as supported by the location. Copy refuses existing destinations. Delete asks
 for confirmation and permanently removes the selected item and its contents.
 Clicking a folder with a matching `Folder/Folder.md` opens that landing note;
-its name is underlined. Use the expansion arrow to browse its children.
+its name is underlined. Hovering over that folder shows a pointing-hand cursor. Use the expansion arrow to browse its children.
 
 Every open file has a breadcrumb path beside the history arrows, including
 images, PDFs, source files, drawings and file-information previews. Underlined
@@ -54,7 +54,18 @@ folders open their same-named Markdown page. Plain folder names have no action.
 When space is limited, ancestor names shorten first to preserve the current
 filename; hover over the desktop path to see its full names.
 
-The sidebar has **Files** and **Calendar** tabs. File search offers
+On desktop, the sidebar stays visible and has **Files** and **Calendar** tabs.
+Previous/next note and parent-folder controls sit in the document toolbar.
+Each tab has its own back/forward history. Opening a sidebar file in the current
+tab adds it to that history; switching tabs does not. Alt+Left and Alt+Right
+follow the focused document's history, including transitions between Markdown
+and other file types. Parent-folder navigation
+uses the file displayed in that tab.
+Loading messages, progress and **Cancel** share a single bottom row with notices
+for the active document. Hover over a shortened notice to read its full text.
+Markdown editing-mode guidance appears in the **Formatted / Source** selector's tooltip.
+
+File search offers
 **Search within Notes Library** and **Search in File Names**, including unopened
 folders. Name matches appear before content matches; quoted phrases and separate
 keywords use the same search rules as mobile. **Show more notes** extends the
@@ -66,8 +77,8 @@ day asks before creating a note in the library root. **Refresh daily notes**
 rescans names after outside changes. **Links** opens backlinks, outgoing links,
 unresolved links and word/character counts for the saved Markdown note.
 
-An unopened library offers Open Document and New Document cards. Choose Markdown
-or Remarkable Document before naming a new file and selecting a library folder.
+An unopened library offers a New Document card; select existing documents in the
+sidebar. Choose Markdown or Remarkable Document before naming a new file and selecting a library folder.
 Both `.md` and `.rmdoc` documents open inside the same library window. Notebook
 navigation and saving use the regular drawing canvas; unsaved changes must be
 resolved before selecting another file. Wiki headings such as `# [[Tech]]` can
@@ -93,6 +104,24 @@ such as `[[Topics/Tech]]`. Lookup stops after 10,000 entries.
 
 
 ## Embedded source files in Notes Library
+
+Every file selected in Files opens inside Notes Library. Images (PNG, JPEG,
+WebP and GIF) display in the detail pane; PDFs have Previous page and Next page
+controls. Image previews use an 8 MiB/16-megapixel limit; PDFs use a 32 MiB limit.
+Videos such as MP4 open a player in the same pane, with Play/Pause and a position
+slider. Video embeds such as `![[clip.mp4]]` also show playback controls in
+Markdown. Playback starts when you press Play; opening the page does not preload
+the whole video. Images and videos use the same lookup as file links: beside the
+note, from the library root, then a unique matching path elsewhere in the library.
+Use an explicit path if several files match. If an embedded image cannot load,
+its preview shows a reason such as a missing file, ambiguous path, denied access
+or size limit. This does not change the Markdown source.
+Other formats show a file-information view when no preview is available.
+Opening another file reuses the active document tab and asks about unsaved edits.
+To keep another file alongside it on desktop, right-click that file and choose
+**Open in new tab**.
+Links to extensionless files such as `LICENSE` prefer an existing file in the
+current folder or library root before trying the usual `.md` note suffix.
 
 The Files pane includes JSON and view-script files, including folders such as
 `_Resources/dataview`. Select a file to open it inside the library's detail pane.
@@ -154,8 +183,40 @@ folder. The optional second argument supplies an origin note path relative to
 the library root. Paths may not escape the library or read hidden configuration.
 JSON and JavaScript files can also be opened and edited through Files.
 
-This subset does not implement Dataview queries, `dv.pages`, metadata indexing,
-Obsidian's `app`/plugin APIs, DOM manipulation or `view.css`. Code blocks inside
+File-size tables can use `app.vault.getMarkdownFiles()` (also available through
+`dv.app.vault`). It returns a render-local array of Markdown files with `path`,
+`name`, `basename`, `extension` and `stat.size` in provider-reported bytes.
+Paths are relative to this library, hidden files are excluded, and no note
+contents are loaded for this inventory. `dv.fileLink(path, false, displayName)`
+creates a clickable library link in tables, lists, paragraphs and spans; the
+display name is optional. Embedded links and other Obsidian app APIs are not
+supported. For example:
+
+```dataviewjs
+const files = app.vault.getMarkdownFiles().sort((a, b) => b.stat.size - a.stat.size);
+dv.table(["File", "Bytes"], files.map(file => [dv.fileLink(file.path), file.stat.size]));
+```
+
+Folder-index scripts can use `dv.current().file` (`path`, `folder`, `name`) and
+`dv.pages('"Folder"').array()`. Paths are relative to the library root; a quoted
+folder selects its Markdown notes and descendants, while `dv.pages()` or
+`dv.pages('""')` selects all Markdown notes. Names exclude the Markdown extension.
+The current note remains the calling note inside `dv.view` scripts.
+Page discovery includes `.md` and `.markdown` notes. It reads filenames,
+excludes hidden folders/files and is limited to
+10,000 entries per render; it does not read note bodies or frontmatter.
+
+`dv.container.createEl` supports `ul`, `ol`, `li`, `a`, `p`, `span` and `div`.
+Elements support nested `createEl`, `children`, `remove()`, `textContent`,
+`className`, `href` and `dataset`. Creation options include `text`, `cls` and
+`href`. Internal anchors using `href` or `dataset.href` with a library-relative
+note path become navigable Markdown links; nested lists become Markdown lists.
+Empty nested lists can be removed with `if (!list.children.length) list.remove()`.
+This is a detached output tree, with a 10,000-element limit; scripts do not access
+the reading page's DOM, and CSS classes do not change the native renderer's style.
+
+This subset does not implement full Dataview query syntax, frontmatter metadata,
+Obsidian's `app`/plugin APIs, arbitrary browser DOM APIs or `view.css`. Code blocks inside
 lists, quotes, frontmatter or fenced examples do not execute. Each render runs in a disposable
 worker with no host write API or network access. It permits up to 64 script
 blocks, 128 file requests, 2 MiB per file and 8 MiB of total reads, with bounded
@@ -164,9 +225,16 @@ retires the run. LocalCrypt content remains in memory.
 
 ## Notes Library document groups
 
-Opening sidebar entries keeps each document in its own inner tab. Drag an inner
+Opening sidebar entries replaces the document in the active inner tab while
+retaining that tab’s back/forward history. Drag an inner
 tab to another header to reorder it, or to the left/right side of a document to
 create a neighbouring group (up to three). The tab's context menu offers the same
 moves. Inner tabs stay within the library. Each document retains its draft while
 you switch tabs; Save applies to the focused document. Closing a tab or library
 resolves unsaved edits. File moves update affected tabs and preserve their groups.
+
+For Markdown notes, **Links** sits at the right end of the document toolbar.
+It opens word/character counts, backlinks, outgoing links and unresolved links
+inside that document's tab. Each tab keeps its own Links panel open or closed
+when you switch between documents or groups.
+Opening another file type hides that panel; returning to Markdown restores it.

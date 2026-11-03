@@ -129,6 +129,7 @@ class _BrowserHost:
                                        directory_boundary=self._directory_boundary,
                                        calculate_folder_sizes=calculate_folder_sizes,
                                        index_settings_path=Path(__file__).resolve().parents[1]/'configFile.ini')
+        self.file_browser.model.fileRenamed.connect(self._relocate_renamed)
         self.extensions = []
         self._extensions_by_feature = {}
         self._sync_extensions()
@@ -136,6 +137,14 @@ class _BrowserHost:
         self.destroyed.connect(self._unsubscribe)
         self.file_browser.idle.connect(self._retry_close)
         self._open_location(root_path)
+
+    def _relocate_renamed(self, parent, before, after):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from desktop.document_catalog import relocate
+        try:
+            relocate(LocalFiles(parent), before, after)
+        except (OSError, ValueError, PermissionError):
+            qt.QMessageBox.warning(self, 'Rename', 'Files changed; some saved references could not be updated.')
 
     def _directory_boundary(self, path):
         # Qt asks rowCount repeatedly while painting. Do not reread application

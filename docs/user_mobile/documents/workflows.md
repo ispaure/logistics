@@ -55,6 +55,26 @@ keep the draft and use **Save As** after inspecting the destination.
 
 ## Document workflow
 
+**New Document** opens a naming form. Choose a format and enter the file name;
+only formats with enabled features appear. The keyboard stays closed until you
+tap the name field.
+Compact phone layouts use **Text**, **Markdown** and **reMarkable Notebook** tabs,
+with the selected format highlighted. The tabs stay above the name field while
+typing; switching format keeps the keyboard open and retains the name and folder.
+Wide Duo and tablet layouts keep the format cards. While typing in limited
+space there, the cards collapse to the selected format and **Change**. Change
+dismisses the keyboard and restores the cards without losing the draft.
+
+On compact screens, **Next** opens the location browser. On wider screens, the
+name and location panes appear together and the browser loads immediately.
+The **Choose a folder** pane keeps the normal mobile file browser. Choose a
+writable location, optionally use **+ New folder**, and select **Create here**.
+Creating a folder enters it immediately; repeat for nested folders, or use the
+parent path links to create sibling folders. The document stays pending while
+you organize folders. The destination summary shows the final filename and whether
+the storage is encrypted. Returning to the name or resizing retains the draft
+and destination; nothing is published until creation is confirmed.
+
 The app opens on **Home**, a landing page with Open/New actions and five recent
 files. **See all in Documents** opens the full document workspace. The house icon is the first native destination, before
 **Workspaces**, **Documents**, **Chat** and **Settings**. **Workspaces** separates ordinary Local files, Cloud and Home Server into source tabs, with available copies grouped under their owning source.
@@ -66,8 +86,8 @@ beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and managem
 actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. **New document** asks for a name and file type. Tap **Choose location**, select a writable Local,
-Received Files or unlocked LocalCrypt folder, then **Create document**. New files
+the entire device filesystem. **New document** asks for a name and file type. Tap **Next**, select a writable Local,
+Received Files or unlocked LocalCrypt folder, then **Create here**. New files
 are created in that browsable location. Cloud remains read-only; use reviewed
 Push for changes. Cancel before creation creates nothing. The
 [document guide](documents.md) owns the current creation controls and navigation.

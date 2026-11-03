@@ -52,14 +52,20 @@ def storage_group(project, *, cache_root=None, processes=None, now=None):
     project = Path(project).absolute()
     cache_root = Path(cache_root) if cache_root is not None else Path.home() / 'Library/Developer/Xcode/DerivedData'
     now = time.time() if now is None else now
+    dynamic_processes = processes is None
     if processes is None:
         # A failed process inventory is a failed safety check, not an idle host.
         processes = subprocess.check_output(['/bin/ps', '-Ao', 'command='], text=True, timeout=15)
     lines = processes.splitlines()
-    gui_open = any('/Xcode.app/Contents/MacOS/Xcode' in line or
-                   re.search(r'/Xcode[^/]*\.app/Contents/MacOS/Xcode(?:\s|$)', line) for line in lines)
-
     def eligible(path):
+        current = lines
+        if dynamic_processes:
+            try:
+                current = subprocess.check_output(['/bin/ps', '-Ao', 'command='], text=True, timeout=15).splitlines()
+            except (OSError, subprocess.SubprocessError):
+                return False
+        gui_open = any('/Xcode.app/Contents/MacOS/Xcode' in line or
+                       re.search(r'/Xcode[^/]*\.app/Contents/MacOS/Xcode(?:\s|$)', line) for line in current)
         info = workspace(path)
         if not info or gui_open:
             return False
@@ -73,7 +79,7 @@ def storage_group(project, *, cache_root=None, processes=None, now=None):
             return False
         scope = str(snapshot) if snapshot else str(source)
         if any(('xcodebuild' in line or 'briefcase' in line) and
-               (scope in line or str(path) in line) for line in lines):
+               (scope in line or str(path) in line) for line in current):
             return False
         return True
 
@@ -82,7 +88,7 @@ def storage_group(project, *, cache_root=None, processes=None, now=None):
         snapshot = source_snapshot(project, info[0]) if info else None
         return snapshot.with_suffix('.lock') if snapshot else cache_root / ('.' + path.name + '.retention.lock')
 
-    return dict(root=cache_root, eligible=eligible, lock_path=lock_path)
+    return dict(root=cache_root, eligible=eligible, lock_path=lock_path, ownership_files=('info.plist',))
 
 
 def access_order(path):

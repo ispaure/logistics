@@ -6,6 +6,8 @@ TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import Mock, patch
 import unittest
+import json
+import os
 
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.runtime.resources.lifetime import WorkerCancellation
@@ -14,6 +16,62 @@ from features.rclone.localcrypt.transport import CryptCommand
 
 
 class CryptCommandTests(unittest.TestCase):
+    def test_shared_batches_deduplicate_preserve_order_and_bound_long_paths(self):
+        from features.rclone.localcrypt.path_batches import map_path_entries
+        calls = []
+        def resolve(batch):
+            calls.append(list(batch))
+            return [path + ('/directory' if directory else '/file') for path, directory in batch]
+        entries = [('long/' + str(i) + '/' + 'é' * 300, False) for i in range(70)]
+        entries += [entries[0], (entries[0][0], True)]
+        result = map_path_entries(entries, resolve, check=lambda: None)
+        self.assertGreater(len(calls), 1)
+        self.assertEqual(sum(map(len, calls)), 71)
+        self.assertEqual(result[0], result[-2])
+        self.assertNotEqual(result[0], result[-1])
+        self.assertTrue(all(sum(2 * len(path.encode('utf-8')) + 64 for path, _ in batch) <= 24 * 1024
+                            for batch in calls))
+
+    def test_shared_batches_reject_partial_results_and_revocation(self):
+        from features.rclone.localcrypt.path_batches import map_path_entries
+        for result in ([], [None], [''], ['one', 'two'], 'one'):
+            with self.subTest(result=result), self.assertRaises(ValueError):
+                map_path_entries([('one', False)], lambda batch: result, check=lambda: None)
+        closed = False
+        def check():
+            if closed:
+                raise ValueError('revoked')
+        def revoke(batch):
+            nonlocal closed
+            closed = True
+            return ['one']
+        with self.assertRaisesRegex(ValueError, 'revoked'):
+            map_path_entries([('one', False)], revoke, check=check)
+
+    def test_encoding_and_decoding_share_deduplicated_bounded_processes(self):
+        def run(arguments, path, **kwargs):
+            command = arguments('view:')
+            self.assertEqual(command[3:5], ['--json', '--'])
+            return json.dumps(command[5:]).encode()
+        for method in (self.command.encode_many, self.command.decode_many):
+            with patch.object(self.command, '_run', side_effect=run) as process:
+                paths = [f'folder/{i}' for i in range(300)] + ['folder/0']
+                self.assertEqual(method(paths), paths)
+                self.assertEqual(process.call_count, 3 if os.name == 'nt' else 1)
+
+    def test_windows_mapping_retains_small_command_batches(self):
+        def run(arguments, path, **kwargs):
+            command = arguments('view:')
+            paths = command[5:]
+            self.assertLessEqual(len(paths), 128)
+            self.assertLessEqual(sum(2 * len(path.encode('utf-8')) + 64 for path in paths), 24 * 1024)
+            return json.dumps(paths).encode()
+        with patch('features.rclone.localcrypt.transport.os.name', 'nt'), patch.object(
+                self.command, '_run', side_effect=run) as process:
+            paths = [f'folder/{i}' for i in range(300)]
+            self.assertEqual(self.command.decode_many(paths), paths)
+            self.assertEqual(process.call_count, 3)
+
     def setUp(self):
         self.context = Path('/synthetic/private.session')
         self.scope = WorkerCancellation()
@@ -65,8 +123,6 @@ class CryptCommandTests(unittest.TestCase):
         with patch.object(session, 'revocation_check', return_value=lambda: False), \
                 patch.object(session, 'launch') as launch:
             self.assertEqual(self.command.encode_many([]), [])
-            with self.assertRaises(ValueError):
-                self.command.encode_many(['note.md'] * 129)
             with self.scope.scope(lambda: True), self.assertRaises(OperationCancelled):
                 self.command.encode_many(['private.md'])
             launch.assert_not_called()
@@ -80,5 +136,5 @@ class CryptCommandTests(unittest.TestCase):
              patch('features.rclone.localcrypt.transport.run_bytes') as run:
             for reply in (b'[]', b'["one","two"]', b'{}', b'[null]', b'[123]'):
                 run.return_value = reply
-                with self.assertRaisesRegex(ValueError, 'could not be resolved'):
+                with self.assertRaisesRegex(ValueError, 'batch result'):
                     self.command.encode('private.md')

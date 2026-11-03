@@ -16,6 +16,39 @@ from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_accent_drag_previews_release_persists_and_reset_restores_blue(self):
+        from mobile.palette import LIGHT, set_accent, accent_colors
+        from mobile.preferences import Preferences
+        self.addCleanup(set_accent)
+        app = self.make_app()
+        app.show_settings()
+        app.settings_navigation.choose('Appearance')
+        controls = app.accent_controls
+        controls.hue.on_press()
+        controls.hue.value = 150
+        controls.saturation.value = 60
+        self.assertEqual(app.preferences.values['accent_hue'], '221')
+        self.assertEqual(LIGHT['accent'], '#2563eb')
+        self.assertNotEqual(str(controls.selected.style.color), '#2563eb')
+        self.assertEqual(controls.hue._accent_preview, accent_colors(150, 60))
+        self.assertEqual(controls.saturation._accent_preview, controls.hue._accent_preview)
+        controls.hue.on_release()
+        self.assertNotEqual(LIGHT['accent'], '#2563eb')
+        self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 150)
+        with patch.object(app.preferences, 'save', side_effect=OSError('Disk full')):
+            controls.hue.on_press()
+            controls.hue.value = 25
+            controls.hue.on_release()
+        self.assertEqual(controls.hue.value, 150)
+        self.assertEqual(controls.hue._accent_preview, accent_colors(150, 60))
+        self.assertEqual(app.settings_status.text, 'Disk full')
+        controls.reset()
+        self.assertEqual(LIGHT['accent'], '#2563eb')
+        self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 221)
+        # Accessibility and keyboard adjustments do not emit touch release.
+        controls.hue.value = 90
+        self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 90)
+
     def test_android_notice_asset_is_read_offline_and_closed(self):
         from mobile.settings.licenses import show_licenses
         app = self.make_app()

@@ -8,28 +8,29 @@ from commonUtils.formats.markdown.image_sources import folder_image_source
 
 
 class MarkdownMedia:
-    def __init__(self, provider, document, *, root=None, entry=None):
+    def __init__(self, provider, document, *, root=None, entry=None, resolve=None):
         self.provider, self.document, self.root = provider, provider.relative(document), root
         from types import SimpleNamespace
         self.image_provider = SimpleNamespace(relative=provider.relative, open=provider.open, entry=entry) if entry else provider
-        self.images = folder_image_source(self.image_provider, document, root=root)
+        self.images = folder_image_source(self.image_provider, document, root=root, resolve=resolve)
         self.videos, self.closed, self.lock = {}, False, RLock()
+        self.resolve = resolve
 
-    def render_source(self):
+    def render_source(self, *, resolve=None):
         """Each render gets a fresh raster budget; video leases stay document-owned."""
         from features.video.formats import VIDEO_EXTENSIONS
-        images = folder_image_source(self.image_provider, self.document, root=self.root)
+        images = folder_image_source(self.image_provider, self.document, root=self.root, resolve=resolve or self.resolve)
         def source(target):
             with self.lock:
                 if self.closed:
                     return None
             if PurePosixPath(unquote(urlsplit(target).path)).suffix.lower() in VIDEO_EXTENSIONS:
-                return self(target)
+                return self(target, resolve=resolve)
             return images(target)
         source.videos = self.videos
         return source
 
-    def __call__(self, target):
+    def __call__(self, target, *, resolve=None):
         from features.video.formats import VIDEO_EXTENSIONS
         parts = urlsplit(target)
         name = unquote(parts.path)
@@ -37,16 +38,41 @@ class MarkdownMedia:
             return self.images(target)
         if parts.scheme or parts.netloc or parts.query or not name or name.startswith(('/', '\\')) or '\\' in name:
             return None
-        candidates = [posixpath.normpath(posixpath.join(posixpath.dirname(self.document), name))]
-        if self.root is not None and not name.startswith(('./', '../')):
-            candidates.append(posixpath.normpath(posixpath.join(self.root, name)))
-            if '/' not in name:
-                candidates.extend(posixpath.join(self.root, folder, name) for folder in
-                                  ('Attachments', 'attachments', 'Assets', 'assets', 'Videos', 'videos'))
+        from commonUtils.formats.markdown import link_path_names
+        candidates = []
+        for name in link_path_names(parts.path):
+            candidates.append(posixpath.normpath(posixpath.join(posixpath.dirname(self.document), name)))
+            if self.root is not None and not name.startswith(('./', '../')):
+                candidates.append(posixpath.normpath(posixpath.join(self.root, name)))
+                if '/' not in name:
+                    candidates.extend(posixpath.join(self.root, folder, name) for folder in
+                                      ('Attachments', 'attachments', 'Assets', 'assets', 'Videos', 'videos'))
+        def paths():
+            resolver = resolve or self.resolve
+            if resolver is not None:
+                try:
+                    yield resolver(target)
+                except (OSError, ValueError):
+                    # Resolution can fail before reaching a previously cached
+                    # candidate (for example after deletion). Retire invalid
+                    # streams even when there is no longer a resolved path.
+                    for path, (content, transport) in list(self.videos.items()):
+                        try:
+                            content.check()
+                        except (OSError, ValueError):
+                            del self.videos[path]
+                            try:
+                                transport.close()
+                            finally:
+                                content.close()
+                    raise
+            else:
+                yield from dict.fromkeys(candidates)
+
         with self.lock:
             if self.closed:
                 return None
-            for candidate in dict.fromkeys(candidates):
+            for candidate in paths():
                 if candidate == '..' or candidate.startswith('../'):
                     continue
                 if self.root and not candidate.startswith(self.root + '/'):
@@ -86,6 +112,7 @@ class MarkdownMedia:
     def close(self):
         with self.lock:
             self.closed = True
+            self.resolve = None
             videos, self.videos = self.videos, {}
         for content, transport in videos.values():
             try:

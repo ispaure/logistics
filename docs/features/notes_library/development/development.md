@@ -7,11 +7,59 @@
 | Model, containment, links and mutations | `Python/features/notes_library/notes.py`, `notes_links.py`, `library_files.py`; desktop/mobile Notes Library suites |
 | Desktop session destination | `ui/page.py`, `desktop/documents.py`, `desktop/sidebar.py`; `test_main_window.py` |
 | Desktop documents and groups | `ui/notes_library.py`, `ui/library_workspace.py`; `test_notes_library_desktop.py`, `test_notes_library_tabs.py` |
+| In-library file previews | `file_preview.py`, `ui/file_preview.py`, `mobile/file_preview.py`; desktop tabs and mobile Notes Library suites, native Notes Library probe |
 | Mobile library | `mobile/notes_library.py`, library panels/tools/editors; mobile Notes Library and Markdown library workflow suites |
 | Shared mobile authoring | `services/documents/authoring/`; mobile Markdown editor, provider and workflow suites |
 | Feature state and payload | Desktop runtime preferences, mobile preferences/features, owning source manifests; feature-preference/mobile-feature and packaging tests |
 
 ## Destination and feature contract
+
+Sidebar navigation reuses the current inner document owner, preserving its
+history and existing save/discard/cancel transition. Explicit `new_tab=True`
+opens/focuses a separate document. Files without a Markdown/source/notebook
+adapter use a memory-only `FilePreview` in the same library pane; images and
+PDF pages use existing image validation and PDF backends. Other formats display
+metadata without loading arbitrary binary data. Video previews retain a revocable
+`VideoContent`/`VideoTransport` range stream, with desktop Play/Pause and seek
+controls or a mobile HTML video element. Neither starts decoding until Play.
+Markdown image and video embeds use the same authoritative lookup as file links:
+current folder, library root, then a unique suffix match across the library.
+Conventional attachment folders do not bypass ambiguity checks. LocalCrypt uses its
+ciphertext-name search for these fallbacks. Link resolution accepts any
+contained file, retaining hidden-path and library-root restrictions. File
+previews retire rendered content, PDF bytes and video streams on replacement, close or lock;
+page workers finish before their content is released.
+File-preview creation also closes its stream if validation fails while leaving
+the provider operation. A failed media resolution revalidates cached video
+streams, retires deleted or revoked entries, and preserves the resolver's error
+for the rendered placeholder. Standalone video embeds try decoded URL names
+before their literal spelling, matching image and navigation fallbacks.
+Each opening render passes its own cancellation predicate into media lookup;
+the document's reusable media owner does not retain a cancelled render predicate.
+Cancelled mobile PDF page tasks keep their busy state until the underlying
+renderer finishes; retirement then closes its bytes. Page-render errors leave
+the previous page selected and remain visible. Switching to an embedded file,
+source editor or drawing retires the previous Markdown media and reader DOM.
+Extensionless links prefer exact current-folder/root filenames before `.md`.
+
+Desktop Markdown toolbars host the library-only Links toggle after the reader
+controls. Each inner document owns its connections tree and worker, so panel
+visibility and results follow that tab, including split groups. Non-Markdown
+files hide the panel while retaining its toggle preference.
+Background note loads refresh enabled panels, tab activation rescans saved
+connections, and saves/library mutations refresh panels in other documents too.
+Library layouts remove nested window margins and hide the alternate-format toolbar for Markdown.
+Empty status lines collapse; messages use the shared File Browser `StatusLine`
+height. `test_notes_library_tabs.py` checks tab-local backlinks, panel visibility,
+edge geometry and compact idle footers alongside history and save lifetimes.
+
+The November 2, 2026 file-opening validation covered desktop active-tab
+replacement and cancelled draft navigation, image/PDF/information views, PDF
+page changes, mobile in-library links and unchanged session routing, and payload
+startup. The extended native Notes Library probe passed on disposable iPhone
+and Android devices, including rendered image/PDF pages and return to Markdown;
+their QA devices/apps were removed afterward. This does not certify physical
+devices or every platform-supported file format.
 
 `notes_library` registers a lazy page and folder actions independently of Text
 Editor. Desktop `ui/page.py` reuses `DocumentsPage` workspace lifecycle with a
@@ -78,7 +126,35 @@ encoding and line endings, and opening JSON/JavaScript never executes it.
 `dataview.py` parses complete top-level `dataviewjs` fences, retains their source
 spans and supplies per-render `ViewFiles` reads through `DocumentResource`.
 Requests obey library containment, hidden-configuration exclusion, provider access
-checks, cancellation and byte/request budgets. It does not recursively index files.
+checks, cancellation and byte/request budgets. Each worker first requests a
+render-local Markdown filename index with library-relative `file.path`,
+`file.folder` and `file.name`, plus the calling note for `dv.current()`.
+Workers request provider-reported byte sizes with this index for synchronous
+`app.vault.getMarkdownFiles()` / `dv.app.vault` compatibility. This metadata
+inventory uses the provider's `note_file_entries` capability when available,
+otherwise lightweight per-folder listings, without reading note contents.
+LocalCrypt mobile collects ciphertext sizes during batched name discovery, then
+converts distinct lengths through the credential-scoped `crypt_sizes` bridge
+action in batches of at most 256. It uses rclone's own size conversion without
+reading document bytes; invalid or partial results and revoked grants fail the
+request. Desktop validates visible names with the same discovery, then obtains
+decrypted sizes in one recursive rclone metadata command with hidden entries
+excluded. Missing or duplicate note rows fail discovery rather than publishing an
+incomplete index. Size requests therefore retain the discovery optimizations.
+Filename-only discovery uses the provider's `note_file_paths` capability when available, with
+per-folder listings as the fallback. Name-only `list_names` listings avoid rich
+metadata, timestamp formatting and sorting when the provider supports them;
+ordinary mobile collections use the same lightweight projection. Adapted local
+providers retain their existing listing filters. LocalCrypt batches basename decoding across
+sibling folders at each depth and decodes repeated basenames once per discovery,
+avoiding an rclone process or native bridge request for every folder. It prunes
+hidden directories before descent and keeps decoded names only during the call.
+Desktop POSIX decode commands use bounded 512-entry / 64 KiB batches to amortize
+process startup; Windows retains 128-entry / 24 KiB limits. Mobile bridge batches
+remain bounded at 256 entries. These are transient discovery optimizations, with
+no persistent filename index or change to authored scripts.
+Discovery checks cancellation and containment and stops at 10,000 entries. Serialized
+index bytes count toward the existing read budget; note content is not indexed.
 Frontmatter is excluded before parsing script fences. Span accounting uses only
 CR/LF line boundaries so Unicode separators cannot displace generated output.
 The total byte budget is checked before another file is opened. Desktop editing
@@ -86,8 +162,18 @@ retires view execution; failed navigation keeps the currently published view ali
 Mobile view runs use the document publication token, independently of unsuccessful
 opening attempts, and defer generated-heading jumps until results are published.
 `dataview_script.py` is an independent implementation of the documented JSON/view
-API subset: it runs authored scripts in a disposable browser worker and returns
-escaped Markdown output. No Obsidian or Dataview source is bundled. Trust is
+API subset, including synchronous current-note and quoted-folder page queries.
+Inline and nested scripts receive the same read-only `app` compatibility object.
+`dv.fileLink` creates runtime-owned link values rendered through the existing
+library-path anchor renderer in tables, lists, paragraphs and spans. Ordinary
+objects and authored Markdown remain literal output.
+It runs authored scripts in a disposable browser worker and returns escaped
+Markdown output. `dv.container` exposes a bounded detached element tree for
+recursive lists and internal anchors, rather than the browser DOM. Anchor paths
+and list text preserve authored output order, with numbered markers for `ol`;
+assigning `textContent` replaces an element's children. Anchor paths
+are escaped and made relative to the calling note for the existing link resolver.
+No Obsidian or Dataview source is bundled. Trust is
 enabled by default; worker CSP forbids network access and the host exposes no
 write or arbitrary native bridge. Worker messages remain untrusted provider input.
 
@@ -126,8 +212,12 @@ devices, fold layouts or compatibility with APIs outside the documented subset.
 Direct note links probe their contained provider path without listing sibling
 files. Bare wiki names first try the current folder and library root; unresolved
 names still require a bounded vault scan and duplicate matches are rejected.
-LocalCrypt matches the deterministic encrypted basename without decoding unrelated
-file names. On POSIX hosts it walks ciphertext through directory descriptors,
+Desktop and mobile LocalCrypt providers share `localcrypt/note_lookup.py`,
+which matches the deterministic encrypted basename without decoding unrelated
+file names. This lookup applies to attachment links (including `.mp4`) as well
+as Markdown links, avoiding a decrypted listing of every folder for bare media
+names. Desktop supplies bounded rclone encode/decode commands; mobile
+supplies native bridge calls. On POSIX hosts it walks ciphertext through directory descriptors,
 avoiding repeated ancestor checks and decoding only candidate full paths. Hidden
 candidate paths are excluded after decoding. Deep or oversized raw trees fall back
 to the bounded visible-tree scan, which batches directory-name decoding across
@@ -373,7 +463,10 @@ The outer owner retains folder/search/calendar navigation; inner owners retain
 editors, resource sessions and workers. Provider leases are shared without
 revoking sibling tabs. Group focus controls active file references and Save;
 shortcuts stay within each child widget. Mutation preparation resolves drafts,
-and successful moves/deletes remap or retire affected tabs. Close waits for
+and successful moves/deletes remap or retire affected tabs. Moves retain tab
+identity, repeated history occurrences, cursor and reading positions; deletion
+removes earlier visits from every tab's history. Deleting an inactive dirty tab
+still resolves its draft. Mutations do not run during pending document reads. Close waits for
 cooperative worker retirement. Focused tab tests cover independent drafts,
 side-by-side groups, native Save-key dispatch, rename placement and LocalCrypt
 lease release. Existing desktop library tests cover favourite reopening through
@@ -381,7 +474,24 @@ the tabbed host.
 
 The tab host also routes New to the shared library navigator and scopes inner
 shortcuts to their document subtree; Save has one active child handler. Focus
-changes inside side-by-side editors update the active document reference.
+changes inside side-by-side editors update the active document reference. Desktop Files/Calendar
+stays visible, with a non-collapsible splitter pane. Document navigation sits in
+the Markdown toolbar (or the document control row for source files/drawings),
+using commonUtils' shared `MarkdownNavigation` group beside Contents and the
+other document tools. Each tab's buttons use its own document history. Switching tabs does not
+append history; parent-folder navigation uses the clicked tab's current file. Child operation
+footers are hosted below the outer splitter, selected with the active tab
+(including its first pending open), and retired when the child closes. Data-view
+reads, Markdown rendering, source-file saves, embedded notebook saves/exports and
+PDF page reads share that footer placement. Notebook canvas replacement retires
+its previous progress widget before creating the next one. Tabs
+keep Markdown notices, rendering indicators and source-save results in one horizontal
+footer row, alongside active operations; long notices are elided with full tooltips
+and accessibility descriptions. Empty
+messages collapse and switching documents clears stale source-save messages. Tabs
+without a completed open and the empty library clear the outer document/history
+projection; Save does nothing until a document is available. Tab regression tests cover history dispatch,
+footer placement, cancellation and cleanup.
 
 ## Library file dragging
 
@@ -419,3 +529,19 @@ The architecture scan also identified existing feature-to-host imports outside
 Notes Library. The extraction's new model, service publication boundary and
 reviewed desktop adapters are covered separately; those unrelated imports are
 not evidence of a passing whole-repository architecture scan.
+
+## Percent-encoded local links
+
+Note navigation, outgoing links and backlinks try one URL decode first, then the
+literal path spelling only when the decoded lookup has no matches. A decoded
+ambiguity remains unresolved rather than falling through to a literal filename.
+Each spelling retains relative/root lookup rules and the library's containment
+and access checks. Images and videos use the same resolver and decoded-first ordering as navigation.
+Missing or ambiguous images display a reason in native previews and a readable
+in-memory placeholder in the desktop viewer. Access, invalid image and size/budget
+failures also produce reasons; the authored Markdown remains unchanged. Fragments stay separate from filename lookup.
+
+Connection scans normalize direct relative/root candidates and apply the same
+library containment checks as navigation before considering a literal fallback.
+Desktop absolute file links preserve their query/fragment and must have the same
+file-URL host as the current document.

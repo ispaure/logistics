@@ -18,6 +18,21 @@ from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 
 
 class LocalCryptConfigurationTests(unittest.TestCase):
+    def test_landing_note_probes_batch_encoding_instead_of_mapping_each_note(self):
+        with TemporaryDirectory() as directory:
+            provider = self.listing_provider(directory)
+            paths = [f'Folder{i}/Note.md' for i in range(300)]
+            for name in paths[::2]:
+                path = provider.root / name
+                path.parent.mkdir(parents=True)
+                path.write_bytes(b'opaque fixture')
+            with patch.object(provider.client, 'request', wraps=provider.client.request) as request:
+                self.assertEqual(provider.existing_files(paths), set(paths[::2]))
+            batches = [call.kwargs['entries'] for call in request.call_args_list if call.args[0] == 'crypt_paths']
+            self.assertEqual(len(batches), 2)
+            self.assertTrue(all(entry['encode'] for batch in batches for entry in batch))
+            self.assertFalse(any(call.args[0] == 'crypt_path' for call in request.call_args_list))
+
     def listing_provider(self, root):
         def request(action, **values):
             if action == 'crypt_path':

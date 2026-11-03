@@ -362,6 +362,57 @@ class CredentialDocumentLists:
             self.notice()
         self.publish_recent()
 
+    def relocate(self, source, destination=None, *, names=None):
+        """Follow logical renames in unlocked encrypted history and reopen lists."""
+        from services.documents.catalog import relocated_source, relocated_title
+        for key, state in self.states.items():
+            changed = False
+            for field in ('open', 'recent'):
+                rows = []
+                for item in state[field]:
+                    before = item['source']
+                    after = relocated_source(before, source, destination)
+                    if before is not after:
+                        changed = True
+                        if after is None:
+                            continue
+                        item = dict(item, source=after, resource=self.references.reference_id(after),
+                                    title=relocated_title(item['title'], before, after, names=names))
+                    rows.append(item)
+                state[field] = self.references.normalize_items(rows)
+            if changed:
+                self.queue_write(key)
+        workspace = self.app.workspace
+        for session in list(workspace.sessions.values()):
+            if session.provider != 'credential-reference' or getattr(session, 'cache_id', None) not in self.states:
+                continue
+            before = session.cache_source
+            after = relocated_source(before, source, destination)
+            if before is after:
+                continue
+            if after is None:
+                workspace.close(session.id, guard=lambda session: True)
+                continue
+            resource = sha256((self.scene + ':' + self.references.reference_id(after)).encode()).hexdigest()
+            existing = next((item for item in workspace.sessions.values() if item is not session
+                             and item.identity == ('credential-reference', resource)), None)
+            if existing is not None:
+                selected = workspace.active == session.id
+                workspace.close(session.id, guard=lambda session: True)
+                if selected:
+                    workspace.active = existing.id
+                continue
+            old_identity = session.identity
+            owners = getattr(workspace, 'window_owners', None)
+            if owners is not None and old_identity != ('credential-reference', resource):
+                owners.claim(workspace.window_id, ('credential-reference', resource), private=True)
+                owners.release(workspace.window_id, old_identity)
+            session.cache_source, session.resource = after, resource
+            session.title = relocated_title(session.title, before, after, names=names)
+            workspace.invalidate(session.id)
+        self.publish_recent()
+        self.queue_views()
+
     def forget_memory(self, key=None):
         with _cache_io_lock:
             self._forget_memory(key)

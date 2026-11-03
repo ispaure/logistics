@@ -16,6 +16,17 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class OpenSourceTests(unittest.TestCase):
+    def test_dataview_upstream_acknowledgement_is_complete_on_every_platform(self):
+        expected = (ROOT / 'services/licenses/Dataview-MIT.txt').read_text().strip()
+        for platform in ('android', 'ios', 'darwin', 'win32', 'linux'):
+            with self.subTest(platform=platform):
+                notice = next(item for item in bundled_notices(ROOT, platform)
+                              if item.name == 'Dataview compatibility acknowledgement')
+                self.assertIn(expected, notice.text)
+                self.assertIn('Copyright (c) 2021 Michael Brenan', notice.text)
+                self.assertIn('THE SOFTWARE IS PROVIDED "AS IS"', notice.text)
+                self.assertIn('does not mean the Obsidian Dataview plugin is bundled', notice.text)
+
     def test_native_catalog_matches_pinned_direct_dependencies(self):
         entries = json.loads((ROOT / 'services/licenses/native.json').read_text())
         android = {entry['module'] + ':' + entry['version'] for entry in entries if 'module' in entry}

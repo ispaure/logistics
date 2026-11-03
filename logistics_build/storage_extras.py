@@ -1,4 +1,5 @@
 """Explicit adoption of disposable probes and recovery of owned simulator leases."""
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -9,7 +10,7 @@ from uuid import UUID, uuid4
 
 from build_manager.locking import workspace_lock
 from build_manager.profiles import save_json
-from build_manager.retention import allocated_bytes, linked, protection_reason
+from build_manager.retention import allocated_bytes, linked, protection_reason, nested_workflow_hold_reason
 
 MARKER = '.logistics-owned-scratch.json'
 
@@ -93,11 +94,13 @@ def directory_groups(root):
                 processes = subprocess.check_output(['/bin/ps', '-Ao', 'command='], text=True, timeout=15)
                 # Legacy probes did not take manager locks. Require absence of
                 # native writers as well as the new ownership lock.
-                return not any(str(path) in line and any(word in line for word in ('xcodebuild', 'briefcase', 'gradle', 'logistics_build'))
+                return not any(str(path) in line and any(word in line for word in ('xcodebuild', 'briefcase', 'gradle', 'logistics_build', 'build_manager'))
                                for line in processes.splitlines())
             except (OSError, ValueError, TypeError, subprocess.SubprocessError):
                 return False
-        yield ('Adopted temporary builds / ' + path.name, dict(root=path.parent, eligible=eligible))
+        identity = hashlib.sha256(str(path).encode()).hexdigest()[:12]
+        yield ('Adopted temporary builds / ' + path.name + ' / ' + identity,
+               dict(root=path.parent, eligible=eligible, protection=nested_workflow_hold_reason, ownership_files=(MARKER,)))
 
 
 def simulator_records(root):
@@ -175,7 +178,7 @@ def delete_simulators(root, names, *, expired_only=False):
     return result
 
 
-def clean_simulators(root, *, apply=False):
+def clean_simulators(root, *, apply=False, warnings=None):
     result = []
     for device, record in simulator_records(root).items():
         if time.time() - record['stamp'] < 86400:
@@ -192,7 +195,10 @@ def clean_simulators(root, *, apply=False):
             outcome = delete_simulators(root, [device], expired_only=True)
             result.extend(outcome['removed'])
             if outcome['skipped']:
-                print('Owned simulator cleanup incomplete: ' + '; '.join(outcome['skipped']))
+                message = 'Owned simulator cleanup incomplete: ' + '; '.join(outcome['skipped'])
+                print(message)
+                if warnings is not None:
+                    warnings.append(message)
         else:
             result.append(str(path))
     return result

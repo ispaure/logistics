@@ -5,6 +5,15 @@ are local working material. Keep them under ignored `test-results/` or the
 owning tool's ignored `mobile_build/logs/` directory. They are excluded from source
 releases and mobile offline help.
 
+Run one-off commands through `python -m logistics_build.build_retention --scratch
+COMMAND ...`; `{workspace}` arguments expand to the disposable directory. The
+command receives its own `COMMONUTILS_STORAGE_ROOT`, so automatic document history
+and shared caches cannot write into the user's normal cache. This overrides an
+inherited storage root. Save evidence outside the workspace before it exits.
+Python callers of `scratch()` must set `COMMONUTILS_STORAGE_ROOT` inside their
+workspace before importing application or shared UI modules. Probes must also
+redirect any feature preferences or credentials they modify to private fixtures.
+
 The historical mobile evidence archive is retained locally at
 `test-results/mobile-evidence/`. It was moved from
 `docs/development/mobile-evidence/`, which is also ignored and explicitly excluded

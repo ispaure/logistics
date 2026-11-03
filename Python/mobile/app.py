@@ -221,6 +221,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         workspace_root = getattr(self, 'workspace_root', root)
         models = self.__dict__.pop('_startup_models', None)
         self.preferences = models['preferences'] if models is not None else Preferences(workspace_root)
+        from .palette import set_accent
+        set_accent(self.preferences.values['accent_hue'], self.preferences.values['accent_saturation'])
         manager = getattr(self, 'scene_manager', None)
         if manager is not None and manager.app is not self:
             self.preferences.feature_preferences = manager.app.preferences
@@ -845,12 +847,13 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def reload_preferences(self, widget=None, **kwargs):
         self.preferences.reload()
+        from .palette import set_accent
+        set_accent(self.preferences.values['accent_hue'], self.preferences.values['accent_saturation'])
         from .magnifier import refresh
         refresh(self.preferences)
         from .appearance import configure_android_eink
         configure_android_eink(self)
-        if type(self._impl).__module__.startswith('toga_android.'):
-            self.refresh_native_theme()
+        self.refresh_native_theme()
         self.refresh_folder_visibility()
         from .font_scaling import refresh
         refresh(self)

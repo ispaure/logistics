@@ -33,11 +33,27 @@ class CreationProbe(LogisticsMobile):
         assert picker.next_button.enabled
         return picker
 
-    async def check_keyboard_steps(self):
+    async def capture_system_keyboard(self, pose):
+        from commonUtils.testing.waiting import wait_until
+        output = Path(self.paths.cache) / 'document-creation-evidence'
+        done = output / 'keyboard-done'
+        done.unlink(missing_ok=True)
+        request = output / 'keyboard-request.tmp'
+        request.write_text(json.dumps(dict(pose=pose)))
+        request.replace(output / 'keyboard-request.json')
+        await wait_until(done.exists, timeout=30, message='System keyboard screenshot was not captured')
+
+    async def check_keyboard_steps(self, pose='portrait'):
         from mobile.keyboard import picker_keyboard_visible
         from .fixtures import capture_window
+        from .rotation_checks import rotate
+        if not type(self._impl).__module__.startswith('toga_iOS.'):
+            (Path(self.paths.cache) / 'creation-orientation').write_text(pose)
+        await rotate(self, pose)
         picker = await self.new_form()
         picker.save_as_name.value = 'Field notes'
+        await asyncio.sleep(.3)
+        await capture_window(self, Path(self.paths.cache) / f'creation-formats-{pose}.png')
         field = picker.save_as_name._impl.native
         adapter = self.native_host.adapter
         ios = type(self._impl).__module__.startswith('toga_iOS.')
@@ -65,30 +81,122 @@ class CreationProbe(LogisticsMobile):
         assert await settled_keyboard(request, lambda: picker_keyboard_visible(self, adapter),
                                       ready=ready, attempts=100), 'Filename keyboard did not appear'
         await asyncio.sleep(.4)
-        assert picker.next_button.enabled and picker.name_form.layout.height >= 48
+        assert picker.next_button.enabled and picker.name_form.layout.height >= 44
+        formats = picker.creation_formats
+        if formats.tabbed:
+            assert formats.tabs.parent is picker.name_content and formats.cards.parent is None
+        if formats.compact:
+            assert formats.row.parent is picker.name_content and formats.cards.parent is None
+            assert formats.change.enabled
         if ios:
             window = self.main_window._impl.native
             rect = field.convertRect(field.bounds, toView=window)
             keyboard = window.convertRect(adapter.keyboard_frame, fromCoordinateSpace=window.screen.coordinateSpace)
-            assert rect.origin.y >= 0 and rect.origin.y + rect.size.height <= keyboard.origin.y + 1
+            def frame(value):
+                return [round(float(value.origin.x), 1), round(float(value.origin.y), 1),
+                        round(float(value.size.width), 1), round(float(value.size.height), 1)]
+            scroll = picker.name_form._impl.native
+            geometry = dict(field=frame(rect), keyboard=frame(keyboard), inset=adapter.keyboard_inset,
+                form=frame(scroll.convertRect(scroll.bounds, toView=window)),
+                form_bounds=frame(scroll.bounds), panel=frame(picker.name_panel._impl.native.bounds),
+                window=frame(window.bounds), compact=picker._compact_keyboard,
+                tabs=frame(picker.creation_formats.tabs._impl.native.bounds))
+            assert rect.origin.y >= 0 and rect.origin.y + rect.size.height <= keyboard.origin.y + 1, geometry
         else:
             from android.graphics import Rect
-            for control in (field, picker.next_button._impl.native):
+            action = picker.picker_primary if picker.creation_layout.paired else picker.next_button
+            tabs = tuple(tab._impl.native for tab in formats.tab_buttons.values()) if formats.tabbed else ()
+            for control in (field, action._impl.native, *tabs):
                 visible = Rect()
                 assert control.getGlobalVisibleRect(visible) and visible.height() >= control.getHeight() - 1
-        await capture_window(self, Path(self.paths.cache) / 'creation-name.png')
+                assert visible.width() >= control.getWidth() - 1
+            for control in tabs:
+                density = control.getResources().getDisplayMetrics().density
+                assert control.getHeight() / density >= 44 - 1 / density
+                text = control.getLayout()
+                assert text is not None
+                assert all(text.getEllipsisCount(i) == 0 for i in range(text.getLineCount())), 'Format title is truncated'
+                assert (text.getLineBottom(text.getLineCount() - 1) <= control.getHeight()
+                        - control.getCompoundPaddingTop() - control.getCompoundPaddingBottom() + 1), dict(
+                    error='Format title is clipped', title=str(control.getText()), height=control.getHeight(),
+                    lines=text.getLineCount(), text_bottom=text.getLineBottom(text.getLineCount() - 1),
+                    padding=(control.getCompoundPaddingTop(), control.getCompoundPaddingBottom()))
+        await capture_window(self, Path(self.paths.cache) / f'creation-name-{pose}.png')
+        await self.capture_system_keyboard(pose)
+        if ios:
+            rect = field.convertRect(field.bounds, toView=window)
+            keyboard = window.convertRect(adapter.keyboard_frame, fromCoordinateSpace=window.screen.coordinateSpace)
+            assert rect.origin.y >= 0 and rect.origin.y + rect.size.height <= keyboard.origin.y + 1
+            await capture_window(self, Path(self.paths.cache) / f'creation-name-{pose}.png')
+            scroll = picker.name_form._impl.native
+            input_rect = field.convertRect(field.bounds, toView=scroll)
+            assert input_rect.origin.y >= scroll.bounds.origin.y - 1
+            assert (input_rect.origin.y + input_rect.size.height <=
+                    scroll.bounds.origin.y + scroll.bounds.size.height + 1), 'Name input is clipped by its scroll viewport'
+            if formats.compact:
+                change = formats.change._impl.native
+                bounds = change.convertRect(change.bounds, toView=window)
+                assert bounds.origin.y >= 0 and bounds.origin.y + bounds.size.height <= keyboard.origin.y + 1
+                assert bounds.size.height >= 44, 'Change format lost its touch target'
+            if formats.tabbed:
+                for tab in formats.tab_buttons.values():
+                    native = tab._impl.native
+                    bounds = native.convertRect(native.bounds, toView=window)
+                    assert bounds.size.width >= 44 and bounds.size.height >= 44
+                    assert bounds.origin.x >= 0 and bounds.origin.x + bounds.size.width <= window.bounds.size.width + 1
+                    assert bounds.origin.y + bounds.size.height <= keyboard.origin.y + 1
+        location, original = picker.editor_picker_location, picker.save_as_name
+        if formats.tabbed:
+            formats.tab_buttons['Markdown (.md)'].on_press()
+            assert picker_keyboard_visible(self, adapter), 'Changing a phone tab dismissed the keyboard'
+            assert bool(field.isFirstResponder) if ios else bool(field.hasFocus())
+        else:
+            formats.change.on_press()
+            for _ in range(50):
+                if not picker_keyboard_visible(self, adapter):
+                    break
+                await asyncio.sleep(.1)
+            assert not picker_keyboard_visible(self, adapter), 'Change format did not dismiss the keyboard'
+            assert formats.cards.parent is picker.name_view and not formats.compact
+            formats.buttons['Markdown (.md)'].on_press()
+        assert picker.save_as_name is original and picker.destination_filename() == 'Field notes.md'
+        assert picker.editor_picker_location == location
+        await capture_window(self, Path(self.paths.cache) / f'creation-change-format-{pose}.png')
         await picker.choose_creation_location()
         for _ in range(50):
             if not picker_keyboard_visible(self, adapter):
                 break
             await asyncio.sleep(.1)
         assert not picker_keyboard_visible(self, adapter), 'Keyboard stayed open over locations'
+        await capture_window(self, Path(self.paths.cache) / f'creation-locations-{pose}.png')
         await picker.browser_editor_location(('Local', ''))
         assert picker.picker_primary.enabled
         await asyncio.sleep(.4)
         assert picker.editor_picker_location == ('Local', '') and picker.picker_primary.enabled
         assert 'Local' in picker.picker_destination.text
-        await capture_window(self, Path(self.paths.cache) / 'creation-location.png')
+        await capture_window(self, Path(self.paths.cache) / f'creation-location-{pose}.png')
+        from services.documents.locations import collection_path
+        root = collection_path(self.private_root)
+        for name, parent in (('Projects', ''), ('Notes', 'Projects'), ('Research', 'Projects')):
+            await picker.browser_editor_location(('Local', parent))
+            if not (root / parent / name).exists():
+                picker.show_new_folder()
+                picker.new_folder_name.value = name
+                await picker.create_picker_folder()
+                assert picker.editor_picker_location == ('Local', '/'.join(filter(None, (parent, name))))
+        await picker.browser_editor_location(('Local', 'Projects'))
+        await asyncio.sleep(.3)
+        assert not (root / 'Projects/Field notes.md').exists()
+        assert picker.destination_filename() == 'Field notes.md'
+        if not ios:
+            for widget in (picker.picker_primary, picker.picker_new_folder):
+                native = widget._impl.native
+                rect = Rect()
+                assert native.getGlobalVisibleRect(rect)
+                assert rect.height() >= native.getHeight() - 1
+                assert rect.width() >= native.getWidth() - 1
+            assert picker.editor_browser.scroll_container().layout.height >= 44, 'Browser has no usable space'
+        await capture_window(self, Path(self.paths.cache) / f'creation-folders-{pose}.png')
         picker.cancel_text_destination()
 
     async def check_adaptive_creation(self):
@@ -266,8 +374,11 @@ class CreationProbe(LogisticsMobile):
         output.mkdir(parents=True, exist_ok=True)
         report = dict(success=False, cases=[])
         try:
-            await self.check_keyboard_steps()
-            report['cases'].append(dict(keyboard_steps=True))
+            if getattr(self, 'startup_task', None) is not None:
+                await asyncio.shield(self.startup_task)
+            for pose in ('portrait', 'landscape-left', 'landscape-right'):
+                await self.check_keyboard_steps(pose)
+                report['cases'].append(dict(keyboard_steps=pose, change_format=True))
             report['layouts'] = await self.check_adaptive_creation()
             report['cases'].append(await self.create_in('Ordinary.txt', 'Local'))
             report['cases'].append(await self.create_in('Note.md', 'Received Files', 'Markdown (.md)'))

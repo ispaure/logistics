@@ -3,6 +3,8 @@
   "modules": [
     "__init__.py",
     "localcrypt/__init__.py",
+    "localcrypt/note_lookup.py",
+    "localcrypt/path_batches.py",
     "access.py",
     "credential_storage.py",
     "credential_loading.py",

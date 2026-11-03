@@ -11,6 +11,72 @@ from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_slider_preview_supplies_the_same_opaque_accent_on_both_platforms(self):
+        import toga
+        from unittest.mock import patch
+        from mobile.reader_progress import style_slider, refresh_progress
+        from mobile.palette import accent_colors, set_eink_enabled, EINK
+        slider = toga.Slider()
+        slider._accent_preview = accent_colors(150, 60)
+        self.addCleanup(set_eink_enabled, False)
+        with patch('mobile.reader_progress.native_style_slider') as paint:
+            style_slider(slider)
+            options = paint.call_args.kwargs
+            for dark, color in enumerate(slider._accent_preview):
+                self.assertEqual(options['palette'](bool(dark))['accent'], color)
+                self.assertEqual(options['apple_color'].__self__.palette(bool(dark))['accent'], color)
+            refresh_progress()
+            self.assertEqual(paint.call_args.kwargs['palette']()['accent'], slider._accent_preview[0])
+            set_eink_enabled(True)
+            self.assertEqual(options['palette']()['accent'], EINK['accent'])
+
+    def test_ios_switch_accent_targets_the_wrapped_native_switch(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import patch
+        import toga
+        from mobile.appearance import paint_accent_control
+        class Impl:
+            __module__ = 'toga_iOS.widgets.switch'
+        impl = Impl()
+        impl.interface = toga.Switch('Accent')
+        impl.native, impl.native_switch = NS(), NS()
+        with patch('mobile.appearance.apple_color', return_value='chosen'):
+            paint_accent_control(impl)
+        self.assertEqual(impl.native_switch.onTintColor, 'chosen')
+        self.assertFalse(hasattr(impl.native, 'onTintColor'))
+
+    def test_accent_spectrum_is_readable_and_keeps_semantic_roles(self):
+        from mobile.palette import set_accent, EINK
+        before = [dict(colors) for colors in (LIGHT, DARK, EINK)]
+        self.addCleanup(set_accent)
+        for hue in range(0, 360, 7):
+            for saturation in (0, 25, 65, 100):
+                set_accent(hue, saturation)
+                for colors, original in zip((LIGHT, DARK), before):
+                    self.assertEqual(colors['primary'], colors['accent'])
+                    for role in ('surface', 'alternate', 'window', 'hover'):
+                        self.assertGreaterEqual(contrast_ratio(argb(colors['accent']), argb(colors[role])), 4.5)
+                    self.assertEqual({key: value for key, value in colors.items() if key not in ('accent', 'primary')},
+                                     {key: value for key, value in original.items() if key not in ('accent', 'primary')})
+                self.assertEqual(EINK, before[2])
+        set_accent()
+        self.assertEqual(LIGHT['accent'], '#2563eb')
+        self.assertEqual(DARK['accent'], '#75a7ff')
+
+    def test_accent_preferences_persist_and_reject_invalid_values(self):
+        from tempfile import TemporaryDirectory
+        from mobile.preferences import Preferences
+        with TemporaryDirectory() as root:
+            preferences = Preferences(root)
+            self.assertEqual(preferences.values['accent_hue'], '221')
+            preferences.save(accent_hue='123.5', accent_saturation='42')
+            self.assertEqual(Preferences(root).values['accent_hue'], '123.5')
+            for hue, saturation in (('nan', '1'), ('inf', '1'), ('360', '1'),
+                                     ('0', '-1'), ('0', '101'), ('bad', '2')):
+                with self.assertRaises(ValueError):
+                    preferences.save(accent_hue=hue, accent_saturation=saturation)
+            self.assertEqual(Preferences(root).values['accent_saturation'], '42')
+
     def test_ios_workspace_group_anchor_supports_method_and_property_getters(self):
         from types import SimpleNamespace as NS
         from mobile.folder_hub_style import tree_anchor

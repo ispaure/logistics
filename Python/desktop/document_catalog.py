@@ -64,8 +64,14 @@ def reference(window):
 def relocate(provider, source, destination, *, deleted=None):
     source, cipher = source_reference(provider.root / (deleted or source), provider)
     target = None if deleted is not None else source_reference(provider.root / destination, provider)[0]
+    errors = []
     for recent in (False, True):
-        catalog(recent=recent).relocate(source, target, cipher=cipher)
+        try:
+            catalog(recent=recent).relocate(source, target, cipher=cipher)
+        except (OSError, ValueError, PermissionError) as error:
+            errors.append(error)
+    if errors:
+        raise errors[0]
 
 
 def remember(window, *, favourite=False):

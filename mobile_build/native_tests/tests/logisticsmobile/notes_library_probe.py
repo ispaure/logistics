@@ -126,6 +126,43 @@ class NotesLibraryProbe(LogisticsMobile):
     def _is_apple(self):
         return type(self.main_window._impl).__module__.startswith('toga_iOS.')
 
+    async def check_file_previews(self, owner, root, evidence):
+        from io import BytesIO
+        from pypdf import PdfWriter
+        from .fixtures import png_page
+        (root / 'Image.png').write_bytes(png_page())
+        (root / 'Unknown.binary').write_bytes(b'\x00binary')
+        output = BytesIO()
+        writer = PdfWriter()
+        writer.add_blank_page(width=200, height=300)
+        writer.add_blank_page(width=300, height=200)
+        writer.write(output)
+        (root / 'Document.pdf').write_bytes(output.getvalue())
+        (root / 'clip.mp4').write_bytes(b'non-playing stream fixture')
+        (root / 'Media.md').write_text('![[clip.mp4]]')
+        assert await owner.open_note('Media.md')
+        await self.wait_js(owner.web, '!!document.querySelector("video")')
+        media = owner.library.image_source('Media.md')
+        transports = [transport for _, transport in media.videos.values()]
+        assert transports
+        sessions = set(self.workspace.sessions)
+        for name in ('Image.png', 'Document.pdf', 'Unknown.binary'):
+            assert await owner.open_note(name), owner.notice.text
+            assert set(self.workspace.sessions) == sessions
+            assert owner.path == name and owner.embedded.kind == 'file'
+            assert all(transport.closed.is_set() for transport in transports)
+            preview = owner.embedded
+            if name != 'Unknown.binary':
+                await self.wait_js(preview.web, '!!document.querySelector("img") && document.querySelector("img").complete && document.querySelector("img").naturalWidth > 0')
+            if name == 'Document.pdf':
+                assert preview.preview.count == 2
+                await preview.turn(1)
+                assert preview.index == 1
+                await self.wait_js(preview.web, 'document.querySelector("img").complete && document.querySelector("img").naturalWidth > 0')
+            await capture_window(self, evidence / ('notes-file-' + name + '.png'))
+        assert await owner.open_note('Home.md')
+        assert preview.closed and not preview.preview.path
+
     async def check_breadcrumbs(self, owner, root, evidence):
         from .fixtures import png_page
         folder = root / 'Technology/Accessories/Devices'
@@ -181,6 +218,8 @@ class NotesLibraryProbe(LogisticsMobile):
             assert owner.secondary.parent is owner.view
             await capture_window(self, evidence / 'notes-reading.png')
             session_ids = set(self.workspace.sessions)
+            await self.check_file_previews(owner, root, evidence)
+            report['embedded_file_previews'] = True
             await self.check_breadcrumbs(owner, root, evidence)
             report['breadcrumbs_all_files'] = True
             assert await owner.open_editor()

@@ -46,6 +46,32 @@ class FileOperationTests(unittest.TestCase):
     def select(self, name):
         self.app.file_selection.value = next(key for key, row in self.app.file_rows.items() if row['name'] == name)
 
+    def test_collection_name_listing_avoids_metadata_formatting(self):
+        from services.documents.locations import CollectionFiles
+        provider = CollectionFiles(self.root)
+        with patch('services.documents.locations._modified_time', side_effect=AssertionError('No timestamps')):
+            rows = provider.list_names()
+        self.assertTrue({'first.txt', 'second.txt'} <= {row['name'] for row in rows})
+        self.assertTrue(all(set(row) == {'name', 'path', 'directory', 'size'} for row in rows))
+
+    def test_collection_name_listing_rejects_folder_replacement(self):
+        from contextlib import contextmanager
+        import os
+        from services.documents.locations import CollectionFiles
+        provider = CollectionFiles(self.root)
+        folder = provider.root / 'Moving'
+        folder.mkdir()
+        scan = os.scandir
+        @contextmanager
+        def replaced(path):
+            with scan(path) as entries:
+                yield entries
+            folder.rename(provider.root / 'Previous')
+            folder.mkdir()
+        with patch('services.documents.locations.os.scandir', side_effect=replaced):
+            with self.assertRaisesRegex(ValueError, 'changed during listing'):
+                provider.list_names('Moving')
+
     def test_create_rename_move_and_confirmed_delete_use_existing_resource_operations(self):
         app = self.app
         app.file_name.value = 'New folder'
@@ -83,6 +109,48 @@ class FileOperationTests(unittest.TestCase):
         self.run_async(self.app.browse_files())
         self.assertTrue(menu.disposed)
         self.assertEqual(menu.actions, ())
+
+    def test_rename_updates_closed_favourites_and_recent_descendants(self):
+        from mobile.favourites import catalog
+        from mobile.workspace import Session
+        app = self.app
+        folder = self.source.root / 'Folder Ω'
+        folder.mkdir()
+        note = folder / 'Private name.md'
+        note.write_text('# Keep bytes')
+        source = dict(type='local', path=str(note))
+        store = catalog(app)
+        store.remember(source, note.name, dict(kind='notes', root=str(folder)), favourite=True)
+        app.recent_documents.remember_file(Session('', 'file-reference', 'fixture', 'markdown', title=note.name), source)
+        self.run_async(app.browse_files())
+        self.select(folder.name)
+        app.file_name.value = 'Renamed Ω'
+        self.run_async(app.rename_file())
+        expected = str(self.source.root / 'Renamed Ω' / note.name)
+        self.assertEqual(store.entries()[0]['source']['path'], expected)
+        self.assertEqual(store.entries()[0]['opener']['root'], str(self.source.root / 'Renamed Ω'))
+        recent = app.recent_documents.items[0]
+        self.assertEqual(recent['source']['path'], expected)
+        self.assertEqual(recent['resource'], app.recent_documents.reference_id(recent['source']))
+        self.assertEqual(Path(expected).read_text(), '# Keep bytes')
+
+    def test_rename_updates_recent_on_ui_thread_even_if_favourites_fail(self):
+        from mobile.workspace import Session
+        app = self.app
+        source = dict(type='local', path=str(self.source.root / 'first.txt'))
+        app.recent_documents.remember_file(Session('', 'file-reference', 'fixture', 'text', title='first.txt'), source)
+        ui_thread, observed = get_ident(), []
+        relocate = app.recent_documents.relocate
+        def on_ui(*args, **kwargs):
+            observed.append(get_ident())
+            return relocate(*args, **kwargs)
+        app.file_name.value = 'renamed.txt'
+        with patch('services.documents.catalog.DocumentCatalog.relocate', side_effect=OSError('Unreadable favourites')), \
+                patch.object(app.recent_documents, 'relocate', side_effect=on_ui):
+            self.run_async(app.rename_file())
+        self.assertEqual(observed, [ui_thread])
+        self.assertEqual(app.recent_documents.items[0]['source']['path'], str(self.source.root / 'renamed.txt'))
+        self.assertIn('saved references could not be updated', app.file_status.value)
 
     def test_delete_keeps_the_confirmed_target_if_selection_changes_in_dialog(self):
         async def confirm(dialog):
