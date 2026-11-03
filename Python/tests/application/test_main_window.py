@@ -16,6 +16,97 @@ from desktop import main_window
 
 
 class MainWindowTests(QtTestCase):
+    def test_notes_library_disabled_at_startup_rejects_saved_reference_before_provider_open(self):
+        from commonUtils.ui.document_host import current_document_host
+        from features.notes_library.ui.notes_library import open_notes
+        from desktop.document_catalog import reopen
+        window = self.window(); window.dlg.show()
+        # A disabled-at-startup feature has no constructed destination host.
+        with patch.dict(self.app._commonutils_document_hosts, {'notes_library': lambda: None}), patch.object(
+                main_window.registry, 'is_feature_enabled', return_value=False), patch(
+                'features.notes_library.ui.library_workspace.TabbedNotesLibrary') as constructor, patch(
+                'desktop.document_catalog.provider_for') as provider, patch.object(qt.QMessageBox, 'warning') as warning:
+            self.assertIsNone(current_document_host(destination='notes_library'))
+            factory = Mock()
+            with self.assertRaisesRegex(ValueError, 'Enable Notes Library'):
+                open_notes(factory, 'Disabled')
+            row = dict(source=dict(type='crypt', path='Home.md'),
+                       opener=dict(editor='notes', root='Vault'), title='Home.md')
+            self.assertIsNone(reopen(row, window.dlg))
+            warning.assert_called_once()
+            provider.assert_not_called(); factory.assert_not_called(); constructor.assert_not_called()
+
+    def test_notes_library_closing_host_never_falls_back_to_a_standalone_window(self):
+        from features.notes_library.ui.notes_library import open_notes
+        window = self.window(); window.dlg.show()
+        window.documents.closing = True
+        try:
+            with patch.dict(self.app._commonutils_document_hosts, {'notes_library': lambda: None}), patch.object(
+                    main_window.registry, 'is_feature_enabled', return_value=True):
+                factory = Mock()
+                with self.assertRaisesRegex(ValueError, 'closing'):
+                    open_notes(factory, 'Closing')
+                factory.assert_not_called()
+        finally:
+            window.documents.closing = False
+
+    def test_notes_library_retries_failed_initial_load_and_reuses_hidden_host(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.ui.document_host import request_document_close, CloseOutcome
+        from features.notes_library import register
+        from features.notes_library.ui.notes_library import open_notes
+        entry = RegisteredContribution('notes_library', 'Notes Library', register().pages[0])
+        with TemporaryDirectory() as directory, patch.object(main_window.registry, 'get_pages', return_value=[entry]):
+            root = Path(directory); (root / 'Home.md').write_text('# Home')
+            window = self.window([entry]); window.dlg.show()
+            page = window._feature_pages['notes_library', 'notes_library.workspace']
+            broken = LocalFiles(root)
+            with patch.object(broken, 'list', side_effect=OSError('Temporarily unavailable')):
+                failed = open_notes(lambda: broken, 'Retry')
+                self.wait_until(lambda: not failed.progress.busy)
+            self.assertIsNone(failed.library)
+            retried = open_notes(lambda: LocalFiles(root), 'Retry')
+            self.assertIsNot(retried, failed)
+            self.wait_until(lambda: retried.library is not None and not retried.progress.busy)
+            self.assertEqual(page.count, 1)
+            window.dlg.hide()
+            self.assertIs(open_notes(lambda: LocalFiles(root), 'Retry'), retried)
+            self.assertEqual(page.count, 1)
+            (root / 'Other').mkdir()
+            hidden = open_notes(lambda: LocalFiles(root / 'Other'), 'Hidden host')
+            self.wait_until(lambda: hidden.library is not None and not hidden.progress.busy)
+            self.assertIn(hidden, page.records)
+            self.assertFalse(hidden.isWindow())
+            self.assertEqual(page.count, 2)
+            window.dlg.show()
+            for owner in (retried, hidden):
+                self.wait_until(lambda owner=owner: request_document_close(owner) is CloseOutcome.ACCEPTED)
+
+    def test_notes_favourite_waits_for_a_busy_retained_library(self):
+        from types import SimpleNamespace
+        from desktop.document_catalog import reopen
+        class Library(qt.QWidget):
+            idle = qt.Signal()
+        owner = Library()
+        self.addCleanup(owner.deleteLater)
+        owner.library = object()
+        owner.progress = SimpleNamespace(busy=True)
+        owner.open_note = Mock()
+        row = dict(source=dict(type='local', path='/notes/Home.md'),
+                   opener=dict(editor='notes', root='/notes'), title='Home.md')
+        with patch('features.notes_library.ui.notes_library.open_notes', return_value=owner):
+            self.assertIs(reopen(row), owner)
+        owner.open_note.assert_not_called()
+        owner.idle.emit()
+        owner.open_note.assert_not_called()
+        owner.progress.busy = False
+        owner.idle.emit()
+        owner.open_note.assert_called_once_with('Home.md')
+        owner.idle.emit()
+        owner.open_note.assert_called_once()
+
     def test_notes_library_has_own_destination_reuses_roots_and_survives_disable(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
