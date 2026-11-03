@@ -266,7 +266,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         # Focused prompts and reader controls retain their own layout. Main
         # workspaces and each editor get a permanent top-left drawer control.
         eligible = (isinstance(view, toga.Box) and not getattr(view, '_reading_frame', False)
-                    and not getattr(view, '_hub_sections', False) and
+                    and not getattr(view, '_hub_sections', False)
+                    and not getattr(view, '_standalone_markdown', False) and
                     not getattr(view, '_documents_overview', False) and
                     (root or route in ('editor', 'browser', 'remote-browser', 'folder-options', 'workspace-browser')
                      or (route or '').startswith('private:')))

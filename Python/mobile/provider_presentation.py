@@ -288,6 +288,7 @@ def _mount_editor(self, view, controls):
     markdown = view.crypt_reader.kind in {'.md', '.markdown'}
     view.crypt_view = toga.Box(children=controls, style=Pack(direction=COLUMN, margin=0 if markdown else 12, flex=1))
     view.crypt_view._keyboard_actions_required = True
+    view.crypt_view._standalone_markdown = markdown
     if markdown:
         view.crypt_view._workspace_toolbar = view.reader_toolbar
         view._native_reading_buttons = view._provider_markdown.native_buttons
