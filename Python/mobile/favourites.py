@@ -53,6 +53,10 @@ def reference(app, host=None):
             source = dict(type='session', provider=session.provider, resource=session.resource)
     if source is None:
         raise ValueError('This file has no saved opening reference yet.')
+    if source['type'] == 'local':
+        source = dict(source, path=str(Path(source['path']).resolve()))
+        if opener.get('kind') == 'notes':
+            opener = dict(opener, root=str(Path(opener['root']).resolve()))
     if source['type'] not in {'local', 'session'} and not saved_connection(app, source['remote'], source['identity']):
         if provider is None:
             provider = SimpleNamespace(client=app.cloud_client, remote=source['remote'], identity=source['identity'])
@@ -70,6 +74,24 @@ async def favourite(app, host=None):
             app.refresh_hub(destination)
     except (OSError, ValueError, PermissionError) as error:
         await app.main_window.dialog(toga.InfoDialog('Favourite file', str(error)))
+
+
+async def favourite_resource(app, provider, path, *, kind):
+    from services.documents.provider_documents import ProviderDocuments
+    from .document_sources import file_source, saved_connection
+    source = file_source(app, ProviderDocuments(provider), path, session_only=True)
+    if source is None:
+        raise ValueError('This file has no reusable storage reference.')
+    cipher = None
+    if source['type'] == 'local':
+        source = dict(source, path=str(Path(source['path']).resolve()))
+    elif not saved_connection(app, source['remote'], source['identity']):
+        cipher = MobileCredentialCipher(provider, app)
+        cipher.identity
+    await asyncio.to_thread(catalog(app).remember, source, Path(path).name,
+                            dict(kind=kind), favourite=True, cipher=cipher)
+    app._favourites_version = getattr(app, '_favourites_version', 0) + 1
+    app.refresh_hub('home')
 
 
 async def reopen(app, row):

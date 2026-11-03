@@ -34,7 +34,7 @@ def reference(window):
     path = Path(path)
     cipher = None
     if provider is None or not getattr(provider, 'private', False):
-        source = dict(type='local', path=str(path.absolute()))
+        source = dict(type='local', path=str(path.resolve()))
     elif getattr(provider, 'connection', None) is not None:
         item = provider.connection
         source = dict(type='crypt', package=str(item.package), root=str(item.root),
@@ -50,7 +50,7 @@ def reference(window):
     opener = dict(editor=getattr(window, 'document_editor_id', '') or path.suffix.lower())
     from features.text_editor.ui.notes_library import NotesLibraryWindow
     if isinstance(window, NotesLibraryWindow):
-        opener = dict(editor='notes', root=str(provider.root / window.library.root)
+        opener = dict(editor='notes', root=str((provider.root / window.library.root).resolve())
                       if source['type'] == 'local' else window.library.root)
     return source, path.name, opener, cipher
 
@@ -123,7 +123,7 @@ def reopen(row, parent=None):
                 root = ''
             else:
                 root = row['opener']['root']
-            window = open_notes(lambda: provider, row['title'], root=root)
+            window = open_notes(lambda provider=provider: provider, row['title'], root=root)
             def ready():
                 if window.library is not None:
                     window.idle.disconnect(ready)
@@ -134,10 +134,6 @@ def reopen(row, parent=None):
         return open_resource(provider, path, parent, editor=row['opener'].get('editor', ''))
     except (OSError, ValueError, PermissionError) as error:
         qt.QMessageBox.warning(parent, 'Open document', str(error))
-    finally:
-        if provider is not None and hasattr(provider, 'close'):
-            # Reader handoff has its own lease; do not revoke that provider.
-            pass
 
 
 def populate(layout, parent, *, recent=False):

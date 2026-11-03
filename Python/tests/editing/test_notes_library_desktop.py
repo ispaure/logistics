@@ -42,6 +42,25 @@ class NotesLibraryDesktopTests(QtTestCase):
         self.addCleanup(lambda: window.close() if __import__('shiboken6').isValid(window) else None)
         return window
 
+    def test_favourite_keeps_library_root_and_reopens_the_note(self):
+        from desktop.document_catalog import reference, reopen
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            source, title, opener, cipher = reference(window)
+            self.assertIsNone(cipher)
+            self.assertEqual(opener, dict(editor='notes', root=str(root.resolve())))
+            with patch.object(qt.QMessageBox, 'warning', side_effect=AssertionError('Favourite could not reopen')):
+                restored = reopen(dict(source=source, title=title, opener=opener))
+            self.addCleanup(lambda: restored.close() if __import__('shiboken6').isValid(restored) else None)
+            self.wait_until(lambda: not restored.progress.busy and restored.index >= 0)
+            self.assertEqual(restored.history[restored.index], 'Home.md')
+            restored.close()
+            window.close()
+
     def test_save_before_navigation_continues_once_and_failure_keeps_current_note(self):
         with self.temporary_directory() as directory:
             root = Path(directory)

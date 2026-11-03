@@ -295,6 +295,7 @@ public final class VideoPlayer {
             more.setOnClickListener(view -> {
                 PopupMenu menu = optionsMenu = new PopupMenu(activity, more);
                 menu.getMenu().add("Show in folder").setOnMenuItemClickListener(item -> { tools.emit("showInFolder", ""); return true; });
+                menu.getMenu().add("Favourite file").setOnMenuItemClickListener(item -> { tools.emit("favourite", ""); return true; });
                 menu.getMenu().add("Playback…").setOnMenuItemClickListener(item -> { tools.show(); return true; });
                 if (!restricted) menu.getMenu().add("Picture in picture").setOnMenuItemClickListener(item -> { pip(); return true; });
                 if (!restricted) menu.getMenu().add("Cast…").setOnMenuItemClickListener(item -> { cast(); return true; });

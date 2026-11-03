@@ -235,6 +235,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
         __weak UIBarButtonItem *anchor = more;
         more.menu = [UIMenu menuWithChildren:@[
             [UIAction actionWithTitle:@"Show in folder" image:[UIImage systemImageNamed:@"folder"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"showInFolder" value:@""]; }],
+            [UIAction actionWithTitle:@"Favourite file" image:[UIImage systemImageNamed:@"star"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"favourite" value:@""]; }],
             [UIAction actionWithTitle:@"Picture in picture" image:[UIImage systemImageNamed:@"pip"] identifier:nil handler:^(UIAction *action) { [owner pip:anchor]; }],
             [UIAction actionWithTitle:@"Cast…" image:[UIImage systemImageNamed:@"tv"] identifier:nil handler:^(UIAction *action) { [owner cast:anchor]; }]
         ]];

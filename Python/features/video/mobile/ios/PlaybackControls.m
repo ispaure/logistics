@@ -287,7 +287,7 @@
     UIAlertController *menu = [self menu:@"Playback" sender:sender];
     for (NSArray *entry in @[@[@"Go to time…", @"goToTime:"], @[@"Speed…", @"speedOptions:"],
         @[@"HDR display mode…", @"hdrDisplayOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
-        @[@"Show in folder", @"showInFolder:"], @[@"Current folder…", @"queueVideos:"], @[@"Previous episode", @"previousVideo:"],
+        @[@"Show in folder", @"showInFolder:"], @[@"Favourite file", @"favouriteFile:"], @[@"Current folder…", @"queueVideos:"], @[@"Previous episode", @"previousVideo:"],
         @[@"Next episode", @"nextVideo:"], @[@"Mute / unmute", @"toggleMute:"], @[@"Lock controls", @"toggleControlLock:"]]) {
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             SEL selector = NSSelectorFromString(entry[1]);
@@ -322,6 +322,7 @@
     [strip setNeedsDisplay];
 }
 - (void)showInFolder:(id)sender { [self emitCommand:@"showInFolder" value:@""]; }
+- (void)favouriteFile:(id)sender { [self emitCommand:@"favourite" value:@""]; }
 - (void)updateVideoHeader {
     NSDictionary *options = [self playbackOptions];
     self.videoTitle.text = options[@"video_title"] ?: @"";
