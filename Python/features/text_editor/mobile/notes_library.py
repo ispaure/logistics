@@ -702,6 +702,13 @@ class VaultBrowser(LibraryPanels):
             self.host.open_timing({key: value for key, value in timing.items() if key != 'started'})
 
     async def open_note(self, path, *, remember=True, fragment="", resolve_link=False):
+        return_side = getattr(self.sidebar, 'side', None)
+        opened = await self._open_note(path, remember=remember, fragment=fragment, resolve_link=resolve_link)
+        if opened and return_side is not None:
+            self._document_return_side = return_side
+        return opened
+
+    async def _open_note(self, path, *, remember=True, fragment="", resolve_link=False):
         started = perf_counter()
         if not self.valid():
             return False
@@ -938,9 +945,16 @@ class VaultBrowser(LibraryPanels):
         opening = getattr(self, 'page_loading', None)
         if opening is not None and opening.active:
             return opening.cancel
+        if getattr(self, '_document_return_side', None) is not None:
+            return self.return_to_browsing
         if self.history_index > 0:
             return self.previous_note
         return None
+
+    def return_to_browsing(self):
+        side, self._document_return_side = self._document_return_side, None
+        self.sidebar.show(side)
+        self.host.render()
 
     async def previous_note(self, widget=None, **kwargs):
         await self.navigate_history(-1)
