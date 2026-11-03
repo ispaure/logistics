@@ -44,6 +44,29 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_retained_native_title_stays_above_commands_and_breadcrumbs(self):
+        from mobile.obsidian import open_vault
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            # Apple promotes this toolbar into native navigation. Its retained
+            # side-title row must stay first as an empty library gains a note.
+            owner.toolbar.parent.remove(owner.toolbar)
+            header = owner.view._document_title_header = toga.Box(style=Pack(height=37))
+            owner.view.insert(0, header)
+            owner.refresh_chrome()
+            self.assertIs(owner.view.children[0], header)
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            owner.refresh_chrome()
+            self.assertIs(owner.view.children[0], header)
+            self.assertLess(list(owner.view.children).index(header), list(owner.view.children).index(owner.secondary))
+            self.assertLess(list(owner.view.children).index(owner.secondary), list(owner.view.children).index(owner.breadcrumbs))
+            owner.sidebar.show_sidebar()
+            self.assertIs(owner.view.children[0], header)
+            owner.sidebar.show_detail()
+            self.assertIs(owner.view.children[0], header)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_cancelled_source_preparation_retires_resource_after_worker_finishes(self):
         from threading import Event
         from mobile.obsidian import open_vault

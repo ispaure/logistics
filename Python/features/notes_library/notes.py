@@ -1,5 +1,6 @@
 """Bounded provider-backed Notes Libraries with on-demand note-link lookup."""
 import posixpath
+import os
 from pathlib import PurePosixPath
 from threading import RLock
 from services.documents.storage import DocumentResource
@@ -129,7 +130,17 @@ class NotesLibrary:
 
         def revision():
             info = locate(folder, directory=True).stat()
-            return info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+            stamp = info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+            if os.name == 'nt':
+                # Windows can defer directory timestamp changes across rapid
+                # create/delete operations. Validate cached names against a
+                # fresh lightweight listing, without reading document content.
+                scan = getattr(self.provider, 'list_names', self.provider.list)
+                rows = scan(folder, cancelled=cancelled)
+                if len(rows) > 10000:
+                    raise ValueError('Note lookup exceeds the 10,000-entry limit. Use an explicit note path.')
+                stamp += (tuple(sorted((row['name'], row['path'], row['directory']) for row in rows)),)
+            return stamp
 
         before = revision()
         with self._link_lock:

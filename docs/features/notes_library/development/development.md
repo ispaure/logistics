@@ -95,8 +95,10 @@ Ancestor landing pages use the same bounded provider probes as sidebar folders,
 including files opened before their ancestors are expanded. Probes run off the
 UI thread; links follow the existing document navigation/save/history path.
 Desktop places a shrinking rich-text path beside history; mobile uses a compact
-row below the document controls. Only folders with a same-named `.md` are links
-and underlined, both in the path and in Files. The shared fitting policy reserves
+row below the document controls. The retained Apple side-title row stays above
+commands and breadcrumbs when the library opens a note or returns from browsing.
+Only folders with a same-named `.md` are links and underlined, both in the path
+and in Files. The shared fitting policy reserves
 space for the current filename before shortening ancestors. Closing or locking
 the library clears the displayed path.
 
@@ -179,7 +181,8 @@ write or arbitrary native bridge. Worker messages remain untrusted provider inpu
 
 Desktop `ui/dataview.py` adds `NotesMarkdownViewer` only to Notes Library. Its
 off-the-record Chromium page executes the shared runtime; `OperationProgress`
-owns asynchronous file reads. Results render in the existing native Markdown
+owns asynchronous file reads. Each private profile outlives its disposable page
+and is retired after the page has completed native teardown. Results render in the existing native Markdown
 browser, retaining search, speech and heading controls. Original editor text and
 save baselines never receive generated output. Close waits for active reads
 before releasing the provider, and stale generations cannot publish results.
@@ -234,7 +237,9 @@ index. Root containment, linked/special
 file rejection, cancellation, credential checks and the 10,000-entry limit remain
 enforced. Ordinary local global lookups reuse an in-memory, 10,000-entry folder-name cache. Validated local
 directory inode and nanosecond modification/change times invalidate changed
-folders, including changes made outside Logistics. Providers without a validated
+folders, including changes made outside Logistics. On Windows, a fresh lightweight
+name/type fingerprint also detects rapid changes whose directory timestamps are
+deferred. Unchanged folders still reuse their richer listings. Providers without a validated
 physical directory location keep uncached lookup. No note bodies or persistent
 plaintext index are added. Close and credential revocation retire the cache;
 late workers cannot repopulate it. Mobile Notes Library navigation history and

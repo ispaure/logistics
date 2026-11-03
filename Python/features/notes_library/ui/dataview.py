@@ -101,9 +101,11 @@ class DesktopViews(qt.QObject):
 
         self.plan, self.files, self.key = self.pending
         self.pending = None
-        profile = QWebEngineProfile()
+        # The profile must outlive its page, including deferred native teardown.
+        # Parenting it to the page can retire Chromium resources too early.
+        profile = QWebEngineProfile(qt.QApplication.instance())
         self.page = Page(profile, self)
-        profile.setParent(self.page)
+        self.page.destroyed.connect(profile.deleteLater)
         generation = self.generation
         def loaded(ok):
             if generation != self.generation or self.page is None:

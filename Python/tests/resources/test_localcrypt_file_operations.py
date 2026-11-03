@@ -60,7 +60,8 @@ class DesktopFileOperationsTests(unittest.TestCase):
                 paths[0] = paths[0].removesuffix('.md') + '.markdown'
                 for name, encoded in zip(paths + ['.hidden/Secret.md'],
                                          provider._commands.encode_many(paths + ['.hidden/Secret.md'])):
-                    target = provider.root / encoded
+                    from commonUtils.filesystem.native_paths import native_path
+                    target = native_path(provider.root / encoded)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(provider.encrypted_path('note.md').read_bytes())
                 with patch.object(provider, 'list', side_effect=AssertionError('No per-folder listing')), patch.object(

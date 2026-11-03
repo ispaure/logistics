@@ -19,6 +19,30 @@ class LibraryModeTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
+    def test_windows_link_cache_detects_new_names_when_directory_times_do_not_change(self):
+        from types import SimpleNamespace
+        from features.notes_library import notes
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Vault/Topics').mkdir(parents=True)
+            (root / 'Vault/Home.md').write_text('# Home')
+            (root / 'Vault/Topics/Tech.md').write_text('# Tech')
+            provider = LocalFiles(root)
+            library = NotesLibrary(provider, 'Vault')
+            stamp = SimpleNamespace(st_dev=1, st_ino=2, st_mtime_ns=3, st_ctime_ns=4)
+            location = SimpleNamespace(stat=lambda: stamp)
+            with patch.object(notes, 'os', SimpleNamespace(name='nt')), \
+                    patch.object(provider, 'transfer_location', return_value=location), \
+                    patch.object(provider, 'list', wraps=provider.list) as listing:
+                self.assertEqual(library.link('Vault/Home.md', 'Tech')[0], 'Vault/Topics/Tech.md')
+                listing.reset_mock()
+                self.assertEqual(library.link('Vault/Home.md', 'Tech')[0], 'Vault/Topics/Tech.md')
+                listing.assert_not_called()
+                (root / 'Vault/Other').mkdir()
+                (root / 'Vault/Other/Tech.md').write_text('# Duplicate')
+                with self.assertRaisesRegex(ValueError, 'Several notes'):
+                    library.link('Vault/Home.md', 'Tech')
+
     def test_real_workspace_browser_opens_root_vault_without_prompt(self):
         from desktop.file_browser import BrowserView
         with self.temporary_directory() as directory:

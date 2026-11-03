@@ -64,7 +64,8 @@ class CryptNoteLookup:
                             if entry.is_symlink() or (hasattr(Path, 'is_junction') and child.is_junction()):
                                 raise ValueError('Linked storage is not supported.')
                             try:
-                                info = entry.stat(follow_symlinks=False)
+                                info = (child.stat(follow_symlinks=False) if os.name == 'nt'
+                                        else entry.stat(follow_symlinks=False))
                             except FileNotFoundError:
                                 continue
                             directory = stat.S_ISDIR(info.st_mode)
@@ -209,7 +210,8 @@ class CryptNoteLookup:
                             if entry.is_symlink() or (hasattr(Path, 'is_junction') and child.is_junction()):
                                 raise ValueError('Linked storage is not supported.')
                             try:
-                                info = entry.stat(follow_symlinks=False)
+                                info = (child.stat(follow_symlinks=False) if os.name == 'nt'
+                                        else entry.stat(follow_symlinks=False))
                             except FileNotFoundError:
                                 continue
                             directory = stat.S_ISDIR(info.st_mode)
