@@ -1,6 +1,7 @@
 """Interrupted multi-file promotion preserves complete old Plex generations."""
 
 from commonUtils.testing.stages import TestStage
+from commonUtils.filesystem.native_paths import native_path
 
 TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager
@@ -189,7 +190,7 @@ class PlexPublicationTests(unittest.TestCase):
             def replace(source, target):
                 nonlocal final_failed
                 source, target = Path(source), Path(target)
-                if not final_failed and target == transaction.recovery / 'journal.json' and json.loads(source.read_text())['phase'] == 'committed':
+                if not final_failed and native_path(target) == native_path(transaction.recovery / 'journal.json') and json.loads(source.read_text())['phase'] == 'committed':
                     final_failed = True
                     raise OSError('final journal publication failed')
                 if source == transaction.recovery / 'archive.002':

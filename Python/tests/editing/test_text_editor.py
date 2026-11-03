@@ -84,7 +84,9 @@ class TextEditorTests(QtTestCase):
                     original = parent if folder else path
                     index = browser.model.index(str(original))
                     self.wait_until(index.isValid)
-                    self.assertTrue(browser.model.setData(index, 'Renamed'))
+                    with patch.object(qt.QMessageBox, 'warning') as warning:
+                        self.assertTrue(browser.model.setData(index, 'Renamed'), warning.call_args)
+                    self.assertFalse(warning.called, warning.call_args)
                     renamed = parent.with_name('Renamed') / 'note.txt' if folder else path.with_name('Renamed')
                     with patch.object(self.window, 'show_error') as report:
                         self.window.save_document(document)

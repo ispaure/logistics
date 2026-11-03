@@ -71,6 +71,30 @@ renderFolder(currentFolder, rootList);
 
 
 class DataViewTests(QtTestCase):
+    def test_disposable_web_profile_outlives_its_page(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('```dataviewjs\nawait new Promise(() => {});\n```')
+            window = NotesLibraryWindow(lambda: LocalFiles(root), 'Profile lifetime')
+            window.show()
+            self.wait_until(lambda: not window.progress.busy)
+            window.open_note('Home.md', remember=False)
+            self.wait_until(lambda: window.viewer.data_views is not None and
+                            window.viewer.data_views.page is not None)
+            runtime = window.viewer.data_views
+            page = runtime.page
+            profile = page.profile()
+            self.assertTrue(profile.isOffTheRecord())
+            retired = []
+            page.destroyed.connect(lambda: retired.append('page'))
+            profile.destroyed.connect(lambda: retired.append('profile'))
+            runtime.stop()
+            def drained():
+                qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+                return retired == ['page', 'profile']
+            self.wait_until(drained, message=lambda: str(retired))
+            window.close()
+
     def test_vault_file_sizes_render_inline_and_nested_views_without_content_reads(self):
         from unittest.mock import patch
         with self.temporary_directory() as directory:

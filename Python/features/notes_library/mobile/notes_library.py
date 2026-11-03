@@ -291,14 +291,22 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         show = self.path is not None and not self.sidebar.sidebar_open
         self.breadcrumbs.style.display = PACK if show else NONE
         self.refresh_breadcrumbs()
+        header = getattr(self.view, '_document_title_header', None)
+        if header is not None and header.parent is self.view and self.view.children[0] is not header:
+            self.view.remove(header)
+            self.view.insert(0, header)
         if show and self.secondary.parent is None:
-            self.view.insert(1, self.secondary)
+            anchors = [child for child in (header, self.toolbar)
+                       if child is not None and child.parent is self.view]
+            index = max((list(self.view.children).index(child) for child in anchors), default=-1) + 1
+            self.view.insert(index, self.secondary)
         elif not show and self.secondary.parent is not None:
             self.secondary.parent.remove(self.secondary)
         parent = self.article if self.sidebar.expanded else self.view
         siblings = [child for child in parent.children if child is not self.breadcrumbs]
         index = (siblings.index(self.secondary) + 1 if self.secondary.parent is parent
-                 else siblings.index(self.toolbar) + 1 if self.toolbar.parent is parent else 0)
+                 else siblings.index(self.toolbar) + 1 if self.toolbar.parent is parent
+                 else siblings.index(header) + 1 if header is not None and header.parent is parent else 0)
         if (self.breadcrumbs.parent is not parent or
                 list(parent.children).index(self.breadcrumbs) != index):
             if self.breadcrumbs.parent is not None:

@@ -40,7 +40,10 @@ class SettingsAndStorageUITests(unittest.TestCase):
 
     def test_filtered_delete_all_uses_reviewed_owned_rows_and_refreshes(self):
         from logistics_build.build_retention import storage_inventory, delete_storage
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, \
+                patch('logistics_build.xcode_storage.storage_group',
+                      side_effect=lambda project: dict(root=Path(project) / 'xcode-cache', eligible=lambda path: False)), \
+                patch('logistics_build.storage_extras.simulator_inventory', return_value=[]):
             root = Path(directory).resolve()
             for group in ('firebase', 'testflight'):
                 for build in ('1', '2'):
