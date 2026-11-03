@@ -1,7 +1,7 @@
 """Bounded favourites and recent references, with credential-password buckets."""
 from hashlib import sha256
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import RLock
 from time import time_ns
 from commonUtils.persistence import atomic_write_bytes
@@ -85,6 +85,36 @@ class DocumentCatalog:
             value = self.read(cipher)
             value['favourites'] = [row for row in value['favourites'] if row['id'] != identity]
             self.save(value, cipher)
+
+    def relocate(self, source, destination=None, *, cipher=None):
+        """Follow an app-owned move/delete while retaining each opening context."""
+        key = 'key' if 'key' in source else 'path'
+        prefix = source[key]
+        scope = {name: value for name, value in source.items() if name != key}
+        def belongs(path):
+            return path == prefix or path.startswith(prefix.rstrip('/') + '/')
+        with _lock:
+            value = self.read(cipher)
+            changed = False
+            for field in ('favourites', 'recent'):
+                rows = []
+                for row in value[field]:
+                    item = row['source']
+                    if ({name: data for name, data in item.items() if name != key} == scope
+                            and isinstance(item.get(key), str) and belongs(item[key])):
+                        changed = True
+                        if destination is None:
+                            continue
+                        item = dict(item, **{key: destination[key] + item[key][len(prefix):]})
+                        opener = dict(row['opener'])
+                        if isinstance(opener.get('root'), str) and belongs(opener['root']):
+                            opener['root'] = destination[key] + opener['root'][len(prefix):]
+                        title = PurePosixPath(item[key]).name if row['title'] == PurePosixPath(row['source'][key]).name else row['title']
+                        row = dict(row, id=self.identity(item), source=item, opener=opener, title=title)
+                    rows.append(row)
+                value[field] = rows
+            if changed:
+                self.save(value, cipher)
 
     def entries(self, field='favourites', *, ciphers=(), strict=True):
         with _lock:

@@ -364,6 +364,12 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                 return
             source, deleted, created = values
             destination, result, refresh_errors = result
+            if source is not None or deleted is not None:
+                try:
+                    from desktop.document_catalog import relocate
+                    relocate(self.provider, source, destination, deleted=deleted)
+                except (OSError, ValueError, PermissionError):
+                    self.viewer.status.setText('Files changed; some saved references could not be updated.')
             if refresh_errors:
                 self.viewer.status.setText('Files updated; some folders could not refresh. ' + refresh_errors[0])
             def remap(path):

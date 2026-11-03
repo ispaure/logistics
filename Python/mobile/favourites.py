@@ -48,6 +48,14 @@ def reference(app, host=None):
         source = file_source(app, provider, owner.crypt_reader.key, session_only=True) if owner is not None else getattr(session, 'history_source', None)
         opener, title = dict(kind=session.kind), session.title
         if source is None:
+            panel = getattr(app, '_notebook_views', {}).get(session.id) or app.text_views.get(session.id)
+            document = getattr(panel, 'document', None)
+            resource = getattr(document, 'resource', None)
+            if resource is not None:
+                from services.documents.provider_documents import ProviderDocuments
+                provider = resource.provider
+                source = file_source(app, ProviderDocuments(provider), resource.path, session_only=True)
+        if source is None:
             if session.transient:
                 raise ValueError('This file has no saved opening reference yet.')
             source = dict(type='session', provider=session.provider, resource=session.resource)
@@ -77,6 +85,14 @@ async def favourite(app, host=None):
 
 
 async def favourite_resource(app, provider, path, *, kind):
+    source, cipher = resource_reference(app, provider, path)
+    await asyncio.to_thread(catalog(app).remember, source, Path(path).name,
+                            dict(kind=kind), favourite=True, cipher=cipher)
+    app._favourites_version = getattr(app, '_favourites_version', 0) + 1
+    app.refresh_hub('home')
+
+
+def resource_reference(app, provider, path):
     from services.documents.provider_documents import ProviderDocuments
     from .document_sources import file_source, saved_connection
     source = file_source(app, ProviderDocuments(provider), path, session_only=True)
@@ -88,10 +104,14 @@ async def favourite_resource(app, provider, path, *, kind):
     elif not saved_connection(app, source['remote'], source['identity']):
         cipher = MobileCredentialCipher(provider, app)
         cipher.identity
-    await asyncio.to_thread(catalog(app).remember, source, Path(path).name,
-                            dict(kind=kind), favourite=True, cipher=cipher)
+    return source, cipher
+
+
+def relocate(app, provider, source, destination=None):
+    source, cipher = resource_reference(app, provider, source)
+    target = resource_reference(app, provider, destination)[0] if destination is not None else None
+    catalog(app).relocate(source, target, cipher=cipher)
     app._favourites_version = getattr(app, '_favourites_version', 0) + 1
-    app.refresh_hub('home')
 
 
 async def reopen(app, row):

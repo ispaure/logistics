@@ -59,6 +59,7 @@ class NotesHost:
     choose_type: Callable = None
     toolbar_insets: Callable = lambda toolbar: (8, 8)
     open_timing: Callable = None
+    relocate_references: Callable = lambda provider, source, destination: None
 
 
 from .library_panels import LibraryPanels, LibraryOpening
@@ -1297,9 +1298,15 @@ class VaultBrowser(LibraryPanels):
                     self._reopening_after_move = False
             if side is not None:
                 self.sidebar.show(side)
+            saved_reference_error = False
+            try:
+                await asyncio.to_thread(self.host.relocate_references, self.provider, source, destination)
+            except (OSError, ValueError, PermissionError):
+                saved_reference_error = True
             self.refresh_library_indexes()
             self.refresh_reader_actions()
-            self.notice.text = 'Moved ' + PurePosixPath(destination).name
+            self.notice.text = ('Moved ' + PurePosixPath(destination).name
+                               + ('; some saved references could not be updated.' if saved_reference_error else ''))
             return True
         except OperationCancelled:
             return False

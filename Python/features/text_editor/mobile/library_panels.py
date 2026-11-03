@@ -332,6 +332,10 @@ class LibraryPanels:
             await asyncio.to_thread(library_files.remove, self.library, path, cancelled=lambda: not self.valid())
             if not self.valid():
                 return
+            try:
+                await asyncio.to_thread(self.host.relocate_references, self.provider, path, None)
+            except (OSError, ValueError, PermissionError):
+                self.notice.text = 'Deleted; some saved references could not be updated.'
             retained_index = sum(not removed(current) for current in self.history[:self.history_index + 1]) - 1
             self.history = [current for current in self.history if not removed(current)]
             self.search_rows = [row for row in self.search_rows if not removed(row['path'])]
