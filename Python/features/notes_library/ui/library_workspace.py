@@ -4,6 +4,7 @@ from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
 from .notes_library import NotesLibraryWindow
+from .document import NotesDocumentPane
 from ..navigation import PathChange
 
 
@@ -90,14 +91,7 @@ class LibraryTabs(qt.QStackedWidget):
                 if fragment:
                     child.viewer.browser.scrollToAnchor(fragment)
                 return child
-        provider = self.owner.provider
-        child = NotesLibraryWindow(lambda provider=provider: provider, self.label,
-                                   root=self.owner.library.root, document_only=True)
-        child.setWindowFlags(qt.Qt.WindowType.Widget)
-        for widget in (child.panel_tabs, child.links_tree, child.menu):
-            widget.hide()
-        child.up.clicked.disconnect()
-        child.up.clicked.connect(lambda: self.parent_folder(child))
+        child = NotesDocumentPane(self.owner, self.label)
         self.owner.operation_footer.layout().addWidget(child.operation_footer, 1)
         child.open_card.hide()
         child.new_card.hide()
