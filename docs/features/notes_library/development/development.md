@@ -566,3 +566,15 @@ resources, connections and operation footer; the workspace selects the active
 projection. `ui/library_connections.py` owns the document Links panel independently
 of library navigation. Desktop library and scoped-tab regressions cover the split,
 including private leases, shortcuts, footer selection and worker retirement.
+
+## Document preparation and publication
+
+`preparation.py` returns named `PreparedDocument` results before desktop UI
+publication. An abandoned result has one idempotent close path for source leases,
+notebooks, media resources and file previews. Publication retains each format's
+existing editor behavior. Mobile `mobile/library_opening.py` owns document
+admission, preparation, publication tokens, history and native page callbacks;
+the browser retains library navigation. `mobile/preparation.py` shields prepared
+reads and disposes late results when their awaiting task is cancelled. A source
+resource is never closed while its preparation worker still uses it. Desktop
+late-open regressions and mobile cancellation/resource checks cover this boundary.

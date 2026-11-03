@@ -6,7 +6,8 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.markdown.navigation import MarkdownNavigation
 from .dataview import NotesMarkdownViewer
 from .library_connections import LibraryConnections
-from ..notes import NotesLibrary, document_kind, MAX_NOTE, breadcrumb_folders, fit_breadcrumbs
+from ..preparation import prepare_document
+from ..notes import NotesLibrary, breadcrumb_folders, fit_breadcrumbs
 
 
 class NotesBreadcrumbs(qt.QLabel):
@@ -284,53 +285,14 @@ class DocumentPresentation:
         self.pending = ('note', path, remember, fragment, index)
         self.viewer.setEnabled(False)
         self.set_navigation_enabled(False)
-        pages = {}
+        from features.application import registry
+        notebooks_enabled = registry.is_feature_enabled('notebooks')
+        current = self.history[self.index] if self.index >= 0 else ''
         def read(report, cancelled):
-            current = self.history[self.index] if self.index >= 0 else ''
-            resolved, _, data = self.library.load_note(path, current=current, resolve_link=resolve_link,
-                cancelled=cancelled, stage=lambda message: self.progress.progress_changed.emit(0, 0, message))
-            folders = breadcrumb_folders(self.library.root, resolved)
-            pages.update(self.library.folder_pages(
-                [{'path': folder, 'directory': True} for folder in folders], cancelled=cancelled))
-            if document_kind(resolved) is None:
-                from ..file_preview import FilePreview
-                preview = FilePreview.open(self.provider, resolved, cancelled=cancelled)
-                try:
-                    return resolved, (preview, preview.page())
-                except BaseException:
-                    preview.close()
-                    raise
-            if document_kind(resolved) == 'text':
-                from services.documents.storage import DocumentResource
-                from commonUtils.persistence.text import decode_bytes
-                resource = DocumentResource(self.provider, resolved, max_bytes=MAX_NOTE)
-                try:
-                    snapshot = decode_bytes(resource.read(cancelled=cancelled), path=self.provider.root / resolved)
-                    return resolved, (resource, snapshot)
-                except BaseException:
-                    resource.close()
-                    raise
-            if document_kind(resolved) == 'notebook':
-                from features.application import registry
-                if not registry.is_feature_enabled('notebooks'):
-                    raise ValueError('Enable Notebooks to open Remarkable Documents.')
-                from features.notebooks.notebook import Notebook, MAX_ARCHIVE
-                from features.notebooks.storage import NotebookDocument
-                from services.documents.storage import DocumentResource
-                resource = DocumentResource(self.provider, resolved, max_bytes=MAX_ARCHIVE)
-                try:
-                    document = NotebookDocument(Notebook.read(resource.read(cancelled=cancelled)), resource=resource)
-                    return resolved, document
-                except BaseException:
-                    resource.close()
-                    raise
-            from services.documents.markdown import prepare_markdown
-            self.progress.progress_changed.emit(0, 0, 'Preparing embedded media…')
-            return resolved, prepare_markdown(self.provider, self.provider.root / resolved, data=data, cancelled=cancelled,
-                                             image_source=self.library.image_source(resolved, cancelled=cancelled))
-        def read_with_path(report, cancelled):
-            return read(report, cancelled), pages
-        self.progress.start(read_with_path, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
+            return prepare_document(self.library, path, current=current, resolve_link=resolve_link,
+                cancelled=cancelled, notebooks_enabled=notebooks_enabled,
+                stage=lambda message: self.progress.progress_changed.emit(0, 0, message))
+        self.progress.start(read, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
 
 
     def open_other_file(self, path):
@@ -339,14 +301,8 @@ class DocumentPresentation:
 
     @staticmethod
     def discard_note_result(result):
-        if result and PurePosixPath(result[0]).suffix.lower() == '.rmdoc':
-            result[1].close()
-        elif result and document_kind(result[0]) is None:
-            result[1][0].close()
-        elif result and document_kind(result[0]) == 'text':
-            result[1][0].close()
-        elif result and document_kind(result[0]) == 'markdown':
-            getattr(result[1][1], 'close', lambda: None)()
+        if result is not None:
+            result.close()
 
 
     def can_leave_document(self):
@@ -609,13 +565,13 @@ class DocumentPresentation:
                 self.refresh_connections()
         return
 
-    def publish_note(self, values, result, pages):
+    def publish_note(self, values, result):
         if not self.check_provider():
             self.discard_note_result(result)
             return
         path, remember, fragment, index = values
-        path, result = result
-        self.folder_pages.update(pages)
+        path = result.path
+        self.folder_pages.update(result.folder_pages)
         self.refresh_document_entries()
         if remember:
             del self.history[self.index + 1:]
@@ -623,28 +579,28 @@ class DocumentPresentation:
             self.index = len(self.history) - 1
         elif index is not None:
             self.index = index
-        if document_kind(path) != 'markdown':
+        if result.kind != 'markdown':
             self.viewer.browser.inline_videos.clear()
             self.viewer.formatted_editor.inline_videos.clear()
             self.library.release_media(path)
-        if document_kind(path) is None:
-            self.show_file(*result)
+        if result.kind is None:
+            self.show_file(result.preview, result.rendered)
             self.back.setEnabled(self.index > 0)
             self.forward.setEnabled(self.index < len(self.history) - 1)
             self.up.setEnabled(True)
             self.refresh_connections()
             self.idle.emit()
             return
-        if PurePosixPath(path).suffix.lower() == '.rmdoc':
-            self.show_canvas(result)
+        if result.kind == 'notebook':
+            self.show_canvas(result.notebook)
             self.back.setEnabled(self.index > 0)
             self.forward.setEnabled(self.index < len(self.history) - 1)
             self.up.setEnabled(True)
             self.refresh_connections()
             self.idle.emit()
             return
-        if document_kind(path) == 'text':
-            self.show_text(*result)
+        if result.kind == 'text':
+            self.show_text(result.resource, result.snapshot)
             self.back.setEnabled(self.index > 0)
             self.forward.setEnabled(self.index < len(self.history) - 1)
             self.up.setEnabled(True)
@@ -663,7 +619,7 @@ class DocumentPresentation:
         self.storage.path = (self.provider.root / path).resolve()
         self.document_resource_path = self.provider.root / path
         self.document_provider = self.provider
-        self.storage.data, self.storage.resources = result
+        self.storage.data, self.storage.resources = result.data, result.resources
         self.library.release_media(path)
         self.viewer.history.clear()
         self.viewer.history_index = -1
@@ -749,14 +705,14 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
                 if kind == 'initial':
                     result[1]()
                 elif kind == 'note':
-                    self.discard_note_result(result[0])
+                    self.discard_note_result(result)
             self.close()
             self.idle.emit()
             return
         self.progress.hide()
         if kind == 'note' and self.progress.cancelled.is_set():
             if result is not None:
-                self.discard_note_result(result[0])
+                self.discard_note_result(result)
             result, error = None, error or 'Opening cancelled.'
         self.viewer.setEnabled(self.storage.path is not None or (kind == 'note' and not error))
         if kind == 'save':
@@ -772,8 +728,7 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
             protect_private_view(self, self.provider)
             self.check_provider()
         else:
-            result, pages = result
-            self.publish_note(values, result, pages)
+            self.publish_note(values, result)
         self.idle.emit()
 
     def clear_content(self):

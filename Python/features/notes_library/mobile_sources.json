@@ -13,10 +13,13 @@
     "mobile/library_drag.py",
     "mobile/library_editing.py",
     "mobile/library_panels.py",
+    "mobile/library_opening.py",
     "mobile/library_text.py",
     "mobile/library_tools.py",
     "mobile/notes_library.py",
+    "mobile/preparation.py",
     "mobile/notes_swipe.py",
+    "preparation.py",
     "navigation.py",
     "notes.py",
     "notes_links.py"

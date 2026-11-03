@@ -6,6 +6,8 @@ from toga.style.pack import COLUMN, ROW
 from services.documents.mobile_views import retire_webview
 from commonUtils.ui.native.inline_html import set_inline_html
 from ..file_preview import FilePreview
+from ..preparation import PreparedDocument
+from .preparation import read_prepared
 
 
 class LibraryFilePreview:
@@ -34,27 +36,21 @@ class LibraryFilePreview:
         epoch = library.epoch
         cancelled = lambda: not library.valid() or library.epoch != epoch
         def read():
-            preview = FilePreview.open(library.provider, path, cancelled=cancelled)
+            result = PreparedDocument(path, None)
             try:
-                return preview, preview.page()
+                result.preview = FilePreview.open(library.provider, path, cancelled=cancelled)
+                result.rendered = result.preview.page()
+                return result
             except BaseException:
-                preview.close()
+                result.close()
                 raise
-        task = asyncio.create_task(asyncio.to_thread(read))
-        try:
-            preview, html = await asyncio.shield(task)
-        except BaseException:
-            def retire(finished):
-                if not finished.cancelled() and finished.exception() is None:
-                    finished.result()[0].close()
-            task.add_done_callback(retire)
-            raise
+        result = await read_prepared(read)
         try:
             if cancelled():
                 raise ValueError('Notes Library closed.')
-            return cls(library, preview, html)
+            return cls(library, result.preview, result.rendered)
         except BaseException:
-            preview.close()
+            result.close()
             raise
 
     def publish(self, html, *, index=None):
