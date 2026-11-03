@@ -312,18 +312,10 @@ class NotesLibrary:
             source.close()
 
     def link(self, current, target, *, cancelled=lambda: False):
-        from urllib.parse import urlsplit
-        from commonUtils.formats.markdown import link_path_names
+        from .link_policy import resolve_link
         from commonUtils.runtime.operations import check_cancelled
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
-        check_cancelled(cancelled)
-        link = urlsplit(target)
-        if link.scheme or link.netloc or link.query or link.path.startswith(('/', '\\')) or '\\' in link.path:
-            raise ValueError('Choose a note inside this Notes Library.')
-        current = self.contained(current)
-        if not link.path:
-            return current, link.fragment
         with operation(self.provider, cancelled):
             listings = {}
             count = 0
@@ -339,50 +331,16 @@ class NotesLibrary:
                 return listings[folder]
 
             def exists(candidate):
-                # A rooted provider validates the whole path itself. Listing
-                # every ancestor makes a direct link proportional to unrelated
-                # siblings (and decrypts their names for encrypted providers).
                 check_cancelled(cancelled)
                 try:
                     return not self.entry(candidate)['directory']
                 except (FileNotFoundError, NotADirectoryError):
                     return False
 
-            for name in link_path_names(link.path):
-                extensionless = name if not PurePosixPath(name).suffix else None
-                if extensionless:
-                    name += '.md'
-                path = self.contained(posixpath.normpath(posixpath.join(posixpath.dirname(current), name)))
-                if extensionless:
-                    exact = [self.contained(posixpath.normpath(posixpath.join(posixpath.dirname(current), extensionless)))]
-                    if not any(part in {'.', '..'} for part in extensionless.split('/')):
-                        exact.append(self.contained(posixpath.normpath(posixpath.join(self.root, extensionless))))
-                    for candidate in dict.fromkeys(exact):
-                        if exists(candidate):
-                            return candidate, link.fragment
-                candidates = [path]
-                # Explicit ../ paths retain their relative meaning. Other wiki paths
-                # may be relative to either the current note or the vault root.
-                if not any(part in {'.', '..'} for part in name.split('/')):
-                    candidates.append(self.contained(posixpath.normpath(posixpath.join(self.root, name))))
-                for candidate in dict.fromkeys(candidates):
-                    check_cancelled(cancelled)
-                    if exists(candidate):
-                        return candidate, link.fragment
-                if any(part in {'.', '..'} for part in name.split('/')):
-                    continue
+            def suffix_matches(name):
                 find = getattr(self.provider, 'find_note_paths', None)
-                # Provider name lookup also supports attachments. Restricting
-                # this to Markdown makes a bare media link decrypt/list every
-                # folder instead of matching its encrypted basename directly.
                 if callable(find):
-                    matches = [self.contained(match) for match in find(name, self.root, cancelled=cancelled)]
-                    check_cancelled(cancelled)
-                    if len(matches) == 1:
-                        return matches[0], link.fragment
-                    if matches:
-                        raise ValueError('Several notes match this link. Use a path from the Notes Library root.')
-                    continue
+                    return [self.contained(match) for match in find(name, self.root, cancelled=cancelled)]
                 matches, pending, seen = [], [self.root], set()
                 while pending:
                     check_cancelled(cancelled)
@@ -390,8 +348,7 @@ class NotesLibrary:
                     if folder in seen:
                         continue
                     seen.add(folder)
-                    rows = listing(folder)
-                    for row in rows:
+                    for row in listing(folder):
                         check_cancelled(cancelled)
                         if row['name'].startswith('.'):
                             continue
@@ -400,8 +357,7 @@ class NotesLibrary:
                             pending.append(child)
                         elif child.endswith('/' + name) or child == name:
                             matches.append(child)
-                if len(matches) == 1:
-                    return matches[0], link.fragment
-                if matches:
-                    raise ValueError('Several notes match this link. Use a path from the Notes Library root.')
-            raise ValueError('Note not found in this Notes Library.')
+                return matches
+
+            return resolve_link(current, target, root=self.root, contained=self.contained,
+                                exists=exists, suffix_matches=suffix_matches, cancelled=cancelled)
