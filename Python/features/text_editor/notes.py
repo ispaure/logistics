@@ -119,6 +119,18 @@ class NotesLibrary:
             return dict(size=info['Size'], directory=info['IsDir'], revision=self.provider._revision(info))
         return self.provider.entry(path)
 
+    def folder_pages(self, rows, *, cancelled=lambda: False):
+        """Resolve landing notes in one bounded provider batch when available."""
+        folders = [self.contained(row['path']) for row in rows if row['directory']]
+        paths = [self.contained(posixpath.join(folder, PurePosixPath(folder).name + '.md'))
+                 for folder in folders]
+        probe = getattr(self.provider, 'existing_files', None)
+        if callable(probe):
+            with operation(self.provider, cancelled):
+                existing = probe(paths, cancelled=cancelled)
+            return {folder: path if path in existing else None for folder, path in zip(folders, paths)}
+        return {folder: self.folder_page(folder, cancelled=cancelled) for folder in folders}
+
     def folder_page(self, folder, *, cancelled=lambda: False):
         """Probe only the conventional landing note, without listing descendants."""
         folder = self.contained(folder)

@@ -115,6 +115,23 @@ class CryptResources(LocalFiles):
                                       input_data=input_data, input_writer=input_writer,
                                       limit=limit, cancelled=cancelled)
 
+    def existing_files(self, paths, *, cancelled=lambda: False):
+        """Probe landing notes without starting a process for each missing file."""
+        paths = [self.relative(path) for path in paths]
+        found = set()
+        with self.operation(cancelled):
+            for offset in range(0, len(paths), 128):
+                check_cancelled(cancelled)
+                batch = paths[offset:offset + 128]
+                encoded = self._commands.encode_many(batch)
+                for path, name in zip(batch, encoded):
+                    check_cancelled(cancelled)
+                    target = self._guard(native_path(self.root) / self.relative(name))
+                    if target.is_file():
+                        found.add(path)
+            self._check_active()
+        return found
+
     def list(self, path='', *, cancelled=lambda: False):
         # Transfers and initial unlock validate the whole tree. Navigation only
         # needs to inspect the requested directory and its immediate children.

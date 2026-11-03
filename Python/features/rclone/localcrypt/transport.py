@@ -47,6 +47,18 @@ class CryptCommand:
         return self._run(arguments, path, limit=limit, cancelled=cancelled,
                          input_data=input_data, input_writer=input_writer)
 
+    def encode_many(self, relatives):
+        if not relatives:
+            return []
+        if len(relatives) > 128:
+            raise ValueError('Too many encrypted paths.')
+        result = self._run(lambda remote: ['backend', 'encode', remote, *relatives, '--json'],
+                           '', limit=2 * 1024 * 1024)
+        paths = json.loads(result)
+        if not isinstance(paths, list) or len(paths) != len(relatives) or not all(isinstance(p, str) for p in paths):
+            raise ValueError('Encrypted paths could not be resolved.')
+        return paths
+
     def encode(self, relative):
         result = self._run(lambda remote: ['backend', 'encode', remote, relative, '--json'],
                            '', limit=16384)
