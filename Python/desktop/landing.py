@@ -169,6 +169,11 @@ class LandingPage(qt.QWidget):
             return super().eventFilter(watched, event)
         if watched is self.scroll.viewport() and event.type() == qt.QEvent.Type.Resize:
             self._fit_content()
+        if (watched is self.scroll.viewport() and event.type() == qt.QEvent.Type.Paint
+                and self._layout_pending):
+            # A native scroll area can reserve its scrollbar after the parent
+            # paints. Settle the resulting column widths before its cards paint.
+            self._settle_layout()
         if isinstance(watched, qt.QLabel) and (event.type() == qt.QEvent.Type.FontChange
                 or event.type() == qt.QEvent.Type.Resize and event.size().width() != event.oldSize().width()):
             # QLabel's height-for-width includes its minimum height. Discard the
