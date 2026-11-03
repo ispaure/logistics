@@ -578,3 +578,12 @@ the browser retains library navigation. `mobile/preparation.py` shields prepared
 reads and disposes late results when their awaiting task is cancelled. A source
 resource is never closed while its preparation worker still uses it. Desktop
 late-open regressions and mobile cancellation/resource checks cover this boundary.
+
+## Shared link policy
+
+`link_policy.py` owns decoded/literal spelling precedence, exact extensionless
+files, relative/root candidates and suffix ambiguity. Navigation supplies bounded
+live provider probes; connection scans supply their detached path/suffix inventory.
+Neither changes the other's I/O strategy. Desktop/mobile link, containment, media
+and encrypted file-operation regressions cover this boundary. Dataview keeps its
+separate explicit path contract.

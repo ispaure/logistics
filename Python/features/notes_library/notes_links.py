@@ -1,9 +1,8 @@
 """Bounded, cancellable local connection scans; no persistent plaintext index."""
-import posixpath
 from pathlib import PurePosixPath
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
-from commonUtils.formats.markdown import link_path_names
+from .link_policy import resolve_link
 from commonUtils.runtime.operations import check_cancelled
 
 
@@ -54,35 +53,12 @@ def connections(library, current, *, cancelled=lambda: False, visible=lambda pat
             suffixes.setdefault('/'.join(parts[index:]), set()).add(path)
 
     def resolve(source, target):
-        url = urlsplit(target)
-        if url.scheme or url.netloc or url.query:
+        try:
+            return resolve_link(source, target, root=library.root, contained=library.contained,
+                exists=paths.__contains__, suffix_matches=lambda name: suffixes.get(name, ()),
+                cancelled=cancelled)[0]
+        except ValueError:
             return None
-        if not url.path:
-            return source
-        for name in link_path_names(url.path):
-            if name.startswith('/') or '\\' in name:
-                return None
-            explicit = any(part in {'.', '..'} for part in name.split('/'))
-            names = [name] if PurePosixPath(name).suffix else [name, name + '.md']
-            for lookup in names:
-                try:
-                    candidates = [library.contained(posixpath.normpath(
-                        posixpath.join(posixpath.dirname(source), lookup)))]
-                    if not explicit:
-                        candidates.append(library.contained(posixpath.normpath(posixpath.join(library.root, lookup))))
-                except ValueError:
-                    # A rejected decoded path must not become a valid literal
-                    # backlink when navigation would reject the same link.
-                    return None
-                for candidate in candidates:
-                    if candidate in paths:
-                        return candidate
-            matches = suffixes.get(names[-1], ()) if not explicit else ()
-            if len(matches) == 1:
-                return next(iter(matches))
-            if matches:
-                return None
-        return None
 
     incoming, outgoing, unresolved = set(), set(), set()
     total = words = characters = 0
