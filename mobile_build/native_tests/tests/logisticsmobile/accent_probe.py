@@ -45,6 +45,47 @@ class AccentProbe(LogisticsMobile):
             await asyncio.sleep(.5)
             controls = self.accent_controls
             apple = type(self._impl).__module__.startswith('toga_iOS.')
+            if not apple:
+                from android.os import SystemClock
+                from android.view import MotionEvent
+                from time import perf_counter
+                from unittest.mock import patch
+                from mobile.settings.accent import refresh_appearance
+                result['android_drag'] = {}
+                for slider_name, slider in (('hue', controls.hue), ('saturation', controls.saturation)):
+                    native = slider._impl.native
+                    density = native.getResources().getDisplayMetrics().density
+                    assert native.getHeight() / density >= 64
+                    assert native.getThumb().getIntrinsicWidth() / density >= 32
+                    thumb, track = native.getThumb().hashCode(), native.getProgressDrawable().hashCode()
+                    down = SystemClock.uptimeMillis()
+                    left, right = native.getPaddingLeft(), native.getWidth() - native.getPaddingRight()
+                    y = native.getHeight() / 2
+                    elapsed = []
+                    def touch(action, fraction):
+                        event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
+                                                   left + (right - left) * fraction, y, 0)
+                        try:
+                            started = perf_counter()
+                            assert native.dispatchTouchEvent(event)
+                            elapsed.append((perf_counter() - started) * 1000)
+                        finally:
+                            event.recycle()
+                    with patch('mobile.settings.accent.refresh_appearance', wraps=refresh_appearance) as repaint:
+                        touch(MotionEvent.ACTION_DOWN, (slider.value - slider.min) / (slider.max - slider.min))
+                        for fraction in (.7, .75, .8, .85):
+                            touch(MotionEvent.ACTION_MOVE, fraction)
+                            await asyncio.sleep(.02)
+                            assert controls._dragging
+                            assert native.getThumb().hashCode() == thumb
+                            assert native.getProgressDrawable().hashCode() == track
+                            repaint.assert_not_called()
+                        touch(MotionEvent.ACTION_UP, .85)
+                        assert not controls._dragging
+                        repaint.assert_called_once_with(self)
+                    result['android_drag'][slider_name] = dict(touch_height_dp=native.getHeight() / density,
+                        thumb_dp=native.getThumb().getIntrinsicWidth() / density,
+                        event_ms=elapsed, artwork_retained_during_drag=True, refreshes_on_release=1)
             cases = [(f'{name}-{mode}', hue, saturation, mode)
                      for mode in ((1, 2) if apple else (0,))
                      for name, hue, saturation in (('green', 150, 75), ('purple', 249, 100))]
