@@ -88,6 +88,7 @@ class NotesAuditProbe(LogisticsMobile):
             await asyncio.sleep(.05)
             lag.clear()
             begin = perf_counter()
+            owner.search_mode.value = 'Search within Documents'
             owner.search.value = 'needleword'
             await owner.search_task
             if getattr(owner, 'tree_task', None) is not None:

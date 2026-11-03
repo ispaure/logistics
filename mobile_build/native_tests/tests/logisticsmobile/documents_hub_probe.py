@@ -81,14 +81,21 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
             assert any(getattr(w, 'text', '') == 'Graphic novels' and isinstance(w, toga.Button)
                        for w in walk(self.document_comics_list))
             await capture_window(self, Path(self.paths.cache) / f'documents-hub-{orientation}-libraries.png')
+            assert self.document_search.parent is None
+            self.open_document_search()
+            assert self.document_search.parent is not None
             self.document_search.value = 'QA unique'
             await asyncio.sleep(.4)
             await self.hub_controller()._documents_file_search.task
             assert self.document_views.parent is None
-            names = [w.text for w in walk(self.document_search_results) if isinstance(w, toga.Button)]
+            names = [w.text for w in walk(self.document_search_results) if isinstance(w, toga.Button) and not hasattr(w, '_document_search_menu')]
             assert names == ['QA unique note.md', 'QA unique received.txt'], names
             await capture_window(self, Path(self.paths.cache) / f'documents-hub-{orientation}-search.png')
-            self.document_search.value = ''
+            if self.routes.apple:
+                self.close_document_search()
+            else:
+                self._impl.native.getOnBackPressedDispatcher().onBackPressed()
+            assert not self.documents_search_open and self.document_search.parent is None
             assert self.document_views.parent is not None
             self.document_view_buttons['Open'].on_press()
         self.home_unlock_candidates = lambda: []

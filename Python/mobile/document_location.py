@@ -206,13 +206,13 @@ def mount_apple_title(view, controller, title):
                 header.style.direction = ROW
                 header.style.align_items = 'center'
                 header.style.margin_left = header.style.margin_right = 8
-                header._title_content = toga.Box(style=Pack(flex=1, height=storage_title_height(state[1]), margin_left=8, margin_right=8))
+                header._title_content = toga.Box(style=Pack(flex=1, height=max(48, storage_title_height(state[1])), margin_left=8, margin_right=8))
                 for button in controls:
                     if button.parent is not None:
                         button.parent.remove(button)
                 header.add(controls[0], header._title_content, controls[1])
         if controls:
-            header._title_content.style.height = storage_title_height(state[1])
+            header._title_content.style.height = max(48, storage_title_height(state[1]))
         if controller.navigationItem.titleView != header._empty_bar_title:
             controller.navigationItem.titleView = header._empty_bar_title
         if frame is not None and header not in frame.controls:

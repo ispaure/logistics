@@ -150,6 +150,7 @@ class DocumentLocationTests(unittest.TestCase):
                 header = view._document_title_header
                 self.assertEqual(list(header.children), [left, header._title_content, right])
                 self.assertIs(view.children[0], header)
+                self.assertGreaterEqual(header._title_content.style.height, 48)
                 self.assertIs(controller.navigationItem.titleView, header._empty_bar_title)
                 place.assert_called_with(header, view._document_title_view, '')
             self.assertEqual(make.call_args.args[0], 'A long library name')

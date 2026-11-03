@@ -158,6 +158,8 @@ class HostLifecycle:
                 host.audio_output.dispose()
             host.seasonal_snow.dispose()
         if saved:
+            # Queued view refreshes must retire with the successfully closed host.
+            host.active_host = False
             layout = getattr(host, '_layout_participants', None)
             if layout is not None:
                 layout.dispose()

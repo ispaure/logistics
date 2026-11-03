@@ -248,6 +248,7 @@ def notes_host(app):
 
     return NotesHost(
         show_error=show_error,
+        remember_document=lambda owner: obsidian.remember_note(app, owner),
         open_resource=open_resource,
         relocate_references=lambda provider, source, destination: relocate(app, provider, source, destination),
         tab_style=tab_style,

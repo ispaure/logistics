@@ -83,7 +83,9 @@ def document_feature(name='', kind=None):
 
 
 def session_enabled(preferences, session):
-    feature = 'notes_library' if getattr(session, 'provider', None) == 'notes-library' else document_feature(session.title, session.kind)
+    opener = getattr(session, 'history_opener', None) or {}
+    feature = ('notes_library' if getattr(session, 'provider', None) == 'notes-library'
+               or opener.get('kind') == 'notes' else document_feature(session.title, session.kind))
     if feature is not None and not enabled(preferences, feature):
         return False
     source = (getattr(session, 'source', None) or getattr(session, 'history_source', None)

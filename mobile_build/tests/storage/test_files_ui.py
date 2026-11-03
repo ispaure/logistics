@@ -125,7 +125,7 @@ class FileUITests(unittest.TestCase):
                 # Pulled providers carry their own namespace. Browsing and
                 # editor picking must return that same object, not reconstruct
                 # one from its display label and lose the association.
-                label = 'LocalCrypt: Fixture (pulled)'
+                label = 'LocalCrypt: Fixture'
                 app.file_roots = app.editor_storage_roots = {label: provider}
                 self.assertIs(app.file_provider_for(label), provider)
                 self.assertIs(app.editor_provider(label), provider)

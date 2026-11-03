@@ -201,7 +201,9 @@ async def exercise_crypt_mirror(app, fixture):
     async def documents_route():
         app.show_documents(destination='documents')
         drawer = app.adaptive.browser('documents')
-        label = 'LocalCrypt: ' + remote + ' (pulled)'
+        label = next(label for label, item in app.file_roots.items()
+                     if getattr(item, 'remote', None) == remote and item.storage_namespace == job['identity'])
+        assert '(pulled)' not in label
         assert await drawer.show_main_browser(label, folder='mobile-mirror-fixture'), drawer.status.text
         assert await drawer.open_file({'path': 'mobile-mirror-fixture/note.md'}), drawer.status.text
 
