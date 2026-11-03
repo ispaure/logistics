@@ -2,7 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
-from features.text_editor.notes import operation, vault_root, local_library
+from features.notes_library.notes import operation, vault_root, local_library
 
 
 class NotesFolderOffer(qt.QWidget):
@@ -19,7 +19,7 @@ class NotesFolderOffer(qt.QWidget):
         self.progress = OperationProgress(self)
         self.progress.completed.connect(self.completed)
         from features.application import registry
-        self.enabled = registry.is_feature_enabled('text_editor')
+        self.enabled = registry.is_feature_enabled('notes_library')
         self._unsubscribe = registry.subscribe(self.features_changed)
         self.destroyed.connect(self._unsubscribe)
         self.hide()
@@ -35,7 +35,7 @@ class NotesFolderOffer(qt.QWidget):
 
     def features_changed(self):
         from features.application import registry
-        self.enabled = registry.is_feature_enabled('text_editor')
+        self.enabled = registry.is_feature_enabled('notes_library')
         if not self.enabled and not self.closing:
             self.dismiss()
             self.progress.request_cancel()

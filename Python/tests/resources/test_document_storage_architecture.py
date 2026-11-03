@@ -74,7 +74,7 @@ class StorageArchitectureBehaviorTests(unittest.TestCase):
 
     def test_notes_library_uses_wrapped_capabilities(self):
         from commonUtils.runtime.resources.local import LocalFiles
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         provider = LocalFiles(self.root)
         provider.provider = SimpleNamespace(remote_storage=True)
         with self.assertRaisesRegex(ValueError, 'local copy'):

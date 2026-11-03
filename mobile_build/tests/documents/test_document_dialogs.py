@@ -8,7 +8,7 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from features.text_editor.mobile.document_dialogs import DocumentDialog, LibraryOpenDialog
+from services.documents.authoring.document_dialogs import DocumentDialog, LibraryOpenDialog
 
 
 class DocumentDialogTests(TestCase):

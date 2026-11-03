@@ -228,7 +228,7 @@ def settings_sections(app):
     app.settings_status = SettingsLabel(app.preferences.error, style=Pack(margin_top=12))
     owner = SettingsCategories(app)
     from services.mobile_features import enabled
-    requirements = {'Camera': ('images',), 'Markdown': ('text_editor',), 'Text': ('text_editor',),
+    requirements = {'Camera': ('images',), 'Markdown': ('text_editor', 'notes_library'), 'Text': ('text_editor', 'notes_library'),
         'EPUB': ('books',), 'Books & Comics': ('books', 'comics', 'pdf'), 'LM Chat': ('lm',)}
     return {entry.title: lambda entry=entry: getattr(owner, entry.factory)(*entry.arguments)
             for entry in CATEGORIES if (not entry.camera_required or available(app))

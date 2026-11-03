@@ -1,4 +1,4 @@
-"""Compatibility entry for the host-owned document write policy."""
+"""Shared desktop and mobile document write capability."""
 
 
 def can_write(*, provider=None, reader=None):

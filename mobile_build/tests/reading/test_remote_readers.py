@@ -452,7 +452,7 @@ class RemoteReaderTests(unittest.TestCase):
             self.assertTrue(private)
             return toga.WebView(**options)
         with TemporaryDirectory() as folder, patch(
-                'features.text_editor.mobile.provider_markdown.markdown_webview', side_effect=webview):
+                'services.documents.authoring.provider_markdown.markdown_webview', side_effect=webview):
             LogisticsMobile.storage_root = Path(folder)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')

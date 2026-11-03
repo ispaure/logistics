@@ -39,7 +39,7 @@ class Client:
 
 class LocalCryptAccessTests(unittest.TestCase):
     def test_note_lookup_decodes_only_candidate_paths_and_preserves_matching_rules(self):
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         from commonUtils.runtime.operations import OperationCancelled
         with TemporaryDirectory() as root:
             client = Client()

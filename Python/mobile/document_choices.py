@@ -12,7 +12,7 @@ def available_choices(app):
 
 def creation_filename(name, extension):
     """Validate the visible name against the explicitly selected format."""
-    from features.text_editor.names import document_name
+    from services.documents.names import document_name
     from .destination_names import save_filename
     extensions = ('.md', '.markdown') if extension == 'md' else ('.' + extension,)
     return document_name(save_filename(name, 'Untitled.' + extension, extensions=extensions))
@@ -36,7 +36,7 @@ def choose_document_type(app):
     origin = (destination, len(app.routes.screens[destination]), len(app.adaptive.detail_routes))
     generation = app.navigation_generation
     async def choose():
-        from features.text_editor.mobile.document_dialogs import DocumentTypeDialog
+        from services.documents.authoring.document_dialogs import DocumentTypeDialog
         icons = {'txt': '≡  Plain text', 'md': 'Ⓜ  Markdown', 'rmdoc': '▧  Remarkable Document'}
         choices = [(icons[ext], ext) for _, ext in available_choices(app)]
         extension = await app.main_window.dialog(DocumentTypeDialog(choices=choices))

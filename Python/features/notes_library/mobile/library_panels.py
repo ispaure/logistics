@@ -8,8 +8,8 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.operations import OperationCancelled
-from features.text_editor import library_files
-from .document_dialogs import DocumentTypeDialog
+from features.notes_library import library_files
+from services.documents.authoring.document_dialogs import DocumentTypeDialog
 
 
 # Match the host's 13-sp captions and 16-sp controls in Toga CSS-point units.

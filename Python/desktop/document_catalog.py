@@ -54,7 +54,7 @@ def reference(window):
     path = Path(path)
     source, cipher = source_reference(path, provider)
     opener = dict(editor=getattr(window, 'document_editor_id', '') or path.suffix.lower())
-    from features.text_editor.ui.notes_library import NotesLibraryWindow
+    from features.notes_library.ui.notes_library import NotesLibraryWindow
     if isinstance(window, NotesLibraryWindow):
         opener = dict(editor='notes', root=str((provider.root / window.library.root).resolve())
                       if source['type'] == 'local' else window.library.root)
@@ -123,27 +123,32 @@ def open_resource(provider, path, parent=None, *, editor=''):
 
 
 def reopen(row, parent=None):
-    provider = None
     try:
-        provider, path = provider_for(row['source'])
         if row['opener'].get('editor') == 'notes':
-            from features.text_editor.ui.notes_library import open_notes
+            from features.notes_library.ui.notes_library import open_notes
             if row['source']['type'] == 'local':
                 from commonUtils.runtime.resources.local import LocalFiles
                 library_root = Path(row['opener']['root'])
-                provider = LocalFiles(library_root)
+                factory = lambda: LocalFiles(library_root)
                 path = Path(row['source']['path']).relative_to(library_root).as_posix()
                 root = ''
             else:
                 root = row['opener']['root']
-            window = open_notes(lambda provider=provider: provider, row['title'], root=root)
+                path = row['source']['path']
+                factory = lambda: provider_for(row['source'])[0]
+            window = open_notes(factory, row['title'], root=root)
+            if window is None:
+                return None
             def ready():
                 if window.library is not None:
                     window.idle.disconnect(ready)
                     window.open_note(path)
-            window.idle.connect(ready)
-            provider = None  # Window owns the provider lease.
+            if window.library is not None:
+                window.open_note(path)
+            else:
+                window.idle.connect(ready)
             return window
+        provider, path = provider_for(row['source'])
         return open_resource(provider, path, parent, editor=row['opener'].get('editor', ''))
     except (OSError, ValueError, PermissionError) as error:
         qt.QMessageBox.warning(parent, 'Open document', str(error))

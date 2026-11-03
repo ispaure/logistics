@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 import mobile_build.tests.documents.test_obsidian as fixtures
 from mobile.obsidian import open_vault
-from features.text_editor import library_files
+from features.notes_library import library_files
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
@@ -170,7 +170,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 if not release.wait(3):
                     raise RuntimeError('Test did not release search')
                 return SearchResult([], 1000, True, [])
-            with patch('features.text_editor.mobile.notes_library.search_resources', side_effect=scan):
+            with patch('features.notes_library.mobile.notes_library.search_resources', side_effect=scan):
                 owner.search.value = 'missing'
                 try:
                     self.assertTrue(await asyncio.to_thread(entered.wait, 2))
@@ -261,7 +261,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 if not release.wait(3):
                     raise RuntimeError('Test did not release search')
                 return SearchResult(result.rows, 1, True, [])
-            with patch('features.text_editor.mobile.notes_library.search_resources', side_effect=scan):
+            with patch('features.notes_library.mobile.notes_library.search_resources', side_effect=scan):
                 owner.search.value = 'Plan'
                 try:
                     self.assertTrue(await asyncio.to_thread(entered.wait, 2))
@@ -485,10 +485,10 @@ class NotesLibraryPanelTests(unittest.TestCase):
                     self.assertEqual(owner.page_loading.status.text, 'Finding file…')
                     found.set()
                     for _ in range(100):
-                        if owner.page_loading.status.text == 'Opening document…':
+                        if owner.page_loading.status.text == 'Reading Plan.MD…':
                             break
                         await asyncio.sleep(.01)
-                    self.assertEqual(owner.page_loading.status.text, 'Opening document…')
+                    self.assertEqual(owner.page_loading.status.text, 'Reading Plan.MD…')
                     self.assertEqual(owner.page_loading.filename.text, 'Plan.MD')
                 finally:
                     found.set()

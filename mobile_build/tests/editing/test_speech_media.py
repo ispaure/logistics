@@ -198,7 +198,7 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
                 self.assertFalse(panel.session.text or panel.session.words)
                 owner.markdown_speech.close()
         import toga
-        with patch('features.text_editor.mobile.provider_markdown.markdown_webview',
+        with patch('services.documents.authoring.provider_markdown.markdown_webview',
                    side_effect=lambda *, private, **options: toga.WebView(**options)):
             self.app.loop.run_until_complete(exercise())
 

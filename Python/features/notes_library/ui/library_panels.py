@@ -6,7 +6,8 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.search.providers import search_resources
 from commonUtils.search.names import natural_name_key, search_terms
 from commonUtils.runtime.operations import OperationCancelled
-from features.text_editor import library_files
+from features.notes_library import library_files
+from .library_icons import entry_icon
 
 
 class LibrarySearchTree(qt.QTreeWidget):
@@ -20,6 +21,7 @@ class LibrarySearchTree(qt.QTreeWidget):
 
 class LibraryPanels:
     def init_panels(self, side, controls):
+        qt.QApplication.instance().paletteChanged.connect(self.refresh_entry_icons)
         self.positions = {}
         self.folder_pages = {}
         self.aux_generation = 0
@@ -94,18 +96,20 @@ class LibraryPanels:
 
     def decorate_entry(self, item, path, directory):
         landing = directory and bool(self.folder_pages.get(path))
-        kind = qt.QStyle.StandardPixmap.SP_DirIcon if directory else qt.QStyle.StandardPixmap.SP_FileIcon
-        icon = self.style().standardIcon(kind)
-        if landing:
-            pixmap = icon.pixmap(24, 24)
-            painter = qt.QPainter(pixmap)
-            badge = self.style().standardIcon(qt.QStyle.StandardPixmap.SP_FileIcon).pixmap(14, 14)
-            painter.drawPixmap(10, 10, badge)
-            painter.end()
-            icon = qt.QIcon(pixmap)
-        item.setIcon(0, icon)
+        item.setIcon(0, entry_icon(directory, landing_page=landing))
         item.setToolTip(0, ('Folder with same-named note' if landing else 'Folder' if directory else 'File')
                         + ' · ' + path)
+
+    def refresh_entry_icons(self, *args):
+        for tree in (self.tree, self.search_results):
+            iterator = qt.QTreeWidgetItemIterator(tree)
+            while iterator.value() is not None:
+                item = iterator.value()
+                entry = item.data(0, qt.Qt.ItemDataRole.UserRole)
+                if entry:
+                    path, directory = entry
+                    item.setIcon(0, entry_icon(directory, landing_page=bool(self.folder_pages.get(path))))
+                iterator += 1
 
     def request_aux(self, kind, work):
         self.aux_generation += 1
@@ -322,7 +326,7 @@ class LibraryPanels:
         library = self.library
         path = self.storage.path.relative_to(self.provider.root.resolve()).as_posix()
         self.links_tree.addTopLevelItem(qt.QTreeWidgetItem(['Finding local connections…']))
-        from features.text_editor.notes_links import connections
+        from features.notes_library.notes_links import connections
         self.connections_pending = (self.connections_generation,
             lambda report, cancelled: connections(library, path, cancelled=cancelled))
         self.start_connections()

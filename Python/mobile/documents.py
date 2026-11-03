@@ -16,7 +16,7 @@ MAX_BYTES = 1024 * 1024
 MAX_RECORD = 4 * 1024 * 1024
 
 
-from features.text_editor.names import document_name
+from services.documents.names import document_name
 
 
 def serialized(method):

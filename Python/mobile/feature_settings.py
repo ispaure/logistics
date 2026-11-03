@@ -21,7 +21,7 @@ def set_enabled(app, name, value, *, refresh=True):
                 if name == 'video' or (name == 'rclone' and not DocumentPolicy.for_provider(video.content.provider).persistent):
                     raise ValueError('Close the video player before turning this feature off.')
             for session in host.workspace.sessions.values():
-                feature = document_feature(session.title, session.kind)
+                feature = 'notes_library' if getattr(session, 'provider', None) == 'notes-library' else document_feature(session.title, session.kind)
                 from .document_sources import session_source
                 source = session_source(host, session) if name == 'rclone' else None
                 if feature in members or (source is not None and source.get('type') != 'local'):

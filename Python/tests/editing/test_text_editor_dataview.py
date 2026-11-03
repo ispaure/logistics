@@ -7,10 +7,10 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.ui.native.markdown_preview import markdown_preview
-from features.text_editor.notes import NotesLibrary
-from features.text_editor.dataview import ViewFiles, view_plan, runtime_script, javascript
-from features.text_editor.dataview_script import POLL, worker_policy
-from features.text_editor.ui.notes_library import NotesLibraryWindow
+from features.notes_library.notes import NotesLibrary
+from features.notes_library.dataview import ViewFiles, view_plan, runtime_script, javascript
+from features.notes_library.dataview_script import POLL, worker_policy
+from features.notes_library.ui.notes_library import NotesLibraryWindow
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -48,9 +48,23 @@ class DataViewTests(QtTestCase):
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as fixture:
             fixture.provider.mkdir('.obsidian')
             fixture.provider.create_file('data.json', BytesIO(b'{"private":true}'))
+            fixture.provider.mkdir('_Resources')
+            fixture.provider.mkdir('_Resources/dataview')
+            fixture.provider.create_file('_Resources/dataview/folder-index-recursive.js', BytesIO(b'dv.paragraph("found");'))
+            files = ViewFiles(NotesLibrary(fixture.provider), 'Home.md')
+            reply = files.request(dict(id=1, kind='view', path='_Resources/Dataview/folder-index-recursive'))
+            self.assertEqual(reply['value']['code'], 'dv.paragraph("found");')
             window = NotesLibraryWindow(lambda: CryptResources(fixture.item, binary=binary), 'Encrypted source')
             window.show()
             self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(window.windowTitle(), fixture.item.remote)
+            fixture.provider.create_file('clip.mp4', BytesIO(b'encrypted video fixture'))
+            media = window.library.image_source('Home.md')
+            _, url = media('clip.mp4')
+            from urllib.request import Request, urlopen
+            with urlopen(Request(url, headers={'Range': 'bytes=0-8'}), timeout=5) as response:
+                self.assertEqual(response.status, 206)
+                self.assertEqual(response.read(), b'encrypted')
             window.open_note('data.json')
             self.wait_until(lambda: not window.progress.busy)
             editor = window.text_document
@@ -199,7 +213,7 @@ class DataViewTests(QtTestCase):
             provider = LocalFiles(root)
             files = ViewFiles(NotesLibrary(provider), 'Home.md')
             request = dict(id=1, kind='load', path='data.json')
-            with patch('features.text_editor.dataview.MAX_TOTAL', 8), patch.object(provider, 'open', wraps=provider.open) as opened:
+            with patch('features.notes_library.dataview.MAX_TOTAL', 8), patch.object(provider, 'open', wraps=provider.open) as opened:
                 self.assertEqual(files.request(request)['value'], '[123]')
                 calls = opened.call_count
                 for _ in range(3):

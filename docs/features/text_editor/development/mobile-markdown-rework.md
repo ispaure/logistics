@@ -76,9 +76,9 @@ Read the [developer index](../../../development/development.md),
 
 | Owner | Current responsibility and planned review |
 | --- | --- |
-| `Python/features/text_editor/mobile/markdown_editor.py` | Formatted WebView, block serialization, formatting commands, HTML/CSS and change bridge. Diagnose iOS rendering, input and synchronization before choosing the editing engine. |
+| `Python/services/documents/authoring/markdown_editor.py` | Formatted WebView, block serialization, formatting commands, HTML/CSS and change bridge. Diagnose iOS rendering, input and synchronization before choosing the editing engine. |
 | `Python/features/text_editor/mobile/ui.py` | Managed-document editor. Bring its modes, controls and lifecycle into the same interaction model as provider documents. |
-| `Python/features/text_editor/mobile/provider_markdown.py` | Provider Markdown modes, rendering, source synchronization and controls. Retain one authoritative draft and guarded asynchronous rendering. |
+| `Python/services/documents/authoring/provider_markdown.py` | Provider Markdown modes, rendering, source synchronization and controls. Retain one authoritative draft and guarded asynchronous rendering. |
 | `Python/features/text_editor/mobile/notes_library.py` and `notes.py` | Library navigation, note reading, provider bounds and editor handoff. Rework presentation and preserve bounded folder loading and containment. |
 | `Python/mobile/provider_*.py`, `editor_picker.py`, composition and session owners | Opening, access policy, saving and lifecycle. Enforce storage permissions beneath the controls. |
 | `Python/mobile/keyboard.py`, native host adapters and shared adaptive components | Keyboard geometry, safe areas, native bars and allocated pane sizes. Fix the responsible layout owner rather than adding competing offsets. |

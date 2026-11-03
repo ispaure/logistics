@@ -1,8 +1,8 @@
 """Mobile Markdown renderer with Logistics appearance roles."""
 from commonUtils.ui.native.markdown_preview import markdown_body, markdown_preview as _markdown_preview
 from .palette import css_variables
-from commonUtils.formats.markdown.image_sources import folder_image_source
-from features.text_editor.mobile.markdown_style import READING_CSS
+from services.documents.markdown_media import reader_media_source
+from services.documents.authoring.markdown_style import READING_CSS
 
 __all__ = ['markdown_body', 'markdown_preview']
 
@@ -24,7 +24,7 @@ def reader_image_source(copies, reader):
                 or getattr(copies, 'resource', None))
     key = getattr(reader, 'key', None)
     if provider is not None and key is not None:
-        return folder_image_source(provider, key)
+        return reader_media_source(provider, reader, key)
     return None
 
 

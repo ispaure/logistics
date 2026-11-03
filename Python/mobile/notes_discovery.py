@@ -3,7 +3,7 @@ import asyncio
 from pathlib import PurePosixPath
 import toga
 from toga.style import Pack
-from features.text_editor.notes import vault_root, operation
+from features.notes_library.notes import vault_root, operation
 from commonUtils.runtime.operations import check_cancelled, OperationCancelled
 
 
@@ -38,7 +38,7 @@ def find_libraries(provider, *, cancelled=lambda: False):
 
 
 def populate(app, container):
-    if not app.feature_enabled('text_editor'):
+    if not app.feature_enabled('notes_library'):
         return
     container.clear()
     container.add(toga.Label('Notes Library', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
@@ -56,7 +56,7 @@ def populate(app, container):
         return (app.active_host and app._notes_discovery_token is token
                 and client is getattr(app, 'cloud_client', None)
                 and generation == getattr(client, 'generation', None)
-                and app.feature_enabled('text_editor'))
+                and app.feature_enabled('notes_library'))
     def discover():
         from commonUtils.runtime.resources.local import LocalFiles
         from services.documents.locations import collection_path

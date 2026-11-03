@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 from mobile.android_markdown_font import FONT_ROOT, MARKER, font_response, standalone_font, style_markdown, web_font
 from mobile.preview import markdown_preview
-from features.text_editor.mobile.markdown_editor import editor_html
+from services.documents.authoring.markdown_editor import editor_html
 
 
 class MarkdownFontTests(unittest.TestCase):

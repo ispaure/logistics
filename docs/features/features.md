@@ -22,6 +22,7 @@ wiki. Application source and tests retain their existing owners under `Python/`.
 - [Media](media/media.md)
 - [Video Player](video/video.md)
 - [Minecraft](minecraft/minecraft.md)
+- [Notes Library](notes_library/notes_library.md)
 - [Obsidian](obsidian/obsidian.md)
 - [Pdf](pdf/pdf.md)
 - [Perforce](perforce/perforce.md)

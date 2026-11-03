@@ -398,3 +398,17 @@ and notebook presentation mount these beneath native titles. Reader rows join
 the existing ReadingFrame controls so immersive mode hides them with the other
 controls. Native remote resources expose credential package source, encryption
 and session-only metadata without granting publication capabilities.
+
+## Notes Library and shared authoring
+
+`features/notes_library` owns library containment, navigation and document groups.
+The desktop destination reuses retained workspace hosting with a separate named
+host; `services/documents/authoring/` owns mobile Markdown input, provider modes
+and common edit decisions shared by libraries and standalone documents. Neither
+library feature admission nor embedded editing requires Text Editor enabled.
+
+`services/documents/mutations.py` owns verified provider-tree copy/delete under
+`document_operation` and the document write policy. Notes Library validates its
+contained source/destination, root exclusion and supported capabilities before
+calling this service. The copied source stays intact; staged copies are verified
+before a collision-safe rename and are removed on failure.

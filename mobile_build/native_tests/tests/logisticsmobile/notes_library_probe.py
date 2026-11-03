@@ -10,7 +10,7 @@ from commonUtils.testing.stages import TestStage
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 from mobile.obsidian import open_vault
-from features.text_editor.notes import NotesLibrary
+from features.notes_library.notes import NotesLibrary
 from . import start_native_check
 from .fixtures import capture_window
 from .rotation_checks import rotate

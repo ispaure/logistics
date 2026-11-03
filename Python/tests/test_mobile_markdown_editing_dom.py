@@ -105,7 +105,7 @@ class MobileMarkdownEditingDOMTests(QtTestCase):
 
     def test_reading_and_editing_have_matching_typography_at_multiple_sizes(self):
         from commonUtils.ui.native.markdown_preview import markdown_preview
-        from features.text_editor.mobile.markdown_style import READING_CSS
+        from services.documents.authoring.markdown_style import READING_CSS
         from features.lm.mobile.presentation import transcript_document
         source = ('# Heading\n\n## Two\n\n### Three\n\n#### Four\n\n'
                   '##### Five\n\n###### Six\n\nBody `inline`.\n\n'

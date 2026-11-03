@@ -9,8 +9,8 @@ from types import SimpleNamespace
 import unittest
 
 from commonUtils.runtime.resources.local import LocalFiles
-from features.text_editor.access import can_write
-from features.text_editor.notes import NotesLibrary
+from services.documents.access import can_write
+from features.notes_library.notes import NotesLibrary
 from features.text_editor.resources import LocalTextCopies
 
 

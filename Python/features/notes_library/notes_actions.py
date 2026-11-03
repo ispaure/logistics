@@ -1,6 +1,6 @@
 """Notes Library commands for the desktop location actions page."""
 from features.contributions import UIAction
-from features.text_editor.notes import vault_root, local_library
+from features.notes_library.notes import vault_root, local_library
 
 
 def sources(entry):

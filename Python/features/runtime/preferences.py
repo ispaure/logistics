@@ -43,10 +43,14 @@ class PreferenceState:
                 log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
             try:
                 self._migrate_feature_overrides(store)
+                self._migrate_notes_library(store)
                 disabled = self._effective_disabled_features(store)
             except (OSError, UnicodeError, Error, ValueError) as error:
                 log(Severity.ERROR, 'Feature settings', f'Could not migrate per-feature choices; original files preserved: {error}')
                 disabled = self._effective_disabled_features(store)
+        if not self.layered and path.exists():
+            from ..preferences import migrate_notes_library
+            disabled = migrate_notes_library(path, disabled)
         self.disabled.clear()
         self.disabled.update(disabled)
         self.path = path
@@ -105,6 +109,16 @@ class PreferenceState:
             store.save(changes)
         migration_ledger(store).run('feature-overrides-v2', migrate)
 
+
+    def _migrate_notes_library(self, store):
+        from ..settings import migration_ledger
+        def migrate():
+            key = 'FeatureOverrides', 'notes_library_bool'
+            if key not in store.overrides():
+                disabled = self._effective_disabled_features(store)
+                if ('text_editor' in disabled) != ('notes_library' in disabled):
+                    store.save({key: str('text_editor' not in disabled).lower()})
+        migration_ledger(store).run('notes-library-feature-v1', migrate)
 
     def _save_feature_preferences(self, changes=None):
         if self.layered:

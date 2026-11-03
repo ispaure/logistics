@@ -7,6 +7,9 @@ batches of files, or work with your servers and libraries.
 It runs on Windows, macOS and Linux. Some tools are specific to one platform or
 need another application installed.
 
+Desktop [Notes Library](docs/features/notes_library/user/user.md) has its own sidebar
+destination below Documents, with independent libraries and split note tabs.
+
 Mobile Settings includes bundled offline documentation with nested folder browsing
 and file/title or page-text search.
 On iOS, a lightweight Home Screen widget can display numbers or short text supplied

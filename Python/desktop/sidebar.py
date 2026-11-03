@@ -27,6 +27,13 @@ class DestinationIcon(qt.QIconEngine):
             if self.name == 'actions':
                 painter.drawArc(qt.QRectF(8, 10, 10, 8), 30 * 16, 280 * 16)
                 painter.drawPolyline(qt.QPolygonF([qt.QPointF(16, 9), qt.QPointF(19, 11), qt.QPointF(16, 13)]))
+        elif self.name == 'notes_library':
+            painter.drawRoundedRect(qt.QRectF(5, 3, 16, 19), 2, 2)
+            painter.drawLine(qt.QLineF(9, 3, 9, 22))
+            for y in (7, 12, 17):
+                painter.drawLine(qt.QLineF(3, y, 6, y))
+            for y in (9, 13, 17):
+                painter.drawLine(qt.QLineF(12, y, 18, y))
         elif self.name == 'rename':
             pen = painter.pen()
             pen.setCapStyle(qt.Qt.PenCapStyle.RoundCap)
@@ -290,6 +297,10 @@ class DestinationRail(qt.QWidget):
                 self.sync_destinations.setSpacing(6)
                 layout.addLayout(self.sync_destinations)
             if key == 'documents':
+                self.library_destinations = qt.QVBoxLayout()
+                self.library_destinations.setContentsMargins(0, 0, 0, 0)
+                self.library_destinations.setSpacing(6)
+                layout.addLayout(self.library_destinations)
                 self.workspace_destinations = qt.QVBoxLayout()
                 self.workspace_destinations.setContentsMargins(0, 0, 0, 0)
                 self.workspace_destinations.setSpacing(6)
@@ -369,10 +380,12 @@ class DestinationRail(qt.QWidget):
             destination = destinations.get(page)
             icon = destination.icon if destination is not None else page.property('navigation_icon')
             if key is None and icon:
-                key = (destination.rail_key or destination.key) if destination is not None else f'feature:{id(page)}'
+                key = (destination.rail_key or destination.key) if destination is not None else page.property('navigation_key') or f'feature:{id(page)}'
                 if key not in self.buttons:
                     button = self._button(key, tabs.tabText(index), icon)
-                    if page.property('navigation_position') == 'workspace' and icon == 'actions':
+                    if page.property('navigation_position') == 'notes_library':
+                        self.library_destinations.addWidget(button)
+                    elif page.property('navigation_position') == 'workspace' and icon == 'actions':
                         self.sync_destinations.addWidget(button)
                         self.sync_buttons.add(key)
                     elif page.property('navigation_position') == 'workspace':
@@ -382,7 +395,9 @@ class DestinationRail(qt.QWidget):
                         self.feature_destinations.addWidget(button)
                     self.feature_buttons.add(key)
                 self.buttons[key].show()
-                if key in self.workspace_buttons:
+                if page.property('navigation_position') == 'notes_library':
+                    pass
+                elif key in self.workspace_buttons:
                     workspace_entries.append((page.property('navigation_order') or 100, tabs.tabText(index), self.buttons[key]))
                 elif key in self.sync_buttons:
                     sync_entries.append((page.property('navigation_order') or 100, tabs.tabText(index), self.buttons[key]))

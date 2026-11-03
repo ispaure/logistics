@@ -8,8 +8,8 @@ from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
-from features.text_editor.ui.notes_library import NotesLibraryWindow
-from features.text_editor.notes_actions import actions
+from features.notes_library.ui.notes_library import NotesLibraryWindow
+from features.notes_library.notes_actions import actions
 from models.folder_entry import FolderEntry
 from models.local_folder import LocalFolder
 
@@ -31,15 +31,162 @@ class PrivateFiles(RemoteFiles):
 
 
 class NotesLibraryDesktopTests(QtTestCase):
-    def test_open_document_only_appears_when_sidebar_is_hidden(self):
+    def test_failed_and_late_cancelled_note_attempts_retire_media_and_keep_current(self):
+        from services.documents.markdown import prepare_markdown
         with self.temporary_directory() as directory:
-            window = self.open_library(Path(directory))
-            self.assertTrue(window.open_card.isHidden())
-            window.menu.click()
-            self.assertFalse(window.open_card.isHidden())
-            window.open_card.click()
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            (root / 'Other.md').write_text('# Other')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            current = window.library._media['Home.md']
+            for cancel in (False, True):
+                attempts = []
+                def prepare(*args, **kwargs):
+                    attempts.append(window.library._media['Other.md'])
+                    if not cancel:
+                        raise ValueError('Rejected preview')
+                    result = prepare_markdown(*args, **kwargs)
+                    window.progress.cancelled.set()
+                    return result
+                with patch('services.documents.markdown.prepare_markdown', side_effect=prepare):
+                    window.open_note('Other.md')
+                    self.wait_until(lambda: not window.progress.busy)
+                self.assertEqual(window.history[window.index], 'Home.md')
+                self.assertTrue(attempts[0].closed)
+                self.assertFalse(current.closed)
+                self.assertEqual(set(window.library._media), {'Home.md'})
+            window.close()
+
+    def test_cancelled_standalone_markdown_preparation_closes_video_transport(self):
+        from threading import Event
+        from services.documents.markdown import prepare_markdown
+        from services.documents.markdown_media import MarkdownMedia
+        from commonUtils.runtime.operations import OperationCancelled
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'potato.mp4').write_bytes(b'video fixture')
+            stopped, sources, transports = Event(), [], []
+            original = MarkdownMedia.__call__
+            def source(owner, target):
+                result = original(owner, target)
+                sources.append(owner)
+                transports.extend(transport for _, transport in owner.videos.values())
+                stopped.set()
+                return result
+            with patch.object(MarkdownMedia, '__call__', source):
+                with self.assertRaises(OperationCancelled):
+                    prepare_markdown(LocalFiles(root), root / 'Home.md', data=b'![[potato.mp4]]', cancelled=stopped.is_set)
+            self.assertTrue(sources)
+            self.assertTrue(all(owner.closed for owner in sources))
+            self.assertTrue(all(transport.closed.is_set() for transport in transports))
+
+    def test_video_embeds_have_inline_controls_in_reading_and_formatted_editing(self):
+        import shutil
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            source = '# Video\n\n![[potato.mp4]]\n\nFollowing text\n'
+            (root / 'Home.md').write_text(source)
+            shutil.copyfile(Path(__file__).parents[1] / 'readers/fixtures/video/h264-aac.mp4', root / 'potato.mp4')
+            window = self.open_library(root)
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.wait_until(lambda: bool(window.viewer.browser.inline_videos.cards))
+            self.assertEqual(len(window.viewer.browser.inline_videos.cards), 1)
+            card = next(iter(window.viewer.browser.inline_videos.cards.values()))
+            card.audio.setMuted(True)
+            frames = []
+            card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
+            card.play.click()
+            self.wait_until(lambda: any(frames) and card.player.position() > 0,
+                            message='Embedded video did not decode a frame')
+            self.assertIn('Following text', window.viewer.browser.toPlainText())
+            window.viewer.set_editing(True)
+            self.wait_until(lambda: bool(window.viewer.formatted_editor.inline_videos.cards))
+            self.assertEqual(window.viewer.markdown_text(), source)
+            media = window.library.image_source('Home.md')
+            transports = [transport for _, transport in media.videos.values()]
+            window.close()
+            self.assertTrue(all(transport.closed.is_set() for transport in transports))
+
+    def click_name_editor(self, window, path):
+        from PySide6.QtTest import QTest
+        tree = window.tree
+        item = window.items[path]
+        tree.scrollToItem(item)
+        position = tree.visualItemRect(item).center()
+        QTest.mouseClick(tree.viewport(), qt.Qt.MouseButton.LeftButton, pos=position)
+        self.wait_until(lambda: not window.progress.busy)
+        # Separate the two clicks so Qt treats the second as SelectedClicked.
+        QTest.qWait(self.app.doubleClickInterval() + 50)
+        QTest.mouseClick(tree.viewport(), qt.Qt.MouseButton.LeftButton, pos=position)
+        self.wait_until(lambda: tree.findChild(qt.QLineEdit) is not None)
+        return tree.findChild(qt.QLineEdit)
+
+    def test_selected_name_click_renames_files_and_nested_folders(self):
+        from PySide6.QtTest import QTest
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Nested').mkdir()
+            (root / 'Nested/Home.md').write_text('# Home')
+            window = self.open_library(root)
+            window.items['Nested'].setExpanded(True)
+            self.wait_until(lambda: not window.progress.busy)
+            editor = self.click_name_editor(window, 'Nested/Home.md')
+            editor.setText('Renamed.md')
+            QTest.keyClick(editor, qt.Qt.Key.Key_Return)
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual((root / 'Nested/Renamed.md').read_text(), '# Home')
+            self.assertEqual(window.history[window.index], 'Nested/Renamed.md')
+            editor = self.click_name_editor(window, 'Nested')
+            editor.setText('Moved folder')
+            QTest.keyClick(editor, qt.Qt.Key.Key_Return)
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual((root / 'Moved folder/Renamed.md').read_text(), '# Home')
+            self.assertEqual(window.history[window.index], 'Moved folder/Renamed.md')
+            self.assertFalse(window.items[window.library.root].flags() & qt.Qt.ItemFlag.ItemIsEditable)
+            window.close()
+
+    def test_inline_rename_cancel_invalid_name_and_collision_keep_original(self):
+        from PySide6.QtTest import QTest
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            (root / 'Taken.md').write_text('# Taken')
+            window = self.open_library(root)
+            editor = self.click_name_editor(window, 'Home.md')
+            editor.setText('Cancelled.md')
+            QTest.keyClick(editor, qt.Qt.Key.Key_Escape)
+            QTest.qWait(1)
+            self.assertFalse((root / 'Cancelled.md').exists())
+            for name in ('../Escape.md', '', 'Taken.md', 'Wrong.txt'):
+                window.tree.editItem(window.items['Home.md'])
+                editor = window.tree.findChild(qt.QLineEdit)
+                self.assertIsNotNone(editor)
+                self.assertTrue(editor.isVisible())
+                editor.setText(name)
+                QTest.keyClick(editor, qt.Qt.Key.Key_Return)
+                self.wait_until(lambda: not window.progress.busy)
+                QTest.qWait(1)
+                self.assertEqual(window.items['Home.md'].text(0), 'Home.md')
+                self.assertEqual((root / 'Home.md').read_text(), '# Home')
+                self.assertEqual((root / 'Taken.md').read_text(), '# Taken')
+            window.close()
+
+    def test_desktop_sidebar_stays_visible_and_navigation_uses_viewer_toolbar(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Home')
+            window = self.open_library(root)
+            self.assertTrue(window.menu.isHidden())
+            window.show_sidebar(False)
             self.assertFalse(window.panel_tabs.isHidden())
             self.assertTrue(window.open_card.isHidden())
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertGreaterEqual(window.viewer.navigation_toolbar.indexOf(window.navigation), 0)
+            self.assertFalse(window.split.isCollapsible(0))
             window.close()
 
     def test_miscellaneous_files_are_visible_and_use_the_document_router(self):
@@ -269,7 +416,7 @@ class NotesLibraryDesktopTests(QtTestCase):
 
     def test_delayed_files_search_cannot_cancel_calendar_or_restart_hidden_scan(self):
         from threading import Event
-        from features.text_editor.library_files import daily_notes
+        from features.notes_library.library_files import daily_notes
         with self.temporary_directory() as directory:
             root = Path(directory)
             (root / '2026-11-02.md').write_text('# Today')
@@ -280,7 +427,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 release.wait(5)
                 return daily_notes(*args, **kwargs)
             try:
-                with patch('features.text_editor.library_files.daily_notes', side_effect=slow) as scan:
+                with patch('features.notes_library.library_files.daily_notes', side_effect=slow) as scan:
                     window.panel_tabs.setCurrentIndex(1)
                     self.wait_until(entered.is_set)
                     generation = window.aux_generation
@@ -357,7 +504,7 @@ class NotesLibraryDesktopTests(QtTestCase):
 
     def test_failed_mutation_resumes_search_and_connections(self):
         from commonUtils.search.providers import search_resources
-        from features.text_editor.notes_links import connections
+        from features.notes_library.notes_links import connections
         with self.temporary_directory() as directory:
             root = Path(directory)
             (root / 'Home.md').write_text('# Needle\n\n[[Other]]')
@@ -370,8 +517,8 @@ class NotesLibraryDesktopTests(QtTestCase):
             window.toggle_links()
             self.wait_until(lambda: not window.aux.busy and not window.connections_progress.busy)
             with patch.object(qt.QInputDialog, 'getText', return_value=('Other.md', True)), \
-                    patch('features.text_editor.ui.library_panels.search_resources', wraps=search_resources) as search, \
-                    patch('features.text_editor.notes_links.connections', wraps=connections) as links:
+                    patch('features.notes_library.ui.library_panels.search_resources', wraps=search_resources) as search, \
+                    patch('features.notes_library.notes_links.connections', wraps=connections) as links:
                 window.copy_entry('Home.md')
                 self.wait_until(lambda: not window.progress.busy and not window.aux.busy and not window.connections_progress.busy)
                 self.assertGreaterEqual(search.call_count, 1)
@@ -488,7 +635,7 @@ class NotesLibraryDesktopTests(QtTestCase):
     def test_connections_do_not_cancel_file_search_and_close_waits_for_both(self):
         from threading import Event
         from shiboken6 import isValid
-        from features.text_editor.notes_links import connections
+        from features.notes_library.notes_links import connections
         with self.temporary_directory() as directory:
             root = Path(directory)
             (root / 'Home.md').write_text('# Searchable home')
@@ -501,7 +648,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 release.wait(5)
                 return connections(*args, **kwargs)
             try:
-                with patch('features.text_editor.notes_links.connections', side_effect=slow):
+                with patch('features.notes_library.notes_links.connections', side_effect=slow):
                     window.toggle_links()
                     self.wait_until(entered.is_set)
                     window.search.setText('Searchable')
@@ -569,7 +716,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 release.set()
 
     def test_remarkable_document_uses_the_same_library_window(self):
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         from features.notebooks.notebook import Notebook
         with self.temporary_directory() as directory:
             root = Path(directory)
@@ -715,7 +862,7 @@ class NotesLibraryDesktopTests(QtTestCase):
 
     def test_action_uses_only_selected_storage_context(self):
         from dataclasses import replace
-        from features.text_editor.notes_actions import sources
+        from features.notes_library.notes_actions import sources
         from features.rclone.desktop_service import service
         with self.temporary_directory() as directory:
             root = Path(directory)
@@ -729,7 +876,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 cloud_actions = actions(replace(entry, storage_scope='remote'))
                 remote.assert_not_called()
                 self.assertEqual(cloud_actions, [])
-                with patch('features.text_editor.ui.notes_library.open_notes') as opened:
+                with patch('features.notes_library.ui.notes_library.open_notes') as opened:
                     local_actions[0].callback()
                     self.assertFalse(opened.call_args.kwargs['remote'])
             self.assertEqual([item[0] for item in sources(replace(entry, local=None, storage_scope='local'))], [])
@@ -774,7 +921,7 @@ class NotesLibraryDesktopTests(QtTestCase):
     def test_note_reads_complete_short_chunks_and_enforce_the_total_preview_limit(self):
         from contextlib import contextmanager
         from io import BytesIO
-        from features.text_editor.notes import NotesLibrary, MAX_NOTE
+        from features.notes_library.notes import NotesLibrary, MAX_NOTE
         class ShortReads(BytesIO):
             def read(self, count):
                 return super().read(min(3, count))
@@ -790,7 +937,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                     yield stream
             for limit in (4, MAX_NOTE):
                 with self.subTest(limit=limit), patch.object(provider, 'open', side_effect=opened), \
-                        patch('features.text_editor.notes.MAX_NOTE', limit):
+                        patch('features.notes_library.notes.MAX_NOTE', limit):
                     if limit < len(data):
                         with self.assertRaisesRegex(ValueError, 'too large'):
                             library.read('Note.md')
@@ -804,14 +951,14 @@ class NotesLibraryDesktopTests(QtTestCase):
         (root/'.obsidian/private.md').write_text('# Hidden')
         (root/'Other.txt').write_text('Not Markdown')
 
-    def test_location_action_and_documents_host_open_library(self):
+    def test_location_action_and_library_host_open_library(self):
         from commonUtils.ui.document_host import register_document_host
-        from desktop.documents import DocumentsPage
+        from features.notes_library.ui.page import NotesLibraryPage
         with self.temporary_directory() as directory:
             root=Path(directory);self.fixture(root)
             commands=actions(FolderEntry('Notes',local=LocalFolder(root)))
             self.assertEqual([item.name for item in commands], ['Open as Notes Library'])
-            host=DocumentsPage(lambda: None);host.show();register_document_host(host)
+            host=NotesLibraryPage();host.show()
             try:
                 window=commands[0].callback()
                 self.wait_until(lambda:not window.progress.busy)
@@ -827,8 +974,10 @@ class NotesLibraryDesktopTests(QtTestCase):
                 window.search.setText('Home')
                 self.assertFalse(window.items['Home.md'].isHidden())
             finally:
-                self.app._commonutils_document_host = lambda: None
+                self.app._commonutils_document_hosts.pop('notes_library', None)
+                host.prepare_close()
                 host.close()
+                host.deleteLater()
 
     def test_remote_no_search_no_recursive_index_and_revoked_text_clears(self):
         with self.temporary_directory() as directory:
@@ -903,6 +1052,7 @@ class NotesLibraryDesktopTests(QtTestCase):
 
     def test_provider_library_embeds_load_from_memory_in_both_modes(self):
         from PIL import Image
+        from urllib.parse import quote
         from commonUtils.formats.markdown.images import image_targets
         from services.documents.markdown import prepare_markdown
         for remote in (False, True):
@@ -915,6 +1065,8 @@ class NotesLibraryDesktopTests(QtTestCase):
                     filename = 'photo #1.' + kind.lower()
                     Image.new('RGB', (800, 400), 'blue').save(root / 'Attachments' / filename, kind)
                     embeds.append('![[Attachments/' + filename + '|900]]')
+                    embeds.append('![Caption.jpg](Attachments/' + quote(filename) + ')')
+                    embeds.append('![Caption.jpg]\\(Attachments/' + quote(filename) + ')')
                 source = '\n\n'.join(embeds) + '\n\nFollowing text'
                 path = root / 'Nested/Next.md'
                 path.write_text(source)
@@ -944,6 +1096,6 @@ class NotesLibraryDesktopTests(QtTestCase):
                 # spaces and literal hashes, ignoring fenced code.
                 sibling = root / 'Nested/photo #1.png'
                 Image.new('RGB', (800, 400), 'blue').save(sibling)
-                direct = b'![[photo #1.png|500]]\n\n![Reference][pic]\n\n[pic]: <photo #1.png>\n\n```\n![[absent.png]]\n```'
+                direct = b'![[photo #1.png|500]]\n\n![Caption.jpg]\\(photo%20%231.png)\n\n![Reference][pic]\n\n[pic]: <photo #1.png>\n\n```\n![[absent.png]]\n```'
                 _, resources = prepare_markdown(LocalFiles(root), path, data=direct)
                 self.assertEqual(set(resources), {sibling.resolve()})

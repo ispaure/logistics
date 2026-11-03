@@ -3,7 +3,7 @@ import posixpath
 from pathlib import PurePosixPath
 from threading import RLock
 from services.documents.storage import DocumentResource
-from .access import can_write
+from services.documents.access import can_write
 
 MARKDOWN = {'.md', '.markdown'}
 TEXT = {'.json', '.jsonc', '.js', '.mjs', '.cjs', '.css', '.txt', '.csv',
@@ -24,6 +24,9 @@ def library_name(provider, root='', fallback='Notes Library'):
     if getattr(provider, 'remote', None):
         from services.documents.storage import display_path
         return display_path(provider, '').rstrip(':')
+    connection = getattr(provider, 'connection', None)
+    if getattr(connection, 'remote', None):
+        return connection.remote.rstrip(':')
     return provider.root.name or fallback
 
 
@@ -56,12 +59,16 @@ class NotesLibrary:
         self._link_folders = {}
         self._link_lock = RLock()
         self._links_closed = False
+        self._media = {}
 
     def close(self):
         """Retire in-memory names, including work completing after revocation."""
         with self._link_lock:
             self._links_closed = True
             self._link_folders.clear()
+            media, self._media = self._media, {}
+        for source in media.values():
+            source.close()
 
     def _link_listing(self, folder, cancelled):
         """Reuse names only while the validated local directory is unchanged."""
@@ -162,6 +169,22 @@ class NotesLibrary:
         data.decode('utf-8-sig')
         return data
 
+    def load_note(self, path, *, current='', resolve_link=False, cancelled=lambda: False,
+                  stage=lambda message: None):
+        """Shared finding/reading stages; platform hosts own rendering/publication."""
+        from commonUtils.runtime.operations import check_cancelled
+        fragment = ''
+        if resolve_link:
+            stage('Finding file…')
+            path, fragment = self.link(current, path, cancelled=cancelled)
+        else:
+            path = self.contained(path)
+        check_cancelled(cancelled)
+        stage('Reading ' + PurePosixPath(path).name + '…')
+        data = self.read(path, cancelled=cancelled) if document_kind(path) == 'markdown' else None
+        check_cancelled(cancelled)
+        return path, fragment, data
+
     def read_text(self, path, *, cancelled=lambda: False):
         """Bounded content search for the same source types shown in Files."""
         from commonUtils.persistence.text import decode_bytes
@@ -172,7 +195,7 @@ class NotesLibrary:
             return decode_bytes(resource.read(cancelled=cancelled)).text
 
     def create(self, name, parent=None, *, extension='md', cancelled=lambda: False):
-        from .names import document_name
+        from services.documents.names import document_name
         if not self.writable:
             raise ValueError('This Notes Library is read-only.')
         name = document_name(name)
@@ -194,7 +217,7 @@ class NotesLibrary:
         return self.writable and getattr(capabilities(self.provider), action)
 
     def create_folder(self, name, parent=None, *, cancelled=lambda: False):
-        from .names import document_name
+        from services.documents.names import document_name
         if not self.supports('create'):
             raise ValueError('This Notes Library cannot create folders.')
         path = self.contained(posixpath.join(self.root if parent is None else parent, document_name(name)))
@@ -219,11 +242,29 @@ class NotesLibrary:
         return destination
 
     def image_source(self, path):
-        from commonUtils.formats.markdown.image_sources import folder_image_source
-        from types import SimpleNamespace
-        # Keep the library adapter for providers exposing entry or stat.
-        source = SimpleNamespace(relative=self.provider.relative, entry=self.entry, open=self.provider.open)
-        return folder_image_source(source, self.contained(path), root=self.root)
+        from services.documents.markdown_media import MarkdownMedia
+        path = self.contained(path)
+        with self._link_lock:
+            if self._links_closed:
+                raise ValueError('Notes Library closed.')
+            if path not in self._media:
+                self._media[path] = MarkdownMedia(self.provider, path, root=self.root, entry=self.entry)
+            return self._media[path].render_source()
+
+    def release_media(self, current, *, active=lambda: True):
+        with self._link_lock:
+            if not active():
+                return
+            retired = [self._media.pop(path) for path in tuple(self._media) if path != current]
+        for source in retired:
+            source.close()
+
+    def discard_media(self, path, *, active=lambda: True):
+        """Retire one abandoned attempt without touching a newer document."""
+        with self._link_lock:
+            source = self._media.pop(path, None) if active() else None
+        if source is not None:
+            source.close()
 
     def link(self, current, target, *, cancelled=lambda: False):
         from urllib.parse import unquote, urlsplit

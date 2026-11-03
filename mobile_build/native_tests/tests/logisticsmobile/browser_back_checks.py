@@ -39,7 +39,7 @@ async def prepare_android_back(app):
 async def cancel_dirty_reader_back(app, owner):
     """Exercise Back on the actual window-modal draft decision."""
     from unittest.mock import patch
-    from features.text_editor.mobile.document_dialogs import DocumentDialog
+    from services.documents.authoring.document_dialogs import DocumentDialog
     shown = []
     original = DocumentDialog._show
     def capture(dialog, window):

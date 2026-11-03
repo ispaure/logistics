@@ -1,7 +1,7 @@
 """Embedded Markdown over the shared provider-backed library text draft."""
 import asyncio
 from .library_text import LibraryText
-from .markdown_editor import FormattedMarkdownInput, prepare_editor
+from services.documents.authoring.markdown_editor import FormattedMarkdownInput, prepare_editor
 
 
 class LibraryMarkdown(LibraryText):

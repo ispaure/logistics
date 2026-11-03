@@ -13,8 +13,9 @@ from unittest.mock import patch
 
 from PIL import Image
 from commonUtils.runtime.resources.local import LocalFiles
-from mobile.preview import folder_image_source, markdown_preview, reader_image_source
-from features.text_editor.mobile.markdown_editor import editor_blocks, editor_html
+from commonUtils.formats.markdown.image_sources import folder_image_source
+from mobile.preview import markdown_preview, reader_image_source
+from services.documents.authoring.markdown_editor import editor_blocks, editor_html
 
 
 class MarkdownImageTests(unittest.TestCase):
@@ -31,9 +32,14 @@ class MarkdownImageTests(unittest.TestCase):
             for extension, kind, mime in [('webp', 'WEBP', 'webp'), ('png', 'PNG', 'png'), ('jpg', 'JPEG', 'jpeg'), ('gif', 'GIF', 'gif')]:
                 data = self.image(kind)
                 (root / 'assets' / ('photo.' + extension)).write_bytes(data)
-                text = f'![Picture](../assets/photo.{extension})\n\n![[../assets/photo.{extension}]]'
+                text = (f'![Picture](../assets/photo.{extension})\n\n![[../assets/photo.{extension}]]'
+                        + f'\n\n![Concept_Katia_01_SD.jpg]\\(../assets/photo.{extension})')
                 html = markdown_preview(text, image_source=folder_image_source(LocalFiles(root), 'notes/read.md'))
-                self.assertEqual(html.count(f'<img src="data:image/{mime};base64,'), 2)
+                self.assertEqual(html.count(f'<img src="data:image/{mime};base64,'), 3)
+                blocks = editor_blocks(text, image_source=folder_image_source(LocalFiles(root), 'notes/read.md'))
+                self.assertEqual(sum(block['html'].count('<img ') for block in blocks), 3)
+                self.assertEqual(''.join(block['source'] for block in blocks), text)
+                self.assertIn('data-markdown="![Concept_Katia_01_SD.jpg]\\(', blocks[-2]['html'])
                 self.assertIn(base64.b64encode(data).decode(), html)
                 self.assertIn('img-src data:', html)
                 self.assertNotIn('file://', html)

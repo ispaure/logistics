@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock
 
 from commonUtils.runtime.resources.local import LocalFiles
-from features.text_editor.notes import NotesLibrary
+from features.notes_library.notes import NotesLibrary
 from services.documents.storage import DocumentPolicy, DocumentResource, publish_document_stream
 
 

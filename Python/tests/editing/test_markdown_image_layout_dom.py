@@ -26,7 +26,7 @@ class MarkdownImageLayoutDOMTests(QtTestCase):
         self.web.show()
         loaded = []
         self.web.loadFinished.connect(loaded.append)
-        style_path = Path(__file__).parents[2] / 'features/text_editor/mobile/markdown_style.py'
+        style_path = Path(__file__).parents[2] / 'services/documents/authoring/markdown_style.py'
         tree = ast.parse(style_path.read_text())
         reading_css = next(ast.literal_eval(node.value) for node in tree.body
                            if isinstance(node, ast.Assign) and node.targets[0].id == 'READING_CSS')

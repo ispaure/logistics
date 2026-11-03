@@ -9,7 +9,7 @@ from urllib.parse import quote
 import unittest
 from mobile.app import LogisticsMobile
 from mobile.workspace import view_state
-from features.text_editor.mobile.markdown_editor import editor_blocks, editor_html
+from services.documents.authoring.markdown_editor import editor_blocks, editor_html
 
 
 class MarkdownEditorTests(unittest.TestCase):
@@ -17,7 +17,7 @@ class MarkdownEditorTests(unittest.TestCase):
         import asyncio
         from types import SimpleNamespace
         from unittest.mock import patch
-        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+        from services.documents.authoring.markdown_editor import FormattedMarkdownInput
         async def exercise():
             region = [SimpleNamespace(y=100, vertical=False)]
             presentation = SimpleNamespace(fold_division=lambda widget: region[0])
@@ -44,7 +44,7 @@ class MarkdownEditorTests(unittest.TestCase):
     def test_preparing_formatted_document_parses_once_and_preserves_source(self):
         from unittest.mock import patch
         from markdown_it import MarkdownIt
-        from features.text_editor.mobile.markdown_editor import prepare_editor
+        from services.documents.authoring.markdown_editor import prepare_editor
         source = '---\ntitle: Test\n---\n\n# [[Tech]]\r\n\r\n' + ('A **bold** paragraph.\n\n' * 100)
         calls = []
         original = MarkdownIt.parse
@@ -114,7 +114,7 @@ class MarkdownEditorTests(unittest.TestCase):
     def test_save_flushes_the_final_dom_patch_and_rejects_replaced_pages(self):
         import json
         from unittest.mock import AsyncMock, patch
-        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+        from services.documents.authoring.markdown_editor import FormattedMarkdownInput
         updates = []
         editor = FormattedMarkdownInput(updates.append)
         editor.load('# Before\r\n\r\nUntouched\r\n')
@@ -293,7 +293,7 @@ class MarkdownEditorTests(unittest.TestCase):
 
     def test_changed_blocks_are_cumulative_ordered_and_retired(self):
         import json
-        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+        from services.documents.authoring.markdown_editor import FormattedMarkdownInput
         changes = []
         editor = FormattedMarkdownInput(changes.append)
         source = '# Original\r\n\r\n' + ('untouched 😀\n\n' * 1000)
