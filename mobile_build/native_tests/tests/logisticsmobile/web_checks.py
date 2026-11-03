@@ -6,6 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import os
+import time
 
 
 def native_state(view):
@@ -89,7 +90,7 @@ async def wait_for_text(view, expected, *, absent=None, timeout=30):
             # Briefcase truncates individual app log lines around 1 KiB. Keep
             # this host-control signal small; full state is reported on failure.
             print('LOGISTICS_NATIVE_WEBVIEW_STALL=' + json.dumps(dict(
-                pid=os.getpid(), expected=expected[:40])), flush=True)
+                pid=os.getpid(), expected=expected[:40], sent_ns=time.time_ns())), flush=True)
         done, _ = await asyncio.wait([task], timeout=timeout - first_wait)
     if not done:
         state = native_state(view)

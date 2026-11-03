@@ -771,6 +771,10 @@ keyboards, IME/undo gestures or Android runtime editor appearance.
 
 ### Native startup progress
 
+Preparing hidden destination roots during startup does not launch Documents
+library discovery. Opening Documents starts the selected Libraries view's scans;
+Libraries remains the default collection.
+
 Primary iOS and Android startup first shows a lightweight `StartupScreen` in the
 main window. `LogisticsMobile._startup_steps` yields eight real phases: private
 storage, preferences, document state, editor, navigation, restored documents,

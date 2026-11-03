@@ -483,9 +483,10 @@ class HubUI:
         if list(self.document_results.children) != [selected]:
             self.document_results.clear()
             self.document_results.add(selected)
-        if not query and self.documents_view == 'Libraries' and not self._document_libraries_ready:
+        discover = not getattr(self.app, '_startup_in_progress', False)
+        if discover and not query and self.documents_view == 'Libraries' and not self._document_libraries_ready:
             self.populate_document_libraries()
-        if not query and self.documents_view == 'Favourites':
+        if discover and not query and self.documents_view == 'Favourites':
             from .favourites import populate
             self.document_favourites_list.clear()
             populate(self.app, self.document_favourites_list, heading=False)

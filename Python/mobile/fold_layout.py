@@ -26,8 +26,8 @@ def reserved_divisions(widget, *, include_inactive=False):
     from commonUtils.ui.native.text_size import native_backend
     if not native_backend(widget).startswith('toga_iOS.'):
         return ()
-    native = widget._impl.native
-    if not hasattr(native, 'reservedRegionsOfKind'):
+    native = getattr(widget._impl, 'native', None)
+    if native is None or not hasattr(native, 'reservedRegionsOfKind'):
         return ()
     from rubicon.objc import ObjCClass
     kind = ObjCClass('UIViewReservedRegionKind').divisionRegionKind()

@@ -12,6 +12,26 @@ from features.notes_library import library_files
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
+    def test_panel_container_surfaces_do_not_request_native_text_color(self):
+        from dataclasses import replace
+        import toga
+        presentation = self.app.presentation
+        containers = []
+        def paint(widget, **options):
+            if isinstance(widget, toga.Box):
+                self.assertIsNone(options.get('foreground'))
+                containers.append(widget)
+            return presentation.surface(widget, **options)
+        self.app._presentation = replace(presentation, surface=paint)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            await owner.open_note('Vault/Home.md')
+            await owner.open_note('Vault/Projects/Plan.MD')
+            owner.update_tree_selection()
+            self.assertGreater(len(containers), 1)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_footer_commands_browse_root_and_collapse_without_changing_document(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')

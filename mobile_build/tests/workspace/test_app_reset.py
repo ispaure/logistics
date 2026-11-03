@@ -1,5 +1,6 @@
 """Destructive reset boundaries, interruption recovery and explicit confirmation."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -110,7 +111,7 @@ class AppResetUITests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(self.temp.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.app.show_app_reset()
 

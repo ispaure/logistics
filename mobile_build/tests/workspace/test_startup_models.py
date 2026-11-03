@@ -1,5 +1,6 @@
 """Startup prepares durable models off-thread and defers inactive native views."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -115,5 +116,5 @@ class StartupModelTests(TestCase):
                         background.cancel()
                     app.main_window.close()
                     app.loop.run_until_complete(asyncio.sleep(0))
-                    app.loop.close()
+                    close_loop(app.loop)
                 LogisticsMobile.storage_root = None

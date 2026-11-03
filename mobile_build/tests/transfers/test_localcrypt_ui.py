@@ -1,5 +1,6 @@
 """Official Toga dummy backend: encrypted copies never enter persistent editors."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -42,7 +43,7 @@ class LocalCryptUITests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.cloud_client = Client()
             app.show_cloud(present=False)
@@ -137,7 +138,7 @@ class LocalCryptUITests(unittest.TestCase):
                 self.assertEqual(len(list((root / 'LocalCrypt').glob('*/data'))), 1)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_metadata_form_retains_failed_edits_and_clears_on_close(self):
         from io import BytesIO
@@ -187,4 +188,4 @@ class LocalCryptUITests(unittest.TestCase):
                 self.assertIsNone(owner.crypt_metadata_view.content)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

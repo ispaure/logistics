@@ -1,5 +1,6 @@
 """User-created documents publish into browsable local or encrypted folders."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.SMOKE
@@ -43,7 +44,7 @@ class DocumentCreationTests(unittest.TestCase):
     def tearDown(self):
         self.app.main_window.close()
         self.app.loop.run_until_complete(self.app.loop.shutdown_default_executor())
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 

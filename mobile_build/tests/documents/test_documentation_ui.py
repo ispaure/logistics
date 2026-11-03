@@ -1,5 +1,6 @@
 """Offline help entry, nested folder selection, inline search and adaptive layout."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -151,7 +152,7 @@ class DocumentationTests(unittest.TestCase):
 
     def tearDown(self):
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.temporary.cleanup()
 

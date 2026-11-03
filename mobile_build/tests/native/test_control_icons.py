@@ -1,5 +1,6 @@
 """Compact controls keep navigation, selection and editor ownership intact."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -18,7 +19,7 @@ class ControlIconTests(unittest.TestCase):
 
     def tearDown(self):
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 

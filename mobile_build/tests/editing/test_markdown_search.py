@@ -1,5 +1,6 @@
 """Native Markdown search scope, WebView lifecycle and host command integration."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -27,7 +28,7 @@ class MarkdownSearchTests(unittest.TestCase):
     def tearDown(self):
         self.owner.page_search.dispose()
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.temporary.cleanup()
 

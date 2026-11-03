@@ -1,5 +1,6 @@
 """Source isolation, credential defaults and iOS shared-root browsing."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -21,7 +22,7 @@ class FolderSourceTabTests(unittest.TestCase):
     def tearDown(self):
         _shared_local_roots.pop(self.app.private_root, None)
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 

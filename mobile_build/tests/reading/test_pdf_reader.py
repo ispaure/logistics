@@ -1,5 +1,6 @@
 """Mobile session integration using Toga's official dummy backend."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -36,7 +37,7 @@ def search_panel():
         finally:
             search.dispose()
             app.main_window.close()
-            app.loop.close()
+            close_loop(app.loop)
             LogisticsMobile.storage_root = previous_root
 
 
@@ -82,7 +83,7 @@ class PDFMobileTests(unittest.TestCase):
                 app.loop.run_until_complete(check())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = previous_root
 
     def test_spreads_follow_page_dimensions_and_last_page_without_skipping(self):
@@ -206,7 +207,7 @@ class PDFMobileTests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             local = root / 'cold.pdf'
             local.write_bytes(PDF)
@@ -241,7 +242,7 @@ class PDFMobileTests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             client = app.cloud_client = Client()
             client.supports_streaming = False

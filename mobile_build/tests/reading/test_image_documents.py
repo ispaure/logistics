@@ -1,5 +1,6 @@
 """Images remain provider documents across navigation and failed replacement."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -54,7 +55,7 @@ class ImageDocumentTests(unittest.TestCase):
                     self.assertEqual(owner.crypt_reader.key, 'pic10.png')
                 finally:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None
 
     def test_home_server_image_navigation_is_read_only_and_session_only(self):
@@ -88,5 +89,5 @@ class ImageDocumentTests(unittest.TestCase):
                 self.assertEqual(len(app.private_sessions.controllers), 1)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = None

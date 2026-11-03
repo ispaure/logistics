@@ -1,4 +1,5 @@
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -44,7 +45,7 @@ class NativeBrowserTests(unittest.TestCase):
             finally:
                 app.loop.run_until_complete(browser.close())
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_views_pagination_info_and_stale_thumbnail(self):
         with TemporaryDirectory() as directory:
@@ -97,4 +98,4 @@ class NativeBrowserTests(unittest.TestCase):
                 app.loop.run_until_complete(check())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

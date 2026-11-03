@@ -1,5 +1,6 @@
 """Android Back policy with real retained panels on Toga's dummy backend."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -21,7 +22,7 @@ class AndroidBackTests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(self.directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.routes = self.app.routes
         self.app.show_documents(destination='documents')

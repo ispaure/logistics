@@ -1,5 +1,6 @@
 """Configured collection folders, including encrypted and pulled copies."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -84,7 +85,7 @@ class LibraryCatalogTests(unittest.TestCase):
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             collection = app.private_root / 'LocalFiles' / 'Collection'
             (collection / 'Comics').mkdir(parents=True)

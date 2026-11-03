@@ -1,5 +1,6 @@
 """Vault detection, rooted Markdown browsing and revoked private reads."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -254,7 +255,7 @@ class ObsidianTests(unittest.TestCase):
             await self.app.loop.shutdown_asyncgens()
             await self.app.loop.shutdown_default_executor()
         self.app.loop.run_until_complete(drain_workers())
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.temporary.cleanup()
 

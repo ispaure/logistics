@@ -1,5 +1,6 @@
 """Conversation lists cache summaries only and preserve cold-start selection."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -46,7 +47,7 @@ class ChatInventoryTests(TestCase):
         LogisticsMobile.storage_root = self.root
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         async def exercise():
             app.show_chat()
@@ -63,7 +64,7 @@ class ChatInventoryTests(TestCase):
         LogisticsMobile.storage_root = self.root
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         async def exercise():
             app.show_chat()
@@ -87,7 +88,7 @@ class ChatInventoryTests(TestCase):
         LogisticsMobile.storage_root = self.root
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
 
         async def exercise():

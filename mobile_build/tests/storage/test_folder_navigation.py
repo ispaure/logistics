@@ -1,5 +1,6 @@
 """Folder Back stacks and explicit reader-to-folder navigation."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -22,7 +23,7 @@ from mobile_build.tests.native.test_native_reader_return import Navigation
 class FolderStackTests(TestCase):
     def setUp(self):
         self.loop = asyncio.new_event_loop()
-        self.addCleanup(self.loop.close)
+        self.addCleanup(close_loop, self.loop)
         self.host = NativeNavigationHost(DESTINATION_ITEMS)
         self.app = SimpleNamespace(loop=self.loop, native_host=self.host, active_host=True,
             select_destination=Mock(return_value=True), visible_reader=Mock(return_value=None),
@@ -295,7 +296,7 @@ class ShowInFolderTests(TestCase):
         LogisticsMobile.storage_root = Path(directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.app.show_cloud(present=False)
         self.folder = self.app.private_root / 'LocalFiles' / 'Projects' / 'Reports'
