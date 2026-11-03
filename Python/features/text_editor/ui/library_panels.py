@@ -9,6 +9,15 @@ from commonUtils.runtime.operations import OperationCancelled
 from features.text_editor import library_files
 
 
+class LibrarySearchTree(qt.QTreeWidget):
+    def keyPressEvent(self, event):
+        if event.key() in (qt.Qt.Key.Key_Return, qt.Qt.Key.Key_Enter) and self.currentItem() is not None:
+            self.itemActivated.emit(self.currentItem(), self.currentColumn())
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class LibraryPanels:
     def init_panels(self, side, controls):
         self.positions = {}
@@ -30,7 +39,7 @@ class LibraryPanels:
         if self.search is not None:
             self.search.setPlaceholderText('Search Notes Library')
         side.insertWidget(1, self.search_mode)
-        self.search_results = qt.QTreeWidget()
+        self.search_results = LibrarySearchTree()
         self.search_results.setHeaderLabels(['Name', 'Type', 'Size', 'Path'])
         self.search_results.header().setStretchLastSection(False)
         self.search_results.header().setSectionResizeMode(0, qt.QHeaderView.ResizeMode.Stretch)
