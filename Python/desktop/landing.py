@@ -46,6 +46,7 @@ class LandingPage(qt.QWidget):
     def __init__(self, parent=None, *, documents_only=False):
         super().__init__(parent)
         self._documents_only = documents_only
+        self._tool_columns = 1
         self._document_columns = 3
         self._tool_signature = None
         self._tool_cards = []
@@ -66,9 +67,10 @@ class LandingPage(qt.QWidget):
             QPushButton#launchCard:disabled { background: palette(window); }
             QLabel#launchTitle { font-weight: bold; }
             QLabel#launchDetail { color: palette(text); }
-            QLabel#sectionTitle { font-weight: bold; font-size: 15px; }
+            QLabel#launchHint { color: palette(placeholder-text); }
+            QLabel#sectionTitle { font-weight: bold; font-size: %s; }
             QPushButton#documentAction { min-height: 0px; padding: 2px 10px; }
-        ''')
+        ''' % ('15px' if documents_only else f'{point_size(19.5)}pt'))
         outer = qt.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = self.scroll = qt.QScrollArea(self)
@@ -81,7 +83,8 @@ class LandingPage(qt.QWidget):
         centered = qt.QVBoxLayout(canvas)
         centered.setContentsMargins(16 if documents_only else 36, 24 if documents_only else 36,
                                    16 if documents_only else 36, 32 if documents_only else 64)
-        centered.addStretch()
+        if documents_only:
+            centered.addStretch()
         content = self.content = qt.QWidget()
         content.installEventFilter(self)
         content.setMinimumWidth(240)
@@ -90,21 +93,21 @@ class LandingPage(qt.QWidget):
         layout = qt.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
-        heading = qt.QLabel('New / Open Document' if documents_only else 'Welcome to Logistics')
-        font = heading.font()
-        font.setPointSizeF(point_size(19.5))
-        font.setBold(True)
-        heading.setFont(font)
-        heading.setWordWrap(True)
-        layout.addWidget(heading)
-        introduction = qt.QLabel('Choose a format to create, read or edit.' if documents_only
-                                 else 'Choose your workspace, or open something to read or edit.')
-        introduction.setWordWrap(True)
-        layout.addWidget(introduction)
+        if documents_only:
+            heading = qt.QLabel('New / Open Document')
+            font = heading.font()
+            font.setPointSizeF(point_size(19.5))
+            font.setBold(True)
+            heading.setFont(font)
+            heading.setWordWrap(True)
+            layout.addWidget(heading)
+            introduction = qt.QLabel('Choose a format to create, read or edit.')
+            introduction.setWordWrap(True)
+            layout.addWidget(introduction)
         self.buttons = {}
         self.columns = qt.QGridLayout()
         self.columns.setContentsMargins(0, 0, 0, 0)
-        self.columns.setHorizontalSpacing(24)
+        self.columns.setHorizontalSpacing(48)
         self.columns.setVerticalSpacing(24)
         layout.addLayout(self.columns)
         self.choices = qt.QWidget()
@@ -113,35 +116,26 @@ class LandingPage(qt.QWidget):
         choices_layout.setSpacing(16)
         self.columns.addWidget(self.choices, 0, 0)
         if not documents_only:
+            features_heading = qt.QLabel('Features')
+            features_heading.setObjectName('sectionTitle')
+            choices_layout.addWidget(features_heading)
             self.tool_grid = qt.QGridLayout()
             self.tool_grid.setSpacing(16)
             choices_layout.addLayout(self.tool_grid)
-            hint = qt.QLabel('Workspaces open with the sidebar by default. Change this under Appearance & shared controls → Menus.')
+            hint = qt.QLabel('Sidebar preference · Settings → Menus')
+            hint.setToolTip('Settings → Appearance & shared controls → Menus → Launch with sidebar')
+            hint.setObjectName('launchHint')
             hint.setWordWrap(True)
             choices_layout.addWidget(hint)
-            choices_layout.addSpacing(8)
         self.document_section = qt.QWidget()
         self.document_grid = qt.QGridLayout(self.document_section)
         self.document_grid.setContentsMargins(0, 0, 0, 0)
         self.document_grid.setSpacing(16)
+        title = qt.QLabel('Read & edit')
+        title.setObjectName('sectionTitle')
         if documents_only:
-            title = qt.QLabel('Read & edit')
-            title.setObjectName('sectionTitle')
             choices_layout.addWidget(title)
-        else:
-            self.read_edit_toggle = qt.QToolButton()
-            self.read_edit_toggle.setText('Read && edit')
-            self.read_edit_toggle.setAccessibleName('Read & edit')
-            self.read_edit_toggle.setCheckable(True)
-            self.read_edit_toggle.setToolButtonStyle(qt.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-            self.read_edit_toggle.setArrowType(qt.Qt.ArrowType.RightArrow)
-            self.read_edit_toggle.setCursor(qt.Qt.CursorShape.PointingHandCursor)
-            self.read_edit_toggle.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Fixed)
-            self.read_edit_toggle.setStyleSheet('QToolButton { text-align: left; font-weight: bold; padding: 8px; }')
-            self.read_edit_toggle.toggled.connect(self._toggle_document_section)
-            choices_layout.addWidget(self.read_edit_toggle)
-            self.document_section.hide()
-        choices_layout.addWidget(self.document_section)
+            choices_layout.addWidget(self.document_section)
         choices_layout.addStretch()
         self.editor_buttons = {}
         self.editor_new_buttons = {}
@@ -153,20 +147,22 @@ class LandingPage(qt.QWidget):
         saved_layout.setContentsMargins(0, 0, 0, 0)
         saved_layout.setSpacing(16)
         self.favourites_layout = qt.QVBoxLayout()
+        self.favourites_layout.setSpacing(12)
         saved_layout.addLayout(self.favourites_layout)
+        saved_layout.addSpacing(16 if not documents_only else 0)
         self.recent_layout = qt.QVBoxLayout()
+        self.recent_layout.setSpacing(12)
         saved_layout.addLayout(self.recent_layout)
+        if not documents_only:
+            saved_layout.addSpacing(16)
+            saved_layout.addWidget(title)
+            saved_layout.addWidget(self.document_section)
         saved_layout.addStretch()
         self.columns.addWidget(self.saved_files, 1, 0)
         centered.addWidget(content, 0, qt.Qt.AlignmentFlag.AlignHCenter)
         centered.addStretch()
         self.scroll.viewport().installEventFilter(self)
         self._fit_content()
-
-    def _toggle_document_section(self, expanded):
-        self.document_section.setVisible(expanded)
-        self.read_edit_toggle.setArrowType(qt.Qt.ArrowType.DownArrow if expanded else qt.Qt.ArrowType.RightArrow)
-        self._schedule_layout()
 
     def eventFilter(self, watched, event):
         if self._preparing_layout:
@@ -242,7 +238,7 @@ class LandingPage(qt.QWidget):
                 for widget in widgets:
                     qt.QCoreApplication.sendPostedEvents(widget, qt.QEvent.Type.LayoutRequest)
                 state = (self.content.geometry().getRect(), self.scroll.viewport().size(),
-                         self._document_columns,
+                         self._tool_columns, self._document_columns,
                          tuple(c.geometry().getRect() for c in self._tool_cards + self._document_cards))
                 if state == previous:
                     break
@@ -308,16 +304,17 @@ class LandingPage(qt.QWidget):
             self.columns.removeWidget(self.saved_files)
             self.columns.addWidget(self.saved_files, *position)
         # Saved filenames and large fonts must not steal width from the tools.
-        choices_width = (width - self.columns.horizontalSpacing()) // 2 if split else width
+        choices_width = (width - self.columns.horizontalSpacing()) * 2 // 3 if split else width
         self.choices.setFixedWidth(choices_width)
         self.saved_files.setFixedWidth(width - self.columns.horizontalSpacing() - choices_width if split else width)
-        self.columns.setColumnStretch(0, 1)
+        self.columns.setColumnStretch(0, 2 if split else 1)
         self.columns.setColumnStretch(1, int(split))
-        columns = (3 if width >= 840 else 2 if width >= 560 else 1) if self._documents_only else 1
-        self._document_columns = columns
+        self._document_columns = (3 if width >= 840 else 2 if width >= 560 else 1) if self._documents_only else 1
         if hasattr(self, 'tool_grid'):
-            self._arrange_cards(self.tool_grid, self._tool_cards, columns)
-        self._arrange_cards(self.document_grid, self._document_cards, columns)
+            # Keep at least 340 pixels per feature card for wrapped descriptions.
+            self._tool_columns = 2 if choices_width >= 680 + self.tool_grid.spacing() else 1
+            self._arrange_cards(self.tool_grid, self._tool_cards, self._tool_columns)
+        self._arrange_cards(self.document_grid, self._document_cards, self._document_columns)
         self._schedule_layout()
 
     @staticmethod
@@ -486,6 +483,13 @@ class LaunchSurface(qt.QWidget):
         update.move(max(12, self.width() - update.width() - 12),
                     12 + version.height() + 6 if version.isVisible() else 12)
         update.raise_()
+        # Keep the scrollable launch page below the floating release controls.
+        # Top-aligned section headings otherwise sit underneath an update offer.
+        header_clearance = max((control.geometry().bottom() + 13
+                                for control in (version, update) if not control.isHidden()), default=0)
+        layout = self.layout()
+        if layout is not None and layout.contentsMargins().top() != header_clearance:
+            layout.setContentsMargins(0, header_clearance, 0, 0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
