@@ -31,6 +31,19 @@ class PrivateFiles(RemoteFiles):
 
 
 class NotesLibraryDesktopTests(QtTestCase):
+    def test_miscellaneous_files_are_visible_and_use_the_document_router(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            for name in ('clip.mp4', 'archive.bin', 'LICENSE', '.secret'):
+                (root / name).write_bytes(b'content')
+            window = self.open_library(root)
+            self.assertTrue({'clip.mp4', 'archive.bin', 'LICENSE'} <= window.items.keys())
+            self.assertNotIn('.secret', window.items)
+            with patch('desktop.document_catalog.open_resource') as opened:
+                window.open_note('clip.mp4')
+                opened.assert_called_once_with(window.provider, 'clip.mp4', window)
+            window.close()
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 

@@ -272,6 +272,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         except ValueError as error:
             self.viewer.status.setText(str(error))
             return
+        if not resolve_link and document_kind(path) is None:
+            return self.open_other_file(path)
         if not self.can_leave_document():
             self.defer_after_save(lambda: self.open_note(path, remember=remember, fragment=fragment,
                                                         index=index, resolve_link=resolve_link))
@@ -312,6 +314,13 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             return resolved, prepare_markdown(self.provider, self.provider.root / resolved, data=data, cancelled=cancelled,
                                              image_source=self.library.image_source(resolved))
         self.progress.start(read, message='Opening note…')
+
+    def open_other_file(self, path):
+        from desktop.document_catalog import open_resource
+        try:
+            return open_resource(self.provider, self.library.contained(path), self)
+        except (OSError, ValueError) as error:
+            self.viewer.status.setText(str(error))
 
     def completed(self, result, error):
         kind, *values = self.pending

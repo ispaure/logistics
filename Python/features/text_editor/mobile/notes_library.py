@@ -20,7 +20,7 @@ import toga
 from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
-from features.text_editor.notes import NotesLibrary, MAX_NOTE, MARKDOWN, DOCUMENTS, document_kind
+from features.text_editor.notes import NotesLibrary, MAX_NOTE, MARKDOWN, document_kind
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.search.names import natural_name_key, search_terms
 from commonUtils.search.providers import search_resources, SearchResult
@@ -59,6 +59,7 @@ class NotesHost:
     choose_type: Callable = None
     toolbar_insets: Callable = lambda toolbar: (8, 8)
     open_timing: Callable = None
+    open_resource: Callable = None
     relocate_references: Callable = lambda provider, source, destination: None
 
 
@@ -400,10 +401,6 @@ class VaultBrowser(LibraryPanels):
                     and self.host.folder_visible(
                         row["path"], directory=row["directory"]
                     )
-                    and (
-                        row["directory"]
-                        or PurePosixPath(row["name"]).suffix.lower() in DOCUMENTS
-                    )
                 ),
                 key=lambda row: (not row["directory"], row["name"].casefold()),
             )
@@ -733,6 +730,12 @@ class VaultBrowser(LibraryPanels):
         if not self.valid() or (getattr(self, '_moving_entry', False) and not getattr(self, '_reopening_after_move', False)):
             return False
         if not await self.prepare_leave():
+            return False
+        if not resolve_link and document_kind(path) is None:
+            path = self.contained(path)
+            if self.host.open_resource is not None:
+                return await self.host.open_resource(self.provider, path)
+            self.notice.text = 'No viewer is available for this file type.'
             return False
         if not resolve_link and document_kind(path) == 'text':
             return await self.open_text(path, remember=remember)
