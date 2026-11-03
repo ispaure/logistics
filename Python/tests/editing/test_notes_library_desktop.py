@@ -61,6 +61,26 @@ class NotesLibraryDesktopTests(QtTestCase):
             restored.close()
             window.close()
 
+    def test_search_activation_opens_nested_document_from_its_provider_path(self):
+        from PySide6.QtTest import QTest
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Nested').mkdir()
+            (root / 'Nested/Target.md').write_text('# Target note')
+            window = self.open_library(root)
+            window.search.setText('Target')
+            window.filter()
+            self.wait_until(lambda: not window.aux.busy and bool(window.search_rows))
+            item = window.search_results.topLevelItem(0)
+            self.assertEqual(item.text(0), 'Target.md')
+            window.search_results.setCurrentItem(item)
+            window.search_results.setFocus()
+            QTest.keyClick(window.search_results, qt.Qt.Key.Key_Return)
+            self.wait_until(lambda: not window.progress.busy and window.index >= 0)
+            self.assertEqual(window.history[window.index], 'Nested/Target.md')
+            self.assertIn('Target note', window.viewer.browser.toPlainText())
+            window.close()
+
     def test_save_before_navigation_continues_once_and_failure_keeps_current_note(self):
         with self.temporary_directory() as directory:
             root = Path(directory)
