@@ -127,7 +127,9 @@ function finish(e, cancelled = false) {
   if (cancelled) {
     cancelPreview();
     points = [];
-    draw();
+    // Applying a deferred viewport size redraws the page itself. Avoid
+    // replaying all stored ink immediately before that same redraw.
+    if (!viewportResizePending) draw();
     flushUpdate();
     return
   }
