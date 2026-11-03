@@ -44,6 +44,26 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_system_back_restores_browsing_after_each_document_kind(self):
+        from mobile.obsidian import open_vault
+        from features.notebooks.notebook import Notebook
+        (self.vault / 'Code.json').write_text('{}')
+        (self.vault / 'Drawing.rmdoc').write_bytes(Notebook.new('Drawing').to_bytes())
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            for path in ('Vault/Home.md', 'Vault/Code.json', 'Vault/Drawing.rmdoc'):
+                owner.sidebar.show_sidebar()
+                self.assertTrue(await owner.open_note(path))
+                self.assertFalse(owner.sidebar.sidebar_open)
+                self.assertEqual(owner.back_action(), owner.return_to_browsing)
+                owner.back_action()()
+                self.assertEqual(owner.sidebar.side, 'files')
+                self.assertIsNone(owner._document_return_side)
+                self.assertEqual(owner.back_action(), owner.sidebar.show_detail)
+                owner.back_action()()
+            owner.close()
+        self.run_async(exercise())
+
     def test_json_and_view_scripts_use_embedded_code_input_and_preserve_source_bytes(self):
         from dataclasses import replace
         from unittest.mock import AsyncMock
