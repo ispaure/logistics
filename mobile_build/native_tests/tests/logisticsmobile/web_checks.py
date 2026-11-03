@@ -5,6 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
+import os
 
 
 def native_state(view):
@@ -78,7 +79,16 @@ async def wait_for_text(view, expected, *, absent=None, timeout=30):
     # asyncio's current-task timeout context is not reliable at that boundary.
     # wait() uses a loop timer without requiring a current-task context.
     task = asyncio.create_task(loaded())
-    done, _ = await asyncio.wait([task], timeout=timeout)
+    first_wait = min(timeout, 15)
+    done, _ = await asyncio.wait([task], timeout=first_wait)
+    if not done and timeout > first_wait:
+        state = native_state(view)
+        if state.get('platform_backend', '').startswith('toga_iOS.'):
+            # Capture the still-running process before the final failure exits
+            # the app. This does not extend the existing render deadline.
+            print('LOGISTICS_NATIVE_WEBVIEW_STALL=' + json.dumps(dict(
+                pid=os.getpid(), expected=expected, native=state)), flush=True)
+        done, _ = await asyncio.wait([task], timeout=timeout - first_wait)
     if not done:
         state = native_state(view)
         print('LOGISTICS_NATIVE_WEBVIEW_STATE=' + json.dumps(state), flush=True)

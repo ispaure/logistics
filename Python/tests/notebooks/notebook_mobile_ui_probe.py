@@ -99,6 +99,9 @@ def main(output, *, palm_only=False, laptop_only=False):
                 assert js("$('laptopTools').hidden && $('viewport').clientHeight===innerHeight"), js(
                     "JSON.stringify({hidden:$('laptopTools').hidden,classes:document.body.className,viewport:$('viewport').clientHeight,height:innerHeight,body:document.body.getBoundingClientRect().toJSON()})")
                 js("$('brushToggle').click()")
+                js("window.absentFoldProof=null;window.notebookFold(null);requestAnimationFrame(()=>{window.absentFoldProof=JSON.stringify({open:!$('mobileSheet').hidden,focused:document.activeElement.matches('.brush-card[aria-pressed=true]')})})")
+                wait(lambda: bool(js('window.absentFoldProof')))
+                assert json.loads(js('window.absentFoldProof')) == dict(open=True, focused=True)
                 assert js("!$('mobileSheet').hidden && $('mobileSheet').contains($('tool'))")
                 js("document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
             (output / 'laptop-result.json').write_text(json.dumps(dict(success=True, layouts=reports), indent=2))
@@ -145,16 +148,18 @@ def main(output, *, palm_only=False, laptop_only=False):
             colors = PEN_COLORS if tool in (17, 15) else (BRUSHES[tool]['colors'][0],)
             for color in colors:
                 for grayscale in ((False, True) if tool in (17, 15) else (False,)):
-                    js("$('tool').value=" + repr(str(tool)) + ";$('tool').onchange();$('color').value=" + repr(str(color)) + ";$('grayscale').checked=" + str(grayscale).lower() + ";document.dispatchEvent(new Event('change'))")
-                    QTest.qWait(80)
-                    config = json.loads(js('JSON.stringify(window.booxPreviewConfiguration)'))
-                    assert config['tool'] == tool and config['color'] == color, config
-                    assert config['enabled'] == (tool in (15, 17)), config
-                    if config['enabled']:
+                    expected = dict(tool=tool, color=color, enabled=tool in (15, 17))
+                    if expected['enabled']:
                         rgb = [int(PALETTE[color][i:i + 2], 16) for i in (1, 3, 5)]
                         if grayscale:
                             rgb = [math.floor(sum(c * w for c, w in zip(rgb, (.2126, .7152, .0722))) + .5)] * 3
-                        assert config['argb'] == 0xff000000 + (rgb[0] << 16) + (rgb[1] << 8) + rgb[2]
+                        expected['argb'] = 0xff000000 + (rgb[0] << 16) + (rgb[1] << 8) + rgb[2]
+                    js("$('tool').value=" + repr(str(tool)) + ";$('tool').onchange();$('color').value=" + repr(str(color)) + ";$('grayscale').checked=" + str(grayscale).lower() + ";document.dispatchEvent(new Event('change'))")
+                    # The native preview producer publishes on a later frame.
+                    wait(lambda: js('(()=>{const actual=window.booxPreviewConfiguration;return !!actual&&Object.entries('
+                        + json.dumps(expected) + ').every(([key,value])=>actual[key]===value)})()'))
+                    config = json.loads(js('JSON.stringify(window.booxPreviewConfiguration)'))
+                    assert {key: config[key] for key in expected} == expected, config
                     native_previews.append(dict(tool=tool, color=color, grayscale=grayscale, enabled=config['enabled']))
         js("$('tool').value='17';$('tool').onchange();$('color').value='0';$('grayscale').checked=false;document.dispatchEvent(new Event('change'))")
         pointer_report = json.loads(js(POINTER_CHECKS))
@@ -196,6 +201,9 @@ def main(output, *, palm_only=False, laptop_only=False):
             assert js("getComputedStyle($('inkLayers')).backgroundColor") == 'rgba(0, 0, 0, 0)', 'E-ink styling must preserve the transparent ink blend group'
             js("document.getElementById('probeContrast').remove()")
             js("document.getElementById('brushToggle').click()")
+            js("window.absentFoldProof=null;window.notebookFold(null);requestAnimationFrame(()=>{window.absentFoldProof=JSON.stringify({open:!$('mobileSheet').hidden,focused:document.activeElement.matches('.brush-card[aria-pressed=true]')})})")
+            wait(lambda: bool(js('window.absentFoldProof')))
+            assert json.loads(js('window.absentFoldProof')) == dict(open=True, focused=True), 'An absent fold update dismissed the brush picker'
             assert js("document.activeElement.matches('.brush-card[aria-pressed=true]')")
             assert js("[...$('mobileSheet').querySelectorAll('button')].filter(b=>b.getClientRects().length).every(b=>b.getAttribute('aria-label')!=='Close panel')")
             assert js("[...document.querySelectorAll('#mobileSheet .sheet-panel:not([hidden]) h3')].map(h=>h.textContent).join('/')") == 'Brush/Stroke width/Ink color'
@@ -321,6 +329,7 @@ def main(output, *, palm_only=False, laptop_only=False):
         (output / 'mobile-ui.json').write_text(json.dumps(dict(status='passed', sizes=reports,
             brush=12, color=6, real_mouse_input=True, undo=True, redo=True,
             focus_mode=True, view_preserved=True, full_viewport=True, error_visible=True,
+            absent_fold_preserves_picker=True,
             pointer=pointer_report,
             input=input_report, native_previews=native_previews, pages=3, thumbnails=True, insert_after_current=True,
             layers=True, browser_owns_rename=True, recovery=True, errors=failures), indent=2))
