@@ -645,7 +645,8 @@ class VaultBrowser(LibraryPanels):
                     row.insert(2, disclosure)
                 async def file_actions(widget=None, path=path, **kwargs):
                     await self.file_actions(path)
-                row.add(self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions))
+                if any(self.library.supports(action) for action in ('rename', 'delete')):
+                    row.add(self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions))
             new_rows[key] = row
             self._row_cache[key] = row
             button = next(child for child in row.children if hasattr(child, 'vault_path'))
