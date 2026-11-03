@@ -129,7 +129,14 @@ def safe_geometry(app):
         title_gap = float(title_rect.origin.y - safe.top)
         body_rect = window_rect
         if reader is not None:
-            content = reader._reading_frame_owner.content._impl.native
+            frame = getattr(reader, '_reading_frame_owner', None)
+            # Managed Markdown has a title row and WebView without a paginated
+            # ReadingFrame. Measure its first actual content row after the title.
+            from mobile.document_location import side_title_header
+            content_view = (frame.content if frame is not None else next(
+                child for child in reader.children
+                if child is not side_title_header(reader) and child.layout.content_height > 0))
+            content = content_view._impl.native
             body_rect = content.convertRect(content.bounds, toView=window)
         content_gap = float(body_rect.origin.y) - title_bottom
         result.update(reader_title_top_gap=title_gap, reader_title_content_gap=content_gap)
