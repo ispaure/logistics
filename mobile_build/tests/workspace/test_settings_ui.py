@@ -17,6 +17,47 @@ from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_android_drag_tints_existing_sliders_without_rebuilding_artwork(self):
+        from mobile.settings.accent import AccentControls
+        from mobile.palette import accent_colors
+        class AndroidImpl:
+            __module__ = 'toga_android.app'
+        sliders = [SimpleNamespace(value=value, _impl=SimpleNamespace(native=Mock()))
+                   for value in (150, 60)]
+        owner = SimpleNamespace(app=SimpleNamespace(_impl=AndroidImpl()), _dragging=True,
+            hue=sliders[0], saturation=sliders[1], update_labels=Mock(), draw_spectrum=Mock(),
+            _spectrum_width=200, selected=SimpleNamespace(style=SimpleNamespace()))
+        tint = Mock()
+        with patch.dict('sys.modules', {'android.content.res': SimpleNamespace(ColorStateList=SimpleNamespace(valueOf=tint))}), \
+                patch('mobile.settings.accent.style_slider') as rebuild:
+            AccentControls.preview_color(owner)
+        rebuild.assert_not_called()
+        for slider in sliders:
+            self.assertEqual(slider._accent_preview, accent_colors(150, 60))
+            slider._impl.native.setThumbTintList.assert_called_once()
+            slider._impl.native.setThumb.assert_not_called()
+            slider._impl.native.setProgressDrawable.assert_not_called()
+
+    def test_hue_drag_skips_unchanged_spectrum_and_only_commits_on_release(self):
+        app = self.make_app()
+        app.show_settings()
+        app.settings_navigation.choose('Appearance')
+        controls = app.accent_controls
+        self.assertGreaterEqual(controls.hue.style.height, 64)
+        self.assertEqual(controls.hue._accent_thumb_extent, 32)
+        controls.hue.on_press()
+        with patch.object(controls.spectrum, 'redraw') as redraw, \
+                patch.object(app.preferences, 'save', wraps=app.preferences.save) as save, \
+                patch('mobile.settings.accent.refresh_appearance') as refresh:
+            for value in range(20, 40):
+                controls.hue.value = value
+            redraw.assert_not_called()
+            save.assert_not_called()
+            refresh.assert_not_called()
+            controls.hue.on_release()
+            save.assert_called_once()
+            refresh.assert_called_once_with(app)
+
     def test_accent_drag_previews_release_persists_and_reset_restores_blue(self):
         from mobile.palette import LIGHT, set_accent, accent_colors
         from mobile.preferences import Preferences
