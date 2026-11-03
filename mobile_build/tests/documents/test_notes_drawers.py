@@ -144,6 +144,9 @@ class NotesDrawerTests(unittest.TestCase):
             touch(0, 0)
             touch(cancellation, 0)
             self.assertFalse(touch(1, 150, time=100))
+        touch(0, 0)
+        touch(2, 5, 80, 50)
+        self.assertFalse(touch(1, 150, time=100))
         owner.swipe.assert_not_called()
         owner.clear_gestures()
         popup.setTouchInterceptor.assert_called_with(None)
@@ -220,6 +223,10 @@ assert.equal(swipe(90, {duration:900}), '');
 assert.equal(swipe(90, {target:{...normal, scrollWidth:400}}), '');
 assert.equal(swipe(90, {target:{...normal, isContentEditable:true}}), '');
 assert.equal(swipe(90, {target:{...normal, tagName:'INPUT'}}), '');
+assert.equal(swipe(90, {target:{...normal, tagName:'VIDEO'}}), '');
+assert.equal(swipe(90, {target:{...normal, tagName:'AUDIO'}}), '');
+assert.equal(swipe(90, {during:()=>events.touchmove({touches:[point(185,180)]})}), '');
+assert.equal(swipe(90, {during:()=>events.touchmove({touches:[point(245,105)]})}), '/note?drawer=files');
 selection = 'selected';
 assert.equal(swipe(90), '');
 selection = '';

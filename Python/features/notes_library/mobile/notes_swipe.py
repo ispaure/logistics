@@ -14,13 +14,17 @@ def document_swipes(base):
         let t=e.touches[0], el=e.target;
         while(el && el!==document.body){
           if(el.scrollWidth>el.clientWidth+2 || el.isContentEditable ||
-             /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(el.tagName))return;
+             /^(INPUT|TEXTAREA|SELECT|BUTTON|AUDIO|VIDEO)$/.test(el.tagName))return;
           el=el.parentElement;
         }
         start={x:t.clientX,y:t.clientY,time:Date.now()};
       },{passive:true});
       document.addEventListener('touchmove',e=>{
         if(e.touches.length!==1 || zoomed())start=null;
+        if(start){
+          const t=e.touches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;
+          if(Math.abs(dy)>10 && Math.abs(dx)<Math.abs(dy)*2)start=null;
+        }
       },{passive:true});
       document.addEventListener('touchcancel',()=>start=null,{passive:true});
       document.addEventListener('touchend',e=>{

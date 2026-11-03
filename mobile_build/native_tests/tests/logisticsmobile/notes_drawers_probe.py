@@ -48,14 +48,19 @@ class NotesDrawersProbe(LogisticsMobile):
                 expected_children = [owner.tree, owner.article] if owner.sidebar.expanded else [owner.article]
                 assert list(owner.sidebar.view.children) == expected_children
 
-                async def swipe_document(dx):
+                async def swipe_document(dx, *, vertical=False, media=''):
                     await owner.web.evaluate_javascript('''(function(){
-                      function event(type,x){const e=new Event(type,{bubbles:true});
-                        Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[{clientX:x,clientY:160}]});
-                        Object.defineProperty(e,'changedTouches',{value:[{clientX:x,clientY:160}]});
-                        document.body.dispatchEvent(e);}
-                      event('touchstart',innerWidth/2);event('touchend',innerWidth/2+DX);
-                    })();'''.replace('DX', str(dx)))
+                      const target=MEDIA?document.createElement(MEDIA):document.body;
+                      if(MEDIA)document.body.appendChild(target);
+                      function event(type,x,y=160){const e=new Event(type,{bubbles:true});
+                        Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[{clientX:x,clientY:y}]});
+                        Object.defineProperty(e,'changedTouches',{value:[{clientX:x,clientY:y}]});
+                        target.dispatchEvent(e);}
+                      event('touchstart',innerWidth/2);
+                      if(VERTICAL)event('touchmove',innerWidth/2+5,240);
+                      event('touchend',innerWidth/2+DX);
+                      if(MEDIA)target.remove();
+                    })();'''.replace('DX', str(dx)).replace('VERTICAL', json.dumps(vertical)).replace('MEDIA', json.dumps(media)))
 
                 async def wait_side(side):
                     for _ in range(100):
@@ -78,18 +83,30 @@ class NotesDrawersProbe(LogisticsMobile):
                         density = native.getContext().getResources().getDisplayMetrics().density
                         time = SystemClock.uptimeMillis()
                         x = 80 if direction > 0 else 220
-                        for action, offset, elapsed in ((0, 0, 0), (1, 140 * direction, 100)):
-                            event = MotionEvent.obtain(time, time + elapsed, action,
-                                (x + offset) * density, 180 * density, 0)
-                            try:
-                                native.dispatchTouchEvent(event)
-                                if action == 0:
-                                    owner.sidebar.refresh_gestures()
-                            finally:
-                                event.recycle()
+                        overlay = owner.sidebar.overlay
+                        for vertical in (True, False):
+                            moves = [(0, 0, 0, 0)]
+                            if vertical:
+                                moves.append((2, 5, 80, 50))
+                            moves.append((1, 140 * direction, 0, 100))
+                            for action, offset, dy, elapsed in moves:
+                                event = MotionEvent.obtain(time, time + elapsed, action,
+                                    (x + offset) * density, (180 + dy) * density, 0)
+                                try:
+                                    native.dispatchTouchEvent(event)
+                                    if action == 0:
+                                        owner.sidebar.refresh_gestures()
+                                finally:
+                                    event.recycle()
+                            if vertical:
+                                assert owner.sidebar.overlay is overlay
                     assert owner.sidebar.overlay is None
                     assert not owner.sidebar.gestures
 
+                for options in ({'vertical': True}, {'media': 'video'}, {'media': 'audio'}):
+                    await swipe_document(-95, **options)
+                    await asyncio.sleep(.2)
+                    assert owner.sidebar.side is None
                 await swipe_document(-95)
                 await wait_side('links')
                 await asyncio.sleep(.3)
