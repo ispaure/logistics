@@ -30,7 +30,8 @@ def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=Fal
             drive = Path(letter + ':/')
             if drive.exists() and str(drive) != local_root:
                 locations.append((str(drive), lambda drive=drive: (LocalFiles(drive), lambda: None)))
-    for item in connections():
+    from features.application import registry
+    for item in connections() if registry.is_feature_enabled('rclone') else ():
         if item == getattr(provider, 'connection', None):
             continue
         def factory(item=item):
@@ -83,7 +84,10 @@ def open_editor_choice(choice, parent=None, *, markdown=False, fragment='', edit
     progress = loading.operation
     def completed(session, error):
         try:
-            if error:
+            if progress.cancelled.is_set():
+                getattr(getattr(session, 'resources', None), 'close', lambda: None)()
+                choice.close()
+            elif error:
                 choice.close()
                 qt.QMessageBox.warning(parent, 'Open', error)
             else:
@@ -91,6 +95,7 @@ def open_editor_choice(choice, parent=None, *, markdown=False, fragment='', edit
                 if markdown and fragment:
                     window.viewer.browser.scrollToAnchor(fragment)
         except Exception as error:
+            getattr(getattr(session, 'resources', None), 'close', lambda: None)()
             choice.close()
             qt.QMessageBox.warning(parent, 'Open', str(error))
         finally:
