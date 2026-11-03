@@ -140,8 +140,10 @@ File rows keep the existing font size and touch height.
 
 The left panel has **Files**, **Search** and **Calendar** tabs. Files uses the
 available height for its folder tree. Search keeps its query and results in a
-separate tab, with **In documents** and **File names** scope buttons. Returning
-to Files shows the tree even while a search query is retained. Calendar starts on the current
+separate tab, with **File names** selected by default and **In documents** available
+for content searches. Files and Search retain separate rows and scroll positions;
+returning to either tab restores its own list immediately. New result batches replace
+the visible rows together. Returning to Files shows the tree even while a search query is retained. Calendar starts on the current
 month; use its arrows to browse months. A dot marks a day with a note named
 `YYYY-MM-DD.md` anywhere in the library. Tap to open it, choosing a folder if
 several notes share that date. A missing day offers confirmation before creating
@@ -160,6 +162,12 @@ the pane that opened it. Android Back does the same, keeping the open document
 and its history unchanged. Search offers **File names** and **In documents**.
 Searches also inspect unopened folders, excluding
 hidden configuration.
+
+Documents opened inside a Notes Library appear in Home and Documents **Recent**.
+Selecting one returns to that library at the selected document, reusing the loaded
+library when possible. LocalCrypt references follow the existing credential history
+policy; Session-Only visits remain available in memory while the library is loaded
+and disappear when it closes or locks.
 
 Opening a Markdown document shows a full-pane **Opening document…** screen with
 **Cancel**. Cancelling keeps the current document and ignores late loading results.

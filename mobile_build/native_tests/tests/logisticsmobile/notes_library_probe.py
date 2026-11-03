@@ -327,6 +327,7 @@ class NotesLibraryProbe(LogisticsMobile):
             # Slow content search cannot monopolize the event loop or selector.
             for index in range(120):
                 (root / 'Projects' / f'Match {index:03}.md').write_text('search needle')
+            owner.search_mode.value = 'Search within Documents'
             owner.search.value = 'needle'
             first = owner.search_task
             await asyncio.sleep(.21)

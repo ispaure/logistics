@@ -19,6 +19,8 @@ class HubController(HubUI):
         "populate_document_libraries",
         "publish_document_search",
         "search_documents",
+        "open_document_search",
+        "close_document_search",
         "refresh_document_list",
         "clear_recent_documents",
         "open_document_category",
@@ -39,6 +41,7 @@ class HubController(HubUI):
         "document_saved_list",
         "document_notes_list",
         "documents_query",
+        "documents_search_open",
         "documents_view",
         "document_views",
         "document_view_buttons",
@@ -58,6 +61,7 @@ class HubController(HubUI):
     def __init__(self, app):
         self.app = app
         self.documents_query = ''
+        self.documents_search_open = False
         self.documents_view = 'Libraries'
         from .layout_participants import participants
         participants(app).register('document-hubs', self, HubUI.reflow_layout, order=20)
@@ -78,7 +82,10 @@ class HubController(HubUI):
         for name in ('document_notes_list', 'document_comics_list', 'document_search_results', 'document_favourites_list'):
             target = getattr(self, name, None)
             if target is not None:
-                target.clear()
+                if name == 'document_search_results':
+                    self.clear_document_search_results()
+                else:
+                    target.clear()
         self._document_libraries_ready = False
         self.refresh_document_list()
 

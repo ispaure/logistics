@@ -17,6 +17,18 @@ WORKSPACE_HEIGHT = 500
 
 
 class WorkspaceNavigationTests(unittest.TestCase):
+    def test_standalone_markdown_preview_has_no_file_drawer_button(self):
+        import toga
+        preview = toga.Box(children=[toga.WebView()])
+        toolbar = toga.Box()
+        preview.insert(0, toolbar)
+        preview._workspace_toolbar = toolbar
+        prepared = self.navigation.prepare(preview, 'documents', route='preview')
+        self.assertIs(prepared, preview)
+        self.assertFalse(hasattr(preview, '_workspace_menu_button'))
+        self.assertFalse(hasattr(preview, '_workspace_frame'))
+        self.assertEqual(list(toolbar.children), [])
+
     def test_reselecting_each_tab_returns_to_root_and_keeps_sessions(self):
         import toga
         app = self.app

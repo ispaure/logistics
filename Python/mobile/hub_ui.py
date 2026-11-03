@@ -245,6 +245,10 @@ class HubUI:
             if self.session_visible(current):
                 live.update((identity, current) for identity in aliases)
         history = self.recent_documents.sessions()
+        notes = getattr(self.app, 'vault_browser', None)
+        if notes is not None and notes.valid():
+            history = sorted([*getattr(notes, 'recent_notes', ()), *history],
+                             key=lambda session: getattr(session, 'opened_at', 0), reverse=True)
         recorded = {session.identity for session in history}
         # Unrecorded session-only work is still discoverable without persisting it.
         missing = [session for session in reversed(list(self.workspace.sessions.values()))
@@ -254,7 +258,7 @@ class HubUI:
         other_missing = [session for session in missing if session.id != self.workspace.active]
         items, seen = [], set()
         for entry in [*active_missing, *history, *other_missing]:
-            session = live.get(entry.identity, entry)
+            session = (entry if getattr(entry, 'history_opener', None) else live.get(entry.identity, entry))
             if session.id not in self.workspace.sessions and session.provider == 'file-reference':
                 from .document_sources import local_reference_available
                 if not local_reference_available(self.app, session.source):
@@ -273,6 +277,11 @@ class HubUI:
 
     def recent_opener(self, session):
         async def reopen(widget=None, **kwargs):
+            opener = getattr(session, 'history_opener', None)
+            if opener is not None and opener.get('kind') == 'notes':
+                from .favourites import reopen as reopen_reference
+                return await reopen_reference(self.app, dict(source=session.source, opener=opener,
+                                                            title=session.title), error_title='Open recent note')
             # Re-resolve at press time: the row may outlive a close or reopen.
             aliases = session_identities(session, self.recent_documents)
             current = next((item for item in self.workspace.sessions.values()
@@ -420,7 +429,7 @@ class HubUI:
         self.document_search = toga.TextInput(placeholder='Search local documents',
             value=getattr(self, 'documents_query', ''), on_change=self.search_documents,
             style=Pack(height=48, flex=1))
-        self.app._documents_status_row = toga.Box(children=[self.document_search],
+        self.app._documents_status_row = toga.Box(children=[],
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=8))
         box.add(self.app._documents_status_row)
         self.document_grids = []
@@ -436,6 +445,9 @@ class HubUI:
         self.document_libraries_list = toga.Box(children=[self.document_notes_list, self.document_comics_list],
                                                 style=Pack(direction=COLUMN))
         self._document_libraries_ready = False
+        for menu in getattr(self, '_document_search_menus', ()):
+            menu.dispose()
+        self._document_search_menus = []
         self.document_search_results = toga.Box(style=Pack(direction=COLUMN))
         self.document_results = toga.Box(style=Pack(direction=COLUMN))
         from .folder_hub_style import source_tab
@@ -468,15 +480,21 @@ class HubUI:
             return
         from .folder_hub_style import source_tab
         query = bool(getattr(self, 'documents_query', '').strip())
+        searching = query or getattr(self, 'documents_search_open', False)
+        status = self.app._documents_status_row
+        if searching and self.document_search.parent is None:
+            status.add(self.document_search)
+        elif not searching and self.document_search.parent is status:
+            status.remove(self.document_search)
         parent = self.document_views.parent
-        if query and parent is not None:
+        if searching and parent is not None:
             parent.remove(self.document_views)
-        elif not query and parent is None:
+        elif not searching and parent is None:
             index = self.documents_sections.children.index(self.app._documents_status_row) + 1
             self.documents_sections.insert(index, self.document_views)
         for name, button in self.document_view_buttons.items():
             source_tab(button, self.documents_view == name)
-        selected = self.document_search_results if query else {
+        selected = self.document_search_results if searching else {
             'Open': self.document_open_list, 'Recent': self.document_recent_list,
             'Saved': self.document_saved_list, 'Libraries': self.document_libraries_list,
             'Favourites': self.document_favourites_list}[self.documents_view]
@@ -484,9 +502,9 @@ class HubUI:
             self.document_results.clear()
             self.document_results.add(selected)
         discover = not getattr(self.app, '_startup_in_progress', False)
-        if discover and not query and self.documents_view == 'Libraries' and not self._document_libraries_ready:
+        if discover and not searching and self.documents_view == 'Libraries' and not self._document_libraries_ready:
             self.populate_document_libraries()
-        if discover and not query and self.documents_view == 'Favourites':
+        if discover and not searching and self.documents_view == 'Favourites':
             from .favourites import populate
             self.document_favourites_list.clear()
             populate(self.app, self.document_favourites_list, heading=False)
@@ -529,14 +547,23 @@ class HubUI:
             old.cancel()
         self._document_comics_discovery = self.app.loop.create_task(discover())
 
+    def clear_document_search_results(self):
+        for menu in getattr(self, '_document_search_menus', ()):
+            menu.dispose()
+        self._document_search_menus = []
+        self.document_search_results.clear()
+
     def publish_document_search(self, hits, failures):
         target = self.document_search_results
-        target.clear()
+        self.clear_document_search_results()
         rows = []
         for hit in hits:
-            async def open_result(widget=None, source=hit['source'], **kwargs):
+            async def open_result(widget=None, source=hit['source'], hit=hit, **kwargs):
                 if not self.app.checkpoint():
                     return
+                if hit.get('directory'):
+                    from .document_search import reveal_search_hit
+                    return await reveal_search_hit(self.app, hit)
                 if source['type'] == 'managed':
                     return self.app.stored_document_opener(source['resource'])()
                 if source['type'] == 'notebook':
@@ -552,18 +579,50 @@ class HubUI:
             middle_filename(button)
             button_icons(button, [('storage_local', 'Local document'), *(
                 [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [])])
-            row = toga.Box(children=[button, empty_document_row(hit['location'] + ' · ' + hit['path'])],
-                           style=Pack(direction=COLUMN))
+            from .browser_ui import entry_icon
+            from .action_menu import ActionMenu
+            more = icon_button('more', 'File actions for ' + hit['name'])
+            actions = [('Open folder' if hit.get('directory') else 'Open', open_result)]
+            if hit['source']['type'] in {'local', 'crypt'}:
+                async def reveal(widget=None, hit=hit, **kwargs):
+                    from .document_search import reveal_search_hit
+                    try:
+                        return await reveal_search_hit(self.app, hit)
+                    except (OSError, ValueError) as error:
+                        await self.main_window.dialog(toga.InfoDialog('Could not show file', str(error)))
+                actions.append(('Show in folder', reveal))
+            more._document_search_menu = ActionMenu(more, self.app, actions, document=False)
+            self._document_search_menus.append(more._document_search_menu)
+            row = toga.Box(children=[entry_icon(hit.get('directory', False)), button, more],
+                           style=Pack(direction=ROW, align_items=CENTER))
             rows.append(row)
         target.add(document_list(rows, 'No matching local documents.'))
         if failures:
             target.add(empty_document_row('Some local locations could not be searched.'))
         self.reflow_documents_hub()
 
+    def open_document_search(self, widget=None, **kwargs):
+        self.documents_search_open = True
+        self.show_document_collection()
+        if not self.documents_query.strip():
+            self.clear_document_search_results()
+            self.document_search_results.add(empty_document_row('Search filenames in all local folders.'))
+        self.app.adaptive.render()
+        self.document_search.focus()
+
+    def close_document_search(self, widget=None, **kwargs):
+        self._documents_file_search.stop_local_search()
+        self.document_search.value = ''
+        self._document_search_delay.cancel()
+        self.documents_search_open = False
+        self.clear_document_search_results()
+        self.show_document_collection()
+        self.app.adaptive.render()
+
     def search_documents(self, widget, **kwargs):
         self.documents_query = widget.value
         self._documents_file_search.stop_local_search()
-        self.document_search_results.clear()
+        self.clear_document_search_results()
         if widget.value.strip():
             self.document_search_results.add(empty_document_row('Searching local filenames…'))
         self.show_document_collection()
@@ -573,6 +632,9 @@ class HubUI:
         try:
             self.app.credential_document_lists.clear_recent()
             self.recent_documents.clear()
+            notes = getattr(self.app, 'vault_browser', None)
+            if notes is not None:
+                notes.recent_notes.clear()
         except (OSError, ValueError) as error:
             await self.main_window.dialog(toga.InfoDialog('Could not clear recent documents', str(error)))
             return
@@ -585,7 +647,7 @@ class HubUI:
         from .workspace import Session
         query = getattr(self, 'documents_query', '').strip().casefold()
         if query:
-            self.document_search_results.clear()
+            self.clear_document_search_results()
             self.document_search_results.add(empty_document_row('Searching local filenames…'))
             self._documents_file_search.start(query)
             self.show_document_collection()

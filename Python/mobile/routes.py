@@ -160,6 +160,13 @@ class MobileRoutes(Routes):
             self.render(destination)
 
     def back(self):
+        if (self.host.state.destination == 'documents'
+                and not self.screens['documents']
+                and not getattr(self.app.adaptive, 'in_detail', False)
+                and (getattr(self.app, 'documents_search_open', False)
+                     or bool(getattr(self.app, 'documents_query', '').strip()))):
+            self.app.close_document_search()
+            return True
         library = getattr(self.app, 'vault_browser', None)
         if library is not None and contains(self.body(), getattr(library, 'file_action_view', None)):
             if not self.guard():

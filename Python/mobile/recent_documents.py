@@ -54,7 +54,13 @@ class RecentDocuments:
         result, seen = [], set()
         for item in sorted(items, key=lambda item: item.get('opened', 0), reverse=True):
             if item['provider'] == 'file-reference':
-                source = self.normalize_source(item['source'])
+                before = item['source']
+                source = self.normalize_source(before)
+                if source != before and item.get('opener', {}).get('kind') == 'notes':
+                    from pathlib import Path
+                    suffix = Path(before['path']).relative_to(item['opener']['root'])
+                    root = Path(source['path']).parents[len(suffix.parts) - 1]
+                    item = dict(item, opener=dict(item['opener'], root=str(root)))
                 item = dict(item, source=source, resource=self.reference_id(source))
             identity = item['provider'], item['resource']
             if identity not in seen:
@@ -85,9 +91,11 @@ class RecentDocuments:
             if identity in seen or len(sessions) >= MAX_RECENT:
                 continue
             seen.add(identity)
-            values = {key: value for key, value in item.items() if key not in {'source', 'opened'}}
+            values = {key: value for key, value in item.items() if key not in {'source', 'opened', 'opener'}}
             session = Session(id='', **values)
             session.source = item.get('source')
+            session.history_opener = item.get('opener')
+            session.opened_at = item.get('opened', 0)
             sessions.append(session)
         return sessions
 
@@ -97,7 +105,7 @@ class RecentDocuments:
 
     @staticmethod
     def validate_reference(item):
-        if (not {'provider', 'resource', 'kind', 'title', 'source'} <= set(item) <= {'provider', 'resource', 'kind', 'title', 'source', 'opened'}
+        if (not {'provider', 'resource', 'kind', 'title', 'source'} <= set(item) <= {'provider', 'resource', 'kind', 'title', 'source', 'opened', 'opener'}
                 or item['kind'] not in REFERENCE_KINDS or not isinstance(item['title'], str)
                 or len(item['title']) > 1024 or not isinstance(item['source'], dict) or not RecentDocuments.valid_time(item)):
             raise ValueError('Invalid recent file reference.')
@@ -119,16 +127,34 @@ class RecentDocuments:
                 if key in source and (len(source[key]) != 64 or any(c not in '0123456789abcdef' for c in source[key])):
                     raise ValueError('Invalid recent connection identity.')
 
+        opener = item.get('opener')
+        if opener is not None:
+            from pathlib import Path, PurePosixPath
+            if (not isinstance(opener, dict) or set(opener) != {'kind', 'root'}
+                    or opener['kind'] != 'notes' or not isinstance(opener['root'], str)
+                    or len(opener['root']) > 4096 or '\0' in opener['root']
+                    or source.get('type') not in {'local', 'crypt'}):
+                raise ValueError('Invalid Notes Library opening reference.')
+            if source['type'] == 'local':
+                if not Path(opener['root']).is_absolute() or not Path(source['path']).resolve().is_relative_to(Path(opener['root']).resolve()):
+                    raise ValueError('Recent note is outside its library.')
+            elif (PurePosixPath(source['key']).is_absolute() or '..' in PurePosixPath(source['key']).parts
+                  or PurePosixPath(opener['root']).is_absolute() or '..' in PurePosixPath(opener['root']).parts
+                  or not PurePosixPath(source.get('key', '')).is_relative_to(opener['root'] or '.')):
+                raise ValueError('Recent note is outside its library.')
+
     @staticmethod
     def reference_id(source):
         return sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
 
-    def remember_file(self, session, source):
+    def remember_file(self, session, source, *, opener=None):
         if self.error or source is None:
             return
         source = self.normalize_source(source)
         item = dict(provider='file-reference', resource=self.reference_id(source),
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
+        if opener is not None:
+            item['opener'] = dict(opener)
         if self.items and all(self.items[0].get(key) == value for key, value in item.items() if key != 'opened'):
             item = self.items[0]
         self.validate_reference(item)
@@ -148,7 +174,7 @@ class RecentDocuments:
 
     def relocate(self, source, destination=None, *, names=None):
         """Follow renamed files and descendants even when no reader is open."""
-        from services.documents.catalog import relocated_source, relocated_title
+        from services.documents.catalog import relocated_source, relocated_title, relocated_opener
         if self.error:
             raise ValueError('Recent history could not be read; it was preserved.')
         items = []
@@ -160,6 +186,8 @@ class RecentDocuments:
                     continue
                 item = dict(item, source=after, resource=self.reference_id(after),
                             title=relocated_title(item['title'], before, after, names=names))
+                if 'opener' in item:
+                    item['opener'] = relocated_opener(item['opener'], source, destination)
             items.append(item)
         items = self.normalize_items(items)
         if items != self.items:

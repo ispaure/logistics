@@ -28,17 +28,26 @@ def prepare(app, view, destination):
     buttons = [unlock]
     if destination == 'documents':
         opener = icon_button('folder_hub', 'Open document', on_press=app.open_hub_file)
+        search = icon_button('find', 'Search documents', on_press=app.open_document_search)
+        search._toolbar_symbol = 'magnifyingglass'
+        view._document_search_button = search
+        view._document_search_close = icon_button('close', 'Exit document search', on_press=app.close_document_search)
         new = icon_button('compose', 'New document', on_press=app.new_hub_document)
         opener._toolbar_symbol, new._toolbar_symbol = 'folder', 'plus'
-        buttons.extend([opener, new])
+        buttons.extend([opener, new, search])
         from .action_menu import ActionMenu
         more = icon_button('more', 'Document actions')
         more._toolbar_group = 'credentials'
         view._destination_action_menu = ActionMenu(more, app,
-            [('Open document', app.open_hub_file), ('New document', app.new_hub_document)], document=False)
+            [('Open document', app.open_hub_file), ('New document', app.new_hub_document), ('Search documents', app.open_document_search)], document=False)
     view._destination_actions = (header, buttons)
     def apple_actions():
         actions = selected(app, buttons)
+        if destination == 'documents':
+            searching = getattr(app, 'documents_search_open', False) or bool(getattr(app, 'documents_query', '').strip())
+            view._ios_toolbar_leading = [view._document_search_close] if searching else []
+            if searching:
+                actions = [button for button in actions if button is not search]
         from .ios_toolbar import vertical_edge, supplemental_fits
         controller = app.native_host.adapter.parent
         budget = app.native_host.adapter.content_controller(destination)
@@ -73,12 +82,17 @@ def refresh(app, view):
     # Unlock is always the outside/rightmost action, independent of the tab.
     actions = selected(app, buttons)
     actions = [*actions[1:], actions[0]] if buttons[0] in actions else actions
+    close = getattr(view, '_document_search_close', None)
+    searching = close is not None and (getattr(app, 'documents_search_open', False) or bool(getattr(app, 'documents_query', '').strip()))
+    if searching:
+        actions = [button for button in actions if button is not view._document_search_button]
+    leading = [close] if searching else []
     current = [child for child in header.children if isinstance(child, toga.Button)]
-    if current == actions:
+    if current == [*leading, *actions]:
         return
     header.clear()
     if actions:
-        header.add(toga.Box(style=Pack(flex=1)), *actions)
+        header.add(*leading, toga.Box(style=Pack(flex=1)), *actions)
 
 
 def sync_native_host(app, view, destination):

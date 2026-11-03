@@ -46,8 +46,6 @@ def _scan_locations(app, roots, query, *, cancelled):
                                       list_children=children)
             failures.extend(result.errors)
             for row in result.rows:
-                if row['directory']:
-                    continue
                 key = provider.relative(row['path'])
                 private = bool(provider.private)
                 if private:
@@ -61,7 +59,7 @@ def _scan_locations(app, roots, query, *, cancelled):
                     continue
                 seen.add(identity)
                 hits.append(dict(name=PurePosixPath(key).name, path=key, location=label,
-                                 source=source, private=private))
+                                 source=source, private=private, directory=row['directory']))
         except (OSError, ValueError):
             failures.append((label, 'Location could not be searched.'))
         finally:
@@ -84,6 +82,23 @@ def _scan_locations(app, roots, query, *, cancelled):
                 hits.append(dict(name=name, path=name, location='Saved documents',
                                  source=dict(type='notebook', resource=key), private=False))
     return sorted(hits, key=lambda hit: (hit['name'].casefold(), hit['location'], hit['path'])), failures
+
+
+async def reveal_search_hit(app, hit):
+    """Reveal a search result using the owning browser and its file actions."""
+    from .document_sources import show_folder_location
+    source = hit['source']
+    if source['type'] == 'local':
+        return await show_folder_location(app, dict(path=Path(source['path'])))
+    if source['type'] != 'crypt':
+        return False
+    roots = dict(app.existing_crypt_locations())
+    roots.update(app.linked_crypt_locations())
+    provider = app.storage_provider(hit['location'], roots)
+    if (provider.identity != source['identity'] or provider.storage_namespace != source['namespace']
+            or provider.remote != source['remote']):
+        raise ValueError('The encrypted file connection changed.')
+    return await show_folder_location(app, dict(provider=provider, key=source['key']))
 
 
 class DocumentSearch:

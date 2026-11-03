@@ -78,7 +78,23 @@ async def exercise_obsidian(app, encrypted):
         await wait_for_tree(owner, expected)
         await owner.toggle_folder('Native Obsidian Vault/Projects')
         await wait_for_tree(owner, expected | {'Native Obsidian Vault/Projects/Plan.md'})
+        files_rows, files_scroll = owner.rows, owner.rows_scroll
+        assert owner.search_mode.value == 'Search in File Names'
+        owner.select_panel_tab('Search')
+        assert owner.rows is not files_rows and owner.rows_scroll is not files_scroll
+        owner.search.value = 'Plan'
+        await owner.search_task
+        await wait_for_tree(owner, {'Native Obsidian Vault/Projects/Plan.md'})
+        owner.select_panel_tab('Files')
+        assert owner.rows is files_rows and owner.rows_scroll is files_scroll
+        await wait_for_tree(owner, expected | {'Native Obsidian Vault/Projects/Plan.md'})
         assert await owner.open_note('Native Obsidian Vault/Projects/Plan.md')
+        recent = next(session for session, _ in app.recent_items()
+                      if session.title == 'Plan.md' and getattr(session, 'history_opener', None))
+        assert await owner.open_note('Native Obsidian Vault/Home.md')
+        await app.recent_opener(recent)()
+        assert app.vault_browser is owner and owner.path == 'Native Obsidian Vault/Projects/Plan.md'
+
         for _ in range(150):
             text = await owner.web.evaluate_javascript('document.body ? document.body.textContent : ""')
             if 'Nested Markdown note' in str(text):
