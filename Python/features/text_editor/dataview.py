@@ -114,6 +114,30 @@ class ViewFiles:
             raise ValueError('Data view reads exceed the 8 MiB limit.')
         return data.decode('utf-8-sig')
 
+    def matching_case(self, path, cancelled):
+        """Match explicit path components only; never scan descendants."""
+        folder, visited = self.library.root, 0
+        parts = PurePosixPath(path).relative_to(folder or '.').parts
+        with operation(self.library.provider, cancelled):
+            for index, name in enumerate(parts):
+                check_cancelled(cancelled)
+                try:
+                    rows = self.library.provider.list(folder, cancelled=cancelled)
+                except (FileNotFoundError, NotADirectoryError, ValueError):
+                    return None
+                visited += len(rows)
+                if visited > 10000:
+                    raise ValueError('Custom view path lookup exceeds 10,000 entries. Use the exact filename case.')
+                matches = [row for row in rows if row['name'] == name]
+                if not matches:
+                    matches = [row for row in rows if row['name'].casefold() == name.casefold()]
+                if len(matches) > 1:
+                    raise ValueError('Several files match this custom view path. Use the exact filename case.')
+                if not matches or (index < len(parts) - 1 and not matches[0]['directory']):
+                    return None
+                folder = self.library.contained(matches[0]['path'])
+        return folder
+
     def request(self, message, *, cancelled=lambda: False):
         """Return a JSON reply; cancellation must propagate to the owning host."""
         check_cancelled(cancelled)
@@ -147,6 +171,13 @@ class ViewFiles:
                     if code is not None:
                         value = dict(code=code)
                         break
+                if value is None:
+                    for candidate in candidates:
+                        matched = self.matching_case(candidate, cancelled)
+                        code = self.read(matched, cancelled) if matched is not None else None
+                        if code is not None:
+                            value = dict(code=code)
+                            break
                 if value is None:
                     tried = [PurePosixPath(candidate).relative_to(self.library.root or '.').as_posix()
                              for candidate in candidates]
