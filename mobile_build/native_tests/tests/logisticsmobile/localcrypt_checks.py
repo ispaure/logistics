@@ -561,7 +561,8 @@ async def exercise_localcrypt(app, passed):
     browser.search.value = 'nested-search'
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
-    assert [item.label for item in browser.entries] == ['navigation/nested-search.md']
+    assert [item.label for item in browser.entries] == ['nested-search.md']
+    assert [item.payload['path'] for item in browser.entries] == ['navigation/nested-search.md']
     await browser.activate_entry(browser.entries[0])
     assert app.selected_file()[1] == 'navigation/nested-search.md'
     await app.show_files()
