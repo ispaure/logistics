@@ -407,10 +407,9 @@ async def exercise_ui_review(app):
             pair = sorted([luminance(foreground), luminance(background)])
             assert (pair[1] + .05) / (pair[0] + .05) >= 4.5, 'Low editor text contrast'
             assert foreground == widget._impl.get_theme_color(R.attr.textColorPrimary)
-            from commonUtils.ui.appearance.colors import contrast_ratio
             bar = app.native_host.adapter.bottom
             selected = bar.getItemTextColor().getColorForState([R.attr.state_checked], foreground)
-            assert contrast_ratio(selected, background) >= 4.5, 'Low selected navigation label contrast'
+            assert selected == widget._impl.get_theme_color(R.attr.colorAccent), 'Selected navigation changes the chosen accent'
 
     for dark in (True, False):
         await appearance_mode(dark)

@@ -157,7 +157,8 @@ class NotesDocumentAccess:
 
     def validate_preview(self, html, max_bytes):
         if not self.policy.persistent and len(html.encode('utf-8')) > max_bytes:
-            raise ValueError('Private preview exceeds its memory-only limit.')
+            raise ValueError(f'This page exceeds the {max_bytes / (1024 * 1024):g} MiB '
+                             'in-memory preview limit. Reduce its embedded media and try again.')
 
 
 def attach_notes_return(app, library, owner):

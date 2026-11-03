@@ -148,6 +148,10 @@ async def exercise_destination_edges(app):
                     break
                 await asyncio.sleep(.05)
         if type(app._impl).__module__.startswith('toga_android.'):
+            # Let rotation's pending hide/connection callbacks run before the
+            # visibility gate. A post-gate sleep previously let Gboard hide
+            # again while we still treated the earlier result as settled.
+            await asyncio.sleep(.6)
             from java import jclass
             native = picker.save_as_name._impl.native
             native.requestFocus()
@@ -163,7 +167,7 @@ async def exercise_destination_edges(app):
                 native.requestFocus()
                 # isActive reconciles the served input connection after an
                 # Activity rotation. Do not show an IME for an unserved view.
-                if native.hasWindowFocus() and manager.isActive(native):
+                if native.hasWindowFocus() and manager.isActive(native) and manager.isAcceptingText():
                     controller.show(ime)
                     manager.showSoftInput(native, 0)
             def keyboard_visible():
@@ -171,10 +175,11 @@ async def exercise_destination_edges(app):
                 return bool(insets is not None and insets.isVisible(ime))
             def input_ready():
                 return bool(native.isAttachedToWindow() and native.hasWindowFocus()
-                            and native.hasFocus() and manager.isActive(native))
+                            and native.hasFocus() and manager.isActive(native) and manager.isAcceptingText())
             keyboard_settled = await settled_keyboard(request_keyboard, keyboard_visible,
                                                        ready=input_ready, attempts=60)
-        await asyncio.sleep(.6)
+        else:
+            await asyncio.sleep(.6)
         assert_visible_controls(app)
         sample = dict(orientation=orientation, width=app.main_window.size.width,
             height=app.main_window.size.height,
@@ -209,6 +214,7 @@ async def exercise_destination_edges(app):
             sample['window_focused'] = bool(native.hasWindowFocus())
             sample['input_focused'] = bool(native.hasFocus())
             sample['input_active'] = bool(manager.isActive(native))
+            sample['input_accepting_text'] = bool(manager.isAcceptingText())
             sample['input_attached'] = bool(native.isAttachedToWindow())
             assert keyboard_settled, sample
             sample['fullscreen_ime'] = bool(manager.isFullscreenMode())

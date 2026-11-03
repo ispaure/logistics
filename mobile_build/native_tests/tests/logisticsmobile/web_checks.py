@@ -17,7 +17,10 @@ def native_state(view):
         if impl is None:
             return state
         native = impl.native
-        if state['backend'].startswith('toga_iOS.'):
+        platform = next((base.__module__ for base in type(impl).__mro__
+                         if base.__module__.startswith(('toga_iOS.', 'toga_android.'))), '')
+        state['platform_backend'] = platform
+        if platform.startswith('toga_iOS.'):
             from commonUtils.ui.native.keyboard import native_value
             from rubicon.objc import SEL
             state['load_events'] = getattr(view, '_native_load_trace', [])
@@ -41,7 +44,7 @@ def native_state(view):
                     width=float(bounds.size.width), height=float(bounds.size.height)))
                 node = native_value(node.superview)
             state['ancestors'] = chain
-        elif state['backend'].startswith('toga_android.'):
+        elif platform.startswith('toga_android.'):
             state.update(attached=bool(native.isAttachedToWindow()), visibility=int(native.getVisibility()),
                          width=int(native.getWidth()), height=int(native.getHeight()))
     except Exception as error:

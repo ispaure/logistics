@@ -37,7 +37,7 @@ class AccentControls(toga.Box):
             slider.on_press = self.begin_drag
             slider.on_change = self.changed
             slider.on_release = self.save
-        self.add(SettingsLabel('Release to save. Brightness adjusts for readable light and dark colors.',
+        self.add(SettingsLabel('Release to save. The same color is used in light and dark appearance.',
                                style=Pack(font_size=12, margin_bottom=8)))
         self.add(surface(toga.Button('Reset to blue', on_press=self.reset, style=Pack(height=48)),
                          foreground='accent'))
@@ -78,13 +78,12 @@ class AccentControls(toga.Box):
             self.save()
 
     def draw_spectrum(self, widget=None, *, width, **kwargs):
-        import colorsys
         from ..palette import eink_enabled
         self._spectrum_width = width
         self.spectrum.root_state.drawing_actions.clear()
         for step in range(72):
-            rgb = colorsys.hls_to_rgb(step / 71, .5, .8)
-            color = '#000000' if eink_enabled() else '#' + ''.join(f'{round(channel * 255):02x}' for channel in rgb)
+            color = '#000000' if eink_enabled() else accent_colors((step * 360 / 71) % 360,
+                self.saturation.value)[0]
             with self.spectrum.fill(color=color):
                 self.spectrum.rect(step * width / 72, 0, width / 72 + 1, 6)
         self.spectrum.redraw()

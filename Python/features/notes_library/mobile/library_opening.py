@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 from uuid import uuid4
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui.native.inline_html import set_inline_html
-from ..notes import MAX_NOTE, MARKDOWN, document_kind
+from ..notes import MAX_PREVIEW_HTML, MARKDOWN, document_kind
 from ..dataview import view_plan
 from ..dataview_script import worker_policy
 from .library_panels import LibraryOpening
@@ -174,7 +174,7 @@ class LibraryDocuments:
                 plan = view_plan(data.decode("utf-8-sig"))
                 html = self.host.preview(plan.render() if plan.scripts else plan.source,
                                          image_source=self.library.image_source(path, cancelled=cancelled))
-                self.access.validate_preview(html, MAX_NOTE)
+                self.access.validate_preview(html, MAX_PREVIEW_HTML)
                 return html, plan
 
             html, plan = await asyncio.to_thread(read)
@@ -218,7 +218,9 @@ class LibraryDocuments:
             return False
         except (OSError, UnicodeError, ValueError) as error:
             if self.valid() and epoch == self.epoch:
-                self.notice.text = fill(str(error)[:180], width=28)
+                import toga
+                self.page_loading.finish()
+                await self.view.window.dialog(toga.ErrorDialog('Could not open document', str(error)))
             return False
         finally:
             if self._media_open_epoch == epoch:
@@ -239,7 +241,7 @@ class LibraryDocuments:
             self.sidebar.show_sidebar()
             return False
         if url == self.base + '?drawer=links':
-            self.host.loop.create_task(self.show_links())
+            self.host.loop.create_task(self.show_links(toggle=False))
             return False
         parsed = urlsplit(url)
         if not parsed.scheme and not parsed.netloc:
@@ -341,7 +343,7 @@ class LibraryDocuments:
                 return
             def render():
                 html = self.host.preview(text, image_source=self.library.image_source(path))
-                self.access.validate_preview(html, MAX_NOTE)
+                self.access.validate_preview(html, MAX_PREVIEW_HTML)
                 return html
             html = await asyncio.to_thread(render)
             if valid():
@@ -352,8 +354,10 @@ class LibraryDocuments:
                     set_inline_html(self.web, self.base, self.data_view_html(html))
         except (OSError, ValueError, TypeError, KeyError, RuntimeError, asyncio.TimeoutError) as error:
             if valid():
+                import toga
                 self.data_views_loading = False
-                self.notice.text = 'Data view error: ' + (str(error)[:160] or 'execution exceeded 35 seconds.')
+                await self.view.window.dialog(toga.ErrorDialog('Could not update data view',
+                    str(error) or 'Execution exceeded 35 seconds.'))
 
 
     async def remember_position(self):

@@ -16,6 +16,9 @@ class NotesDrawers:
         self.overlay = None
         self.side = None
         self.gestures = []
+        self.opening_gestures = []
+        self.retiring = []
+        self.open_links = self.show_links
         self.on_close = lambda: None
         self.on_change = lambda: None
         for panel in (files, links):
@@ -28,11 +31,14 @@ class NotesDrawers:
         return self.side is not None
 
     def reflow(self, width):
+        from .notes_gestures import install_opening_swipes
+        install_opening_swipes(self)
         expanded = width >= 840  # 320 for Files, at least 520 for the document.
         if expanded != self.expanded:
             # Detach a floating Files panel before mounting it in the layout.
             if self.side == 'files':
                 self.show_detail()
+                self.finish_dismissals()
             self.expanded = expanded
             if expanded:
                 self.sidebar.style.flex = 0
@@ -64,6 +70,7 @@ class NotesDrawers:
         if self.side == side:
             return
         self.show_detail()
+        self.finish_dismissals()
         self.side = side
         self.on_change()
         panel = self.sidebar if side == 'files' else self.links
@@ -90,6 +97,29 @@ class NotesDrawers:
             self.show_detail()
             return True
         return False
+
+    def open_swipe(self, direction):
+        if self.side is not None:
+            return False
+        if direction > 0:
+            if self.expanded:
+                return False
+            self.show_sidebar()
+        else:
+            self.open_links()
+        return True
+
+    def finish_dismissals(self):
+        for overlay, handle in self.retiring:
+            handle.cancel()
+            overlay.close()
+        self.retiring.clear()
+
+    def dispose(self):
+        from .notes_gestures import clear_opening_swipes
+        clear_opening_swipes(self)
+        self.show_detail()
+        self.finish_dismissals()
 
     def install_swipe(self, panel):
         backend = type(panel._impl).__module__
@@ -174,7 +204,16 @@ class NotesDrawers:
         overlay, self.overlay = self.overlay, None
         if overlay is not None:
             overlay.panel.overlay = None
-            overlay.close()
+            from .notes_motion import slide_out
+            duration = slide_out(overlay, -1 if overlay.leading else 1, self.app)
+            if duration:
+                def finish():
+                    overlay.close()
+                    self.retiring.remove((overlay, handle))
+                handle = self.app.loop.call_later(duration, finish)
+                self.retiring.append((overlay, handle))
+            else:
+                overlay.close()
 
 
 _swipe_class = None

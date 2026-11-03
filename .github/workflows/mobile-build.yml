@@ -12,6 +12,10 @@ on:
         type: choice
         default: both
         options: [android, ios, both]
+      ios_object_diagnostics:
+        description: Diagnose native object lifetimes in disposable iOS test apps
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       target:
@@ -205,6 +209,8 @@ jobs:
         env:
           IOS_DEVICE: ${{ matrix.device }}
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
+          SIMCTL_CHILD_NSZombieEnabled: ${{ inputs.ios_object_diagnostics && 'YES' || '' }}
+          SIMCTL_CHILD_MallocStackLogging: ${{ inputs.ios_object_diagnostics && '1' || '' }}
         run: |
           mkdir -p "$BRIEFCASE_HOME"
           # This disposable runner validates software-keyboard geometry.
@@ -218,13 +224,12 @@ jobs:
           device=$(python validation/ui_tools.py "$selector" --owned)
           # Capture launch decisions live: retrospective simulator logs can
           # contain only UUID compose failures after a WebKit startup stall.
-          # Bound the host-side writer: simctl's remote logger does not inherit
-          # a host shell's file-size limit. Owned simulator cleanup also stops
-          # the remote logger when the bounded pipe closes.
+          # Retain recent launch decisions throughout the suite. Stopping at the
+          # first size limit discarded the minutes containing late failures.
           xcrun simctl spawn "$device" log stream \
             --style compact --level debug --predicate \
             'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR subsystem BEGINSWITH "com.apple.extensionkit" OR subsystem BEGINSWITH "com.apple.extensionfoundation" OR process == "runningboardd"' \
-            2>&1 | head -c 26214400 > logs/ios-webkit-live.log &
+            2>&1 | python validation/bounded_log.py logs/ios-webkit-live.log &
           webkit_log_pid=$!
           trap 'kill "$webkit_log_pid" 2>/dev/null || true; kill -KILL "$webkit_log_pid" 2>/dev/null || true; wait "$webkit_log_pid" 2>/dev/null || true' EXIT
           python validation/ui_tools.py run ios --device "$device" --no-update "${flags[@]}"

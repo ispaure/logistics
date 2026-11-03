@@ -23,8 +23,8 @@ BUNDLE = 'io.github.ispaure.logisticsstorageqa'
 QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
-NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
-                      'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-fullscreen.png', 'notes-links-landscape-left.png', 'notes-links-portrait.png', 'notes-files-landscape-left.png', 'notes-files-portrait.png', 'sync-portrait.png', 'sync-landscape-left.png')
+NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'notes-discovery.png',
+                      'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-landing.png', 'notes-fullscreen.png', 'notes-links-landscape-left.png', 'notes-links-portrait.png', 'notes-files-landscape-left.png', 'notes-files-portrait.png', 'sync-portrait.png', 'sync-landscape-left.png')
 
 SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
     for orientation in ('portrait', 'landscape-left')
@@ -230,6 +230,9 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
             (cache / 'drive-folds').touch()
         if entry_point.endswith('.notes_library_probe'):
             (cache / 'notes-keyboard').touch()
+        drive_notes = duoctl is not None and entry_point.endswith('.notes_drawers_probe')
+        if drive_notes:
+            (cache / 'drive-notes-touches').touch()
         if family == 'iPhone Duo' and pose == 'partial' and entry_point.endswith('.notes_library_probe'):
             (cache / 'notes-laptop-keyboard').touch()
         console_stream = (output / 'ios-console.log').open('w')
@@ -238,6 +241,14 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 240)
         next_progress = 0
         while time.monotonic() < deadline:
+            request = cache / 'notes-touch-request.json'
+            if drive_notes and request.exists():
+                touch = json.loads(request.read_text())
+                subprocess.run([sys.executable, str(duoctl), '-d', device, 'swipe',
+                                *map(str, touch['points']), '--duration', '.25'],
+                               timeout=60, env=env, check=True, capture_output=True)
+                request.unlink()
+                (cache / 'notes-touch-done').touch()
             if result_name == 'logistics-native-ui-result.json' and time.monotonic() >= next_progress:
                 next_progress = time.monotonic() + 30
                 timings = cache / NATIVE_DIAGNOSTICS[0]

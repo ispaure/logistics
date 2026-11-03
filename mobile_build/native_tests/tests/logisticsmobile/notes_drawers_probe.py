@@ -18,6 +18,43 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class NotesDrawersProbe(LogisticsMobile):
+    async def check_note_actions(self, owner, report):
+        assert await owner.open_note('Other.md')
+        await asyncio.sleep(.3)
+        assert owner.secondary.parent is None
+        async def invoke(button, complete):
+            item = button._ios_action_item
+            assert item.enabled and item.target is not None
+            item.target.performSelector(item.action, withObject=item)
+            for _ in range(100):
+                if complete():
+                    break
+                await asyncio.sleep(.05)
+            else:
+                raise AssertionError(('Native action did not complete', button.accessible_name))
+            await asyncio.sleep(.2)
+        await invoke(owner.back_button, lambda: owner.path == 'Home.md')
+        assert owner.forward_button._ios_action_item.enabled
+        await invoke(owner.forward_button, lambda: owner.path == 'Other.md')
+        await invoke(owner.edit, lambda: owner.editing)
+        await invoke(owner.edit, lambda: not owner.editing)
+        actions = owner.reader_actions_button._ios_action_item
+        assert actions.menu is not None and actions.target is None
+        assert owner.reader_actions_button._impl.native.showsMenuAsPrimaryAction
+        assert any(label == 'Contents…' for label, _ in owner.reader_actions.actions)
+        assert await owner.open_note('Home.md')
+        await asyncio.sleep(.3)
+        # Check that title content cannot swallow taps on the folder row.
+        from rubicon.objc import CGPoint
+        button = owner.breadcrumbs.children[-1]._impl.native
+        point = button.convertPoint(CGPoint(button.bounds.size.width / 2, button.bounds.size.height / 2),
+                                    toView=self.main_window._impl.native)
+        hit = self.main_window._impl.native.hitTest(point, withEvent=None)
+        while hit is not None and hit != button:
+            hit = hit.superview
+        assert hit == button, 'Folder breadcrumb is covered by another native view'
+        report['native_note_actions'] = True
+
     def startup(self):
         self.storage_root = Path(self.paths.cache) / ('notes-drawers-' + uuid4().hex)
         super().startup()
@@ -25,16 +62,74 @@ class NotesDrawersProbe(LogisticsMobile):
     def on_running(self):
         start_native_check(self, type(self).probe)
 
+    async def real_swipe(self, owner, direction):
+        output = Path(self.paths.cache)
+        native = owner.article._impl.native
+        frame = native.convertRect(native.bounds, toView=self.main_window._impl.native)
+        y = float(frame.origin.y + frame.size.height * .75)
+        center = float(frame.origin.x + frame.size.width / 2)
+        (output / 'notes-touch-request.json').write_text(json.dumps(
+            dict(points=[center - direction * 65, y, center + direction * 65, y])))
+        for _ in range(200):
+            done = output / 'notes-touch-done'
+            if done.exists():
+                done.unlink()
+                await asyncio.sleep(.3)
+                return
+            await asyncio.sleep(.1)
+        raise AssertionError('Native swipe driver did not reply')
+
     async def probe(self):
         output = Path(self.paths.cache)
         report = dict(success=False, samples=[])
         owner = None
         try:
-            root = output / 'drawer-fixture'
+            self.show_documents_hub()
+            await self._notes_discovery_task
+            await asyncio.sleep(.5)
+            status = self.document_notes_list.children[2]
+            assert 'Unlock LocalCrypt' in status._settings_source_text
+            assert '\n' in status._settings_rendered_text
+            await capture_window(self, output / 'notes-discovery.png')
+            root = output / 'Compulsion-Shared-Obsidian-Notion'
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Home.md').write_text('# Home\n\nRead here. [[Other]]\n')
             (root / 'Other.md').write_text('# Other\n\n[[Home]]\n')
             owner = await open_vault(self, LocalFiles(root), '', 'files')
+            await asyncio.sleep(1)
+            await capture_window(self, output / 'notes-landing.png')
+            if type(self._impl).__module__.startswith('toga_iOS.'):
+                header = owner.view._document_title_header
+                assert list(header.children) == [owner.menu, header._title_content, owner.links_button]
+                assert float(header._title_content._impl.native.bounds.size.width) > 0
+                # Toga flattens Box children into its native layout container;
+                # measure screen positions rather than native parentage.
+                def screen_frame(native):
+                    return native.convertRect(native.bounds, toView=None)
+                left = screen_frame(owner.menu._impl.native)
+                title = screen_frame(owner.view._document_title_view)
+                right = screen_frame(owner.links_button._impl.native)
+                assert float(left.origin.x + left.size.width) <= float(title.origin.x) + 1
+                assert float(title.origin.x + title.size.width) <= float(right.origin.x) + 1
+                if (output / 'drive-notes-touches').exists():
+                    for direction, side in ((1, 'files'), (-1, 'links')):
+                        await self.real_swipe(owner, direction)
+                        assert owner.sidebar.side == side, ('landing swipe', direction, owner.sidebar.side)
+                        await self.real_swipe(owner, -direction)
+                        assert owner.sidebar.side is None
+                    assert await owner.open_note('Home.md')
+                    await asyncio.sleep(.5)
+                    for direction, side in ((1, 'files'), (-1, 'links')):
+                        await self.real_swipe(owner, direction)
+                        assert owner.sidebar.side == side, ('article swipe', direction, owner.sidebar.side)
+                        owner.sidebar.show_detail()
+                        assert owner.sidebar.retiring
+                        overlay = owner.sidebar.retiring[0][0]
+                        assert overlay.container is not None
+                        await asyncio.sleep(.3)
+                        assert not owner.sidebar.retiring
+                        assert overlay.container is None
+                    report['native_touch_swipes'] = True
             for orientation in ('portrait', 'landscape-left', 'portrait'):
                 await rotate(self, orientation, settle=.5)
                 if owner.sidebar.expanded:
@@ -42,6 +137,8 @@ class NotesDrawersProbe(LogisticsMobile):
                     assert getattr(owner, '_document_return_side', None) is None
                 owner.sidebar.show_sidebar()
                 assert await owner.open_note('Home.md')
+                if type(self._impl).__module__.startswith('toga_iOS.'):
+                    await self.check_note_actions(owner, report)
                 if owner.sidebar.expanded:
                     assert owner.back_action() is None
                 for _ in range(100):

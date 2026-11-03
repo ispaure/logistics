@@ -132,3 +132,24 @@ class DocumentLocationTests(unittest.TestCase):
         controller = NS(navigationItem=NS(titleView=object()))
         mount_apple_title(toga.Box(), controller, 'Settings')
         self.assertIsNone(controller.navigationItem.titleView)
+
+    def test_library_pane_controls_surround_title_across_bar_orientations(self):
+        view = toga.Box()
+        view._document_path = lambda: 'Library'
+        left, right = toga.Button('Files'), toga.Button('Links')
+        view._document_title_controls = (left, right)
+        controller = NS(view=NS(bounds=NS(size=NS(width=466))), navigationItem=NS(titleView=None))
+        with patch('mobile.folder_title.storage_title', return_value=object()) as make, \
+                patch('mobile.ios_toolbar.vertical_edge', return_value=2) as edge, \
+                patch('mobile.document_location.bind_apple_hold'), \
+                patch('mobile.document_location.empty_bar_title', return_value=object()), \
+                patch('mobile.document_location.place_title_in_header') as place:
+            for orientation in (2, 0, 2):
+                edge.return_value = orientation
+                mount_apple_title(view, controller, 'A long library name')
+                header = view._document_title_header
+                self.assertEqual(list(header.children), [left, header._title_content, right])
+                self.assertIs(view.children[0], header)
+                self.assertIs(controller.navigationItem.titleView, header._empty_bar_title)
+                place.assert_called_with(header, view._document_title_view, '')
+            self.assertEqual(make.call_args.args[0], 'A long library name')

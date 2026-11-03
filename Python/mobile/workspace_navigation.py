@@ -137,7 +137,7 @@ def sync_reader_toolbar(app, view, destination=None):
         frame = getattr(view, '_workspace_frame', None)
         menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
         leading = [close]
-        if menu is not None:
+        if menu is not None and menu not in getattr(view, '_document_title_controls', ()):
             detach(menu)
             menu.app, menu.window = app, app.main_window
             leading.append(menu)
@@ -275,7 +275,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             view._workspace_menu = True
             view._workspace_menu_destination = destination
         menu = getattr(view, '_workspace_menu_button', None)
-        if menu is not None and self.app.routes.apple:
+        if (menu is not None and self.app.routes.apple
+                and menu not in getattr(view, '_document_title_controls', ())):
             detach(menu)
         return view
 

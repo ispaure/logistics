@@ -11,6 +11,9 @@ TEXT = {'.json', '.jsonc', '.js', '.mjs', '.cjs', '.css', '.txt', '.csv',
         '.yaml', '.yml', '.toml', '.ini', '.xml', '.html', '.py', '.ts'}
 DOCUMENTS = MARKDOWN | TEXT | {'.rmdoc'}
 MAX_NOTE = 2 * 1024 * 1024
+# Rendering expands Markdown and may include up to 22 MiB of embedded images.
+# Leave room above the renderer's 24 MiB output bound for host styling/scripts.
+MAX_PREVIEW_HTML = 32 * 1024 * 1024
 
 
 def breadcrumb_folders(root, path):

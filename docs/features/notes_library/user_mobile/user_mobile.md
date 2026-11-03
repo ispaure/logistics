@@ -14,6 +14,13 @@ Use Files, Calendar and Links to navigate, and the library's close control to
 leave. Unsaved changes retain their save/discard/cancel choices. Folder-backed
 Markdown uses the [shared mobile editing controls](../../text_editor/user_mobile/user_mobile.md).
 
+The landing page offers **Open Document** and, for writable libraries,
+**New Document**. On iOS, the title sits between the Files and Links pane buttons;
+long names pan within that space, respecting the system's motion preferences.
+Swipe right across the article or empty landing area to open Files, or left to
+open Links. Swipe the open panel toward its edge to close it. Panels slide in
+and out; Reduce Motion and Android E Ink mode suppress this motion.
+
 Notes Library also runs [JSON data views and reusable `dv.view` scripts](../user/user.md#json-data-views-in-notes-library)
 in reading mode, enabled by default. The same API subset and file/path limits
 apply on desktop and mobile. Editing retains the authored code blocks.
@@ -36,10 +43,16 @@ library; switching files asks about unsaved changes.
 
 Folders with a same-named `Folder/Folder.md` page have underlined names in Files;
 tap the name to open that page, or use the arrow to expand the folder.
-A compact breadcrumb row below the document controls shows the path for every
-open file type, including images and PDFs. Underlined folders open their page;
-plain folder names have no action. Ancestor names shorten first on narrow
-screens so the current filename keeps priority.
+A compact folder breadcrumb appears below the title for every open file type,
+including images and PDFs. Narrow document panes show the containing folder;
+wider panes show ancestors as space permits. Tap a folder to open its same-named
+page, or browse that folder when it has no page. The filename appears once, in
+the title; hold the title to see its full location.
+
+On iPhone and iPad, previous/next note, edit/view and Note actions use the native
+toolbar. Duo can move those actions into its side bar and overflow. Files and
+Links stay beside the document title. On Android, note controls stay together
+above their document pane, including when Files is visible alongside it.
 
 
 ## Notes Library and Documentation Library
@@ -47,7 +60,9 @@ screens so the current filename keeps priority.
 Open **Documents → Notes Library** to see libraries found in Local and unlocked
 LocalCrypt storage. Discovery looks for an `.obsidian` directory at the storage
 root and up to two folders below it. Use **Refresh libraries** after adding or
-moving one. Unlock credentials first to see encrypted libraries. Workspaces
+moving one. Library buttons show a local disk icon and, for encrypted storage,
+an open lock instead of a `LocalCrypt:` text prefix. Unlock credentials first to
+see encrypted libraries. Workspaces
 opens folders directly without a Notes Library prompt or menu choice. Notes
 Library keeps actual filenames in its sidebar.
 
@@ -125,7 +140,9 @@ In Files, hold a file or folder for **Move / rename…**, **Copy…**, or **Dele
 as supported by the location. Destinations stay inside this library and must have
 existing parent folders. Copy and move refuse existing names; delete asks for
 confirmation and permanently removes the selected item and its contents. Links
-are not rewritten. The search choices are **Search in File Names** and
+are not rewritten. Cancelling the action menu or its move/copy form returns to
+the pane that opened it. Android Back does the same, keeping the open document
+and its history unchanged. The search choices are **Search in File Names** and
 **Search within Documents**. Searches also inspect unopened folders, excluding
 hidden configuration.
 

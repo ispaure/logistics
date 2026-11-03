@@ -81,6 +81,13 @@ estimated progress, attachment and ancestor visibility. Where available, optiona
 test-only WebKit process identifiers and responsiveness accompany the snapshot;
 failure artifacts also retain host memory and relevant process summaries. The fixture inherits
 Toga's policy and finish handlers and retains the normal render deadline.
+The hosted iOS job keeps the latest two 12.5 MiB WebKit log segments throughout
+the test, rather than stopping capture when the first segment fills. Manual
+dispatch of **Native mobile prototype builds** offers `ios_object_diagnostics`
+for disposable simulator apps: it enables Objective-C zombies and allocation
+stack logging. A message sent to a deallocated object fails validation even if
+the native fixture otherwise reports success. This mode diagnoses lifetime
+failures; a passing diagnostic run alone does not resolve an intermittent crash.
 
 The suite runner reports the active test and completed count every 60 seconds.
 Native crashes also produce Python tracebacks. The outer platform runner allows
