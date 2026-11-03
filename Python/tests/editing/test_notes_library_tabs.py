@@ -29,6 +29,21 @@ class NotesLibraryTabTests(QtTestCase):
         self.wait_until(lambda: not child.progress.busy and child.index >= 0)
         return child
 
+    def test_document_pane_has_no_duplicate_library_navigator(self):
+        with self.temporary_directory() as directory:
+            owner = self.opened(Path(directory))
+            child = self.note(owner, 'A.md')
+            self.assertIsInstance(child, qt.QWidget)
+            self.assertNotIsInstance(child, qt.QMainWindow)
+            for name in ('tree', 'panel_tabs', 'calendar', 'search_results', 'aux'):
+                self.assertFalse(hasattr(child, name), name)
+            self.assertIsNot(child.library, owner.library)
+            self.assertIs(child.provider, owner.provider)
+            with patch.object(owner, 'reveal_folder') as reveal:
+                child.up.click()
+                reveal.assert_called_once_with('')
+            owner.close()
+
     def test_browsing_reuses_active_tab_and_cancel_keeps_draft(self):
         with self.temporary_directory() as directory:
             owner = self.opened(Path(directory))

@@ -6,7 +6,7 @@
 | --- | --- |
 | Model, containment, links and mutations | `Python/features/notes_library/notes.py`, `notes_links.py`, `library_files.py`; desktop/mobile Notes Library suites |
 | Desktop session destination | `ui/page.py`, `desktop/documents.py`, `desktop/sidebar.py`; `test_main_window.py` |
-| Desktop documents and groups | `ui/notes_library.py`, `ui/library_workspace.py`; `test_notes_library_desktop.py`, `test_notes_library_tabs.py` |
+| Desktop documents and groups | `ui/notes_library.py`, `ui/document.py`, `ui/library_workspace.py`; `test_notes_library_desktop.py`, `test_notes_library_tabs.py` |
 | In-library file previews | `file_preview.py`, `ui/file_preview.py`, `mobile/file_preview.py`; desktop tabs and mobile Notes Library suites, native Notes Library probe |
 | Mobile library | `mobile/notes_library.py`, library panels/tools/editors; mobile Notes Library and Markdown library workflow suites |
 | Shared mobile authoring | `services/documents/authoring/`; mobile Markdown editor, provider and workflow suites |
@@ -555,3 +555,14 @@ mobile mutations share these rules. `MutationResult` distinguishes committed
 filesystem destinations from folder refresh and saved-reference failures, so
 refresh cancellation cannot undo an authoritative move result. Focused desktop
 and mobile Notes Library suites exercise these transitions.
+
+## Desktop document panes
+
+`ui/document.py` owns `NotesDocumentPane` and shared document presentation. Scoped
+tabs instantiate QWidget document panes, without a second Files tree, Calendar,
+search worker or library menu. The outer workspace retains those controls. Each
+pane retains its own history, provider lease, Markdown/source/notebook/preview
+resources, connections and operation footer; the workspace selects the active
+projection. `ui/library_connections.py` owns the document Links panel independently
+of library navigation. Desktop library and scoped-tab regressions cover the split,
+including private leases, shortcuts, footer selection and worker retirement.
