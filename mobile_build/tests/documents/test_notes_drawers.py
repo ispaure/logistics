@@ -1,8 +1,13 @@
 """Mobile drawer navigation and local connection indexing contracts."""
 import asyncio
+import json
+import os
+import shutil
+import subprocess
+import sys
 from threading import Event
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import unittest
 from commonUtils.testing.stages import TestStage
 from commonUtils.runtime.operations import OperationCancelled
@@ -12,6 +17,7 @@ from mobile.obsidian import open_vault
 import mobile_build.tests.documents.test_obsidian as fixtures
 
 TEST_STAGE = TestStage.REGRESSION
+NODE = os.environ.get('LOGISTICS_NODE') or shutil.which('node')
 
 
 class NotesDrawerTests(unittest.TestCase):
@@ -46,9 +52,13 @@ class NotesDrawerTests(unittest.TestCase):
                 owner.reflow(width)
                 self.assertIsNone(owner.sidebar.side)
                 owner.open_card.on_press()
-                self.assertEqual(owner.sidebar.side, 'files')
-                self.assertEqual(list(owner.sidebar.view.children), [owner.article])
-                self.assertTrue(self.app.routes.system_back())
+                wide = width >= 864  # Library reserves a 24-unit inset.
+                self.assertEqual(owner.sidebar.expanded, wide)
+                self.assertEqual(owner.sidebar.side, None if wide else 'files')
+                self.assertEqual(list(owner.sidebar.view.children),
+                                 [owner.tree, owner.article] if wide else [owner.article])
+                if not wide:
+                    self.assertTrue(self.app.routes.system_back())
                 self.assertIsNone(owner.sidebar.side)
                 self.assertTrue(owner.valid())
                 await owner.open_note('Vault/Projects/Plan.MD')
@@ -59,10 +69,140 @@ class NotesDrawerTests(unittest.TestCase):
                 self.assertTrue(self.app.routes.system_back())
                 self.assertIsNone(owner.sidebar.side)
                 owner.follow_link(owner.web, owner.base + '?drawer=files')
-                self.assertEqual(owner.sidebar.side, 'files')
+                self.assertEqual(owner.sidebar.side, None if wide else 'files')
                 owner.dispose()
                 self.assertIsNone(owner.sidebar.overlay)
         self.run_async(exercise())
+
+    def test_swipes_dismiss_only_the_opposite_drawer_and_resize_preserves_document(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.reflow(390)
+            await owner.open_note('Vault/Home.md')
+            for side, closing in (('files', -1), ('links', 1)):
+                owner.sidebar.show(side)
+                owner.sidebar.swipe(-closing)
+                self.assertEqual(owner.sidebar.side, side)
+                owner.sidebar.swipe(closing)
+                self.assertIsNone(owner.sidebar.side)
+                self.assertIsNone(owner.sidebar.overlay)
+            owner.sidebar.show_sidebar()
+            owner.select_panel_tab('Calendar')
+            await owner.calendar_task
+            owner.reflow(863)
+            self.assertFalse(owner.sidebar.expanded)
+            owner.reflow(864)
+            self.assertTrue(owner.sidebar.expanded)
+            self.assertIsNone(owner.sidebar.overlay)
+            self.assertEqual(owner.sidebar.view.children, [owner.tree, owner.article])
+            owner.reflow(864)
+            self.assertEqual(owner.sidebar.view.children, [owner.tree, owner.article])
+            self.assertEqual(owner.panel_body.children, [owner.calendar_scroll])
+            await owner.show_links()
+            owner.reflow(390)
+            self.assertEqual(owner.sidebar.side, 'links')
+            self.assertEqual(owner.sidebar.view.children, [owner.article])
+            self.assertEqual(owner.panel_body.children, [owner.calendar_scroll])
+            owner.sidebar.swipe(1)
+            self.assertIsNone(owner.sidebar.side)
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            self.assertIs(owner.web.parent, owner.article)
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_android_popup_observes_child_touches_and_releases_its_listener(self):
+        from mobile.notes_drawers import NotesDrawers
+        owner = NotesDrawers.__new__(NotesDrawers)
+        owner.gestures = []
+        owner.swipe = Mock()
+        popup = Mock()
+        owner.overlay = SimpleNamespace(popup=popup)
+        panel = SimpleNamespace(_impl=type('AndroidBox', (), {'__module__':'toga_android.widgets.box'})())
+        with patch.dict(sys.modules, {
+            'android.view': SimpleNamespace(View=SimpleNamespace(OnTouchListener=object)),
+            'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+        }):
+            owner.install_swipe(panel)
+        listener = popup.setTouchInterceptor.call_args.args[0]
+        view = Mock()
+        view.getContext().getResources().getDisplayMetrics.return_value.density = 2
+        def touch(action, x, y=0, time=0):
+            event = Mock()
+            event.getActionMasked.return_value = action
+            event.getRawX.return_value, event.getRawY.return_value = x, y
+            event.getEventTime.return_value = time
+            return listener.onTouch(view, event)
+        for distance, direction in ((150, 1), (-150, -1)):
+            self.assertFalse(touch(0, 0))
+            self.assertTrue(touch(1, distance, time=100))
+            owner.swipe.assert_called_with(direction)
+        owner.swipe.reset_mock()
+        for action, x, y, time in ((1, 150, 100, 100), (1, 100, 0, 100), (1, 150, 0, 900)):
+            touch(0, 0)
+            self.assertFalse(touch(action, x, y, time))
+        for cancellation in (3, 5):
+            touch(0, 0)
+            touch(cancellation, 0)
+            self.assertFalse(touch(1, 150, time=100))
+        owner.swipe.assert_not_called()
+        owner.clear_gestures()
+        popup.setTouchInterceptor.assert_called_with(None)
+        self.assertEqual(owner.gestures, [])
+
+    @unittest.skipUnless(NODE, 'Node required for document touch events')
+    def test_document_touch_events_open_from_center_and_preserve_reading_gestures(self):
+        from features.notes_library.mobile.notes_swipe import document_swipes
+        script = r'''
+const assert = require('node:assert/strict');
+const events = {};
+let registrations = 0;
+global.window = {visualViewport: {scale: 1}};
+global.document = {body: {}, addEventListener: (name, handler) => {events[name] = handler; registrations++;}};
+global.location = {href: ''};
+let selection = '';
+global.getSelection = () => selection;
+let now = 0;
+Date.now = () => now;
+eval(SCRIPT);
+const point = (x, y=100) => ({clientX:x, clientY:y});
+const normal = {parentElement: document.body, scrollWidth: 200, clientWidth: 200};
+function swipe(dx, {dy=0, target=normal, duration=100, during=()=>{}}={}) {
+  location.href = '';
+  now = 0;
+  events.touchstart({touches:[point(180)], target});
+  during();
+  now = duration;
+  events.touchend({touches:[], changedTouches:[point(180+dx,100+dy)]});
+  return location.href;
+}
+assert.equal(swipe(90), '/note?drawer=files');
+assert.equal(swipe(-90), '/note?drawer=links');
+assert.equal(swipe(40), '');
+assert.equal(swipe(90, {dy:60}), '');
+assert.equal(swipe(90, {duration:900}), '');
+assert.equal(swipe(90, {target:{...normal, scrollWidth:400}}), '');
+assert.equal(swipe(90, {target:{...normal, isContentEditable:true}}), '');
+assert.equal(swipe(90, {target:{...normal, tagName:'INPUT'}}), '');
+selection = 'selected';
+assert.equal(swipe(90), '');
+selection = '';
+assert.equal(swipe(90, {during:()=>{selection='selected';}}), '');
+selection = '';
+window.visualViewport.scale = 2;
+assert.equal(swipe(90), '');
+window.visualViewport.scale = 1;
+assert.equal(swipe(90, {during:()=>events.touchstart({touches:[point(1),point(2)],target:normal})}), '');
+assert.equal(swipe(90, {during:()=>events.touchmove({touches:[point(1),point(2)]})}), '');
+assert.equal(swipe(90, {during:()=>events.touchcancel()}), '');
+const installedCount = registrations;
+eval(REINSTALL);
+assert.equal(registrations, installedCount);
+assert.equal(swipe(90), '/next?drawer=files');
+assert.equal(swipe(-90), '/next?drawer=links');
+'''.replace('SCRIPT', json.dumps(document_swipes('/note'))).replace(
+            'REINSTALL', json.dumps(document_swipes('/next')))
+        result = subprocess.run([NODE, '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_closed_library_cannot_publish_delayed_connections(self):
         async def exercise():

@@ -162,11 +162,20 @@ byte baseline.
 
 On mobile, `notes-library:` routes own the full content area, including iPad and
 Duo layouts. The outer Workspaces folder column and app destination bar stay
-hidden until the library closes; the library retains its own floating Files/Links drawers,
-history and editing actions. Child tools retain that presentation. This is a
+hidden until the library closes. The library floats Files on compact allocations
+and pins it beside the article from 840 points of inner width (864 before the
+library inset), leaving at least 520 points for the document. Links remains a
+floating panel at every width. Document swipes open Files to the right and Links
+to the left; the opposite swipe dismisses each floating panel. Selection,
+editable controls, horizontal overflow, zoom and multi-touch suppress document
+swipes. Android observes drawer touches at the popup before child dispatch;
+iOS allows the drawer recognizer to coexist with scrolling. History and editing
+actions remain library-owned. Child tools retain that presentation. This is a
 presentation policy separate from reader-return trimming, so closing a nested
 note editor returns to its library. `notes_fullscreen_probe.py` checks native
 geometry through rotation and verifies that closing restores the folder browser.
+The focused `document_storage_tools --probe notes-drawers` checks center-document
+touch events, native drawer dismissal and compact/pinned layouts through rotation.
 
 `notes.py` provides toolkit-independent marker detection, rooted paths, bounded
 reads and immediate-child filtering. Note reads complete short provider reads

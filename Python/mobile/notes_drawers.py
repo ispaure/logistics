@@ -1,7 +1,8 @@
-"""Two floating Notes Library drawers over a retained full-width document."""
+"""Compact Notes Library drawers, with persistent Files on wide allocations."""
 from types import SimpleNamespace
 import toga
 from toga.style import Pack
+from toga.style.pack import ROW
 from .speech_overlay import SpeechOverlay
 
 
@@ -10,7 +11,7 @@ class NotesDrawers:
 
     def __init__(self, files, article, links, *, app):
         self.app, self.sidebar, self.detail, self.links = app, files, article, links
-        self.view = toga.Box(children=[article], style=Pack(flex=1))
+        self.view = toga.Box(children=[article], style=Pack(direction=ROW, flex=1))
         self.policy = SimpleNamespace(sidebar_width=320, gap=0)
         self.overlay = None
         self.side = None
@@ -27,6 +28,18 @@ class NotesDrawers:
         return self.side is not None
 
     def reflow(self, width):
+        expanded = width >= 840  # 320 for Files, at least 520 for the document.
+        if expanded != self.expanded:
+            # Detach a floating Files panel before mounting it in the layout.
+            if self.side == 'files':
+                self.show_detail()
+            self.expanded = expanded
+            if expanded:
+                self.sidebar.style.flex = 0
+                self.view.insert(0, self.sidebar)
+            else:
+                self.view.remove(self.sidebar)
+                self.sidebar.style.flex = 1
         # The host passes the document width minus its 24-unit inset. Leave
         # at least 44 units opposite the drawer for outside dismissal.
         self.policy.sidebar_width = min(320, max(1, width - 32))
@@ -45,6 +58,9 @@ class NotesDrawers:
         self.show('links')
 
     def show(self, side):
+        if side == 'files' and self.expanded:
+            self.show_detail()
+            return
         if self.side == side:
             return
         self.show_detail()
@@ -76,11 +92,15 @@ class NotesDrawers:
     def install_swipe(self, panel):
         backend = type(panel._impl).__module__
         if backend.startswith('toga_iOS.'):
-            from rubicon.objc import ObjCClass, SEL, objc_method
+            from rubicon.objc import ObjCClass, ObjCProtocol, SEL, objc_method
             # An overlay owns its recognizer target; release both on dismissal.
             global _swipe_class
             if _swipe_class is None:
-                class LogisticsNotesDrawerSwipe(ObjCClass('NSObject')):
+                class LogisticsNotesDrawerSwipe(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureRecognizerDelegate'),)):
+                    @objc_method
+                    def gestureRecognizer_shouldRecognizeSimultaneouslyWithGestureRecognizer_(self, gesture, other) -> bool:
+                        return True
+
                     @objc_method
                     def swipe_(self, gesture) -> None:
                         if self.owner is not None:
@@ -91,6 +111,7 @@ class NotesDrawers:
             native = self.overlay.container.native
             gesture = ObjCClass('UISwipeGestureRecognizer').alloc().initWithTarget(target, action=SEL('swipe:'))
             gesture.direction = 2 if self.side == 'files' else 1
+            gesture.delegate = target
             native.addGestureRecognizer(gesture)
             self.gestures.append((native, gesture, target))
         elif backend.startswith('toga_android.'):
@@ -114,25 +135,21 @@ class NotesDrawers:
                     elif action in (3, 5):
                         self.start = None
                     return False
-            def attach(widget):
-                native = widget._impl.native
-                listener = Touch()
-                native.setOnTouchListener(listener)
-                self.gestures.append((native, None, listener))
-                for child in widget.children:
-                    attach(child)
-                content = getattr(widget, 'content', None)
-                if content is not None and content not in widget.children:
-                    attach(content)
-            attach(panel)
+            # PopupWindow observes the complete stream before child controls
+            # consume it. Per-widget listeners miss scrolls and native children.
+            popup = self.overlay.popup
+            listener = Touch()
+            popup.setTouchInterceptor(listener)
+            self.gestures.append((popup, None, listener))
 
     def clear_gestures(self):
         for native, gesture, target in self.gestures:
             if gesture is not None:
                 native.removeGestureRecognizer(gesture)
+                gesture.delegate = None
                 target.owner = None
             else:
-                native.setOnTouchListener(None)
+                native.setTouchInterceptor(None)
         self.gestures.clear()
 
     def refresh_gestures(self):
