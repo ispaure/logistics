@@ -71,3 +71,30 @@ class DocumentCatalogTests(TestCase):
             with self.assertRaises(ValueError):
                 catalog.remember({'path': '/note.md'}, 'Note', {}, favourite=True)
             self.assertEqual(catalog.path().read_text(), 'invalid')
+
+    def test_swapped_credential_bucket_and_revoke_during_save_preserve_ciphertext(self):
+        sessions = CredentialSessions()
+        context = Path('/fixture/catalog-session')
+        with TemporaryDirectory() as directory, patch('features.rclone.session.registry', sessions):
+            sessions.remember(context, {}, state_password='shared password', state_identity='a' * 64)
+            cipher = DesktopCredentialCipher(SimpleNamespace(context=context))
+            catalog = DocumentCatalog(directory)
+            source = dict(type='crypt', path='private.md')
+            catalog.remember(source, 'Private', {}, favourite=True, cipher=cipher)
+            original = catalog.path(cipher).read_bytes()
+            sessions.remember(context, {}, state_password='shared password', state_identity='b' * 64)
+            catalog.path(cipher).write_bytes(original)
+            with self.assertRaisesRegex(ValueError, 'another credential'):
+                catalog.read(cipher)
+            self.assertEqual(catalog.entries(ciphers=[cipher], strict=False), [])
+            self.assertTrue(catalog.errors)
+            sessions.remember(context, {}, state_password='shared password', state_identity='a' * 64)
+            transform = cipher.transform
+            def revoke(data, decode=False):
+                result = transform(data, decode=decode)
+                if not decode:
+                    sessions.forget(context)
+                return result
+            with patch.object(cipher, 'transform', side_effect=revoke), self.assertRaises(PermissionError):
+                catalog.remember(source, 'Changed', {}, favourite=True, cipher=cipher)
+            self.assertEqual((catalog.root / ('a' * 64 + '.zip')).read_bytes(), original)

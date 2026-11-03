@@ -41,6 +41,7 @@ class LaunchCard(qt.QPushButton):
 class LandingPage(qt.QWidget):
     launch_requested = qt.Signal(str)
     document_requested = qt.Signal(str, bool)
+    saved_lists_changed = qt.Signal()
 
     def __init__(self, parent=None, *, documents_only=False):
         super().__init__(parent)
@@ -123,6 +124,8 @@ class LandingPage(qt.QWidget):
         self.editor_buttons = {}
         self.editor_new_buttons = {}
         self._launcher_signature = None
+        self._catalog_subscriptions = []
+        self.saved_lists_changed.connect(self.refresh_saved_lists)
         self.favourites_layout = qt.QVBoxLayout()
         layout.addLayout(self.favourites_layout)
         self.recent_layout = qt.QVBoxLayout()
@@ -161,12 +164,23 @@ class LandingPage(qt.QWidget):
         super().paintEvent(event)
 
     def showEvent(self, event):
-        from .document_catalog import populate
-        populate(self.favourites_layout, self)
-        populate(self.recent_layout, self, recent=True)
+        self.refresh_saved_lists()
         self._settle_layout()
         self._layout_pending = True
         super().showEvent(event)
+
+    def _catalog_locked(self):
+        self.saved_lists_changed.emit()
+
+    def refresh_saved_lists(self):
+        from .document_catalog import populate, unlocked_ciphers
+        from features.rclone import session
+        for unsubscribe in self._catalog_subscriptions:
+            unsubscribe()
+        self._catalog_subscriptions = [session.on_forget(cipher.provider.context, self._catalog_locked)
+                                       for cipher in unlocked_ciphers()]
+        populate(self.favourites_layout, self)
+        populate(self.recent_layout, self, recent=True)
 
     def _settle_layout(self):
         # Card heights and their parent grids must change in one pass: a height

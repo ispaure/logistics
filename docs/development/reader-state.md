@@ -88,3 +88,17 @@ their identities. Duplicate references retain the newest entry. New opens use
 the same resolution, preventing a container relocation from adding a second row.
 Secondary windows resolve against the app storage root while retaining their own
 history file in the window settings folder.
+
+## Favourites and desktop Recent
+
+`services/documents/catalog.py` stores bounded file references and their opening
+context. `DocumentCatalog` holds favourites; desktop `DocumentRecent` separately
+holds ten recent references so clearing Recent preserves favourites. Ordinary
+local references use JSON. Session-Only references use the existing desktop or
+mobile credential-password AES ZIP cipher, with the credential identity checked
+inside the encrypted envelope and access rechecked after transformation. They
+are decrypted for display only while their credential is unlocked. Desktop landing
+rows subscribe to revocation; mobile Home refresh follows credential publication.
+Unreadable buckets are preserved and do not hide unrelated available references.
+Focused catalogue tests cover wrong passwords, cross-credential substitution,
+revocation during encryption, opening-method replacement and independent clearing.

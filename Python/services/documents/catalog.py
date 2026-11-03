@@ -13,6 +13,7 @@ _lock = RLock()
 class DocumentCatalog:
     def __init__(self, root, *, recent=False):
         self.root = Path(root) / ('DocumentRecent' if recent else 'DocumentCatalog')
+        self.errors = []
 
     def path(self, cipher=None):
         identity = cipher.identity if cipher is not None else 'local'
@@ -31,8 +32,14 @@ class DocumentCatalog:
             raise ValueError('Document list exceeds limits; original preserved.')
         data = path.read_bytes()
         if cipher is not None:
+            identity = cipher.identity
             data = cipher.transform(data, decode=True)
         value = json.loads(data)
+        if cipher is not None:
+            if (not isinstance(value, dict) or set(value) != {'version', 'credential', 'lists'}
+                    or value['version'] != 1 or value['credential'] != identity or cipher.identity != identity):
+                raise ValueError('Document list belongs to another credential.')
+            value = value['lists']
         if not isinstance(value, dict) or set(value) != {'favourites', 'recent'}:
             raise ValueError('Invalid document list; original preserved.')
         for field, maximum in (('favourites', 100), ('recent', 10)):
@@ -52,12 +59,16 @@ class DocumentCatalog:
         return sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
 
     def save(self, value, cipher=None):
-        data = json.dumps(value, ensure_ascii=False).encode()
+        identity = cipher.identity if cipher is not None else None
+        envelope = dict(version=1, credential=identity, lists=value) if cipher is not None else value
+        data = json.dumps(envelope, ensure_ascii=False).encode()
         if len(data) > LIMIT:
             raise ValueError('Document list exceeds limits.')
         path = self.path(cipher)
         if cipher is not None:
             data = cipher.transform(data)
+            if cipher.identity != identity:
+                raise ValueError('Credential changed while saving document lists.')
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         atomic_write_bytes(path, data)
 
@@ -75,11 +86,17 @@ class DocumentCatalog:
             value['favourites'] = [row for row in value['favourites'] if row['id'] != identity]
             self.save(value, cipher)
 
-    def entries(self, field='favourites', *, ciphers=()):
+    def entries(self, field='favourites', *, ciphers=(), strict=True):
         with _lock:
+            self.errors = []
             rows = list(self.read()[field])
             for cipher in ciphers:
-                rows.extend(self.read(cipher)[field])
+                try:
+                    rows.extend(self.read(cipher)[field])
+                except (OSError, ValueError, PermissionError):
+                    if strict:
+                        raise
+                    self.errors.append('Some encrypted entries could not be unlocked; their originals were preserved.')
             # A re-favourite through another viewer replaces that opening method.
             unique = {}
             for row in sorted(rows, key=lambda row: row['updated'], reverse=True):

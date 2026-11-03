@@ -137,9 +137,12 @@ async def reopen(app, row):
 def populate(app, container):
     container.add(toga.Label('Favourites', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
     try:
-        rows = catalog(app).entries(ciphers=list(unlocked_ciphers(app)))
+        store = catalog(app)
+        rows = store.entries(ciphers=list(unlocked_ciphers(app)), strict=False)
     except (OSError, ValueError, PermissionError):
         rows = []
+    if 'store' in locals() and store.errors:
+        container.add(toga.Label(store.errors[0], style=Pack(font_size=12)))
     for row in rows:
         async def open_row(widget=None, row=row, **kwargs):
             await reopen(app, row)
