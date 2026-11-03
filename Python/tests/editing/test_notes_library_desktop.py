@@ -31,6 +31,17 @@ class PrivateFiles(RemoteFiles):
 
 
 class NotesLibraryDesktopTests(QtTestCase):
+    def test_open_document_only_appears_when_sidebar_is_hidden(self):
+        with self.temporary_directory() as directory:
+            window = self.open_library(Path(directory))
+            self.assertTrue(window.open_card.isHidden())
+            window.menu.click()
+            self.assertFalse(window.open_card.isHidden())
+            window.open_card.click()
+            self.assertFalse(window.panel_tabs.isHidden())
+            self.assertTrue(window.open_card.isHidden())
+            window.close()
+
     def test_miscellaneous_files_are_visible_and_use_the_document_router(self):
         with self.temporary_directory() as directory:
             root = Path(directory)

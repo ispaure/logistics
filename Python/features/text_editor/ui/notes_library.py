@@ -117,14 +117,27 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.welcome = qt.QWidget()
         welcome = qt.QVBoxLayout(self.welcome)
         welcome.addStretch()
-        welcome.addWidget(qt.QLabel('Notes Library'))
+        welcome.setContentsMargins(40, 32, 40, 32)
+        welcome.setSpacing(14)
+        self.welcome_title = qt.QLabel('Notes Library')
+        title_font = self.welcome_title.font()
+        title_font.setPointSizeF(24)
+        title_font.setBold(True)
+        self.welcome_title.setFont(title_font)
+        welcome.addWidget(self.welcome_title)
+        hint = qt.QLabel('Choose a file from the sidebar, or create a document to start writing.')
+        hint.setWordWrap(True)
+        hint.setForegroundRole(qt.QPalette.ColorRole.PlaceholderText)
+        welcome.addWidget(hint)
         self.open_card = qt.QPushButton('Open Document')
-        self.open_card.clicked.connect(lambda: self.split.widget(0).show())
+        self.open_card.clicked.connect(lambda: self.show_sidebar(True))
+        self.open_card.hide()
         self.new_card = qt.QPushButton('New Document')
         self.new_card.clicked.connect(self.new_note)
         for card in (self.open_card, self.new_card):
-            card.setMinimumHeight(72)
-            welcome.addWidget(card)
+            card.setMinimumHeight(44)
+            card.setMaximumWidth(280)
+            welcome.addWidget(card, 0, qt.Qt.AlignmentFlag.AlignLeft)
         self.new_card.setVisible(not remote)
         welcome.addStretch()
         self.document_stack.addWidget(self.welcome)
@@ -205,7 +218,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.split.addWidget(self.links_tree)
         self.split.setStretchFactor(1, 1)
         self.menu.clicked.disconnect()
-        self.menu.clicked.connect(lambda: self.panel_tabs.setVisible(not self.panel_tabs.isVisible()))
+        self.menu.clicked.connect(lambda: self.show_sidebar(self.panel_tabs.isHidden()))
         self.split.setSizes([260, 740])
         self.progress = OperationProgress(self)
         self.progress.completed.connect(self.completed)
@@ -239,6 +252,10 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.progress.start(initial, message='Opening Notes Library…')
         self.tree.setEnabled(False)
         self.viewer.setEnabled(False)
+
+    def show_sidebar(self, visible):
+        self.panel_tabs.setVisible(visible)
+        self.open_card.setVisible(not visible and not self.document_only)
 
     def list_folder(self, path):
         if self.progress.busy or self.library is None or self.locked:
@@ -425,6 +442,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             from features.text_editor.notes import library_name
             self.document_container_title = library_name(self.provider, self.library.root)
             self.setWindowTitle(self.document_container_title)
+            self.welcome_title.setText(self.document_container_title)
             from services.documents.ui.private_views import protect_private_view
             protect_private_view(self, self.provider)
             if not self.check_provider():
