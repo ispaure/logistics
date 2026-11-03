@@ -147,6 +147,8 @@ class NotesLibraryTests(unittest.TestCase):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             await owner.open_note('Vault/Home.md')
+            self.assertEqual(owner.session.title, 'Vault')
+            self.assertEqual(owner.view._native_reader_title(), 'Home.md')
             source, title, opener, cipher = reference(self.app)
             self.assertIsNone(cipher)
             catalog(self.app).remember(source, title, opener, favourite=True)

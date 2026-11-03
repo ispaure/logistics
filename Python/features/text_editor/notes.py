@@ -18,6 +18,15 @@ def document_kind(path):
     return 'markdown' if suffix in MARKDOWN else 'text' if suffix in TEXT else 'notebook' if suffix == '.rmdoc' else None
 
 
+def library_name(provider, root='', fallback='Notes Library'):
+    if root:
+        return PurePosixPath(root).name
+    if getattr(provider, 'remote', None):
+        from services.documents.storage import display_path
+        return display_path(provider, '').rstrip(':')
+    return provider.root.name or fallback
+
+
 def operation(provider, cancelled):
     from services.documents.storage import document_operation
     return document_operation(provider, cancelled)

@@ -71,6 +71,8 @@ class VaultBrowser(LibraryPanels):
         self.release_provider = lambda: None
         self.library = NotesLibrary(provider, root)
         self.root = self.library.root
+        from features.text_editor.notes import library_name
+        self.library_title = library_name(provider, self.root)
         self.history, self.history_index = [], -1
         self.positions = {}
         self.session = None
@@ -207,7 +209,7 @@ class VaultBrowser(LibraryPanels):
         self.view._workspace_menu_button = self.menu
         self.view._native_reader_toolbar = self.toolbar
         self.view._native_reader_title = (
-            lambda: PurePosixPath(self.path).name if self.path else "Notes Library"
+            lambda: PurePosixPath(self.path).name if self.path else self.library_title
         )
         from services.documents.storage import display_path
         self.view._document_path = lambda: display_path(self.provider, self.path or self.root) if self.valid() else None
@@ -235,7 +237,7 @@ class VaultBrowser(LibraryPanels):
         self.new_card = toga.Button('New Document', on_press=self.new_note, style=Pack(height=72, margin_top=12))
         host.presentation.surface(self.open_card, radius=16)
         host.presentation.surface(self.new_card, radius=16)
-        self.welcome.add(toga.Label('Notes Library', style=Pack(font_size=24, font_weight='bold')), self.open_card)
+        self.welcome.add(toga.Label(self.library_title, style=Pack(font_size=24, font_weight='bold')), self.open_card)
         if self.library.supports('create'):
             self.welcome.add(self.new_card)
         self.article.remove(self.web)
@@ -1381,6 +1383,7 @@ class VaultBrowser(LibraryPanels):
             self.page_search.show()
 
     def dispose(self):
+        self.library_title = 'Notes Library'
         if hasattr(self, 'file_drag'):
             self.file_drag.dispose()
         self.cancel_data_views()

@@ -44,7 +44,7 @@ async def open_vault(app, provider, root, destination=None, *, title='', rows=No
         raise
     owner.release_provider = owned.close if owned is not None else lambda: None
     owner.session = app.workspace.open('notes-library', uuid4().hex, 'markdown',
-        'Notes Library' + (' — ' + title if title else ''), transient=True)
+        owner.library_title, transient=True)
     app.vault_browser = owner
     if app.show_view(owner.view, destination=destination, route='notes-library:' + owner.session.id, title=owner.session.title) is False:
         owner.dispose()

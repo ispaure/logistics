@@ -110,6 +110,9 @@ def document_location(window):
 
 
 def document_title(window, original=None):
+    container_title = getattr(window, 'document_container_title', None)
+    if container_title:
+        return container_title
     original = window.windowTitle() if original is None else original
     path, provider = document_location(window)
     if not path:
