@@ -16,7 +16,8 @@ class LibraryDrag:
         self.task = None
 
     def start(self, path):
-        if not self.owner.valid() or self.owner.file_command_busy or not self.owner.library.supports('rename'):
+        if (not self.owner.valid() or self.owner.file_command_busy
+                or (self.task is not None and not self.task.done()) or not self.owner.library.supports('rename')):
             return False
         path = self.owner.library.contained(path)
         if path == self.owner.root:

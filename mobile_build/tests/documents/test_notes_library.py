@@ -68,7 +68,56 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertTrue(drag.drop('Vault/Destination'))
             self.assertTrue(await drag.task)
             self.assertTrue((self.vault / 'Destination/Projects/Plan.MD').is_file())
+            (self.vault / 'Destination/Home.md').write_text('Existing destination')
+            self.assertTrue(drag.start('Vault/Home.md'))
+            self.assertTrue(drag.drop('Vault/Destination'))
+            self.assertFalse(await drag.task)
+            self.assertTrue((self.vault / 'Home.md').is_file())
+            self.assertEqual((self.vault / 'Destination/Home.md').read_text(), 'Existing destination')
+            self.assertTrue(owner.article.enabled)
             self.assertFalse(drag.start(owner.root))
+            owner.close()
+        self.run_async(exercise())
+
+    def test_android_local_drag_callbacks_keep_paths_out_of_native_payload(self):
+        from mobile.obsidian import open_vault
+        from types import SimpleNamespace
+        import sys
+        class Native:
+            def setOnLongClickListener(self, value): self.long_click = value
+            def setOnDragListener(self, value): self.drag = value
+            def startDragAndDrop(self, clip, shadow, state, flags):
+                self.clip = clip
+                return True
+        class Widget:
+            def __init__(self): self._impl = SimpleNamespace(native=Native())
+        class Clip:
+            @staticmethod
+            def newPlainText(label, text): return (label, text)
+        events = SimpleNamespace(ACTION_DRAG_STARTED=1, ACTION_DRAG_ENTERED=2, ACTION_DRAG_LOCATION=3,
+                                 ACTION_DROP=4, ACTION_DRAG_EXITED=5, ACTION_DRAG_ENDED=6)
+        view = SimpleNamespace(OnLongClickListener=object, OnDragListener=object, DragShadowBuilder=lambda native: native)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            drag = owner.file_drag
+            source, target = Widget(), Widget()
+            modules = {'android.view': SimpleNamespace(View=view, DragEvent=events),
+                       'android.content': SimpleNamespace(ClipData=Clip),
+                       'java': SimpleNamespace(dynamic_proxy=lambda protocol: object)}
+            with patch.dict(sys.modules, modules):
+                drag.bind_android(source, 'Vault/Projects/Plan.MD', True, False)
+                drag.bind_android(target, owner.root, False, True)
+                self.assertTrue(source._impl.native.long_click.onLongClick(source._impl.native))
+                self.assertEqual(source._impl.native.clip, (drag.token, ''))
+                event = SimpleNamespace(getAction=lambda: events.ACTION_DROP,
+                    getClipDescription=lambda: SimpleNamespace(getLabel=lambda: drag.token))
+                self.assertTrue(target._impl.native.drag.onDrag(target._impl.native, event))
+                self.assertTrue(await drag.task)
+                self.assertTrue((self.vault / 'Plan.MD').is_file())
+                drag.unbind(source)
+                drag.unbind(target)
+                self.assertIsNone(source._impl.native.long_click)
+                self.assertIsNone(target._impl.native.drag)
             owner.close()
         self.run_async(exercise())
 
