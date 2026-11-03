@@ -81,9 +81,9 @@ class NotesDrawerTests(unittest.TestCase):
             await owner.open_note('Vault/Home.md')
             for side, closing in (('files', -1), ('links', 1)):
                 owner.sidebar.show(side)
-                owner.sidebar.swipe(-closing)
+                self.assertFalse(owner.sidebar.swipe(-closing))
                 self.assertEqual(owner.sidebar.side, side)
-                owner.sidebar.swipe(closing)
+                self.assertTrue(owner.sidebar.swipe(closing))
                 self.assertIsNone(owner.sidebar.side)
                 self.assertIsNone(owner.sidebar.overlay)
             owner.sidebar.show_sidebar()
@@ -114,7 +114,7 @@ class NotesDrawerTests(unittest.TestCase):
         from mobile.notes_drawers import NotesDrawers
         owner = NotesDrawers.__new__(NotesDrawers)
         owner.gestures = []
-        owner.swipe = Mock()
+        owner.swipe = Mock(return_value=True)
         popup = Mock()
         owner.overlay = SimpleNamespace(popup=popup)
         panel = SimpleNamespace(_impl=type('AndroidBox', (), {'__module__':'toga_android.widgets.box'})())
@@ -148,6 +148,43 @@ class NotesDrawerTests(unittest.TestCase):
         owner.clear_gestures()
         popup.setTouchInterceptor.assert_called_with(None)
         self.assertEqual(owner.gestures, [])
+
+    def test_android_wrong_direction_preserves_child_touch_and_refresh_preserves_swipe(self):
+        from mobile.notes_drawers import NotesDrawers
+        owner = NotesDrawers.__new__(NotesDrawers)
+        owner.side, owner.gestures = 'files', []
+        owner.show_detail = Mock()
+        popup = Mock()
+        owner.overlay = SimpleNamespace(popup=popup)
+        panel = SimpleNamespace(_impl=type('AndroidBox', (), {'__module__':'toga_android.widgets.box'})())
+        owner.sidebar = panel
+        view = Mock()
+        view.getContext().getResources().getDisplayMetrics.return_value.density = 1
+        def touch(action, x, time=0):
+            event = Mock()
+            event.getActionMasked.return_value = action
+            event.getRawX.return_value, event.getRawY.return_value = x, 0
+            event.getEventTime.return_value = time
+            listener = popup.setTouchInterceptor.call_args.args[0]
+            return listener.onTouch(view, event)
+        with patch.dict(sys.modules, {
+            'android.view': SimpleNamespace(View=SimpleNamespace(OnTouchListener=object)),
+            'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+        }):
+            owner.install_swipe(panel)
+            # A swipe toward the already-open Files drawer must still reach
+            # its child control, including the final up event.
+            touch(0, 100)
+            self.assertFalse(touch(1, 200, 100))
+            owner.show_detail.assert_not_called()
+            # Tree/link rendering can finish between down and up. A parent
+            # recognizer does not need replacing when its children change.
+            touch(0, 200)
+            owner.refresh_gestures()
+            self.assertTrue(touch(1, 100, 100))
+            owner.show_detail.assert_called_once()
+            self.assertEqual(popup.setTouchInterceptor.call_count, 1)
+        owner.clear_gestures()
 
     @unittest.skipUnless(NODE, 'Node required for document touch events')
     def test_document_touch_events_open_from_center_and_preserve_reading_gestures(self):

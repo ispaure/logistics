@@ -88,6 +88,8 @@ class NotesDrawers:
     def swipe(self, direction):
         if (self.side == 'files' and direction < 0) or (self.side == 'links' and direction > 0):
             self.show_detail()
+            return True
+        return False
 
     def install_swipe(self, panel):
         backend = type(panel._impl).__module__
@@ -130,8 +132,7 @@ class NotesDrawers:
                         dx, dy = event.getRawX()-x, event.getRawY()-y
                         density = view.getContext().getResources().getDisplayMetrics().density
                         if abs(dx)>60*density and abs(dx)>2*abs(dy) and event.getEventTime()-time<800:
-                            owner.swipe(1 if dx>0 else -1)
-                            return True
+                            return owner.swipe(1 if dx>0 else -1)
                     elif action in (3, 5):
                         self.start = None
                     return False
@@ -153,8 +154,9 @@ class NotesDrawers:
         self.gestures.clear()
 
     def refresh_gestures(self):
-        if self.overlay is not None:
-            self.clear_gestures()
+        # Both native backends observe the overlay container, so replacing
+        # rows does not require replacing the active recognizer/touch stream.
+        if self.overlay is not None and not self.gestures:
             self.install_swipe(self.sidebar if self.side == 'files' else self.links)
 
     def show_detail(self):
