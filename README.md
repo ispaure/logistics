@@ -56,10 +56,11 @@ the interface, browser, reading and code; accent colors also tint dark surfaces.
 
 ## Find your way around
 
-The launch page offers **Open full hub with sidebar**, or **File Browser**, **Git**
-and **IDE** without the sidebar. **Read & edit** cards launch enabled editors and
-readers, including comics, EPUBs and archives. Single-tool views keep a small
-settings icon at the bottom-left; clicking it opens settings and navigation choices.
+The launch page shows active workspace and feature cards on the left, with
+favourites above recent files on the right. Choices open with the sidebar by
+default; **Appearance & shared controls → Menus** can switch to focused views.
+Expand **Read & edit** below the feature cards to launch editors and readers,
+including comics, EPUBs and archives. Focused views keep a settings icon at the bottom-left for navigation.
 
 Use **File Browser** for any folder, or **Workspaces** for configured libraries
 and remote storage. Workspaces groups **Local**, **Cloud** and **Home Server**

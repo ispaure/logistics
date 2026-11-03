@@ -162,7 +162,8 @@ class LaunchModeTests(QtTestCase):
             self.assertIs(window.launch_stack.currentWidget(), window.landing)
             self.assertIs(window.tabs.currentWidget(), page)
             self.assertTrue(label.isVisible())
-        window.landing.buttons['hub'].click()
+        self.assertNotIn('hub', window.landing.buttons)
+        window.open_hub_action.trigger()
         self.assertTrue(window.sidebar.isVisible())
         self.assertTrue(window.settings_button.isHidden())
         self.assertIs(window.tabs.currentWidget(), window._launch_targets()['browser'])
@@ -321,6 +322,20 @@ class LaunchModeTests(QtTestCase):
         self.assertNotIn(key, self.window.landing.buttons)
         self.assertIs(self.window.launch_stack.currentWidget(), self.window.landing)
         self.assertIs(self.window._feature_pages['sample', 'sample.workspace'], retained)
+
+    def test_notes_library_destination_has_a_launch_card_without_utility_cards(self):
+        contribution = PageContribution('Notes Library', 'notes_library.workspace', qt.QWidget,
+                                        order=17, navigation_icon='notes_library')
+        entry = RegisteredContribution('notes_library', 'Notes Library', contribution)
+        with patch.object(main_window.registry, 'get_pages', return_value=[*self.entries, entry]):
+            self.window._sync_feature_pages()
+        key = 'feature:notes_library:notes_library.workspace'
+        card = self.window.landing.buttons[key]
+        self.assertEqual(card.accessibleName(), 'Notes Library')
+        card.click()
+        self.assertIs(self.window.tabs.currentWidget(), self.window._launch_targets()[key])
+        for utility in ('hub', 'settings', 'documents', 'debug'):
+            self.assertNotIn(utility, self.window.landing.buttons)
 
     def test_chooser_expands_reflows_and_scrolls_with_mouse_wheel(self):
         from desktop.landing import DocumentChooser

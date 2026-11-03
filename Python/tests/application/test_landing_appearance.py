@@ -44,10 +44,65 @@ class LandingAppearanceTests(QtTestCase):
         )
         page.set_tool_launchers([(str(i), 'Workspace ' + str(i), detail, 'git')
                                  for i, detail in enumerate(descriptions)])
+        page.read_edit_toggle.click()
         page.set_document_launchers({str(i): DocumentLauncherContribution(
             str(i), 'Text Editor', lambda: None, 'text', i, lambda: None,
             description='Read and edit documents in this format.') for i in range(6)})
         return page
+
+    def test_read_edit_starts_collapsed_and_title_toggles_the_cards(self):
+        page = LandingPage()
+        self.addCleanup(page.deleteLater)
+        self.assertTrue(page.document_section.isHidden())
+        page.read_edit_toggle.click()
+        self.assertFalse(page.document_section.isHidden())
+        page.read_edit_toggle.click()
+        self.assertTrue(page.document_section.isHidden())
+
+    def test_launch_columns_share_width_and_saved_lists_stack_on_the_right(self):
+        page = self.page(SLATE_LIGHT)
+        page.resize(1250, 800)
+        page.show()
+        self.app.processEvents()
+        page._settle_layout()
+        self.assertNotIn('hub', page.buttons)
+        self.assertLessEqual(abs(page.choices.width() - page.saved_files.width()), 1)
+        self.assertGreater(page.saved_files.x(), page.choices.geometry().right())
+        favourites = page.favourites_layout.itemAt(0).widget()
+        recent = page.recent_layout.itemAt(0).widget()
+        self.assertLess(favourites.y(), recent.y())
+        page.resize(650, 800)
+        self.app.processEvents()
+        page._settle_layout()
+        self.assertGreater(page.saved_files.y(), page.choices.geometry().bottom())
+
+    def test_long_saved_filenames_preserve_columns_and_reopen_the_full_entry(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        title = 'A very long favourite filename ' * 15 + '.md'
+        row = dict(title=title, source={}, opener={})
+        store = SimpleNamespace(entries=lambda *args, **kwargs: [row], errors=[])
+        with patch('desktop.document_catalog.catalog', return_value=store), \
+                patch('desktop.document_catalog.unlocked_ciphers', return_value=[]), \
+                patch('desktop.document_catalog.reopen') as reopen:
+            page = self.page(SLATE_LIGHT)
+            page.resize(850, 550)
+            page.show()
+            self.app.processEvents()
+            page._settle_layout()
+            self.assertLessEqual(abs(page.choices.width() - page.saved_files.width()), 1)
+            for layout in (page.favourites_layout, page.recent_layout):
+                container = layout.itemAt(1).widget()
+                button = container.findChild(qt.QPushButton)
+                self.assertLessEqual(button.width(), page.saved_files.width())
+                self.assertEqual(button.toolTip(), title)
+                self.assertEqual(button.text(), title)
+                button.click()
+                reopen.assert_called_with(row, page)
+            page.resize(650, 550)
+            self.app.processEvents()
+            page._settle_layout()
+            self.assertEqual(page.saved_files.width(), page.content.width())
 
     def test_first_paint_preserves_positions_across_scrollbar_column_breakpoint(self):
         for colors in (SLATE_LIGHT, SLATE_DARK):
