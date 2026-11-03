@@ -61,6 +61,19 @@ class CryptCommandTests(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs['max_output'], 3)
         self.assertEqual(self.validate.call_count, 2)
 
+    def test_batch_encoding_bounds_and_cancellation(self):
+        with patch.object(session, 'revocation_check', return_value=lambda: False), \
+                patch.object(session, 'launch') as launch:
+            self.assertEqual(self.command.encode_many([]), [])
+            with self.assertRaises(ValueError):
+                self.command.encode_many(['note.md'] * 129)
+            with self.scope.scope(lambda: True), self.assertRaises(OperationCancelled):
+                self.command.encode_many(['private.md'])
+            launch.assert_not_called()
+        with patch.object(self.command, '_run', return_value=b'["one"]'):
+            with self.assertRaises(ValueError):
+                self.command.encode_many(['one', 'two'])
+
     def test_encode_rejects_incomplete_or_ambiguous_results(self):
         with patch.object(session, 'revocation_check', return_value=lambda: False), \
              patch.object(session, 'launch', return_value=({}, 'view:', '')), \
