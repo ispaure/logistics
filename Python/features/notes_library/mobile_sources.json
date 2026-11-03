@@ -17,6 +17,7 @@
     "mobile/library_tools.py",
     "mobile/notes_library.py",
     "mobile/notes_swipe.py",
+    "navigation.py",
     "notes.py",
     "notes_links.py"
   ]

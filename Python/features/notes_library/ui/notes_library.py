@@ -8,6 +8,7 @@ from commonUtils.ui.markdown.navigation import MarkdownNavigation
 from features.notes_library.notes import NotesLibrary, vault_root, operation, document_kind, MAX_NOTE
 from .library_panels import LibraryPanels, FolderPageTree
 from ..notes import breadcrumb_folders, fit_breadcrumbs
+from ..navigation import PathChange, MutationResult
 
 
 class NotesBreadcrumbs(qt.QLabel):
@@ -564,38 +565,33 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             if not self.check_provider():
                 return
             source, deleted, created = values
-            destination, result, refresh_errors = result
+            mutation = result
+            destination = mutation.destination
             if source is not None or deleted is not None:
                 try:
                     from desktop.document_catalog import relocate
                     relocate(self.provider, source, destination, deleted=deleted)
                 except (OSError, ValueError, PermissionError):
-                    self.viewer.status.setText('Files changed; some saved references could not be updated.')
-            if refresh_errors:
-                self.viewer.status.setText('Files updated; some folders could not refresh. ' + refresh_errors[0])
-            def remap(path):
-                return destination + path[len(source):] if source is not None and (
-                    path == source or path.startswith(source + '/')) else path
+                    mutation.reference_errors.append('Some saved references could not be updated.')
+                    self.viewer.status.setText('Files changed; ' + mutation.reference_errors[0])
+            if mutation.refresh_errors:
+                self.viewer.status.setText('Files updated; some folders could not refresh. ' + mutation.refresh_errors[0])
+            change = PathChange(source, destination, deleted)
             current = self.history[self.index] if self.index >= 0 else None
-            self.history = [remap(path) for path in self.history]
-            self.positions = {remap(path): value for path, value in self.positions.items()}
+            self.history, self.index = change.history(self.history, self.index)
+            self.positions = change.positions(self.positions)
+            if change.removes(current):
+                self.clear_document()
+                current = None
+                self.index = -1
             if deleted:
-                def removed(path):
-                    return path == deleted or path.startswith(deleted + '/')
-                retained_index = sum(not removed(path) for path in self.history[:self.index + 1]) - 1
-                self.history = [path for path in self.history if not removed(path)]
-                self.positions = {path: value for path, value in self.positions.items() if not removed(path)}
-                if current is not None and removed(current):
-                    self.clear_document()
-                    current = None
-                self.index = retained_index if current is not None else -1
                 self.back.setEnabled(self.index > 0)
                 self.forward.setEnabled(0 <= self.index < len(self.history) - 1)
             self.tree.clear()
             self.items.clear()
             self.loaded.clear()
             self.folder_pages.clear()
-            for folder, rows in result:
+            for folder, rows in mutation.folders:
                 entries, pages = rows
                 self.populate(folder, entries, pages)
             if self.panel_tabs.currentIndex() == 1:
@@ -603,10 +599,10 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             if created:
                 self.edit_created = destination
                 self.open_note(destination)
-            elif current is not None and remap(current) != current:
+            elif current is not None and change.remap(current) != current:
                 if self.storage.path is not None:
-                    self.storage.path = (self.provider.root / remap(current)).resolve()
-                self.open_note(remap(current), remember=False)
+                    self.storage.path = (self.provider.root / change.remap(current)).resolve()
+                self.open_note(change.remap(current), remember=False)
             elif self.links_tree.isVisible():
                 self.refresh_connections()
             self.idle.emit()
@@ -963,10 +959,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.viewer.setEnabled(False)
         def run(report, cancelled):
             destination = work(cancelled)
-            def remap(path):
-                return destination + path[len(source):] if source is not None and (
-                    path == source or path.startswith(source + '/')) else path
-            paths = {remap(path) for path in folders} | {self.library.root, str(PurePosixPath(destination).parent)}
+            change = PathChange(source, destination, deleted)
+            paths = {change.remap(path) for path in folders} | {self.library.root, str(PurePosixPath(destination).parent)}
             from commonUtils.runtime.operations import OperationCancelled
             rows, errors = [], []
             for path in sorted(paths, key=lambda path: (len(PurePosixPath(path).parts), path)):
@@ -979,7 +973,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                 except (OSError, ValueError, OperationCancelled) as error:
                     errors.append(str(error))
             # Once published, retain the new path even if refreshing is cancelled.
-            return destination, rows, errors
+            return MutationResult(destination, rows, errors)
         # The worker returns the authoritative destination, including an added .md.
         self.progress.start(run, message='Updating Notes Library…')
 

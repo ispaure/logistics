@@ -545,3 +545,13 @@ Connection scans normalize direct relative/root candidates and apply the same
 library containment checks as navigation before considering a literal fallback.
 Desktop absolute file links preserve their query/fragment and must have the same
 file-URL host as the current document.
+
+## Navigation and mutation projection
+
+`navigation.py` owns pure `PathChange` history/position transformations. Visits
+remain ordered occurrences, including repeated visits to the same path; deletion
+retains the cursor relative to surviving visits. Desktop windows, scoped tabs and
+mobile mutations share these rules. `MutationResult` distinguishes committed
+filesystem destinations from folder refresh and saved-reference failures, so
+refresh cancellation cannot undo an authoritative move result. Focused desktop
+and mobile Notes Library suites exercise these transitions.

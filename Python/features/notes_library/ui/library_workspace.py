@@ -4,6 +4,7 @@ from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
 from .notes_library import NotesLibraryWindow
+from ..navigation import PathChange
 
 
 class LibraryTabs(qt.QStackedWidget):
@@ -239,26 +240,19 @@ class LibraryTabs(qt.QStackedWidget):
         menu.exec(group.tabBar().mapToGlobal(point))
 
     def remap(self, source, destination, deleted):
-        def removed(path):
-            return bool(deleted and (path == deleted or path.startswith(deleted + '/')))
-
-        def relocated(path):
-            return destination + path[len(source):] if source and (
-                path == source or path.startswith(source + '/')) else path
+        change = PathChange(source, destination, deleted)
 
         for child in list(self.documents):
             current = self.path(child)
-            if removed(current):
+            if change.removes(current):
                 self.close_tab(child, approved=True)
                 continue
             # Preserve history occurrences and cursor, even when the same file
             # appears more than once or only an earlier visit was affected.
-            index = sum(not removed(path) for path in child.history[:child.index + 1]) - 1
-            child.history = [relocated(path) for path in child.history if not removed(path)]
+            child.history, index = change.history(child.history, child.index)
             child.index = index
-            child.positions = {relocated(path): value for path, value in child.positions.items()
-                               if not removed(path)}
-            path = relocated(current)
+            child.positions = change.positions(child.positions)
+            path = change.remap(current)
             self.documents[child]['path'] = path
             group = self.documents[child]['group']
             group.setTabText(group.indexOf(child), PurePosixPath(path).name)
@@ -377,7 +371,7 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         if self.document_tabs is not None and not self.locked:
             self.document_tabs.setEnabled(True)
             if mutation is not None and not error:
-                self.document_tabs.remap(mutation[1], result[0], mutation[2])
+                self.document_tabs.remap(mutation[1], result.destination, mutation[2])
                 self.document_tabs.refresh_connections()
 
     def clear_document(self):
