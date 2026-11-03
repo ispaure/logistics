@@ -264,6 +264,8 @@ class VaultBrowser(LibraryPanels):
     def refresh_chrome(self):
         if not hasattr(self, 'secondary'):
             return
+        if hasattr(self, 'open_card'):
+            self.open_card.style.display = NONE if self.sidebar.sidebar_open else PACK
         left, right = self.host.toolbar_insets(self.secondary)
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
