@@ -96,6 +96,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
 
     def __init__(self, factory, label, *, remote=False, root="", document_only=False):
         super().__init__()
+        self.document_only = document_only
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle('Notes Library — ' + label)
         self.resize(1000, 750)
@@ -412,6 +413,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             return
         if kind == 'initial':
             self.provider, self.release, self.library, rows, pages = result
+            from features.text_editor.notes import library_name
+            self.document_container_title = library_name(self.provider, self.library.root)
+            self.setWindowTitle(self.document_container_title)
             from services.documents.ui.private_views import protect_private_view
             protect_private_view(self, self.provider)
             if not self.check_provider():
@@ -805,6 +809,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
 
     def retire(self):
         self.locked = True
+        self.document_container_title = None
         self.progress.request_cancel()
         self.clear_content()
         self.setWindowTitle('Notes Library locked')

@@ -33,7 +33,10 @@ class NotesLibraryTabTests(QtTestCase):
         with self.temporary_directory() as directory:
             root = Path(directory)
             owner = self.opened(root)
+            from desktop.location_context import document_title
+            self.assertEqual(owner.windowTitle(), root.name)
             first = self.note(owner, 'A.md')
+            self.assertEqual(document_title(owner), root.name)
             first.viewer.set_editing(True)
             first.viewer.set_edit_mode('source')
             first.viewer.editor.insertPlainText('Unsaved A ')
