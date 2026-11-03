@@ -118,8 +118,7 @@ class NotesLibrary:
     def visible_rows(rows):
         if len(rows) > 10000:
             raise ValueError('Folder exceeds the 10,000-entry limit.')
-        return sorted((row for row in rows if not row['name'].startswith('.')
-            and (row['directory'] or PurePosixPath(row['name']).suffix.lower() in DOCUMENTS)),
+        return sorted((row for row in rows if not row['name'].startswith('.')),
             key=lambda row: (not row['directory'], row['name'].casefold()))
 
     def entry(self, path):
@@ -213,8 +212,7 @@ class NotesLibrary:
             raise ValueError('Choose a different destination outside the selected folder.')
         with operation(self.provider, cancelled):
             entry = self.entry(source)
-            if not entry['directory'] and (PurePosixPath(source).suffix.lower() not in DOCUMENTS
-                                           or PurePosixPath(destination).suffix.lower() != PurePosixPath(source).suffix.lower()):
+            if not entry['directory'] and PurePosixPath(destination).suffix.lower() != PurePosixPath(source).suffix.lower():
                 raise ValueError('Keep the document filename extension.')
             from services.documents.storage import move_document_resource
             move_document_resource(self.provider, source, destination, cancelled=cancelled)

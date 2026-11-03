@@ -257,6 +257,9 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         except ValueError as error:
             self.viewer.status.setText(str(error))
             return
+        from features.text_editor.notes import document_kind
+        if document_kind(path) is None:
+            return self.open_other_file(path)
         return self.document_tabs.open(path, fragment=fragment, remember=remember, index=index)
 
     def activate_document(self, child, *, remember=True, index=None):

@@ -44,6 +44,20 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_miscellaneous_files_are_visible_and_movable_but_dotfiles_are_hidden(self):
+        from mobile.obsidian import open_vault
+        for name in ('clip.mp4', 'archive.bin', 'LICENSE', '.secret'):
+            (self.vault / name).write_bytes(b'content')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            names = {row['name'] for row in owner.folders['Vault']}
+            self.assertTrue({'clip.mp4', 'archive.bin', 'LICENSE'} <= names)
+            self.assertNotIn('.secret', names)
+            self.assertNotIn('.obsidian', names)
+            owner.library.move('Vault/archive.bin', 'Vault/renamed.bin')
+            self.assertEqual((self.vault / 'renamed.bin').read_bytes(), b'content')
+        self.run_async(exercise())
+
     def test_drag_moves_files_and_folders_and_library_root_is_an_explicit_target(self):
         from mobile.obsidian import open_vault
         (self.vault / 'Destination').mkdir()

@@ -224,7 +224,14 @@ def notes_host(app):
                 atomic_write_json(timing_marker.with_name('notes-open-timing.json'), sample, max_bytes=4096)
             except OSError:
                 pass  # Optional measurement must not interrupt document opening.
+    async def open_resource(provider, path):
+        from mobile.favourites import resource_reference
+        from mobile.document_sources import reopen_file
+        source, _ = resource_reference(app, provider, path)
+        return await reopen_file(app, source)
+
     return NotesHost(
+        open_resource=open_resource,
         relocate_references=lambda provider, source, destination: relocate(app, provider, source, destination),
         tab_style=tab_style,
         open_timing=open_timing if timing_marker.is_file() else None,
