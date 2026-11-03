@@ -39,6 +39,15 @@ class LibraryPanels:
             if child not in (self.search, self.search_mode):
                 self.files_content.add(child)
         self.rows_scroll = self.files_content.children[0]
+        search_rows = toga.Box(style=Pack(direction=COLUMN))
+        search_scroll = toga.ScrollContainer(content=search_rows, horizontal=False, style=Pack(flex=1))
+        self._row_panel = 'Files'
+        self._row_panels = {
+            'Files': dict(rows=self.rows, scroll=self.rows_scroll, _row_cache={}, shown=50,
+                          _rows_message=None, _more_rows=None),
+            'Search': dict(rows=search_rows, scroll=search_scroll, _row_cache={}, shown=50,
+                           _rows_message=None, _more_rows=None),
+        }
         self.search_scope = toga.Box(style=Pack(direction=ROW))
         self.search_scope_buttons = {}
         for label, value in (('In documents', 'Search within Documents'), ('File names', 'Search in File Names')):
@@ -47,7 +56,7 @@ class LibraryPanels:
             button = toga.Button(label, on_press=choose, style=Pack(flex=1, height=44, font_size=CONTROL_FONT))
             self.search_scope_buttons[value] = button
             self.search_scope.add(button)
-        self.search_content = toga.Box(children=[self.search, self.search_scope],
+        self.search_content = toga.Box(children=[self.search, self.search_scope, search_scroll],
             style=Pack(direction=COLUMN, flex=1, gap=4))
         self.tree.clear()
         self.tree.style.margin = 0
@@ -80,8 +89,44 @@ class LibraryPanels:
         self.panel_metadata = metadata
         self.tree.add(tabs, self.panel_body, self.panel_footer)
         self.search_mode.items = ['Search within Documents', 'Search in File Names']
-        self.search_mode.value = 'Search within Documents'
+        self.search_mode.value = 'Search in File Names'
         self.sync_search_scope()
+
+    def remember_panel_rows(self):
+        state = self._row_panels[self._row_panel]
+        for name in ('_row_cache', 'shown', '_rows_message', '_more_rows'):
+            state[name] = getattr(self, name, state[name])
+
+    def select_panel_rows(self, name):
+        if name == self._row_panel:
+            return
+        task = getattr(self, 'tree_task', None)
+        if task is not None and not task.done():
+            task.cancel()
+        self.remember_panel_rows()
+        self._row_panel = name
+        state = self._row_panels[name]
+        self.rows, self.rows_scroll = state['rows'], state['scroll']
+        for field in ('_row_cache', 'shown', '_rows_message', '_more_rows'):
+            if state[field] is not None:
+                setattr(self, field, state[field])
+            elif hasattr(self, field):
+                delattr(self, field)
+
+    def dispose_panel_rows(self):
+        self.remember_panel_rows()
+        for state in self._row_panels.values():
+            for row in state['_row_cache'].values():
+                for button in row.children:
+                    if hasattr(button, 'vault_path'):
+                        self.release_file_hold(button)
+            state['_row_cache'].clear()
+            state['rows'].clear()
+            state['_rows_message'] = state['_more_rows'] = None
+        self._row_cache = {}
+        for field in ('_rows_message', '_more_rows'):
+            if hasattr(self, field):
+                delattr(self, field)
 
     def sync_search_scope(self):
         for value, button in getattr(self, 'search_scope_buttons', {}).items():
@@ -128,13 +173,11 @@ class LibraryPanels:
     def select_panel_tab(self, name):
         if not self.valid() or name not in self.panel_tabs:
             return
+        if name in ('Files', 'Search'):
+            self.select_panel_rows(name)
         self.panel_tab = name
         selected = {'Files': self.files_content, 'Search': self.search_content,
                     'Calendar': self.calendar_scroll}[name]
-        if name in ('Files', 'Search') and self.rows_scroll.parent is not selected:
-            if self.rows_scroll.parent is not None:
-                self.rows_scroll.parent.remove(self.rows_scroll)
-            selected.add(self.rows_scroll)
         if self.panel_body.children != [selected]:
             self.panel_body.clear()
             self.panel_body.add(selected)

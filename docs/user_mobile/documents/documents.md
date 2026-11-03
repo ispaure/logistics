@@ -24,11 +24,14 @@ lists other saved text, Markdown and notebook documents. Libraries displays
 discovered Notes libraries followed by configured Comics libraries, under
 **Notes** and **Comics** headings. Tap a library directly to open it.
 
-**Search local documents** searches filenames recursively through Local,
-Shared files, Received Files and unlocked LocalCrypt storage, including files
-you have never opened. It does not search file contents or online remotes.
+The upper-right **Search documents** magnifier beside Open and New opens a dedicated
+filename search. It searches filenames recursively through Local,
+Shared files, Received Files and unlocked LocalCrypt storage, including files and folders
+you have never opened. Results use compact filename rows with **…** actions;
+**Show in folder** reveals the item in the file browser. It does not search file contents or online remotes.
 While text is entered, results replace the collection buttons and lists.
-Clear the search to return to the previous collection. Locked LocalCrypt
+Tap the upper-left **×** to return to the previous collection. Android Back also
+exits search when the Documents overview is visible. Locked LocalCrypt
 filenames remain hidden until you unlock their credentials. Unavailable
 locations are reported rather than treated as an empty successful search.
 
@@ -40,7 +43,7 @@ edge after rotation. Unlocking returns to
 the overview where you started. Documents also provides Open and New actions;
 its overview has no collapsible hamburger menu.
 When a vertical action bar has too little space, **Document actions** (**…**)
-contains Open and New while Unlock remains directly available.
+contains Open, New and Search while Unlock remains directly available.
 
 In **New document**, enter a name and choose Plain text, Markdown or Notebook.
 Tap **Choose location** to leave the keyboard and open the folder browser. Select

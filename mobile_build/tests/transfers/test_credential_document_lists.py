@@ -55,6 +55,68 @@ class ListBridge:
 
 
 class CredentialDocumentListTests(unittest.TestCase):
+    def test_note_visits_retain_encrypted_context_without_restoring_an_open_tab(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile.obsidian import remember_note
+        class CryptFiles(LocalFiles):
+            private = True
+            remote = 'Drive'
+            identity = 'b' * 64
+            storage_namespace = 'c' * 64
+        self.client.unlock()
+        provider = CryptFiles(self.root)
+        provider.storage_namespace = 'c' * 64
+        (self.root / 'Vault').mkdir()
+        (self.root / 'Vault/Note.md').write_text('# Note')
+        owner = SimpleNamespace(valid=lambda: True, provider=provider, root='Vault',
+                                path='Vault/Note.md', recent_notes=[])
+        self.app.vault_browser = owner
+        try:
+            remember_note(self.app, owner)
+            self.assertEqual(len(owner.recent_notes), 1)
+            recent = next(session for session, _ in self.app.recent_items() if session.title == 'Note.md')
+            self.assertEqual(recent.history_opener, dict(kind='notes', root='Vault'))
+            key = next(iter(self.cache.states))
+            self.assertEqual(self.cache.states[key]['open'], [])
+            self.assertEqual(self.app.recent_documents.items, [])
+            self.assertFalse(self.cache.failed)
+            self.assertTrue(self.cache.path(key).exists())
+            self.cache.states.clear()
+            self.cache.refresh()
+            self.assertFalse(self.cache.failed)
+            self.assertTrue(self.cache.states[key]['recent'], self.cache.states)
+            restored = self.app.recent_documents.sessions()[0]
+            self.assertEqual(restored.history_opener, recent.history_opener)
+            for path in self.root.rglob('*'):
+                if path.is_file() and path.name != 'Note.md':
+                    self.assertNotIn(b'Vault/Note.md', path.read_bytes())
+        finally:
+            del self.app.vault_browser
+
+    def test_passwordless_session_note_recent_is_memory_only(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile.obsidian import remember_note
+        class CryptFiles(LocalFiles):
+            private = True
+            remote = 'Drive'
+            identity = 'b' * 64
+            storage_namespace = 'c' * 64
+        provider = CryptFiles(self.root)
+        provider.storage_namespace = 'c' * 64
+        owner = SimpleNamespace(valid=lambda: True, provider=provider, root='Vault',
+                                path='Vault/Note.md', recent_notes=[])
+        self.app.vault_browser = owner
+        try:
+            remember_note(self.app, owner)
+            self.assertEqual(len(owner.recent_notes), 1)
+            self.assertTrue(any(s.title == 'Note.md' for s, _ in self.app.recent_items()))
+            self.assertEqual(self.app.recent_documents.items, [])
+            self.assertEqual(self.cache.states, {})
+            owner.valid = lambda: False
+            self.assertFalse(any(s.title == 'Note.md' for s, _ in self.app.recent_items()))
+        finally:
+            del self.app.vault_browser
+
     def test_rename_retargets_restored_open_placeholder_before_reopening(self):
         self.client.unlock()
         session = self.remember()

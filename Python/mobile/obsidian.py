@@ -54,6 +54,47 @@ async def open_vault(app, provider, root, destination=None, *, title='', rows=No
     return owner
 
 
+def remember_note(app, owner):
+    """Use existing history/privacy owners, retaining Session-Only visits in RAM."""
+    if not owner.valid() or owner.path is None:
+        return
+    from pathlib import Path
+    from time import time_ns
+    from services.documents.provider_documents import ProviderDocuments
+    from .document_sources import file_source
+    from .workspace import Session
+    from .recent_documents import MAX_RECENT
+    history = app.recent_documents
+    try:
+        # Providers without a stable reopening identity cannot enter history.
+        if getattr(owner.provider, 'private', False) and not hasattr(owner.provider, 'remote'):
+            return
+        copies = ProviderDocuments(owner.provider)
+        source = file_source(app, copies, owner.path, session_only=True)
+        if source is None:
+            return
+        title = Path(owner.path).name
+        suffix = Path(title).suffix.lower()
+        kind = {'.md': 'markdown', '.markdown': 'markdown', '.pdf': 'pdf', '.epub': 'epub',
+                '.cbz': 'comic', '.cbr': 'comic', '.rmdoc': 'notebook'}.get(suffix, 'text')
+        session = Session('', 'file-reference', history.reference_id(source), kind, title=title)
+        session.source, session.opened_at = source, time_ns()
+        session.history_opener = dict(kind='notes', root=str((owner.provider.root / owner.root).resolve())
+                                     if source['type'] == 'local' else owner.root)
+        history.validate_reference(dict(provider='file-reference', resource=session.resource,
+                                        kind=session.kind, title=title, source=source,
+                                        opener=session.history_opener))
+        owner.recent_notes = [session, *(old for old in owner.recent_notes
+                                        if old.identity != session.identity)][:MAX_RECENT]
+        app.credential_document_lists.remember(session, source, opened=False)
+        history.remember_file(session, file_source(app, copies, owner.path), opener=session.history_opener)
+        for destination in ('home', 'documents'):
+            app.refresh_hub(destination)
+    except (OSError, ValueError, PermissionError):
+        # An unreadable saved history must not prevent opening the document.
+        app.credential_document_lists.notice()
+
+
 async def offer_vault(app, browser, provider, root, rows):
     """Return True for Notes, False for files/no offer, or None for dismissal."""
     # Providers may be recreated on refresh; storage identity is stable.

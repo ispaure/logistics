@@ -11,6 +11,34 @@ from mobile.workspace import Session
 
 
 class RecentDocumentTests(unittest.TestCase):
+    def test_note_reference_preserves_library_context_after_reload_and_folder_move(self):
+        with TemporaryDirectory() as directory:
+            history = RecentDocuments(Path(directory))
+            source = dict(type='local', path='/files/Vault/Projects/Plan.md')
+            session = Session('', 'file-reference', '', 'markdown', title='Plan.md')
+            history.remember_file(session, source, opener=dict(kind='notes', root='/files/Vault'))
+            restored = RecentDocuments(Path(directory))
+            self.assertFalse(restored.error)
+            self.assertEqual(restored.sessions()[0].history_opener,
+                             dict(kind='notes', root='/files/Vault'))
+            restored.relocate(dict(type='local', path='/files/Vault'),
+                              dict(type='local', path='/files/Renamed'))
+            again = RecentDocuments(Path(directory))
+            self.assertFalse(again.error)
+            self.assertEqual(again.sessions()[0].source['path'], '/files/Renamed/Projects/Plan.md')
+            self.assertEqual(again.sessions()[0].history_opener['root'], '/files/Renamed')
+
+    def test_invalid_note_references_fail_closed(self):
+        for source, root in [(dict(type='local', path=7), '/files/Vault'),
+                             (dict(type='local', path='/files/Other.md'), '/files/Vault'),
+                             (dict(type='crypt', remote='r', identity='a'*64, namespace='b'*64,
+                                   key='Vault/Note.md'), '../Vault')]:
+            item = dict(provider='file-reference', resource=RecentDocuments.reference_id(source),
+                        kind='markdown', title='Note.md', source=source,
+                        opener=dict(kind='notes', root=root))
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                RecentDocuments.validate_reference(item)
+
     def test_video_reference_restores_without_becoming_a_workspace_kind(self):
         from mobile.workspace import KINDS
         with TemporaryDirectory() as directory:

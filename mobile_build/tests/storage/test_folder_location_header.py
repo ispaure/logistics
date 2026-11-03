@@ -125,12 +125,12 @@ class FolderLocationTests(unittest.TestCase):
         provider = SimpleNamespace(private=True, remote='Secret', client=SimpleNamespace(
             package_records=[dict(remotes=['Secret'], saved=False)]))
         header = FolderLocationHeader(toga.Label(''), icon_button('up', 'Parent folder'))
-        header.update_provider('', provider, name='LocalCrypt: Secret (pulled)')
+        header.update_provider('', provider, name='LocalCrypt: Secret')
         self.assertEqual(header.folder_name.value, 'Secret')
         self.assertEqual(header.storage_identity.children[-1].value,
                          'On-device · Unlocked (Session Only) · LocalCrypt')
         screen = FolderScreen(None, SimpleNamespace(search_provider=provider), None,
-                              'LocalCrypt: Secret (pulled)', '', 'browser')
+                              'LocalCrypt: Secret', '', 'browser')
         self.assertEqual(screen.title, 'Secret')
         provider.client.package_records[0]['saved'] = True
         header.update_provider('', provider)

@@ -56,6 +56,7 @@ class HostLifecycleTests(unittest.TestCase):
     def test_exit_veto_does_not_dispose_and_successful_exit_is_idempotent(self):
         host = self.host()
         host.cloud_busy = False
+        host.cloud_startup_task = None
         host.retire_private_comic_batch = Mock()
         host.private_sessions = object()
         host.clear_private_reader = Mock(return_value=False)
@@ -72,6 +73,7 @@ class HostLifecycleTests(unittest.TestCase):
                 patch('features.books.mobile.media_controls.stop_media'):
             self.assertTrue(owner.request_exit())
             self.assertTrue(owner.request_exit())
+        self.assertFalse(host.active_host)
         host.checkpoint.assert_called_once_with()
         host.screen_privacy.dispose.assert_called_once_with()
 

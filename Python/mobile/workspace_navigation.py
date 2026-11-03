@@ -277,13 +277,6 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         if eligible and destination == 'files':
             view._workspace_frame.folder_root = root
             view._workspace_frame.folder_detail = not root and route in ('browser', 'remote-browser', 'folder-options', 'workspace-browser')
-        if route == 'preview' and isinstance(view, toga.Box) and not getattr(view, '_workspace_menu', False):
-            menu = menu_button(lambda widget, **kw: self.show_browser(destination))
-            toolbar = getattr(view, '_workspace_toolbar', view)
-            toolbar.insert(0, menu)
-            view._workspace_menu_button = menu
-            view._workspace_menu = True
-            view._workspace_menu_destination = destination
         menu = getattr(view, '_workspace_menu_button', None)
         if (menu is not None and self.app.routes.apple
                 and menu not in getattr(view, '_document_title_controls', ())):

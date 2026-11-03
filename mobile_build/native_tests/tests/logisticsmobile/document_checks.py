@@ -44,6 +44,18 @@ async def exercise_documents(app, passed):
     # Preserve every existing persistent identity as well as both text drafts.
     expected_sessions = {key: session.identity for key, session in app.workspace.sessions.items()
                          if not session.transient}
+    app.show_documents_hub()
+    app.document_view_buttons['Recent'].on_press()
+    assert app.document_search.parent is None
+    app.open_document_search()
+    assert app.document_search.parent is not None
+    assert list(app.document_results.children) == [app.document_search_results]
+    if get_os() is OS.ANDROID:
+        app._impl.native.getOnBackPressedDispatcher().onBackPressed()
+    else:
+        app.close_document_search()
+    assert not app.documents_search_open and app.document_search.parent is None
+    assert list(app.document_results.children) == [app.document_recent_list]
     app.show_documents(destination='documents')
     app.editor.value = 'Draft survives actual Back'
     import toga
@@ -177,6 +189,7 @@ async def exercise_documents(app, passed):
     app.show_preview()
     assert app.preview is original_preview
     await wait_for_text(app.preview, 'Native preview')
+    assert not hasattr(app.preview_box, '_workspace_menu_button')
     passed.append('native_markdown_preview')
     from .file_mutation_checks import exercise_file_mutations, exercise_destination_edges
     await exercise_file_mutations(app)

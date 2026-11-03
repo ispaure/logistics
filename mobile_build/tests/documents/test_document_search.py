@@ -48,6 +48,47 @@ class LocalDocumentSearchTests(TestCase):
         app.loop.run_until_complete(remove.on_press())
         self.assertEqual(catalog(app).entries(), [])
 
+    def test_search_button_and_android_back_restore_documents_collection(self):
+        import toga
+        from mobile_build.tests.workspace.test_hub_documents import widgets
+        app = self.app
+        app.show_documents_hub()
+        app.document_view_buttons['Recent'].on_press()
+        self.assertIsNone(app.document_search.parent)
+        search = next(w for w in widgets(app.body) if isinstance(w, toga.Button)
+                      and getattr(w, 'accessible_name', '') == 'Search documents')
+        search.on_press()
+        self.assertIsNotNone(app.document_search.parent)
+        self.assertEqual(list(app.document_results.children), [app.document_search_results])
+        self.assertIsNone(app.document_views.parent)
+        self.assertTrue(app.routes.back())
+        self.assertIsNone(app.document_search.parent)
+        self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+        self.assertIsNotNone(app.document_views.parent)
+        self.assertFalse(app.documents_search_open)
+
+    def test_matching_folders_and_filename_rows_have_browser_actions(self):
+        import toga
+        from mobile_build.tests.workspace.test_hub_documents import widgets
+        app = self.app
+        from services.documents.locations import collection_path
+        root = collection_path(app.private_root)
+        (root / 'Nested/Needle folder').mkdir(parents=True)
+        (root / 'Nested/Needle.md').write_text('body')
+        hits, failures = scan_local_documents(app, 'needle')
+        self.assertFalse(failures)
+        folder = next(hit for hit in hits if hit['name'] == 'Needle folder')
+        self.assertTrue(folder['directory'])
+        app.show_documents_hub()
+        app.publish_document_search(hits, [])
+        rows = list(widgets(app.document_search_results))
+        self.assertFalse(any(isinstance(w, toga.Label) and 'Nested/' in w.text for w in rows))
+        menus = [w._document_search_menu for w in rows if hasattr(w, '_document_search_menu')]
+        self.assertEqual(len(menus), len(hits))
+        self.assertTrue(all('Show in folder' in [name for name, _ in menu.raw_actions] for menu in menus))
+        app.hub_controller().clear_document_search_results()
+        self.assertTrue(all(menu.disposed for menu in menus))
+
     def test_recursive_local_shared_received_and_unlocked_crypt_names_only(self):
         app = self.app
         base = app.private_root / 'search-fixture'
@@ -189,8 +230,8 @@ class LocalDocumentSearchTests(TestCase):
                   patch('mobile.ios_toolbar.vertical_edge', return_value=2),
                   patch('mobile.ios_toolbar.supplemental_fits', return_value=False) as capacity):
                 actions = root._ios_toolbar_buttons()
-            capacity.assert_called_once_with(child, 3)
+            capacity.assert_called_once_with(child, 4)
             self.assertEqual([button.accessible_name for button in actions],
                              ['Unlock LocalCrypt', 'Document actions'])
             self.assertEqual([label for label, _ in root._destination_action_menu.actions],
-                             ['Open document', 'New document'])
+                             ['Open document', 'New document', 'Search documents'])

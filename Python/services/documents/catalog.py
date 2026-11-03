@@ -38,6 +38,16 @@ def relocated_source(item, source, destination):
     return None if destination is None else dict(destination, **{key: str(_path_type(destination)(destination[key]) / suffix)})
 
 
+def relocated_opener(opener, source, destination):
+    """Keep a library opening root aligned when its containing folder moves."""
+    result = dict(opener)
+    suffix = _path_suffix(result.get('root'), source)
+    if suffix is not None and destination is not None:
+        key = 'key' if 'key' in destination else 'path'
+        result['root'] = str(_path_type(destination)(destination[key]) / suffix)
+    return result
+
+
 def relocated_title(title, before, after, *, names=None):
     key = 'key' if 'key' in before else 'path'
     old, new = names or (_path_type(before)(before[key]).name, _path_type(after)(after[key]).name)
@@ -136,10 +146,7 @@ class DocumentCatalog:
                         if destination is None:
                             continue
                         item = updated
-                        opener = dict(row['opener'])
-                        suffix = _path_suffix(opener.get('root'), source)
-                        if suffix is not None:
-                            opener['root'] = str(_path_type(destination)(destination[key]) / suffix)
+                        opener = relocated_opener(row['opener'], source, destination)
                         title = relocated_title(row['title'], row['source'], item, names=names)
                         row = dict(row, id=self.identity(item), source=item, opener=opener, title=title)
                     rows.append(row)

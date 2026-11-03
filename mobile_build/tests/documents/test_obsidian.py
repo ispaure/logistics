@@ -21,6 +21,19 @@ from mobile.obsidian import VaultBrowser, vault_root, open_vault
 
 
 class ObsidianTests(unittest.TestCase):
+    def test_recent_note_reuses_loaded_library_at_selected_section(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await owner.open_note('Vault/Projects/Plan.MD'))
+            recent = next(session for session, _ in self.app.recent_items()
+                          if session.title == 'Plan.MD')
+            self.assertEqual(recent.history_opener['kind'], 'notes')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            await self.app.recent_opener(recent)()
+            self.assertIs(self.app.vault_browser, owner)
+            self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+        self.run_async(exercise())
+
     def test_native_rejection_preserves_document_and_editor_before_popup(self):
         from unittest.mock import AsyncMock
         async def exercise():

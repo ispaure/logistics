@@ -123,6 +123,22 @@ def relocate(app, provider, source, destination=None):
     # title without changing that key or replacing a custom favourite label.
     names = (old_name, new_name) if source == target else None
     def update_history():
+        from services.documents.catalog import relocated_source, relocated_title, relocated_opener
+        notes = getattr(app, 'vault_browser', None)
+        if notes is not None:
+            retained = []
+            for session in notes.recent_notes:
+                before = session.source
+                after = relocated_source(before, source, target)
+                if after is None:
+                    continue
+                if after is not before:
+                    session.source = after
+                    session.resource = app.recent_documents.reference_id(after)
+                    session.title = relocated_title(session.title, before, after, names=names)
+                    session.history_opener = relocated_opener(session.history_opener, source, target)
+                retained.append(session)
+            notes.recent_notes = retained
         failed = False
         for owner in (app.recent_documents, app.credential_document_lists):
             try:
@@ -146,7 +162,7 @@ def relocate(app, provider, source, destination=None):
             update_history()
 
 
-async def reopen(app, row):
+async def reopen(app, row, *, error_title='Open favourite'):
     source, opener = row['source'], row['opener']
     try:
         if source['type'] == 'session':
@@ -156,6 +172,25 @@ async def reopen(app, row):
         if opener.get('kind') != 'notes':
             from .document_sources import reopen_file
             return await reopen_file(app, source, kind=opener.get('kind'))
+        current = getattr(app, 'vault_browser', None)
+        if current is not None and current.valid():
+            if source['type'] == 'local':
+                same = ((current.provider.root / current.root).resolve() == Path(opener['root']).resolve()
+                        and not getattr(current.provider, 'private', False))
+                path = Path(source['path']).relative_to(current.provider.root).as_posix() if same else None
+            else:
+                same = (source['type'] == 'crypt' and current.root == opener['root']
+                        and getattr(current.provider, 'identity', None) == source['identity']
+                        and getattr(current.provider, 'storage_namespace', None) == source['namespace']
+                        and getattr(current.provider, 'remote', None) == source['remote'])
+                path = source.get('key')
+            if same:
+                if not app.checkpoint():
+                    return False
+                opened = await current.open_note(path)
+                if opened:
+                    current.present()
+                return bool(opened)
         provider = None
         if source['type'] == 'local':
             from commonUtils.runtime.resources.local import LocalFiles
@@ -182,7 +217,7 @@ async def reopen(app, row):
             if hasattr(provider, 'close'):
                 provider.close()
     except (OSError, ValueError, PermissionError) as error:
-        await app.main_window.dialog(toga.InfoDialog('Open favourite', str(error)))
+        await app.main_window.dialog(toga.InfoDialog(error_title, str(error)))
     return False
 
 

@@ -316,6 +316,9 @@ class CredentialDocumentLists:
                     self.app.workspace.close(pending.id, guard=lambda session: True)
         item = dict(provider='file-reference', resource=self.references.reference_id(source),
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
+        opener = getattr(session, 'history_opener', None)
+        if opener is not None:
+            item['opener'] = dict(opener)
         self.references.validate_reference(item)
         state = self.states[key]
         fields = (('recent', self.max_recent), ('open', 32)) if opened else (('recent', self.max_recent),)
@@ -364,7 +367,7 @@ class CredentialDocumentLists:
 
     def relocate(self, source, destination=None, *, names=None):
         """Follow logical renames in unlocked encrypted history and reopen lists."""
-        from services.documents.catalog import relocated_source, relocated_title
+        from services.documents.catalog import relocated_source, relocated_title, relocated_opener
         for key, state in self.states.items():
             changed = False
             for field in ('open', 'recent'):
@@ -378,6 +381,8 @@ class CredentialDocumentLists:
                             continue
                         item = dict(item, source=after, resource=self.references.reference_id(after),
                                     title=relocated_title(item['title'], before, after, names=names))
+                        if 'opener' in item:
+                            item['opener'] = relocated_opener(item['opener'], source, destination)
                     rows.append(item)
                 state[field] = self.references.normalize_items(rows)
             if changed:

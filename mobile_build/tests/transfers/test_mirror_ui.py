@@ -160,6 +160,26 @@ async def drive_review(app, *, declined=False, early=False):
 
 
 class MirrorUITests(unittest.TestCase):
+    def test_localcrypt_copy_names_do_not_collapse_distinct_namespaces(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        from features.rclone.transfers.mobile.ui import MirrorUI
+        with TemporaryDirectory() as directory:
+            jobs = [dict(crypt=True, remote='Secret', identity=letter * 64,
+                         cipher_identity='c' * 64, target=name)
+                    for letter, name in [('a', 'Notes'), ('b', 'Comics')]]
+            providers = [Mock(), Mock()]
+            store = NS(jobs={str(i): job for i, job in enumerate(jobs)}, target=lambda job: Path(directory))
+            owner = NS(app=NS(feature_enabled=lambda feature: True), private_root=Path(directory),
+                       cloud_client=Mock(), cloud_crypt_remotes=['Secret'], mirror_store=lambda: store)
+            service = NS(localcrypt=NS(open=Mock(side_effect=providers)))
+            with patch('features.rclone.transfers.mobile.jobs.resolved_job', side_effect=lambda client, job: job), \
+                    patch('features.rclone.transfers.mobile.jobs.loaded_copy_cipher', return_value='Secret'), \
+                    patch('features.rclone.mobile.service.native_service', return_value=service):
+                locations = MirrorUI.linked_crypt_locations(owner)
+            self.assertEqual(list(locations.values()), providers)
+            self.assertEqual(list(locations), ['LocalCrypt: Secret · Notes', 'LocalCrypt: Secret · Comics'])
+
     def test_pull_replaces_an_open_document_without_losing_its_unsaved_draft(self):
         from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies

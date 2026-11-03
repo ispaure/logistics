@@ -75,6 +75,8 @@ class LibraryDocuments:
         opened = await self._open_note(path, remember=remember, fragment=fragment, resolve_link=resolve_link)
         if opened and return_side is not None:
             self._document_return_side = None if return_side == 'files' and self.sidebar.expanded else return_side
+        if opened:
+            self.host.remember_document(self)
         return opened
 
 
