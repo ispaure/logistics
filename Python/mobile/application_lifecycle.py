@@ -14,6 +14,8 @@ class HostLifecycle:
         self.exited = False
 
     def stop_local_searches(self):
+        from .notes_discovery import cancel
+        cancel(self.host)
         for value in tuple(vars(self.host).values()):
             stop = getattr(type(value), 'stop_local_search', None)
             if stop is not None:

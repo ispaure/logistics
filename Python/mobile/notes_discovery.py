@@ -7,6 +7,13 @@ from features.text_editor.notes import vault_root, operation
 from commonUtils.runtime.operations import check_cancelled, OperationCancelled
 
 
+def cancel(app):
+    app._notes_discovery_token = None
+    task = getattr(app, '_notes_discovery_task', None)
+    if task is not None and not task.done():
+        task.cancel()
+
+
 def find_libraries(provider, *, cancelled=lambda: False):
     pending, found, count, folders = [('', 0)], [], 0, 0
     with operation(provider, cancelled):
