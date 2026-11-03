@@ -22,6 +22,26 @@ class DesktopFileOperationsTests(unittest.TestCase):
                 raise RuntimeError('Required pinned rclone is missing.')
             raise unittest.SkipTest('Pinned rclone executable not installed')
 
+    def test_notes_landing_probes_use_bounded_batches_and_no_content_reads(self):
+        from io import BytesIO
+        from unittest.mock import patch
+        from features.text_editor.notes import NotesLibrary
+        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+            provider = fixture.provider
+            for name in ('One', 'Two', 'Empty'):
+                provider.mkdir(name)
+            provider.create_file('One/One.md', BytesIO(b'# Landing'))
+            library = NotesLibrary(provider)
+            rows = library.folders('')
+            with patch.object(provider._commands, 'encode_many', wraps=provider._commands.encode_many) as encode, \
+                    patch.object(provider, 'open', side_effect=AssertionError('No content reads')):
+                pages = library.folder_pages(rows)
+            self.assertEqual(pages['One'], 'One/One.md')
+            self.assertIsNone(pages['Two'])
+            self.assertIsNone(pages['Empty'])
+            self.assertEqual(encode.call_count, 1)
+            library.close()
+
     def test_verified_save_drops_temporary_plaintext_and_keeps_original_cache_valid(self):
         with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
             provider = fixture.provider

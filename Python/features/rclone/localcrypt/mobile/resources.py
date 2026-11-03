@@ -288,6 +288,19 @@ class CryptFiles(CryptContentProvider, LocalFiles):
             check_cancelled(cancelled)
             return matches
 
+    def existing_files(self, paths, *, cancelled=lambda: False):
+        """Bounded path encoding for Notes Library landing-note probes."""
+        paths = [self.relative(path) for path in paths]
+        found = set()
+        with self.operation(cancelled):
+            for path in paths:
+                check_cancelled(cancelled)
+                target = self._guard(self._physical(path))
+                if target.is_file():
+                    found.add(path)
+            self._access.check()
+        return found
+
     def list(self, path='', *, cancelled=lambda: False):
         path = self.relative(path)
         rows = []

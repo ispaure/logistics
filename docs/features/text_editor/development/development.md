@@ -850,3 +850,14 @@ editor generation. An old page retained during asynchronous replacement therefor
 cannot submit patches against the new source blocks. The production-HTML DOM
 suite verifies that a mismatched page does not even invoke its snapshot function;
 native probes wait for the matching identity before testing queued input.
+
+## Folder browsing cost
+
+Folder expansion reads names and metadata, without opening document bodies.
+Landing-note detection uses `NotesLibrary.folder_pages`; desktop LocalCrypt
+encodes candidates in batches of at most 128 rather than spawning a process for
+each candidate and alternate directory spelling. Mobile LocalCrypt probes only
+the encoded file spelling. Probes retain cancellation and credential checks and
+validate physical paths before inspecting them. No additional plaintext index is
+persisted. Focused provider tests check real encrypted landing-note detection and
+that a folder page batch never reads document content.

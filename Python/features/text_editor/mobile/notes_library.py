@@ -367,9 +367,10 @@ class VaultBrowser(LibraryPanels):
             path = self.contained(path)
             def listing():
                 entries = self.library.folders(path, cancelled=lambda: not self.valid()) if rows is None else rows
-                pages = {row['path']: self.library.folder_page(row['path'], cancelled=lambda: not self.valid())
-                         for row in entries if row['directory'] and not row['name'].startswith('.')
-                         and self.host.folder_visible(row['path'], directory=True)}
+                pages = self.library.folder_pages(
+                    [row for row in entries if not row['name'].startswith('.')
+                     and self.host.folder_visible(row['path'], directory=row['directory'])],
+                    cancelled=lambda: not self.valid())
                 return entries, pages
             rows, pages = await asyncio.to_thread(listing)
             if not self.valid():

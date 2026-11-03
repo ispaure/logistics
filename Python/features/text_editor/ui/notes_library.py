@@ -221,8 +221,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                 notes = library.visible_rows(rows)
                 if cancelled():
                     raise ValueError('Notes Library closed.')
-                pages = {row['path']: library.folder_page(row['path'], cancelled=cancelled)
-                         for row in notes if row['directory']}
+                pages = library.folder_pages(notes, cancelled=cancelled)
                 return provider, release, library, notes, pages
             except BaseException:
                 release()
@@ -238,8 +237,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.tree.setEnabled(False)
         def read(report, cancelled):
             rows = self.library.folders(path, cancelled=cancelled)
-            pages = {row['path']: self.library.folder_page(row['path'], cancelled=cancelled)
-                     for row in rows if row['directory']}
+            pages = self.library.folder_pages(rows, cancelled=cancelled)
             return rows, pages
         self.progress.start(read, message='Loading notes…')
 
@@ -675,8 +673,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                     continue
                 try:
                     entries = self.library.folders(path, cancelled=cancelled)
-                    pages = {row['path']: self.library.folder_page(row['path'], cancelled=cancelled)
-                             for row in entries if row['directory']}
+                    pages = self.library.folder_pages(entries, cancelled=cancelled)
                     rows.append((path, (entries, pages)))
                 except (OSError, ValueError, OperationCancelled) as error:
                     errors.append(str(error))
