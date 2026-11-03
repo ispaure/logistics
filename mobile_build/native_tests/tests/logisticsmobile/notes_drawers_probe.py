@@ -69,6 +69,7 @@ class NotesDrawersProbe(LogisticsMobile):
                         _, gesture, target = owner.sidebar.gestures[0]
                         assert int(gesture.direction) == (1 if direction > 0 else 2)
                         assert gesture.delegate is not None
+                        owner.sidebar.refresh_gestures()
                         target.swipe_(gesture)
                     else:
                         from android.view import MotionEvent
@@ -82,6 +83,8 @@ class NotesDrawersProbe(LogisticsMobile):
                                 (x + offset) * density, 180 * density, 0)
                             try:
                                 native.dispatchTouchEvent(event)
+                                if action == 0:
+                                    owner.sidebar.refresh_gestures()
                             finally:
                                 event.recycle()
                     assert owner.sidebar.overlay is None
