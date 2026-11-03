@@ -79,7 +79,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
         const tool=$('tool').value;
         const clear=ctx.clearRect.bind(ctx),stroke=ctx.stroke.bind(ctx);
         let clears=0,segments=0;
-        window.notebookMoveMetrics=null;
+        window.notebookMoveMetrics=null;window.notebookCancelContext=null;
         const restore=()=>{
             state.strokes=saved;canvas.setPointerCapture=capture;
             ctx.clearRect=clear;ctx.stroke=stroke;
@@ -99,6 +99,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
             requestAnimationFrame(()=>{
                 try {
                     const afterFrame=segments;
+                    window.notebookCancelContext={resizePending:viewportResizePending,deferredUpdate:!!deferredUpdate};
                     canvas.onpointercancel(event(400));
                     window.notebookMoveMetrics={...moving,afterFrame,batched:frameBatchedInk,
                         cancelled:active===null&&points.length===0,cancelClears:clears};
@@ -118,7 +119,9 @@ async def exercise_notebooks(app, *, return_to_home=True):
     expected = dict(clears=0, segments=0 if metrics['batched'] else 400, samples=401,
                     afterFrame=1 if metrics['batched'] else 400, batched=metrics['batched'],
                     cancelled=True, cancelClears=1)
-    assert metrics == expected, metrics
+    if metrics != expected:
+        context = json.loads(await panel.web.evaluate_javascript('JSON.stringify(window.notebookCancelContext)'))
+        raise AssertionError(dict(metrics=metrics, before_cancel=context))
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:durable-stroke')
     await panel.web.evaluate_javascript("send({op:'stroke',points:[[100,100,.2],[120,130,.8]],tool:12,color:6,width:3})")
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:stroke-command-returned')
