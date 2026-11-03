@@ -142,12 +142,15 @@ def populate(layout, parent, *, recent=False):
         if item.widget() is not None:
             item.widget().deleteLater()
     try:
-        rows = catalog(recent=recent).entries('recent' if recent else 'favourites', ciphers=unlocked_ciphers())
+        store = catalog(recent=recent)
+        rows = store.entries('recent' if recent else 'favourites', ciphers=unlocked_ciphers(), strict=False)
     except (OSError, ValueError, PermissionError):
         rows = []
     title = qt.QLabel('Recent' if recent else 'Favourites')
     title.setObjectName('sectionTitle')
     layout.addWidget(title)
+    if 'store' in locals() and store.errors:
+        layout.addWidget(qt.QLabel(store.errors[0]))
     if not rows:
         layout.addWidget(qt.QLabel('No recent files.' if recent else 'No favourite files.'))
     for row in rows:
