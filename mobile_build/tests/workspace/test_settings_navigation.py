@@ -1,5 +1,6 @@
 """Category navigation adapts without rebuilding preferences or losing native Back."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -20,7 +21,7 @@ class SettingsNavigationTests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(self.directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         width = patch.object(self.app.adaptive, 'content_width', return_value=390)
         self.width = width.start()

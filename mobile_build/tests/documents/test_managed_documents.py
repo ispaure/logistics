@@ -1,5 +1,6 @@
 """Picker completions remain attached to their originating document lifetime."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -21,7 +22,7 @@ class ManagedDocumentTests(TestCase):
         LogisticsMobile.storage_root = self.root
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.app.show_documents()
 

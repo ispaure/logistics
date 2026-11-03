@@ -1,5 +1,6 @@
 """Retained imports are measurable and can be deleted independently of sources."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -159,7 +160,7 @@ class SavedFilesTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
                 self.drain(app)
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 reopened = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
                 self.assertEqual(reopened.recent_documents.items, [])
                 self.assertFalse(any(session.provider == 'provider-session'
@@ -167,7 +168,7 @@ class SavedFilesTests(unittest.TestCase):
                 self.assertEqual(reopened.reader_manager().catalog.library_store.stored_files()[0], [])
                 self.drain(reopened)
                 reopened.main_window.close()
-                reopened.loop.close()
+                close_loop(reopened.loop)
 
     def test_delete_refuses_other_windows_and_busy_readers(self):
         with TemporaryDirectory() as directory:

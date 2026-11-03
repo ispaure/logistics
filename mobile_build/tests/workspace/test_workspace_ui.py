@@ -1,5 +1,6 @@
 """Two editor owners survive switches, cold launch and close independently."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -153,4 +154,4 @@ class WorkspaceUITests(unittest.TestCase):
                 self.assertTrue(owner.formatted.closed)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

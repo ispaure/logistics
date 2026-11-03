@@ -1,5 +1,6 @@
 """Repeated private-copy opens preserve resource identity across launches."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -85,7 +86,7 @@ class ResourceImportTests(unittest.TestCase):
             use_shared_local(private, documents)
             self.addCleanup(_shared_local_roots.pop, private, None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
+            self.addCleanup(close_loop, app.loop)
             self.addCleanup(app.main_window.close)
             app.show_cloud(present=False)
             app.loop.run_until_complete(app.open_download(path=path))
@@ -166,4 +167,4 @@ class ResourceImportTests(unittest.TestCase):
                     ResourceImports(root).find(linked)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

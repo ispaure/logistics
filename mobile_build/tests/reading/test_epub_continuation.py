@@ -1,5 +1,6 @@
 """Whole-book speech uses real chapter publication with a silent speech engine."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -30,7 +31,7 @@ def reader_app():
             yield app, make_books(root)[0]
         finally:
             app.main_window.close()
-            app.loop.close()
+            close_loop(app.loop)
             LogisticsMobile.storage_root = None
 
 

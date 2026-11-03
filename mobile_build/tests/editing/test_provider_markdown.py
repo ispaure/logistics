@@ -1,5 +1,6 @@
 """Provider Markdown owns surfaces while sessions retain drafts and access policy."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -70,7 +71,7 @@ class ProviderMarkdownTests(unittest.TestCase):
     def tearDown(self):
         self.app.private_sessions.clear(discard=True)
         self.app.main_window.close()
-        self.app.loop.close()
+        close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.temporary.cleanup()
 

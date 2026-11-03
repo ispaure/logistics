@@ -51,7 +51,7 @@ class LibraryPanels:
             style=Pack(direction=COLUMN, flex=1, gap=4))
         self.tree.clear()
         self.tree.style.margin = 0
-        self.host.presentation.surface(self.tree, radius=0, background='alternate', foreground='text', outlined=False)
+        self.host.presentation.surface(self.tree, radius=0, background='alternate', outlined=False)
         self.panel_tabs = {}
         self.panel_tab_indicators = {}
         tabs = self.host.presentation.surface(toga.Box(style=Pack(direction=ROW)),
@@ -296,7 +296,7 @@ class LibraryPanels:
                     self.host.highlight_entry(button, selected)
                     if not selected:
                         self.host.presentation.surface(row, radius=0, background='transparent',
-                            foreground='text', outlined=False, eink_outlined=False)
+                            outlined=False, eink_outlined=False)
                         self.host.presentation.surface(button, radius=0, background='transparent',
                             foreground='text', outlined=False, eink_outlined=False)
                     row._notes_selected = selected

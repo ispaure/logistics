@@ -1,5 +1,6 @@
 """Settings explanations stay visible; About uses the installed payload."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -247,7 +248,7 @@ class SettingsUITests(unittest.TestCase):
         LogisticsMobile.storage_root = Path(directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         return app
 

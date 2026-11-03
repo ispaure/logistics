@@ -25,14 +25,14 @@ class NativePreflightTests(unittest.TestCase):
     def test_ios_stall_samples_only_the_identified_test_app(self):
         with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'):
             path = Path(directory) / 'ios-native-ui.log'
-            for command, permitted in (('/usr/bin/python', False),
-                    ('/tmp/Fixture/Logistics Mobile.app/Logistics Mobile', True)):
-                process = SimpleNamespace(returncode=0, stdout=command + '\n')
+            for pid, command, permitted in ((123, '/usr/bin/python', False),
+                    (124, '/tmp/Fixture/Logistics Mobile.app/Logistics Mobile', True)):
+                process = SimpleNamespace(returncode=0, stdout=command + '\n', stderr='')
                 with patch.object(ui_tools.subprocess, 'run', return_value=process) as run:
-                    ui_tools.record_ios_stall(path, dict(pid=123))
+                    ui_tools.record_ios_stall(path, dict(pid=pid))
                 self.assertEqual(run.call_count, 2 if permitted else 1)
                 if permitted:
-                    self.assertEqual(run.call_args.args[0][:3], ['sample', '123', '3'])
+                    self.assertEqual(run.call_args.args[0][:3], ['sample', str(pid), '3'])
                     self.assertEqual(run.call_args.kwargs['timeout'], 10)
             for invalid in (None, True, 1, -1, '123'):
                 with patch.object(ui_tools.subprocess, 'run') as run:
@@ -43,6 +43,20 @@ class NativePreflightTests(unittest.TestCase):
         with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'), \
                 patch.object(ui_tools.subprocess, 'run', side_effect=subprocess.TimeoutExpired('ps', 5)):
             ui_tools.record_ios_stall(Path(directory) / 'ios-native-ui.log', dict(pid=123))
+            receipt = json.loads((Path(directory) / 'ios-webview-stall-123.json').read_text())
+            self.assertEqual(receipt['status'], 'capture-error')
+            self.assertIn('TimeoutExpired', receipt['error'])
+
+    def test_late_stall_signal_preserves_process_unavailability_and_transport_timestamps(self):
+        with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'), \
+                patch.object(ui_tools.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout='')) as run:
+            path = Path(directory) / 'ios-native-ui.log'
+            ui_tools.record_ios_stall(path, dict(pid=123, sent_ns=1))
+            receipt = json.loads(path.with_name('ios-webview-stall-123.json').read_text())
+            self.assertEqual(receipt['status'], 'process-unavailable')
+            self.assertEqual(receipt['sent_ns'], 1)
+            self.assertGreater(receipt['received_ns'], 1)
+            self.assertEqual(run.call_count, 1)
 
     def test_real_preflight_accepts_valid_sources_and_blocks_invalid_sources_before_launch_or_reuse(self):
         with TemporaryDirectory() as directory:
@@ -577,7 +591,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             return report['source'][key]
         def launch(command, *, stdout, **kwargs):
             import sys
-            self.assertEqual(command[:3], [sys.executable, '-m', 'briefcase'])
+            self.assertEqual(command[:4], [sys.executable, '-u', '-m', 'briefcase'])
             stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
             stdout.flush()
             return SimpleNamespace(wait=lambda **kwargs: code)

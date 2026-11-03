@@ -13,6 +13,13 @@ from mobile_build.native_tests.tests.logisticsmobile.reader_parity_probe import 
 
 
 class FoldLayoutTests(unittest.TestCase):
+    def test_reserved_regions_are_absent_until_native_view_is_created(self):
+        from unittest.mock import patch
+        from mobile.fold_layout import reserved_divisions
+        with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.widgets.box'):
+            self.assertEqual(reserved_divisions(NS(_impl=NS())), ())
+            self.assertEqual(reserved_divisions(NS(_impl=NS(native=None))), ())
+
     def test_reserved_regions_accept_private_native_backend_subclasses(self):
         from unittest.mock import patch
         from mobile.fold_layout import reserved_divisions, Division

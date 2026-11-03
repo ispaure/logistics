@@ -1,5 +1,6 @@
 """Remote reader UI contracts with a bounded in-memory engine fixture."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -318,7 +319,7 @@ class RemoteReaderTests(unittest.TestCase):
                 app.loop.run_until_complete(check())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_folder_hub_comic_tap_shows_loading_then_opens_reader(self):
         from PIL import Image
@@ -375,7 +376,7 @@ class RemoteReaderTests(unittest.TestCase):
                 app.loop.run_until_complete(check())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_direct_text_is_read_only_and_unsupported_open_only_shows_dialog(self):
         with TemporaryDirectory() as folder:
@@ -412,7 +413,7 @@ class RemoteReaderTests(unittest.TestCase):
                         self.assertNotIn(client.text, path.read_bytes(), str(path))
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_failed_navigation_restores_unselected_listing_and_rejects_stale_credentials(self):
         with TemporaryDirectory() as folder:
@@ -443,7 +444,7 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertFalse(app.remote_browser.buttons)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_remote_markdown_returns_to_readonly_text_without_edit_label(self):
         # Exercise supported-preview controls with a dummy surface. Production
@@ -477,7 +478,7 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertFalse(any('write' in action for action, _ in app.cloud_client.calls))
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_remote_markdown_unsupported_private_webview_keeps_readonly_source(self):
         with TemporaryDirectory() as folder, patch(
@@ -505,7 +506,7 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertFalse(any('write' in action for action, _ in app.cloud_client.calls))
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_cached_ranges_fail_after_credential_revocation(self):
         client = RemoteClient()
@@ -553,7 +554,7 @@ class RemoteReaderTests(unittest.TestCase):
                     self.assertNotIn(owner.session.id, app.private_sessions.controllers)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_remote_browser_excludes_retired_copy_and_download_apis(self):
         with TemporaryDirectory() as folder:
@@ -578,4 +579,4 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertEqual(app.downloads.items(), [])
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

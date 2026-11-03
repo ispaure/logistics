@@ -1,5 +1,6 @@
 """Widget contracts using Toga's official dummy backend, not device evidence."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -172,7 +173,7 @@ class MobileUITests(unittest.TestCase):
             self.assertTrue(app.cloud_client.forgotten)
             self.assertEqual(len(app.downloads.items()), 1)
             app.main_window.close()
-            app.loop.close()
+            close_loop(app.loop)
 
 
 if __name__ == '__main__':

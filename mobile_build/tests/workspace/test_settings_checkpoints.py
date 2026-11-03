@@ -1,5 +1,6 @@
 """Settings navigation preserves edits once and avoids unchanged recovery writes."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -19,7 +20,7 @@ class SettingsCheckpointTests(unittest.TestCase):
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', LogisticsMobile.storage_root)
         LogisticsMobile.storage_root = Path(directory.name)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         doc = self.app.store.create('Note.md', b'original')
         self.app.open_document(doc.id)

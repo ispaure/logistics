@@ -1,5 +1,6 @@
 """SMB connection entry preserves multiple servers and clears password fields."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -57,7 +58,7 @@ class SMBConnectionTests(unittest.TestCase):
                 self.assertTrue(app.smb_connect.enabled)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_client_uses_vault_and_session_only_does_not_restore_or_write_label(self):
         from unittest.mock import Mock

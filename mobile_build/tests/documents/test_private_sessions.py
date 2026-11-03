@@ -1,5 +1,6 @@
 """Independent memory-only owners, bounded resources and atomic lock guards."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -21,7 +22,7 @@ class PrivateSessionTests(unittest.TestCase):
         LogisticsMobile.storage_root = self.root
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(self.app.loop.close)
+        self.addCleanup(close_loop, self.app.loop)
         self.addCleanup(self.app.main_window.close)
         self.app.show_cloud()
         self.local = self.root / 'LocalFiles'
@@ -185,6 +186,7 @@ class PrivateSessionTests(unittest.TestCase):
                 owner = self.open('close-me.md')
                 key = owner.session.id
                 self.app.show_documents_hub()
+                self.app.document_view_buttons['Open'].on_press()
                 root = self.app.routes.roots['documents']
                 close = next(widget for widget in widgets(root)
                              if getattr(widget, 'accessible_name', '') == 'Close close-me.md')

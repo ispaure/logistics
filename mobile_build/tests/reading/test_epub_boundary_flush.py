@@ -1,5 +1,6 @@
 """A real reading-position write cannot discard the user's next chapter action."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -56,5 +57,5 @@ class EpubBoundaryFlushTests(unittest.TestCase):
             finally:
                 release.set()
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = None

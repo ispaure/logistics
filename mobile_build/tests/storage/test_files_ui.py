@@ -1,4 +1,5 @@
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -32,7 +33,7 @@ class FileUITests(unittest.TestCase):
                 self.assertNotIn('Private fixture', [row.value for row in app.file_storage.items])
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_credential_cleanup_during_cold_local_read_preserves_picker_and_listing(self):
         from services.documents.locations import CollectionFiles
@@ -60,7 +61,7 @@ class FileUITests(unittest.TestCase):
                 self.assertFalse(app.file_browser.closed)
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_cold_local_files_open_while_initial_cloud_restore_is_blocked(self):
         import asyncio
@@ -93,7 +94,7 @@ class FileUITests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_encrypted_provider_reads_during_transfer_without_allowing_mutations(self):
         from features.rclone.localcrypt.mobile.resources import CryptFiles
@@ -131,7 +132,7 @@ class FileUITests(unittest.TestCase):
             finally:
                 app.cloud_busy = app.transfer_busy = False
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_superseded_host_ignores_late_folder_results_and_errors(self):
         import asyncio
@@ -254,7 +255,7 @@ class FileUITests(unittest.TestCase):
 
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_tap_folders_back_history_search_sort_and_failed_navigation(self):
         class Client:
@@ -330,4 +331,4 @@ class FileUITests(unittest.TestCase):
                 app.loop.run_until_complete(check())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

@@ -1,5 +1,6 @@
 """Visible received-file roots and lossless upgrades from legacy Inbox storage."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -142,7 +143,7 @@ class ReceivedFilesTests(TestCase):
         LogisticsMobile.storage_root = self.private
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(app.loop.close)
+        self.addCleanup(close_loop, app.loop)
         self.addCleanup(app.main_window.close)
         received = inbox_path(app.private_root)
         (received / 'shared.txt').write_bytes(b'shared')

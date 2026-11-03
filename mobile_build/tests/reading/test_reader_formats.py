@@ -1,5 +1,6 @@
 """Comic and EPUB controls expose only settings usable by that format."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -111,7 +112,7 @@ class ReaderFormatTests(unittest.TestCase):
                     from mobile.comic_feedback import clear
                     clear(app)
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                     LogisticsMobile.storage_root = None
 
     def test_imported_and_provider_comic_controls_preserve_epub_preferences(self):
@@ -219,7 +220,7 @@ class ReaderFormatTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
 
     def test_info_paths_describe_storage_without_serializing_credentials(self):
         from types import SimpleNamespace
@@ -302,4 +303,4 @@ class ReaderFormatTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)

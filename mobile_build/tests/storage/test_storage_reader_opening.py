@@ -1,5 +1,6 @@
 """Every supported book format reaches its reader through each storage entry point."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -120,7 +121,7 @@ class StorageReaderOpeningTests(unittest.TestCase):
             finally:
                 if app is not None:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                 LogisticsMobile.storage_root = None
                 _shared_local_roots.pop(private, None)
 
@@ -145,5 +146,5 @@ class StorageReaderOpeningTests(unittest.TestCase):
             finally:
                 if app is not None:
                     app.main_window.close()
-                    app.loop.close()
+                    close_loop(app.loop)
                 LogisticsMobile.storage_root = None

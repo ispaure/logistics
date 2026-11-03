@@ -1,5 +1,6 @@
 """EPUB navigation returns to the passage and keeps tools out of the text."""
 
+from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -15,6 +16,7 @@ from features.books.epub import EPUBBook
 from features.books.mobile.provider_reader import RichBookView
 from features.books.mobile.text_reader import TextBookView
 from mobile.app import LogisticsMobile
+from mobile_build.tests.support.app import mobile_app
 from services.documents.readers import PrivateReader
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 
@@ -139,7 +141,7 @@ class EpubUXTests(unittest.TestCase):
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = None
 
     def test_imported_page_is_mounted_before_progress_write_and_survives_failure(self):
@@ -163,7 +165,7 @@ class EpubUXTests(unittest.TestCase):
             finally:
                 app.loop.run_until_complete(app.reader_manager().catalog.wait_for_refresh())
                 app.main_window.close()
-                app.loop.close()
+                close_loop(app.loop)
                 LogisticsMobile.storage_root = None
 
     def test_prepared_private_chapter_reuses_worker_index(self):
@@ -230,13 +232,8 @@ class EpubUXTests(unittest.TestCase):
         asyncio.run(exercise())
 
     def test_imported_chapter_and_bookmark_return_to_reading_with_progress(self):
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, mobile_app(root=Path(directory)) as app:
             root = Path(directory)
-            LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
             fixtures = root / 'fixtures'
             fixtures.mkdir()
             epub, _ = make_books(fixtures)
@@ -281,13 +278,8 @@ class EpubUXTests(unittest.TestCase):
             app.loop.run_until_complete(exercise())
 
     def test_private_hamburger_opens_contents_and_bookmarks_without_moving_passage(self):
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, mobile_app(root=Path(directory)) as app:
             root = Path(directory)
-            LogisticsMobile.storage_root = root
-            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
             fixtures = root / 'fixtures'
             fixtures.mkdir()
             epub, _ = make_books(fixtures)
