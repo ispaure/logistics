@@ -26,11 +26,7 @@ def unlocked_ciphers():
     return result
 
 
-def reference(window):
-    from .location_context import document_location
-    path, provider = document_location(window)
-    if not path:
-        raise ValueError('Save or open a file before adding it to favourites.')
+def source_reference(path, provider=None):
     path = Path(path)
     cipher = None
     if provider is None or not getattr(provider, 'private', False):
@@ -47,12 +43,29 @@ def reference(window):
     if provider is not None and getattr(provider, 'session_only', False):
         cipher = DesktopCredentialCipher(provider)
         cipher.identity  # Fail closed before any plaintext write.
+    return source, cipher
+
+
+def reference(window):
+    from .location_context import document_location
+    path, provider = document_location(window)
+    if not path:
+        raise ValueError('Save or open a file before adding it to favourites.')
+    path = Path(path)
+    source, cipher = source_reference(path, provider)
     opener = dict(editor=getattr(window, 'document_editor_id', '') or path.suffix.lower())
     from features.text_editor.ui.notes_library import NotesLibraryWindow
     if isinstance(window, NotesLibraryWindow):
         opener = dict(editor='notes', root=str((provider.root / window.library.root).resolve())
                       if source['type'] == 'local' else window.library.root)
     return source, path.name, opener, cipher
+
+
+def relocate(provider, source, destination, *, deleted=None):
+    source, cipher = source_reference(provider.root / (deleted or source), provider)
+    target = None if deleted is not None else source_reference(provider.root / destination, provider)[0]
+    for recent in (False, True):
+        catalog(recent=recent).relocate(source, target, cipher=cipher)
 
 
 def remember(window, *, favourite=False):

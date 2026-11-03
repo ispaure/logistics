@@ -90,7 +90,7 @@ def document_location(window):
         return None, None
     current = getattr(window, 'current', None)
     if current is not None and getattr(current, 'path', None):
-        return current.path, None
+        return current.path, getattr(window, 'document_provider', None) or getattr(current, 'source', None)
     choice = getattr(window, 'choice', None)
     if choice is not None:
         return choice.provider.root / choice.path, choice.provider

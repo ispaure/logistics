@@ -241,6 +241,7 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         old.hide()
         old.setParent(self)
         self.document_tabs = tabs
+        self.centralWidget().layout().addWidget(self.viewer.status)
         self.save_action.setShortcuts([])
         self.resize(1200, 800)
 

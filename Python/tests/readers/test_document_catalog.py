@@ -12,6 +12,22 @@ from unittest.mock import patch
 
 
 class DocumentCatalogTests(TestCase):
+    def test_moves_follow_paths_and_library_context_while_deletes_retire_references(self):
+        with TemporaryDirectory() as directory:
+            catalog = DocumentCatalog(directory)
+            catalog.remember(dict(type='local', path='/notes/Folder/Home.md'), 'Home.md',
+                             dict(editor='notes', root='/notes/Folder'), favourite=True)
+            catalog.relocate(dict(type='local', path='/notes/Folder'), dict(type='local', path='/notes/Moved'))
+            row = catalog.entries()[0]
+            self.assertEqual(row['source']['path'], '/notes/Moved/Home.md')
+            self.assertEqual(row['opener']['root'], '/notes/Moved')
+            catalog.relocate(dict(type='local', path='/notes/Moved/Home.md'), dict(type='local', path='/notes/Moved/Renamed.md'))
+            row = catalog.entries()[0]
+            self.assertEqual(row['title'], 'Renamed.md')
+            self.assertEqual(row['id'], catalog.identity(row['source']))
+            catalog.relocate(dict(type='local', path='/notes/Moved'))
+            self.assertEqual(catalog.entries(), [])
+
     def test_clearing_recent_preserves_favourites_and_locked_recent_is_removable(self):
         from services.documents.history_controls import clear_recent_files
         with TemporaryDirectory() as directory:

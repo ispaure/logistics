@@ -212,6 +212,7 @@ def notes_host(app):
 
     from services.documents.mobile_storage import NotesDocumentAccess
     from services.documents.mobile_notebooks import notes_editor
+    from mobile.favourites import relocate
     from pathlib import Path
     timing_marker = Path(app.paths.cache) / 'notes-open-timing.enabled'
     def open_timing(sample):
@@ -224,6 +225,7 @@ def notes_host(app):
             except OSError:
                 pass  # Optional measurement must not interrupt document opening.
     return NotesHost(
+        relocate_references=lambda provider, source, destination: relocate(app, provider, source, destination),
         tab_style=tab_style,
         open_timing=open_timing if timing_marker.is_file() else None,
         document_editor=lambda library, path: notes_editor(app, library, path),

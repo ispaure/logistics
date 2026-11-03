@@ -52,11 +52,15 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertIn(owner.root_drop_button, owner.files_content.children)
             await owner.open_note('Vault/Home.md')
             owner.sidebar.show_sidebar()
+            from mobile.favourites import catalog, reference
+            source, title, opener, cipher = reference(self.app)
+            catalog(self.app).remember(source, title, opener, favourite=True, cipher=cipher)
             drag = owner.file_drag
             self.assertTrue(drag.start('Vault/Home.md'))
             self.assertTrue(drag.drop('Vault/Destination'))
             self.assertTrue(await drag.task)
             self.assertEqual(owner.path, 'Vault/Destination/Home.md')
+            self.assertTrue(catalog(self.app).entries()[0]['source']['path'].endswith('/Destination/Home.md'))
             self.assertTrue(owner.sidebar.sidebar_open)
             self.assertFalse((self.vault / 'Home.md').exists())
             self.assertTrue(drag.start('Vault/Destination/Home.md'))
