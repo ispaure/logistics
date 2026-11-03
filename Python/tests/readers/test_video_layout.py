@@ -21,6 +21,8 @@ class DockedVideoTests(QtTestCase):
         with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'state'):
             window = VideoWindow(ResourceChoice(LocalFiles(root), movie.name), **options)
         window.startup_pending = False
+        if hasattr(window.player, 'native'):
+            window.player.native.audio_output_set('adummy')
         window.audio.setMuted(True)
         window.show()
         self.addCleanup(window.close)

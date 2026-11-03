@@ -13,9 +13,9 @@ import unittest
 from unittest.mock import patch
 
 from build_manager import Executor, Phase, Plan
-from build_manager.test_manifest import discover as _discover
+from build_manager.test_manifest import resolve_test_group_suites as _resolve_suites
 from build_manager.journeys import for_host, validate_plan
-from build_manager.workflows import ancestors, approve
+from build_manager.workflows import transitive_dependency_ids, approve
 from logistics_build.build_project import LogisticsProject
 from logistics_build.manager_journeys import PlanningContext
 
@@ -70,7 +70,7 @@ class JourneyAdapterTests(unittest.TestCase):
                       commonUtils=dict(commit='b' * 40, dirty=False, fingerprint='commonutils-fixture'))
         for target, options in (
                 ('build_manager.identity.runtime_identity', {'return_value': engine}),
-                ('build_manager.test_manifest.discover', {'side_effect': lambda root, group: _discover(ROOT, group)}),
+                ('build_manager.test_manifest.resolve_test_group_suites', {'side_effect': lambda root, group: _resolve_suites(ROOT, group)}),
                 ('logistics_build.build_retention.clean', {'return_value': []}),
                 ('logistics_build.build_project.identity', {'return_value': self.source}),
                 ('logistics_build.build_project.manager_settings.settings', {'side_effect': lambda *_, **kwargs: (dict(self.values, **kwargs.get('overrides', {})), {})}),
@@ -95,7 +95,7 @@ class JourneyAdapterTests(unittest.TestCase):
             return Plan('Logistics', 'Device app', context.source(project, revision), (build, install), str(self.root / 'devices'))
         with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan) as make:
             plan = self.make(platforms=['android'], destinations=['android-devices'], run_overrides={'devices.android':'["serial-1"]'})
-        self.assertIn('android.validated', ancestors(plan, 'android.devices.install-phone'))
+        self.assertIn('android.validated', transitive_dependency_ids(plan, 'android.devices.install-phone'))
         self.assertEqual(plan.journey['destinations']['android-devices']['platforms'], ['android'])
         self.assertEqual(make.call_args.args[2][0]['id'], 'serial-1')
         self.assertTrue(plan.source['dirty'])
@@ -132,7 +132,7 @@ class JourneyAdapterTests(unittest.TestCase):
             shared = make.call_args.kwargs['shared']
             expected = target + '.preparation.' + ('build-release-archive' if target == 'ios' else 'prepare-verified-artifact')
             self.assertEqual(shared.id, expected)
-            self.assertIn(shared.id, ancestors(plan, target+'.devices.install-phone'))
+            self.assertIn(shared.id, transitive_dependency_ids(plan, target+'.devices.install-phone'))
             self.assertEqual(sum(call[0].startswith('Prepare ') for call in self.project.calls), 1)
             validate_plan(plan)
 
@@ -143,7 +143,7 @@ class JourneyAdapterTests(unittest.TestCase):
         with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan):
             plan = self.make(platforms=['ios'], destinations=['ios-devices'], run_overrides={
                 'devices.ios':'["phone"]', 'devices.ios_variant':'release'})
-        self.assertIn('ios.preparation.build-release-archive', ancestors(plan, 'ios.devices.install-phone'))
+        self.assertIn('ios.preparation.build-release-archive', transitive_dependency_ids(plan, 'ios.devices.install-phone'))
         self.assertFalse(any(p.effect == 'upload' or p.id.endswith('prepare-verified-artifact') for p in plan.phases))
 
     def test_release_device_accepts_captured_working_source(self):
@@ -154,7 +154,7 @@ class JourneyAdapterTests(unittest.TestCase):
             plan = self.make(platforms=['android'], destinations=['android-devices'], run_overrides={
                 'devices.android':'["phone"]', 'devices.android_variant':'release'})
             self.assertTrue(plan.source['dirty'])
-            self.assertIn('android.validated', ancestors(plan, 'android.devices.install'))
+            self.assertIn('android.validated', transitive_dependency_ids(plan, 'android.devices.install'))
 
 
     def test_shared_tester_message_maps_to_both_owned_service_fields(self):
@@ -198,20 +198,20 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertIn('ios.validation.ipad', names)
         for target in ('ios', 'android'):
             for consumer in ('portable-contracts', 'desktop-ui', 'mobile-host'):
-                self.assertIn(target + '.validation.commonutils', ancestors(plan, target + '.validation.' + consumer))
-            self.assertIn(target + '.validation.commonutils', ancestors(plan, target + '.validated'))
+                self.assertIn(target + '.validation.commonutils', transitive_dependency_ids(plan, target + '.validation.' + consumer))
+            self.assertIn(target + '.validation.commonutils', transitive_dependency_ids(plan, target + '.validated'))
         self.assertIn('android.validation.release-acceptance', names)
         self.assertIn('ios.validation.release-acceptance', names)
         for name, target in (('firebase.upload', 'android'), ('testflight.upload', 'ios')):
-            self.assertIn(target + '.validated', ancestors(plan, name))
+            self.assertIn(target + '.validated', transitive_dependency_ids(plan, name))
             other = 'ios' if target == 'android' else 'android'
-            self.assertNotIn(other + '.validated', ancestors(plan, name))
+            self.assertNotIn(other + '.validated', transitive_dependency_ids(plan, name))
         self.assertEqual(sum(phase.id.endswith('.prepare-verified-artifact') for phase in plan.phases), 2)
         for phase in plan.phases:
             if '.preparation.' in phase.id:
                 target = phase.id.split('.')[0]
-                self.assertIn(target + '.validated', ancestors(plan, phase.id))
-        self.assertNotIn('android.validated', ancestors(plan, 'ios.validation.build'))
+                self.assertIn(target + '.validated', transitive_dependency_ids(plan, phase.id))
+        self.assertNotIn('android.validated', transitive_dependency_ids(plan, 'ios.validation.build'))
         self.assertFalse(any('.admit-validation' in phase.id for phase in plan.phases))
         for target, other in (('ios', 'android'), ('android', 'ios')):
             for phase in plan.phases:
@@ -318,9 +318,9 @@ class JourneyAdapterTests(unittest.TestCase):
         step = next(p for p in plan.phases if p.id == 'github.delivery.release-source-and-gates')
         self.assertEqual(step.effect, 'publish')
         required = {gate for target in ('macos', 'linux', 'windows') for gate in plan.journey['platforms'][target]}
-        self.assertTrue(required.issubset(ancestors(plan, step.id)))
-        self.assertNotIn('ios.validated', ancestors(plan, step.id))
-        self.assertNotIn('android.validated', ancestors(plan, step.id))
+        self.assertTrue(required.issubset(transitive_dependency_ids(plan, step.id)))
+        self.assertNotIn('ios.validated', transitive_dependency_ids(plan, step.id))
+        self.assertNotIn('android.validated', transitive_dependency_ids(plan, step.id))
         self.assertIn('v1.2.3-alpha.1', plan.journey['destinations']['github']['identity'])
 
     def test_dirty_source_missing_platform_focused_tests_and_changed_settings_fail_before_delivery(self):

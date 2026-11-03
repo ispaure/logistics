@@ -243,8 +243,8 @@ class ObsidianTests(unittest.TestCase):
         self.assertEqual(list(owner.sidebar.view.children), [owner.tree, owner.article])
         self.assertIsNone(owner.sidebar.overlay)
         self.assertFalse(owner.sidebar.sidebar_open)
-        self.assertIs(owner.toolbar.parent, owner.view)
-        self.assertNotIn(owner.toolbar, owner.article.children)
+        self.assertIs(owner.toolbar.parent, owner.article)
+        self.assertIn(owner.toolbar, owner.article.children)
         self.assertTrue(all(button.parent is owner.secondary for button in
             (owner.back_button, owner.forward_button, owner.reader_actions_button)))
         self.assertIsNone(owner.up_button.parent)

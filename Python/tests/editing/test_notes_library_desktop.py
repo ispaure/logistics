@@ -381,6 +381,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 from features.video.ui.vlc_backend import VLCPlayback
                 player = VideoWindow(ResourceChoice(provider, path),
                                      backend_factory=lambda owner: VLCPlayback(owner, interactive=False))
+                player.player.native.audio_output_set('adummy')
                 player.audio.setMuted(True)
                 player.show()
                 players.append(player)
