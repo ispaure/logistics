@@ -58,8 +58,9 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     vault = ProtectedVault.for_app(app)
     app.cloud_client.vault = vault
     app.cloud_remember.value = True
-    app.cloud_password.value = 'synthetic-fixture-password'
     with patch('mobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+        await app.choose_cloud_package()
+        app.cloud_password.value = 'synthetic-fixture-password'
         await app.import_cloud_package()
     assert vault.ciphertext.is_file(), app.cloud_status.value
     encrypted = vault.ciphertext.read_bytes()
@@ -72,8 +73,9 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     assert 'credentials.zip' in app.cloud_package.text
     # A session-only unlock must leave the saved ciphertext untouched.
     app.cloud_remember.value = False
-    app.cloud_password.value = 'synthetic-fixture-password'
     with patch('mobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
+        await app.choose_cloud_package()
+        app.cloud_password.value = 'synthetic-fixture-password'
         await app.import_cloud_package()
     assert vault.ciphertext.read_bytes() == encrypted
     cache = app.retained_packages()
