@@ -9,6 +9,18 @@ from services.documents.locations import collection_path, CollectionFiles
 from .fixtures import capture_window
 
 
+async def wait_for_tree(owner, expected):
+    """Native rows are committed in batches to keep the main loop responsive."""
+    for _ in range(600):
+        actual = {child.vault_path for row in owner.rows.children for child in row.children
+                  if hasattr(child, 'vault_path')}
+        task = getattr(owner, 'tree_task', None)
+        if actual == expected and (task is None or task.done()):
+            return
+        await asyncio.sleep(.05)
+    raise AssertionError(('Native Notes rows did not settle', actual, expected, owner.notice.text))
+
+
 async def exercise_obsidian(app, encrypted):
     collection_path(app.private_root).mkdir(parents=True, exist_ok=True)
     ordinary = CollectionFiles(app.private_root)
@@ -55,12 +67,12 @@ async def exercise_obsidian(app, encrypted):
             assert owner.provider.identity == provider.identity
             assert owner.provider.storage_namespace == provider.storage_namespace
             assert not owner.provider.closed and not provider.closed
-        assert {child.vault_path for row in owner.rows.children for child in row.children
-                if hasattr(child, 'vault_path')} == {
+        expected = {
             'Native Obsidian Vault/Projects', 'Native Obsidian Vault/Home.md',
             'Native Obsidian Vault/attachment.txt'}
+        await wait_for_tree(owner, expected)
         await owner.toggle_folder('Native Obsidian Vault/Projects')
-        assert len(owner.rows.children) == 4
+        await wait_for_tree(owner, expected | {'Native Obsidian Vault/Projects/Plan.md'})
         assert await owner.open_note('Native Obsidian Vault/Projects/Plan.md')
         for _ in range(150):
             text = await owner.web.evaluate_javascript('document.body ? document.body.textContent : ""')
