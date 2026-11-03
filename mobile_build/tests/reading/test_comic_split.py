@@ -50,6 +50,13 @@ class ComicSplitTests(unittest.TestCase):
                                 owner = imported
                                 nav, move = owner.comic_navigation, owner.move_comic
                             self.assertEqual(nav.visible, (0, 1))
+                            await move(1)
+                            self.assertEqual(nav.visible, (2,))
+                            surface = owner.crypt_view if provider else owner.library_view
+                            action = app.reader_back_action(surface)
+                            self.assertIsNotNone(action)
+                            await action()
+                            self.assertEqual(nav.visible, (0, 1))
                             for direction, expected in ((1, (2,)), (1, (3, 4)), (1, (5,)),
                                                         (-1, (3, 4)), (-1, (2,)), (-1, (0, 1))):
                                 await move(direction)

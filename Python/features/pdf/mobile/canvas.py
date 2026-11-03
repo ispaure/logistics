@@ -49,11 +49,14 @@ class PDFNavigation:
         self._spread_starts = {}
         self._stops = {}
         self._layout = None
+        from mobile.reading.history import PageVisits
+        self.visits = PageVisits()
 
     def commit(self, indices, viewport):
         """Remember published boundaries so Back retraces the visible spreads."""
         self._use_layout(viewport)
         self.indices, self.viewport = indices, viewport
+        self.visits.visit(indices[0])
         # A direct jump can repartition a previously visited pair. Retire
         # overlapping history so Back cannot reuse an obsolete pair boundary.
         for end, start in list(self._spread_starts.items()):

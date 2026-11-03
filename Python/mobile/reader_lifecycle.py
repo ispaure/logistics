@@ -10,6 +10,22 @@ def document_route(route):
     return session_route(route) or (route or '').startswith('notes-library:')
 
 
+def epub_page_back(reader):
+    footer = getattr(reader, 'page_footer', None)
+    pagination = getattr(footer, 'epub_pagination', None)
+    if pagination is None or not pagination.visits.previous:
+        return None
+    async def back():
+        async def show(position):
+            chapter, page = position
+            if chapter != pagination.chapter:
+                await footer.move(chapter)
+            if pagination.chapter == chapter:
+                await pagination.seek_page(chapter, page)
+        await pagination.visits.back(show)
+    return back
+
+
 def scroll_position(widget):
     if widget is None:
         return None
@@ -151,6 +167,17 @@ class ReaderLifecycle:
             chapters = getattr(reader, 'chapter_sidebar', None)
             if chapters is not None and not chapters.expanded and chapters.sidebar_open:
                 return chapters.show_detail
+            navigation = getattr(reader, 'comic_navigation', None)
+            if navigation is not None and navigation.visits.previous:
+                async def comic_back():
+                    async def show(position):
+                        navigation.requested_half = position[1]
+                        await reader.move_book_page(position[0])
+                    await navigation.visits.back(show)
+                return comic_back
+            action = epub_page_back(reader)
+            if action is not None:
+                return action
 
         private = getattr(self, 'private_sessions', None)
         reader = private.active if private is not None else None
@@ -167,6 +194,21 @@ class ReaderLifecycle:
             tools = getattr(reader, 'pdf_tools', None)
             if tools is not None and contains(view, tools.panel):
                 return tools.close
+
+            navigation = getattr(reader.crypt_reader, 'comic_navigation', None)
+            if navigation is not None and navigation.visits.previous:
+                async def private_comic_back():
+                    async def show(position):
+                        navigation.requested_half = position[1]
+                        await reader.move_private_page(position[0])
+                    await navigation.visits.back(show)
+                return private_comic_back
+            navigation = getattr(reader.crypt_reader, 'pdf_navigation', None)
+            if navigation is not None and navigation.visits.previous:
+                return lambda: navigation.visits.back(reader.move_private_page)
+            action = epub_page_back(reader)
+            if action is not None:
+                return action
 
         return None
 
