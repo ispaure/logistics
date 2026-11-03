@@ -115,11 +115,11 @@ def safe_geometry(app):
     minimum_top = float(insets.top)
     from mobile.reader_edges import page_footer
     from mobile.ios_toolbar import vertical_edge
-    footer = page_footer(view)
-    controller = (app.native_host.adapter.content_controller(app.native_host.state.destination)
-                  if footer is not None else None)
     from mobile.document_location import side_title_reader
+    footer = page_footer(view)
     reader = side_title_reader(view)
+    controller = (app.native_host.adapter.content_controller(app.native_host.state.destination)
+                  if footer is not None or reader is not None else None)
     title = (reader._document_title_view if reader is not None else
              controller.navigationItem.titleView if controller is not None else None)
     if (title is not None and vertical_edge(controller)
