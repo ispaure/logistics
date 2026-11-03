@@ -26,6 +26,8 @@ class RemoteBrowser(ResourceBrowser):
     def _start_search(self):
         if self.closing:
             return
+        self.model.set_search_mode(bool(self.filter.text().strip()))
+        self._configure_columns()
         self.model.set_filter(self.filter.text().strip(), self.navigation.directory)
         self.views.set_root(self.navigation.directory)
 
@@ -48,8 +50,10 @@ class RemoteBrowserView(qt.QMainWindow):
         layout = qt.QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         self.setCentralWidget(content)
+        from services.documents.storage import display_path
         self.file_browser = RemoteBrowser(self.provider, self,
             directory=self.provider.root / location.directory,
+            path_label=lambda path: display_path(self.provider, path),
             thumbnail=self._thumbnail, details=self._details)
         self.file_browser.filter.setPlaceholderText('Search this folder')
         self.file_browser.notice.setText('Remote · Read-only · Previews stay in memory')
