@@ -7,6 +7,19 @@ import asyncio
 from commonUtils.runtime.platform import get_os, OS
 
 
+async def wait_for_file_entry(app, path):
+    """Native navigation presents its page before its asynchronous listing."""
+    for _ in range(600):
+        entry = next((entry for entry in app.file_browser.entries
+                      if entry.payload['path'] == path), None)
+        if entry is not None:
+            return entry
+        await asyncio.sleep(.05)
+    raise AssertionError(('Native file listing did not contain', path,
+                          [entry.payload['path'] for entry in app.file_browser.entries],
+                          app.file_status.value))
+
+
 async def exercise_ui_review(app):
     import base64
     import toga
@@ -250,9 +263,10 @@ async def exercise_ui_review(app):
         if app.file_storage.value != 'Local files':
             from services.documents.locations import collection_path
             collection = collection_path(app.private_root).name
-            entry = next(entry for entry in app.file_browser.entries if entry.payload['path'] == collection)
+            entry = await wait_for_file_entry(app, collection)
             await app.file_browser.activate_entry(entry)
         assert app.file_storage.value == 'Local files' and app.file_path == ''
+        await wait_for_file_entry(app, 'UI Review')
         assert any(entry.label == 'UI Review' for entry in app.file_browser.entries)
     dialog = toga.ConfirmDialog('Pull folder?', 'From: Example remote:/Comics\nTo: Local/Comics\n\nLocal files may be replaced or removed. Continue?')
     pending = asyncio.create_task(app.main_window.dialog(dialog))
