@@ -38,6 +38,7 @@ class LibraryPanels:
             self.search_results.header().setSectionResizeMode(column, qt.QHeaderView.ResizeMode.ResizeToContents)
         self.search_results.setColumnWidth(3, 260)
         self.search_results.itemClicked.connect(self.choose_result)
+        self.search_results.itemActivated.connect(self.choose_result)
         self.search_more = qt.QPushButton('Show more notes')
         self.search_more.clicked.connect(self.more_results)
         self.search_more.hide()
