@@ -258,16 +258,21 @@ async def exercise_ui_review(app):
         assert app.files_view in app.body.children
         assert app.file_storage.value == app.local_browser_root() and app.file_path == ''
         assert app.file_browser.search.value == ''
-        # All files shows the ordinary shared/device root, containing Local
-        # and Received Files. Enter the collection before checking its files.
+        # Browse All Files contains ordinary shared/device files. Managed
+        # collections are selected through Workspaces, rather than duplicated
+        # as mutable root entries in that provider.
         if app.file_storage.value != 'Local files':
             from services.documents.locations import collection_path
             collection = collection_path(app.private_root).name
-            entry = await wait_for_file_entry(app, collection)
-            await app.file_browser.activate_entry(entry)
-        assert app.file_storage.value == 'Local files' and app.file_path == ''
-        await wait_for_file_entry(app, 'UI Review')
-        assert any(entry.label == 'UI Review' for entry in app.file_browser.entries)
+            assert collection not in [entry.payload['path'] for entry in app.file_browser.entries]
+            app.show_locations()
+            assert await app.refresh_folder_hub()
+            await app.folder_buttons['UI Review'].on_press()
+            assert app.file_storage.value == 'Local files' and app.file_path == 'UI Review'
+            await wait_for_file_entry(app, 'UI Review/Meeting notes.md')
+        else:
+            assert app.file_path == ''
+            await wait_for_file_entry(app, 'UI Review')
     dialog = toga.ConfirmDialog('Pull folder?', 'From: Example remote:/Comics\nTo: Local/Comics\n\nLocal files may be replaced or removed. Continue?')
     pending = asyncio.create_task(app.main_window.dialog(dialog))
     await asyncio.sleep(.2)
