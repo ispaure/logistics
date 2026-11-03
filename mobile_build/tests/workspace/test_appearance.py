@@ -45,23 +45,29 @@ class AppearanceTests(unittest.TestCase):
         self.assertEqual(impl.native_switch.onTintColor, 'chosen')
         self.assertFalse(hasattr(impl.native, 'onTintColor'))
 
-    def test_accent_spectrum_is_readable_and_keeps_semantic_roles(self):
+    def test_accent_spectrum_preserves_selected_saturation_and_semantic_roles(self):
+        import colorsys
         from mobile.palette import set_accent, EINK
         before = [dict(colors) for colors in (LIGHT, DARK, EINK)]
         self.addCleanup(set_accent)
         for hue in range(0, 360, 7):
             for saturation in (0, 25, 65, 100):
                 set_accent(hue, saturation)
+                self.assertEqual(LIGHT['accent'], DARK['accent'])
+                channels = [int(LIGHT['accent'][start:start + 2], 16) / 255 for start in (1, 3, 5)]
+                self.assertAlmostEqual(colorsys.rgb_to_hls(*channels)[2], saturation / 100, delta=.01)
                 for colors, original in zip((LIGHT, DARK), before):
                     self.assertEqual(colors['primary'], colors['accent'])
-                    for role in ('surface', 'alternate', 'window', 'hover'):
-                        self.assertGreaterEqual(contrast_ratio(argb(colors['accent']), argb(colors[role])), 4.5)
                     self.assertEqual({key: value for key, value in colors.items() if key not in ('accent', 'primary')},
                                      {key: value for key, value in original.items() if key not in ('accent', 'primary')})
                 self.assertEqual(EINK, before[2])
         set_accent()
         self.assertEqual(LIGHT['accent'], '#2563eb')
-        self.assertEqual(DARK['accent'], '#75a7ff')
+        self.assertEqual(DARK['accent'], '#2563eb')
+
+    def test_full_saturation_violet_is_not_lightened_in_either_mode(self):
+        from mobile.palette import accent_colors
+        self.assertEqual(accent_colors(249, 100), ('#2600ff', '#2600ff'))
 
     def test_accent_preferences_persist_and_reject_invalid_values(self):
         from tempfile import TemporaryDirectory
@@ -438,7 +444,6 @@ class AppearanceTests(unittest.TestCase):
                 for ink in ('text', 'muted'):
                     with self.subTest(palette=palette, surface=surface, ink=ink):
                         self.assertGreaterEqual(contrast_ratio(argb(palette[ink]), argb(palette[surface])), 4.5)
-            self.assertGreaterEqual(contrast_ratio(argb(palette['accent']), argb(palette['surface'])), 4.5)
 
     def test_preview_and_chat_follow_the_same_system_palette(self):
         for html, background in ((markdown_preview('# Notes'), 'window'), (transcript_document(theme_css=css_variables()), 'chat_background')):

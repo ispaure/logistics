@@ -106,6 +106,8 @@
     "notes_actions.py",
     "notes_discovery.py",
     "notes_drawers.py",
+    "notes_gestures.py",
+    "notes_motion.py",
     "obsidian.py",
     "page_animation.py",
     "palette.py",

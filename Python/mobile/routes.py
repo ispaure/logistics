@@ -151,6 +151,12 @@ class MobileRoutes(Routes):
             self.render(destination)
 
     def back(self):
+        library = getattr(self.app, 'vault_browser', None)
+        if library is not None and contains(self.body(), getattr(library, 'file_action_view', None)):
+            # File forms return to their originating pane for toolbar Back
+            # and the Android system-Back fallback alike.
+            library.return_from_file_action()
+            return True
         picker = getattr(self.app, '_editor_picker', None)
         if picker is not None and picker.visible(self.body()):
             if (picker.location_panel is not None and picker.panel is picker.location_panel and not picker.cloud_busy
