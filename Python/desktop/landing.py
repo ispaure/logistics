@@ -77,6 +77,9 @@ class LandingPage(qt.QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Reserve a stable gutter before the first layout. Native Windows
+        # scrollbar admission otherwise changes wrapping after cards paint.
+        scroll.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         outer.addWidget(scroll)
         canvas = qt.QWidget()
         scroll.setWidget(canvas)
@@ -233,16 +236,6 @@ class LandingPage(qt.QWidget):
                 self.content.updateGeometry()
                 self.scroll.widget().layout().invalidate()
                 self.scroll.widget().layout().activate()
-                # Native QScrollArea can defer scrollbar admission until after
-                # the first child paint. Decide it in this same fixed-point
-                # pass: its gutter changes wrapping and therefore card heights.
-                # At an exact fit reserve the gutter before integer rounding
-                # can introduce overflow on the following layout event.
-                overflow = self.scroll.widget().minimumSizeHint().height() >= self.scroll.viewport().height()
-                policy = (qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOn if overflow
-                          else qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-                if self.scroll.verticalScrollBarPolicy() != policy:
-                    self.scroll.setVerticalScrollBarPolicy(policy)
                 # Drain only our layout requests while the reentrancy guard is
                 # active. Otherwise this pass schedules another pass indefinitely.
                 for widget in widgets:
