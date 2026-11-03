@@ -635,9 +635,14 @@ class VaultBrowser(LibraryPanels):
                 if directory and not searching:
                     async def expand(widget=None, path=path, **kwargs):
                         await self.toggle_folder(path)
-                    row.insert(2, toga.Button('▾' if path in self.expanded else '▸',
+                    disclosure = self.host.presentation.icon_button(
+                        'down' if path in self.expanded else 'forward',
+                        ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'],
                         on_press=expand,
-                        style=Pack(width=48, height=48)))
+                    )
+                    disclosure.style.width = 48
+                    disclosure.style.height = 48
+                    row.insert(2, disclosure)
             new_rows[key] = row
             self._row_cache[key] = row
             button = next(child for child in row.children if hasattr(child, 'vault_path'))
