@@ -96,8 +96,11 @@ async def exercise_obsidian(app, encrypted):
         assert await owner.open_editor()
         editor = owner.embedded
         assert editor.library is owner
+        from .web_checks import wait_for_text
+        await wait_for_text(editor.formatted.view, 'Nested Markdown note')
+        await editor.flush()
         assert 'Nested Markdown note' in editor.text
-        assert await owner.open_editor()  # Return from the embedded editor to reading.
+        assert await owner.open_editor(), owner.notice.text  # Return to reading.
         assert editor.closed
         # WKWebView may defer an offscreen replacement document. Close the
         # visible Notes Library so the rendered cleanup proof can complete.
