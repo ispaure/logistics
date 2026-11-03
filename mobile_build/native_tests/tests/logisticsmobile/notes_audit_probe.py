@@ -130,7 +130,7 @@ class NotesAuditProbe(LogisticsMobile):
         from io import BytesIO
         from features.rclone.mobile.cloud import CloudClient
         from features.rclone.localcrypt.mobile.resources import encrypted_storage
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         fixture = json.loads((Path(__file__).parent / 'localcrypt_fixture.json').read_text())
         client = self.cloud_client = CloudClient()
         client.request('import', package=fixture['package'], password='synthetic-resume-password',

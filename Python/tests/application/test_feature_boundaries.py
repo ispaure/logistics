@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 class FeatureBoundaryTests(unittest.TestCase):
     def test_rclone_mobile_does_not_import_the_application_host(self):
-        paths = [path for owner in ('rclone', 'lm', 'text_editor')
+        paths = [path for owner in ('rclone', 'lm', 'text_editor', 'notes_library')
                  for path in (ROOT / 'Python/features' / owner).rglob('*.py')
                  if 'mobile' in path.parts]
         for path in paths:
@@ -25,6 +25,21 @@ class FeatureBoundaryTests(unittest.TestCase):
                          [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
                 self.assertFalse(any(name == 'mobile' or name.startswith('mobile.')
                                      for name in names), str(path))
+
+    def test_notes_library_registration_and_model_do_not_import_text_editor_or_gui(self):
+        script = """
+import sys
+from features.notes_library import register
+from features.notes_library.notes import NotesLibrary
+feature = register()
+assert feature.id == 'notes_library'
+assert not feature.requires
+assert not any(name.startswith(('PySide', 'toga', 'features.text_editor')) for name in sys.modules)
+"""
+        result = subprocess.run([sys.executable, '-c', script], cwd=ROOT,
+                                env=dict(os.environ, PYTHONPATH=str(ROOT / 'Python')),
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_provider_adapters_import_without_ui_or_application_host(self):
         script = '''

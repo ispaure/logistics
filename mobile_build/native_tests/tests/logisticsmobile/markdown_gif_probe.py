@@ -69,7 +69,7 @@ class MarkdownGifProbe(toga.App):
         from commonUtils.runtime.resources.local import LocalFiles
         from commonUtils.formats.markdown.image_sources import folder_image_source
         from mobile.preview import markdown_preview
-        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+        from services.documents.authoring.markdown_editor import FormattedMarkdownInput
         result = dict(success=False, backend=type(self.web._impl).__module__, samples=[])
         try:
             root = self.paths.cache / 'gif-fixtures'

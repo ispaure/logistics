@@ -10,9 +10,9 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.ui.markdown.window import MarkdownWindow
-from features.text_editor.notes import NotesLibrary
-from features.text_editor.ui.notes_library import NotesLibraryWindow
-from features.text_editor.ui.notes_offer import NotesFolderOffer
+from features.notes_library.notes import NotesLibrary
+from features.notes_library.ui.notes_library import NotesLibraryWindow
+from features.notes_library.ui.notes_offer import NotesFolderOffer
 
 
 class LibraryModeTests(QtTestCase):
@@ -192,7 +192,7 @@ class LibraryModeTests(QtTestCase):
             self.wait_until(lambda: offer.dialog is not None)
             self.assertIsNone(browser.navigation.directory)
             self.assertIsNone(browser.views.root)
-            with patch('features.text_editor.ui.notes_library.open_notes') as opened:
+            with patch('features.notes_library.ui.notes_library.open_notes') as opened:
                 self.choose(offer, 'Open as Notes Library')
                 self.assertEqual(opened.call_args.kwargs['root'], '')
                 self.assertFalse(opened.call_args.kwargs['remote'])
@@ -291,7 +291,7 @@ class LibraryModeTests(QtTestCase):
                 try:
                     self.wait_until(lambda: offer.dialog is not None)
                     provider.revoked = True
-                    with patch('features.text_editor.ui.notes_library.open_notes') as opened:
+                    with patch('features.notes_library.ui.notes_library.open_notes') as opened:
                         self.choose(offer, choice)
                         opened.assert_not_called()
                     self.assertIsNone(browser.views.root)

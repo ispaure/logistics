@@ -2,8 +2,8 @@
 import asyncio
 from uuid import uuid4
 from .preview import markdown_preview
-from features.text_editor.notes import vault_root, local_library
-from features.text_editor.mobile.notes_library import VaultBrowser as _VaultBrowser
+from features.notes_library.notes import vault_root, local_library
+from features.notes_library.mobile.notes_library import VaultBrowser as _VaultBrowser
 
 
 class VaultBrowser(_VaultBrowser):
@@ -22,7 +22,7 @@ class VaultBrowser(_VaultBrowser):
 
 
 async def open_vault(app, provider, root, destination=None, *, title='', rows=None):
-    if not local_library(provider):
+    if not app.feature_enabled('notes_library') or not local_library(provider):
         return None
     destination = destination or app.native_host.state.destination
     previous = getattr(app, 'vault_browser', None)
@@ -67,7 +67,7 @@ async def offer_vault(app, browser, provider, root, rows):
     browser._notes_location = location
     if previous == location or vault_root(provider, root, rows) is None:
         return False
-    if not app.feature_enabled('text_editor') or app.routes.folders.restoring:
+    if not app.feature_enabled('notes_library') or app.routes.folders.restoring:
         return False
     origin = app.navigation_generation
     client = getattr(app, 'cloud_client', None)
@@ -90,9 +90,9 @@ async def offer_vault(app, browser, provider, root, rows):
 
 
 async def _choose_vault(app, browser, provider, root, rows, location, origin, client, generation):
-    from features.text_editor.mobile.document_dialogs import LibraryOpenDialog
+    from services.documents.authoring.document_dialogs import LibraryOpenDialog
     choice = await app.main_window.dialog(LibraryOpenDialog())
-    if (not app.active_host or not app.feature_enabled('text_editor') or app.navigation_generation != origin
+    if (not app.active_host or not app.feature_enabled('notes_library') or app.navigation_generation != origin
             or browser._notes_location != location
             or getattr(browser, '_notes_requested_location', location) != location):
         if browser._notes_location == location:

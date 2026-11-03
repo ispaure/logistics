@@ -72,13 +72,14 @@ class DocumentWorkspace(Workspace):
         self.page = page
         super().__init__(DocumentPane, page, dock_group=page,
                          policy=WorkspacePolicy(show_single_tab_in_detached=False,
-                                                detached_title='Documents: {title}'),
+                                                detached_title=page.detached_title),
                          new_view=page.new_document_chooser, setup_container=page.setup_workspace)
         self.close_action.setEnabled(False)  # Keep each reader/editor's own close shortcut.
         page.setup_workspace(self)
 
 
 class DocumentsPage(qt.QWidget):
+    detached_title = 'Documents: {title}'
     changed = qt.Signal()
     idle = qt.Signal()
 

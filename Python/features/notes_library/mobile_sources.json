@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "dataview.py",
+    "dataview_script.py",
+    "library_files.py",
+    "mobile/__init__.py",
+    "mobile/dataview.py",
+    "mobile/library_document.py",
+    "mobile/library_drag.py",
+    "mobile/library_editing.py",
+    "mobile/library_panels.py",
+    "mobile/library_text.py",
+    "mobile/library_tools.py",
+    "mobile/notes_library.py",
+    "mobile/notes_swipe.py",
+    "notes.py",
+    "notes_links.py"
+  ]
+}

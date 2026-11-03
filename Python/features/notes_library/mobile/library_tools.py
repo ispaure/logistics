@@ -9,7 +9,7 @@ from commonUtils.formats.markdown import (
     split_frontmatter, parse_properties, parse_property_value, replace_property, replace_frontmatter,
     RawYAML,
 )
-from .document_dialogs import DocumentTypeDialog
+from services.documents.authoring.document_dialogs import DocumentTypeDialog
 
 
 def select_source(source, start, end):

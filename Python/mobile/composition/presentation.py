@@ -169,7 +169,7 @@ def speech_presentation(app):
 
 
 def notes_host(app):
-    from features.text_editor.mobile.notes_library import NotesHost
+    from features.notes_library.mobile.notes_library import NotesHost
     from ..appearance import list_button
     from ..browser_ui import middle_filename, entry_icon, highlight_entry
     from ..markdown_speech import MarkdownSpeech
@@ -199,15 +199,16 @@ def notes_host(app):
         return max(8, round(left) + 8), max(8, round(right) + 8)
 
     async def confirm():
-        from features.text_editor.mobile.document_dialogs import DocumentDialog
+        from services.documents.authoring.document_dialogs import DocumentDialog
         return await app.main_window.dialog(DocumentDialog('Save document changes?',
             'Save this document before leaving it.', discard_label='Discard changes'))
 
     async def choose_type():
-        from features.text_editor.mobile.document_dialogs import DocumentTypeDialog
-        from mobile.document_choices import available_choices
+        from services.documents.authoring.document_dialogs import DocumentTypeDialog
         icons = {'md': 'Ⓜ  Markdown', 'rmdoc': '▧  Remarkable Document'}
-        choices = [(icons[extension], extension) for _, extension in available_choices(app) if extension in icons]
+        choices = [(icons['md'], 'md')]
+        if app.feature_enabled('notebooks'):
+            choices.append((icons['rmdoc'], 'rmdoc'))
         return await app.main_window.dialog(DocumentTypeDialog(choices=choices)) if choices else 'cancel'
 
     from services.documents.mobile_storage import NotesDocumentAccess
@@ -307,7 +308,7 @@ def reading_presentation(owner):
 
 def provider_markdown(owner, view, footer):
     """Compose the Markdown workflow without exposing the host to the feature."""
-    from features.text_editor.mobile.provider_markdown import (
+    from services.documents.authoring.provider_markdown import (
         ProviderMarkdown,
         ProviderMarkdownHost,
     )

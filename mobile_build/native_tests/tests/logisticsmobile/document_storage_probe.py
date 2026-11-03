@@ -134,7 +134,7 @@ class DocumentStorageProbe(LogisticsMobile):
                 assert self.close_session(owner.session.id, choice='discard')
                 await asyncio.sleep(.2)
                 report['cases'].append(('localcrypt' if provider.private else 'local') + '-text-save-' + suffix)
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         from services.documents.mobile_storage import document_source
         from mobile.obsidian import open_vault
         for provider in (local, crypt):

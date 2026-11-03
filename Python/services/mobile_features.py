@@ -22,6 +22,7 @@ class MobileFeature:
 
 
 FEATURES = (
+    MobileFeature('notes_library', 'Notes Library', 'Read, edit and organize local and LocalCrypt notes.'),
     MobileFeature('text_editor', 'Text Editor', 'Create, read and edit text, Markdown and source files.'),
     MobileFeature('notebooks', 'Notebooks', 'Create and draw in reMarkable (.rmdoc) notebooks.'),
     MobileFeature('books', 'Books & Comics', 'Read EPUB books and comic archives and browse their libraries.', ('books', 'comics')),
@@ -82,7 +83,7 @@ def document_feature(name='', kind=None):
 
 
 def session_enabled(preferences, session):
-    feature = document_feature(session.title, session.kind)
+    feature = 'notes_library' if getattr(session, 'provider', None) == 'notes-library' else document_feature(session.title, session.kind)
     if feature is not None and not enabled(preferences, feature):
         return False
     source = (getattr(session, 'source', None) or getattr(session, 'history_source', None)

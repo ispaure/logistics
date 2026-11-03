@@ -35,6 +35,30 @@ class MobileFeatureTests(unittest.TestCase):
     def run_async(self, action):
         return self.app.loop.run_until_complete(action)
 
+    def test_notes_library_preference_migrates_once_and_does_not_gate_text_authoring(self):
+        from services.mobile_features import enabled
+        legacy = self.root / 'legacy-notes'
+        legacy.mkdir()
+        (legacy / 'preferences.ini').write_text('[Mobile]\ndisabled_features = ["text_editor"]\n')
+        preferences = Preferences(legacy)
+        self.assertFalse(enabled(preferences, 'notes_library'))
+        preferences.save(disabled_features='["text_editor"]')
+        self.assertTrue(enabled(Preferences(legacy), 'notes_library'))
+        self.assertFalse(enabled(Preferences(legacy), 'text_editor'))
+        self.app.set_feature_enabled('notes_library', False, refresh=False)
+        self.assertTrue(self.app.feature_enabled('text_editor'))
+        from services.documents.authoring.markdown_editor import FormattedMarkdownInput
+        self.assertIsNotNone(FormattedMarkdownInput)
+
+    def test_library_session_is_gated_by_library_feature_instead_of_text_editor(self):
+        from services.mobile_features import session_enabled
+        from mobile.workspace import Session
+        session = Session('test', 'notes-library', 'root', 'markdown', title='Library')
+        self.app.set_feature_enabled('text_editor', False, refresh=False)
+        self.assertTrue(session_enabled(self.app.preferences, session))
+        self.app.set_feature_enabled('notes_library', False, refresh=False)
+        self.assertFalse(session_enabled(self.app.preferences, session))
+
     def test_existing_preferences_and_new_installs_enable_every_current_feature(self):
         self.assertTrue(all(enabled(self.app.preferences, feature.name) for feature in FEATURES))
         root = self.root / 'old-install'

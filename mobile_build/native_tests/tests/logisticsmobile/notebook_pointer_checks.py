@@ -179,7 +179,7 @@ async def exercise_document_actions(app):
     from unittest.mock import patch
     from features.notebooks.notebook import Notebook
     from features.notebooks.mobile.documents import open_notebook
-    from features.text_editor.mobile.document_dialogs import DocumentDialog
+    from services.documents.authoring.document_dialogs import DocumentDialog
     from .web_checks import wait_for_text
 
     from services.documents.locations import collection_path

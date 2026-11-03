@@ -19,6 +19,53 @@ from mobile.obsidian import VaultBrowser, vault_root, open_vault
 
 
 class ObsidianTests(unittest.TestCase):
+    def test_failed_cancelled_and_superseded_note_attempts_retire_only_abandoned_media(self):
+        from dataclasses import replace
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Home.md')
+            current = owner.library._media['Vault/Home.md']
+            original_host = owner.host
+            for cancel in (False, True):
+                attempts = []
+                def preview(text, **kwargs):
+                    attempts.append(owner.library._media['Vault/Projects/Plan.MD'])
+                    if not cancel:
+                        raise ValueError('Rejected preview')
+                    self.app.loop.call_soon_threadsafe(owner.page_loading.cancel)
+                    return '<html><body>Cancelled preview</body></html>'
+                owner.host = replace(original_host, preview=preview)
+                self.assertFalse(await owner.open_note('Vault/Projects/Plan.MD'))
+                self.assertTrue(attempts[0].closed)
+                self.assertFalse(current.closed)
+                self.assertEqual(set(owner.library._media), {'Vault/Home.md'})
+            entered, released, attempts = Event(), Event(), []
+            def preview(text, **kwargs):
+                attempts.append(owner.library._media['Vault/Projects/Plan.MD'])
+                entered.set()
+                if not released.wait(5):
+                    raise RuntimeError('Delayed preview timed out')
+                return '<html><body>Superseded preview</body></html>'
+            owner.host = replace(original_host, preview=preview)
+            task = asyncio.create_task(owner.open_note('Vault/Projects/Plan.MD'))
+            try:
+                for _ in range(100):
+                    if entered.is_set():
+                        break
+                    await asyncio.sleep(.01)
+                self.assertTrue(entered.is_set())
+                owner.host = original_host
+                self.assertTrue(await owner.open_note('Vault/Home.md'))
+                released.set()
+                self.assertFalse(await task)
+                self.assertTrue(attempts[0].closed)
+                self.assertFalse(owner.library._media['Vault/Home.md'].closed)
+            finally:
+                released.set()
+                await task
+                owner.host = original_host
+        self.run_async(exercise())
+
     def setUp(self):
         import toga
         factory = patch('services.documents.mobile_views.document_webview',
@@ -176,15 +223,15 @@ class ObsidianTests(unittest.TestCase):
     def test_nested_markdown_preview_and_adaptive_tree_keep_provider_identity(self):
         owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
         def paths():
-            return [row.children[-1].vault_path for row in owner.rows.children]
-        self.assertEqual(paths(), ['Vault/Projects', 'Vault/Home.md'])
-        self.assertEqual([row.children[1].browser_entry_kind for row in owner.rows.children], ['folder', 'file'])
+            return [next(child.vault_path for child in row.children if hasattr(child, 'vault_path')) for row in owner.rows.children]
+        self.assertEqual(paths(), ['Vault/Projects', 'Vault/attachment.txt', 'Vault/Home.md'])
+        self.assertEqual([row.children[1].browser_entry_kind for row in owner.rows.children], ['folder', 'file', 'file'])
         self.run_async(owner.toggle_folder('Vault/Projects'))
-        self.assertEqual(paths(), ['Vault/Projects', 'Vault/Projects/Plan.MD', 'Vault/Home.md'])
+        self.assertEqual(paths(), ['Vault/Projects', 'Vault/Projects/Plan.MD', 'Vault/attachment.txt', 'Vault/Home.md'])
         self.assertEqual(owner.rows.children[1].children[0].style.width, 20)
         self.assertTrue(self.run_async(owner.open_note('Vault/Projects/Plan.MD')))
         self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
-        selected = next(row for row in owner.rows.children if row.children[-1].vault_path == owner.path)
+        selected = next(row for row in owner.rows.children if any(getattr(child, 'vault_path', None) == owner.path for child in row.children))
         self.assertEqual(selected._impl._surface_roles[0], 'hover')
         owner.reflow(390)
         self.assertIs(owner.toolbar.parent, owner.view)
@@ -210,9 +257,9 @@ class ObsidianTests(unittest.TestCase):
         self.assertIs(owner.embedded.resource.provider, self.provider)
         with patch.object(self.app, 'folder_path_visible', side_effect=lambda path, **kw: 'Projects' not in path):
             self.app.refresh_folder_visibility()
-            self.assertEqual(paths(), ['Vault/Home.md'])
+            self.assertEqual(paths(), ['Vault/attachment.txt', 'Vault/Home.md'])
 
-    def test_links_stay_within_vault_and_only_markdown_can_open(self):
+    def test_links_stay_within_vault_and_text_opens_in_library(self):
         owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
         self.run_async(owner.open_note('Vault/Home.md'))
         owner.follow_link(owner.web, owner.base + '?target=Projects%2FPlan.MD')
@@ -221,7 +268,9 @@ class ObsidianTests(unittest.TestCase):
 
         for target in ('../../outside.md', '/tmp/outside.md', '../.obsidian/private.md', 'https://example.com/note.md'):
             self.assertFalse(owner.follow_link(owner.web, target))
-        self.assertFalse(self.run_async(owner.open_note('Vault/attachment.txt')))
+        self.assertTrue(self.run_async(owner.open_note('Vault/attachment.txt')))
+        self.assertEqual(owner.path, 'Vault/attachment.txt')
+        self.assertTrue(self.run_async(owner.open_note('Vault/Projects/Plan.MD')))
         self.assertFalse(self.run_async(owner.open_note('Vault/.obsidian/private.md')))
         self.assertFalse(self.run_async(owner.open_note('outside.md')))
         self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
@@ -232,22 +281,22 @@ class ObsidianTests(unittest.TestCase):
         owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
         def folder_row():
             return next(row for row in owner.rows.children
-                        if getattr(row.children[-1], 'vault_path', None) == 'Vault/Projects')
+                        if any(getattr(child, 'vault_path', None) == 'Vault/Projects' for child in row.children))
         self.assertEqual(folder_row().children[1].browser_entry_kind, 'folder_document')
-        self.run_async(folder_row().children[-1].on_press())
+        self.run_async(next(child for child in folder_row().children if hasattr(child, 'vault_path')).on_press())
         self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
         self.run_async(folder_row().children[2].on_press())
-        self.assertIn('Vault/Projects/Projects.md', [row.children[-1].vault_path for row in owner.rows.children])
+        self.assertIn('Vault/Projects/Projects.md', [child.vault_path for row in owner.rows.children for child in row.children if hasattr(child, 'vault_path')])
         self.assertEqual(owner.selected_path, 'Vault/Projects')
-        child = next(row.children[-1] for row in owner.rows.children
-                     if row.children[-1].vault_path == 'Vault/Projects/Projects.md')
+        child = next(child for row in owner.rows.children for child in row.children
+                     if getattr(child, 'vault_path', None) == 'Vault/Projects/Projects.md')
         self.run_async(child.on_press())
         self.assertEqual(owner.selected_path, 'Vault/Projects/Projects.md')
         owner.library.move('Vault/Projects/Projects.md', 'Vault/Projects/Overview.md')
         self.run_async(owner.load_folder('Vault'))
         self.run_async(owner.load_folder('Vault/Projects'))
         self.assertEqual(folder_row().children[1].browser_entry_kind, 'folder')
-        self.assertIn('Vault/Projects/Overview.md', [row.children[-1].vault_path for row in owner.rows.children])
+        self.assertIn('Vault/Projects/Overview.md', [child.vault_path for row in owner.rows.children for child in row.children if hasattr(child, 'vault_path')])
 
     def test_oversized_and_linked_notes_do_not_replace_the_current_preview(self):
         owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))

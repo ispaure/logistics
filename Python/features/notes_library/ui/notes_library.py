@@ -4,7 +4,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from .dataview import NotesMarkdownViewer
 from commonUtils.ui.readers.reader_chrome import reader_button
-from features.text_editor.notes import NotesLibrary, vault_root, operation, document_kind, MAX_NOTE
+from features.notes_library.notes import NotesLibrary, vault_root, operation, document_kind, MAX_NOTE
 from .library_panels import LibraryPanels
 
 
@@ -46,6 +46,11 @@ class PageStorage:
         if kind == qt.QTextDocument.ResourceType.ImageResource:
             return qt.QImage.fromData(data) if data else qt.QImage()
         return qt.QByteArray(data or b'')
+
+    def video_source(self, url):
+        if self.window.locked or not self.window.check_provider():
+            return None
+        return getattr(self.resources, 'videos', {}).get(Path(url.toLocalFile()))
     def open_link(self, path, fragment=''):
         owner = self.window
         if owner.library is not None:
@@ -60,14 +65,38 @@ class PageStorage:
                 owner.viewer.status.setText(str(error))
 
 
+class NotesNameDelegate(qt.QStyledItemDelegate):
+    """Keep the displayed name authoritative until the provider move succeeds."""
+    def createEditor(self, parent, option, index):
+        owner = self.parent().owner
+        if owner.library is None or owner.progress.busy or owner.locked:
+            return None
+        return super().createEditor(parent, option, index)
+
+    def setModelData(self, editor, model, index):
+        path, _ = index.data(qt.Qt.ItemDataRole.UserRole)
+        self.parent().owner.rename_tree_entry(path, editor.text())
+
+
 class NotesTree(qt.QTreeWidget):
     """Internal drops request a provider move; only success changes the tree."""
     def __init__(self, owner):
         super().__init__()
         self.owner = owner
+        self.rename_click = False
         self.setDragDropMode(qt.QAbstractItemView.DragDropMode.InternalMove)
         self.setDefaultDropAction(qt.Qt.DropAction.MoveAction)
-        self.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.setEditTriggers(qt.QAbstractItemView.EditTrigger.SelectedClicked |
+                             qt.QAbstractItemView.EditTrigger.EditKeyPressed)
+        self.setItemDelegate(NotesNameDelegate(self))
+
+    def mousePressEvent(self, event):
+        item = self.itemAt(event.position().toPoint())
+        self.rename_click = bool(item is not None and item.isSelected() and
+            item.flags() & qt.Qt.ItemFlag.ItemIsEditable and
+            event.button() == qt.Qt.MouseButton.LeftButton and
+            event.modifiers() == qt.Qt.KeyboardModifier.NoModifier)
+        super().mousePressEvent(event)
 
     def dropEvent(self, event):
         event.ignore()
@@ -152,7 +181,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.tree.setHeaderHidden(True)
         self.tree.itemExpanded.connect(self.expand)
         self.tree.itemActivated.connect(self.choose)
-        self.tree.itemClicked.connect(self.choose)
+        self.tree.itemClicked.connect(lambda item, column: self.choose(item)
+                                      if not self.tree.rename_click else None)
         self.search = None
         sidebar = qt.QWidget()
         side = qt.QVBoxLayout(sidebar)
@@ -189,7 +219,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.menu = qt.QToolButton()
         self.menu.setText('▤')
         self.menu.setAccessibleName('Browse Notes Library')
-        self.menu.clicked.connect(lambda: sidebar.setVisible(not sidebar.isVisible()))
+        self.menu.hide()
         self.back = reader_button(self, 'Previous note', icon='previous')
         self.forward = reader_button(self, 'Next note', icon='next')
         self.up = reader_button(self, 'Browse parent folder', icon='up')
@@ -200,8 +230,14 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.forward.setEnabled(False)
         self.up.setEnabled(False)
         controls = qt.QHBoxLayout()
-        for button in (self.menu, self.back, self.forward, self.up):
-            controls.addWidget(button)
+        self.navigation = qt.QWidget()
+        navigation = qt.QHBoxLayout(self.navigation)
+        navigation.setContentsMargins(0, 0, 0, 0)
+        for button in (self.back, self.forward, self.up):
+            navigation.addWidget(button)
+        self.viewer.navigation_toolbar.insertWidget(0, self.navigation)
+        self.document_controls = controls
+        self.document_stack.currentChanged.connect(self.place_navigation)
         controls.addStretch()
         self.save_drawing = qt.QPushButton('Save')
         self.save_drawing.setVisible(False)
@@ -217,16 +253,20 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.split.addWidget(self.document_stack)
         self.split.addWidget(self.links_tree)
         self.split.setStretchFactor(1, 1)
-        self.menu.clicked.disconnect()
-        self.menu.clicked.connect(lambda: self.show_sidebar(self.panel_tabs.isHidden()))
+        self.split.setCollapsible(0, False)
         self.split.setSizes([260, 740])
         self.progress = OperationProgress(self)
         self.progress.completed.connect(self.completed)
         body = qt.QWidget()
         layout = qt.QVBoxLayout(body)
         layout.addLayout(controls)
-        layout.addWidget(self.progress)
         layout.addWidget(self.split, 1)
+        self.operation_footer = qt.QWidget()
+        footer = qt.QVBoxLayout(self.operation_footer)
+        footer.setContentsMargins(0, 0, 0, 0)
+        footer.addWidget(self.progress)
+        layout.addWidget(self.operation_footer)
+        layout.addWidget(self.viewer.status)
         self.setCentralWidget(body)
         self.revoked.connect(self.retire)
         self.pending = ('initial',)
@@ -239,8 +279,6 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                     return provider, release, library, [], {}
                 with operation(provider, cancelled):
                     rows = provider.list(library.root, cancelled=cancelled)
-                if vault_root(provider, library.root, rows) is None:
-                    raise ValueError('This location has no .obsidian directory.')
                 notes = library.visible_rows(rows)
                 if cancelled():
                     raise ValueError('Notes Library closed.')
@@ -253,9 +291,15 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.tree.setEnabled(False)
         self.viewer.setEnabled(False)
 
+    def place_navigation(self, *args):
+        if self.document_stack.currentWidget() is self.viewer:
+            self.viewer.navigation_toolbar.insertWidget(0, self.navigation)
+        else:
+            self.document_controls.insertWidget(0, self.navigation)
+
     def show_sidebar(self, visible):
-        self.panel_tabs.setVisible(visible)
-        self.open_card.setVisible(not visible and not self.document_only)
+        self.panel_tabs.setVisible(not self.document_only)
+        self.open_card.hide()
 
     def list_folder(self, path):
         if self.progress.busy or self.library is None or self.locked:
@@ -301,10 +345,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.viewer.setEnabled(False)
         self.tree.setEnabled(False)
         def read(report, cancelled):
-            resolved = path
-            if resolve_link:
-                current = self.history[self.index] if self.index >= 0 else ''
-                resolved, _ = self.library.link(current, path, cancelled=cancelled)
+            current = self.history[self.index] if self.index >= 0 else ''
+            resolved, _, data = self.library.load_note(path, current=current, resolve_link=resolve_link,
+                cancelled=cancelled, stage=lambda message: self.progress.progress_changed.emit(0, 0, message))
             if document_kind(resolved) == 'text':
                 from services.documents.storage import DocumentResource
                 from commonUtils.persistence.text import decode_bytes
@@ -316,6 +359,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                     resource.close()
                     raise
             if document_kind(resolved) == 'notebook':
+                from features.application import registry
+                if not registry.is_feature_enabled('notebooks'):
+                    raise ValueError('Enable Notebooks to open Remarkable Documents.')
                 from features.notebooks.notebook import Notebook, MAX_ARCHIVE
                 from features.notebooks.storage import NotebookDocument
                 from services.documents.storage import DocumentResource
@@ -327,10 +373,10 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                     resource.close()
                     raise
             from services.documents.markdown import prepare_markdown
-            data = self.library.read(resolved, cancelled=cancelled)
+            self.progress.progress_changed.emit(0, 0, 'Preparing embedded media…')
             return resolved, prepare_markdown(self.provider, self.provider.root / resolved, data=data, cancelled=cancelled,
                                              image_source=self.library.image_source(resolved))
-        self.progress.start(read, message='Opening note…')
+        self.progress.start(read, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
 
     def open_other_file(self, path):
         from desktop.document_catalog import open_resource
@@ -352,6 +398,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.tree.setEnabled(True)
         self.note_controls.setEnabled(True)
         self.progress.hide()
+        if kind == 'note' and self.progress.cancelled.is_set():
+            self.discard_note_result(result)
+            result, error = None, error or 'Opening cancelled.'
         self.viewer.setEnabled(self.storage.path is not None or (kind == 'note' and not error))
         if kind == 'save':
             data, completed = values
@@ -373,6 +422,9 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                     self.refresh_connections()
             return
         if error:
+            if kind == 'note':
+                current = self.history[self.index] if self.index >= 0 else None
+                self.library.release_media(current)
             self.viewer.status.setText(error)
             if kind == 'mutation':
                 # Mutations cancel background readers before dispatch, including
@@ -439,7 +491,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             return
         if kind == 'initial':
             self.provider, self.release, self.library, rows, pages = result
-            from features.text_editor.notes import library_name
+            from features.notes_library.notes import library_name
             self.document_container_title = library_name(self.provider, self.library.root)
             self.setWindowTitle(self.document_container_title)
             self.welcome_title.setText(self.document_container_title)
@@ -501,6 +553,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             self.document_resource_path = self.provider.root / path
             self.document_provider = self.provider
             self.storage.data, self.storage.resources = result
+            self.library.release_media(path)
             self.viewer.history.clear()
             self.viewer.history_index = -1
             # Leaving was confirmed before the read. Keep the old draft on read
@@ -526,6 +579,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             result[1].close()
         elif result and document_kind(result[0]) == 'text':
             result[1][0].close()
+        elif result and document_kind(result[0]) == 'markdown':
+            getattr(result[1][1], 'close', lambda: None)()
 
     def selected_parent(self):
         tree = self.search_results if self.files_stack.currentWidget() is self.search_results else self.tree
@@ -644,10 +699,16 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         for title, extension, icon in [('Remarkable Document', 'rmdoc', qt.QStyle.StandardPixmap.SP_FileDialogDetailedView),
                                        ('Markdown', 'md', qt.QStyle.StandardPixmap.SP_FileIcon)]:
             action = menu.addAction(self.style().standardIcon(icon), title)
+            from features.application import registry
+            action.setEnabled(extension != 'rmdoc' or registry.is_feature_enabled('notebooks'))
             action.triggered.connect(lambda checked=False, ext=extension: self.new_entry(extension=ext))
         menu.exec(qt.QCursor.pos())
 
     def new_entry(self, *, folder=False, extension='md'):
+        from features.application import registry
+        if extension == 'rmdoc' and not registry.is_feature_enabled('notebooks'):
+            self.viewer.status.setText('Enable Notebooks to create Remarkable Documents.')
+            return
         if self.progress.busy or self.locked or self.library is None or not self.library.supports('create'):
             return
         name, accepted = qt.QInputDialog.getText(self, 'New folder' if folder else 'New Remarkable Document' if extension == 'rmdoc' else 'New Markdown document', 'Folder name' if folder else 'File name')
@@ -691,6 +752,14 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         if self.library is None or not self.library.supports('rename'):
             return
         self.mutate(lambda cancelled: self.library.move(source, destination, cancelled=cancelled), source=source)
+
+    def rename_tree_entry(self, source, name):
+        if name == PurePosixPath(source).name:
+            return
+        if not name.strip() or name in ('.', '..') or '/' in name or '\\' in name:
+            self.viewer.status.setText('Enter a file or folder name without path separators.')
+            return
+        self.move_entry(source, str(PurePosixPath(source).with_name(name)))
 
     def mutate(self, work, *, source=None, created=False, deleted=None, leave=True):
         if self.progress.busy or self.locked:
@@ -757,7 +826,7 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
             parent = qt.QTreeWidgetItem(['Library root'])
             parent.setData(0, qt.Qt.ItemDataRole.UserRole, (path, True))
             parent.setFlags(parent.flags() & ~qt.Qt.ItemFlag.ItemIsDragEnabled)
-            parent.setIcon(0, self.style().standardIcon(qt.QStyle.StandardPixmap.SP_DirIcon))
+            self.decorate_entry(parent, path, True)
             parent.setToolTip(0, 'Drop a file or folder here to move it to the library root')
             self.tree.addTopLevelItem(parent)
             self.items[path] = parent
@@ -767,6 +836,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         for row in rows:
             item = qt.QTreeWidgetItem([row['name']])
             item.setData(0, qt.Qt.ItemDataRole.UserRole, (row['path'], row['directory']))
+            if self.library.supports('rename'):
+                item.setFlags(item.flags() | qt.Qt.ItemFlag.ItemIsEditable)
             self.decorate_entry(item, row['path'], row['directory'])
             self.items[row['path']] = item
             if row['directory']:
@@ -790,6 +861,8 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
         self.reveal_folder(parent)
 
     def clear_document(self):
+        self.viewer.browser.inline_videos.clear()
+        self.viewer.formatted_editor.inline_videos.clear()
         self.viewer.clear_data_views()
         if self.text_document is not None:
             self.text_document.clear()
@@ -868,6 +941,12 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
                 and not (self.viewer.data_views and self.viewer.data_views.progress.busy)
                 and not (self.text_document and (self.text_document.busy or self.text_document.search.busy)))
 
+    def request_close(self):
+        from commonUtils.ui.document_host import CloseOutcome, close_document
+        if not self.prepare_close():
+            return CloseOutcome.PENDING if self.closing or self.pending_close or self.document_saving else CloseOutcome.VETOED
+        return CloseOutcome.ACCEPTED if close_document(self) else CloseOutcome.PENDING
+
     def closeEvent(self, event):
         if not self.prepare_close():
             event.ignore()
@@ -879,7 +958,10 @@ class NotesLibraryWindow(LibraryPanels, qt.QMainWindow):
 
 
 def open_notes(factory, label, *, remote=False, root=""):
-    from commonUtils.ui.document_host import show_document
+    from commonUtils.ui.document_host import show_document, current_document_host
+    host = current_document_host(destination='notes_library')
+    if host is not None and host.window().isVisible() and not host.closing:
+        return host.open_library(factory, label, remote=remote, root=root)
     from services.documents.ui.editors import retain
     from .library_workspace import TabbedNotesLibrary
     window = TabbedNotesLibrary(factory, label, remote=remote, root=root)

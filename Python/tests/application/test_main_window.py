@@ -16,6 +16,145 @@ from desktop import main_window
 
 
 class MainWindowTests(QtTestCase):
+    def test_notes_library_has_own_destination_reuses_roots_and_survives_disable(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.ui.document_host import close_document, current_document_host
+        from features.notes_library import register
+        from features.notes_library.ui.notes_library import open_notes
+        entry = RegisteredContribution('notes_library', 'Notes Library', register().pages[0])
+        pages = [entry]
+        with TemporaryDirectory() as directory, patch.object(main_window.registry, 'get_pages', side_effect=lambda: pages), patch.object(
+                main_window.registry, 'is_feature_enabled', side_effect=lambda name: bool(pages) if name == 'notes_library' else name != 'text_editor'):
+            root = Path(directory)
+            (root / 'A').mkdir(); (root / 'B').mkdir()
+            # Ordinary folders need no Obsidian marker.
+            (root / 'A/note.md').write_text('# First')
+            (root / 'B/note.md').write_text('# Second')
+            window = self.window(pages); window.dlg.show()
+            page = window._feature_pages['notes_library', 'notes_library.workspace']
+            self.assertIs(current_document_host(destination='notes_library'), page)
+            key = window._launch_key('notes_library', 'notes_library.workspace')
+            button = window.sidebar.buttons[key]
+            self.assertEqual(window.sidebar.library_destinations.indexOf(button), 0)
+            self.assertEqual(button.accessibleName(), 'Notes Library')
+            self.assertLess(window.sidebar.buttons['documents'].geometry().top(), button.geometry().top())
+            from threading import get_ident
+            provider_threads = []
+            def factory():
+                provider_threads.append(get_ident())
+                return LocalFiles(root / 'A')
+            first = open_notes(factory, 'Same label')
+            self.assertNotEqual(provider_threads, [get_ident()])
+            self.wait_until(lambda: first.library is not None and not first.progress.busy)
+            self.assertIs(window.tabs.currentWidget(), page)
+            self.assertEqual(window.documents.count, 0)
+            self.assertEqual(page.count, 1)
+            self.assertIs(open_notes(lambda: LocalFiles(root), 'Other label', root='A'), first)
+            second = open_notes(lambda: LocalFiles(root / 'B'), 'Same label')
+            self.wait_until(lambda: second.library is not None and not second.progress.busy)
+            self.assertEqual(page.count, 2)
+            note = first.open_note('note.md')
+            self.wait_until(lambda: note.index >= 0 and not note.progress.busy)
+            note.viewer.set_editing(True); note.viewer.set_edit_mode('source')
+            note.viewer.editor.insertPlainText('draft ')
+            page.present(second); page.present(first)
+            self.assertTrue(note.viewer.is_modified)
+            # Registry no longer contributes the disabled page, but open sessions stay reachable.
+            pages.clear(); window._sync_feature_pages()
+            self.assertGreaterEqual(window.tabs.indexOf(page), 0)
+            page._refresh_choosers()
+            with self.assertRaisesRegex(ValueError, 'Enable Notes Library'):
+                open_notes(lambda: LocalFiles(root / 'A'), 'Disabled')
+            self.assertIn(key, window.sidebar.buttons)
+            self.assertTrue(window.sidebar.buttons[key].isVisible())
+            self.assertEqual(window.sidebar.library_destinations.indexOf(button), 0)
+            with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Cancel):
+                self.assertFalse(window.can_close())
+            self.assertFalse(window._closing)
+            self.assertFalse(page.closing)
+            page.closing = True  # A previous asynchronous quit may already have stopped admission.
+            page.can_close = lambda: False
+            self.assertFalse(window.can_close())
+            self.assertFalse(page.closing)
+            del page.can_close
+            self.assertTrue(note.viewer.is_modified)
+            with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Discard):
+                self.assertTrue(close_document(first))
+            self.assertTrue(close_document(second))
+            self.wait_until(lambda: page.count == 0)
+            window._sync_feature_pages()
+            self.assertEqual(window.tabs.indexOf(page), -1)
+
+    def test_cancelled_library_provider_preparation_releases_lease_without_a_session(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from threading import Event
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.ui.resources.picker import ResourceTaskDialog
+        from features.notes_library import register
+        from features.notes_library.ui.notes_library import open_notes
+        entry = RegisteredContribution('notes_library', 'Notes Library', register().pages[0])
+        with TemporaryDirectory() as directory, patch.object(main_window.registry, 'get_pages', return_value=[entry]):
+            window = self.window([entry]); window.dlg.show()
+            page = window._feature_pages['notes_library', 'notes_library.workspace']
+            provider = LocalFiles(Path(directory))
+            entered, proceed = Event(), Event()
+            releases = []
+            provider.acquire = lambda: lambda: releases.append(True)
+            def factory():
+                entered.set()
+                if not proceed.wait(3):
+                    raise RuntimeError('Cancellation timer did not run')
+                return provider
+            timer = qt.QTimer(window.dlg)
+            def cancel():
+                if entered.is_set():
+                    loading = window.dlg.findChild(ResourceTaskDialog)
+                    if loading is not None:
+                        loading.reject(); proceed.set(); timer.stop()
+            timer.timeout.connect(cancel); timer.start(5)
+            try:
+                self.assertIsNone(open_notes(factory, 'Cancelled'))
+                self.assertEqual(releases, [True])
+                self.assertEqual(page.count, 0)
+            finally:
+                proceed.set(); timer.stop()
+
+    def test_notes_library_detaches_and_favourite_reopens_existing_note(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.ui.document_host import close_document
+        from features.notes_library import register
+        from features.notes_library.ui.notes_library import open_notes
+        from desktop.document_catalog import reopen
+        entry = RegisteredContribution('notes_library', 'Notes Library', register().pages[0])
+        with TemporaryDirectory() as directory, patch.object(main_window.registry, 'get_pages', return_value=[entry]):
+            root = Path(directory); (root / 'note.md').write_text('# Hello')
+            window = self.window([entry]); window.dlg.show()
+            page = window._feature_pages['notes_library', 'notes_library.workspace']
+            owner = open_notes(lambda: LocalFiles(root), 'Notes')
+            self.wait_until(lambda: owner.library is not None and not owner.progress.busy)
+            page.workspace.detach_active()
+            self.app.processEvents()
+            self.assertTrue(page.records[owner]['detached'])
+            self.assertIs(open_notes(lambda: LocalFiles(root), 'Notes'), owner)
+            self.assertTrue(page.records[owner]['detached'])
+            row = dict(source=dict(type='local', path=str(root / 'note.md')),
+                       opener=dict(editor='notes', root=str(root)), title='note.md')
+            self.assertIs(reopen(row, window.dlg), owner)
+            self.wait_until(lambda: owner.document_tabs.current is not None
+                            and owner.document_tabs.path(owner.document_tabs.current) == 'note.md'
+                            and not owner.document_tabs.current.progress.busy)
+            self.assertEqual(page.count, 1)
+            page.attach(owner)
+            self.assertFalse(page.records[owner]['detached'])
+            from commonUtils.ui.document_host import request_document_close, CloseOutcome
+            self.wait_until(lambda: request_document_close(owner) is CloseOutcome.ACCEPTED)
+            self.wait_until(lambda: page.count == 0)
+
     def test_document_launcher_then_plus_menu_preserves_native_tab_menus(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory

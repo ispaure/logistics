@@ -2,12 +2,12 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from features.text_editor.names import document_name
+from services.documents.names import document_name
 from services.documents.storage import DocumentPolicy
 from commonUtils.ui.native.editor_search import EditorSearch
 from commonUtils.ui.native.code_input import CodeInput
 from commonUtils.formats.code_language import LANGUAGE_CHOICES
-from .markdown_editor import FormattedMarkdownInput
+from services.documents.authoring.markdown_editor import FormattedMarkdownInput
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')

@@ -20,7 +20,7 @@ import toga
 from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
-from features.text_editor.notes import NotesLibrary, MAX_NOTE, MARKDOWN, document_kind
+from features.notes_library.notes import NotesLibrary, MAX_NOTE, MARKDOWN, document_kind
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.search.names import natural_name_key, search_terms
 from commonUtils.search.providers import search_resources, SearchResult
@@ -72,7 +72,7 @@ class VaultBrowser(LibraryPanels):
         self.release_provider = lambda: None
         self.library = NotesLibrary(provider, root)
         self.root = self.library.root
-        from features.text_editor.notes import library_name
+        from features.notes_library.notes import library_name
         self.library_title = library_name(provider, self.root)
         self.history, self.history_index = [], -1
         self.positions = {}
@@ -749,6 +749,8 @@ class VaultBrowser(LibraryPanels):
         self.links_generation += 1
         self.epoch += 1
         epoch = self.epoch
+        self._media_open_epoch = epoch
+        self._media_open_path, self._media_open_pending = path, True
         if self.host.open_timing is not None:
             self._open_timing = dict(epoch=epoch, started=started, link=resolve_link,
                 cached_folders_at_start=len(self.library._link_folders), stages_ms={})
@@ -768,20 +770,31 @@ class VaultBrowser(LibraryPanels):
                 path = self.contained(path)
             if not resolve_link and PurePosixPath(path).suffix.lower() not in MARKDOWN:
                 raise ValueError("Choose a Markdown note.")
+            def stage(message):
+                def publish():
+                    if not cancelled() and self.page_loading.active:
+                        self.page_loading.status.text = message
+                        if resolve_link and message == 'Finding file…':
+                            self.mark_open_timing('finding', epoch)
+                        elif resolve_link and message.startswith('Reading '):
+                            self.mark_open_timing('found', epoch)
+                self.host.loop.call_soon_threadsafe(publish)
+            path, found_fragment, data = await asyncio.to_thread(self.library.load_note, path,
+                current=current, resolve_link=resolve_link, cancelled=cancelled, stage=stage)
+            if self._media_open_epoch == epoch:
+                self._media_open_path = path
+            if cancelled():
+                return False
+            fragment = found_fragment or fragment
             if resolve_link:
-                self.mark_open_timing('finding', epoch)
-                path, fragment = await asyncio.to_thread(self.library.link, current, path, cancelled=cancelled)
-                if cancelled():
-                    return False
                 self.page_loading.opening(path)
-                self.mark_open_timing('found', epoch)
                 if document_kind(path) in ('text', 'notebook'):
                     self.page_loading.finish()
                     opener = self.open_text if document_kind(path) == 'text' else self.open_canvas
                     return await opener(path, remember=remember)
 
             def read():
-                data = self.library.read(path, cancelled=cancelled)
+                stage('Preparing embedded media…')
                 plan = view_plan(data.decode("utf-8-sig"))
                 html = self.host.preview(plan.render() if plan.scripts else plan.source, image_source=self.library.image_source(path))
                 self.access.validate_preview(html, MAX_NOTE)
@@ -830,6 +843,13 @@ class VaultBrowser(LibraryPanels):
                 self.notice.text = fill(str(error)[:180], width=28)
             return False
         finally:
+            if self._media_open_epoch == epoch:
+                self._media_open_pending = False
+                await asyncio.to_thread(self.library.release_media, self.path,
+                    active=lambda: self._media_open_epoch == epoch)
+            await asyncio.to_thread(self.library.discard_media, path,
+                active=lambda: path != self.path and not (
+                    self._media_open_pending and path == self._media_open_path))
             if epoch == self.epoch:
                 self.page_loading.finish()
 
@@ -1058,7 +1078,7 @@ class VaultBrowser(LibraryPanels):
         self.link_rows.add(spinner)
         spinner.start()
         try:
-            from features.text_editor.notes_links import connections
+            from features.notes_library.notes_links import connections
             result = await asyncio.to_thread(connections, self.library, path,
                 cancelled=cancelled, visible=self.host.folder_visible)
             if cancelled():
@@ -1192,7 +1212,7 @@ class VaultBrowser(LibraryPanels):
         status = toga.Label('')
         async def next_step(widget=None, **kwargs):
             try:
-                from features.text_editor.names import document_name
+                from services.documents.names import document_name
                 filename = document_name(name.value or 'Untitled.' + extension)
                 suffixes = MARKDOWN if extension == 'md' else {'.' + extension}
                 if PurePosixPath(filename).suffix.lower() not in suffixes:
@@ -1269,6 +1289,8 @@ class VaultBrowser(LibraryPanels):
         if not self.valid() or self.file_command_busy or not self.library.supports('rename'):
             return False
         self.file_command_busy = True
+        task_cancelled = False
+        mutation_cancelled = Event()
         side = self.sidebar.side
         article_enabled = self.article.enabled
         try:
@@ -1279,7 +1301,26 @@ class VaultBrowser(LibraryPanels):
             self._moving_entry = True
             self.article.enabled = False
             self.epoch += 1
-            await asyncio.to_thread(self.library.move, source, destination, cancelled=lambda: not self.valid())
+            def move():
+                self.library.move(source, destination,
+                    cancelled=lambda: mutation_cancelled.is_set() or not self.valid())
+                try:
+                    self.host.relocate_references(self.provider, source, destination)
+                except (OSError, ValueError, PermissionError):
+                    return True
+                return False
+            worker = asyncio.create_task(asyncio.to_thread(move))
+            # Retire the worker before releasing its guard. A cancellation after
+            # commit must still reconcile saved references and the current note.
+            while True:
+                try:
+                    saved_reference_error = await asyncio.shield(worker)
+                    break
+                except asyncio.CancelledError:
+                    if worker.cancelled():
+                        raise
+                    task_cancelled = True
+                    mutation_cancelled.set()
             if not self.valid():
                 return False
             if moving_open:
@@ -1305,11 +1346,6 @@ class VaultBrowser(LibraryPanels):
                     self._reopening_after_move = False
             if side is not None:
                 self.sidebar.show(side)
-            saved_reference_error = False
-            try:
-                await asyncio.to_thread(self.host.relocate_references, self.provider, source, destination)
-            except (OSError, ValueError, PermissionError):
-                saved_reference_error = True
             self.refresh_library_indexes()
             self.refresh_reader_actions()
             self.notice.text = ('Moved ' + PurePosixPath(destination).name
@@ -1325,6 +1361,8 @@ class VaultBrowser(LibraryPanels):
             self._moving_entry = False
             self.article.enabled = article_enabled
             self.file_command_busy = False
+            if task_cancelled:
+                raise asyncio.CancelledError
 
     def manage_entry(self, *, folder=False, move=False):
         if not self.valid() or not self.library.supports('rename' if move else 'create'):

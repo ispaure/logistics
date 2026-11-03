@@ -2,7 +2,7 @@
 import asyncio
 from contextlib import contextmanager
 from pathlib import Path
-from features.text_editor.notes import vault_root, local_library
+from features.notes_library.notes import vault_root, local_library
 from commonUtils.runtime.operations import OperationCancelled
 
 
@@ -82,6 +82,9 @@ def resolve_source(app, entry):
 
 
 async def offer_notes(app, entry, box, button, status):
+    if not app.feature_enabled('notes_library'):
+        button.enabled = False
+        return
     """A single immediate-root listing, only for the currently selected action page."""
     if entry['kind'] in ('remote', 'job-remote'):
         return

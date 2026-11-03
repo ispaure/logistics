@@ -25,7 +25,7 @@ class DesktopFileOperationsTests(unittest.TestCase):
     def test_notes_landing_probes_use_bounded_batches_and_no_content_reads(self):
         from io import BytesIO
         from unittest.mock import patch
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
             provider = fixture.provider
             for name in ('One', 'Two', 'Empty'):

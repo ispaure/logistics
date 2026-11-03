@@ -60,7 +60,7 @@ def ios_toolbar_items(controller, *, leading=False):
 async def choose_creation_type(app, extension):
     """Select the format for unattended probes of the subsequent native screens."""
     from unittest.mock import patch
-    from features.text_editor.mobile.document_dialogs import DocumentTypeDialog
+    from services.documents.authoring.document_dialogs import DocumentTypeDialog
 
     async def select(dialog):
         assert isinstance(dialog, DocumentTypeDialog)

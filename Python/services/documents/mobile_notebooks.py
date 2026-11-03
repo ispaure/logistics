@@ -294,7 +294,7 @@ async def show_notebook_in_folder(panel):
 async def delete_notebook(panel):
     """Confirm and retire one document through its storage/recovery owners."""
     import asyncio
-    from features.text_editor.mobile.document_dialogs import DocumentDialog
+    from services.documents.authoring.document_dialogs import DocumentDialog
     from mobile.resource_imports import ResourceImports
     app, document, session = panel.app, panel.document, panel.session
     if panel.closed or not app.active_host or getattr(panel, '_delete_pending', False):

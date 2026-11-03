@@ -508,7 +508,7 @@ recovery using the dummy native backend.
 
 ## Notes Library
 
-`features.text_editor.notes` owns rooted containment, immediate-folder filtering,
+`features.notes_library.notes` owns rooted containment, immediate-folder filtering,
 marker detection and bounded revision-checked note reads for both desktop and
 mobile. Desktop Text Editor contributes **Open as Notes Library** to location
 actions through `notes_actions` and hosts `ui.notes_library` in Documents.

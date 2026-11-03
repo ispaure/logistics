@@ -170,7 +170,7 @@ class Probe(LogisticsMobile):
                         await asyncio.sleep(.05)
                     assert bool(controller.isTabBarHidden()) == tabs_before, (name, 'Destination tabs did not restore')
             if ios:
-                from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+                from services.documents.authoring.markdown_editor import FormattedMarkdownInput
                 protected = FormattedMarkdownInput(lambda text: None, private=True)
                 try:
                     assert protected.view.private_configured

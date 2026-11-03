@@ -112,6 +112,14 @@
     [
       "Python/features/text_editor/ui/editing.py",
       "desktop.settings"
+    ],
+    [
+      "Python/features/notes_library/ui/page.py",
+      "desktop.documents"
+    ],
+    [
+      "Python/features/notes_library/ui/notes_library.py",
+      "desktop.document_catalog"
     ]
   ],
   "feature_dependencies": [
@@ -206,6 +214,10 @@
     [
       "rclone",
       "text_editor"
+    ],
+    [
+      "notes_library",
+      "notebooks"
     ]
   ],
   "portable_modules": [
@@ -249,8 +261,8 @@
     "features.rclone.transfers.transfer_options",
     "commonUtils.formats.code_language",
     "commonUtils.runtime.choices",
-    "features.text_editor.names",
-    "features.text_editor.notes",
+    "services.documents.names",
+    "features.notes_library.notes",
     "features.text_editor.resources",
     "services.documents.archive_access",
     "services.documents.limits",
@@ -283,7 +295,8 @@
     "features.comics",
     "features.pdf",
     "features.images",
-    "features.video"
+    "features.video",
+    "features.notes_library"
   ],
   "document_external_packages": {
     "features.notebooks._vendor": "Upstream in-memory rmscene binary codec; not application document I/O."
@@ -573,6 +586,18 @@
       "scope": "compress_image",
       "operation": "raw-method:unlink",
       "reason": "Existing standalone image compression tool owns exclusive sibling staging, encoded-image verification and publication/cleanup. It is separate from provider-backed image viewing; no source document path is opened by the viewer."
+    },
+    {
+      "module": "features.notes_library.mobile.notes_library",
+      "scope": "VaultBrowser.run_search.read_text",
+      "operation": "raw-method:read_text",
+      "reason": "Bounded NotesLibrary.read_text delegates to DocumentResource after containment/type checks; this is not filesystem Path.read_text."
+    },
+    {
+      "module": "features.notes_library.ui.library_panels",
+      "scope": "LibraryPanels.filter.scan.read",
+      "operation": "raw-method:read_text",
+      "reason": "Bounded NotesLibrary.read_text delegates to DocumentResource after containment/type checks; this is not filesystem Path.read_text."
     }
   ]
 }

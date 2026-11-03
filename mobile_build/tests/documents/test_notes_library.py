@@ -13,7 +13,7 @@ from unittest.mock import patch
 import mobile_build.tests.documents.test_obsidian as test_obsidian
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.notes_actions import RemoteNotes, offer_notes
-from features.text_editor.notes import NotesLibrary
+from features.notes_library.notes import NotesLibrary
 import toga
 from toga.style import Pack
 
@@ -43,6 +43,45 @@ class NotesLibraryTests(unittest.TestCase):
     setUp = test_obsidian.ObsidianTests.setUp
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
+
+    def test_library_markdown_and_source_editing_work_with_text_editor_disabled(self):
+        from mobile.obsidian import open_vault
+        self.app.set_feature_enabled('text_editor', False, refresh=False)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertIsNotNone(owner)
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            self.assertTrue(await owner.open_editor())
+            self.assertTrue(await owner.embedded.choose_mode(False))
+            owner.embedded.source.value = '# Independent library editor'
+            self.assertTrue(await owner.embedded.save())
+            self.assertEqual((self.vault / 'Home.md').read_text(), '# Independent library editor')
+            owner.dispose()
+            self.app.set_feature_enabled('notes_library', False, refresh=False)
+            self.assertIsNone(await open_vault(self.app, self.provider, 'Vault', 'documents'))
+        self.run_async(exercise())
+
+    def test_video_embeds_stream_in_preview_and_editor_and_close_with_library(self):
+        from mobile.obsidian import open_vault
+        from services.documents.authoring.markdown_editor import editor_blocks
+        (self.vault / 'potato.mp4').write_bytes(b'video fixture')
+        source = '![[potato.mp4]]\n'
+        (self.vault / 'Home.md').write_text(source)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            with patch.object(owner.web, 'set_content') as publish:
+                self.assertTrue(await owner.open_note('Vault/Home.md'))
+            media = owner.library.image_source('Vault/Home.md')
+            html = publish.call_args.args[1]
+            self.assertIn('<video ', html)
+            blocks = editor_blocks(source, image_source=media)
+            self.assertIn('<video ', blocks[0]['html'])
+            self.assertIn('![[potato.mp4]]', blocks[0]['source'])
+            transports = [transport for _, transport in media.videos.values()]
+            owner.dispose()
+            self.assertTrue(all(transport.closed.is_set() for transport in transports))
+            self.assertIsNone(media('potato.mp4'))
+        self.run_async(exercise())
 
     def test_miscellaneous_files_are_visible_and_movable_but_dotfiles_are_hidden(self):
         from mobile.obsidian import open_vault
@@ -243,7 +282,7 @@ class NotesLibraryTests(unittest.TestCase):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
             with patch.object(owner, 'scroll_fragment') as scroll, \
-                    patch('features.text_editor.mobile.dataview.execute_views', new=AsyncMock(return_value='## Generated target\n')):
+                    patch('features.notes_library.mobile.dataview.execute_views', new=AsyncMock(return_value='## Generated target\n')):
                 self.assertTrue(await owner.open_note('Vault/Home.md', fragment='generated-target'))
                 owner.page_loaded()
                 scroll.assert_not_called()
@@ -268,7 +307,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertIn('worker-src blob:', initial)
                 plan = owner.data_view_plan
                 owner.data_view_plan = None
-                with patch('features.text_editor.mobile.dataview.execute_views',
+                with patch('features.notes_library.mobile.dataview.execute_views',
                            new=AsyncMock(return_value='# Dashboard\n\n| Name |\n| --- |\n| Mobile result |\n')):
                     await owner.render_data_views(plan, owner.base, owner.path)
                 self.assertIn('Mobile result', publish.call_args.args[1])
@@ -279,7 +318,7 @@ class NotesLibraryTests(unittest.TestCase):
                     entered.set()
                     await release.wait()
                     return 'Stale result'
-                with patch('features.text_editor.mobile.dataview.execute_views', side_effect=slow):
+                with patch('features.notes_library.mobile.dataview.execute_views', side_effect=slow):
                     pending = asyncio.create_task(owner.render_data_views(plan, owner.base, owner.path))
                     await entered.wait()
                     await owner.open_note('Vault/Projects/Plan.MD')

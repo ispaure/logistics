@@ -68,8 +68,8 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
 
 
         missing_markdown = tuple(name for name in mobile_tools.DOCUMENT_MODULES
-                                 if name != 'features/text_editor/mobile/provider_markdown.py')
-        with self.assertRaisesRegex(ValueError, 'imports unstaged features.text_editor.mobile.provider_markdown'):
+                                 if name != 'services/documents/authoring/provider_markdown.py')
+        with self.assertRaisesRegex(ValueError, 'imports unstaged services.documents.authoring.provider_markdown'):
             mobile_tools.validate_app_modules(REPO / 'Python/mobile', document_modules=missing_markdown)
 
     def test_payload_excludes_private_files_desktop_features_and_links(self):
@@ -161,7 +161,7 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertTrue((repo / 'docs/development/mobile-evidence/nested/report.md').is_file())
             self.assertTrue((repo / 'test-results/mobile-evidence/report.md').is_file())
             self.assertTrue((payload / 'features/books/epub.py').exists())
-            self.assertTrue((payload / 'features/text_editor/mobile/provider_markdown.py').is_file())
+            self.assertTrue((payload / 'services/documents/authoring/provider_markdown.py').is_file())
             self.assertTrue((payload / 'commonUtils/ui/native/android/io/github/ispaure/commonutils/NavigationBack.java').exists())
             bridge = shared / 'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java'
             bridge.write_text(bridge.read_text() + '\n// local fixture mutation\n')

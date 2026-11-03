@@ -10,7 +10,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 
 from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
 
-DEFAULTS = {'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
+DEFAULTS = {'notes_library_migrated': 'true', 'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'workspace_local_group': 'Others', 'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
             'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false', 'session_trusted_wifi': 'false', 'trusted_wifi_networks': '[]',
@@ -49,6 +49,11 @@ class Preferences:
                     if not parser.has_option('Mobile', key):
                         self.values[key] = self.values['font_size']
                 self.validate(self.values)
+                if not parser.has_option('Mobile', 'notes_library_migrated'):
+                    disabled = set(json.loads(self.values['disabled_features']))
+                    if 'text_editor' in disabled:
+                        disabled.add('notes_library')
+                    self.save(disabled_features=json.dumps(sorted(disabled)), notes_library_migrated='true')
                 # Older session-only imports persisted package/remote labels.
                 # Remove those associations as part of the privacy migration.
                 packages = json.loads(self.values['remote_packages'])
@@ -66,6 +71,8 @@ class Preferences:
         if values.keys() != DEFAULTS.keys():
             raise ValueError('Unknown mobile preference.')
         disabled_features(values['disabled_features'])
+        if values['notes_library_migrated'] != 'true':
+            raise ValueError('Invalid Notes Library migration state.')
         from services.audio_output import approvals
         approvals(values['approved_bluetooth_devices'])
         if not isinstance(values['speech_voice'], str) or len(values['speech_voice']) > 1024 or any(c in values['speech_voice'] for c in '\r\n\x00'):
@@ -123,7 +130,7 @@ class Preferences:
         if self.error:
             raise ValueError('Repair or move the preserved preferences file before saving settings.')
         # Retain retired keys for INI compatibility, but keep cards and the saved legacy toggle off.
-        changes = dict(changes, show_legacy='false', document_card_overview='false')
+        changes = dict(changes, show_legacy='false', document_card_overview='false', notes_library_migrated='true')
         for key in ('markdown_font_size', 'text_font_size', 'epub_font_size'):
             changes.setdefault(key, self.values[key])
         values = dict(self.values, **changes)

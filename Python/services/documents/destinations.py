@@ -44,7 +44,7 @@ class DestinationRequest:
         if Path(filename).suffix.lower() not in extensions or len(data) > maximum:
             raise ValueError('Choose a text, source or configuration filename; saves are limited to 1 MiB.')
         if creating:
-            from features.text_editor.names import document_name
+            from services.documents.names import document_name
             if session_count >= session_limit:
                 raise ValueError('Close an open document before creating another (limit: 32).')
             document_name(filename)

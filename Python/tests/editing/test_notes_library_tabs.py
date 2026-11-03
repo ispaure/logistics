@@ -7,7 +7,7 @@ from shiboken6 import isValid
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
-from features.text_editor.ui.library_workspace import TabbedNotesLibrary
+from features.notes_library.ui.library_workspace import TabbedNotesLibrary
 
 
 class NotesLibraryTabTests(QtTestCase):
@@ -28,6 +28,31 @@ class NotesLibraryTabTests(QtTestCase):
         child = owner.open_note(path)
         self.wait_until(lambda: not child.progress.busy and child.index >= 0)
         return child
+
+    def test_navigation_and_loading_footer_follow_active_document(self):
+        with self.temporary_directory() as directory:
+            owner = self.opened(Path(directory))
+            first = self.note(owner, 'A.md')
+            second = self.note(owner, 'B.md')
+            self.assertTrue(owner.navigation.isHidden())
+            self.assertGreaterEqual(second.viewer.navigation_toolbar.indexOf(second.navigation), 0)
+            self.assertFalse(second.back.isHidden())
+            self.assertTrue(second.back.isEnabled())
+            self.assertIs(second.operation_footer.parentWidget(), owner.operation_footer)
+            self.assertTrue(first.operation_footer.isHidden())
+            self.assertFalse(second.operation_footer.isHidden())
+            second.back.click()
+            self.wait_until(lambda: owner.document_tabs.current is first)
+            self.assertFalse(first.operation_footer.isHidden())
+            self.assertTrue(second.operation_footer.isHidden())
+            self.assertFalse(first.back.isEnabled())
+            self.assertTrue(first.forward.isEnabled())
+            first.forward.click()
+            self.wait_until(lambda: owner.document_tabs.current is second)
+            self.assertTrue(owner.document_tabs.close_tab(first))
+            self.app.processEvents()
+            self.assertFalse(second.operation_footer.isHidden())
+            owner.close()
 
     def test_independent_drafts_scoped_groups_and_cancelled_close(self):
         with self.temporary_directory() as directory:

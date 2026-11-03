@@ -94,7 +94,7 @@ for saved_document in (False, True):
     (notes / 'Note.md').write_text('# Packaged Markdown')
     assert app.loop.run_until_complete(app.open_crypt(copies=LocalTextCopies(LocalFiles(notes)), key='Note.md'))
     reader = app.private_sessions.active
-    assert type(reader._provider_markdown).__module__ == 'features.text_editor.mobile.provider_markdown'
+    assert type(reader._provider_markdown).__module__ == 'services.documents.authoring.provider_markdown'
     assert reader.crypt_content.children == [reader.crypt_preview]
     reader.toggle_private_preview()
     assert reader.crypt_content.children == [reader.crypt_formatted.view]

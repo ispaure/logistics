@@ -224,7 +224,7 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
 
     def test_contents_in_preview_and_draft_reject_stale_navigation(self):
         import json
-        from features.text_editor.mobile.library_tools import show_contents
+        from features.notes_library.mobile.library_tools import show_contents
         async def exercise():
             library = await open_vault(self.app, self.provider, 'Vault', 'files')
             await library.open_note('Vault/Home.md')
@@ -318,7 +318,7 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
     def test_late_formatted_preparation_cannot_override_newer_source_choice(self):
         import asyncio
         from threading import Event
-        from features.text_editor.mobile.library_document import prepare_editor
+        from features.notes_library.mobile.library_document import prepare_editor
         async def exercise():
             library = await open_vault(self.app, self.provider, 'Vault', 'files')
             await library.open_note('Vault/Home.md')
@@ -331,7 +331,7 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
                 if not release.wait(3):
                     raise RuntimeError('Test did not release preparation')
                 return prepare_editor(*args, **kwargs)
-            with patch('features.text_editor.mobile.library_document.prepare_editor', side_effect=slow_prepare):
+            with patch('features.notes_library.mobile.library_document.prepare_editor', side_effect=slow_prepare):
                 pending = asyncio.create_task(editor.choose_mode(formatted=True))
                 try:
                     self.assertTrue(await asyncio.to_thread(entered.wait, 2))
@@ -414,7 +414,7 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_remarkable_document_is_contained_and_uses_embedded_canvas(self):
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         from features.notebooks.notebook import Notebook
         path = NotesLibrary(self.provider, 'Vault').create('Sketch', 'Vault/Projects', extension='rmdoc')
         self.assertEqual(Notebook.read((self.root / path).read_bytes()).name, 'Sketch')
@@ -433,7 +433,7 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
         import asyncio
         from dataclasses import replace
         from types import SimpleNamespace
-        from features.text_editor.mobile.library_document import LibraryMarkdown
+        from features.notes_library.mobile.library_document import LibraryMarkdown
         async def exercise():
             for canvas in (False, True):
                 library = await open_vault(self.app, self.provider, 'Vault', 'files')
@@ -522,13 +522,13 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
         async def exercise():
             library = await open_vault(self.app, self.provider, 'Vault', 'files')
             self.assertIsNone(library)
-            from features.text_editor.notes import NotesLibrary
+            from features.notes_library.notes import NotesLibrary
             with self.assertRaisesRegex(ValueError, 'local copy'):
                 NotesLibrary(self.provider, 'Vault')
         self.run_async(exercise())
 
     def test_create_is_contained_and_never_overwrites_an_existing_note(self):
-        from features.text_editor.notes import NotesLibrary
+        from features.notes_library.notes import NotesLibrary
         model = NotesLibrary(self.provider, 'Vault')
         path = model.create('New note', 'Vault/Projects')
         self.assertEqual(path, 'Vault/Projects/New note.md')

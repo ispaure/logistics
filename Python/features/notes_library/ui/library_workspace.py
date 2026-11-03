@@ -73,9 +73,15 @@ class LibraryTabs(qt.QStackedWidget):
         child = NotesLibraryWindow(lambda provider=provider: provider, self.label,
                                    root=self.owner.library.root, document_only=True)
         child.setWindowFlags(qt.Qt.WindowType.Widget)
-        for widget in (child.panel_tabs, child.links_tree, child.menu, child.back,
-                       child.forward, child.up, child.links_button):
+        for widget in (child.panel_tabs, child.links_tree, child.menu, child.links_button):
             widget.hide()
+        child.back.clicked.disconnect()
+        child.forward.clicked.disconnect()
+        child.up.clicked.disconnect()
+        child.back.clicked.connect(lambda: self.owner.navigate(-1))
+        child.forward.clicked.connect(lambda: self.owner.navigate(1))
+        child.up.clicked.connect(self.owner.parent_folder)
+        self.owner.operation_footer.layout().addWidget(child.operation_footer)
         child.open_card.hide()
         child.new_card.hide()
         child.viewer.new_action.triggered.disconnect()
@@ -123,7 +129,10 @@ class LibraryTabs(qt.QStackedWidget):
 
     def detach(self, child):
         record = self.documents.pop(child, None)
-        if record is None:
+        if record is not None and isValid(child.operation_footer):
+            child.operation_footer.hide()
+            child.operation_footer.deleteLater()
+        if record is None or not isValid(self) or not isValid(self.owner) or not isValid(self.owner.up):
             return
         group = record['group']
         if isValid(group):
@@ -233,6 +242,7 @@ class LibraryTabs(qt.QStackedWidget):
 
 
 class TabbedNotesLibrary(NotesLibraryWindow):
+    document_destination = 'notes_library'
     def __init__(self, factory, label, **kwargs):
         self.document_tabs = None
         super().__init__(factory, label, **kwargs)
@@ -241,7 +251,7 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         old.hide()
         old.setParent(self)
         self.document_tabs = tabs
-        self.centralWidget().layout().addWidget(self.viewer.status)
+        self.navigation.hide()
         self.save_action.setShortcuts([])
         self.resize(1200, 800)
 
@@ -257,7 +267,7 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         except ValueError as error:
             self.viewer.status.setText(str(error))
             return
-        from features.text_editor.notes import document_kind
+        from features.notes_library.notes import document_kind
         if document_kind(path) is None:
             return self.open_other_file(path)
         return self.document_tabs.open(path, fragment=fragment, remember=remember, index=index)
@@ -277,6 +287,11 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         self.back.setEnabled(self.index > 0)
         self.forward.setEnabled(0 <= self.index < len(self.history) - 1)
         self.up.setEnabled(True)
+        for document in self.document_tabs.documents:
+            document.back.setEnabled(self.back.isEnabled())
+            document.forward.setEnabled(self.forward.isEnabled())
+            document.up.setEnabled(self.up.isEnabled())
+            document.operation_footer.setVisible(document is child)
         self.refresh_connections()
         self.idle.emit()
 

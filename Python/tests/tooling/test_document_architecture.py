@@ -124,7 +124,7 @@ def edit(provider, path, source, output):
     def test_new_descendants_in_every_current_editor_package_inherit_contract(self):
         packages = json.loads((ROOT / 'Scripts/architecture.json').read_text())['document_packages']
         self.assertTrue({'features.text_editor', 'features.notebooks', 'features.books',
-                         'features.comics', 'features.pdf'} <= set(packages))
+                         'features.comics', 'features.pdf', 'features.notes_library'} <= set(packages))
         for package in packages:
             self.policy['document_packages'] = [package]
             with self.subTest(package=package):

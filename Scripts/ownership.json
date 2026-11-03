@@ -341,12 +341,10 @@
       "tests": {
         "desktop": [
           "test_text_editor*.py",
-          "test_editor*.py",
-          "test_notes_library_desktop.py"
+          "test_editor*.py"
         ],
         "mobile": [
           "test_editor_picker.py",
-          "test_notes_library.py",
           "test_source_editor.py",
           "test_markdown_editor.py",
           "test_provider_markdown.py",
@@ -535,6 +533,27 @@
         ]
       },
       "mobile_manifest": "Python/features/video/mobile_sources.json"
+    },
+    "notes_library": {
+      "sources": [
+        "Python/features/notes_library"
+      ],
+      "guide": "docs/features/notes_library/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_notes_library*.py",
+          "test_markdown_library_modes.py",
+          "test_text_editor_dataview.py",
+          "test_main_window.py"
+        ],
+        "mobile": [
+          "test_notes_library*.py",
+          "test_obsidian.py",
+          "test_markdown_library_workflow.py",
+          "test_mobile_features.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/notes_library/mobile_sources.json"
     }
   }
 }

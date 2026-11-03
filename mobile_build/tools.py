@@ -11,7 +11,7 @@ import tomllib
 
 SOURCE_OWNERS = (
     'mobile', 'services', 'features/books', 'features/pdf', 'features/comics',
-    'features/notebooks', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor', 'features/video',
+    'features/notebooks', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor', 'features/notes_library', 'features/video',
 )
 BASE_DOCUMENT_MODULES = ('features/__init__.py', 'configFile.ini')
 

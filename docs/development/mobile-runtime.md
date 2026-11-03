@@ -127,7 +127,7 @@ system accessibility extremes still require native layout validation.
 | Explicit read-only services and writable compatibility state | `services/workflow_host.py`; lazy owner access in `composition/assembly.py` |
 | Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
 | Managed-text create/open/save, inventory, preview and picker completion | `managed_documents.py` (`ManagedDocumentWorkflows`); app retains aggregate checkpoint guards |
-| Provider Markdown modes, controls and preview lifecycle | `features/text_editor/mobile/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
+| Provider Markdown modes, controls and preview lifecycle | `services/documents/authoring/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
 | Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
 | Provider content preparation and chrome assembly | `provider_presentation.py`; session and publication orchestration in `provider_ui.py` |
@@ -541,7 +541,7 @@ Main reader/editor surfaces expose `_reader_session_id` and
 `_reader_close_button`. The native bars mount this Close control in place of
 Back; secondary tools, metadata and appearance routes keep Back. Inline tools
 switch that same leading control to Back through `reader_tool_back` and restore
-Close when dismissed. `features.text_editor.mobile.document_dialogs` supplies window-modal UIKit alerts
+Close when dismissed. `services.documents.authoring.document_dialogs` supplies window-modal UIKit alerts
 and Android AlertDialogs: Save/discard/cancel for dirty sessions and metadata,
 and destructive Delete/cancel for stored-document deletion. No close-decision
 route is pushed. The iOS destructive role and Android red command text also

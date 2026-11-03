@@ -1,5 +1,7 @@
 # Developing Logistics
 
+- [Notes Library feedback review](notes-feedback-review.md)
+
 - [Private reader state and history clearing](reader-state.md)
 
 If this is your first contribution, follow [the contributor walkthrough](getting-started.md).
@@ -97,6 +99,8 @@ validate a new change.
 - [Qt proof launchers](qt-proof-launchers.md)
 
 ## Plans and historical assessments
+
+- [Notes Library feature and desktop navigation brief](notes-library-feature-brief.md)
 
 See the [current build and deployment ownership map](build-deployment-audit.md)
 for the manager/project boundary and the `logistics_build/` migration.

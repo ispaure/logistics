@@ -158,7 +158,7 @@ def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='',
             '<meta name="logistics-native-font" content="true">'
             '<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">'
             f'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
-            f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">'
+            f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; img-src data:; media-src http://127.0.0.1:*; base-uri \'none\'; form-action \'none\'">'
             f'<style>body{{font-size:{int(font_size)}px}}' + EDITOR_CSS + stylesheet +
             '</style></head><body><nav aria-label="Markdown formatting">' + toolbar + '</nav>'
             '<p id="notice" role="status"></p><main id="document" aria-label="Formatted Markdown editor"></main>' + link_dialog +

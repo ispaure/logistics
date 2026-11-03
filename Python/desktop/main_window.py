@@ -387,6 +387,10 @@ class MainWindow(pyside.Window):
 
     def _create_feature_page(self, contribution):
         page = contribution.create_page(self.dlg)
+        if getattr(page, 'retain_when_disabled', False):
+            page.activate = lambda: self._destination_changed(page)
+            page.changed.connect(lambda: pyside.QTimer.singleShot(0, self.dlg, self._library_sessions_changed))
+            page.workspace.active_changed.connect(self._sync_menus)
         if contribution.page_id in ('git.workspace', 'lm.chat'):
             page.working_file_opener = self._open_git_file_in_ide
         settings_requested = getattr(page, 'feature_settings_requested', None)
@@ -446,6 +450,10 @@ class MainWindow(pyside.Window):
                 self._feature_pages[key] = self._create_feature_page(contribution)
                 self._feature_pages[key].setProperty('navigation_icon', contribution.navigation_icon)
             entries.append((contribution.order, contribution.name, self._feature_pages[key]))
+        active_pages = {page for _, _, page in entries}
+        for (feature, page_id), page in self._feature_pages.items():
+            if page not in active_pages and getattr(page, 'retain_when_disabled', False) and page.count:
+                entries.append((17, 'Notes Library', page))
         with pyside.QSignalBlocker(self.tabs):
             while self.tabs.count():
                 page = self.tabs.widget(0)
@@ -458,6 +466,10 @@ class MainWindow(pyside.Window):
                 self.tabs.setCurrentIndex(index)
         self._tab_changed(self.tabs.currentIndex())
         self._refresh_sidebar()
+
+    def _library_sessions_changed(self):
+        self._sync_menus()
+        self._sync_feature_pages()
 
     def _refresh_sidebar(self):
         catalog = self._launch_catalog(refresh=True)
@@ -599,14 +611,18 @@ class MainWindow(pyside.Window):
         from commonUtils.ui.workspaces.workspace_menus import sync_native_menus
         sync_native_menus(self.dlg, self._menu_document())
 
+    def _cancel_close(self, pages):
+        self._closing = self.documents.closing = self.actions.closing = False
+        for page in pages:
+            if getattr(page, 'retain_when_disabled', False):
+                page.closing = False
+        return False
+
     def can_close(self):
         pages = [page for _, _, page in self._core_pages] + list(self._feature_pages.values())
         # Resolve unsaved settings before asking browser workers/controllers to stop.
         if not all(getattr(page, 'can_close', lambda: True)() for page in pages):
-            self._closing = False
-            self.documents.closing = False
-            self.actions.closing = False
-            return False
+            return self._cancel_close(pages)
         self._closing = True
         self.documents.closing = True
         self.actions.closing = True
@@ -619,13 +635,14 @@ class MainWindow(pyside.Window):
         if self.bulk_rename is not None:
             ready = self.bulk_rename.prepare_close() and ready
         if self.documents.close_veto:
-            self._closing = False
-            self.documents.closing = False
-            self.actions.closing = False
-            return False
+            return self._cancel_close(pages)
         for page in pages:
+            if getattr(page, 'retain_when_disabled', False):
+                page.closing = True
             if not getattr(page, 'prepare_close', lambda: True)():
                 ready = False
+            if getattr(page, 'close_veto', False):
+                return self._cancel_close(pages)
         if self.updates is not None:
             ready = self.updates.prepare_close() and ready
         return ready

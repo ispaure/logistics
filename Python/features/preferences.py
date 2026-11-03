@@ -63,3 +63,23 @@ def save_disabled(path, disabled):
     stream = StringIO()
     parser.write(stream)
     atomic_write_bytes(path, stream.getvalue().encode('utf-8'))
+
+
+def migrate_notes_library(path, disabled):
+    """Seed the split library preference once in legacy unlayered settings."""
+    parser = _read(path, saving=True)
+    if parser.get('Migrations', 'notes_library', fallback='false').lower() == 'true':
+        return disabled
+    disabled = set(disabled)
+    if 'text_editor' in disabled:
+        disabled.add('notes_library')
+    if not parser.has_section('Migrations'):
+        parser.add_section('Migrations')
+    parser.set('Migrations', 'notes_library', 'true')
+    if not parser.has_section('Features'):
+        parser.add_section('Features')
+    parser.set('Features', 'disabled', '\n'.join(sorted(disabled)))
+    stream = StringIO()
+    parser.write(stream)
+    atomic_write_bytes(path, stream.getvalue().encode('utf-8'))
+    return disabled

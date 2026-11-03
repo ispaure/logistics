@@ -47,7 +47,7 @@ class MarkdownFontProbe(toga.App):
         from android.graphics.text import TextRunShaper
         from mobile import android_markdown_font as bridge
         from mobile.preview import markdown_preview
-        from features.text_editor.mobile.markdown_editor import editor_html
+        from services.documents.authoring.markdown_editor import editor_html
         from features.books.mobile.private_view import PrivateWebView
         report = dict(success=False, samples=[])
         result = Path(self.paths.cache) / 'markdown-font-result.json'

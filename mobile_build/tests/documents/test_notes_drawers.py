@@ -6,8 +6,8 @@ from unittest.mock import patch
 import unittest
 from commonUtils.testing.stages import TestStage
 from commonUtils.runtime.operations import OperationCancelled
-from features.text_editor.notes import NotesLibrary, vault_root
-from features.text_editor.notes_links import connections
+from features.notes_library.notes import NotesLibrary, vault_root
+from features.notes_library.notes_links import connections
 from mobile.obsidian import open_vault
 import mobile_build.tests.documents.test_obsidian as fixtures
 
@@ -73,7 +73,7 @@ class NotesDrawerTests(unittest.TestCase):
                 entered.set()
                 release.wait(5)
                 return dict(incoming=['private.md'], outgoing=[], unresolved=[], words=1, characters=1)
-            with patch('features.text_editor.notes_links.connections', side_effect=delayed):
+            with patch('features.notes_library.notes_links.connections', side_effect=delayed):
                 task = asyncio.create_task(owner.show_links())
                 try:
                     for _ in range(100):

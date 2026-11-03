@@ -25,6 +25,29 @@ class FeaturePreferencesTests(unittest.TestCase):
         replacement = patch.object(registry, 'load_features', return_value=[self.base, self.child])
         replacement.start(); self.addCleanup(replacement.stop)
 
+    def test_notes_library_inherits_disabled_editor_once_then_varies_independently(self):
+        save_disabled(self.path, {'text_editor'})
+        registry.load_feature_preferences(self.path)
+        self.assertEqual(load_disabled(self.path), {'text_editor', 'notes_library'})
+        save_disabled(self.path, {'text_editor'})
+        registry.load_feature_preferences(self.path)
+        self.assertNotIn('notes_library', registry._disabled_features)
+        self.assertIn('text_editor', registry._disabled_features)
+
+    def test_notes_library_migration_respects_explicit_layered_choice(self):
+        from commonUtils.configuration.layered import register_settings
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = ["text_editor"]\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        with patch.object(registry, 'feature_settings_store', return_value=store), patch(
+                'features.preferences.preferences_path', return_value=self.path):
+            registry.load_feature_preferences()
+            self.assertIn('notes_library', registry._disabled_features)
+            store.save({('FeatureOverrides', 'notes_library_bool'): 'true'})
+            registry.load_feature_preferences()
+            self.assertNotIn('notes_library', registry._disabled_features)
+            self.assertIn('text_editor', registry._disabled_features)
+
     def test_saved_choices_load_before_startup_hooks_and_dependencies_reenable(self):
         registry.load_feature_preferences(self.path)
         registry.set_feature_enabled('pref_child', False)
