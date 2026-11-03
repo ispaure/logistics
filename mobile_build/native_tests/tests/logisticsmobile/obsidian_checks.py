@@ -48,10 +48,14 @@ async def exercise_obsidian(app, encrypted):
                 await discovery
                 if discovery is app._notes_discovery_task:
                     break
-            suffix = ' · Local' if label == 'local' else ' · LocalCrypt: Native check'
+            # Storage icons identify Local; encrypted locations retain their
+            # short location name without repeating the LocalCrypt prefix.
+            suffix = '' if label == 'local' else ' · Native check'
             button = next((button for button in app.document_notes_list.children[1].children
                            if button.text == 'Native Obsidian Vault' + suffix), None)
-            assert button is not None, app.document_notes_list.children[2].text
+            assert button is not None, dict(location=label,
+                captions=[row.text for row in app.document_notes_list.children[1].children],
+                status=app.document_notes_list.children[2].text)
             assert button.parent is not None
             await capture_window(app, output / (label + '-button.png'))
             await button.on_press()
