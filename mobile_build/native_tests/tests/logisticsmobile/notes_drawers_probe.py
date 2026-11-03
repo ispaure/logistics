@@ -117,6 +117,38 @@ class NotesDrawersProbe(LogisticsMobile):
                 await swipe_document(-95)
                 await wait_side('links')
                 await asyncio.sleep(.3)
+                if (type(self._impl).__module__.startswith('toga_android.')
+                        and orientation == 'portrait'):
+                    from android.view import MotionEvent
+                    from android.os import SystemClock
+                    from java import jarray, jint
+                    for _ in range(100):
+                        buttons = [row for row in owner.link_rows.children
+                                   if getattr(row, 'text', '') == 'Other.md']
+                        if buttons:
+                            break
+                        await asyncio.sleep(.02)
+                    assert buttons, 'Connections did not load'
+                    button = buttons[0]._impl.native
+                    native = owner.sidebar.overlay.popup.getContentView().getRootView()
+                    point, origin = jarray(jint)(2), jarray(jint)(2)
+                    button.getLocationOnScreen(point)
+                    native.getLocationOnScreen(origin)
+                    x, y = point[0] - origin[0], point[1] - origin[1]
+                    y += button.getHeight() / 2
+                    assert 0 <= y < native.getHeight(), (y, native.getHeight())
+                    time = SystemClock.uptimeMillis()
+                    for action, fraction, elapsed in ((0, .8, 0), (2, .5, 50), (1, .2, 100)):
+                        event = MotionEvent.obtain(time, time + elapsed, action,
+                            x + button.getWidth() * fraction, y, 0)
+                        try:
+                            native.dispatchTouchEvent(event)
+                        finally:
+                            event.recycle()
+                    await asyncio.sleep(.3)
+                    assert owner.path == 'Home.md', 'A non-closing swipe activated a note link'
+                    assert owner.sidebar.side == 'links'
+                    assert not button.isPressed(), 'Swipe left a link button pressed'
                 await capture_window(self, output / ('notes-links-' + orientation + '.png'))
                 dismiss(1)
                 await swipe_document(95)
