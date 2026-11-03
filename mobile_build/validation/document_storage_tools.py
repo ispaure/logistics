@@ -23,8 +23,8 @@ BUNDLE = 'io.github.ispaure.logisticsstorageqa'
 QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
-NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'notes-discovery.png',
-                      'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-landing.png', 'notes-fullscreen.png', 'notes-links-landscape-left.png', 'notes-links-portrait.png', 'notes-files-landscape-left.png', 'notes-files-portrait.png', 'sync-portrait.png', 'sync-landscape-left.png')
+NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'notes-discovery.png', 'notes-file-hold.png', 'notes-compact-files.png',
+                      'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-landing.png', 'notes-fullscreen.png', 'notes-reading-portrait.png', 'notes-reading-landscape-left.png', 'notes-links-landscape-left.png', 'notes-links-portrait.png', 'notes-files-landscape-left.png', 'notes-files-portrait.png', 'sync-portrait.png', 'sync-landscape-left.png')
 
 SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
     for orientation in ('portrait', 'landscape-left')
@@ -33,6 +33,12 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.documents_hub_probe'):
+        return NATIVE_DIAGNOSTICS + tuple(f'documents-hub-{orientation}-{panel}.png'
+            for orientation in ('portrait', 'landscape-left')
+            for panel in ('home', 'files', 'documents', 'libraries', 'search'))
+    if entry_point.endswith('.file_transfer_probe'):
+        return NATIVE_DIAGNOSTICS + ('file-transfer-progress.png',)
     if entry_point.endswith('.document_creation_probe'):
         return NATIVE_DIAGNOSTICS + ('creation-landscape-left.png', 'creation-portrait.png') + tuple(
             f'creation-{panel}-{pose}.png' for panel in ('formats', 'name', 'change-format', 'locations', 'location', 'folders')
@@ -134,7 +140,8 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
         if not native_sources.is_dir() and (source_app.parents[4] / '.manager-scratch').is_file():
             native_sources = source_app.parents[4] / 'build/logisticsmobile/ios/xcode/Support'
         hashes = {}
-        for source in (SOURCE / 'Python/features/video/mobile/ios').glob('*.m'):
+        for source in [*(SOURCE / 'Python/features/video/mobile/ios').glob('*.m'),
+                       SOURCE / 'Python/mobile/ios/ScreenAwake.m']:
             compiled = native_sources / source.name
             if not compiled.is_file() or compiled.read_bytes() != source.read_bytes():
                 raise ValueError('Reusable shell has stale native video source: ' + source.name)
@@ -230,7 +237,9 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
             (cache / 'drive-folds').touch()
         if entry_point.endswith('.notes_library_probe'):
             (cache / 'notes-keyboard').touch()
-        drive_notes = duoctl is not None and entry_point.endswith('.notes_drawers_probe')
+        # duoctl rejects non-Duo models even when passed an explicit UUID.
+        drive_notes = (duoctl is not None and family == 'iPhone Duo'
+                       and entry_point.endswith('.notes_drawers_probe'))
         if drive_notes:
             (cache / 'drive-notes-touches').touch()
         if family == 'iPhone Duo' and pose == 'partial' and entry_point.endswith('.notes_library_probe'):
@@ -241,12 +250,28 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 240)
         next_progress = 0
         while time.monotonic() < deadline:
+            background_request = cache / 'file-transfer-background'
+            if entry_point.endswith('.file_transfer_probe') and background_request.exists():
+                background_request.unlink()
+                client.invoke('launch', device, 'com.apple.Preferences')
+                time.sleep(1)
+                client.invoke('launch', device, bundle)
             request = cache / 'notes-touch-request.json'
             if drive_notes and request.exists():
                 touch = json.loads(request.read_text())
-                subprocess.run([sys.executable, str(duoctl), '-d', device, 'swipe',
-                                *map(str, touch['points']), '--duration', '.25'],
-                               timeout=60, env=env, check=True, capture_output=True)
+                action = touch.get('action', 'swipe')
+                if action == 'capture-menu':
+                    arguments = ['screenshot', str(output / 'notes-native-menu.png')]
+                elif action == 'tap':
+                    arguments = ['tap', *map(str, touch['points'])]
+                elif action in ('swipe', 'long-press'):
+                    arguments = [action, *map(str, touch['points']), '--duration', '.7' if action == 'long-press' else '.25']
+                else:
+                    raise ValueError('Unexpected Notes touch action')
+                result = subprocess.run([sys.executable, str(duoctl), '-d', device, *arguments],
+                                        timeout=60, env=env, capture_output=True)
+                if result.returncode:
+                    raise RuntimeError(result.stderr.decode(errors='replace')[-2000:])
                 request.unlink()
                 (cache / 'notes-touch-done').touch()
             if result_name == 'logistics-native-ui-result.json' and time.monotonic() >= next_progress:
@@ -480,6 +505,10 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 return result
             time.sleep(.3)
         raise TimeoutError('Android document storage probe timed out')
+    except BaseException:
+        import traceback
+        (output / 'android-run-error.txt').write_text(traceback.format_exc())
+        raise
     finally:
         try:
             if record is not None:
@@ -534,14 +563,18 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 except RuntimeError:
                     pass
         finally:
-            if record is not None:
-                emulator.invoke('-s', record['serial'], 'uninstall', bundle)
-                if device is not None:
-                    remaining = emulator.invoke('-s', device, 'shell', 'pm', 'list', 'packages', 'logistics')
-                    (output / 'remaining-packages.txt').write_text(remaining)
-            # The manager's lease validates ownership before removing the AVD.
-            emulator.cleanup()
-            (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
+            try:
+                if record is not None:
+                    installed = emulator.invoke('-s', record['serial'], 'shell', 'pm', 'list', 'packages', bundle)
+                    if 'package:' + bundle in installed.splitlines():
+                        emulator.invoke('-s', record['serial'], 'uninstall', bundle)
+                    if device is not None:
+                        remaining = emulator.invoke('-s', device, 'shell', 'pm', 'list', 'packages', 'logistics')
+                        (output / 'remaining-packages.txt').write_text(remaining)
+            finally:
+                # An app install/uninstall error must not bypass owned-device cleanup.
+                emulator.cleanup()
+                (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
 
 
 def main():
@@ -551,7 +584,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -576,6 +609,8 @@ def main():
         parser.error('The raw ink probe requires an explicit physical Android --device.')
     if args.probe == 'markdown-typography' and args.platform != 'ios':
         parser.error('The Markdown typography probe measures UIKit fonts and requires iOS.')
+    if args.probe == 'file-transfer' and args.platform != 'ios':
+        parser.error('The file-transfer probe measures the shared UIKit idle policy and requires iOS.')
     SOURCE = args.source_root.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     options, _ = manager_settings.settings(REPO / 'mobile_build')
@@ -597,9 +632,15 @@ def main():
         if args.probe == 'notes-audit':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotesauditqa',
                 entry_point='tests.logisticsmobile.notes_audit_probe', result_name='notes-audit-result.json')
+        if args.probe == 'documents-hub':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.documents_hub_probe', result_name='documents-hub-result.json')
         if args.probe == 'notes-library':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.notes_library_probe', result_name='notes-library-result.json')
+        if args.probe == 'file-transfer':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.file_transfer_probe', result_name='file-transfer-result.json')
         if args.probe == 'notes-dataview':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.dataview_probe', result_name='dataview-result.json')
@@ -646,6 +687,9 @@ def main():
         if args.probe == 'sync-status':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.sync_status_probe', result_name='sync-status-result.json')
+        if args.probe == 'notes-header':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.notes_header_probe', result_name='notes-header-result.json')
         if args.probe == 'notes-drawers':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.notes_drawers_probe', result_name='notes-drawers-result.json')

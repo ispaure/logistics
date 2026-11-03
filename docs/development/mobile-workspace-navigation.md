@@ -56,8 +56,17 @@ Main destinations omit standalone headings that repeat their navigation labels.
 On iOS, title-only root navigation bars are hidden after screen actions are mounted;
 bars with Browse, conversation controls or other actions remain visible. Nested
 routes retain their title and Back bar, and reader fullscreen keeps ownership of
-its chrome. Android's compact shell also hides its native activity bar. The Home
-unlock button shares the introductory row rather than reserving a title row.
+its chrome. Android's compact shell also hides its native activity bar.
+`destination_actions` declares Home, Workspaces and Documents overview actions.
+Their iOS bar belongs to the existing full-window outer navigation controller,
+so a partially folded Workspaces lower pane cannot relocate Unlock. Nested
+routes hide that outer bar and keep their destination-owned controls. Empty
+Home/Workspaces action sets keep the title-only bar hidden.
+Unlock uses the same trailing group on iOS and the outside/rightmost control in
+Android's root action row. It replaces the former Home content lock button;
+the existing retained-credential workflow resumes the originating destination.
+The root projection clears previous reader/drawer leading items as well as
+replacing trailing actions. UIKit owns Duo's vertical placement and system regions.
 
 Destination artwork is projected again after the tab controller attaches to its
 window and whenever UIKit changes its vertical-bar edge. This deferred,
@@ -127,12 +136,11 @@ borderless rather than acquiring outlines against tightly fitted text.
 Its rows and close buttons are transparent and borderless; inset dividers
 separate complete rows, including their status text. Both native backends clip
 pressed states to the group's corners. Home includes its See all action inside
-the Recent group; Documents keeps independent All open, Recent and Saved groups.
+the Recent group; Documents mounts one Open, Recent, Saved or Libraries collection.
 `document_list` creates a group only when it has document rows. Empty-state and
 search-result messages use transparent, borderless muted labels directly on the
 page, including in high contrast. Home keeps its empty Recent label outside the
-group containing See all. The library button uses the explicit action label
-**Open Books & Comics library**.
+group containing See all. Libraries shows Notes and Comics lists directly.
 Group construction preserves the existing document identities and callbacks.
 
 `folder_hub_style.folder_scroll` reserves the Android tree scrollbar's native
@@ -201,6 +209,15 @@ browser history. Search dismissal and child-folder history remain separate steps
 Folder identity includes both provider and
 path, since both provider roots have an empty path. Other direct reveals retain their
 folder ancestry.
+
+On iOS, moves between Received Files and ordinary Shared Files folders opt into
+commonUtils' guarded cross-root filesystem rename. Large videos keep their inode
+without copying or hashing their contents when both folders are on one volume.
+Different-volume moves retain verified streaming transfer. The picker shows a
+moving status while work runs. `test_destination_workflows.py` covers a sparse
+40 GiB MKV move into Movies, checks that no streams are opened and verifies the
+picker releases its busy state; this host test does not certify native Duo taps.
+
 Local, LocalCrypt, remote and full-page workspace browsers publish successful
 locations with `record`; failed listings do not advance the stack. UIKit Back,
 interactive pops and explicit route Back restore the ancestor location into the
@@ -294,16 +311,43 @@ establish physical fold-pose behavior or live provider operation.
 
 `hub_ui.HubSections` retains the existing controls and moves Recent between the
 compact page and a second scroll container. Home has Open/New actions without
-introductory copy. Its status row is mounted only for credential or transfer
-shortcuts, with five recent entries and a Documents link in the trailing
-section. Documents keeps search and All open together; the trailing section holds
-closed Recent entries, other saved text documents and library access. Open entries
-are excluded from Recent, with the active session first in All open. Search updates
-the retained list containers without replacing the input or changing sessions.
+introductory copy. Its content status row is mounted only for transfer shortcuts,
+with five recent entries and a Documents link in the trailing section.
+Documents starts with Libraries selected. Its selector orders Libraries, the
+heart-only Favourites control, Open, Recent and Saved. Favourites reuses the
+credential-aware saved reference catalog and its existing open/remove actions;
+the icon retains an accessible Favourites label. Search temporarily hides the
+whole selector and restores the selected collection when cleared.
+Documents uses a focused single collection, with no root `WorkspaceFrame` or
+hamburger. Open entries are excluded from Recent, with the active session first.
+Libraries discovers Notes libraries recursively across ordinary local roots and
+unlocked LocalCrypt, then displays the configured Comics catalogue beneath it.
+Both lists are expanded and each library is a direct action.
 Saved text inventory uses cached metadata summaries and refreshes when the host
 publishes a new inventory; listing it does not decode stored file contents.
-Each wide section scrolls independently. Narrow layouts restore the
-original section order without rebuilding sessions or changing routes.
+The Home sections scroll independently in wide layouts. Documents retains one
+list and its search control across phone and tablet widths.
+
+`document_search.DocumentSearch` reuses `FolderListing` admission and the shared
+`search_resources` traversal without `read_text`. It searches all local filenames
+through provider lists, bypassing the persistent ordinary-file index so private
+names/references stay in RAM. Shared excludes the separately scanned Local and
+Received roots. Results omit directories, deduplicate source identities and use
+existing provider-document opening and credential checks. A nonempty query
+removes the collection selector and mounts only search results; clearing it
+restores the selected collection. Replacement, cancellation and credential
+generation changes reject late workers. Host retirement cancels discovery and
+search. `test_document_search.py` covers these boundaries; `documents_hub_probe`
+checks real root actions, direct library lists and filename-only results on
+native devices using synthetic files and a synthetic unlock-availability flag.
+The focused November 3 acceptance covers portrait/landscape Android phone and
+tablet, iPhone and iPad, plus closed, open and partial Duo simulator poses.
+It checks identical Unlock coordinates across the three overviews, direct Notes
+and Comics rows, filename results replacing the selector, and action removal.
+The short folded-landscape bar groups Unlock with a native Document actions
+menu, keeping Open/New reachable without covering a destination tab. UIKit
+still owns the edge after rotation. These are synthetic emulator/simulator
+checks, separate from physical touch and live-account acceptance.
 
 Reflow uses the destination's measured native allocation, with a two-section
 threshold of 700 points. `fold_layout.seam_fraction(..., include_open=True)`
@@ -311,10 +355,10 @@ forces and aligns the two sections in partially or fully open Duo landscape,
 converting the physical center into the hub's coordinates to account for rails
 and asymmetric safe areas. Each section has its own 16-point content margins,
 keeping controls away from the crease. Tab rendering, viewport changes and hinge
-status changes reflow retained hubs. Open reader routes keep their own layouts.
+status changes reflow Home. Open reader routes keep their own layouts.
 
 `test_hub_documents` checks section ownership, compact restoration and retained
-hub reflow. The disposable `hub_landscape_probe` checks native bounds and scroll
+Home reflow. The earlier disposable `hub_landscape_probe` checked native bounds and scroll
 independence in both landscape directions and portrait; its partial hinge status
 is injected, so it does not certify a physical folding gesture. On 2026-10-20,
 the iOS 27.1 Duo simulator passed ten hub/pose samples plus retained-control

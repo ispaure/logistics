@@ -294,6 +294,32 @@ closure.
 
 ## File operation ownership
 
+Destination-picker moves show phase-specific copy/encryption and verification
+progress through commonUtils' move callback. UI updates are coalesced every
+200 ms and rejected after cancellation, privacy changes or presentation retirement.
+Native encrypted writes report physical bytes with an indeterminate bar; their
+logical-byte verification has a measured percentage. The move retains its busy
+guard, navigation veto and awake lease through cancellation and worker cleanup.
+Backgrounding/manual lock cancels the picker and leaves a stopped message for
+inspection and explicit retry; no automatic restart or background-time guarantee
+is implied. A late committed move is reported as completed instead of cancelled.
+
+`keep_awake.AwakeLease` uses the shared native `LGScreenAwakeLease` on iOS and
+counted decor-view screen-on requests on Android. Features acquire the lease
+through the host's `acquire_awake_lease()` service. Rclone execution acquires its
+lease before starting a worker and releases it after worker retirement, including
+failure/cancellation. iOS video uses the same native lease, preserving the prior
+idle-timer setting only when the final transfer/player releases its request.
+These are automatic-idle-sleep requests, not CPU/background execution locks.
+
+`mobile_build.validation.document_storage_tools ios --probe file-transfer --family
+'iPhone Duo' --output test-results/file-transfer-progress` runs the focused native
+acceptance in a manager-owned disposable simulator. It checks overlapping awake
+leases, visible native progress, navigation veto, an actual switch to Settings,
+temporary-file cleanup, preserved source bytes and a verified retry. Its encrypted
+writer polling/cancellation and Android lease coverage are host tests; this does
+not establish physical device auto-lock timing or background transfer duration.
+
 `FilesUI.file_operations()` owns one `FileOperations` coordinator. The UI captures
 an immutable `FileOperationRequest` on the UI thread: operation, source provider,
 path, entered name/target and destination specification. The worker receives no

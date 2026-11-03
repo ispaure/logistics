@@ -7,7 +7,7 @@ from commonUtils.ui.markdown.navigation import MarkdownNavigation
 from .dataview import NotesMarkdownViewer
 from .library_connections import LibraryConnections
 from ..preparation import prepare_document
-from ..notes import NotesLibrary, breadcrumb_folders, fit_breadcrumbs
+from ..notes import NotesLibrary, MAX_NOTE, breadcrumb_folders, fit_breadcrumbs
 
 
 class NotesBreadcrumbs(qt.QLabel):
@@ -85,7 +85,7 @@ class PageStorage:
         owner.viewer.setEnabled(False)
         def write(report, cancelled):
             from services.documents.storage import DocumentResource
-            with DocumentResource(owner.provider, relative, max_bytes=2 * 1024 * 1024, independent=False) as resource:
+            with DocumentResource(owner.provider, relative, max_bytes=MAX_NOTE, independent=False) as resource:
                 if resource.read(cancelled=cancelled) != expected:
                     raise ValueError('Note changed. Reopen it before saving.')
                 resource.save(data, cancelled=cancelled)

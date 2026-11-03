@@ -20,23 +20,128 @@ from mobile.obsidian import VaultBrowser, vault_root, open_vault
 
 
 class ObsidianTests(unittest.TestCase):
-    def test_private_note_render_can_expand_beyond_source_limit(self):
-        from services.documents.storage import DocumentPolicy
-        from features.notes_library.notes import MAX_NOTE, MAX_PREVIEW_HTML
-        # Valid source expands past 2 MiB after HTML escaping.
-        (self.vault / 'Expanded.md').write_text('& ' * 400000)
+    def test_native_rejection_preserves_document_and_editor_before_popup(self):
+        from unittest.mock import AsyncMock
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            for editing in (False, True):
+                if editing:
+                    self.assertTrue(await owner.open_editor())
+                state = (owner.path, owner.selected_path, owner.base, list(owner.history),
+                         owner.history_index, owner.title.text, owner.embedded, list(owner.article.children))
+                def retained():
+                    self.assertEqual((owner.path, owner.selected_path, owner.base, list(owner.history),
+                        owner.history_index, owner.title.text, owner.embedded, list(owner.article.children)), state)
+                async def popup(dialog):
+                    retained()
+                    self.assertFalse(owner.page_loading.active)
+                with patch.object(owner.web, 'set_content', side_effect=ValueError('Native HTML limit')), \
+                        patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=popup)) as dialog:
+                    self.assertFalse(await owner.open_note('Vault/Projects/Plan.MD'))
+                    dialog.assert_awaited_once()
+                retained()
+                self.assertEqual(set(owner.library._media), {'Vault/Home.md'})
+        self.run_async(exercise())
+
+    def test_private_limit_is_checked_after_link_decoration(self):
+        from dataclasses import replace
+        from services.documents.storage import DocumentPolicy
+        from unittest.mock import AsyncMock
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
             owner.access.policy = DocumentPolicy(False, True)
-            surface = owner.access.webview(max_bytes=MAX_PREVIEW_HTML)
-            self.assertEqual(surface.max_html_bytes, MAX_PREVIEW_HTML)
+            raw = '<html><body>' + '<a href="x">x</a>' * 10 + '</body></html>'
+            owner.host = replace(owner.host, preview=lambda *args, **kwargs: raw)
+            # Rendering fits, but expanding relative links past this bound does not.
+            with patch('features.notes_library.mobile.library_opening.MAX_PREVIEW_HTML', len(raw.encode('utf-8'))), \
+                    patch.object(owner.web, 'set_content') as publish, \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                self.assertFalse(await owner.open_note('Vault/Projects/Plan.MD'))
+                publish.assert_not_called()
+                dialog.assert_awaited_once()
+            self.assertEqual(owner.path, 'Vault/Home.md')
+        self.run_async(exercise())
+
+    def test_embedded_open_and_page_turn_failures_use_popup(self):
+        from features.notes_library.mobile.file_preview import LibraryFilePreview
+        from unittest.mock import AsyncMock
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            with patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                self.assertFalse(await owner.open_embedded('Vault/attachment.txt',
+                    AsyncMock(side_effect=ValueError('Preview limit'))))
+                dialog.assert_awaited_once()
+            self.assertEqual(owner.notice.text, '')
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            preview = SimpleNamespace(path='test.pdf', count=2, page=lambda index: 'oversized', close=lambda: None)
+            surface = LibraryFilePreview(owner, preview, '<p>First page</p>')
+            try:
+                with patch.object(surface, 'publish', side_effect=ValueError('Preview limit')), \
+                        patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                    await surface.turn(1)
+                    dialog.assert_awaited_once()
+                self.assertEqual(surface.index, 0)
+                self.assertFalse(surface.busy)
+                self.assertTrue(surface.following.enabled)
+                self.assertEqual(owner.notice.text, '')
+            finally:
+                surface.dispose()
+        self.run_async(exercise())
+
+    def test_private_note_render_can_expand_beyond_source_limit(self):
+        from PIL import Image
+        from features.notes_library.notes import MAX_PREVIEW_HTML
+        class PrivateFiles(LocalFiles):
+            private = True
+        self.app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None)
+        # A tiny note expands beyond the former 16 MiB raw-image, 24 MiB
+        # rendered-content and 32 MiB final-page limits.
+        Image.new('RGB', (1024, 768), 'blue').save(self.vault / 'photo.png', compress_level=0)
+        (self.vault / 'Expanded.md').write_text('# Photo\n\n' + '![[photo.png]]\n\n' * 12)
+        async def exercise():
+            owner = await open_vault(self.app, PrivateFiles(self.root), 'Vault', 'files')
+            self.assertFalse(owner.access.policy.persistent)
+            self.assertEqual(owner.web.max_html_bytes, MAX_PREVIEW_HTML)
             with patch.object(self.app.main_window, 'dialog') as dialog, \
                     patch.object(owner.web, 'set_content', wraps=owner.web.set_content) as publish:
                 self.assertTrue(await owner.open_note('Vault/Expanded.md'))
                 dialog.assert_not_called()
-            self.assertGreater(len(publish.call_args.args[1].encode('utf-8')), MAX_NOTE)
+            self.assertGreater(len(publish.call_args.args[1].encode('utf-8')), 32 * 1024 * 1024)
+            self.assertEqual(publish.call_args.args[1].count('<img '), 12)
+            self.assertIn('loading="lazy" decoding="async"', publish.call_args.args[1])
+            self.assertIn('<img src="data:image/png;base64,', publish.call_args.args[1])
             self.assertEqual(owner.path, 'Vault/Expanded.md')
             self.assertEqual(owner.notice.text, '')
+        self.run_async(exercise())
+
+    def test_note_source_above_two_mib_reaches_renderer_and_enforces_new_bound(self):
+        from features.notes_library.notes import MAX_NOTE
+        from unittest.mock import AsyncMock
+        text = '# Big note\n\n' + 'plain text ' * 200000 + '\n\n# End sentinel'
+        self.assertGreater(len(text.encode('utf-8')), 2 * 1024 * 1024)
+        (self.vault / 'Large.md').write_text(text)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            with patch.object(owner.web, 'set_content', wraps=owner.web.set_content) as publish:
+                self.assertTrue(await owner.open_note('Vault/Large.md'))
+                self.assertIn('End sentinel', publish.call_args.args[1])
+            self.assertEqual(owner.path, 'Vault/Large.md')
+            with patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                self.assertTrue(await owner.open_editor())
+                dialog.assert_awaited_once()  # Formatted mode keeps its 1 MiB bound.
+            editor = owner.embedded
+            self.assertIn(editor.source, editor.view.children)
+            editor.source.value = text + '\nSaved large source\n'
+            self.assertTrue(await editor.save())
+            self.assertEqual((self.vault / 'Large.md').read_text(), text + '\nSaved large source\n')
+            with patch.object(owner.library, 'entry', return_value={'directory': False, 'size': MAX_NOTE + 4097}), \
+                    patch.object(owner.provider, 'open') as read:
+                with self.assertRaisesRegex(ValueError, '16 MiB source limit'):
+                    owner.library.read('Vault/Large.md')
+                read.assert_not_called()
         self.run_async(exercise())
 
     def test_private_preview_limit_uses_popup_and_retains_published_page(self):
@@ -48,7 +153,7 @@ class ObsidianTests(unittest.TestCase):
             owner.access.policy = DocumentPolicy(False, True)
             history, base = list(owner.history), owner.base
             def check(html, max_bytes):
-                # Exercise the real rejection without allocating 32 MiB.
+                # Exercise the real rejection without allocating 128 MiB.
                 from services.documents.mobile_storage import NotesDocumentAccess
                 NotesDocumentAccess.validate_preview(owner.access, html, 1)
             async def show(dialog):
@@ -141,6 +246,14 @@ class ObsidianTests(unittest.TestCase):
         if owner:
             owner.dispose()
         self.app.main_window.close()
+        async def drain_workers():
+            pending = asyncio.all_tasks() - {asyncio.current_task()}
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            await self.app.loop.shutdown_asyncgens()
+            await self.app.loop.shutdown_default_executor()
+        self.app.loop.run_until_complete(drain_workers())
         self.app.loop.close()
         LogisticsMobile.storage_root = None
         self.temporary.cleanup()
@@ -282,7 +395,7 @@ class ObsidianTests(unittest.TestCase):
         self.assertEqual([row.children[1].browser_entry_kind for row in owner.rows.children], ['folder', 'file', 'file'])
         self.run_async(owner.toggle_folder('Vault/Projects'))
         self.assertEqual(paths(), ['Vault/Projects', 'Vault/Projects/Plan.MD', 'Vault/attachment.txt', 'Vault/Home.md'])
-        self.assertEqual(owner.rows.children[1].children[0].style.width, 20)
+        self.assertEqual(owner.rows.children[1].children[0].style.width, 12)
         self.assertTrue(self.run_async(owner.open_note('Vault/Projects/Plan.MD')))
         self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
         selected = next(row for row in owner.rows.children if any(getattr(child, 'vault_path', None) == owner.path for child in row.children))
@@ -356,9 +469,10 @@ class ObsidianTests(unittest.TestCase):
         self.assertIn('Vault/Projects/Overview.md', [child.vault_path for row in owner.rows.children for child in row.children if hasattr(child, 'vault_path')])
 
     def test_oversized_and_linked_notes_do_not_replace_the_current_preview(self):
+        from features.notes_library.notes import MAX_NOTE
         owner = self.run_async(open_vault(self.app, self.provider, 'Vault', 'files'))
         self.assertTrue(self.run_async(owner.open_note('Vault/Home.md')))
-        (self.vault / 'Huge.md').write_bytes(b'x' * (3 * 1024 * 1024))
+        (self.vault / 'Huge.md').write_bytes(b'x' * (MAX_NOTE + 1))
         (self.vault / 'Link.md').symlink_to(self.vault / 'Home.md')
         for path in ('Vault/Huge.md', 'Vault/Link.md'):
             self.assertFalse(self.run_async(owner.open_note(path)))

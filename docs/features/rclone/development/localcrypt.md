@@ -8,6 +8,14 @@ and documented in that repository.
 
 ## Initial Pull storage choice
 
+Mobile file moves retain the native descriptor/rewrap stream hooks while reporting
+copy progress. `write_progress` observes the owned ciphertext output descriptor
+every 250 ms and signals native cancellation when the move event is set; it never
+opens a plaintext temporary file. The watcher retires before the output closes.
+Native encryption reports physical bytes with an indeterminate bar; subsequent
+verification reports logical bytes read from both providers. Range-stream logical
+lengths replace ciphertext metadata estimates as each source is opened.
+
 Desktop exposes one Pull action. For a session-loaded crypt remote without a
 selected local copy, it opens the LocalCrypt/Local choice with LocalCrypt as the
 recommended default. Mobile uses a native question popup for the equivalent

@@ -179,6 +179,12 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return
         navigation = adapter.navigation_for(destination)
         item = adapter.content_controller(destination).navigationItem
+        body = self.app.routes.body(destination)
+        view = body.children[0] if body is not None and body.children else None
+        if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
+            if not bool(navigation.isNavigationBarHidden()):
+                navigation.setNavigationBarHidden(True, animated=False)
+            return
         # Include both legacy item arrays and modern grouped/overflow actions.
         # Disabled actions still need their toolbar, as do native More/Back routes.
         actions = any(list(getattr(item, name, None) or ()) for name in (
@@ -248,6 +254,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             del view._workspace_menu_button
             view._workspace_menu = False
         if destination not in ('files', 'documents'):
+            if root:
+                from .destination_actions import prepare
+                view = prepare(self.app, view, destination)
             return view
         if root and (isinstance(view, toga.ScrollContainer) or getattr(view, '_hub_sections', False)):
             original = view
@@ -258,6 +267,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         # workspaces and each editor get a permanent top-left drawer control.
         eligible = (isinstance(view, toga.Box) and not getattr(view, '_reading_frame', False)
                     and not getattr(view, '_hub_sections', False) and
+                    not getattr(view, '_documents_overview', False) and
                     (root or route in ('editor', 'browser', 'remote-browser', 'folder-options', 'workspace-browser')
                      or (route or '').startswith('private:')))
         if eligible and not hasattr(view, '_workspace_frame'):
@@ -278,6 +288,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         if (menu is not None and self.app.routes.apple
                 and menu not in getattr(view, '_document_title_controls', ())):
             detach(menu)
+        if root:
+            from .destination_actions import prepare
+            view = prepare(self.app, view, destination)
         return view
 
     def browser(self, destination):
@@ -424,6 +437,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 # Fullscreen restoration can restore the old ActionBar visibility.
                 # The incoming route owns the final document-bar state.
                 sync_reader_toolbar(self.app, view, destination or self.app.native_host.state.destination)
+                from .destination_actions import refresh as refresh_root_actions
+                refresh_root_actions(self.app, view)
+                from .destination_actions import sync_native_host
+                sync_native_host(self.app, view, destination or self.app.native_host.state.destination)
                 from .ios_toolbar import sync_screen
                 sync_screen(self.app, view, destination or self.app.native_host.state.destination)
             if hasattr(self.app, 'render_chat_workspace'):

@@ -8,7 +8,7 @@ from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
 
 
-async def prepare_document_mutation(app, request):
+async def prepare_document_mutation(app, request, *, progress=None):
     # Native formatted edits can still be queued in the WebView. Flush them
     # before replacing the reader identity used by its change callbacks.
     manager = app.provider_sessions()
@@ -21,7 +21,7 @@ async def prepare_document_mutation(app, request):
             workflow = getattr(owner, '_provider_markdown', None)
             if workflow is not None:
                 await workflow.flush()
-    return DocumentMutation(app, request)
+    return DocumentMutation(app, request, progress=progress)
 
 
 def relative_document(provider, key, source, path):
@@ -72,8 +72,9 @@ class DocumentMutation:
     baseline and resource identity change. A failed handoff never accepts edits
     as saved and never silently recreates the old source.
     """
-    def __init__(self, app, request):
+    def __init__(self, app, request, *, progress=None):
         self.app, self.request = app, request
+        self.progress = progress
         self.bindings = []
         from .notebook_mutations import NotebookMutations
         self.notebooks = NotebookMutations(app, request)
@@ -130,7 +131,7 @@ class DocumentMutation:
                 if current.data != binding.reader.data or current.revision != binding.reader.revision:
                     raise ValueError('An open document changed on disk. Reload or use Save As before moving it.')
             self.notebooks.prepare(destination, target, cancelled)
-            result = request.execute(cancelled, destination=destination)
+            result = request.execute(cancelled, destination=destination, progress=self.progress)
             reference_error = None
             if request.kind == 'rename':
                 try:

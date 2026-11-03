@@ -16,6 +16,11 @@ def rectangle(x, y, width, height):
 
 
 class ReaderTitleLayoutTests(unittest.TestCase):
+    def setUp(self):
+        edge = patch('mobile.ios_toolbar.vertical_edge', return_value=2)
+        self.edge = edge.start()
+        self.addCleanup(edge.stop)
+
     def fixture(self, *, vertical, side, safe_top):
         footer = NS(vertical=vertical, widget=NS(layout=NS(content_height=64)),
                     row=NS(layout=NS(content_height=44)))
@@ -42,6 +47,13 @@ class ReaderTitleLayoutTests(unittest.TestCase):
 
     def test_horizontal_navigation_retains_its_system_inset(self):
         container = self.fixture(vertical=False, side=False, safe_top=0)
+        with patch('mobile.appearance.reserve_navigation'):
+            compact_apple_reader(container)
+        self.assertEqual(container.top_inset, 82)
+
+    def test_pane_title_does_not_reclaim_horizontal_native_action_targets(self):
+        self.edge.return_value = 0
+        container = self.fixture(vertical=False, side=True, safe_top=24)
         with patch('mobile.appearance.reserve_navigation'):
             compact_apple_reader(container)
         self.assertEqual(container.top_inset, 82)

@@ -411,6 +411,7 @@ class TransferExecutionPresentation:
 
     def started(self):
         owner = self.controller
+        self.awake = owner.app.acquire_awake_lease()
         owner.set_cloud_busy(True)
         owner.show_transfers(present=(owner.native_host.state.destination == 'files'
             and owner.navigation_generation == getattr(self, 'origin', None)))
@@ -421,6 +422,9 @@ class TransferExecutionPresentation:
 
     def finished(self):
         owner = self.controller
+        awake, self.awake = getattr(self, 'awake', None), None
+        if awake is not None:
+            awake.close()
         owner.set_cloud_busy(False)
         if not owner.active_host:
             return

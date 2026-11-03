@@ -76,7 +76,7 @@ class LibraryFilePreview:
                 self.publish(html, index=index)
         except (OSError, ValueError) as error:
             if not self.closed and self.library.valid():
-                self.library.notice.text = str(error)
+                await self.library.document_error('Could not open page', error)
         finally:
             if task.done():
                 self.page_finished(task)

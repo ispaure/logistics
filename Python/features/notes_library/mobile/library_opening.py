@@ -21,6 +21,10 @@ from .library_panels import LibraryOpening
 
 
 class LibraryDocuments:
+    async def document_error(self, title, error):
+        if self.valid():
+            await self.host.show_error(title, str(error))
+
     async def prepare_leave(self):
         editor = self.embedded
         if editor is None:
@@ -169,11 +173,13 @@ class LibraryDocuments:
                     opener = self.open_text if document_kind(path) == 'text' else self.open_canvas
                     return await opener(path, remember=remember)
 
+            base = "https://markdown.invalid/vault/" + uuid4().hex + "/"
             def read():
                 stage('Preparing embedded media…')
                 plan = view_plan(data.decode("utf-8-sig"))
                 html = self.host.preview(plan.render() if plan.scripts else plan.source,
                                          image_source=self.library.image_source(path, cancelled=cancelled))
+                html = self.data_view_html(html, active=bool(plan.scripts), base=base)
                 self.access.validate_preview(html, MAX_PREVIEW_HTML)
                 return html, plan
 
@@ -181,6 +187,9 @@ class LibraryDocuments:
             if not self.valid() or epoch != self.epoch:
                 return False
             self.mark_open_timing('prepared', epoch)
+            # Native admission can still reject the styled page. Do not retire
+            # the current editor or advance history until it has succeeded.
+            set_inline_html(self.web, base, html)
             self.cancel_data_views()
             if remember and path != self.path:
                 del self.history[self.history_index + 1 :]
@@ -192,15 +201,13 @@ class LibraryDocuments:
             self.path = self.selected_path = path
             self.update_tree_selection()
             self.title.text = fill(PurePosixPath(path).name, width=28)
-            self.base = "https://markdown.invalid/vault/" + uuid4().hex + "/"
+            self.base = base
             if self._open_timing is not None:
                 self._open_timing['published_epoch'] = epoch
             self.data_view_plan = plan if plan.scripts else None
             self.data_views_loading = bool(plan.scripts)
-            html = self.data_view_html(html, active=bool(plan.scripts))
             self.pending_fragment = fragment
             self.page_search.loading()
-            set_inline_html(self.web, self.base, html)
             self.edit.enabled = self.library.writable
             self.speech.button.enabled = True
             self.notice.text = ""
@@ -218,9 +225,8 @@ class LibraryDocuments:
             return False
         except (OSError, UnicodeError, ValueError) as error:
             if self.valid() and epoch == self.epoch:
-                import toga
                 self.page_loading.finish()
-                await self.view.window.dialog(toga.ErrorDialog('Could not open document', str(error)))
+                await self.document_error('Could not open document', error)
             return False
         finally:
             if self._media_open_epoch == epoch:
@@ -306,11 +312,12 @@ class LibraryDocuments:
             self.web.evaluate_javascript('window.scrollTo(0,' + str(self.positions[self.path]) + ')')
 
 
-    def data_view_html(self, html, *, active=False):
-        html = re.sub(r'href="([^"]*)"', lambda match: 'href="' + self.base + '?target='
+    def data_view_html(self, html, *, active=False, base=None):
+        base = self.base if base is None else base
+        html = re.sub(r'href="([^"]*)"', lambda match: 'href="' + base + '?target='
                       + quote(unescape(match[1]), safe='') + '"', html)
         if active:
-            html = html.replace('<body>', '<body data-logistics-data-view="' + self.base + '">', 1)
+            html = html.replace('<body>', '<body data-logistics-data-view="' + base + '">', 1)
             return worker_policy(html)
         return html
 
@@ -343,6 +350,7 @@ class LibraryDocuments:
                 return
             def render():
                 html = self.host.preview(text, image_source=self.library.image_source(path))
+                html = self.data_view_html(html, base=base)
                 self.access.validate_preview(html, MAX_PREVIEW_HTML)
                 return html
             html = await asyncio.to_thread(render)
@@ -351,13 +359,12 @@ class LibraryDocuments:
                 if valid():
                     self.page_search.loading()
                     self.data_views_loading = False
-                    set_inline_html(self.web, self.base, self.data_view_html(html))
+                    set_inline_html(self.web, self.base, html)
         except (OSError, ValueError, TypeError, KeyError, RuntimeError, asyncio.TimeoutError) as error:
             if valid():
-                import toga
                 self.data_views_loading = False
-                await self.view.window.dialog(toga.ErrorDialog('Could not update data view',
-                    str(error) or 'Execution exceeded 35 seconds.'))
+                await self.document_error('Could not update data view',
+                    str(error) or 'Execution exceeded 35 seconds.')
 
 
     async def remember_position(self):
@@ -394,7 +401,9 @@ class LibraryDocuments:
             editor = await opener(self, path)
         except (OSError, ValueError, OperationCancelled) as error:
             if self.valid() and epoch == self.epoch:
-                self.notice.text = str(error)
+                self.page_loading.finish()
+                if not isinstance(error, OperationCancelled):
+                    await self.document_error('Could not open document', error)
             return False
         finally:
             if epoch == self.epoch:
@@ -452,11 +461,21 @@ class LibraryDocuments:
             editor = await LibraryMarkdown.open(self, path)
         except (OSError, ValueError, UnicodeError, OperationCancelled) as error:
             if self.valid() and epoch == self.epoch:
-                self.notice.text = str(error)
+                if not isinstance(error, OperationCancelled):
+                    await self.document_error('Could not edit document', error)
             return False
         if not self.valid() or epoch != self.epoch or self.path != path:
             editor.dispose()
             return False
+        if editor.open_warning is not None:
+            try:
+                await self.document_error('Formatted editing unavailable', editor.open_warning)
+            except BaseException:
+                editor.dispose()
+                raise
+            if not self.valid() or epoch != self.epoch or self.path != path:
+                editor.dispose()
+                return False
         self.cancel_data_views()
         self.embedded, self.editing = editor, True
         self.article.clear()

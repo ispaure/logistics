@@ -10,10 +10,11 @@ MARKDOWN = {'.md', '.markdown'}
 TEXT = {'.json', '.jsonc', '.js', '.mjs', '.cjs', '.css', '.txt', '.csv',
         '.yaml', '.yml', '.toml', '.ini', '.xml', '.html', '.py', '.ts'}
 DOCUMENTS = MARKDOWN | TEXT | {'.rmdoc'}
-MAX_NOTE = 2 * 1024 * 1024
-# Rendering expands Markdown and may include up to 22 MiB of embedded images.
-# Leave room above the renderer's 24 MiB output bound for host styling/scripts.
-MAX_PREVIEW_HTML = 32 * 1024 * 1024
+MAX_NOTE = 16 * 1024 * 1024
+MAX_NOTE_IMAGES = 48 * 1024 * 1024
+MAX_RENDERED_HTML = 96 * 1024 * 1024
+MAX_IMAGE_HTML = 66 * 1024 * 1024  # Base64 expansion plus markup for 48 MiB.
+MAX_PREVIEW_HTML = 128 * 1024 * 1024  # Room for host links, styling and scripts.
 
 
 def breadcrumb_folders(root, path):
@@ -226,7 +227,7 @@ class NotesLibrary:
             raise ValueError('Choose a Markdown note.')
         before = self.entry(path)
         if before['directory'] or not 0 <= before['size'] <= MAX_NOTE + 4096:
-            raise ValueError('Note exceeds the 2 MiB preview limit.')
+            raise ValueError(f'Note exceeds the {MAX_NOTE / (1024 * 1024):g} MiB source limit.')
         with DocumentResource(self.provider, path, max_bytes=MAX_NOTE, independent=False) as resource:
             data = resource.read(cancelled=cancelled)
         data.decode('utf-8-sig')
@@ -312,6 +313,7 @@ class NotesLibrary:
                 raise ValueError('Notes Library closed.')
             if path not in self._media:
                 self._media[path] = MarkdownMedia(self.provider, path, root=self.root, entry=self.entry,
+                                                 max_image_bytes=MAX_NOTE_IMAGES,
                                                  resolve=lambda target: self.link(path, target)[0])
             return self._media[path].render_source(resolve=lambda target: self.link(path, target, cancelled=cancelled)[0])
 

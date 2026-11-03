@@ -1,4 +1,4 @@
-"""Native, library-local filename drags; payloads contain only an opaque token."""
+"""Native, library-local icon drags; payloads contain only an opaque token."""
 import posixpath
 from pathlib import PurePosixPath
 from uuid import uuid4
@@ -162,6 +162,7 @@ class LibraryDrag:
                         self.drag.end()
             _ios_classes = LogisticsNotesDragSource, LogisticsNotesDropTarget
         native, bindings = widget._impl.native, []
+        native.userInteractionEnabled = True
         for enabled, name, delegate_class in ((source, 'UIDragInteraction', _ios_classes[0]),
                                                (target, 'UIDropInteraction', _ios_classes[1])):
             if enabled:

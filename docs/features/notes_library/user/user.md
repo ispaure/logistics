@@ -95,7 +95,7 @@ Formatted or Source editing in that same local copy. New Markdown documents
 start editing. Per-note reading positions are retained while the library is open.
 Unsaved changes are checked before switching notes or closing. Choosing Save
 continues navigation after a successful save. Notes are
-limited to 2 MiB. Hidden configuration is excluded and links stay inside the library.
+limited to 16 MiB. Hidden configuration is excluded and links stay inside the library.
 
 Links such as `[[Tech]]` can open `Tech.md` in a subfolder. The current folder
 and library root take priority; otherwise the app looks for a unique match across
@@ -142,7 +142,7 @@ Changing files or closing the library asks about unsaved changes. Saves retain
 encoding/BOM and line endings and refuse to overwrite an externally changed
 file; the draft stays available after a failed save. LocalCrypt reads/writes use
 the selected provider and keep plaintext in memory. Read-only locations remain
-read-only. Source files are limited to 2 MiB; binary and hidden configuration
+read-only. Source files are limited to 16 MiB; binary and hidden configuration
 files are excluded. Content search includes supported source files. Calendar and
 note metadata scans still read Markdown notes.
 

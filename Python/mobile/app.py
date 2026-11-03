@@ -372,6 +372,11 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         from .feature_settings import require
         return require(self, name, destination=destination, present=present)
 
+    def acquire_awake_lease(self):
+        """Provide foreground idle-sleep ownership to feature workflows."""
+        from .keep_awake import AwakeLease
+        return AwakeLease(self)
+
     def set_feature_enabled(self, name, value, *, refresh=True):
         from .feature_settings import set_enabled
         return set_enabled(self, name, value, refresh=refresh)
@@ -861,6 +866,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.show_settings(rebuild=True)
 
     def checkpoint(self, *args, save_workspace=True, **kwargs):
+        picker = getattr(self, '_editor_picker', None)
+        if picker is not None and picker.moving():
+            return False
         readers = getattr(self, 'readers', None)
         if readers is not None:
             for owner in readers.controllers.values():

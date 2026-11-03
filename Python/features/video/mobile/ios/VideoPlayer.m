@@ -9,9 +9,7 @@
 #import <UIKit/UIViewReservedRegion.h>
 #endif
 
-// UIApplication's idle policy is shared by independent scene players.
-static NSUInteger LGVideoAwakeOwners = 0;
-static BOOL LGVideoPreviousIdleTimerDisabled = NO;
+#import "ScreenAwake.m"
 
 // The real navigation container owns adaptive system bar placement. Forward
 // immersive preferences to the video owner instead of drawing a private rail.
@@ -29,6 +27,7 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
     <VLCDrawable, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling,
      VLCMediaPlayerDelegate, CXCallObserverDelegate, UIGestureRecognizerDelegate>
 @property(nonatomic, copy) NSString *videoURL;
+@property(nonatomic, strong) LGScreenAwakeLease *awakeLease;
 @property(nonatomic, copy) NSString *subtitleJSON;
 @property(nonatomic) int64_t startMilliseconds; // Deferred resume/paused seek; -1 means no pending seek.
 @property(nonatomic) int64_t knownDuration;
@@ -144,12 +143,11 @@ static BOOL LGVideoPreviousIdleTimerDisabled = NO;
 - (void)setScreenAwake:(BOOL)awake {
     if (self.holdsIdleTimer == awake) return;
     self.holdsIdleTimer = awake;
-    UIApplication *application = UIApplication.sharedApplication;
     if (awake) {
-        if (LGVideoAwakeOwners++ == 0) LGVideoPreviousIdleTimerDisabled = application.idleTimerDisabled;
-        application.idleTimerDisabled = YES;
-    } else if (--LGVideoAwakeOwners == 0) {
-        application.idleTimerDisabled = LGVideoPreviousIdleTimerDisabled;
+        self.awakeLease = [[LGScreenAwakeLease alloc] init];
+    } else {
+        [self.awakeLease finish];
+        self.awakeLease = nil;
     }
 }
 - (void)updateScreenAwake {
