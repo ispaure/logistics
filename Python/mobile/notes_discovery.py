@@ -5,6 +5,14 @@ import toga
 from toga.style import Pack
 from features.notes_library.notes import vault_root, operation
 from commonUtils.runtime.operations import check_cancelled, OperationCancelled
+from commonUtils.ui.native.forms import FittedLabel, fit_text
+from commonUtils.ui.native.adaptive import allocated_width
+from .control_icons import button_icons
+from .browser_ui import middle_filename
+
+
+def fit_discovery_status(label, frame):
+    fit_text(label, allocated_width(label, frame.content_width('documents')))
 
 
 def cancel(app):
@@ -43,8 +51,12 @@ def populate(app, container):
     container.clear()
     container.add(toga.Label('Notes Library', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
     rows = toga.Box(style=Pack(direction='column'))
-    status = toga.Label('Looking for libraries…', style=Pack(font_size=12))
+    status = FittedLabel('Looking for libraries…', style=Pack(font_size=12))
     container.add(rows, status)
+    from .layout_participants import participants, LayoutFrame
+    status._layout_subscription = participants(app).register(
+        'notes-discovery-status', status, fit_discovery_status)
+    fit_discovery_status(status, LayoutFrame(app.main_window.size.width, app.adaptive.content_width))
     token = object()
     app._notes_discovery_token = token
     previous = getattr(app, '_notes_discovery_task', None)
@@ -109,8 +121,18 @@ def populate(app, container):
                     finally:
                         if provider is not None and hasattr(provider, 'close'):
                             provider.close()
-                caption = (PurePosixPath(root).name or label) + (' · ' + label if root else '')
-                rows.add(toga.Button(caption, on_press=open_library, style=Pack(height=48)))
+                encrypted = label.startswith('LocalCrypt: ')
+                location = label.removeprefix('LocalCrypt: ')
+                caption = PurePosixPath(root).name or location
+                if root and encrypted:
+                    caption += ' · ' + location
+                button = toga.Button(caption, on_press=open_library, style=Pack(height=48))
+                kinds = [('storage_local', 'On-device library')]
+                if encrypted:
+                    kinds.append(('storage_unlocked', 'Encrypted library, unlocked'))
+                button_icons(button, kinds)
+                middle_filename(button)
+                rows.add(button)
             status.text = ('Some locations could not be checked.' if errors else '' if found
                            else 'No libraries found within two folders. Unlock LocalCrypt credentials to include encrypted libraries.')
         except (asyncio.CancelledError, OperationCancelled):

@@ -280,24 +280,59 @@ class LibraryPanels:
             return
         dialog = DocumentTypeDialog(choices=choices)
         dialog.title, dialog.message = PurePosixPath(path).name, 'Choose a file action.'
+        request = self.file_action_request = getattr(self, 'file_action_request', 0) + 1
+        side, epoch, destination = self.sidebar.side, self.epoch, self.host.destination()
         action = await self.view.window.dialog(dialog)
-        if not self.valid():
+        if (not self.valid() or self.epoch != epoch or self.file_action_request != request
+                or self.host.destination() != destination):
             return
+        # Native alerts can dismiss the floating drawer. Its origin still owns
+        # cancellation and the return from any form opened by this decision.
         if action == 'move':
-            self.sidebar.show_detail()
-            self.manage_entry(move=True)
+            self.selected_path = path
+            self.manage_entry(move=True, return_side=side)
         elif action == 'copy':
-            self.copy_entry_form(path)
+            self.copy_entry_form(path, return_side=side)
         elif action == 'delete':
             await self.delete_entry(path)
+            if (self.valid() and self.epoch == epoch and self.file_action_request == request
+                    and self.host.destination() == destination and side is not None):
+                self.sidebar.show(side)
+        elif side is not None:
+            self.sidebar.show(side)
 
-    def copy_entry_form(self, path):
+    def show_file_action(self, view, *, route, title, return_side=None):
+        if not self.valid() or self.file_command_busy:
+            return False
+        self.file_action_request = getattr(self, 'file_action_request', 0) + 1
+        self.file_action_side = self.sidebar.side if return_side is None else return_side
+        self.file_action_view = view
+        self.file_action_destination = self.destination
         self.sidebar.show_detail()
+        return self.host.show_view(view, destination=self.destination, route=route, title=title)
+
+    def file_action_current(self, view=None):
+        current = getattr(self, 'file_action_view', None)
+        return (self.valid() and current is not None and (view is None or view is current)
+                and self.host.destination() == self.file_action_destination)
+
+    def return_from_file_action(self, widget=None, *, view=None, **kwargs):
+        if self.file_command_busy or not self.file_action_current(view):
+            return
+        side = getattr(self, 'file_action_side', None)
+        self.file_action_view = None
+        self.file_action_side = None
+        self.file_action_destination = None
+        self.present()
+        if side is not None:
+            self.sidebar.show(side)
+
+    def copy_entry_form(self, path, *, return_side=None):
         name = toga.TextInput(value=posixpath.relpath(path, self.root or '.'), style=Pack(height=48))
         status = toga.Label('Choose a new path inside this library. Existing files are kept.')
         button = toga.Button('Copy', style=Pack(height=48))
         async def submit(widget=None, **kw):
-            if self.file_command_busy or not self.valid():
+            if self.file_command_busy or not self.file_action_current(form):
                 return
             self.file_command_busy = True
             button.enabled = False
@@ -307,8 +342,8 @@ class LibraryPanels:
                 if self.valid():
                     await self.load_folder(posixpath.dirname(target))
                     self.refresh_library_indexes()
-                    self.present()
-                    self.sidebar.show_sidebar()
+                    self.file_command_busy = False
+                    self.return_from_file_action(view=form)
             except (OSError, ValueError) as error:
                 status.text = str(error)[:180]
             finally:
@@ -316,9 +351,9 @@ class LibraryPanels:
                 button.enabled = True
         button.on_press = submit
         form = toga.Box(children=[toga.Label('Copy ' + PurePosixPath(path).name), name, status, button,
-            toga.Button('Cancel', on_press=lambda w: self.present(), style=Pack(height=48))],
+            toga.Button('Cancel', on_press=lambda w: self.return_from_file_action(view=form), style=Pack(height=48))],
             style=Pack(direction=COLUMN, margin=16))
-        self.host.show_view(form, destination=self.destination, route='notes-copy', title='Copy')
+        self.show_file_action(form, route='notes-copy', title='Copy', return_side=return_side)
 
     async def delete_entry(self, path):
         change = PathChange(deleted=path)
@@ -368,6 +403,9 @@ class LibraryPanels:
             self.file_command_busy = False
 
     def dispose_panels(self):
+        self.file_action_view = None
+        self.file_action_side = None
+        self.file_action_destination = None
         self.calendar_generation += 1
         if self.calendar_task is not None:
             self.calendar_task.cancel()

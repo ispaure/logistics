@@ -67,6 +67,32 @@ class NotesLibraryTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_apple_actions_leave_content_and_keep_history_and_edit_handlers(self):
+        from dataclasses import replace
+        from mobile.obsidian import open_vault
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            owner.host = replace(owner.host, apple=True)
+            for width in (390, 740, 1024, 390):
+                owner.reflow(width)
+                await owner.open_note('Vault/Home.md')
+                await owner.open_note('Vault/Projects/Plan.MD')
+                self.assertIsNone(owner.secondary.parent)
+                self.assertEqual(owner.view._native_reader_buttons(), [owner.back_button,
+                    owner.forward_button, owner.edit, owner.reader_actions_button])
+                await owner.back_button.on_press()
+                self.assertEqual(owner.path, 'Vault/Home.md')
+                await owner.forward_button.on_press()
+                self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+                await owner.edit.on_press()
+                self.assertTrue(owner.editing)
+                await owner.edit.on_press()
+                self.assertFalse(owner.editing)
+                self.assertIn('Contents…', [label for label, _ in owner.reader_actions.actions])
+            await owner.open_note('Vault/attachment.txt')
+            self.assertNotIn(owner.edit, owner.view._native_reader_buttons())
+        self.run_async(exercise())
+
     def test_cancelled_source_preparation_retires_resource_after_worker_finishes(self):
         from threading import Event
         from mobile.obsidian import open_vault
@@ -142,19 +168,26 @@ class NotesLibraryTests(unittest.TestCase):
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             for name in ('Current.md', 'Image.png', 'Data.json', 'Unknown.bin'):
                 self.assertTrue(await owner.open_note('Vault/Projects/Plain/' + name))
+                owner.reflow(1400)
                 links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_path')]
                 self.assertEqual([child.breadcrumb_path for child in links],
-                                 ['Vault/Vault.md', 'Vault/Projects/Projects.md'])
+                                 ['Vault/Vault.md', 'Vault/Projects/Projects.md', None])
                 self.assertTrue(all(child.notes_folder_link for child in links))
-                self.assertEqual(owner.breadcrumbs.children[-1].text, name)
+                self.assertEqual(owner.breadcrumbs.children[-1].text, 'Plain')
                 self.assertTrue(any(getattr(child, 'text', '') == 'Plain' for child in owner.breadcrumbs.children))
+            owner.reflow(390)
+            self.assertEqual(len(owner.breadcrumbs.children), 1)
+            await owner.breadcrumbs.children[0].on_press()
+            self.assertEqual(owner.sidebar.side, 'files')
+            self.assertIn('Vault/Projects/Plain', owner.expanded)
+            owner.sidebar.show_detail()
             await links[1].on_press()
             self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
             await owner.previous_note()
             self.assertEqual(owner.path, 'Vault/Projects/Plain/Unknown.bin')
             self.assertTrue(await owner.open_note(self.provider.relative(deep / 'Current.md')))
             owner.reflow(220)
-            self.assertEqual(owner.breadcrumbs.children[-1].text, 'Current.md')
+            self.assertEqual(owner.breadcrumbs.children[-1].text, 'Nested')
             owner.dispose()
             self.assertFalse(owner.breadcrumbs.children)
         self.run_async(exercise())
@@ -532,6 +565,14 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertIn('Mobile result', publish.call_args.args[1])
                 self.assertNotIn('worker-src blob:', publish.call_args.args[1])
                 self.assertEqual((self.vault / 'Home.md').read_text(), source)
+                calls = publish.call_count
+                with patch('features.notes_library.mobile.dataview.execute_views',
+                           new=AsyncMock(side_effect=ValueError('Preview too large'))), \
+                        patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                    await owner.render_data_views(plan, owner.base, owner.path)
+                    dialog.assert_awaited_once()
+                self.assertEqual(publish.call_count, calls)
+                self.assertEqual(owner.notice.text, '')
                 entered, release = asyncio.Event(), asyncio.Event()
                 async def slow(*args, **kwargs):
                     entered.set()
@@ -746,9 +787,11 @@ class NotesLibraryTests(unittest.TestCase):
                     if discovery is self.app._notes_discovery_task:
                         break
                 buttons = self.app.document_notes_list.children[1].children
-                self.assertIn('LocalCrypt: Secret', [button.text for button in buttons],
+                self.assertIn('Secret', [button.text for button in buttons],
                               self.app.document_notes_list.children[2].text)
-                detected = next(button for button in buttons if button.text == 'LocalCrypt: Secret')
+                detected = next(button for button in buttons if button.text == 'Secret')
+                self.assertEqual([name for name, _ in detected.leading_icons],
+                                 ['storage_local', 'storage_unlocked'])
                 await detected.on_press()
                 self.assertIsNotNone(getattr(self.app, 'vault_browser', None),
                                      self.app.document_notes_list.children[2].text)
@@ -825,7 +868,8 @@ class NotesLibraryTests(unittest.TestCase):
             self.app.show_documents_hub()
             await self.app._notes_discovery_task
             button = next(child for child in self.app.document_notes_list.children[1].children
-                          if getattr(child, 'text', '') == 'Notes · Local')
+                          if getattr(child, 'text', '') == 'Notes')
+            self.assertEqual([name for name, _ in button.leading_icons], ['storage_local'])
             self.assertIsNotNone(button.parent)
             await button.on_press()
             owner = self.app.vault_browser
@@ -892,18 +936,21 @@ class NotesLibraryTests(unittest.TestCase):
         self.assertEqual(client.calls, [])
 
     def test_expanded_private_html_is_refused_without_replacing_note(self):
+        from features.notes_library.notes import MAX_PREVIEW_HTML
+        from unittest.mock import AsyncMock
         from types import SimpleNamespace
-        from mobile.obsidian import VaultBrowser
+        from mobile.obsidian import open_vault
         class PrivateFiles(LocalFiles):
             private = True
         self.app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None)
-        owner = VaultBrowser(self.app, PrivateFiles(self.root), 'Vault', 'documents')
-        self.app.vault_browser = owner
         async def exercise():
+            owner = await open_vault(self.app, PrivateFiles(self.root), 'Vault', 'documents')
             self.assertTrue(await owner.open_note('Vault/Home.md'))
             history = list(owner.history)
-            with patch('mobile.obsidian.markdown_preview', return_value='x' * (2 * 1024 * 1024 + 1)):
+            with patch('mobile.obsidian.markdown_preview', return_value='x' * (MAX_PREVIEW_HTML + 1)), \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
                 self.assertFalse(await owner.open_note('Vault/Projects/Plan.MD'))
+                dialog.assert_awaited_once()
             self.assertEqual(owner.path, 'Vault/Home.md')
             self.assertEqual(owner.history, history)
         self.run_async(exercise())

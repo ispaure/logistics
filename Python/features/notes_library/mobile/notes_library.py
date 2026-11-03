@@ -14,7 +14,7 @@ import toga
 from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
-from features.notes_library.notes import NotesLibrary, MAX_NOTE, MARKDOWN, document_kind
+from features.notes_library.notes import NotesLibrary, MAX_NOTE, MAX_PREVIEW_HTML, MARKDOWN, document_kind
 from ..notes import breadcrumb_folders, fit_breadcrumbs
 from ..navigation import PathChange, MutationResult
 from commonUtils.runtime.operations import OperationCancelled
@@ -80,6 +80,16 @@ def underline_folder_link(button):
     return button
 
 
+def compact_file_row_padding(button):
+    """Reduce native horizontal gutters as well as the row's layout slots."""
+    default = 0 if getattr(button, 'control_icon', None) else 8
+    button._impl._content_inset = getattr(button._impl, '_content_inset', default) / 3
+    if type(button._impl).__module__.startswith('toga_android.'):
+        native = button._impl.native
+        native.setPaddingRelative(round(native.getPaddingStart() / 3), native.getPaddingTop(),
+                                  round(native.getPaddingEnd() / 3), native.getPaddingBottom())
+
+
 class VaultBrowser(LibraryDocuments, LibraryPanels):
     def __init__(self, host, provider, root, destination):
         self.host, self.provider, self.destination = host, provider, destination
@@ -124,7 +134,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             "edit", "Edit Markdown", on_press=self.open_editor, enabled=False
         )
         self.pending_fragment = ""
-        self.web = self.access.webview(max_bytes=MAX_NOTE,
+        self.web = self.access.webview(max_bytes=MAX_PREVIEW_HTML,
             on_navigation_starting=self.follow_link, on_webview_load=self.page_loaded,
             style=Pack(flex=1))
         host.presentation.bind_font(self.web, "markdown", web=True)
@@ -149,6 +159,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.links_generation = 0
         self.links_refresh_task = None
         self.sidebar = host.drawers(self.tree, self.article, self.links)
+        self.sidebar.open_links = lambda: host.loop.create_task(self.show_links(toggle=False))
         self.sidebar.on_close = self.cancel_links
         self.links_button = self.host.presentation.icon_button(
             'notes_links', 'Backlinks and outgoing links', on_press=self.show_links
@@ -239,7 +250,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.reader_actions_button,
             self.links_button,
         ]
-        self.secondary = toga.Box(children=[], style=Pack(direction=ROW, margin_left=8, margin_right=8))
+        self.secondary = toga.Box(children=[], style=Pack(direction=ROW, gap=4, margin_left=8, margin_right=8))
         for button in (self.back_button, self.forward_button, self.edit, self.reader_actions_button):
             if button.parent is not None:
                 button.parent.remove(button)
@@ -250,16 +261,26 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self._breadcrumb_key = None
         self._breadcrumb_width = 320
         self.view.insert(2, self.breadcrumbs)
-        self.view._native_reader_buttons = lambda: [self.links_button]
+        # Keep the library identity between its pane controls, including when
+        # UIKit moves the remaining reader actions to a vertical edge.
+        if host.apple:
+            self.view._document_title_controls = (self.menu, self.links_button)
+        self.view._native_reader_buttons = self.native_note_buttons
         self.sidebar.on_change = self.refresh_chrome
-        self.welcome = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=20))
-        self.open_card = toga.Button('Open Document', on_press=lambda widget: self.sidebar.show_sidebar(), style=Pack(height=72))
-        self.new_card = toga.Button('New Document', on_press=self.new_note, style=Pack(height=72, margin_top=12))
-        host.presentation.surface(self.open_card, radius=16)
-        host.presentation.surface(self.new_card, radius=16)
-        self.welcome.add(toga.Label(self.library_title, style=Pack(font_size=24, font_weight='bold')), self.open_card)
+        self.welcome = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
+                                          align_items=CENTER, justify_content=CENTER))
+        self.welcome_content = toga.Box(style=Pack(direction=COLUMN, width=280))
+        self.welcome.add(self.welcome_content)
+        self.open_card = toga.Button('Open Document', on_press=lambda widget: self.sidebar.show_sidebar(), style=Pack(height=48, margin_top=20))
+        self.new_card = toga.Button('New Document', on_press=self.new_note, style=Pack(height=48, margin_top=8))
+        host.presentation.surface(self.open_card, radius=12)
+        host.presentation.surface(self.new_card, radius=12)
+        self.welcome_content.add(
+            toga.Label('Choose a document', style=Pack(font_size=20, font_weight='bold', text_align=CENTER, margin_bottom=8)),
+            toga.Label('Browse your library or start\nsomething new.', style=Pack(font_size=15, text_align=CENTER)),
+            self.open_card)
         if self.library.supports('create'):
-            self.welcome.add(self.new_card)
+            self.welcome_content.add(self.new_card)
         self.article.remove(self.web)
         self.article.add(self.welcome)
         self.refresh_reader_actions()
@@ -295,14 +316,16 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if header is not None and header.parent is self.view and self.view.children[0] is not header:
             self.view.remove(header)
             self.view.insert(0, header)
-        if show and self.secondary.parent is None:
-            anchors = [child for child in (header, self.toolbar)
-                       if child is not None and child.parent is self.view]
-            index = max((list(self.view.children).index(child) for child in anchors), default=-1) + 1
-            self.view.insert(index, self.secondary)
-        elif not show and self.secondary.parent is not None:
-            self.secondary.parent.remove(self.secondary)
         parent = self.article if self.sidebar.expanded else self.view
+        if show and not self.host.apple and self.secondary.parent is not parent:
+            if self.secondary.parent is not None:
+                self.secondary.parent.remove(self.secondary)
+            anchors = [child for child in (header, self.toolbar)
+                       if child is not None and child.parent is parent]
+            index = max((list(parent.children).index(child) for child in anchors), default=-1) + 1
+            parent.insert(index, self.secondary)
+        elif (not show or self.host.apple) and self.secondary.parent is not None:
+            self.secondary.parent.remove(self.secondary)
         siblings = [child for child in parent.children if child is not self.breadcrumbs]
         index = (siblings.index(self.secondary) + 1 if self.secondary.parent is parent
                  else siblings.index(self.toolbar) + 1 if self.toolbar.parent is parent
@@ -313,7 +336,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 self.breadcrumbs.parent.remove(self.breadcrumbs)
             parent.insert(index, self.breadcrumbs)
         editable = not self.path or PurePosixPath(self.path).suffix.lower() in MARKDOWN
-        if editable and self.edit.parent is None:
+        if editable and self.library.writable and self.edit.parent is None and not self.host.apple:
             self.secondary.insert(2, self.edit)
         elif not editable and self.edit.parent is self.secondary:
             self.secondary.remove(self.edit)
@@ -321,6 +344,18 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self._edit_chrome = self.editing
             self.host.presentation.apply_icon(self.edit, 'view' if self.editing else 'edit',
                                               'View document' if self.editing else 'Edit document')
+
+    def native_note_buttons(self):
+        """UIKit owns adaptation and hit testing for document commands."""
+        if not self.host.apple:
+            return [self.links_button]
+        buttons = []
+        if self.path is not None:
+            buttons.extend((self.back_button, self.forward_button))
+            if self.library.writable and document_kind(self.path) == 'markdown':
+                buttons.append(self.edit)
+        buttons.append(self.reader_actions_button)
+        return buttons
 
     async def breadcrumb_pages(self, path, cancelled):
         folders = breadcrumb_folders(self.root, path)
@@ -333,8 +368,14 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self._breadcrumb_key = None
             return
         folders = breadcrumb_folders(self.root, self.path)
-        entries = [(PurePosixPath(folder).name, self.folder_pages.get(folder)) for folder in folders]
-        entries.append((PurePosixPath(self.path).name, None))
+        # The filename already has a dedicated title. Spend this row on location
+        # and navigation; a phone needs only its immediate containing folder.
+        if not folders:
+            folders = [self.root]
+        if self._breadcrumb_width < 520:
+            folders = folders[-1:]
+        entries = [(PurePosixPath(folder).name or self.library_title,
+                    self.folder_pages.get(folder), folder) for folder in folders]
         key = (tuple(entries), self._breadcrumb_width)
         if key == self._breadcrumb_key:
             return
@@ -351,33 +392,34 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 density = native.getResources().getDisplayMetrics().density
                 return native.getPaint().measureText(value) / density
             return len(value) * 8
-        labels = fit_breadcrumbs([name for name, _ in entries],
-            max(0, self._breadcrumb_width - 16), measure, minimum=32, padding=12)
-        for index, ((name, page), label) in enumerate(zip(entries, labels)):
+        labels = fit_breadcrumbs([name for name, _, _ in entries],
+            max(0, self._breadcrumb_width - 28), measure, minimum=44, padding=12)
+        for (name, page, folder), label in zip(entries, labels):
             if not label:
                 continue
             if self.breadcrumbs.children:
                 self.breadcrumbs.add(toga.Label('/', style=Pack(margin_top=12, width=12, font_size=13)))
-            if page:
-                async def open_folder(widget, path=page, **kwargs):
+            async def open_folder(widget, path=page, folder=folder, **kwargs):
+                if path:
                     await self.open_note(path)
-                button = self.host.list_button(toga.Button(label, on_press=open_folder,
-                    style=Pack(height=44, width=max(44, measure(label) + 12), font_size=13)))
-                button._impl._content_inset = 0
-                self.host.presentation.surface(button, radius=0, background='transparent', foreground='text', outlined=False)
-                backend = type(button._impl).__module__
-                if backend.startswith('toga_iOS.'):
-                    button._impl.native.titleLabel.font = self.breadcrumb_metrics._impl.native.font
-                    button._impl.native.accessibilityLabel = name
-                elif backend.startswith('toga_android.'):
-                    button._impl.native.setTextSize(0, self.breadcrumb_metrics._impl.native.getTextSize())
-                    button._impl.native.setContentDescription(name)
-                button.breadcrumb_path = page
-                underline_folder_link(button)
-                self.breadcrumbs.add(button)
-            else:
-                self.breadcrumbs.add(toga.Label(label,
-                    style=Pack(margin_top=12, font_size=13, flex=1 if index == len(entries) - 1 else 0)))
+                else:
+                    await self.reveal_folder(folder, select=False)
+                    self.sidebar.show_sidebar()
+            button = self.host.list_button(toga.Button(label, on_press=open_folder,
+                style=Pack(height=44, width=max(44, measure(label) + 12), font_size=13)))
+            button._impl._content_inset = 0
+            self.host.presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
+            backend = type(button._impl).__module__
+            if backend.startswith('toga_iOS.'):
+                button._impl.native.titleLabel.font = self.breadcrumb_metrics._impl.native.font
+                button._impl.native.accessibilityLabel = name
+            elif backend.startswith('toga_android.'):
+                button._impl.native.setTextSize(0, self.breadcrumb_metrics._impl.native.getTextSize())
+                button._impl.native.setContentDescription(name)
+            button.breadcrumb_path = page
+            button.breadcrumb_folder = folder
+            underline_folder_link(button)
+            self.breadcrumbs.add(button)
 
 
     def valid(self):
@@ -392,6 +434,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if self.sidebar.expanded and getattr(self, '_document_return_side', None) == 'files':
             self._document_return_side = None
         self._breadcrumb_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
+        self.welcome_content.style.width = min(360, max(0, self._breadcrumb_width - 48))
         # Compact browsing still needs its menu while the article is hidden.
         # Wide layouts keep document commands over their own article pane.
         parent = self.article if self.sidebar.expanded else self.view
@@ -700,12 +743,18 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     toga.Button(label, on_press=choose, style=Pack(height=48, flex=1))
                 )
                 self.host.middle_filename(button)
+                # Keep the row height while giving horizontal padding to the
+                # filename: these gaps are one third of the standard browser's.
+                compact_file_row_padding(button)
                 button.vault_path = path
                 self.bind_file_hold(button, path, directory=directory)
+                entry_icon = self.host.entry_icon(directory, landing_page=page is not None)
+                entry_icon.style.margin_left /= 3
+                entry_icon.style.margin_right /= 3
                 row = toga.Box(
                     children=[
                         toga.Box(style=Pack(width=depth * 20)),
-                        self.host.entry_icon(directory, landing_page=page is not None),
+                        entry_icon,
                         button,
                     ],
                     style=Pack(direction=ROW, align_items=CENTER),
@@ -718,13 +767,17 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                         ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'],
                         on_press=expand,
                     )
-                    disclosure.style.width = 48
+                    disclosure.style.width = 32  # 24-point glyph slot + two 4-point gutters.
                     disclosure.style.height = 48
+                    compact_file_row_padding(disclosure)
                     row.insert(2, disclosure)
                 async def file_actions(widget=None, path=path, **kwargs):
                     await self.file_actions(path)
                 if any(self.library.supports(action) for action in ('rename', 'delete')):
-                    row.add(self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions))
+                    actions = self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions)
+                    actions.style.width = 32
+                    compact_file_row_padding(actions)
+                    row.add(actions)
             new_rows[key] = row
             self._row_cache[key] = row
             button = next(child for child in row.children if hasattr(child, 'vault_path'))
@@ -854,14 +907,15 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if self.sidebar.side == 'links':
             self.links_refresh_task = self.host.loop.create_task(self.show_links(refresh=True))
 
-    async def show_links(self, widget=None, *, refresh=False, **kwargs):
+    async def show_links(self, widget=None, *, refresh=False, toggle=True, **kwargs):
         if not self.valid():
             return
         if refresh and self.sidebar.side != 'links':
             return
         if self.sidebar.side == 'links' and not refresh:
-            self.sidebar.show_detail()
-            self.links_generation += 1
+            if toggle:
+                self.sidebar.show_detail()
+                self.links_generation += 1
             return
         self.sidebar.show_links()
         self.link_rows.clear()
@@ -1078,7 +1132,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if task_cancelled:
                 raise asyncio.CancelledError
 
-    def manage_entry(self, *, folder=False, move=False):
+    def manage_entry(self, *, folder=False, move=False, return_side=None):
         if not self.valid() or not self.library.supports('rename' if move else 'create'):
             return False
         source = self.selected_path if move else None
@@ -1089,16 +1143,16 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         name = toga.TextInput(value=initial, style=Pack(height=48))
         status = toga.Label('Links are not rewritten.' if move else '')
         submit_button = toga.Button('Move' if move else 'Create folder', style=Pack(height=48))
-        cancel = toga.Button('Cancel', on_press=lambda widget: self.present(), style=Pack(height=48))
+        cancel = toga.Button('Cancel', on_press=lambda widget: self.return_from_file_action(view=action_view), style=Pack(height=48))
         parent = self.selected_parent()
         async def submit(widget=None, **kwargs):
-            if not self.valid() or self.file_command_busy:
+            if self.file_command_busy or not self.file_action_current(action_view):
                 return
             if move:
                 submit_button.enabled = cancel.enabled = False
                 try:
                     if await self.move_entry_to(source, posixpath.join(self.root, name.value)):
-                        self.present()
+                        self.return_from_file_action(view=action_view)
                     else:
                         status.text = self.notice.text
                 finally:
@@ -1117,7 +1171,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 for path in sorted(paths):
                     await self.load_folder(path)
                 self.refresh_library_indexes()
-                self.present()
+                self.file_command_busy = False
+                self.return_from_file_action(view=action_view)
                 self.refresh_reader_actions()
             except OperationCancelled:
                 return
@@ -1131,8 +1186,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         form = toga.Box(children=[toga.Label(title, style=Pack(font_size=20)),
             toga.Label('Path inside Notes Library (existing folders)' if move else 'Folder name'),
             name, status, submit_button, cancel], style=Pack(direction=COLUMN, margin=16))
-        return self.host.show_view(toga.ScrollContainer(content=form, horizontal=False, style=Pack(flex=1)),
-                                  destination=self.destination, route='notes-manage', title=title)
+        action_view = toga.ScrollContainer(content=form, horizontal=False, style=Pack(flex=1))
+        return self.show_file_action(action_view,
+                                     route='notes-manage', title=title, return_side=return_side)
 
     def show_page_search(self, widget=None, **kwargs):
         if self.valid() and self.path is not None:
@@ -1154,7 +1210,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self._row_cache = {}
         self.dispose_panels()
         self.retire_editor()
-        self.sidebar.show_detail()
+        self.sidebar.dispose()
         self.cancel_links()
         self.link_rows.clear()
         if hasattr(self, 'page_loading'):

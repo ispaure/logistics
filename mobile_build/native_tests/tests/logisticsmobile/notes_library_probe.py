@@ -184,10 +184,15 @@ class NotesLibraryProbe(LogisticsMobile):
                     assert native.attributedTitleForState(0) is not None
                 else:
                     assert native.getPaintFlags() & 8
-            assert owner.breadcrumbs.children[-1].text == name
+            assert owner.breadcrumbs.children[-1].text == 'Devices'
             await capture_window(self, evidence / ('notes-breadcrumb-' + name + '.png'))
-        await links[0].on_press()
-        assert owner.path.endswith('/Technology.md') or owner.path.endswith('/Accessories.md')
+        landing = next((button for button in links if button.breadcrumb_path), None)
+        await (landing or links[-1]).on_press()
+        if landing is not None:
+            assert owner.path.endswith('/Technology.md') or owner.path.endswith('/Accessories.md')
+        else:
+            assert owner.sidebar.side == 'files' or owner.sidebar.expanded
+            owner.sidebar.show_detail()
         assert await owner.open_note('Home.md')
 
     async def probe(self):
@@ -215,7 +220,7 @@ class NotesLibraryProbe(LogisticsMobile):
             await capture_window(self, evidence / 'notes-files.png')
             assert await owner.open_note('Home.md')
             await asyncio.sleep(.4)
-            assert owner.secondary.parent is owner.view
+            assert owner.secondary.parent is None if owner.host.apple else owner.secondary.parent is owner.view
             await capture_window(self, evidence / 'notes-reading.png')
             session_ids = set(self.workspace.sessions)
             await self.check_file_previews(owner, root, evidence)

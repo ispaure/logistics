@@ -12,6 +12,168 @@ from features.notes_library import library_files
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
+    def test_file_action_callbacks_cannot_change_files_or_destination_after_switching_tabs(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.copy_entry_form('Vault/Home.md')
+            form = owner.file_action_view
+            next(child for child in form.children if isinstance(child, toga.TextInput)).value = 'Hidden copy.md'
+            self.app.routes.return_to('home')
+            next(child for child in form.children if isinstance(child, toga.Button) and child.text == 'Cancel').on_press()
+            await next(child for child in form.children if isinstance(child, toga.Button) and child.text == 'Copy').on_press()
+            self.assertEqual(self.app.native_host.state.destination, 'home')
+            self.assertFalse((self.vault / 'Hidden copy.md').exists())
+        self.run_async(exercise())
+
+    def test_successful_copy_returns_to_files_and_wide_cancel_keeps_files_pinned(self):
+        from dataclasses import replace
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Home.md')
+            owner.sidebar.show_sidebar()
+            owner.copy_entry_form('Vault/Home.md')
+            form = owner.file_action_view
+            next(child for child in form.children if isinstance(child, toga.TextInput)).value = 'Copy.md'
+            await next(child for child in form.children if isinstance(child, toga.Button) and child.text == 'Copy').on_press()
+            self.assertEqual(owner.sidebar.side, 'files')
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            self.assertTrue((self.vault / 'Copy.md').exists())
+            # Reflow prefers the actual article allocation over the host's
+            # fallback width. Simulate the wide allocation as well as its host.
+            with patch.object(owner, 'host', replace(owner.host, content_width=lambda destination: 1100)), \
+                    patch('features.notes_library.mobile.notes_library.allocated_width', return_value=1100):
+                owner.reflow(1100)
+                self.assertTrue(owner.sidebar.expanded)
+                owner.manage_entry(folder=True)
+                self.assertTrue(self.app.routes.system_back())
+                self.assertTrue(owner.sidebar.expanded)
+                self.assertIsNone(owner.sidebar.side)
+                self.assertIn(owner.tree, owner.sidebar.view.children)
+                self.assertEqual(owner.path, 'Vault/Home.md')
+        self.run_async(exercise())
+
+    def test_superseded_file_menu_cannot_replace_or_cancel_newer_form(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            for stale_result in ('move', 'cancel'):
+                owner.sidebar.show_sidebar()
+                answers = []
+                async def dialog(choice):
+                    answer = self.app.loop.create_future()
+                    answers.append(answer)
+                    return await answer
+                with patch.object(self.app.main_window, 'dialog', new=dialog):
+                    first = asyncio.create_task(owner.file_actions('Vault/Home.md'))
+                    await asyncio.sleep(0)
+                    second = asyncio.create_task(owner.file_actions('Vault/Projects/Plan.MD'))
+                    await asyncio.sleep(0)
+                    answers[1].set_result('move')
+                    await second
+                    form = owner.file_action_view
+                    answers[0].set_result(stale_result)
+                    await first
+                self.assertIs(owner.file_action_view, form)
+                self.assertEqual(owner.selected_path, 'Vault/Projects/Plan.MD')
+                self.assertEqual(form.content.children[2].value, 'Projects/Plan.MD')
+                owner.return_from_file_action()
+        self.run_async(exercise())
+
+    def test_old_file_form_cancel_and_submit_cannot_affect_replacement(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            for action in ('move', 'copy'):
+                owner.selected_path = 'Vault/Home.md'
+                if action == 'move':
+                    owner.manage_entry(move=True)
+                else:
+                    owner.copy_entry_form('Vault/Home.md')
+                old_view = owner.file_action_view
+                form = old_view.content if isinstance(old_view, toga.ScrollContainer) else old_view
+                next(child for child in form.children if isinstance(child, toga.TextInput)).value = 'Stale.md'
+                submit = next(child for child in form.children if isinstance(child, toga.Button)
+                              and child.text in ('Move', 'Copy'))
+                cancel = next(child for child in form.children if isinstance(child, toga.Button)
+                              and child.text == 'Cancel')
+                owner.manage_entry(folder=True)
+                current = owner.file_action_view
+                cancel.on_press()
+                await submit.on_press()
+                self.assertIs(owner.file_action_view, current)
+                self.assertTrue((self.vault / 'Home.md').exists())
+                self.assertFalse((self.vault / 'Stale.md').exists())
+                owner.return_from_file_action()
+        self.run_async(exercise())
+
+    def test_file_action_menu_cancel_restores_drawer_dismissed_by_native_dialog(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Home.md')
+            owner.sidebar.show_sidebar()
+            history = list(owner.history)
+            async def dismiss(dialog):
+                owner.sidebar.show_detail()
+                return 'cancel'  # Android Back and the native Cancel button.
+            with patch.object(self.app.main_window, 'dialog', new=dismiss):
+                await owner.file_actions('Vault/Projects/Plan.MD')
+            self.assertEqual(owner.sidebar.side, 'files')
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            self.assertEqual(owner.history, history)
+        self.run_async(exercise())
+
+    def test_file_action_form_cancel_and_android_back_restore_files_without_retracing_document(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            for loaded in (False, True):
+                if loaded:
+                    await owner.open_note('Vault/Home.md')
+                for action in ('move', 'copy'):
+                    for dismiss in ('cancel', 'system-back', 'toolbar-back'):
+                        with self.subTest(loaded=loaded, action=action, dismiss=dismiss):
+                            owner.sidebar.show_sidebar()
+                            history = list(owner.history)
+                            async def choose(dialog):
+                                owner.sidebar.show_detail()  # Native popup dismissed by the alert.
+                                return action
+                            with patch.object(self.app.main_window, 'dialog', new=choose):
+                                await owner.file_actions('Vault/Projects/Plan.MD')
+                            self.assertIsNone(owner.sidebar.side)
+                            view = owner.file_action_view
+                            if dismiss == 'cancel':
+                                form = view.content if isinstance(view, toga.ScrollContainer) else view
+                                next(child for child in form.children if isinstance(child, toga.Button)
+                                     and child.text == 'Cancel').on_press()
+                            elif dismiss == 'system-back':
+                                self.assertTrue(self.app.routes.system_back())
+                            else:
+                                self.assertTrue(self.app.routes.back())
+                            self.assertIsNone(owner.file_action_view)
+                            self.assertEqual(owner.sidebar.side, 'files')
+                            self.assertEqual(owner.history, history)
+                            self.assertEqual(owner.path, 'Vault/Home.md' if loaded else None)
+        self.run_async(exercise())
+
+    def test_file_form_back_keeps_document_origin_and_waits_for_running_mutation(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Home.md')
+            owner.sidebar.show_detail()
+            owner.selected_path = owner.path
+            owner.manage_entry(move=True)
+            form = owner.file_action_view
+            owner.file_command_busy = True
+            self.assertTrue(self.app.routes.system_back())
+            self.assertIs(owner.file_action_view, form)
+            owner.file_command_busy = False
+            self.assertTrue(self.app.routes.system_back())
+            self.assertIsNone(owner.file_action_view)
+            self.assertIsNone(owner.sidebar.side)
+            self.assertEqual(owner.path, 'Vault/Home.md')
+        self.run_async(exercise())
+
     def test_copy_and_delete_refresh_an_active_search(self):
         import toga
         from dataclasses import replace

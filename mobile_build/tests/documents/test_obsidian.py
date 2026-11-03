@@ -10,6 +10,7 @@ from threading import Event
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from toga_dummy.utils import EventLog
 
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceSelection
@@ -19,6 +20,55 @@ from mobile.obsidian import VaultBrowser, vault_root, open_vault
 
 
 class ObsidianTests(unittest.TestCase):
+    def test_private_note_render_can_expand_beyond_source_limit(self):
+        from services.documents.storage import DocumentPolicy
+        from features.notes_library.notes import MAX_NOTE, MAX_PREVIEW_HTML
+        # Valid source expands past 2 MiB after HTML escaping.
+        (self.vault / 'Expanded.md').write_text('& ' * 400000)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.access.policy = DocumentPolicy(False, True)
+            surface = owner.access.webview(max_bytes=MAX_PREVIEW_HTML)
+            self.assertEqual(surface.max_html_bytes, MAX_PREVIEW_HTML)
+            with patch.object(self.app.main_window, 'dialog') as dialog, \
+                    patch.object(owner.web, 'set_content', wraps=owner.web.set_content) as publish:
+                self.assertTrue(await owner.open_note('Vault/Expanded.md'))
+                dialog.assert_not_called()
+            self.assertGreater(len(publish.call_args.args[1].encode('utf-8')), MAX_NOTE)
+            self.assertEqual(owner.path, 'Vault/Expanded.md')
+            self.assertEqual(owner.notice.text, '')
+        self.run_async(exercise())
+
+    def test_private_preview_limit_uses_popup_and_retains_published_page(self):
+        from services.documents.storage import DocumentPolicy
+        from unittest.mock import AsyncMock
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            owner.access.policy = DocumentPolicy(False, True)
+            history, base = list(owner.history), owner.base
+            def check(html, max_bytes):
+                # Exercise the real rejection without allocating 32 MiB.
+                from services.documents.mobile_storage import NotesDocumentAccess
+                NotesDocumentAccess.validate_preview(owner.access, html, 1)
+            async def show(dialog):
+                self.assertFalse(owner.page_loading.active)
+                self.assertIn(owner.web, owner.article.children)
+            with patch.object(owner.access, 'validate_preview', side_effect=check), \
+                    patch.object(owner.web, 'set_content') as publish, \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=show)) as dialog:
+                self.assertFalse(await owner.open_note('Vault/Projects/Plan.MD'))
+                dialog.assert_awaited_once()
+                message = EventLog.performed_actions(dialog.call_args.args[0], 'create ErrorDialog')[0]['message']
+                self.assertIn('in-memory preview limit', message)
+                publish.assert_not_called()
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            self.assertEqual(owner.history, history)
+            self.assertEqual(owner.base, base)
+            self.assertEqual(owner.notice.text, '')
+            self.assertEqual(set(owner.library._media), {'Vault/Home.md'})
+        self.run_async(exercise())
+
     def test_failed_cancelled_and_superseded_note_attempts_retire_only_abandoned_media(self):
         from dataclasses import replace
         async def exercise():
@@ -76,6 +126,7 @@ class ObsidianTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         LogisticsMobile.storage_root = self.root / 'app'
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.app.main_window._impl.dialog_responses['ErrorDialog'] = [None] * 10
         self.vault = self.root / 'Vault'
         (self.vault / '.obsidian').mkdir(parents=True)
         (self.vault / '.obsidian/private.md').write_text('# Configuration')
@@ -214,10 +265,13 @@ class ObsidianTests(unittest.TestCase):
                     await task
             self.assertFalse(owner.page_loading.active)
             self.assertEqual(owner.path, 'Vault/Home.md')
-            with patch.object(owner.library, 'read', side_effect=OSError('Offline')):
+            from unittest.mock import AsyncMock
+            with patch.object(owner.library, 'read', side_effect=OSError('Offline')), \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
                 self.assertFalse(await owner.open_note('Vault/Projects/Plan.MD'))
+                self.assertEqual(EventLog.performed_actions(dialog.call_args.args[0], 'create ErrorDialog')[0]['message'], 'Offline')
             self.assertFalse(owner.page_loading.active)
-            self.assertIn('Offline', owner.notice.text)
+            self.assertEqual(owner.notice.text, '')
         self.run_async(exercise())
 
     def test_nested_markdown_preview_and_adaptive_tree_keep_provider_identity(self):
