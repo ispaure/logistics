@@ -86,8 +86,10 @@ async def wait_for_text(view, expected, *, absent=None, timeout=30):
         if state.get('platform_backend', '').startswith('toga_iOS.'):
             # Capture the still-running process before the final failure exits
             # the app. This does not extend the existing render deadline.
+            # Briefcase truncates individual app log lines around 1 KiB. Keep
+            # this host-control signal small; full state is reported on failure.
             print('LOGISTICS_NATIVE_WEBVIEW_STALL=' + json.dumps(dict(
-                pid=os.getpid(), expected=expected, native=state)), flush=True)
+                pid=os.getpid(), expected=expected[:40])), flush=True)
         done, _ = await asyncio.wait([task], timeout=timeout - first_wait)
     if not done:
         state = native_state(view)
