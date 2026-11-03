@@ -81,6 +81,26 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertIn('Target note', window.viewer.browser.toPlainText())
             window.close()
 
+    def test_tree_drop_moves_nested_file_to_visible_library_root(self):
+        from types import SimpleNamespace
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Nested').mkdir()
+            (root / 'Nested/Move.md').write_text('# Preserve me')
+            window = self.open_library(root)
+            window.items['Nested'].setExpanded(True)
+            self.wait_until(lambda: not window.progress.busy)
+            window.tree.setCurrentItem(window.items['Nested/Move.md'])
+            root_item = window.items[window.library.root]
+            self.assertEqual(root_item.text(0), 'Library root')
+            event = SimpleNamespace(ignore=lambda: None, source=lambda: window.tree,
+                position=lambda: qt.QPointF(window.tree.visualItemRect(root_item).center()))
+            window.tree.dropEvent(event)
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual((root / 'Move.md').read_text(), '# Preserve me')
+            self.assertFalse((root / 'Nested/Move.md').exists())
+            window.close()
+
     def test_save_before_navigation_continues_once_and_failure_keeps_current_note(self):
         with self.temporary_directory() as directory:
             root = Path(directory)
@@ -773,7 +793,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 self.wait_until(lambda:not window.progress.busy)
                 self.assertIn(window,host.records)
                 self.assertIsNotNone(window.search)
-                self.assertEqual(window.tree.topLevelItemCount(),3)
+                self.assertEqual(window.items[window.library.root].childCount(),3)
                 child=window.open_note('Home.md');self.wait_until(lambda:not child.progress.busy and child.index >= 0)
                 self.assertIn('Home',child.viewer.browser.toPlainText())
                 child=window.open_note('Nested/Next.md');self.wait_until(lambda:not child.progress.busy and child.index >= 0)

@@ -44,6 +44,34 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_drag_moves_files_and_folders_and_library_root_is_an_explicit_target(self):
+        from mobile.obsidian import open_vault
+        (self.vault / 'Destination').mkdir()
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertIn(owner.root_drop_button, owner.files_content.children)
+            await owner.open_note('Vault/Home.md')
+            owner.sidebar.show_sidebar()
+            drag = owner.file_drag
+            self.assertTrue(drag.start('Vault/Home.md'))
+            self.assertTrue(drag.drop('Vault/Destination'))
+            self.assertTrue(await drag.task)
+            self.assertEqual(owner.path, 'Vault/Destination/Home.md')
+            self.assertTrue(owner.sidebar.sidebar_open)
+            self.assertFalse((self.vault / 'Home.md').exists())
+            self.assertTrue(drag.start('Vault/Destination/Home.md'))
+            self.assertTrue(drag.drop(owner.root))
+            self.assertTrue(await drag.task)
+            self.assertEqual(owner.path, 'Vault/Home.md')
+            self.assertTrue(drag.start('Vault/Projects'))
+            self.assertIsNone(drag.destination('Vault/Projects/Child'))
+            self.assertTrue(drag.drop('Vault/Destination'))
+            self.assertTrue(await drag.task)
+            self.assertTrue((self.vault / 'Destination/Projects/Plan.MD').is_file())
+            self.assertFalse(drag.start(owner.root))
+            owner.close()
+        self.run_async(exercise())
+
     def test_documents_discovers_libraries_two_folders_down_without_reading_notes(self):
         from mobile.notes_discovery import find_libraries
         (self.root / 'One/Two/.obsidian').mkdir(parents=True)
