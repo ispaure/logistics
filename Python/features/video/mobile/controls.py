@@ -104,6 +104,10 @@ class PlaybackControls:
                     finally:
                         self.busy = False
                         self.task = None
+            elif name == "favourite":
+                from mobile.favourites import favourite_resource
+                await favourite_resource(owner.app, owner.content.provider, owner.content.path, kind='video')
+                owner.native.status('Added to favourites')
             elif name == "showInFolder":
                 if self.busy:
                     return

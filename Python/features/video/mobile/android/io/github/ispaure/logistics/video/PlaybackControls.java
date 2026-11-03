@@ -130,7 +130,7 @@ final class PlaybackControls {
         if (!owner.allowed(false) || locked) return;
         choose("Playback", new String[] {"Go to time…", "Start over", "Undo seek", "Speed…", "Picture size…",
             "Subtitles and audio…", "Current folder…", "Previous episode", "Next episode",
-            (settings.optBoolean("autoplay_next") ? "✓ " : "") + "Play next automatically", "Mute / unmute", "Lock controls", "Show in folder"}, index -> {
+            (settings.optBoolean("autoplay_next") ? "✓ " : "") + "Play next automatically", "Mute / unmute", "Lock controls", "Show in folder", "Favourite file"}, index -> {
             switch (index) {
                 case 0: prompt("Seconds, MM:SS or HH:MM:SS", "", "seek"); break;
                 case 1: owner.seekTo(0); break;
@@ -152,6 +152,7 @@ final class PlaybackControls {
                 case 10: mute(); break;
                 case 11: lock(true); break;
                 case 12: emit("showInFolder", ""); break;
+                case 13: emit("favourite", ""); break;
             }
         });
     }
