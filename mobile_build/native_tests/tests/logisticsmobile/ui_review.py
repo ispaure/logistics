@@ -357,8 +357,9 @@ async def exercise_ui_review(app):
     assert app.provider_sessions().active.crypt_text.value == '# Meeting notes\n\nEdited while testing.\n'
     app.private_sessions.close(owner.session.id, discard=True)
     app.show_transfers()
-    assert app.transfer_view.content.children[0].text == 'Transfer details'
-    assert not any(getattr(child, 'text', '') == 'Choose a remote to pull' for child in app.transfer_view.content.children)
+    from .web_checks import wait_for_text
+    assert app.transfer_view.model['mode'] == 'progress'
+    await wait_for_text(app.transfer_view.web, 'Transfer details', absent='Choose a remote to pull')
     assert app.cloud_remote not in app.cloud_view.children
     await capture('transfers')
     async def appearance_mode(dark):
