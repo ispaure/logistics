@@ -2,8 +2,35 @@
 from base64 import b64encode
 from html import escape
 from pathlib import PurePosixPath
+from dataclasses import dataclass
 from commonUtils.runtime.operations import check_cancelled
 from services.documents.storage import DocumentResource, document_operation
+
+
+@dataclass(frozen=True)
+class PreviewContent:
+    name: str
+    size: int
+    image: bytes = b''
+    mime: str = ''
+    text: str = ''
+    video_url: str = ''
+
+    def html(self):
+        if self.video_url:
+            body = ('<h1>' + escape(self.name) + '</h1>'
+                    '<video controls playsinline preload="none" style="width:100%;max-height:75vh" src="'
+                    + escape(self.video_url, quote=True) + '">Video playback is unavailable.</video>')
+        elif self.image:
+            mime = self.mime
+            body = '<img alt="' + escape(self.name, quote=True) + '" src="data:' + mime + ';base64,' + b64encode(self.image).decode('ascii') + '">'
+        else:
+            body = '<h1>' + escape(self.name) + '</h1><p>' + escape(self.text) + '</p>'
+        return ('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">'
+                '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; '
+                'img-src data:; media-src http://127.0.0.1:*; base-uri \'none\'; form-action \'none\'">'
+                '<style>:root{color-scheme:light dark}body{font:16px sans-serif;margin:12px;background:Canvas;color:CanvasText}img{max-width:100%;height:auto}</style></head><body>'
+                + body + '<p>' + f'{self.size:,} bytes' + '</p></body></html>')
 
 
 class FilePreview:
@@ -63,24 +90,16 @@ class FilePreview:
                 result.close()
             raise
 
-    def page(self, index=0):
+    def content(self, index=0):
         if not 0 <= index < self.count:
             raise ValueError('Page does not exist.')
         image = self.document.page(index) if self.document is not None else self.image
-        if self.video_url:
-            body = ('<h1>' + escape(PurePosixPath(self.path).name) + '</h1>'
-                    '<video controls playsinline preload="none" style="width:100%;max-height:75vh" src="'
-                    + escape(self.video_url, quote=True) + '">Video playback is unavailable.</video>')
-        elif image:
-            mime = 'image/png' if self.document is not None else self.mime
-            body = '<img alt="' + escape(PurePosixPath(self.path).name, quote=True) + '" src="data:' + mime + ';base64,' + b64encode(image).decode('ascii') + '">'
-        else:
-            body = '<h1>' + escape(PurePosixPath(self.path).name) + '</h1><p>' + escape(self.text) + '</p>'
-        return ('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">'
-                '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; '
-                'img-src data:; media-src http://127.0.0.1:*; base-uri \'none\'; form-action \'none\'">'
-                '<style>:root{color-scheme:light dark}body{font:16px sans-serif;margin:12px;background:Canvas;color:CanvasText}img{max-width:100%;height:auto}</style></head><body>'
-                + body + '<p>' + f'{self.size:,} bytes' + '</p></body></html>')
+        mime = 'image/png' if self.document is not None else self.mime
+        return PreviewContent(PurePosixPath(self.path).name, self.size, image, mime, self.text, self.video_url)
+
+    def page(self, index=0):
+        """HTML adapter retained for mobile publication and existing callers."""
+        return self.content(index).html()
 
     def close(self):
         if self.transport is not None:

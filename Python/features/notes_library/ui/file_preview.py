@@ -6,7 +6,7 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 class PreviewBrowser(qt.QStackedWidget):
     def __init__(self):
         super().__init__()
-        self.html, self.pixmap = '', qt.QPixmap()
+        self.content, self.pixmap = None, qt.QPixmap()
         self.video = None
         self.details = qt.QTextBrowser()
         self.details.setOpenLinks(False)
@@ -19,14 +19,11 @@ class PreviewBrowser(qt.QStackedWidget):
         self.addWidget(self.details)
         self.addWidget(self.scroll)
 
-    def setHtml(self, html):
-        import re
-        from base64 import b64decode
+    def set_content(self, content):
         self.clear()
-        self.html = html
-        image = re.search(r'src="data:image/[^;]+;base64,([^"]+)"', html)
-        if image:
-            data = b64decode(image[1])
+        self.content = content
+        if content.image:
+            data = content.image
             buffer = qt.QBuffer()
             buffer.setData(data)
             buffer.open(qt.QIODevice.OpenModeFlag.ReadOnly)
@@ -40,11 +37,11 @@ class PreviewBrowser(qt.QStackedWidget):
             self.fit_image()
             self.scroll.verticalScrollBar().setValue(0)
         else:
-            self.details.setHtml(html)
+            self.details.setHtml(content.html())
             self.setCurrentWidget(self.details)
 
     def toHtml(self):
-        return self.html
+        return self.content.html() if self.content is not None else ''
 
     def toPlainText(self):
         return self.details.toPlainText()
@@ -65,7 +62,7 @@ class PreviewBrowser(qt.QStackedWidget):
             self.removeWidget(self.video)
             self.video.retire()
             self.video = None
-        self.html, self.pixmap = '', qt.QPixmap()
+        self.content, self.pixmap = None, qt.QPixmap()
         self.canvas.clear()
         self.details.clear()
 
@@ -103,10 +100,10 @@ class LibraryFilePreview(qt.QWidget):
             self.browser.video.player.pause()
         super().hideEvent(event)
 
-    def load(self, preview, html):
+    def load(self, preview, content):
         self.clear()
         self.preview, self.index = preview, 0
-        self.browser.setHtml(html)
+        self.browser.set_content(content)
         if preview.video_url:
             from pathlib import PurePosixPath
             from commonUtils.ui.markdown.videos import VideoCard
@@ -128,7 +125,7 @@ class LibraryFilePreview(qt.QWidget):
         if self.busy or self.preview is None or not 0 <= index < self.preview.count:
             return
         preview = self.preview
-        self.operation.start(lambda report, cancelled: (index, preview.page(index)), message='Reading page…')
+        self.operation.start(lambda report, cancelled: (index, preview.content(index)), message='Reading page…')
         self.update_controls()
 
     def completed(self, result, error):
@@ -138,8 +135,8 @@ class LibraryFilePreview(qt.QWidget):
         self.retired.clear()
         if self.preview is not None:
             if not error and not self.operation.cancelled.is_set():
-                index, html = result
-                self.browser.setHtml(html)
+                index, content = result
+                self.browser.set_content(content)
                 self.index = index
             self.update_controls()
             if error:

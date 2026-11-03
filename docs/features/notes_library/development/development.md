@@ -608,3 +608,14 @@ Dataview retains upfront index preparation for its synchronous `dv.pages()` and
 `app.vault.getMarkdownFiles()` compatibility API. Deferring that request by
 re-executing authored scripts would change execution semantics; no script replay
 is introduced by the connection optimization.
+
+## Structured file preview content
+
+`FilePreview.content()` returns `PreviewContent` with image bytes, MIME type,
+metadata and an admitted video URL. Desktop consumes image bytes directly through
+the existing oriented image decoder; it does not serialize or regex-parse HTML.
+Mobile and existing HTML callers use `FilePreview.page()`/`PreviewContent.html()`.
+PDF workers return structured page content on desktop and retain the same deferred
+resource retirement. Library/tab and mobile preview regressions cover image/PDF/
+video/unknown files, cancellation and cleanup; a native desktop image contract
+check refuses any HTML serialization while opening the preview.
