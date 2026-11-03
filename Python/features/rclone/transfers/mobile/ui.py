@@ -67,16 +67,20 @@ class MirrorUI(TransferReviewUI):
         from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
         from features.rclone.mobile.service import native_service
         store = self.mirror_store()
-        from features.rclone.transfers.mobile.jobs import resolved_job
+        from features.rclone.transfers.mobile.jobs import loaded_copy_cipher, resolved_job
         for job in store.jobs.values():
             job = resolved_job(client, job)
-            if not job['crypt'] or job['remote'] not in getattr(self, 'cloud_crypt_remotes', ()):
+            cipher = loaded_copy_cipher(client, job)
+            remote = cipher or job['remote']
+            if not job['crypt'] or remote not in getattr(self, 'cloud_crypt_remotes', ()):
                 continue
             try:
-                if client.connection_identity(job['remote']) != job['identity'] or not store.target(job).exists():
+                if (not cipher and client.connection_identity(remote) != job['identity']) or not store.target(job).exists():
                     continue
-                provider = native_service(client).localcrypt.open(LocalCryptLocation(collection_path(self.private_root, True), job['remote'], namespace=job['identity'], storage_root=self.private_root))
-                result['LocalCrypt: ' + job['remote'] + ' (pulled)'] = provider
+                provider = native_service(client).localcrypt.open(LocalCryptLocation(
+                    collection_path(self.private_root, True), remote, namespace=job['identity'],
+                    storage_root=self.private_root, create=False, cipher_identity=job['cipher_identity']))
+                result['LocalCrypt: ' + remote + ' (pulled)'] = provider
             except (OSError, ValueError):
                 continue
         return result
@@ -93,34 +97,63 @@ class MirrorUI(TransferReviewUI):
             if present:
                 self.show_view(self._transfer_review_view, destination='files', route='transfer-review', title='Transfer review')
             return
-        store = self.mirror_store()
-        box = toga.Box(style=Pack(direction=COLUMN, margin=12))
-        box.add(toga.Label('Transfer details', style=Pack(font_size=22)))
-        endpoints = getattr(self, 'transfer_endpoints', None)
-        if endpoints:
-            source, destination = endpoints
-            box.add(toga.Label(import_hint(f'From: {source}\nTo: {destination}'),
-                               style=Pack(font_size=12, margin_bottom=8)))
-        box.add(toga.Button('Back', on_press=lambda widget, **kwargs: self.routes.back(), style=Pack(height=48)))
-        self.transfer_progress = toga.ProgressBar(max=100, value=100 if getattr(self, 'transfer_complete', False) else 0, style=Pack(height=12))
-        self.transfer_notice = toga.Label(import_hint((store.error or getattr(self, 'transfer_message', 'No transfer is running.')).replace(' · ', '\n')))
-        box.add(self.transfer_progress)
-        box.add(self.transfer_notice)
-        box.add(toga.Label(import_hint('You can leave this screen while the transfer continues. Local documents remain available. Cloud previews must wait until the transfer finishes.\n\nThe total can grow as more files are found. Progress reaches 100% after verification.'), style=Pack(font_size=12, margin_top=12)))
-        if not getattr(self, 'transfer_busy', False):
-            box.add(toga.Button('Transfer settings…', on_press=self.show_transfer_options, style=Pack(height=44)))
-        if getattr(self, 'transfer_busy', False):
-            box.add(toga.Button('Cancel transfer', on_press=self.cancel_mirror_transfer, style=Pack(height=44)))
-        self.transfer_view = toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
+        from types import SimpleNamespace
+        from .surface import TransferSurface
+        old = getattr(self, '_progress_surface', None)
+        if old is not None and not old.closed:
+            self.transfer_view = old
+        else:
+            async def command(action, args):
+                if action == 'background':
+                    self.routes.back()
+                    screens = self.routes.screens[self.native_host.state.destination]
+                    if screens and screens[-1][0] == 'local-push':
+                        self.routes.back()
+                        setup = getattr(self, '_transfer_setup_surface', None)
+                        if setup is not None:
+                            setup.dispose()
+                elif action == 'stop' and self.transfer_busy:
+                    epoch = self.transfer_epoch
+                    confirmed = await self.main_window.dialog(toga.ConfirmDialog('Stop this transfer?',
+                        'Files already copied, replaced or deleted will stay changed.'))
+                    if confirmed and self.transfer_busy and epoch == self.transfer_epoch:
+                        self.cancel_mirror_transfer()
+                elif action == 'settings' and not self.transfer_busy:
+                    self.show_transfer_options()
+            def visible():
+                if not self.active_host:
+                    return False
+                screens = self.routes.screens[self.native_host.state.destination]
+                return bool(screens and screens[-1][0] == 'transfers')
+            self._progress_surface = self.transfer_view = TransferSurface(self.app, command, visible=visible)
+        # Retain the existing programmatic status handles used by cloud callers.
+        if not hasattr(self, 'transfer_notice'):
+            self.transfer_notice = toga.Label('')
+        if not hasattr(self, 'transfer_progress'):
+            self.transfer_progress = toga.ProgressBar(max=100, value=0)
+        self.transfer_files = getattr(self, 'transfer_files', SimpleNamespace(text=''))
+        self.transfer_bytes = getattr(self, 'transfer_bytes', SimpleNamespace(text=''))
+        self.render_transfer_summary()
         if present:
-            self.show_view(self.transfer_view, route='transfers', title='Transfer details')
-        if getattr(self, 'transfer_busy', False):
-            percentage = getattr(self, 'transfer_percentage', None)
-            if percentage is None:
-                self.transfer_progress.max = None
-                self.transfer_progress.start()
-            else:
-                self.transfer_progress.value = percentage
+            self.show_view(self.transfer_view, route='transfers', title='Transfer')
+            self.transfer_view.queue_send()
+        percentage = getattr(self, 'transfer_percentage', None)
+        self.transfer_progress.stop()
+        self.transfer_progress.max = 100 if percentage is not None or not self.transfer_busy else None
+        if self.transfer_progress.max is not None:
+            self.transfer_progress.value = 100 if self.transfer_complete else percentage if percentage is not None else 0
+
+    def render_transfer_summary(self):
+        from features.rclone.transfers.presentation import progress_model
+        model = progress_model(self.state)
+        if self.mirror_store().error:
+            model.update(phase='failed', message=self.mirror_store().error)
+        self.transfer_notice.text = import_hint(self.transfer_message)
+        self.transfer_files.text = 'Files\n' + f"{model['files']:,}" + (f" / {model['total_files']:,}" if model['total_files'] else '')
+        self.transfer_bytes.text = f"Data (MB)\n{model['done'] / 1_000_000:,.2f} /\n{model['total'] / 1_000_000:,.2f}"
+        surface = getattr(self, '_progress_surface', None)
+        if surface is not None and not surface.closed:
+            surface.update(model)
 
     def choose_transfer_copy(self, jobs, *, push=False):
         """Resolve an ambiguous transfer without turning details into a folder list."""
@@ -149,7 +182,8 @@ class MirrorUI(TransferReviewUI):
             await asyncio.to_thread(store.delete_copy, key)
             self.transfer_message = 'Local folder deleted. Online files were kept.'
             if hasattr(self, 'files_view'):
-                self.file_roots = {'Local files': None, **self.existing_crypt_locations(), **self.linked_crypt_locations()}
+                self.file_roots = {**self.app.ordinary_file_roots(include_collections=False),
+                                   **self.existing_crypt_locations(), **self.linked_crypt_locations()}
                 self.file_provider = None
                 self.update_file_locations()
             self.show_transfers()
@@ -260,6 +294,9 @@ class MirrorUI(TransferReviewUI):
             return
         previous = getattr(self, 'transfer_message', None)
         snapshot = transfer_progress(values)
+        self._transfer_progress_snapshot = (epoch, snapshot)
+        if hasattr(self, 'state'):
+            self.state.metrics = dict(values)
         self.transfer_percentage, self.transfer_message = snapshot.percentage, snapshot.message
         done, total = snapshot.done, snapshot.total
         widgets = (id(self.transfer_notice), id(self.cloud_status), id(self.transfer_progress),
@@ -290,6 +327,8 @@ class MirrorUI(TransferReviewUI):
                 bar.max = None
                 bar.start()
 
+        if hasattr(self, '_progress_surface'):
+            self.render_transfer_summary()
         self.refresh_transfer_status()
 
     def cancel_mirror_transfer(self, widget=None, **kwargs):
@@ -304,6 +343,8 @@ class MirrorUI(TransferReviewUI):
                 self.cloud_client.cancel()
             self.transfer_message = 'Stopping transfer… Files already copied, replaced or deleted will stay changed.'
             self.transfer_notice.text = import_hint(self.transfer_message)
+            if hasattr(self, '_progress_surface'):
+                self.render_transfer_summary()
 
 
 
@@ -313,32 +354,36 @@ class MirrorUI(TransferReviewUI):
             return False
         store = self.mirror_store()
         job = store.jobs[key]
-        await self.show_local_location()
-        if job['crypt']:
-            client, generation = self.cloud_client, getattr(self.cloud_client, 'generation', None)
-            origin = self.navigation_generation
-            def resolve():
-                from features.rclone.transfers.mobile.jobs import remote_location
-                from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
-                from features.rclone.mobile.service import native_service
-                _, folder = remote_location(client, dict(job))
-                provider = native_service(client).localcrypt.open(LocalCryptLocation(
-                    collection_path(self.private_root, True), job['remote'], namespace=job['identity'], storage_root=self.private_root))
-                return folder, provider
-            try:
-                folder, provider = await asyncio.to_thread(resolve)
-            except (OSError, ValueError) as error:
-                self.file_status.value = str(error)
-                return False
-            if (not self.active_host or origin != self.navigation_generation or client is not self.cloud_client
-                    or generation != getattr(client, 'generation', None)):
-                provider.close()
-                return False
-            label = 'LocalCrypt: ' + job['remote'] + ' (pulled)'
-            self.file_roots[label] = provider
-            self.update_file_locations()
-            return await self.browser_file_location((label, folder))
-        return await self.browser_file_location(('Local files', job['target']))
+        if not job['crypt']:
+            return await self.show_files(location=('Local files', job['target']))
+        if await self.show_local_location() is False:
+            return False
+        client, generation = self.cloud_client, getattr(self.cloud_client, 'generation', None)
+        origin = self.navigation_generation
+        def resolve():
+            from features.rclone.transfers.mobile.jobs import local_copy_location
+            from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
+            from features.rclone.mobile.service import native_service
+            remote, folder = local_copy_location(client, job)
+            provider = native_service(client).localcrypt.open(LocalCryptLocation(
+                collection_path(self.private_root, True), remote, namespace=job['identity'],
+                storage_root=self.private_root, create=False, cipher_identity=job['cipher_identity']))
+            return remote, folder, provider
+        try:
+            remote, folder, provider = await asyncio.to_thread(resolve)
+        except (OSError, ValueError) as error:
+            self.file_status.value = str(error)
+            return False
+        if (not self.active_host or origin != self.navigation_generation or client is not self.cloud_client
+                or generation != getattr(client, 'generation', None)):
+            provider.close()
+            return False
+        label = 'LocalCrypt: ' + remote + ' (pulled)'
+        self.file_roots[label] = provider
+        self.update_file_locations()
+        self.files_view._folder_entry_location = (label, folder)
+        self.app.file_browser.history.clear()
+        return await self.browser_file_location((label, folder))
 
 
 class TransferExecutionPresentation:
@@ -395,4 +440,4 @@ class TransferExecutionPresentation:
             owner.loop.call_later(5, clear_completion)
         screens = owner.routes.screens[owner.native_host.state.destination]
         if screens and screens[-1][0] == 'transfers':
-            owner.show_transfers()
+            owner.render_transfer_summary()

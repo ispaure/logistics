@@ -85,7 +85,7 @@ final class PlaybackControls {
                 || !updated.optString("subtitle_language").equals(settings.optString("subtitle_language"))
                 || updated.optDouble("subtitle_scale", 1) != settings.optDouble("subtitle_scale", 1);
             settings = updated; queue = new JSONArray(rows);
-            owner.setVideoHeader(settings.optString("video_title"), settings.optString("source_label"), settings.optBoolean("source_remote"));
+            owner.setVideoHeader(settings.optString("video_title"), settings.optString("video_path"), settings.optString("source_label"), settings.optBoolean("source_remote"));
             if (reload) owner.reloadPlaybackOptions();
             apply();
         } catch (Exception error) { owner.status("Invalid playback preferences."); }

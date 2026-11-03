@@ -100,6 +100,14 @@ fixtures run Toga dummy and do not certify native controls. Async tests need a
 lifecycle appropriate to their running loop; the synchronous app fixture rejects
 an already-running loop.
 
+Keep setup proportional to the behavior under test. Command-routing and report
+tests can stub the repository-wide preflight; separate small fixtures must still
+exercise the real validator and prove invalid input stops execution. Restore
+patches, import paths and environment changes with cleanup contexts. For local
+HTTP fixtures, use a short `serve_forever(poll_interval=...)` interval so shutdown
+does not add the default half-second to every case. Keep real requests and verify
+the server thread stops; shortening polling must not bypass cancellation or cleanup.
+
 ## Decide which files to update
 
 A normal `test_*.py` file under an existing recursive root needs its stage

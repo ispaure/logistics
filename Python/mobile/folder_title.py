@@ -24,9 +24,21 @@ def mount(header, controller, title):
     width = max(44, min(220, float(header.window._impl.native.bounds.size.width) - 216))
     header.status.style.font_size = 17 * .75
     identity = next(child for child in header.storage_identity.children if hasattr(child, 'text'))
-    controller.navigationItem.titleView = storage_title(title, identity.text, header._storage_kinds, width)
+    kinds = tuple(header._storage_kinds)
+    state = (title, identity.text, kinds, width, header.folder_location)
+    if getattr(header, '_folder_title_state', None) != state:
+        from .document_location import bind_apple_hold
+        header._folder_title_view = storage_title(title, identity.text, kinds, width)
+        bind_apple_hold(header, header._folder_title_view, lambda owner: owner.show_location(name=title))
+        header._folder_title_state = state
+    if getattr(controller.navigationItem, 'titleView', None) != header._folder_title_view:
+        controller.navigationItem.titleView = header._folder_title_view
     header._native_title_mounted = True
     header.refresh_status()
+
+
+def storage_title_height(text):
+    return 37 if text else 21
 
 
 def storage_title(title, text, kinds, width):
@@ -37,14 +49,17 @@ def storage_title(title, text, kinds, width):
     title_size = 17
     from commonUtils.ui.readers.layout import READER_LAYOUT
     subtitle_size = READER_LAYOUT.caption_size
-    view = ObjCClass('UIView').alloc().initWithFrame(CGRect((0, 0), (width, 37)))
-    label = ObjCClass('UILabel').alloc().initWithFrame(CGRect((0, 0), (width, 21)))
+    from commonUtils.ui.native.panning_title import apple_title_class
+    label = apple_title_class().alloc().initWithFrame(CGRect((0, 0), (width, storage_title_height(None))))
     label.text = title
     label.font = ObjCClass('UIFont').systemFontOfSize(title_size)
     label.textAlignment = 1
     label.lineBreakMode = 5
     label.textColor = apple_color('text')
     label.autoresizingMask = 2
+    if not text:
+        return label
+    view = ObjCClass('UIView').alloc().initWithFrame(CGRect((0, 0), (width, storage_title_height(text))))
     view.addSubview(label)
     scroll = ObjCClass('UIScrollView').alloc().initWithFrame(CGRect((0, 22), (width, 15)))
     scroll.autoresizingMask = 2

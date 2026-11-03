@@ -1,11 +1,15 @@
 # Mobile document host and validation
 
+The mobile folder, document and video headers use the shared panning title
+from commonUtils. The Android build compiles its native Java source root.
+The iOS project includes the shared UIKit label when configuring its launcher.
+
 ## Offline component notices
 
 Settings → About → Open-source licenses uses `services/open_source.py` for installed
 Python dependency notices, the vendored rmscene notice and the Go build's
 `mobile/native-licenses/manifest.json`. The Python inventory follows the platform's
-declared requirements and their installed dependencies, excluding optional extras
+declared requirements and their installed dependencies, excluding unrequested extras
 and unrelated host tools. Package metadata and license files must remain in the
 final app; missing texts are displayed explicitly.
 
@@ -16,15 +20,21 @@ versions and source addresses in `services/licenses/native.json` must be updated
 with their pinned dependencies. The bundled LGPL, GPL, Apache and Python texts
 are upstream license resources, not application guides.
 
+The Android Gradle hook collects the resolved runtime and Chaquopy support
+artifacts, including transitive dependencies, selected versions and Maven parent
+license declarations. The resulting `logistics-open-source.json` asset is read
+offline through the native asset manager. Go collection includes package-local
+notices for both supported architectures under the target OS. Desktop-only source
+notice catalogs are excluded from the mobile payload.
+
+See [open-source notices](open-source-notices.md) for collector ownership, refresh
+commands, exact validation scope and unresolved publisher/provenance items.
 This viewer does not establish redistribution permission or complete source and
-relinking obligations. The native catalog covers the declared direct libraries;
-transitive Java dependencies and codec notices still require artifact review.
-The Onyx entries record the publisher's BSD-3 Maven metadata and its missing
-complete AAR notice. ML Kit links to the publisher's online terms. Resolve these
-gaps and verify the final artifact's notice inventory before store publication.
+relinking obligations; verify the final artifact before store publication.
 
 Host coverage: `test_open_source.py`, `test_settings_page.py`,
-`test_settings_ui.py` and `test_mobile_packaging.py`. Native device layout and
+`test_settings_ui.py`, `test_license_inventory.py`, `test_license_build.py` and
+`test_mobile_packaging.py`. Native device layout and
 final APK/IPA contents require separate release validation.
 
 ## Launcher artwork

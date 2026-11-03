@@ -40,6 +40,7 @@
     "documents/video_state.py",
     "documents/video_migration.py",
     "documents/video_settings.py",
-    "open_source.py"
+    "open_source.py",
+    "license_inventory.py"
   ]
 }

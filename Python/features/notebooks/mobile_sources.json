@@ -47,6 +47,8 @@
     "assets/mobile.css",
     "assets/mobile.js",
     "assets/queue.js",
-    "assets/viewport.js"
+    "assets/theme.css",
+    "assets/viewport.js",
+    "assets/zoom.js"
   ]
 }

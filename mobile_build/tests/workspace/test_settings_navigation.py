@@ -187,7 +187,7 @@ class SettingsNavigationTests(unittest.TestCase):
             self.assertGreater(button.style.height, 48)
             nav.choose('Books & Comics')
             hint = next(child for child in nav.sections['Books & Comics'].children
-                        if isinstance(child, toga.Label) and child.text.startswith('Keep'))
+                        if isinstance(child, toga.Label) and child.text.startswith('While holding'))
             original = hint._settings_source_text
             self.assertGreater(len(hint.text.splitlines()), len(original.splitlines()))
         self.width.return_value = 1400

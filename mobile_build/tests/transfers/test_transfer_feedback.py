@@ -27,6 +27,58 @@ class TransferFeedbackTests(TestCase):
         self.app.cloud_client = RemoteClient()
         self.app.show_cloud(present=False)
 
+    def test_progress_uses_compact_metrics_and_discloses_secondary_counters(self):
+        app = self.app
+        app.transfer_busy = True
+        app.transfer_epoch = 7
+        app.transfer_endpoints = ('Local/Photos', 'Cloud:Photos')
+        app.show_transfers()
+        app.publish_mirror_progress(7, dict(phase='Transferring', files=2, total_files=4,
+            done=12500000, total=25000000, active=1, listed=12, checks=8))
+        controller = app.transfer_controller()
+        model = app.transfer_view.model
+        self.assertEqual(model['percentage'], 50)
+        self.assertEqual(model['files'], 2)
+        self.assertEqual(model['total_files'], 4)
+        self.assertEqual(model['checks'], 8)
+        first = app.transfer_view
+        app.show_transfers()
+        self.assertIs(app.transfer_view, first)
+        self.assertEqual(controller.transfer_files.text, 'Files\n2 / 4')
+
+    def test_transfer_settings_remain_reachable_from_setup_and_return_to_setup(self):
+        app = self.app
+        app.loaded_remote_names = lambda: ['Personal']
+        app.cloud_busy = False
+        app.show_local_push('Personal')
+        setup = app.transfer_controller()._transfer_setup_surface
+        app.loop.run_until_complete(setup.dispatch('settings', {}))
+        self.assertEqual(app.routes.screens['files'][-1][0], 'transfer-settings')
+        panel = app.body
+        # Cancel is the last button of the feature's native settings form.
+        form = panel.children[0] if len(panel.children) == 1 else panel
+        while not any(isinstance(child, toga.Button) and child.text == 'Cancel' for child in form.children):
+            form = form.children[-1]
+        next(child for child in form.children if isinstance(child, toga.Button) and child.text == 'Cancel').on_press()
+        self.assertEqual(app.routes.screens['files'][-1][0], 'local-push')
+        self.assertFalse(setup.closed)
+
+    def test_declined_credentials_leave_push_setup_usable(self):
+        app = self.app
+        app.loaded_remote_names = lambda: ['Personal']
+        app.cloud_busy = False
+        app.show_local_push('Personal')
+        setup = app.transfer_controller()._transfer_setup_surface
+        setup.pending = None
+        setup.delivered_revision = setup.revision
+        async def exercise():
+            with patch.object(app, 'require_remote_credentials_async', new=AsyncMock(return_value=False)):
+                await setup.dispatch('start-review', dict(revision=str(setup.revision)))
+                self.assertFalse(await app.transfer_task)
+            self.assertFalse(setup.closed)
+            self.assertEqual(app.routes.screens['files'][-1][0], 'local-push')
+        app.loop.run_until_complete(exercise())
+
     def test_readers_never_show_sync_status(self):
         from mobile.reader_chrome import reader_buttons, transfer_control
         app = self.app
@@ -54,7 +106,10 @@ class TransferFeedbackTests(TestCase):
                 self.assertIsNotNone(button.parent)
                 self.assertEqual(button._impl._surface_roles, ('hover', 'text', False))
                 self.assertTrue(app._sync_status_controls[destination][3])
-                self.assertGreater(len(button.parent.children), 1)
+                if destination == 'home':
+                    self.assertIs(app._home_status_row.parent, app.home_content)
+                else:
+                    self.assertGreater(len(button.parent.children), 1)
                 self.assertIn('42%', button.accessible_name)
                 self.assertEqual(sum((control if inline else row).parent is not None
                                      for _, row, control, inline in app._sync_status_controls.values()), 1)
@@ -70,6 +125,9 @@ class TransferFeedbackTests(TestCase):
         button = app._sync_status_controls['home'][2]
         self.assertIs(button.parent, app._home_status_row)
         self.assertIsNone(app.home_sections.content.transfer_banner)
+        app.transfer_busy = app.transfer_notification = False
+        app.refresh_transfer_status()
+        self.assertIsNone(app._home_status_row.parent)
 
     def test_chat_title_reserves_sync_space_and_restores_it_on_dismissal(self):
         app = self.app
@@ -166,9 +224,7 @@ class TransferFeedbackTests(TestCase):
                 app.show_transfers()
                 app.show_transfers()  # A progress/completion redraw keeps the same return path.
                 self.assertEqual(app.native_host.state.destination, destination)
-                back = next(child for child in app.transfer_view.content.children
-                            if isinstance(child, toga.Button) and child.text == 'Back')
-                back.on_press()
+                app.loop.run_until_complete(app.transfer_view.dispatch('background', {}))
                 self.assertIs(app.body, origin)
                 self.assertTrue(app.transfer_busy)
                 app._transfer_cancel.set.assert_not_called()

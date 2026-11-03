@@ -7,6 +7,7 @@ import plistlib
 import re
 import shutil
 import subprocess
+import sys
 import time
 
 from logistics_build.build_retention import scratch
@@ -19,7 +20,7 @@ from build_manager.android_emulators import AndroidEmulator
 REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO
 BUNDLE = 'io.github.ispaure.logisticsstorageqa'
-QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
+QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
 NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
@@ -32,6 +33,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.document_creation_probe'):
+        return NATIVE_DIAGNOSTICS + ('creation-name.png', 'creation-location.png', 'creation-landscape-left.png', 'creation-portrait.png')
     return NATIVE_DIAGNOSTICS + (SYNC_SCREENSHOTS if entry_point.endswith('.sync_status_probe') else ())
 
 
@@ -168,7 +171,8 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
 def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         entry_point='tests.logisticsmobile.document_storage_probe',
         result_name='document-storage-result.json', family='iPhone', increase_contrast=False,
-        duoctl=None, pose=None):
+        duoctl=None, pose=None, keyboard_intro=None):
+    output.mkdir(parents=True, exist_ok=True)
     client = AppleSimulators(env)
     inventory = client.devices()['devices']
     runtime, model = next((rt, row['deviceTypeIdentifier']) for rt, rows in inventory.items()
@@ -183,7 +187,6 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         if pose is not None:
             if duoctl is None:
                 raise ValueError('Duo pose matrix requires --duoctl with the reviewed simulator helper.')
-            import sys
             tool = [sys.executable, str(duoctl), '-d', device]
             if pose != 'closed':
                 # A freshly booted Duo can report an open hinge while its cover
@@ -207,6 +210,15 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 raise RuntimeError('iOS Increase Contrast could not be enabled.')
         client.invoke('install', device, str(app), timeout=180)
         cache = Path(client.invoke('get_app_container', device, bundle, 'data')) / 'Library/Caches'
+        drive_folds = duoctl is not None and family == 'iPhone Duo' and entry_point.endswith('.reader_title_probe')
+        creation_folds = (duoctl is not None and pose == 'partial'
+                          and entry_point.endswith('.document_creation_probe'))
+        if drive_folds or creation_folds:
+            (cache / 'drive-folds').touch()
+        if entry_point.endswith('.notes_library_probe'):
+            (cache / 'notes-keyboard').touch()
+        if family == 'iPhone Duo' and pose == 'partial' and entry_point.endswith('.notes_library_probe'):
+            (cache / 'notes-laptop-keyboard').touch()
         console_stream = (output / 'ios-console.log').open('w')
         console = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', device, bundle],
             env=env, stdout=console_stream, stderr=subprocess.STDOUT)
@@ -223,6 +235,28 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                     print(json.dumps(dict(native_elapsed_s=round(summary['elapsed_s'], 1),
                         last_case=checkpoints[-1]['case'] if checkpoints else None,
                         active=[row['name'] for row in value['records'] if row['status'] == 'running'])), flush=True)
+            if drive_folds or creation_folds:
+                folder = 'document-creation-evidence' if creation_folds else 'viewer-layout'
+                request = cache / folder / 'fold-request.json'
+                done = request.with_name('fold-done.json')
+                if request.exists() and not done.exists():
+                    change = json.loads(request.read_text())
+                    subprocess.run([sys.executable, str(duoctl), '-d', device, 'hinge', str(change['angle'])],
+                        timeout=60, env=env, check=True, capture_output=True)
+                    pending = done.with_suffix('.tmp')
+                    pending.write_text(json.dumps(change))
+                    pending.replace(done)
+            keyboard_capture = cache / 'viewer-layout/keyboard-capture-request'
+            if keyboard_capture.exists():
+                if keyboard_intro is not None:
+                    client.invoke('io', device, 'screenshot', str(output / 'keyboard-introduction.png'))
+                    subprocess.run([sys.executable, str(duoctl), '-d', device, 'tap', *map(str, keyboard_intro)],
+                                   env=env, timeout=60, check=True, capture_output=True)
+                    keyboard_intro = None
+                    time.sleep(.5)
+                client.invoke('io', device, 'screenshot', str(output / 'duo-keyboard-screen.png'))
+                keyboard_capture.unlink()
+                (cache / 'viewer-layout/keyboard-capture-done').touch()
             report = cache / result_name
             if report.exists():
                 result = json.loads(report.read_text())
@@ -278,7 +312,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
 
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
-                result_name='document-storage-result.json', device=None):
+                result_name='document-storage-result.json', device=None, tablet=False):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe', '.notebook_load_probe'))
@@ -314,6 +348,11 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         else:
             record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
+        if device is None and entry_point.endswith('.document_creation_probe'):
+            emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
+        if tablet:
+            emulator.invoke('-s', serial, 'shell', 'wm', 'size', '1600x2400')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
         if device is None and entry_point.endswith('.sync_status_probe'):
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '640x1136')
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
@@ -325,8 +364,16 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
         deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 240)
-        last_stage = None
+        last_stage = last_orientation = None
         while time.monotonic() < deadline:
+            if tablet:
+                result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
+                pose = result.stdout.strip()
+                if result.returncode == 0 and pose in (b'portrait', b'landscape-left') and pose != last_orientation:
+                    emulator.invoke('-s', serial, 'shell', 'wm', 'user-rotation', 'lock',
+                                    '1' if pose == b'landscape-left' else '0')
+                    last_orientation = pose
             if memory_probe:
                 progress = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/notebook-memory-progress.json'], env=env, capture_output=True, timeout=15)
@@ -383,64 +430,67 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             time.sleep(.3)
         raise TimeoutError('Android document storage probe timed out')
     finally:
-        if record is not None:
-            if entry_point.endswith(('.viewer_layout_probe', '.control_center_probe')):
-                import io
-                import tarfile
-                archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
-                    'run-as', bundle, 'tar', '-cf', '-', 'cache/viewer-layout'],
-                    env=env, capture_output=True, timeout=45)
-                if archive.returncode == 0:
-                    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as evidence:
-                        evidence.extractall(output, filter='data')
-            if raw_ink or hands_on:
-                for name in ('baseline.png', 'raw-final.png', 'comparison.rmdoc', 'stage.json', 'observations.json'):
-                    artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
-                        'run-as', bundle, 'cat', 'cache/boox-raw-ink/' + name], env=env, capture_output=True, timeout=15)
-                    if artifact.returncode == 0 and not artifact.stdout.startswith(b'cat: '):
-                        (output / name).write_bytes(artifact.stdout)
-            if entry_point.endswith('.notebook_input_probe'):
-                for name in ('canvas.png', 'dropdown.png', 'overview.png'):
-                    artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
-                        'run-as', bundle, 'cat', 'cache/notebook-input/' + name], env=env, capture_output=True, timeout=15)
-                    if artifact.returncode == 0:
-                        (output / name).write_bytes(artifact.stdout)
-            if memory_probe:
-                for name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png',
-                             *[f'notebook-soak-{index:02d}.png' for index in range(8)]):
+        try:
+            if record is not None:
+                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe')):
+                    import io
+                    import tarfile
+                    archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                        'run-as', bundle, 'tar', '-cf', '-', 'cache/viewer-layout'],
+                        env=env, capture_output=True, timeout=45)
+                    if archive.returncode == 0:
+                        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as evidence:
+                            evidence.extractall(output, filter='data')
+                if raw_ink or hands_on:
+                    for name in ('baseline.png', 'raw-final.png', 'comparison.rmdoc', 'stage.json', 'observations.json'):
+                        artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                            'run-as', bundle, 'cat', 'cache/boox-raw-ink/' + name], env=env, capture_output=True, timeout=15)
+                        if artifact.returncode == 0 and not artifact.stdout.startswith(b'cat: '):
+                            (output / name).write_bytes(artifact.stdout)
+                if entry_point.endswith('.notebook_input_probe'):
+                    for name in ('canvas.png', 'dropdown.png', 'overview.png'):
+                        artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                            'run-as', bundle, 'cat', 'cache/notebook-input/' + name], env=env, capture_output=True, timeout=15)
+                        if artifact.returncode == 0:
+                            (output / name).write_bytes(artifact.stdout)
+                if memory_probe:
+                    for name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png',
+                                 *[f'notebook-soak-{index:02d}.png' for index in range(8)]):
+                        artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                            'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
+                        if artifact.returncode == 0:
+                            (output / name).write_bytes(artifact.stdout)
+                try:
+                    screen = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                        'screencap', '-p'], env=env, capture_output=True, timeout=15)
+                    if screen.returncode == 0:
+                        (output / 'android-final.png').write_bytes(screen.stdout)
+                except (OSError, subprocess.SubprocessError):
+                    pass  # A missing screenshot must not prevent owned cleanup.
+                report_data = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                    'run-as', bundle, 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
+                if report_data.returncode == 0 and report_data.stdout:
+                    (output / 'android-result.json').write_bytes(report_data.stdout)
+                for name in diagnostics(entry_point):
                     artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                         'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
-                    if artifact.returncode == 0:
+                    if artifact.returncode == 0 and (not name.endswith('.png') or artifact.stdout.startswith(b'\x89PNG')):
                         (output / name).write_bytes(artifact.stdout)
-            try:
-                screen = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
-                    'screencap', '-p'], env=env, capture_output=True, timeout=15)
-                if screen.returncode == 0:
-                    (output / 'android-final.png').write_bytes(screen.stdout)
-            except (OSError, subprocess.SubprocessError):
-                pass  # A missing screenshot must not prevent owned cleanup.
-            report_data = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
-                'run-as', bundle, 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
-            if report_data.returncode == 0 and report_data.stdout:
-                (output / 'android-result.json').write_bytes(report_data.stdout)
-            for name in diagnostics(entry_point):
-                artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
-                    'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
-                if artifact.returncode == 0 and (not name.endswith('.png') or artifact.stdout.startswith(b'\x89PNG')):
-                    (output / name).write_bytes(artifact.stdout)
-            (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
-            try:
-                (output / 'android-exit-info.txt').write_text(emulator.invoke(
-                    '-s', record['serial'], 'shell', 'dumpsys', 'activity', 'exit-info', bundle))
-            except RuntimeError:
-                pass
-            emulator.invoke('-s', record['serial'], 'uninstall', bundle)
-            if device is not None:
-                remaining = emulator.invoke('-s', device, 'shell', 'pm', 'list', 'packages', 'logistics')
-                (output / 'remaining-packages.txt').write_text(remaining)
-        # The manager's lease validates ownership before removing the AVD.
-        emulator.cleanup()
-        (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
+                (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
+                try:
+                    (output / 'android-exit-info.txt').write_text(emulator.invoke(
+                        '-s', record['serial'], 'shell', 'dumpsys', 'activity', 'exit-info', bundle))
+                except RuntimeError:
+                    pass
+        finally:
+            if record is not None:
+                emulator.invoke('-s', record['serial'], 'uninstall', bundle)
+                if device is not None:
+                    remaining = emulator.invoke('-s', device, 'shell', 'pm', 'list', 'packages', 'logistics')
+                    (output / 'remaining-packages.txt').write_text(remaining)
+            # The manager's lease validates ownership before removing the AVD.
+            emulator.cleanup()
+            (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
 
 
 def main():
@@ -450,14 +500,17 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
     parser.add_argument('--pose', choices=('closed', 'open', 'partial'), help='Explicit Duo simulator posture')
     parser.add_argument('--duoctl', type=Path, help='Reviewed external simulator-only Duo pose helper')
     parser.add_argument('--increase-contrast', action='store_true')
+    parser.add_argument('--android-tablet', action='store_true', help='Use a tablet viewport on the disposable Android emulator.')
     args = parser.parse_args()
+    if args.android_tablet and (args.platform != 'android' or args.device):
+        parser.error('--android-tablet requires the disposable Android emulator.')
     if args.pose and (args.platform != 'ios' or args.family != 'iPhone Duo'):
         parser.error('--pose requires an iOS iPhone Duo run')
     if args.device and args.platform != 'android':
@@ -482,6 +535,7 @@ def main():
     with scratch(REPO) as workspace:
         os.environ['LOGISTICS_DEPLOY_WORKSPACE'] = str(workspace)
         env['LOGISTICS_DEPLOY_WORKSPACE'] = str(workspace)
+        env['XDG_CACHE_HOME'] = str(workspace / 'probe-tools')
         shutil.copyfile(SOURCE / 'mobile_build/pyproject.toml', workspace / 'pyproject.toml')
         payload = workspace / 'payload'
         manifest = stage(SOURCE, payload, allow_dirty=SOURCE == REPO)
@@ -489,6 +543,18 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'notes-audit':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotesauditqa',
+                entry_point='tests.logisticsmobile.notes_audit_probe', result_name='notes-audit-result.json')
+        if args.probe == 'notes-library':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.notes_library_probe', result_name='notes-library-result.json')
+        if args.probe == 'notes-dataview':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.dataview_probe', result_name='dataview-result.json')
+        if args.probe == 'rclone-transfer':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.rclone_transfer_probe', result_name='rclone-transfer-result.json')
         if args.probe == 'markdown-typography':
             creation_profile = dict(entry_point='tests.logisticsmobile.markdown_typography_probe',
                 result_name='markdown-typography-result.json')
@@ -588,7 +654,7 @@ def main():
             if args.probe == 'boox-preview':
                 profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
                     entry_point='tests.logisticsmobile.boox_preview_probe', result_name='boox-preview-result.json')
-            run_android(workspace, payload, args.output, env, options, device=args.device, **profile)
+            run_android(workspace, payload, args.output, env, options, device=args.device, tablet=args.android_tablet, **profile)
 
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from mobile.app import LogisticsMobile
 from mobile.local_sources import device_files
@@ -46,32 +46,48 @@ class DocumentCreationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_type_choice_cancel_keeps_origin_and_does_not_publish(self):
+        origin = self.app.body
+        files = set(self.root.rglob('*'))
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='cancel')):
+            self.app.loop.run_until_complete(self.app.choose_document_type())
+        self.assertIs(self.app.body, origin)
+        self.assertEqual(set(self.root.rglob('*')), files)
+
     def choose(self, name, kind='Plain text (.txt)', *, local=True):
-        self.app.loop.run_until_complete(self.app.choose_document_type())
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=dict((label, ext) for label, ext in __import__('mobile.document_choices', fromlist=['CHOICES']).CHOICES)[kind])):
+            self.app.loop.run_until_complete(self.app.choose_document_type())
         picker = self.app.editor_picker()
         form = picker.panel
         picker.save_as_name.value, picker.creation_type.value = name, kind
+        self.app.loop.run_until_complete(picker.choose_creation_location())
         if local:
             row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Local')
             self.app.loop.run_until_complete(picker.browser_editor_folder(row))
         return form, picker
 
-    def test_name_type_and_folder_share_one_route_until_publication(self):
+    def test_editing_name_keeps_chosen_folder_without_publishing(self):
         from features.notebooks.notebook import Notebook
         app = self.app
         origin = app.body
+        compact = patch.object(app.adaptive, 'content_width', return_value=390)
+        compact.start()
+        self.addCleanup(compact.stop)
         _, picker = self.choose('Trip.txt')
         panel, location = picker.panel, picker.editor_picker_location
         self.assertTrue(picker.visible())
-        self.assertIn(picker.creation_type, picker.save_as_view.children)
+        app.routes.back()
+        self.assertIs(picker.panel, picker.name_panel)
+        self.assertIn(picker.creation_type, picker.name_view.children)
         self.assertFalse((self.root / 'LocalFiles/Trip.txt').exists())
         picker.creation_type.value = 'Markdown (.md)'
         self.assertEqual(picker.save_as_name.value, 'Trip.md')
-        picker.creation_type.value = 'Notebook (.rmdoc)'
+        picker.creation_type.value = 'Remarkable Document (.rmdoc)'
         self.assertEqual(picker.save_as_name.value, 'Trip.rmdoc')
+        picker.save_as_name.value = 'Final title'
+        app.loop.run_until_complete(picker.choose_creation_location())
         self.assertIs(picker.panel, panel)
         self.assertEqual(picker.editor_picker_location, location)
-        picker.save_as_name.value = 'Final title'
         app.loop.run_until_complete(picker.confirm_editor_file())
         path = self.root / 'LocalFiles/Final title.rmdoc'
         self.assertEqual(Notebook.read(path.read_bytes()).name, 'Final title')
@@ -79,12 +95,95 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertNotIn('text-destination', [row[0] for row in app.routes.screens['home']])
         self.assertIsNot(app.body, origin)
 
+    def test_wide_layout_keeps_edits_folder_and_route_across_width_changes(self):
+        from mobile.fold_layout import Division
+        app = self.app
+        origin = app.body
+        with patch.object(app.adaptive, 'content_width', return_value=810) as width:
+            _, picker = self.choose('Wide')
+            layout = picker.creation_layout
+            route = app.body
+            self.assertTrue(layout.paired)
+            self.assertEqual(list(layout.children), [picker.name_panel, layout.gutter, picker.location_panel])
+            with patch('mobile.creation_layout.division', return_value=Division(350, 0, 24, 800)):
+                layout.reflow()
+                self.assertEqual(picker.name_panel.style.width, 350)
+                self.assertEqual(layout.gutter.style.width, 24)
+            picker.save_as_name.value = '../invalid'
+            self.assertFalse(picker.picker_primary.enabled)
+            picker.save_as_name.value = 'Wide draft'
+            picker.creation_type.value = 'Markdown (.md)'
+            self.assertTrue(picker.picker_primary.enabled)
+            self.assertIn('Wide draft.md', picker.picker_destination.text)
+            width.return_value = 390
+            layout.reflow()
+            self.assertFalse(layout.paired)
+            self.assertIs(picker.edit_name.parent, picker.save_as_storage.parent)
+            self.assertEqual(picker.editor_picker_location, ('Local', ''))
+            self.assertIs(app.body, route)
+            width.return_value = 810
+            layout.reflow()
+            self.assertIsNone(picker.edit_name.parent)
+            app.routes.back()
+            self.assertIs(app.body, origin)
+            self.assertFalse((self.root / 'LocalFiles/Wide draft.md').exists())
+
+    def test_folder_entry_keeps_destination_fixed_until_created_or_cancelled(self):
+        app = self.app
+        with patch.object(app.adaptive, 'content_width', return_value=810) as width:
+            _, picker = self.choose('Draft')
+            layout = picker.creation_layout
+            picker.show_new_folder()
+            picker.new_folder_name.value = 'Nested'
+            picker.fit_keyboard(True)
+            width.return_value = 390
+            layout.reflow()
+            width.return_value = 810
+            layout.reflow()
+            self.assertFalse(picker.picker_primary.enabled)
+            self.assertFalse(app.loop.run_until_complete(picker.browser_editor_location(('Received Files', ''))))
+            app.loop.run_until_complete(picker.confirm_editor_file())
+            self.assertFalse((self.root / 'LocalFiles/Draft.txt').exists())
+            app.loop.run_until_complete(picker.create_picker_folder())
+            self.assertEqual(picker.editor_picker_location, ('Local', 'Nested'))
+            picker.fit_keyboard(False)
+            self.assertEqual(list(picker.location_panel.children)[:4], list(picker._browse_controls))
+            picker.show_new_folder()
+            picker.new_folder_name.value = '../invalid'
+            app.loop.run_until_complete(picker.create_picker_folder())
+            self.assertIn('Folder creation failed:', picker.save_as_status.value)
+            picker.hide_new_folder()
+            self.assertEqual(picker.save_as_status.value, '')
+            self.assertTrue(picker.picker_primary.enabled)
+            app.loop.run_until_complete(picker.confirm_editor_file())
+            self.assertTrue((self.root / 'LocalFiles/Nested/Draft.txt').is_file())
+
+    def test_next_reads_current_name_and_storage_echo_keeps_nested_location(self):
+        app = self.app
+        folder = self.root / 'LocalFiles' / 'Project notes'
+        folder.mkdir(parents=True)
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
+            app.loop.run_until_complete(app.choose_document_type())
+        picker = app.editor_picker()
+        # Return can precede the native field's queued change notification.
+        picker.save_as_name.on_change = None
+        picker.save_as_name.value = 'Field notes'
+        self.assertTrue(picker.next_button.enabled)  # Type-first flow has a valid default name.
+        app.loop.run_until_complete(picker.choose_creation_location())
+        self.assertIs(picker.panel, picker.location_panel)
+        app.loop.run_until_complete(picker.browser_editor_location(('Local', folder.name)))
+        picker.change_editor_storage()
+        self.assertEqual(picker.picker_folder.value, folder.name)
+        self.assertIn('Field notes.txt', picker.picker_destination.text)
+        self.assertIn(folder.name, ' '.join(picker.picker_destination.text.split()))
+        self.assertFalse(list(folder.iterdir()))
+
     def test_received_files_notebook_creation_on_android_without_exclusive_rename(self):
         import errno
         from commonUtils.runtime.platform import OS
         from features.notebooks.notebook import Notebook
         from mobile.incoming_files import inbox_path
-        _, picker = self.choose('Received sketch', 'Notebook (.rmdoc)', local=False)
+        _, picker = self.choose('Received sketch', 'Remarkable Document (.rmdoc)', local=False)
         row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Received Files')
         self.app.loop.run_until_complete(picker.browser_editor_folder(row))
         with patch('commonUtils.runtime.resources.local.rename_exclusive',
@@ -109,7 +208,7 @@ class DocumentCreationTests(unittest.TestCase):
         token = 'a' * 32
         (base / '.logistics-storage').write_text(token)
         (self.root / 'collection-storage.json').write_text(json.dumps(dict(volume=str(volume), token=token)))
-        _, picker = self.choose('SD notebook', 'Notebook (.rmdoc)', local=False)
+        _, picker = self.choose('SD notebook', 'Remarkable Document (.rmdoc)', local=False)
         row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Received Files')
         self.app.loop.run_until_complete(picker.browser_editor_folder(row))
         self.app.loop.run_until_complete(picker.confirm_editor_file())
@@ -135,8 +234,12 @@ class DocumentCreationTests(unittest.TestCase):
             elif len(calls) == 2:
                 app.cloud_client.generation = 1
             return await original(*args, **kwargs)
-        with patch('mobile.editor_picker.asyncio.to_thread', side_effect=restoring):
+        with patch('mobile.editor_picker.asyncio.to_thread', side_effect=restoring), \
+                patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
             app.loop.run_until_complete(app.choose_document_type())
+            picker = app.editor_picker()
+            picker.save_as_name.value = 'Cold start'
+            app.loop.run_until_complete(picker.choose_creation_location())
         picker = app.editor_picker()
         self.assertEqual(picker.editor_picker_location, ('All files', ''))
         self.assertIn('Local', [row['name'] for row in picker.editor_picker_rows.values()])
@@ -144,16 +247,19 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertNotEqual(picker.save_as_status.value, 'Loading folder…')
 
     def test_creation_keyboard_compaction_keeps_name_type_and_destination(self):
-        _, picker = self.choose('Keep my name', 'Notebook (.rmdoc)')
+        _, picker = self.choose('Keep my name', 'Remarkable Document (.rmdoc)')
         name, kind = picker.save_as_name, picker.creation_type
         location = picker.editor_picker_location
+        picker.show_creation_name()
         picker.fit_keyboard(True)
-        self.assertIn(kind, picker.save_as_view.children)
-        self.assertIn(name, picker.save_as_view.children)
+        self.assertIn(kind, picker.name_view.children)
+        self.assertIn(name, picker.name_view.children)
+        self.assertNotIn(picker.save_as_storage, picker.name_panel.children)
+        self.assertIs(picker.name_form.content, picker.name_view)
         self.assertEqual(name.value, 'Keep my name')
         picker.fit_keyboard(False)
         self.assertEqual(picker.editor_picker_location, location)
-        self.assertEqual(kind.value, 'Notebook (.rmdoc)')
+        self.assertEqual(kind.value, 'Remarkable Document (.rmdoc)')
 
     def test_creation_starts_at_browse_all_files_and_can_return_from_collections(self):
         _, picker = self.choose('Anywhere', local=False)
@@ -162,7 +268,7 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertFalse(picker.picker_primary.enabled)
         self.assertFalse(picker.picker_new_folder.enabled)
         self.assertEqual(picker.picker_primary.text, 'Create document')
-        self.assertIn('Choose a folder below', picker.save_as_status.value)
+        self.assertIn('Open a folder', picker.save_as_status.value)
         for name in ('Local', 'Received Files'):
             row = next(row for row in picker.editor_picker_rows.values() if row['name'] == name)
             self.app.loop.run_until_complete(picker.browser_editor_folder(row))
@@ -199,7 +305,7 @@ class DocumentCreationTests(unittest.TestCase):
         local.mkdir(exist_ok=True)
         (local / 'Existing.rmdoc').write_bytes(Notebook.new('Existing').to_bytes())
         (local / 'Text.txt').write_text('other format')
-        _, picker = self.choose('Sketch', 'Notebook (.rmdoc)')
+        _, picker = self.choose('Sketch', 'Remarkable Document (.rmdoc)')
         self.assertEqual(picker.effective_name.text, 'Save as: Sketch.rmdoc')
         self.assertIn('Existing.rmdoc', [row['name'] for row in picker.editor_picker_rows.values()])
         self.assertIn('Text.txt', [row['name'] for row in picker.editor_picker_rows.values()])
@@ -300,14 +406,14 @@ class DocumentCreationTests(unittest.TestCase):
         _, picker = self.choose('No capacity')
         with patch('mobile.workspace.MAX_SESSIONS', 0):
             self.app.loop.run_until_complete(picker.confirm_editor_file())
-        self.assertIn('Close an open document', picker.save_as_status.value)
+        self.assertIn('Close an open document', ' '.join(picker.save_as_status.value.split()))
         self.assertFalse((self.root / 'LocalFiles/No capacity.txt').exists())
 
     def test_notebook_creation_opens_in_shared_documents_and_recovers_ink(self):
         from features.notebooks.notebook import Notebook
         from features.notebooks.mobile.documents import open_notebook
         app = self.app
-        _, picker = self.choose('Sketches', 'Notebook (.rmdoc)')
+        _, picker = self.choose('Sketches', 'Remarkable Document (.rmdoc)')
         app.loop.run_until_complete(picker.confirm_editor_file())
         panel = getattr(app, 'notebook_panel', None)
         self.assertIsNotNone(panel, picker.save_as_status.value)

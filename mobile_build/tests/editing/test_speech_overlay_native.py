@@ -52,6 +52,7 @@ class NativeSpeechOverlayTests(TestCase):
 
     def test_ios_observes_only_outside_taps_and_removes_observer(self):
         overlay = self.overlay()
+        overlay.dim = True
 
         class NSObject:
             def __init_subclass__(cls, **kwargs):
@@ -82,6 +83,9 @@ class NativeSpeechOverlayTests(TestCase):
         with patch.dict('sys.modules', modules), patch('mobile.speech_overlay._apple_dismissal', None):
             overlay.apple(app)
             delegate = overlay.dismissal
+            backdrop = overlay.backdrop
+            self.assertIsNotNone(backdrop)
+            self.assertTrue(native.accessibilityViewIsModal)
             child = SimpleNamespace(superview=native)
             outside = SimpleNamespace(superview=None)
             self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, SimpleNamespace(view=child)))
@@ -95,7 +99,38 @@ class NativeSpeechOverlayTests(TestCase):
             overlay.panel.hide.assert_called_once()
             window.removeGestureRecognizer.assert_called_once_with(gesture)
             native.removeFromSuperview.assert_called_once()
+            backdrop.removeFromSuperview.assert_called_once()
+            self.assertIsNone(overlay.backdrop)
             self.assertIsNone(delegate.overlay)
             self.assertIsNone(overlay.container)
             delegate.outsideTap_(gesture)  # No stale callback after teardown.
             overlay.panel.hide.assert_called_once()
+
+    def test_android_modal_drawer_dims_window_and_restores_on_dismiss(self):
+        overlay = self.overlay()
+        overlay.dim = True
+        container = MagicMock()
+        container.scale_in.side_effect = lambda value: value
+        context = MagicMock()
+        context.getResources().getDisplayMetrics().widthPixels = 400
+        owner = SimpleNamespace(_impl=SimpleNamespace(native=MagicMock()))
+        owner._impl.native.getContext.return_value = context
+        root = MagicMock()
+        params = SimpleNamespace(flags=0, dimAmount=0)
+        root.getRootView().getLayoutParams.return_value = params
+        modules = {
+            'android.graphics.drawable': SimpleNamespace(ColorDrawable=MagicMock()),
+            'android.view': SimpleNamespace(Gravity=SimpleNamespace(TOP=1, END=2),
+                WindowManager=SimpleNamespace(LayoutParams=SimpleNamespace(FLAG_DIM_BEHIND=2))),
+            'android.widget': SimpleNamespace(FrameLayout=lambda context: root, PopupWindow=MagicMock()),
+            'android.util': SimpleNamespace(TypedValue=lambda: SimpleNamespace(data=0)),
+            'toga_android.container': SimpleNamespace(Container=lambda: container),
+            'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+        }
+        with patch.dict('sys.modules', modules):
+            overlay.android(owner)
+        self.assertEqual(params.flags, 2)
+        self.assertEqual(params.dimAmount, .35)
+        context.getSystemService('window').updateViewLayout.assert_called_once_with(root.getRootView(), params)
+        overlay.close()
+        self.assertIsNone(overlay.popup)

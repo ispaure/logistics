@@ -4,7 +4,9 @@
 
 In a file browser list, touch and hold a file or folder, or tap its **⋯** button,
 to open the same actions on iOS and Android. The full name wraps above the actions;
-the compact list may shorten it with an ellipsis in the middle. Tap an action to
+the compact list may shorten it with an ellipsis in the middle. Hold the name
+in the actions menu to reveal the full path. For remote and unlocked LocalCrypt
+files, this shows the connection name and decoded folder and file names. Tap an action to
 continue, or **Cancel** to return to browsing. Holding an item does not delete it.
 
 ## Receive files from another app
@@ -64,8 +66,7 @@ beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and managem
 actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. **New document** now shows the name, type and folder
-together. Choose Plain text, Markdown or Notebook and a writable Local,
+the entire device filesystem. **New document** asks for a name and file type. Tap **Choose location**, select a writable Local,
 Received Files or unlocked LocalCrypt folder, then **Create document**. New files
 are created in that browsable location. Cloud remains read-only; use reviewed
 Push for changes. Cancel before creation creates nothing. The

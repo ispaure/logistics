@@ -62,6 +62,7 @@ class NotebookWorkspace(qt.QWidget):
         self.editor = None
         self.web = None
         self.busy = False
+        qt.QApplication.instance().paletteChanged.connect(self.refresh_appearance)
         self.layout = qt.QVBoxLayout(self)
         if library:
             self.library()
@@ -184,8 +185,12 @@ class NotebookWorkspace(qt.QWidget):
         self.web = QWebEngineView(self)
         page = CanvasPage(self.web, self.bridge)
         self.web.setPage(page)
+        self.web.installEventFilter(self)
         page.command.connect(lambda action: self.deliver(page, action))
-        self.web.setHtml(editor_html(self.state(), self.bridge.url, console_bridge=True, desktop=True))
+        page.loadFinished.connect(self.refresh_appearance)
+        page.loadFinished.connect(self.install_gesture_filter)
+        self.web.setHtml(editor_html(self.state(), self.bridge.url, console_bridge=True, desktop=True,
+                                    stylesheet=self.appearance_stylesheet()))
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
         self.layout.addWidget(self.web, 1)
@@ -193,6 +198,46 @@ class NotebookWorkspace(qt.QWidget):
         self.operation = OperationProgress(self)
         self.operation.completed.connect(self.saved)
         self.layout.addWidget(self.operation)
+
+    def appearance_stylesheet(self):
+        from mobile.palette import DARK, LIGHT
+        palette = qt.QApplication.palette()
+        role = qt.QPalette.ColorRole
+        colors = {name: palette.color(value).name() for name, value in {
+            'window': role.Window, 'surface': role.Base, 'alternate': role.AlternateBase,
+            'text': role.Text, 'muted': role.PlaceholderText, 'border': role.Mid,
+            'control_border': role.Mid,
+            'accent': role.Link, 'hover': role.Midlight,
+        }.items()}
+        scheme = 'dark' if palette.color(role.Window).lightness() < 128 else 'light'
+        colors['destructive'] = (DARK if scheme == 'dark' else LIGHT)['destructive']
+        return ':root{color-scheme:' + scheme + ';' + ';'.join(
+            '--' + name + ':' + value for name, value in colors.items()) + '}'
+
+    def refresh_appearance(self, *_):
+        if self.web is not None:
+            self.web.page().runJavaScript('window.notebookAppearance && window.notebookAppearance('
+                                         + json.dumps(self.appearance_stylesheet()) + ')')
+
+    def install_gesture_filter(self, *_):
+        if self.web is not None and self.web.focusProxy() is not None:
+            self.web.focusProxy().installEventFilter(self)
+
+    def eventFilter(self, receiver, event):
+        if (event.type() == qt.QEvent.Type.NativeGesture and self.web is not None
+                and isinstance(receiver, qt.QWidget)
+                and (receiver is self.web or self.web.isAncestorOf(receiver))):
+            gesture = event.gestureType()
+            if gesture == qt.Qt.NativeGestureType.ZoomNativeGesture:
+                point = self.web.mapFromGlobal(event.globalPosition().toPoint())
+                self.web.page().runJavaScript('window.notebookNativeZoom && window.notebookNativeZoom('
+                    + json.dumps([1 + event.value(), point.x(), point.y()])[1:-1] + ')')
+                event.accept()
+                return True
+            if gesture in (qt.Qt.NativeGestureType.BeginNativeGesture, qt.Qt.NativeGestureType.EndNativeGesture):
+                event.accept()
+                return True
+        return super().eventFilter(receiver, event)
 
     def deliver(self, page, action):
         # A queued event from a retired canvas must not edit the next notebook.

@@ -112,7 +112,7 @@ def refresh_sources(env):
             payload.rename(previous)
         replacement.rename(payload)
         try:
-            run([sys.executable, str(ROOT / 'cloud_build.py'), 'licenses'], env, log=workspace / 'logs/android-licenses.log')
+            run([sys.executable, str(ROOT / 'cloud_build.py'), 'licenses', '--platform', 'android'], env, log=workspace / 'logs/android-licenses.log')
         except Exception:
             shutil.rmtree(payload)
             if previous.exists():
@@ -196,7 +196,7 @@ def compatible_apk(adb, env, serial, apk):
     return signed
 
 
-def deploy(device=None, *, build_only=False, devices=None, discover=True):
+def deploy(device=None, *, build_only=False, devices=None, discover=True, skip_tests=False):
     config = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['briefcase']
     if config['bundle'] + '.logisticsmobile' != BUNDLE:
         raise ValueError('Android bundle identity changed; deployment stopped.')
@@ -217,7 +217,8 @@ def deploy(device=None, *, build_only=False, devices=None, discover=True):
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({name: env[name] for name in ('ANDROID_HOME', 'BRIEFCASE_HOME') if name in env}))
     # The bridge helper also installs current launcher/appearance resources.
-    run([sys.executable, str(ROOT / 'cloud_build.py'), 'android'], env, log=output_root(ROOT) / 'logs/android-bridge.log')
+    run([sys.executable, str(ROOT / 'cloud_build.py'), 'android', *(['--skip-tests'] if skip_tests else [])], env,
+        log=output_root(ROOT) / 'logs/android-bridge.log')
     init = output_root(ROOT) / 'build/deployment-version.gradle'
     init.parent.mkdir(parents=True, exist_ok=True)
     init.write_text('gradle.beforeProject { p ->\n'
@@ -253,9 +254,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', help='ADB serial; otherwise choose the connected device')
     parser.add_argument('--build-only', action='store_true', help='Build without installing')
+    parser.add_argument('--skip-tests', action='store_true', help='Skip the embedded Go bridge tests')
     args = parser.parse_args()
     try:
-        deploy(args.device, build_only=args.build_only)
+        deploy(args.device, build_only=args.build_only, skip_tests=args.skip_tests)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1)

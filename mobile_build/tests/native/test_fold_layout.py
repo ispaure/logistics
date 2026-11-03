@@ -13,6 +13,20 @@ from mobile_build.native_tests.tests.logisticsmobile.reader_parity_probe import 
 
 
 class FoldLayoutTests(unittest.TestCase):
+    def test_reserved_regions_accept_private_native_backend_subclasses(self):
+        from unittest.mock import patch
+        from mobile.fold_layout import reserved_divisions, Division
+        base = type('WebView', (), {'__module__': 'toga_iOS.widgets.webview'})
+        private = type('PrivateWebView', (base,), {})
+        backend = private()
+        region = NS(frame=NS(origin=NS(x=0, y=320), size=NS(width=700, height=40)))
+        calls = []
+        backend.native = NS(reservedRegionsOfKind=lambda kind, options: calls.append((kind, options)) or [region])
+        objc = NS(ObjCClass=lambda name: NS(divisionRegionKind=lambda: 'division'))
+        with patch.dict('sys.modules', {'rubicon.objc': objc}):
+            self.assertEqual(reserved_divisions(NS(_impl=backend)), (Division(0, 320, 700, 40),))
+        self.assertEqual(calls, [('division', 0)])
+
     def test_reserved_region_replaces_midpoint_and_orientation_assumptions(self):
         from mobile.fold_layout import Division
         from unittest.mock import patch

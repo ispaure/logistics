@@ -707,6 +707,8 @@
     "run_choices",
     "set_app_version",
     "storage_inventory",
-    "delete_storage"
+    "delete_storage",
+    "storage_maintenance",
+    "enroll_storage"
   ]
 }

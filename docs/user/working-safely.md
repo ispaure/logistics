@@ -22,9 +22,8 @@ to every device path. The [desktop file guide](files-and-documents.md),
 
 ## Create and find your first mobile document
 
-Choose New document, enter a name, select Plain text, Markdown or Notebook, and
-choose a writable destination. The current form shows the name, type and folder
-together. Create document creates the file in that folder and opens it. Cancel
+Choose New document, enter a name, select Plain text, Markdown or Notebook, and tap
+**Choose location**. Select a writable folder. Create document creates the file in that folder and opens it. Cancel
 before creation creates nothing. A duplicate filename needs a different name;
 do not assume creation replaces the existing file.
 

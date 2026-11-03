@@ -268,12 +268,12 @@ class ReviewDialogTests(QtTestCase):
         self.assertIn('incomplete', confirm.call_args.args[2])
         dialog.deleteLater()
 
-    def test_early_review_approval_cannot_bypass_crypt_integrity(self):
+    def test_early_review_approval_skips_crypt_integrity_and_launches_push(self):
         from unittest.mock import patch
         from features.rclone import executable
         from features.rclone.localcrypt import backend as local_crypt
         from features.rclone.localcrypt import mapping as copy_mapping
-        from features.rclone.transfers import sync
+        from features.rclone.transfers import sync, push_policy
         from features.rclone.transfers import workflow
         from tests.local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
@@ -284,14 +284,15 @@ class ReviewDialogTests(QtTestCase):
             options['wait_for_output'] = True
             return actual_sync(source, destination, **options)
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
-            (f.item.data / 'rogue.txt').write_bytes(b'plaintext must never push')
+            (f.item.data / 'rogue.txt').write_bytes(b'fixture skipped by explicit approval')
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
                     'features.rclone.transfers.ui.review.confirm_review', side_effect=self.approve_prepared), patch.object(
-                    sync, 'rclone_sync', side_effect=execute), patch.object(sync, '_run_sync') as run:
-                with self.assertRaisesRegex(ValueError, 'push refused'):
-                    workflow.reviewed_sync(f.item.data, copy_mapping.backing_target(copy_mapping.unlock(f.item), 'Secret'),
-                        operation='Push', config_path=f.context, copy_links=False)
-                run.assert_not_called()
+                    sync, 'rclone_sync', side_effect=execute), patch.object(sync, '_run_sync', return_value=True) as run, patch.object(
+                    push_policy, 'validate_localcrypt_push') as validate:
+                self.assertTrue(workflow.reviewed_sync(f.item.data, copy_mapping.backing_target(copy_mapping.unlock(f.item), 'Secret'),
+                    operation='Push', config_path=f.context, copy_links=False))
+                validate.assert_not_called()
+                run.assert_called_once()
 
     def test_identical_credential_reload_invalidates_prepared_transfer(self):
         from unittest.mock import patch
@@ -437,6 +438,59 @@ class ReviewDialogTests(QtTestCase):
         self.assertEqual(count, 2)
         dialog.deleteLater()
 
+    def test_change_table_filters_and_searches_without_hiding_total_counts(self):
+        from features.rclone.transfers.ui.review import ReviewDialog
+        def scan(emit, cancelled):
+            for action, path in (('add', 'docs/new.md'), ('replace', 'docs/readme.md'),
+                                 ('delete', 'old.txt'), ('cleanup', 'generated.tmp'), ('match', 'same.txt'), ('add', 'docs/empty/')):
+                emit(action, path)
+            return 'revision'
+        dialog = ReviewDialog(ReviewRequest('Push', '/local', 'Remote:', 'account'), scan, lambda: True)
+        self.assertTrue(dialog.session.scan.retired.wait(2))
+        dialog.refresh()
+        self.assertEqual(dialog.details.topLevelItemCount(), 5)
+        dialog.filter.setCurrentIndex(3)
+        self.assertEqual(dialog.details.topLevelItemCount(), 1)
+        self.assertEqual(dialog.details.topLevelItem(0).text(1), 'old.txt')
+        self.assertIn('2 Add', dialog.summary.text())
+        dialog.filter.setCurrentIndex(4)
+        dialog.details.setCurrentItem(dialog.details.topLevelItem(0))
+        self.assertEqual(dialog.inspector_labels['destination'].text(), 'Local cleanup: /local')
+        dialog.filter.setCurrentIndex(0)
+        dialog.search.setText('DOCS/NEW')
+        from PySide6.QtTest import QTest
+        QTest.qWait(400)
+        self.assertEqual(dialog.details.topLevelItemCount(), 1)
+        self.assertEqual(dialog.details.topLevelItem(0).toolTip(1), 'docs/new.md')
+        dialog.search.setText('missing')
+        from PySide6.QtTest import QTest
+        QTest.qWait(400)
+        self.assertEqual(dialog.empty.text(), 'No matching changes.')
+        dialog.reject()
+        dialog.deleteLater()
+
+    def test_large_desktop_review_pages_without_truncating_total_counts(self):
+        from features.rclone.transfers.ui.review import ReviewDialog
+        def scan(emit, cancelled):
+            for index in range(10000):
+                emit('add', f'folder/{index:05}.txt')
+            return 'large'
+        dialog = ReviewDialog(ReviewRequest('Push', '/local', 'Cloud:', 'identity'), scan, lambda: True)
+        self.assertTrue(dialog.session.scan.retired.wait(3))
+        dialog.refresh()
+        self.assertEqual(dialog.details.topLevelItemCount(), 30)
+        self.assertIn('10,000 Add', dialog.summary.text())
+        dialog.change_page(1)
+        self.assertEqual(dialog.details.topLevelItem(0).text(1), '00030.txt')
+        self.assertIn('00030', dialog.inspector_labels['path'].text())
+        dialog.search.setText('09999')
+        from PySide6.QtTest import QTest
+        QTest.qWait(400)
+        self.assertEqual(dialog.details.topLevelItemCount(), 1)
+        self.assertIn('09999', dialog.inspector_labels['path'].text())
+        dialog.reject()
+        dialog.deleteLater()
+
     def test_revocation_clears_displayed_paths(self):
         from features.rclone.transfers.ui.review import ReviewDialog
         active = [True]
@@ -449,6 +503,8 @@ class ReviewDialogTests(QtTestCase):
             dialog.refresh()
         qt.QTimer.singleShot(30, revoke)
         self.assertEqual(dialog.exec(), qt.QDialog.DialogCode.Rejected)
-        self.assertEqual(dialog.details.toPlainText(), '')
-        self.assertNotIn('private-name', dialog.paths.toPlainText())
+        self.assertEqual(dialog.details.topLevelItemCount(), 0)
+        self.assertEqual(dialog.heading.text(), 'Transfer review')
+        self.assertTrue(all('private-name' not in label.text() for label in dialog.path_labels))
+        self.assertTrue(all(not label.text() for label in dialog.inspector_labels.values()))
         dialog.deleteLater()

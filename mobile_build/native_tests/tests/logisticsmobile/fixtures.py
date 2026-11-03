@@ -15,7 +15,7 @@ def png_page():
             + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND', b''))
 
 
-def make_books(root):
+def make_books(root, *, chapter_text=""):
     epub, comic = root / 'Fixture.epub', root / 'Fixture.cbz'
     with ZipFile(epub, 'w') as archive:
         archive.writestr('mimetype', 'application/epub+zip')
@@ -26,7 +26,7 @@ def make_books(root):
                         '</metadata><manifest><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/>'
                         '<item id="two" href="two.xhtml" media-type="application/xhtml+xml"/></manifest>'
                         '<spine><itemref idref="one"/><itemref idref="two"/></spine></package>')
-        archive.writestr('one.xhtml', '<html><body><h1>Native EPUB first</h1><script>bad()</script></body></html>')
+        archive.writestr('one.xhtml', f'<html><body><h1>Native EPUB first</h1>{chapter_text}<script>bad()</script></body></html>')
         archive.writestr('two.xhtml', '<html><body><h1>Native EPUB second</h1></body></html>')
     with ZipFile(comic, 'w') as archive:
         archive.writestr('page10.png', png_page())
@@ -55,3 +55,17 @@ def ios_toolbar_items(controller, *, leading=False):
     if not leading and nav.pinnedTrailingGroup is not None:
         items.extend(nav.pinnedTrailingGroup.barButtonItems)
     return items
+
+
+async def choose_creation_type(app, extension):
+    """Select the format for unattended probes of the subsequent native screens."""
+    from unittest.mock import patch
+    from features.text_editor.mobile.document_dialogs import DocumentTypeDialog
+
+    async def select(dialog):
+        assert isinstance(dialog, DocumentTypeDialog)
+        assert extension in {value for _, value, _ in dialog.choices}
+        return extension
+
+    with patch.object(app.main_window, 'dialog', select):
+        await app.choose_document_type()

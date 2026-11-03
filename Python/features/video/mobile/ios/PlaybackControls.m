@@ -329,13 +329,20 @@
     self.sourceIcon.image = [UIImage systemImageNamed:[options[@"source_remote"] boolValue] ? @"cloud" : @"internaldrive"];
     self.sourceIcon.accessibilityLabel = self.sourceLabel.text;
 }
+- (void)showVideoLocation:(UILongPressGestureRecognizer *)gesture {
+    if (gesture.state != UIGestureRecognizerStateBegan || ![self canPlay:NO]) return;
+    UIAlertController *dialog = [UIAlertController alertControllerWithTitle:@"Document location"
+        message:[self playbackOptions][@"video_path"] preferredStyle:UIAlertControllerStyleAlert];
+    [dialog lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentPlaybackDialog:dialog];
+}
 - (void)installPlaybackTools {
     UIVisualEffect *effect;
     if (@available(iOS 26.0, *)) effect = [UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular];
     else effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterialDark];
     UIVisualEffectView *header = [[UIVisualEffectView alloc] initWithEffect:effect];
     header.frame = CGRectMake(0, 0, 320, 48);
-    header.userInteractionEnabled = NO;
+    [header addGestureRecognizer:[[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(showVideoLocation:)]];
     header.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     header.layer.cornerRadius = 16;
     header.clipsToBounds = YES;
@@ -352,13 +359,15 @@
         [identity.leadingAnchor constraintEqualToAnchor:header.contentView.leadingAnchor constant:12],
         [identity.trailingAnchor constraintEqualToAnchor:header.contentView.trailingAnchor constant:-12],
         [identity.centerYAnchor constraintEqualToAnchor:header.contentView.centerYAnchor]]];
-    self.videoTitle = [[UILabel alloc] init];
+    Class titleClass = NSClassFromString(@"CommonUtilsPanningTitle") ?: UILabel.class;
+    self.videoTitle = [[titleClass alloc] init];
     self.videoTitle.textColor = UIColor.whiteColor;
     self.videoTitle.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
     self.videoTitle.adjustsFontForContentSizeCategory = YES;
     self.videoTitle.lineBreakMode = NSLineBreakByTruncatingMiddle;
     self.videoTitle.textAlignment = NSTextAlignmentCenter;
     [identity addArrangedSubview:self.videoTitle];
+    [self.videoTitle.widthAnchor constraintLessThanOrEqualToAnchor:identity.widthAnchor].active = YES;
     self.sourceIcon = [[UIImageView alloc] init];
     self.sourceIcon.tintColor = UIColor.whiteColor;
     self.sourceIcon.contentMode = UIViewContentModeScaleAspectFit;

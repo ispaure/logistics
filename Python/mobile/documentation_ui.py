@@ -44,6 +44,7 @@ class DocumentationReader(MarkdownWikiView):
         self.view._native_reader_buttons = lambda: [self.back_button, self.forward_button,
             self.speech.button, self.reader_actions_button]
         self.view._native_reader_title = lambda: self.title.text
+        self.view._document_path = lambda: self.path
         self.view._native_reader_hidden = [self.title]
         self.refresh_reader_actions()
         from .layout_participants import participants

@@ -51,6 +51,10 @@ is reported without undoing a successful installation.
 Optional Terminal usage: `mobile_build/.venv/bin/python -m mobile_build.deployment.android_deploy --device SERIAL` or
 `mobile_build/.venv/bin/python -m mobile_build.deployment.android_deploy --build-only`. Build/install logs are under
 `mobile_build/logs/android-*.log`. It builds local sources; it does not pull from GitHub.
+The Android and iOS device helpers normally run the Go bridge tests before compiling.
+Append `--skip-tests` when explicitly building or deploying without those tests;
+the iOS `deploy-all` command forwards this choice to each device. Compilation,
+signing and in-place installation checks still run.
 The helper remembers the configured local SDK/cache paths and attempts to
 reconnect advertised wireless ADB devices using existing pairing keys. Pair once
 through Android Wireless debugging. Wake the tablet and enable that setting if

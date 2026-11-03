@@ -20,7 +20,7 @@ def native_service(client):
                 raise TypeError('Choose a managed LocalCrypt location or an existing offline copy.')
             return CryptFiles(location.root, client, location.remote,
                               namespace=location.namespace, storage_root=location.storage_root,
-                              create=location.create)
+                              create=location.create, cipher_identity=location.cipher_identity)
 
         def open_remote(location):
             if not isinstance(location, NativeRemoteLocation):

@@ -49,8 +49,9 @@ def _watch_transfer(window, config_path, revoked, cancelled, *, session_bound):
 
 def rclone_sync(source_path, destination_path, *, config_path, query=False, wait_for_output=False,
                 dry_run=False, track_renames=False, bw_limit=None, integrated=True, copy_links=True,
-                cancelled=lambda: False, executable_path=None, excludes=None, on_launch=None):
-    """Preflight every local-to-remote push before starting a transfer."""
+                cancelled=lambda: False, executable_path=None, excludes=None, on_launch=None,
+                skip_localcrypt_integrity=False):
+    """Preflight pushes; explicit desktop incomplete approval skips full crypt I/O."""
     options = dict(source_path=source_path, destination_path=destination_path, config_path=config_path,
                    query=query, wait_for_output=wait_for_output, dry_run=dry_run, track_renames=track_renames,
                    bw_limit=bw_limit, integrated=integrated, copy_links=copy_links, cancelled=cancelled,
@@ -70,6 +71,15 @@ def rclone_sync(source_path, destination_path, *, config_path, query=False, wait
             from commonUtils.filesystem.local_access import check_local_path
             check_local_path(source, recursive=True)
         if item is not None:
+            if skip_localcrypt_integrity:
+                # Keep structural checks without decrypting/authenticating files
+                # or deleting generated files as part of the skipped scan.
+                from features.rclone.transfers.local_policy import inventory
+                inventory(source, cancelled)
+                options['copy_links'] = False
+                if cancelled():
+                    return False
+                return _run_sync(**options)
             binary = executable_path or executable.ensure_rclone()
             if binary is None:
                 return False

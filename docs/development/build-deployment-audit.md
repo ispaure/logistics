@@ -92,3 +92,27 @@ working baseline separately; it never silently replaces a pin or subtree.
 Native builds, physical installation, Blender/emulator interaction, VM acceptance
 and provider publication require their owning platform checks. No commit or push
 is part of this cleanup.
+
+
+## Storage lifecycle
+
+`build_retention.py` defines the project-owned directory families, cache budgets
+and exact metadata checks. `storage_extras.py` owns explicit adoption records and
+recovery of simulator leases. The manager supplies byte measurement, pruning,
+locks, hold retirement and the shared cleanup UI. Cache groups use the enclosing
+snapshot/device operation lock and preserve signed outputs and evidence.
+
+Only declared compiler intermediates, Gradle local metadata and TestFlight derived
+build data are independently disposable inside snapshots. Packages, archives,
+source, reports and receipts remain under ordinary retention and workflow holds.
+Known device build trees are disposable only after a prepared package exists at
+the recipe's expected workspace path. Explicit `.keep` pins also protect caches.
+The shared compiler-cache budget is 12 GiB, with a one-day age limit and one-hour
+grace. Global metadata-owned Xcode caches retain their separate policy.
+
+Temporary adoption stores an exact path/token marker and project registry record;
+cleanup checks both and refuses active native writers. Simulator recovery requires
+an existing project session lease or explicit UUID adoption and verifies the saved
+UUID/name through the manager backend. Display names alone never authorize removal.
+Personal simulators, SDKs, unclassified evidence and arbitrary temporary paths are
+not swept. Keep portable fixture checks separate from native cleanup acceptance.

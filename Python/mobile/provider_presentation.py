@@ -3,12 +3,31 @@
 Credential identity, publication, private drafts and disposal stay with the provider
 session owner. Format-specific navigation remains feature-owned.
 """
-from pathlib import Path
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from .control_icons import icon_button
 from .reader_controls import ReadingFrame, PageFooter, page_buttons
+
+
+def bind_provider_title(owner):
+    """Follow the current reader through saves, renames, and folder moves."""
+    from services.documents.storage import display_path, document_display_name
+    widget = owner.crypt_view
+
+    def identity(format_name):
+        reader = owner.crypt_reader
+        if reader is None or owner.crypt_view is not widget:
+            return ''
+        source = getattr(reader, 'source', None)
+        copies = owner._crypt_reader_store
+        provider = getattr(source, 'provider', None) or getattr(copies, 'provider', copies)
+        if format_name:
+            return document_display_name(provider, reader.name)
+        return display_path(provider, getattr(source, 'path', None) or reader.key)
+
+    widget._native_reader_title = lambda: identity(format_name=True)
+    widget._document_path = lambda: identity(format_name=False)
 
 
 def compact_private_view(self, view):
@@ -63,7 +82,7 @@ def compact_private_view(self, view):
         _mount_editor(self, view, controls)
     from .document_location import install_document_location
     install_document_location(view.crypt_view, copies=view._crypt_reader_store, reader=view.crypt_reader)
-    view.crypt_view._native_reader_title = lambda: Path(view.crypt_reader.name).name
+    bind_provider_title(view)
     image = bool(getattr(view.crypt_reader, 'image_document', False))
     comic = view.crypt_reader.kind in {'.cbz', '.zip'}
     view.crypt_immersive = comic or image or view.crypt_reader.kind == '.pdf'

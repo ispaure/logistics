@@ -25,19 +25,45 @@ Progress displays the latest reported totals, without queuing older updates
 ahead of browsing when native rendering is busy.
 Transfer details include **Back** and stay in the tab from which they were opened;
 leaving the screen keeps the transfer running. Switching tabs dismisses transfer
-details, so returning to a tab never reopens them automatically. Progress counters appear on separate
-lines with labels for copying, discovery and comparison. Cloud previews requiring
+details, so returning to a tab never reopens them automatically. The progress screen shows the current phase, percentage, copied files and MB.
+Tap the source-to-destination strip for exact endpoints. **Transfer details**
+expands discovery, comparison, elapsed-time and retry counters. The **Scan →
+Transfer → Verify** indicator distinguishes discovery, copying and final checks.
+Unknown totals show activity without inventing a percentage. Completion is shown
+only after verification; failures and cancellations preserve completed changes.
+**Continue browsing** returns to the originating screen while the transfer stays
+active. **Stop transfer** asks for confirmation before requesting cancellation. Cloud previews requiring
 the connection show a dialog while transfers are running, including when opened
 from Recent or an open document. Local reader menus remain available.
 Mobile does not offer mounts. See the [mobile transfer guide](../../../user_mobile/folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync)
 for connection scopes, encrypted storage, cancellation and credential persistence.
+
+### Review file changes
+
+Before a Push or Pull starts, the review groups **New files**, **Updated files**,
+**Delete from destination** and any **Local cleanup**. The action tabs filter the
+list; the search icon opens path search. Counts describe the entire comparison,
+even while filtering or paging. Unchanged files are hidden. At most 30 changes
+are rendered per page, without limiting the comparison itself.
+
+On iPhone, tap a file for its full path, action and affected source/destination.
+On a wide iPad pane, the selected file appears in an inspector beside the list.
+The source-to-destination strip opens the exact transfer paths. File sizes are
+not invented when a comparison supplies only actions and paths.
+
+**Push N changes** or **Pull N changes** asks for confirmation, then checks a
+completed comparison again before starting. Changed results need another
+confirmation. **Proceed without full review…** remains available during an
+incomplete comparison and requires its own explicit confirmation. Replacements
+and deletions have no backup or undo. Back cancels a review without starting a
+transfer. Leaving progress keeps the running transfer active.
 
 ### Mobile folder navigation
 
 An entry's three-dot button offers its remote commands in place using the host's
 native popup or action sheet. Open folder/preview acts on the selected entry;
 **Download locally…** opens a destination picker for the selected file or folder.
-Choose Local, Received Files, another folder within Logisticks, or an unlocked
+Choose Local, Received Files, another folder within Logistics, or an unlocked
 LocalCrypt. Choose or create the destination folder, keep or change the item's
 name, then choose **Download here**. An ordinary destination requires confirmation
 because its decrypted copy remains readable after the connection locks.
@@ -74,8 +100,8 @@ dismiss label. Credential, Local, LocalCrypt, Pull and Push terminology is retai
 ### Android collection drive
 
 Android and iOS both offer **Settings → Workspaces → Show Legacy** for Legacy
-folder and credential visibility. Android additionally offers **Local / LocalCrypt
-location…**: choose one drive for both `<drive>/Logistics/Local` and
+folder and credential visibility. Android additionally offers **File storage…**:
+choose one drive for both `<drive>/Logistics/Local` and
 `<drive>/Logistics/LocalCrypt`. On Android 11 and newer, All files access is required
 for public SD-card folders. Android 7–10 instead offers Logistics' app-owned
 folder on each mounted drive, with no storage permission required; Android removes
@@ -83,7 +109,7 @@ those app-owned folders on uninstall or clearing app data. Keep a separate backu
 Downloads are copied and verified before switching, with the
 source retained as a recovery backup. Credentials and transfer associations stay
 internal. A missing card stops collection operations without an internal fallback.
-See the [mobile storage guide](../../../user_mobile/settings/settings.md#local--localcrypt-location)
+See the [mobile storage guide](../../../user_mobile/settings/settings.md#file-storage)
 for migration, restart and existing-destination behavior.
 
 ### Unlock from Home
@@ -97,6 +123,13 @@ the generic Unlock action until you open the chooser.
 
 ### Side-by-side mobile credential packages
 
+Choose **Import credential ZIP…**, then select the file. Unencrypted packages
+continue automatically; encrypted packages open a separate password panel.
+Choose **Session-Only** or **Persistent** when asked how to keep the credentials.
+A wrong password keeps the selected ZIP ready for another attempt without
+reopening the file picker. Back or Cancel clears the pending import and password.
+Successful imports return to Credential Packages with the new package listed.
+
 Android and iOS can keep several ZIP packages loaded together. Each import's
 **Save credentials on this device** choice applies to that package: saved
 packages persist in the encrypted private vault; session-only packages remain
@@ -105,6 +138,14 @@ credential groups, and Connections shows their loading modes. Duplicate remote
 names receive package qualifiers and preserve their original account identities.
 Reloading saved credentials keeps active session packages. See the
 [mobile package guide](../../../user_mobile/navigation/panels.md#multiple-credential-packages-on-android-and-ios).
+
+Forgetting a package preserves downloaded Local and LocalCrypt files. A replacement
+ZIP can have a different filename or ZIP password. Ordinary Local files remain
+readable. To browse an encrypted copy, load the original cipher configuration.
+If its remote was renamed, Logistics can use a unique matching cipher to open
+the on-device files. Push and Pull still require the original destination account.
+A package alias can change without creating a second copy. Changing the ZIP
+password leaves the file encryption keys unchanged.
 
 ### Mobile Workspaces source tabs
 

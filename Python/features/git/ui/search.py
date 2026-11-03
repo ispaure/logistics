@@ -1,4 +1,5 @@
 """Repository history search with explicit fields and date bounds."""
+from commonUtils.search.policy import SEARCH_DEBOUNCE_MS
 from commonUtils.ui import pyside as qt
 from .history import HistoryPanel
 
@@ -32,7 +33,7 @@ class SearchPanel(HistoryPanel):
         self.more.setText('Load 200 more results')
         self.timer = qt.QTimer(self)
         self.timer.setSingleShot(True)
-        self.timer.setInterval(400)
+        self.timer.setInterval(SEARCH_DEBOUNCE_MS)
         self.timer.timeout.connect(self.search_requested)
         self.search.textChanged.connect(self._schedule)
         self.search.returnPressed.connect(self._request)

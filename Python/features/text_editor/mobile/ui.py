@@ -88,6 +88,7 @@ class TextEditorView:
         box._native_reader_toolbar = self.toolbar
         box._native_reader_status = self.status
         box._native_reader_title = lambda: self.document.name if self.document else 'New document'
+        box._document_path = lambda: app.managed_document_location(self)
         box._native_reader_buttons = lambda: [
             self.save_button if self.document is not None and self.document.modified else
             self.preview_button if self.session is not None and self.session.kind == 'markdown' else self.find_button,
@@ -243,7 +244,7 @@ class TextEditorView:
                 or (self.app.loading and self.app.editor_view is self)):
             return
         self.document.text = widget.value
-        self.search.changed()
+        self.search.document_changed()
         self.update_source_info()
         self.preserve()
         self.schedule_preview()
@@ -301,7 +302,7 @@ class TextEditorView:
                 if self.formatted is None:
                     self.formatted = FormattedMarkdownInput(self.formatted_changed,
                         font_size=self.app.presentation.font_size('markdown'),
-                        stylesheet=self.app.presentation.css_variables(), private=not DocumentPolicy.for_provider(self.document).persistent)
+                        stylesheet=self.app.presentation.css_variables(), presentation=self.app.presentation, private=not DocumentPolicy.for_provider(self.document).persistent)
                     self.app.presentation.bind_font(self.formatted.view, 'markdown', web=True, formatted=self.formatted)
                 self.formatted.load(self.document.text)
                 surface = self.formatted.view
@@ -331,6 +332,7 @@ class TextEditorView:
                 self.status.text = str(error)
 
     def dispose(self):
+        self.search.dispose()
         if hasattr(self, "preview_search"):
             self.preview_search.dispose()
         speech = getattr(self, "markdown_speech", None)

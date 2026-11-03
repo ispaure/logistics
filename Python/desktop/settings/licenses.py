@@ -24,13 +24,13 @@ class LicensesPanel(qt.QWidget):
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter, 1)
         self.components.currentRowChanged.connect(self.select)
-        self.search.textChanged.connect(self.filter)
+        qt.connect_search(self.search, self.filter, pass_text=True)
         self.filter('')
 
     def filter(self, query):
         self.components.clear()
         self.visible = [notice for notice in self.notices
-                        if query.casefold() in (notice.title + ' ' + notice.license).casefold()]
+                        if query.casefold() in notice.content.casefold()]
         self.components.addItems([notice.title for notice in self.visible])
         self.components.setCurrentRow(0 if self.visible else -1)
         if not self.visible:

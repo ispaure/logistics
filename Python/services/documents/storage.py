@@ -45,6 +45,30 @@ def document_sources(*sources):
             source = getattr(source, 'provider', None)
 
 
+def document_display_name(provider, path):
+    for source in document_sources(provider):
+        if getattr(source, 'decoded_path', None):
+            path = source.decoded_path
+            break
+    return Path(path).name
+
+
+def display_path(provider, path):
+    """Format a provider's logical path without opening or decoding the file."""
+    root = None
+    for source in document_sources(provider):
+        if getattr(source, 'remote', None):
+            name = getattr(source, 'decoded_path', path)
+            records = getattr(getattr(source, 'client', None), 'package_records', ())
+            remote = next((original for record in records
+                           for original, alias in record.get('aliases', {}).items()
+                           if alias == source.remote), source.remote)
+            return f'{remote}:{name}'
+        if root is None:
+            root = getattr(source, 'root', None)
+    return str(Path(root or '') / path)
+
+
 def document_writable(*sources):
     for source in document_sources(*sources):
         if getattr(source, 'remote_storage', False) or getattr(source, 'read_only', False):

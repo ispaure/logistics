@@ -1,4 +1,3 @@
-:root{--ink:#222922;--paper:#fcfdf9;--edge:#ced3c9;--muted:#5c665a;--selected:#e1ece5}
 /* Canvas gestures must not enter WebKit's page/text selection mode. */
 html,body,#viewport,#paperWrap,canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input,textarea,[contenteditable=true]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}

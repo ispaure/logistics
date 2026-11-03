@@ -146,21 +146,47 @@ class ProgressDeliveryTests(unittest.TestCase):
 async def drive_review(app, *, declined=False, early=False):
     for _ in range(200):
         view = getattr(app, '_transfer_review_view', None)
-        if view is not None and (early or view.children[-1].children[1].enabled):
+        if view is not None and (early or view.review_ready):
             break
         await asyncio.sleep(.01)
     else:
         raise AssertionError('Review was not ready: ' + str(getattr(app, 'cloud_status', None)))
-    button = view.children[-2] if early else view.children[-1].children[1]
-    await button.on_press()
+    await view.approve_review(early)
     if declined:
-        view.children[-1].children[0].on_press()
+        view.cancel_review()
     return await asyncio.wait_for(app.transfer_task, timeout=5)
 
 
 class MirrorUITests(unittest.TestCase):
+    def test_back_from_review_cancels_without_writing(self):
+        class Client(MirrorClient):
+            def restore(self, **kwargs): return []
+            def crypt_remotes(self): return []
+            def cancel(self): pass
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.cloud_client = Client()
+            app.show_cloud(present=False)
+            job, _ = app.mirror_store().create(app.cloud_client, 'Remote', 'folder')
+            target = app.mirror_store().target(job) / 'note.txt'
+            target.write_bytes(b'local edit')
+            async def exercise():
+                app.start_mirror_pull(job['id'])
+                for _ in range(200):
+                    if getattr(app, '_transfer_review_view', None) is not None:
+                        break
+                    await asyncio.sleep(.01)
+                self.assertTrue(app.routes.back())
+                self.assertFalse(await asyncio.wait_for(app.transfer_task, 3))
+                self.assertEqual(target.read_bytes(), b'local edit')
+                self.assertFalse(app.transfer_busy)
+            app.loop.run_until_complete(exercise())
+
     def test_transfer_details_keep_review_endpoints_during_work_and_after_reopening(self):
-        from features.rclone.mobile.messages import import_hint
         class Client(MirrorClient):
             def crypt_remotes(self): return ['Secret']
             def cancel(self): pass
@@ -181,14 +207,14 @@ class MirrorUITests(unittest.TestCase):
                     online = remote + ':' + prefix
                     local = storage + '/' + job['target'] + ('/' + prefix if crypt else '')
                     source, destination = (local, online) if push else (online, local)
-                    expected = import_hint(f'From: {source}\nTo: {destination}')
                     shown = []
                     original = app.show_transfers
                     def show(*args, **kwargs):
                         original(*args, **kwargs)
                         if getattr(app, 'transfer_endpoints', None):
                             self.assertNotIn('transfer-review', app.native_host.state.routes['files'])
-                            self.assertEqual(app.transfer_view.content.children[1].text, expected)
+                            self.assertEqual(app.transfer_view.model['source'], source)
+                            self.assertEqual(app.transfer_view.model['destination'], destination)
                             shown.append(app.transfer_busy)
                     async def exercise():
                         with patch.object(app, 'show_transfers', side_effect=show), patch.object(
@@ -388,17 +414,17 @@ class MirrorUITests(unittest.TestCase):
                     app.start_mirror_pull(job['id'])
                     for _ in range(200):
                         view = getattr(app, '_transfer_review_view', None)
-                        if view is not None and view.children[-1].children[1].enabled:
+                        if view is not None and view.review_ready:
                             break
                         await asyncio.sleep(.01)
-                    await view.children[-1].children[1].on_press()
+                    await view.approve_review()
                     for _ in range(200):
-                        if view.children[2].text.startswith('Files changed'):
+                        if view.model.get('notice', '').startswith('Files changed'):
                             break
                         await asyncio.sleep(.01)
-                    self.assertTrue(view.children[2].text.startswith('Files changed'))
+                    self.assertTrue(view.model.get('notice', '').startswith('Files changed'))
                     self.assertFalse((app.mirror_store().target(job) / 'added-after-review.txt').exists())
-                    view.children[-1].children[0].on_press()
+                    view.cancel_review()
                     self.assertFalse(await app.transfer_task)
             app.loop.run_until_complete(exercise())
 

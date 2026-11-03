@@ -44,7 +44,8 @@ def main(output, rendering=None, probes=None):
                 env.update(QT_OPENGL='software', QTWEBENGINE_CHROMIUM_FLAGS='--disable-gpu')
             for name, script in [('drawing-save-stress', 'notebook_desktop_stress_probe.py'),
                                  ('page-two-memory', 'notebook_memory_probe.py'),
-                                 ('menus-zoom', 'notebook_canvas_probe.py'), ('brush-pixels', 'brush_canvas_probe.py')]:
+                                 ('menus-zoom', 'notebook_canvas_probe.py'), ('view-zoom', 'notebook_view_probe.py'),
+                                 ('brush-pixels', 'brush_canvas_probe.py')]:
                 if probes and name not in probes:
                     continue
                 started = time.monotonic()
@@ -70,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--rendering', choices=('native', 'software', 'chromium-software', 'warp', 'all'),
                         help='Defaults to normal app rendering; headless Linux uses software. Other modes diagnose software graphics paths; all compares available paths.')
-    parser.add_argument('--probe', action='append', choices=('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'brush-pixels'),
+    parser.add_argument('--probe', action='append', choices=('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'view-zoom', 'brush-pixels'),
                         help='Select individual checks; repeat to include several. Defaults to all checks.')
     args = parser.parse_args()
     raise SystemExit(main(args.output, args.rendering, args.probe))

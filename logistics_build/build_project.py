@@ -115,6 +115,10 @@ class LogisticsProject:
         from logistics_build.build_retention import storage_inventory
         return storage_inventory(self.root)
 
+    def enroll_storage(self, kind, location):
+        from logistics_build.storage_extras import enroll
+        return enroll(self.root, kind, location)
+
     def delete_storage(self, selections):
         from logistics_build.build_retention import delete_storage
         return delete_storage(self.root, selections)
@@ -240,7 +244,8 @@ class LogisticsProject:
         from logistics_build.test_evidence import with_reuse
         # Capture receipts from the actual selected-source command, then resolve
         # the newly added probe through that same historical layout.
-        return adapt_plan(with_reuse(adapt_plan(plan)))
+        from logistics_build.storage_extras import with_storage_owner
+        return with_storage_owner(adapt_plan(with_reuse(adapt_plan(plan))), self.root)
 
     def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag='', suite='', _context=None):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):

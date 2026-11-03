@@ -155,7 +155,7 @@ class NotesFullscreenProbe(LogisticsMobile):
             vault = collection_path(self.private_root) / 'Repeat Notes'
             (vault / '.obsidian').mkdir(parents=True, exist_ok=True)
             (vault / 'Welcome.md').write_text('# Repeat visit\n')
-            for choice in ('cancel', 'notes', 'cancel', 'notes'):
+            for choice in ('files', 'notes', 'files', 'notes'):
                 with patch.object(self.main_window, 'dialog', new=AsyncMock(return_value=choice)) as dialog:
                     await self.show_files(location=('Local files', 'Repeat Notes'))
                     assert dialog.await_count == 1, (choice, dialog.await_count)

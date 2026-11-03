@@ -196,16 +196,6 @@ class HubSections(toga.Box):
                 if scroll.style.flex != 1:
                     scroll.style.flex = 1
 
-        if destination == 'home':
-            row = getattr(app, '_home_status_row', None)
-            if row is not None:
-                from commonUtils.ui.native.forms import fit_text
-                content_width = allocation.leading if paired and not vertical else width
-                controls_width = sum(child.style.width + child.style.margin_left + child.style.margin_right
-                                     for child in row.children[1:])
-                fit_text(row.children[0], max(24, content_width - self.content.style.margin_left
-                    - self.content.style.margin_right - controls_width))
-
 
 def _home_state(hub, recent):
     """Compare visible content, excluding credential badges refreshed in place."""
@@ -335,21 +325,18 @@ class HubUI:
         self._home_content_state = _home_state(self, recent)
         self._home_recent_buttons = []
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))
-        from commonUtils.ui.native.forms import FittedLabel
-        intro = FittedLabel('Open a file or start a new document.', style=Pack(flex=1))
-        status_row = toga.Box(children=[intro],
+        status_row = toga.Box(
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.app._home_status_row = status_row
         if self._home_content_state[1]:
             unlock = surface(icon_button('storage_crypt', 'Unlock credentials',
                 on_press=self.app.show_home_unlock), foreground='text')
-            unlock.style.margin_left = 8
             status_row.add(unlock)
-        box.add(status_row)
+            box.add(status_row)
         self.home_continue = None
         self.home_actions = toga.Box(children=[
-            toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1, margin_right=8)),
-            toga.Button('New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1))],
+            toga.Button('Open Document', on_press=self.open_hub_file, style=Pack(height=72, flex=1, margin_right=8)),
+            toga.Button('New Document', on_press=self.new_hub_document, style=Pack(height=72, flex=1))],
             style=Pack(direction=ROW))
         self.home_content = box
         from .document_choices import available_choices
@@ -357,19 +344,7 @@ class HubUI:
             self.home_actions.remove(self.home_actions.children[-1])
         box.add(self.home_actions)
         recent_box = toga.Box(style=Pack(direction=COLUMN))
-        recent_box.add(heading('Recent'))
-        recent_rows = []
-        for session, summary in recent:
-            row = self.recent_row(session, summary)
-            self._home_recent_buttons.append(row.document_button)
-            recent_rows.append(row)
-        if not recent:
-            recent_box.add(empty_document_row('No recent documents.'))
-        def see_all(widget=None, **kwargs):
-            self.documents_query = ''
-            self.app.show_documents_hub()
-        recent_rows.append(toga.Button('See all in Documents', on_press=see_all, style=Pack(height=48)))
-        recent_box.add(document_group(recent_rows))
+        self._populate_home_recent(recent_box, recent)
         box.add(recent_box)
         notice = getattr(getattr(self.app, 'recovery_notice', None), 'text', '')
         if notice:
@@ -388,6 +363,28 @@ class HubUI:
         self.reflow_home()
         return self.home_sections
 
+    def _populate_home_recent(self, recent_box, recent):
+        self._home_recent_buttons = []
+        for child in list(recent_box.children):
+            recent_box.remove(child)
+        recent_box.add(heading('Recent'))
+        recent_rows = []
+        for session, summary in recent:
+            row = self.recent_row(session, summary)
+            self._home_recent_buttons.append(row.document_button)
+            recent_rows.append(row)
+        if not recent:
+            recent_box.add(empty_document_row('No recent documents.'))
+        def see_all(widget=None, **kwargs):
+            self.documents_query = ''
+            self.app.show_documents_hub()
+        recent_rows.append(toga.Button('See all in Documents', on_press=see_all, style=Pack(height=48)))
+        recent_box.add(document_group(recent_rows))
+
+    def refresh_home_documents(self):
+        if hasattr(self, 'home_sections'):
+            self._populate_home_recent(self.home_sections.trailing, self.recent_items()[:5])
+
     def reflow_home(self):
         self.home_sections.reflow(self.app, 'home')
 
@@ -395,6 +392,11 @@ class HubUI:
         self.documents_sections.reflow(self.app, 'documents')
 
     def build_documents_hub(self):
+        from commonUtils.ui.native.event_loop import DebouncedCallback
+        previous = getattr(self, '_document_search_delay', None)
+        if previous is not None:
+            previous.cancel()
+        self._document_search_delay = DebouncedCallback(self.refresh_document_list)
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         self.document_search = toga.TextInput(placeholder='Search documents',
             value=getattr(self, 'documents_query', ''), on_change=self.search_documents,
@@ -422,7 +424,7 @@ class HubUI:
 
     def search_documents(self, widget, **kwargs):
         self.documents_query = widget.value
-        self.refresh_document_list()
+        self._document_search_delay()
 
     async def clear_recent_documents(self, widget=None, **kwargs):
         try:

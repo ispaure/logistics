@@ -34,6 +34,43 @@ class AndroidBackTests(unittest.TestCase):
             await asyncio.sleep(0)
         self.app.loop.run_until_complete(wait())
 
+    def test_workspace_notes_browse_back_returns_to_entry_overview(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        app = self.app
+        local = app.private_root / 'LocalFiles' / 'Notes'
+        (local / '.obsidian').mkdir(parents=True)
+        (local / 'Child').mkdir()
+        (local / 'note.md').write_text('# Notes')
+        crypt_label = 'LocalCrypt: Notes'
+        # The provider is a fixture; the LocalCrypt entry/navigation path is real.
+        with patch.object(app, 'existing_crypt_locations', return_value={crypt_label: LocalFiles(local)}):
+            for width in (390, 840, 1100):
+                for kind, label, path in (('local', 'Local files', 'Notes'), ('crypt', crypt_label, '')):
+                    for toolbar in (False, True):
+                        with self.subTest(width=width, kind=kind, toolbar=toolbar), \
+                                patch.object(app.adaptive, 'width', return_value=width), \
+                                patch.object(app.main_window, 'dialog', new_callable=AsyncMock, return_value='cancel') as dialog:
+                            app.show_locations()
+                            overview = app.body
+                            entry = dict(source='Local' if kind == 'local' else 'LocalCrypt',
+                                         kind=kind, value=path if kind == 'local' else label, name='Notes')
+                            self.assertTrue(app.loop.run_until_complete(app.open_picker_folder(entry)))
+                            dialog.assert_awaited()
+                            self.assertEqual(app.files_view._folder_entry_location, (label, path))
+                            app.loop.run_until_complete(app.browser_file_folder(
+                                next(row for row in app.file_rows.values() if row['name'] == 'Child')))
+                            self.assertTrue(self.routes.system_back())
+                            self.settle()
+                            self.assertEqual(app.file_path, path)
+                            self.assertIsNot(app.body, overview)
+                            if toolbar:
+                                app.file_browser.location_bar.parent_button.on_press()
+                            else:
+                                self.assertTrue(self.routes.system_back())
+                            self.settle()
+                            self.assertIs(app.body, overview)
+                            self.assertFalse(app.routes.screens['files'])
+
     def test_hub_open_file_back_retraces_folders_and_returns_to_origin(self):
         app = self.app
         (app.private_root / 'LocalFiles' / 'Parent' / 'Child').mkdir(parents=True)

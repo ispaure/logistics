@@ -1,5 +1,4 @@
 """Compact Logistics presentation over the shared native browser."""
-import weakref
 import asyncio
 from threading import Event
 from pathlib import PurePosixPath
@@ -7,6 +6,7 @@ import toga
 from .control_icons import apply_icon
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
+from commonUtils.ui.native.panning_title import PanningTitleLabel
 from commonUtils.ui.native_browser.recycled import RecycledBrowser, BrowserPresentation
 from .appearance import list_button
 from .appearance import accessible_name, surface, template_icon, selection_row
@@ -78,21 +78,9 @@ class BrowserStatusLabel(toga.Label):
             self._impl.native.setEllipsize(TextUtils.TruncateAt.MIDDLE)
         surface(self, radius=0, background='transparent', foreground='text',
                 outlined=False, eink_outlined=False)
-        if not shrink:
-            return
-        # Native labels measure the whole single-line string. Let Pack shrink
-        # that text so the adjacent parent/search controls stay on screen.
-        from travertino.size import at_least
-        self.intrinsic.width = at_least(0)
-        native_rehint = getattr(type(self._impl), 'rehint', None)
-        if native_rehint is not None:
-            reference = weakref.ref(self)
-            def rehint():
-                target = reference()
-                if target is not None:
-                    native_rehint(target._impl)
-                    target.intrinsic.width = at_least(0)
-            self._impl.rehint = rehint
+        if shrink:
+            from commonUtils.ui.native.presentation import allow_label_to_shrink
+            allow_label_to_shrink(self)
 
     @property
     def value(self):
@@ -106,11 +94,15 @@ class BrowserStatusLabel(toga.Label):
             changed()
 
 
+class FolderNameLabel(PanningTitleLabel, BrowserStatusLabel):
+    """Browser caption styling with shared overflow motion."""
+
+
 class FolderLocationHeader(toga.Box):
     """Current storage identity and a Back control."""
     def __init__(self, status, parent_button, *, actions=()):
         self.parent_button = parent_button
-        self.folder_name = BrowserStatusLabel('Root', style=Pack(font_size=18, font_weight='normal'))
+        self.folder_name = FolderNameLabel('Root', shrink=False, style=Pack(font_size=18, font_weight='normal'))
         self.status = status
         self.folder_name.style.flex = self.status.style.flex = 0
         self.folder_name.style.margin_left = self.status.style.margin_left = 0
@@ -130,7 +122,12 @@ class FolderLocationHeader(toga.Box):
         super().__init__(children=[parent_button, self.caption, *actions],
                          style=Pack(direction=ROW, align_items=CENTER, margin_top=0))
         if type(self._impl).__module__.startswith('toga_android.'):
+            from .document_location import bind_android_hold
             self.use_android_title()
+            bind_android_hold(self, self.folder_name._impl.native, type(self).show_location)
+        elif type(self._impl).__module__.startswith('toga_iOS.'):
+            from .document_location import bind_apple_hold
+            bind_apple_hold(self, self.folder_name._impl.native, type(self).show_location)
         self.update('')
 
     def use_android_title(self):
@@ -217,8 +214,29 @@ class FolderLocationHeader(toga.Box):
         if visible not in self.caption.children:
             self.caption.add(visible)
 
-    def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None, session_only=False):
-        self.folder_name.value = name if name is not None else PurePosixPath(path).name if path else 'Root'
+    def clear_location(self):
+        self.folder_location = None
+        if self.folder_name.value:
+            self.folder_name.value = ''
+        native_title = getattr(self, '_folder_title_view', None)
+        if native_title is not None:
+            native_title.hidden = True
+            self._folder_title_view = self._folder_title_state = None
+
+    def show_location(self, *, name=None):
+        from .document_location import show_location
+        if self.folder_location:
+            show_location(self, 'Folder location', f'{name or self.folder_name.value}\n\n{self.folder_location}')
+
+    def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None, session_only=False, provider=None):
+        from services.documents.storage import display_path
+        previous_location = getattr(self, 'folder_location', None)
+        self.folder_location = display_path(provider, path) if provider is not None else None
+        title = name if name is not None else PurePosixPath(path).name if path else 'Root'
+        if self.folder_name.value != title:
+            self.folder_name.value = title
+        elif self.folder_location and self.folder_location != previous_location:
+            self.folder_name.restart_pan()
         apply_icon(self.parent_button, 'back', 'Back')
         browser_command(self.parent_button)
         kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
@@ -286,7 +304,7 @@ class FolderLocationHeader(toga.Box):
         if not path and encrypted and not remote:
             name = getattr(provider, 'remote', name)
         self.update(path, remote=remote, encrypted=encrypted, unlocked=True,
-                    name=name, session_only=provider_session_only(provider))
+                    name=name, session_only=provider_session_only(provider), provider=provider)
 
 
 def provider_session_only(provider):
@@ -405,6 +423,9 @@ class FileBrowser(RecycledBrowser):
             self.query_changed()
 
     def stop(self):
+        header = getattr(self, 'location_bar', None)
+        if header is not None:
+            header.clear_location()
         self.stop_local_search()
         super().stop()
         self._release_resource()

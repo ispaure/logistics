@@ -160,7 +160,7 @@ def archive_release(args, workspace, identity, env):
     shutil.copyfile(ROOT / 'pyproject.toml', workspace / 'pyproject.toml')
     try:
         manifest = stage(ROOT.parent, workspace / 'payload', allow_dirty=True)
-        cloud_build.licenses(workspace / 'payload/mobile/native-licenses')
+        cloud_build.licenses(workspace / 'payload/mobile/native-licenses', platform='ios')
         run([sys.executable, '-m', 'briefcase', 'create', 'iOS', '--no-input'], workspace, env, workspace / 'logs/create.log')
         project = workspace / 'build/logisticsmobile/ios/xcode'
         cloud_build.run('go', 'test', './...', env=env)

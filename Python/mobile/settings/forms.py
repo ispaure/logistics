@@ -13,6 +13,10 @@ from services.build_version import BuildVersion, installed_build
 from commonUtils.ui.native import forms as _forms
 from commonUtils.ui.native.forms import wrap_text, FittedLabel as SettingsLabel
 from commonUtils.ui.native.password_input import PasswordInput
+from ..ui_metrics import CONTROL_TEXT, CAPTION_TEXT, toga_font_size
+
+OPTION_FONT_SIZE = toga_font_size(CONTROL_TEXT)
+NOTE_FONT_SIZE = toga_font_size(CAPTION_TEXT)
 
 
 def fit_text(control, width):
@@ -96,6 +100,7 @@ def settings_presentation(section):
             note.style.margin_bottom = 20
             section.add(note)
         elif isinstance(child, toga.Selection):
+            child.style.font_size = OPTION_FONT_SIZE
             surface(child, radius=0, background='transparent', outlined=False, eink_outlined=False)
             child.style.margin_top = 4
             child.style.margin_bottom = 8
@@ -105,8 +110,10 @@ def settings_presentation(section):
             surface(child, radius=0, background='transparent', foreground='text' if primary else 'muted',
                     outlined=False, eink_outlined=False)
             if primary and child.style.font_weight != 'bold':
+                child.style.font_size = OPTION_FONT_SIZE
                 child.style.margin_top = 12
                 choice = children[index + 1]
+                choice.style.font_size = OPTION_FONT_SIZE
                 surface(choice, radius=0, background='transparent', outlined=False, eink_outlined=False)
                 consumed.add(choice)
                 choice.style.margin_top = 4
@@ -115,7 +122,7 @@ def settings_presentation(section):
             else:
                 flush()
                 if child.style.font_weight != 'bold':
-                    child.style.font_size = 13
+                    child.style.font_size = NOTE_FONT_SIZE
                     if section.children and getattr(section.children[-1], '_settings_group', False):
                         section.children[-1].style.margin_bottom = 6
                 child.style.margin_left = child.style.margin_right = 12
@@ -126,6 +133,7 @@ def settings_presentation(section):
             section.add(child)
         elif getattr(child, '_settings_action_row', False):
             label, button = child.children
+            label.style.font_size = OPTION_FONT_SIZE
             surface(label, radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False)
             surface(button, radius=0, background='transparent', foreground='accent', outlined=False, eink_outlined=False)
             rows.append(child)
@@ -142,7 +150,7 @@ def settings_presentation(section):
 
 def connection_note(text):
     from ..appearance import surface
-    return surface(SettingsLabel(text, style=Pack(font_size=12, margin_bottom=12)),
+    return surface(SettingsLabel(text, style=Pack(font_size=NOTE_FONT_SIZE, margin_bottom=12)),
                    radius=0, background='transparent', foreground='muted', outlined=False, eink_outlined=False)
 
 
@@ -160,7 +168,7 @@ def credential_package_row(name, status, on_press):
 
 def connection_heading(text):
     from ..appearance import surface
-    return surface(SettingsLabel(text, style=Pack(font_size=12, font_weight='bold', margin_top=16, margin_bottom=8)),
+    return surface(SettingsLabel(text, style=Pack(font_size=NOTE_FONT_SIZE, font_weight='bold', margin_top=16, margin_bottom=8)),
                    radius=0, background='transparent', foreground='muted', outlined=False, eink_outlined=False)
 
 
@@ -182,7 +190,7 @@ def connection_group(rows):
             accessible_name(row, title)
             row.style.flex = 0
             row.style.width = 64
-            row = toga.Box(children=[SettingsLabel(title, style=Pack(flex=1)), row],
+            row = toga.Box(children=[SettingsLabel(title, style=Pack(flex=1, font_size=OPTION_FONT_SIZE)), row],
                            style=Pack(direction=ROW, align_items=CENTER))
             row._connection_switch_row = True
         result.append(row)
@@ -233,12 +241,11 @@ def switch_row(app, title, switch, explanation):
     from ..appearance import accessible_name
     accessible_name(switch, title)
     row = toga.Box(children=[
-        SettingsLabel(title, style=Pack(flex=1)),
+        SettingsLabel(title, style=Pack(flex=1, font_size=OPTION_FONT_SIZE)),
         switch,
     ], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=8))
     row._settings_switch_row = True
     row._settings_note = connection_note(explanation)
-    row._settings_note.style.font_size = 13
     return row
 
 
@@ -256,14 +263,14 @@ class CredentialStorageContent(toga.Box):
                 (PERSISTENT_TITLE, PERSISTENT_DESCRIPTION +
                  ' Saved credentials use device-protected encrypted storage.', True)):
             button = toga.Button(title, on_press=lambda widget, choice=value, **kw: finish(choice),
-                                 style=Pack(margin_bottom=12, font_size=15))
+                                 style=Pack(margin_bottom=12, font_size=OPTION_FONT_SIZE))
             # Keep the source for the shared multiline fitting logic.
             button._impl.set_text(title + '\n' + description)
             accessible_name(button, title + '. ' + description)
             surface(list_button(button), radius=12, foreground='text', outlined=True)
             self.cards.append(button)
         self.body = toga.Box(children=[
-            SettingsLabel('Unlock credential ZIP', style=Pack(font_size=24, font_weight='bold', margin_bottom=12)),
+            SettingsLabel('Keep credentials', style=Pack(font_size=OPTION_FONT_SIZE, font_weight='bold', margin_bottom=12)),
             connection_note(f'How should Logistics keep credentials from {package}? Tap a card to choose.'),
             *self.cards,
             *([connection_note(SAVED_COPY_NOTE)] if saved else []), connection_note(SHARED_NOTE)],

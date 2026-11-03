@@ -21,6 +21,8 @@ LAPTOP_CHECKS = r"""JSON.stringify((() => {
   $('zoom').value='page'; $('zoom').onchange();
   const r = canvas.getBoundingClientRect();
   check(r.top >= viewport.top - 1 && r.bottom <= viewport.bottom + 1, 'Fitted paper leaves lower screen');
+  const zoom = $('zoomControls').getBoundingClientRect();
+  check(r.bottom <= zoom.top, 'Fitted paper is covered by the bottom zoom controls');
   const originalSend=send, actions=[];
   send=action=>actions.push(action);
   try {

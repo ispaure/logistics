@@ -5,6 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import base64
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -37,6 +38,106 @@ class Client:
 
 
 class LocalCryptAccessTests(unittest.TestCase):
+    def test_note_lookup_decodes_only_candidate_paths_and_preserves_matching_rules(self):
+        from features.text_editor.notes import NotesLibrary
+        from commonUtils.runtime.operations import OperationCancelled
+        with TemporaryDirectory() as root:
+            client = Client()
+            provider = self.provider(root, client)
+            for folder in ('Topics', 'Other', '.hidden', 'Topics/Nested'):
+                (provider.root / folder).mkdir(parents=True)
+            for name in ('Topics/Unique.md', '.hidden/Unique.md', 'Other/Unrelated.md', 'Topics/Nested/Deep.md'):
+                (provider.root / name).write_bytes(b'opaque fixture')
+            library = NotesLibrary(provider)
+            with patch.object(provider, 'list', side_effect=AssertionError('Full folder listing')), patch.object(
+                    client, 'request', wraps=client.request) as requests:
+                self.assertEqual(library.link('Start.md', 'Unique#section'), ('Topics/Unique.md', 'section'))
+                self.assertEqual(library.link('Start.md', 'Nested/Deep'), ('Topics/Nested/Deep.md', ''))
+                decoded = [entry for call in requests.call_args_list if call.args[0] == 'crypt_paths'
+                           for entry in call.kwargs['entries']]
+                self.assertTrue(decoded)
+                if hasattr(os, 'fwalk'):
+                    self.assertTrue(all(not entry['directory'] for entry in decoded))
+                    self.assertTrue(all(Path(entry['path']).name in {'Unique.md', 'Deep.md'} for entry in decoded))
+                else:
+                    self.assertTrue(all(entry['directory'] for entry in decoded))
+            self.assertEqual(provider.find_note_paths('Unique.md', root='Other'), [])
+            (provider.root / 'Other/Unique.md').write_bytes(b'opaque duplicate')
+            with self.assertRaisesRegex(ValueError, 'Several notes'):
+                library.link('Start.md', 'Unique')
+            with self.assertRaisesRegex(ValueError, 'not found'):
+                library.link('Start.md', 'Missing')
+            with self.assertRaises(OperationCancelled):
+                library.link('Start.md', 'Unique', cancelled=lambda: True)
+            (provider.root / 'Other/Linked.md').symlink_to(provider.root / 'Topics/Unique.md')
+            with self.assertRaisesRegex(ValueError, 'Linked storage'):
+                library.link('Start.md', 'Unique')
+            provider.close()
+
+    def test_note_lookup_cannot_publish_after_revocation_during_decode(self):
+        with TemporaryDirectory() as root:
+            client = Client()
+            provider = self.provider(root, client)
+            (provider.root / 'Folder').mkdir()
+            (provider.root / 'Folder/Unique.md').write_bytes(b'opaque fixture')
+            original = client.request
+            def revoke(action, **values):
+                result = original(action, **values)
+                if action == 'crypt_paths':
+                    client.lock()
+                return result
+            with patch.object(client, 'request', side_effect=revoke):
+                with self.assertRaises(ValueError):
+                    provider.find_note_paths('Unique.md')
+
+    def test_note_lookup_rechecks_collection_selection_before_publishing(self):
+        with TemporaryDirectory() as root:
+            client = Client()
+            provider = self.provider(root, client)
+            (provider.root / 'Folder').mkdir()
+            (provider.root / 'Folder/Unique.md').write_bytes(b'opaque fixture')
+            provider.collection_storage_root = Path(root) / 'app'
+            selected = [provider.root.parent]
+            original = client.request
+            def relocate(action, **values):
+                result = original(action, **values)
+                if action == 'crypt_paths':
+                    selected[0] = provider.root.parent / 'Changed'
+                return result
+            with patch('features.rclone.localcrypt.mobile.resources.collection_path', side_effect=lambda *a: selected[0]), patch.object(
+                    client, 'request', side_effect=relocate):
+                with self.assertRaisesRegex(ValueError, 'Collection location changed'):
+                    provider.find_note_paths('Unique.md')
+
+    def test_ciphertext_scan_falls_back_for_hidden_heavy_trees(self):
+        with TemporaryDirectory() as root:
+            client = Client()
+            provider = self.provider(root, client)
+            hidden = provider.root / '.hidden'
+            hidden.mkdir()
+            for index in range(10001):
+                (hidden / str(index)).touch()
+            (provider.root / 'Folder').mkdir()
+            (provider.root / 'Folder/Unique.md').write_bytes(b'opaque fixture')
+            self.assertEqual(provider.find_note_paths('Unique.md'), ['Folder/Unique.md'])
+
+    def test_candidate_replacement_during_decode_is_rejected(self):
+        with TemporaryDirectory() as root:
+            client = Client()
+            provider = self.provider(root, client)
+            (provider.root / 'Folder').mkdir()
+            candidate = provider.root / 'Folder/Unique.md'
+            candidate.write_bytes(b'original opaque fixture')
+            original = client.request
+            def replace(action, **values):
+                result = original(action, **values)
+                if action == 'crypt_paths':
+                    candidate.write_bytes(b'replacement opaque fixture with another revision')
+                return result
+            with patch.object(client, 'request', side_effect=replace):
+                with self.assertRaisesRegex(ValueError, 'changed during lookup'):
+                    provider.find_note_paths('Unique.md')
+
     def test_failed_archive_construction_releases_its_native_source(self):
         from commonUtils.runtime.resources.local import LocalFiles
         from services.documents.provider_documents import ProviderDocuments

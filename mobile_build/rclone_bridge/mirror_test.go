@@ -20,6 +20,7 @@ import (
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/accounting"
 	"github.com/rclone/rclone/fs/object"
+	"github.com/rclone/rclone/fs/rc"
 )
 
 func canonicalTestDir(t *testing.T) string {
@@ -506,5 +507,32 @@ func TestMirrorValidationDescriptorSafeguards(t *testing.T) {
 	defer dir.Close()
 	if _, err := mirrorInput(int(dir.Fd())); err == nil {
 		t.Fatal("accepted directory")
+	}
+}
+
+func TestActiveTransferRowsAreBoundedAndResetBetweenRuns(t *testing.T) {
+	entries := []rc.Params{}
+	for i := 0; i < 20; i++ {
+		entries = append(entries, rc.Params{"name": fmt.Sprintf("folder/file-%d", i), "bytes": int64(i), "size": int64(100)})
+	}
+	rows := boundedActiveTransfers(entries)
+	if len(rows) != 3 || rows[2].Name != "folder/file-2" || rows[2].Bytes != 2 {
+		t.Fatalf("unexpected active rows: %#v", rows)
+	}
+	invalid := boundedActiveTransfers([]rc.Params{{"name": "", "bytes": int64(1)}, {"name": "unknown", "bytes": int64(-1), "size": int64(-1)}})
+	if len(invalid) != 1 || invalid[0].Bytes != 0 || invalid[0].Size != 0 {
+		t.Fatalf("invalid counters were exposed: %#v", invalid)
+	}
+	mirrorPhase("active-row-test", "Transferring", 100)
+	mirrorProgressState.Lock()
+	mirrorProgressState.ActiveFiles = rows
+	mirrorProgressState.Unlock()
+	wrong := mirrorProgress(`{"run":"other"}`)
+	if strings.Contains(wrong, "file-0") {
+		t.Fatal("unrelated progress run exposed filenames")
+	}
+	mirrorPhase("active-row-next", "Discovering / checking files", 0)
+	if strings.Contains(mirrorProgress(`{"run":"active-row-next"}`), "file-0") {
+		t.Fatal("new run retained old filenames")
 	}
 }

@@ -79,8 +79,23 @@ class ReaderBuildTests(unittest.TestCase):
             manifest.write_text(
                 '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="@string/formal_name"><activity android:name="Main" /></application></manifest>'
             )
+            activity = root / 'app/src/main/java/org/beeware/android/MainActivity.java'
+            activity.parent.mkdir(parents=True)
+            activity.write_text("""    public void setContentView(View view, ViewGroup.LayoutParams lp) {
+        super.setContentView(view, lp);
+        // EdgeToEdge.enable
+        View statusBarBackground = new View(this);
+        ViewCompat.setOnApplyWindowInsetsListener(view, listener);
+    }
+
+    public void onStart() {}
+""")
             configure_android_appearance(root)
             configure_android_appearance(root)
+            generated = activity.read_text()
+            self.assertEqual(generated.count('SystemChrome.install(this, view);'), 1)
+            self.assertIn('super.setContentView(view, lp);', generated)
+            self.assertIn('public void onStart()', generated)
             application = ET.parse(manifest).getroot().find('application')
             self.assertEqual(application.get('{http://schemas.android.com/tools}replace'), 'android:label')
             self.assertEqual(application.get('{http://schemas.android.com/apk/res/android}label'), '@string/formal_name')

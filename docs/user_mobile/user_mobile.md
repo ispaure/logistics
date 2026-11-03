@@ -39,9 +39,11 @@ CBZ/ZIP comics. Search filters the current folder only. Unsupported files and
 content beyond the reader limits show a dialog asking you to manually make a
 local copy; opening a file never automatically creates one.
 
-Remote browsers have no standalone file or folder download actions, including
-encrypted downloads. Use Workspaces's managed Pull workflows for offline Local
-or LocalCrypt folders. Existing offline copies remain readable and exportable.
+To keep one file or folder offline, open its **••• → Download locally…** menu
+and choose an ordinary or unlocked LocalCrypt destination. See the
+[mobile remote workflow](../features/rclone/user_mobile/workflows.md#mobile-folder-navigation)
+for confirmation, naming and cancellation. Workspaces's managed Pull workflows
+remain available for configured folders. Existing offline copies remain readable and exportable.
 Direct readers show no Save, Save As or metadata-edit controls. Locking or replacing credentials
 retires their contents, including readers opened with session-only credentials.
 See the [rclone guide](../features/rclone/user/user.md#browse-remote-files-directly)

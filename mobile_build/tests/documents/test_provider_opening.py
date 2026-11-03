@@ -41,7 +41,7 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
         owner.document_open_cancelled = lambda **options: ReaderHost.document_open_cancelled(owner, **options)
         operation = ProviderDocumentSession(owner).opening
         view = ProviderView()
-        view.crypt_view, view.crypt_reader = object(), reader
+        view.crypt_view, view.crypt_reader = NS(), reader
         view.crypt_page = NS(value='Page 1')
         view.crypt_bookmark_selector = NS(items=[])
         view.crypt_text, view.crypt_image = Mock(), Mock()

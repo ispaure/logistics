@@ -131,6 +131,9 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertTrue((payload / 'features/video/mobile/ios/VideoPlayer.m').is_file())
             self.assertTrue((payload / 'services/documents/video_progress.py').is_file())
             self.assertTrue((payload / 'features/notebooks/mobile/android/io/github/ispaure/logistics/notebooks/BooxRefresh.java').is_file())
+            self.assertTrue((payload / 'services/license_inventory.py').is_file())
+            self.assertFalse((payload / 'services/licenses/qt-source-notices.json').exists())
+            self.assertFalse((payload / 'services/licenses/rclone-dependency-notices.json').exists())
             assets = REPO / 'Python/features/notebooks/assets'
             for asset in assets.iterdir():
                 self.assertEqual((payload / 'features/notebooks/assets' / asset.name).read_bytes(),

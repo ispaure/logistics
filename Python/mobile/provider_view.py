@@ -24,6 +24,8 @@ class ProviderView:
             if owner._provider_markdown is not None and isinstance(getattr(type(owner), name, None), _MarkdownState):
                 continue
             setattr(owner, name, value)
+        from .provider_presentation import bind_provider_title
+        bind_provider_title(owner)
         self._adopted = True
 
     def discard(self):

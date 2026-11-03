@@ -66,6 +66,17 @@ class FilesUI:
         # Keep the existing cancellation handle available to compatibility callers.
         self._local_browse_cancel = work.cancel
         browser = self.file_browser
+        app = getattr(self, 'app', self)
+        origin = getattr(app, 'navigation_generation', None)
+        def restore_location():
+            if (listing.work is work and browser is self.file_browser and hasattr(self, 'file_loaded_location')
+                    and (self.file_storage.value, self.file_location.value) == (label, folder)):
+                self.file_changing_location = True
+                try:
+                    self.file_storage.value, self.file_location.value = self.file_loaded_location
+                finally:
+                    self.file_changing_location = False
+                self.refresh_file_source_tabs()
         with browser.population_paused():
             label = self.file_storage.value
             request = None
@@ -73,8 +84,23 @@ class FilesUI:
                 provider = self.file_provider_for(label)
                 path = provider.relative(folder)
                 request = listing.capture(work, provider, path, (label, folder))
+                browser._notes_requested_location = (str(getattr(provider, 'root', '')), getattr(provider, 'remote', ''), path)
                 rows = await listing.read(request)
-                if rows is None:
+                if rows is None or getattr(app, 'navigation_generation', None) != origin:
+                    restore_location()
+                    return False
+                # Resolve the folder's mode before changing the visible browser.
+                from .obsidian import offer_vault
+                choice = await offer_vault(self.app, browser, provider, path, rows)
+                if choice:
+                    restore_location()
+                    return True
+                if choice is None:
+                    restore_location()
+                    return False
+                if (self.app.navigation_generation != origin
+                        or not listing.accepts(work, request)):
+                    restore_location()
                     return False
                 self.file_provider, self.file_path = provider, path
                 self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}' : row
@@ -82,9 +108,8 @@ class FilesUI:
                 # set_entries publishes selection reset once with the new snapshot.
                 self.file_loaded_location = label, path
                 self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
+                self.refresh_file_source_tabs()
                 self.file_status.value = ''
-                from .obsidian import offer_vault
-                await offer_vault(self.app, browser, provider, path, rows)
                 return True
             except Exception as error:
                 if (listing.accepts(work, request, private=request is None)
@@ -119,7 +144,7 @@ class FilesUI:
         if (hasattr(self, 'files_view') and self.file_provider is not None
                 and not self.file_browser.closed):
             if local_read_available(self, private=True):
-                roots = {**self.ordinary_file_roots(), **self.existing_crypt_locations(), **self.linked_crypt_locations()}
+                roots = {**self.ordinary_file_roots(include_collections=False), **self.existing_crypt_locations(), **self.linked_crypt_locations()}
                 storage, destination = self.file_storage.value, self.file_destination.value
                 local_root = local_root or storage not in roots
                 self.file_changing_location = True
@@ -153,6 +178,8 @@ class FilesUI:
                 opened = await self.browse_files()
             if getattr(self.app, 'vault_browser', None) is not previous_notes:
                 return opened
+            if opened is False:
+                return False
             self.refresh_file_source_tabs()
             if self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser') is False:
                 return False
@@ -161,15 +188,21 @@ class FilesUI:
             await self.file_browser.close()
         self._build_file_browser(location)
         self.refresh_file_source_tabs()
-        if self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser') is False:
-            return False
+        # A direct folder shortcut must make the choice over its origin screen.
+        previous_notes = getattr(self.app, 'vault_browser', None)
         opened = await self.browse_files()
         self.file_storage.on_change = self.change_file_storage
+        if getattr(self.app, 'vault_browser', None) is not previous_notes:
+            return opened
+        if not opened:
+            return False
+        if self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser') is False:
+            return False
         return opened
 
     def _build_file_browser(self, location):
         """Construct browser/command controls before route publication and first listing."""
-        self.file_roots = self.ordinary_file_roots()
+        self.file_roots = self.ordinary_file_roots(include_collections=False)
         if local_read_available(self, private=True):
             self.file_roots.update(self.existing_crypt_locations())
             self.file_roots.update(self.linked_crypt_locations())
@@ -401,7 +434,6 @@ class FilesUI:
             self.file_storage.value, self.file_location.value = location
         finally:
             self.file_changing_location = False
-        self.refresh_file_source_tabs()
         return await self.browse_files()
 
     def update_file_locations(self):
@@ -423,11 +455,11 @@ class FilesUI:
     def local_browser_root(self):
         return 'Shared files' if 'Shared files' in self.ordinary_file_roots() else 'Local files'
 
-    def ordinary_file_roots(self):
+    def ordinary_file_roots(self, *, include_collections=True):
         from .local_sources import device_files
         from .incoming_files import inbox_path
         from services.documents.locations import MobileLocalFiles
-        roots = {'Local files': None, 'Shared files': device_files(self.private_root),
+        roots = {'Local files': None, 'Shared files': device_files(self.private_root, include_collections=include_collections),
                  'Received Files': MobileLocalFiles(inbox_path(self.private_root))}
         return roots
 
@@ -493,7 +525,7 @@ class FilesUI:
         name = (Path(self.file_path).name if self.file_path else
                 'Local' if managed_root else
                 'On this device' if self.file_storage.value in ('Local files', 'Shared files') else self.file_storage.value)
-        self.file_browser.location_bar.update_provider(self.file_path or ('Local' if managed_root else ''),
+        self.file_browser.location_bar.update_provider(self.file_path,
             self.file_provider, name=name)
         from .folder_navigation import record
         record(getattr(self, 'app', self), self.files_view, self.file_browser, 'browser', self.file_storage.value,

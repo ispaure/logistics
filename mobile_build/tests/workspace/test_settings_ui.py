@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -15,6 +16,39 @@ from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_android_notice_asset_is_read_offline_and_closed(self):
+        from mobile.settings.licenses import show_licenses
+        app = self.make_app()
+        inventory = dict(schema=1, platform='android', components=[])
+        scanner = Mock()
+        scanner.useDelimiter.return_value = scanner
+        scanner.next.return_value = json.dumps(inventory)
+        java = SimpleNamespace(jclass=Mock(return_value=Mock(return_value=scanner)))
+        with patch.dict('sys.modules', {'java': java}), \
+                patch('mobile.settings.licenses.sys', SimpleNamespace(platform='android')), \
+                patch.object(app._impl, 'native', Mock(), create=True), \
+                patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
+            show_licenses(app)
+        collect.assert_called_once_with(native_inventory=inventory)
+        java.jclass.assert_called_once_with('java.util.Scanner')
+        scanner.close.assert_called_once_with()
+
+    def test_unsupported_android_notice_asset_reports_unavailable_without_breaking_settings(self):
+        from mobile.settings.licenses import show_licenses
+        app = self.make_app()
+        scanner = Mock()
+        scanner.useDelimiter.return_value = scanner
+        scanner.next.return_value = json.dumps(dict(schema=2, platform='android', components=[]))
+        java = SimpleNamespace(jclass=lambda name: lambda *args: scanner)
+        with patch.dict('sys.modules', {'java': java}), \
+                patch('mobile.settings.licenses.sys', SimpleNamespace(platform='android')), \
+                patch.object(app._impl, 'native', Mock(), create=True), \
+                patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
+            view = show_licenses(app)
+        collect.assert_called_once_with(native_inventory=None)
+        self.assertIsNotNone(view)
+        scanner.close.assert_called_once_with()
+
     def test_about_license_navigation_search_and_native_back(self):
         import toga
         from services.open_source import Notice
@@ -36,8 +70,10 @@ class SettingsUITests(unittest.TestCase):
             view = app.routes.screens['settings'][-1][1]
             search = next(widget for widget in descendants(view) if isinstance(widget, toga.TextInput))
             search.value = 'missing'
+            app.loop.run_until_complete(asyncio.sleep(.35))
             self.assertTrue(any(getattr(widget, 'text', '') == 'No matching components.' for widget in descendants(view)))
             search.value = 'example'
+            app.loop.run_until_complete(asyncio.sleep(.35))
             component = next(widget for widget in descendants(view)
                              if isinstance(widget, toga.Button) and widget.text == 'Example 1.0')
             component.on_press()
@@ -342,7 +378,12 @@ class SettingsUITests(unittest.TestCase):
                 section = group.parent
                 self.assertIs(section.children[section.children.index(group) + 1], row._settings_note)
                 self.assertTrue(row._settings_note.text)
-                self.assertEqual(row._settings_note.style.font_size, 13)
+                from mobile.ui_metrics import CAPTION_TEXT, CONTROL_TEXT, toga_font_size
+                self.assertEqual(row._settings_note.style.font_size, toga_font_size(CAPTION_TEXT))
+                self.assertEqual(label.style.font_size, toga_font_size(CONTROL_TEXT))
+                self.assertLess(row._settings_note.style.font_size, label.style.font_size)
+            self.assertEqual(app.restore_choice.parent._settings_note.text.replace('\n', ' '),
+                             'Resume the last active document when the app starts.')
             self.assertEqual(list(app.settings_navigation.sections)[-1], 'About')
             self.assertEqual(box.children[0].text, 'About')
             self.assertIs(box.children[-1], app.build_version_label)

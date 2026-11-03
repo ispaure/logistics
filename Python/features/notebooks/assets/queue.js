@@ -1,5 +1,7 @@
 function send(action) {
-  $('status').textContent = ['export', 'library', 'transfer', 'page'].includes(action.op) ? 'Opening…' : 'Saving…';
+  if (action.op !== 'document-location') {
+    $('status').textContent = ['export', 'library', 'transfer', 'page'].includes(action.op) ? 'Opening…' : 'Saving…';
+  }
   queue.push(action);
   pump()
 }
@@ -77,3 +79,6 @@ window.notebookInkUpdate = function(patch) {
   draw();
   pump()
 };
+
+// Hosts must drain native-bound ink before navigating away from an embedded canvas.
+window.notebookIdle = () => !busy && !queue.length && active === null;

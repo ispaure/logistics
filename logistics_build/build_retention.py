@@ -13,7 +13,7 @@ import sys
 import tempfile
 
 from build_manager.locking import workspace_lock
-from build_manager.retention import lease, linked, prune, remove_tree
+from build_manager.retention import lease, linked, prune, prune_cache_groups, remove_tree, explicitly_pinned
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_MARKER = '.manager-build-output'
@@ -72,6 +72,78 @@ def device_access(path):
     return max((p.stat().st_mtime for p in files), default=path.stat().st_mtime)
 
 
+def cache_idle(path):
+    """Non-manager native writers do not necessarily take our operation locks."""
+    try:
+        processes = subprocess.check_output(['/bin/ps', '-Ao', 'command='], text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    for line in processes.splitlines():
+        if re.search(r'/Xcode[^/]*\.app/Contents/MacOS/Xcode(?:\s|$)', line):
+            return False
+        if str(path) in line and any(word in line for word in ('xcodebuild', 'briefcase', 'gradle', 'logistics_build')):
+            return False
+    return True
+
+
+def device_intermediates(root):
+    """Keep reviewed packages/receipts while retiring their reproducible build tree."""
+    for platform in ('ios', 'android'):
+        spec = device_group(root, platform)
+        parent = spec['root']
+        if not parent.is_dir() or any(linked(p) for p in (parent, *parent.parents)):
+            continue
+        for workspace in sorted(parent.iterdir()):
+            if linked(workspace) or not workspace.is_dir() or not spec['eligible'](workspace):
+                continue
+            def eligible(path, workspace=workspace, platform=platform, owner=spec['eligible']):
+                if path.name != 'build' or not owner(workspace) or explicitly_pinned(workspace) or not cache_idle(workspace):
+                    return False
+                prepared = workspace / 'prepared.json'
+                try:
+                    if linked(prepared) or prepared.stat().st_size > 262144:
+                        return False
+                    data = json.loads(prepared.read_text())
+                    package = workspace / ('app.zip' if platform == 'ios' else 'app.apk')
+                    return (data.get('workspace') == str(workspace) and data.get('platform') == platform
+                            and data.get('package') == str(package) and package.is_file() and not linked(package)
+                            and re.fullmatch('[0-9a-f]{64}', data.get('package_sha256', '')) is not None)
+                except (OSError, ValueError, TypeError, AttributeError):
+                    return False
+            yield ('Device build caches / ' + platform + ' / ' + workspace.name,
+                   dict(root=workspace, eligible=eligible, lock_path=lambda p: p.parent / 'operation.lock'))
+
+
+def cache_access(path):
+    return (path.parent / 'prepared.json').stat().st_mtime
+
+
+def snapshot_intermediates(root):
+    parent = Path(root) / 'mobile_build/.tools/build-manager/snapshots'
+    if not parent.is_dir() or any(linked(p) for p in (parent, *parent.parents)):
+        return
+    for snapshot in sorted(parent.iterdir()):
+        marker = snapshot / '.manager-source.json'
+        if (linked(snapshot) or not snapshot.is_dir() or not re.fullmatch('[0-9a-f]{64}', snapshot.name)
+                or linked(marker) or not marker.is_file()):
+            continue
+        build = snapshot / 'mobile_build/build'
+        specs = [
+            (build / 'logisticsmobile/android/gradle/app/build', {'intermediates', 'tmp', 'generated'}),
+            (build / 'logisticsmobile/android/gradle', {'.gradle'}),
+            (build / 'logisticsmobile/ios/xcode/build', {'Logistics Mobile.build', 'XCBuildData',
+                'EagerLinkingTBDs', 'ExplicitPrecompiledModules', 'SharedPrecompiledHeaders', 'SwiftExplicitPrecompiledModules'}),
+        ]
+        provider = build / 'testflight'
+        if provider.is_dir() and not linked(provider):
+            specs.extend((path, {'derived'}) for path in provider.iterdir() if path.name.isdigit() and path.is_dir() and not linked(path))
+        for cache_root, names in specs:
+            def eligible(path, names=names, snapshot=snapshot):
+                return path.name in names and not explicitly_pinned(snapshot) and cache_idle(snapshot)
+            yield ('Snapshot build caches / ' + snapshot.name[:12] + ' / ' + cache_root.relative_to(snapshot).as_posix(),
+                   dict(root=cache_root, eligible=eligible, lock_path=lambda p, snapshot=snapshot: snapshot.with_suffix('.lock')))
+
+
 def clean(root=ROOT, *, apply=False, snapshots=True):
     root = Path(root)
     mobile = root / 'mobile_build'
@@ -87,6 +159,9 @@ def clean(root=ROOT, *, apply=False, snapshots=True):
         for platform in ('ios', 'android'):
             removed += prune(**device_group(root, platform), age_days=1, max_bytes=DEVICE_BUDGET,
                              grace_days=1/24, last_used=device_access, apply=apply)
+        caches = [dict(spec, last_used=cache_access) for _, spec in device_intermediates(root)]
+        caches += [spec for _, spec in snapshot_intermediates(root)]
+        removed += prune_cache_groups(caches, age_days=1, max_bytes=12 * GIB, grace_days=1/24, apply=apply)
         if sys.platform == 'darwin':
             from logistics_build.xcode_storage import storage_group, access_order
             try:
@@ -94,6 +169,12 @@ def clean(root=ROOT, *, apply=False, snapshots=True):
                                  order_key=access_order, last_used=lambda p: access_order(p)[0], apply=apply)
             except (OSError, subprocess.SubprocessError) as error:
                 print('Xcode cache cleanup unavailable: ' + str(error), file=sys.stderr)
+        from logistics_build.storage_extras import directory_groups, MARKER, clean_simulators
+        for _, spec in directory_groups(root):
+            removed += prune(**spec, keep=0, age_days=7,
+                             last_used=lambda p: (p / MARKER).stat().st_mtime, apply=apply)
+        if sys.platform == 'darwin':
+            removed += clean_simulators(root, apply=apply)
     removed += prune(root / 'test-results/build-scratch',
                      eligible=lambda p: (p / '.manager-scratch').is_file(), keep=1, age_days=1, apply=apply)
     return removed
@@ -102,7 +183,8 @@ def clean(root=ROOT, *, apply=False, snapshots=True):
 def clean_builds(mobile):
     """Deployment helpers also run outside the UI and inside source snapshots."""
     try:
-        removed = clean(Path(mobile).parent, apply=True, snapshots=False)
+        owner = Path(os.environ.get('LOGISTICS_STORAGE_OWNER_ROOT', Path(mobile).parent))
+        removed = clean(owner, apply=True, snapshots='LOGISTICS_STORAGE_OWNER_ROOT' in os.environ)
         if removed:
             print('Build retention removed ' + str(len(removed)) + ' expired directories.', flush=True)
     except (OSError, RuntimeError) as error:
@@ -128,11 +210,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--apply', action='store_true', help='Delete expired owned outputs')
+    parser.add_argument('--enroll-directory', type=Path, help='Adopt a reviewed disposable temporary build directory (seven days)')
+    parser.add_argument('--enroll-simulator', help='Adopt an explicitly disposable simulator UUID (one day)')
     parser.add_argument('--enroll-output', action='append', default=[], metavar='NAME',
                         help='Enroll a reviewed disposable build folder; save useful evidence first. Does not prune.')
     parser.add_argument('--scratch', nargs=argparse.REMAINDER,
                         help='Run a command in a disposable cwd; {workspace} arguments expand to its path')
     args = parser.parse_args()
+    if args.enroll_directory or args.enroll_simulator:
+        if args.apply or args.enroll_output or args.scratch or args.enroll_directory and args.enroll_simulator:
+            parser.error('Adopt one disposable location separately from other operations.')
+        from logistics_build.storage_extras import enroll
+        print(json.dumps(enroll(args.root, 'directory' if args.enroll_directory else 'simulator',
+                                str(args.enroll_directory or args.enroll_simulator)), indent=2))
+        return 0
     if args.enroll_output:
         if args.apply or args.scratch:
             parser.error('Enroll outputs separately from pruning or scratch execution.')
@@ -169,6 +260,10 @@ def storage_groups(root=ROOT):
         **{'Device workspaces / ' + platform: device_group(root, platform) for platform in ('ios', 'android')},
         'Disposable scratch': dict(root=root / 'test-results/build-scratch', eligible=lambda p: (p / '.manager-scratch').is_file()),
     }
+    groups.update(device_intermediates(root))
+    groups.update(snapshot_intermediates(root))
+    from logistics_build.storage_extras import directory_groups
+    groups.update(directory_groups(root))
 
     if sys.platform == 'darwin':
         from logistics_build.xcode_storage import storage_group
@@ -181,18 +276,35 @@ def storage_groups(root=ROOT):
 
 def storage_inventory(root=ROOT):
     from build_manager.retention import owned_entries
-    return [dict(row, group=group) for group, spec in storage_groups(root).items()
+    rows = [dict(row, group=group) for group, spec in storage_groups(root).items()
             for row in owned_entries(**spec)]
+    for row in rows:
+        if row['group'].startswith(('Device build caches / ', 'Snapshot build caches / ')):
+            platform = 'Android' if '/android/' in row['path'] or '/devices/android/' in row['path'] else 'iOS'
+            row['category'] = 'Rebuildable caches / ' + platform
+            parts = row['group'].split(' / ')
+            owner = parts[-1] if parts[0] == 'Device build caches' else parts[1]
+            row['label'] = owner[:12] + ' / ' + row['name']
+    if sys.platform == 'darwin':
+        from logistics_build.storage_extras import simulator_inventory
+        rows += simulator_inventory(root)
+    return rows
 
 
 def delete_storage(root, selections):
     from build_manager.retention import delete_owned
     groups = storage_groups(root)
     result = dict(removed=[], skipped=[])
-    if any(group not in groups for group in selections):
+    if any(group not in groups and group != 'Owned disposable simulators' for group in selections):
         raise ValueError('Unknown cleanup group')
     for group, names in selections.items():
-        outcome = delete_owned(**groups[group], names=names)
+        if group == 'Owned disposable simulators':
+            if sys.platform != 'darwin':
+                raise ValueError('Simulator cleanup requires macOS.')
+            from logistics_build.storage_extras import delete_simulators
+            outcome = delete_simulators(root, names)
+        else:
+            outcome = delete_owned(**groups[group], names=names)
         for key in result:
             result[key].extend(outcome[key])
     return result

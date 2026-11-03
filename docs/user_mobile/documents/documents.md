@@ -22,14 +22,19 @@ documents** lists other saved text and Markdown files. **Search documents**
 filters all three sections by filename. **Open Books & Comics library** is available
 below those lists. Empty lists show plain informational text without a rounded block.
 
-New document shows the name, file type and destination together on one screen on
-iOS and Android. Enter a name, choose Plain text, Markdown or Notebook, and select
+In **New document**, enter a name and choose Plain text, Markdown or Notebook.
+Tap **Choose location** to leave the keyboard and open the folder browser. Select
 a folder in **Local**, **All files**, **Received Files** or an unlocked **LocalCrypt**
 location. Changing the file type updates a matching document extension; a name
 without an extension receives the selected one. Tap **Create document** to create
-and open the file. On iOS this is a labeled navigation-bar action. Cancel
-returns directly to the screen where you started. Android system Back first
-closes browser search or goes up a folder, then leaves the form. The file is
+and open the file. On a narrow screen, **Back to name** keeps your chosen folder
+while you edit the name or type. On a tablet or unfolded Duo with enough room,
+the name stays on the left and the folder browser opens on the right. You can
+edit either pane. Folding or rotating keeps the draft and selected folder.
+The folder arrow navigates within the browser. Android Back dismisses folder
+entry or search and retraces folder navigation first. At the root it returns
+to naming on a narrow screen or exits when both steps are visible. **Cancel**
+returns directly to the screen where you started. The file is
 created in that folder and appears when you browse it from All files. **Save**
 writes edits back to the same file. LocalCrypt files stay encrypted on disk;
 cloud locations are read-only and receive changes through reviewed **Push**.
@@ -38,7 +43,10 @@ documents remain available in Documents.
 
 The folder browser starts at **All files**, the same root as Workspaces’
 **Browse All Files**. Open Local or Received Files to choose a folder; Up returns
-to All files from either collection. On Android this root is a list of locations;
+to All files from either collection. To make a subfolder, tap **New folder**,
+enter its name, then tap **Create folder**. The browser selects the new folder.
+Cancelling the folder entry keeps the current location and your filename.
+On Android this root is a list of locations;
 the form prompts you to choose a folder and keeps **Create document** disabled there. Errors
 appear as messages beneath the destination, with no extra editable field.
 Correct the name or location and try again. Only existing LocalCrypt copies and

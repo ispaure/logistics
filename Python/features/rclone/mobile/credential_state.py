@@ -52,10 +52,13 @@ class NativeCredentialState:
     def resolve_remote(self, name, identity, *, cipher=False):
         field = 'crypt_identities' if cipher else 'identities'
         candidates = []
+        cipher_matches = set()
         for item in self.package_records:
             aliases = item.get('aliases', {})
             hashes = item.get(field, {})
             for original, alias in aliases.items():
+                if cipher and identity and hashes.get(alias) == identity:
+                    cipher_matches.add(alias)
                 if (identity is None or hashes.get(alias) == identity) and (name in (original, alias) or name.startswith(original + ' @ ')):
                     if alias == name:
                         return alias
@@ -65,6 +68,10 @@ class NativeCredentialState:
             return candidates[0]
         if len(set(candidates)) == 1:
             return candidates[0]
+        # Local ciphertext keeps its cipher identity when its remote is renamed.
+        # Only a unique exact match can reopen the old local record.
+        if not candidates and len(cipher_matches) == 1:
+            return cipher_matches.pop()
         return name  # Native identity checks refuse unavailable/ambiguous accounts.
 
     def publish(self, action, values, info):

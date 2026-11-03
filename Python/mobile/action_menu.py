@@ -70,7 +70,11 @@ class BrowserActions:
         self.actions = tuple(actions)
         self.epoch, self.selected = browser.epoch, browser.selected
         entry = browser.tree.entries[self.selected]
-        self.filename = entry.payload.get('display_name') or PurePosixPath(entry.label).name
+        from services.documents.storage import display_path, document_display_name
+        path = entry.payload.get('path')
+        self.location = display_path(browser.search_provider, path) if path else None
+        self.filename = entry.payload.get('display_name') or (
+            document_display_name(browser.search_provider, path) if path else PurePosixPath(entry.label).name)
         self.disposed = False
         self.native = None
         self.android = False
@@ -104,6 +108,15 @@ class BrowserActions:
             title.setText(self.filename)
             title.setSingleLine(False)
             title.setTextIsSelectable(True)
+            if self.location:
+                from android.view import View
+                menu = self
+                class TitleHold(dynamic_proxy(View.OnLongClickListener)):
+                    def onLongClick(self, widget):
+                        widget.setText(menu.location)
+                        return True
+                self.title_hold = TitleHold()
+                title.setOnLongClickListener(self.title_hold)
             title.setTextSize(18)
             padding = round(24 * context.getResources().getDisplayMetrics().density)
             title.setPadding(padding, padding, padding, padding // 2)
@@ -142,6 +155,19 @@ class BrowserActions:
             while controller.presentedViewController:
                 controller = controller.presentedViewController
             controller.presentViewController(self.native, animated=True, completion=None)
+            if self.location:
+                from .document_location import bind_apple_hold
+                labels = list(self.native.view.subviews)
+                while labels:
+                    label = labels.pop()
+                    if label.isKindOfClass(ObjCClass('UILabel')) and str(label.text) == self.filename:
+                        bind_apple_hold(self, label, BrowserActions.reveal_location)
+                        break
+                    labels.extend(label.subviews)
+
+    def reveal_location(self):
+        if not self.disposed:
+            self.native.message = self.location
 
     def dispose(self):
         if self.disposed:

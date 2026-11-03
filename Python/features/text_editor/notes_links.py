@@ -22,7 +22,8 @@ class Targets(HTMLParser):
 
 def connections(library, current, *, cancelled=lambda: False, visible=lambda path, **kw: True):
     """Read at most 5,000 notes / 64 MiB and fail explicitly on incomplete scans."""
-    pending, seen, paths = [library.root], set(), set()
+    from .notes import MARKDOWN
+    pending, seen, paths, notes = [library.root], set(), set(), set()
     entries = 0
     while pending:
         check_cancelled(cancelled)
@@ -41,7 +42,9 @@ def connections(library, current, *, cancelled=lambda: False, visible=lambda pat
                 pending.append(path)
             else:
                 paths.add(path)
-                if len(paths) > 5000:
+                if PurePosixPath(path).suffix.lower() in MARKDOWN:
+                    notes.add(path)
+                if len(notes) > 5000:
                     raise ValueError('Library exceeds the 5,000-note connection scan limit.')
     suffixes = {}
     for path in paths:
@@ -70,7 +73,7 @@ def connections(library, current, *, cancelled=lambda: False, visible=lambda pat
 
     incoming, outgoing, unresolved = set(), set(), set()
     total = words = characters = 0
-    for path in sorted(paths):
+    for path in sorted(notes):
         check_cancelled(cancelled)
         data = library.read(path, cancelled=cancelled)
         total += len(data)

@@ -28,7 +28,8 @@ class ReaderTitleProbe(ViewerLayoutProbe):
                 await asyncio.shield(self.startup_task)
             await self.show_files()
             self.storage_root.mkdir(parents=True, exist_ok=True)
-            epub, comic = make_books(self.storage_root)
+            epub, comic = make_books(self.storage_root, chapter_text="<p>A passage for repagination. </p>" * 240)
+            comic = comic.replace(comic.with_name('2026 — ملاحظات اجتماع المشروع الأسبوعي والملفات المرفقة.cbz'))
             from commonUtils.runtime.resources.documents import LocalDocuments
             from commonUtils.runtime.resources.local import LocalFiles
             from services.documents.provider_documents import ProviderDocuments
@@ -60,13 +61,37 @@ class ReaderTitleProbe(ViewerLayoutProbe):
                             reader = None
                             title = self.native_host.adapter._reader_action_bar_title
                         assert title is not None, 'Missing native document title'
+                        if sys.platform == 'ios' and path == comic:
+                            from commonUtils.ui.native.panning_title import apple_title_class
+                            caption = next(child for child in title.subviews
+                                           if child.isKindOfClass(apple_title_class()))
+                            moving = caption.movingText
+                            if moving is not None:
+                                right = float(moving.frame.origin.x + moving.frame.size.width)
+                                if abs(right - float(caption.bounds.size.width)) > 1:
+                                    row['errors'].append('Right-to-left title starts at the wrong edge')
                         frame = geometry(self, SimpleNamespace(_impl=SimpleNamespace(native=title)))
                         row['native_title'] = frame
                         content = geometry(self, reader._reading_frame_owner.content) if reader is not None else row['view']
                         if frame[1] + frame[3] > content[1] + 1:
                             row['errors'].append('Native title overlaps the document')
+                        if sys.platform == 'ios' and 'epub' in row:
+                            dom = row['epub']
+                            if frame[1] + frame[3] > dom['native_frame'][1] + 1:
+                                row['errors'].append('Native title overlaps the EPUB WebView')
+                            if reader is not None and frame[3] < 37:
+                                row['errors'].append('Title frame clips its storage subtitle')
+                            pages = owner.page_footer.epub_pagination.pages
+                            for _ in range(100):
+                                if pages.complete:
+                                    break
+                                await asyncio.sleep(.1)
+                            row['chapter_counts'] = pages.counts.copy()
+                            if not pages.complete or pages.counts[owner.page_footer.epub_pagination.chapter] != dom['count']:
+                                row['errors'].append('Footer page count differs from the EPUB layout')
                         report['samples'].append(row)
                         (output / 'progress.json').write_text(json.dumps(report, indent=2))
+                        return row
                     await record_sample(name + '-opening', 'landscape-left', opening=True)
                     for orientation in ('portrait', 'landscape-left', 'landscape-right'):
                         await record_sample(name, orientation)
@@ -78,19 +103,29 @@ class ReaderTitleProbe(ViewerLayoutProbe):
                         await asyncio.sleep(.6)
                     await record_sample(name + '-restored', 'landscape-right', opening=True)
                     if (Path(self.paths.cache) / 'drive-folds').exists():
-                        for angle in (0, 180):
+                        orientation = 'portrait' if path == epub else 'landscape-right'
+                        await rotate(self, orientation, settle=.5)
+                        first_fold = None
+                        for angle in (0, 180, 0):
                             request = dict(viewer=name, angle=angle)
                             acknowledgement = output / 'fold-done.json'
+                            pending = output / 'fold-request.tmp'
+                            pending.write_text(json.dumps(request))
+                            pending.replace(output / 'fold-request.json')
                             acknowledgement.unlink(missing_ok=True)
-                            (output / 'fold-request.json').write_text(json.dumps(request))
                             for _ in range(300):
-                                if acknowledgement.exists():
+                                if acknowledgement.exists() and json.loads(acknowledgement.read_text()) == request:
                                     break
                                 await asyncio.sleep(.1)
                             else:
                                 raise AssertionError('External fold driver did not acknowledge the real pose')
                             await asyncio.sleep(1)
-                            await record_sample(name + '-fold-' + str(angle), 'landscape-right', opening=True)
+                            row = await record_sample(name + '-fold-' + str(angle), orientation, opening=True)
+                            if path == epub and angle == 0:
+                                if first_fold is None:
+                                    first_fold = row['chapter_counts']
+                                elif row['chapter_counts'] != first_fold:
+                                    row['errors'].append('Returning to folded portrait changed the page count')
                     self.request_reader_close(owner.session.id)
                     for _ in range(100):
                         if owner.session.id not in self.workspace.sessions:

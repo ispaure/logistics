@@ -555,7 +555,7 @@ class RemoteReaderTests(unittest.TestCase):
                 app.main_window.close()
                 app.loop.close()
 
-    def test_remote_browser_has_no_standalone_copy_or_download_actions(self):
+    def test_remote_browser_excludes_retired_copy_and_download_apis(self):
         with TemporaryDirectory() as folder:
             LogisticsMobile.storage_root = Path(folder)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)

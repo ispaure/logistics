@@ -45,7 +45,7 @@ def main(output, *, palm_only=False, laptop_only=False):
                     received.append(action)
                     if action['op'] == 'page-previews':
                         self.runJavaScript('window.notebookPagePreviews(' + json.dumps(page_previews(book, action['start'])) + ')')
-                    else:
+                    elif action['op'] != 'document-location':
                         editor.apply(action)
                     self.runJavaScript(update_script(editor.state()))
                 elif level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
@@ -96,7 +96,8 @@ def main(output, *, palm_only=False, laptop_only=False):
                 view.grab().save(str(output / f'laptop-{width}x{height}.png'))
                 js('window.notebookFold(null)')
                 QTest.qWait(100)
-                assert js("$('laptopTools').hidden && $('viewport').clientHeight===innerHeight")
+                assert js("$('laptopTools').hidden && $('viewport').clientHeight===innerHeight"), js(
+                    "JSON.stringify({hidden:$('laptopTools').hidden,classes:document.body.className,viewport:$('viewport').clientHeight,height:innerHeight,body:document.body.getBoundingClientRect().toJSON()})")
                 js("$('brushToggle').click()")
                 assert js("!$('mobileSheet').hidden && $('mobileSheet').contains($('tool'))")
                 js("document.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
@@ -111,6 +112,20 @@ def main(output, *, palm_only=False, laptop_only=False):
         js("document.activeElement?.blur();let range=document.createRange();range.selectNode($('paperWrap'));let selection=getSelection();selection.removeAllRanges();selection.addRange(range)")
         wait(lambda: js('getSelection().isCollapsed'))
         assert js("let field=document.createElement('input');field.type='text';field.value='Rename me';document.body.append(field);field.focus();field.select();let editable=getComputedStyle(field).userSelect==='text'&&field.selectionEnd===9;field.remove();editable")
+        js("""window.probeTitlePointer = (type, x = 10) => $('title').dispatchEvent(
+            new PointerEvent(type, {bubbles:true, pointerType:'touch', pointerId:1, isPrimary:true, clientX:x, clientY:10}))""")
+        menu = """document.querySelector('header button[aria-label="Notebook actions"]').click()"""
+        js(menu)
+        for cancel in ("probeTitlePointer('pointerup')", "probeTitlePointer('pointermove', 35)",
+                       "window.dispatchEvent(new Event('blur'))", menu):
+            js("probeTitlePointer('pointerdown');" + cancel)
+            QTest.qWait(600)
+            assert not any(action['op'] == 'document-location' for action in received)
+        js(menu)
+        js("probeTitlePointer('pointerdown')")
+        wait(lambda: any(action['op'] == 'document-location' for action in received))
+        js("probeTitlePointer('pointerup')")
+        js(menu)
         if palm_only:
             pointer = json.loads(js(POINTER_CHECKS))
             (output / 'palm-result.json').write_text(json.dumps(dict(success=True,
@@ -178,6 +193,7 @@ def main(output, *, palm_only=False, laptop_only=False):
             view.grab().save(str(output / f'dropdown-eink-{width}x{height}.png'))
             js("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))")
             assert js("getComputedStyle(document.getElementById('draft')).backgroundColor") == 'rgba(0, 0, 0, 0)', 'E-ink styling must not cover saved ink with an opaque drawing overlay'
+            assert js("getComputedStyle($('inkLayers')).backgroundColor") == 'rgba(0, 0, 0, 0)', 'E-ink styling must preserve the transparent ink blend group'
             js("document.getElementById('probeContrast').remove()")
             js("document.getElementById('brushToggle').click()")
             assert js("document.activeElement.matches('.brush-card[aria-pressed=true]')")

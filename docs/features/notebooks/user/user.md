@@ -25,6 +25,8 @@ in its tab; the page has no second title bar or file-action buttons.
 
 The compact toolbar across the top groups **Undo/Redo**, drawing modes, brush
 icons, three stroke-width samples, circular ink-color swatches and the active layer.
+Controls use the application's light or dark appearance, including live changes
+in Settings. The paper and PDF backgrounds stay white; ink colors are unchanged.
 Colors appear directly in the toolbar; the toolbar wraps when the window narrows. Hover an
 icon for its name. Pick a brush directly with keys `1`–`9`, or click its icon;
 use `B` for Draw, `E` for Eraser settings and `V` for Select and Move.
@@ -57,6 +59,10 @@ Command while scrolling the mouse wheel or trackpad over the page to zoom
 around the pointer; ordinary scrolling still pans. Keyboard/menu zoom keeps
 the viewport center in place. Manual zoom ranges from 10% to 400%, and the
 footer shows the current percentage. The editor
+also provides **−**, **+** and **Fit** buttons in the footer. Pinch on a laptop
+trackpad or use two fingers on a touchscreen to zoom around that point on the
+page. Two-finger zoom cancels an unfinished finger-drawn stroke; additional
+finger contacts during a pen stroke do not zoom the page. The editor
 uses a bounded screen-preview resolution at high magnification; saved and
 exported native ink retains its full geometry. **Page** also
 provides previous/next (`Alt+Left` / `Alt+Right`), add, duplicate, delete, reorder
@@ -131,7 +137,9 @@ remain required before calling this fully tablet-verified. See the
 Press **Erase** to select the eraser and open its settings. **Erase parts of
 strokes** is the default: only ink under the eraser path is removed, leaving
 the rest of a long stroke intact. Choose **Small**, **Medium** (the default) or
-**Large**, then **Done** to draw with the eraser. Press the tool again to
+**Large**. Desktop settings open in a compact dropdown below the eraser button;
+click outside it, press Escape, click the eraser button again, or choose **Done**
+to close it and keep erasing. Press the tool again to
 change its size or switch to **Erase whole strokes**. Both types respect hidden
 layers and support Undo/Redo. The selected type and size remain active while
 you work in that editor.

@@ -149,7 +149,7 @@ def validate_app(app, team, udid, *, build_number=None):
             'keychain_access_groups': entitlements.get('keychain-access-groups', [])}
 
 
-def refresh_sources(env):
+def refresh_sources(env, *, skip_tests=False):
     # Stage first; a failed staging attempt leaves the old payload untouched.
     workspace = prepare_workspace(ROOT)
     with tempfile.TemporaryDirectory(prefix='logistics-stage-', dir=workspace / 'build') as temporary:
@@ -160,7 +160,7 @@ def refresh_sources(env):
             payload.rename(Path(temporary) / 'previous-payload')
         replacement.rename(payload)
         try:
-            run([sys.executable, str(ROOT / 'cloud_build.py'), 'licenses'], env=env, log=workspace / 'logs/device-licenses.log')
+            run([sys.executable, str(ROOT / 'cloud_build.py'), 'licenses', '--platform', 'ios'], env=env, log=workspace / 'logs/device-licenses.log')
         except Exception:
             shutil.rmtree(payload)
             previous = Path(temporary) / 'previous-payload'
@@ -174,7 +174,8 @@ def refresh_sources(env):
         command.append('--update-requirements')
     run(command, env=env,
         log=workspace / 'logs/device-update.log')
-    run([sys.executable, str(ROOT / 'cloud_build.py'), 'ios'], env=env, log=workspace / 'logs/device-bridge.log')
+    run([sys.executable, str(ROOT / 'cloud_build.py'), 'ios', *(['--skip-tests'] if skip_tests else [])],
+        env=env, log=workspace / 'logs/device-bridge.log')
 
 
 def provisioning_auth_args():
@@ -218,7 +219,7 @@ def launch_app(config, env, developer, sdk, *, allow_wired=False, install=False)
     print(('Installed and launched' if install else 'Launched') + ' Logistics over ' + transport + '.')
 
 
-def deploy_all(config, *, allow_wired=False):
+def deploy_all(config, *, allow_wired=False, skip_tests=False):
     """Run the normal verified deployment for every explicitly saved target."""
     targets = config.get('device_ids', [config['device_id']])
     if (not isinstance(targets, list) or not targets
@@ -233,6 +234,8 @@ def deploy_all(config, *, allow_wired=False):
         command = [sys.executable, '-m', 'mobile_build.deployment.device_tools', 'deploy', '--device', target]
         if allow_wired:
             command.append('--allow-wired')
+        if skip_tests:
+            command.append('--skip-tests')
         try:
             run(command, env=child_env)
         except (RuntimeError, subprocess.CalledProcessError) as error:
@@ -249,6 +252,7 @@ def main():
     parser.add_argument('--team', help='Existing Apple development team ID (configure only)')
     parser.add_argument('--device', help='Paired iPhone/iPad UDID/name; defaults to the saved device')
     parser.add_argument('--allow-wired', action='store_true', help='Allow a USB-connected deployment')
+    parser.add_argument('--skip-tests', action='store_true', help='Skip the embedded Go bridge tests')
     parser.add_argument('--xcode-account', action='store_true',
                         help='Use the signed-in Xcode account instead of the configured API key for provisioning')
     args = parser.parse_args()
@@ -257,7 +261,7 @@ def main():
     if args.command == 'deploy-all':
         if args.device:
             parser.error('Use deploy --device for a single target, or deploy-all for saved targets.')
-        deploy_all(saved_config(), allow_wired=args.allow_wired)
+        deploy_all(saved_config(), allow_wired=args.allow_wired, skip_tests=args.skip_tests)
         return
     developer, sdk = choose(installed())
     env = dict(os.environ, DEVELOPER_DIR=developer)
@@ -290,7 +294,7 @@ def main():
         _, _, connection = select_device(result['devices'], config['device_id'])
         print(json.dumps(dict(config, developer_dir=developer, sdk=sdk, connection=connection), indent=2))
         return
-    refresh_sources(env)
+    refresh_sources(env, skip_tests=args.skip_tests)
     prepare_project(config['team_id'])
     run(['xcodebuild', '-project', str(PBX.parent), '-scheme', 'Logistics Mobile',
          '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', f"id={config['device_id']}",

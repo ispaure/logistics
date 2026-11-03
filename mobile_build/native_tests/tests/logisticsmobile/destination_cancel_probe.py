@@ -25,10 +25,12 @@ class DestinationCancelProbe(DestinationProbe):
                 await restoring
             self.show_home()
             form = self.body
-            await self.choose_document_type()
+            from .fixtures import choose_creation_type
+            await choose_creation_type(self, 'md')
             picker = self.editor_picker()
             picker.save_as_name.value = 'Cancelled.md'
             picker.creation_type.value = 'Markdown (.md)'
+            await picker.choose_creation_location()
             await asyncio.sleep(.4)
             assert await picker.browser_editor_location(('Local', '')), picker.save_as_status.value
             root = picker.editor_provider(picker.save_as_storage.value).root

@@ -104,6 +104,7 @@ SHARED_REQUIRED_MODULES = (
     'search/__init__.py',
     'search/indexed.py',
     'search/names.py',
+    'search/policy.py',
     'search/providers.py',
     'search/text.py',
     # Shared native presentation and browser adapters.
@@ -122,6 +123,9 @@ SHARED_REQUIRED_MODULES = (
     'ui/native/android/io/github/ispaure/commonutils/SpeechListener.java',
     'ui/native/appearance.py',
     'ui/native/bars.py',
+    'ui/native/panning_title.py',
+    'ui/native/ios/ScrollingTitle.m',
+    'ui/native/android/io/github/ispaure/commonutils/TitleMotion.java',
     'ui/native/chrome.py',
     'ui/native/code_input.py',
     'ui/native/documents.py',
@@ -282,7 +286,9 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     copy(shared / 'LICENSE.md', Path('commonUtils/LICENSE.md'))
     # License resources are package data, separate from the executable allowlist.
     for resource in sorted((repo / 'Python/services/licenses').iterdir()):
-        if resource.suffix in {'.txt', '.json'}:
+        if resource.suffix in {'.txt', '.json'} and resource.name not in {
+                'python.json', 'qt-source-index.json', 'qt-source-notices.json', 'qtwebengine-source-notices.json',
+                'rclone-dependency-notices.json'}:
             copy(resource, Path('services/licenses') / resource.name)
     config = tomllib.loads((repo / 'mobile_build/pyproject.toml').read_text())['tool']['briefcase']['app']['logisticsmobile']
     (destination / 'mobile/open-source-dependencies.json').write_text(json.dumps({

@@ -9,6 +9,11 @@ Local files can be opened immediately after launching the app. LocalCrypt uses
 the unlocked connection to read its encrypted copy, keeping decoded content in
 memory. A failed open keeps the file drawer available and displays the error.
 
+Press and hold the document title to see its full filename and path. This also
+works when reading a note in Notes Library. In a notebook, you can hold the
+title in the notebook actions panel. On narrow Android screens, swipe the toolbar
+actions sideways to reach controls that do not fit beside the title.
+
 Opening a document hides the app's destination tabs while keeping its title and
 Close control available. Tap **× (Close document)** on a reader or editor to finish
 and return to the previous tab and retained folder or screen, including its
@@ -48,7 +53,10 @@ The controls retain 48-point touch areas. Speech and
 Actions stay above the content. On iOS and Android, readers and editors share the native
 title bar: Close and the relevant browser are on the left, a centered document
 title is in the middle, and supported actions are on the right. Titles use the
-available width; names shorten in the middle only when they do not fit. Comics,
+available width. A filename that fits stays still. Longer filenames pause, then
+scroll slowly across the title bar. You can hold the title at any time to see
+the full path. Titles stay still with reduced motion, system high-contrast text, or the Android
+**High contrast / E Ink** setting. Comics,
 images and PDF canvases have no added outer margin. Comic page arrows, the slider
 and page count share a single bottom row. Android replaces its inline document/workspace headers
 with this single bar; leaving the document hides it again. Appearance and

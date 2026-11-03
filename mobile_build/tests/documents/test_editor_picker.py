@@ -225,7 +225,8 @@ class EditorPickerTests(unittest.TestCase):
         view = Mock()
         view.refresh.side_effect = lambda: events.append('content')
         scroll.scrollRectToVisible.side_effect = lambda *a, **k: events.append('reveal')
-        picker = SimpleNamespace(picker_form=SimpleNamespace(_impl=SimpleNamespace(native=scroll)),
+        picker = SimpleNamespace(panel=object(), name_panel=None,
+            picker_form=SimpleNamespace(content=view, _impl=SimpleNamespace(native=scroll)),
             save_as_name=SimpleNamespace(_impl=SimpleNamespace(native=name)),
             new_folder_name=SimpleNamespace(_impl=SimpleNamespace(native=folder)),
             save_as_view=view, app=SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window))))

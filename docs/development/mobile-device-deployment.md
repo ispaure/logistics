@@ -63,6 +63,9 @@ the helper does not resolve mismatches by changing identity or uninstalling.
 
 `status`, `build`, `deploy` and `launch` accept `--device` to select another
 paired physical iPhone or iPad by exact name, CoreDevice identifier or UDID.
+For an explicitly requested deployment without tests, use `deploy --skip-tests`
+(or `deploy-all --skip-tests`) to omit the otherwise embedded Go bridge tests.
+This does not bypass compilation, provisioning or signature verification.
 The selection is resolved to its UDID for that command; the saved default device
 and shared signing identity remain pinned. `xcodebuild` uses the selected device
 as its destination so automatic provisioning can register/include that device.

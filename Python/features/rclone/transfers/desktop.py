@@ -160,6 +160,7 @@ def build_plan(transfer, credentials):
                 executable_path=transfer.binary, track_renames=approved.options.track_renames,
                 bw_limit=approved.options.bw_limit, copy_links=approved.options.copy_links,
                 excludes=approved.options.excludes, cancelled=context.cancelled,
+                skip_localcrypt_integrity=context.skip_localcrypt_integrity,
                 on_launch=launched, **transfer.launch)
         finally:
             if not retained:

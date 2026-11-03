@@ -166,13 +166,17 @@ class NotebookPanel:
             self.boox_refresh = jclass('io.github.ispaure.logistics.notebooks.BooxRefresh').attach(self.web._impl.native)
             self.pen_input = jclass('io.github.ispaure.logistics.notebooks.NotebookInput').attach(
                 self.web._impl.native, self.boox_refresh)
-        for child in list(self.view.children):
-            self.view.remove(child)
-        self.view.add(self.web)
         location = getattr(self.view, '_document_location_row', None)
-        if location is not None:
+        restore_location = location is not None and location.parent is self.view
+        header = getattr(self.view, '_document_title_header', None)
+        for child in list(self.view.children):
+            if child is not header:
+                self.view.remove(child)
+        self.view.add(self.web)
+        if restore_location:
             self.view.insert(0, location)
-        set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
+        set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
+            self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables()))
 
     async def canvas_loaded(self, widget=None, **kwargs):
         if widget is not self.web:
@@ -231,6 +235,12 @@ class NotebookPanel:
                 # must leave a usable canvas, and queued ink precedes this action.
                 self.busy = False
                 await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+            if op == 'document-location':
+                from services.documents.mobile_notebooks import notebook_location
+                window = self.view.window
+                location = notebook_location(self)
+                if window is not None and location:
+                    await canvas.wait(window.dialog(toga.InfoDialog('Document location', location)))
             if op == 'show-in-folder':
                 self.busy = True
                 from services.documents.mobile_notebooks import show_notebook_in_folder
@@ -281,11 +291,12 @@ class NotebookPanel:
                 saved = await canvas.wait(export_stream(self.app, name, lambda: BytesIO(data)))
                 if not saved:
                     error = 'Export cancelled. Your notebook remains open.'
-            elif op not in {'save', 'save-as', 'show-in-folder', 'delete-file', 'page-previews'}:
+            elif op not in {'save', 'save-as', 'show-in-folder', 'document-location', 'delete-file', 'page-previews'}:
                 await canvas.wait(asyncio.to_thread(editor.apply, action))
                 if hasattr(self, 'session') and op == 'rename':
                     self.session.title = editor.notebook.name
                     self.app.refresh_document_list()
+                    self.app.adaptive.render()
         except asyncio.CancelledError:
             if (canvas is self.bridge and canvas.active and not self.closed
                     and self.app.active_host and self.web is web):

@@ -18,9 +18,25 @@ CHECKS = r'''
 (()=>{try{
 const check=(value,message)=>{if(!value)throw Error(message)};
 check(frameBatchedInk===expectedFrameBatching,'Wrong desktop/mobile paint scheduling');
+check(getComputedStyle($('inkLayers')).isolation==='isolate','Live and saved ink must share an isolated blend group');
 check(!state.native_pen||!ctx.getContextAttributes().desynchronized,'Native preview must not share a desynchronized canvas front buffer');
 check(eraserKind==='partial'&&eraserRadius===16,'Partial eraser must be the default');
 $('erase').click();check(mode==='erase'&&eraserDialog.open,'Eraser button must show settings');
+if(document.querySelector('#brushes')){
+  const panel=eraserDialog.getBoundingClientRect(),anchor=$('erase').getBoundingClientRect();
+  check(!eraserDialog.matches(':modal'),'Desktop eraser settings must not block the document');
+  check(panel.width<=260&&panel.height<300&&Math.abs(panel.top-anchor.bottom-6)<1,'Desktop eraser settings must be a compact anchored dropdown');
+  check(panel.left>=0&&panel.right<=innerWidth&&panel.bottom<=innerHeight,'Eraser dropdown must stay inside the viewport');
+  check($('erase').getAttribute('aria-expanded')==='true','Open eraser dropdown must expose expanded state');
+  $('erase').click();check(!eraserDialog.open,'Clicking eraser again must close the dropdown');
+  $('erase').click();
+  document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));
+  check(!eraserDialog.open&&mode==='erase'&&document.activeElement===$('erase'),'Escape must close settings, preserve eraser mode and return focus');
+  $('erase').click();
+  $('viewport').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+  check(!eraserDialog.open&&mode==='erase','Outside pointer must dismiss settings without changing the tool');
+  $('erase').click();
+}
 check($('eraserSize').options.length===3,'Expected three eraser sizes');
 $('eraserWhole').click();
 $('eraserSize').value='32';$('eraserSize').dispatchEvent(new Event('change'));
@@ -104,22 +120,25 @@ for(let tool of Object.values(state.tools)){
 let color=tool===18?13:tool===23?1:0;
 inkSettings={tool,color,width:3,layer:state.layers[0][0]};points=[];clearDraft();ctx.clearRect(0,0,state.width,state.height);
 for(let sample of samples){let before=points.at(-1);points.push(sample);preview(before?[before,sample]:[sample])}
-let composed=document.createElement('canvas');composed.width=pw;composed.height=ph;let actual=composed.getContext('2d',{willReadFrequently:true});actual.fillStyle='white';actual.fillRect(0,0,pw,ph);actual.drawImage(canvas,0,0);actual.globalCompositeOperation=draft.style.mixBlendMode||'source-over';actual.drawImage(draft,0,0);
+let composed=document.createElement('canvas');composed.width=pw;composed.height=ph;let actual=composed.getContext('2d',{willReadFrequently:true});actual.drawImage(canvas,0,0);actual.globalCompositeOperation=draft.style.mixBlendMode||'source-over';actual.drawImage(draft,0,0);actual.globalCompositeOperation='destination-over';actual.fillStyle='white';actual.fillRect(0,0,pw,ph);
 let expectedCanvas=document.createElement('canvas');expectedCanvas.width=pw;expectedCanvas.height=ph;let final=expectedCanvas.getContext('2d',{willReadFrequently:true});final.fillStyle='white';final.fillRect(0,0,pw,ph);final.setTransform(canvas.width/state.width,0,0,canvas.height/state.height,0,0);line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,3)},final);
 let a=actual.getImageData(0,0,pw,ph).data,b=final.getImageData(0,0,pw,ph).data,inkPixels=0,badPixels=0,totalError=0,totalInk=0;
 for(let i=0;i<a.length;i+=4){if(a[i]<250||a[i+1]<250||a[i+2]<250||b[i]<250||b[i+1]<250||b[i+2]<250){inkPixels++;for(let c=0;c<3;c++){totalError+=Math.abs(a[i+c]-b[i+c]);totalInk+=255-b[i+c]}if(Math.max(Math.abs(a[i]-b[i]),Math.abs(a[i+1]-b[i+1]),Math.abs(a[i+2]-b[i+2]))>25)badPixels++}}
 let error=totalError/Math.max(1,totalInk);previewErrors.push({tool,error,edgeDifferences:badPixels/Math.max(1,inkPixels)});check(error<.18,'Streaming/saved brush mismatch '+tool+': '+error);
 if(!['fineliner','ballpoint'].includes(brushFor(tool).family)){
 ctx.fillStyle='#789abc';ctx.fillRect(20,40,160,50);
-let reference=document.createElement('canvas');reference.width=pw;reference.height=ph;let overlay=reference.getContext('2d',{willReadFrequently:true});overlay.fillStyle='white';overlay.fillRect(0,0,pw,ph);overlay.drawImage(canvas,0,0);overlay.globalCompositeOperation=draft.style.mixBlendMode||'source-over';overlay.drawImage(draft,0,0);
+let reference=document.createElement('canvas');reference.width=pw;reference.height=ph;let overlay=reference.getContext('2d',{willReadFrequently:true});overlay.drawImage(canvas,0,0);overlay.globalCompositeOperation=draft.style.mixBlendMode||'source-over';overlay.drawImage(draft,0,0);overlay.globalCompositeOperation='destination-over';overlay.fillStyle='white';overlay.fillRect(0,0,pw,ph);
 let painted=overlay.getImageData(0,0,pw,ph).data;
 let original=geometry,replayed=0;geometry=(...args)=>{replayed++;return original(...args)};
 try{commitDraft(tool)}finally{geometry=original}
 check(replayed===0,'Pen-up rebuilt completed geometry '+tool);
 let committed=document.createElement('canvas');committed.width=pw;committed.height=ph;let result=committed.getContext('2d',{willReadFrequently:true});result.fillStyle='white';result.fillRect(0,0,pw,ph);result.drawImage(canvas,0,0);
 let pixels=result.getImageData(0,0,pw,ph).data;
-let changed=false;for(let i=0;i<painted.length;i++)if(Math.abs(painted[i]-pixels[i])>1){changed=true;break}
-check(!changed,'Pen-up changed painted brush pixels '+tool);
+let changed=0,maxDifference=0,firstDifference=null;for(let i=0;i<painted.length;i++){
+let difference=Math.abs(painted[i]-pixels[i]);maxDifference=Math.max(maxDifference,difference);
+if(difference>1){changed++;firstDifference??={x:Math.floor(i/4)%pw,y:Math.floor(Math.floor(i/4)/pw),channel:i%4,before:painted[i],after:pixels[i]}}
+}
+check(!changed,'Pen-up changed painted brush pixels '+JSON.stringify({tool,changed,maxDifference,firstDifference}));
 check(draftCount===0&&draftBounds===null,'Pen-up retained draft geometry '+tool);committedBrushes.push(tool);
 }
 // Instrument geometry work after 2,000 samples. A move must touch only the

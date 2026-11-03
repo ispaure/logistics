@@ -129,6 +129,13 @@ class ManagedDocumentWorkflows:
                                      if failures else '')
         self.refresh_document_list()
 
+    def managed_document_location(self, owner):
+        from .document_sources import folder_location
+        if owner.document is not None:
+            source = folder_location(self, owner.session)
+            path = source['path'] if source else owner.document.snapshot.path
+            return f'{owner.document.name}\n\n{path}' if path else owner.document.name
+
     def open_document(self, key):
         if not self.require_feature('text_editor'):
             return False

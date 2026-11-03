@@ -4,6 +4,10 @@ from services.documents.locations import shared_documents_path
 
 
 class SharedFiles(LocalFiles):
+    def __init__(self, root, *, include_collections=True):
+        super().__init__(root)
+        self.include_collections = include_collections
+
     def _guard(self, path):
         relative = path.relative_to(self.root)
         if relative.parts in (('Local',), ('Received Files',)):
@@ -23,6 +27,8 @@ class SharedFiles(LocalFiles):
         for child in self.root.iterdir():
             check_cancelled(cancelled)
             if child.name in ('Local', 'Received Files'):
+                if not self.include_collections:
+                    continue
                 # Expose the collection as a folder, but keep root mutations
                 # protected; normal navigation switches to CollectionFiles.
                 row = LocalFiles(self.root).entry(child.name)
@@ -32,9 +38,9 @@ class SharedFiles(LocalFiles):
         return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
 
 
-def shared_files(private_root):
+def shared_files(private_root, *, include_collections=True):
     root = shared_documents_path(private_root)
-    return SharedFiles(root) if root is not None else None
+    return SharedFiles(root, include_collections=include_collections) if root is not None else None
 
 
 class DeviceFiles(LocalFiles):
@@ -43,10 +49,11 @@ class DeviceFiles(LocalFiles):
     Private settings, credentials and raw LocalCrypt storage must never become
     visible through this provider, including direct paths and recursive search.
     """
-    def __init__(self, private_root):
+    def __init__(self, private_root, *, include_collections=True):
         from services.documents.locations import collection_base, collection_path
         from .incoming_files import inbox_path
         self.private_root = private_root
+        self.include_collections = include_collections
         received = inbox_path(private_root)
         local = collection_path(private_root)
         local.mkdir(parents=True, exist_ok=True)
@@ -68,6 +75,9 @@ class DeviceFiles(LocalFiles):
             from services.documents.locations import local_folder_snapshot
             return local_folder_snapshot(self, path, cancelled=cancelled)
         rows = []
+        if not self.include_collections:
+            self._guard(self.root)
+            return rows
         for folder in self.folders:
             check_cancelled(cancelled)
             row = self.entry(folder)
@@ -90,5 +100,6 @@ class DeviceFiles(LocalFiles):
         return super().remove_empty(path, revision)
 
 
-def device_files(private_root):
-    return shared_files(private_root) or DeviceFiles(private_root)
+def device_files(private_root, *, include_collections=True):
+    return (shared_files(private_root, include_collections=include_collections)
+            or DeviceFiles(private_root, include_collections=include_collections))

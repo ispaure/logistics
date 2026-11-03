@@ -3,5 +3,33 @@
   "LGPL-2.1.txt": "https://raw.githubusercontent.com/videolan/vlckit/2e0868f5ed40fe59cd92f377645fdcc260c6e759/COPYING",
   "GPL-2.0.txt": "https://raw.githubusercontent.com/videolan/vlc/3.0.21/COPYING",
   "Python.txt": "https://raw.githubusercontent.com/python/cpython/v3.12.2/LICENSE",
-  "rclone-1.74.1.txt": "https://github.com/rclone/rclone/blob/v1.74.1/COPYING"
+  "rclone-1.74.1.txt": "https://github.com/rclone/rclone/blob/v1.74.1/COPYING",
+  "LGPL-3.0.txt": "https://raw.githubusercontent.com/qt/qtbase/v6.12.0/LICENSES/LGPL-3.0-only.txt",
+  "GPL-3.0.txt": "https://raw.githubusercontent.com/qt/qtbase/v6.12.0/LICENSES/GPL-3.0-only.txt",
+  "macFUSE-5.0.5.txt": "https://raw.githubusercontent.com/macfuse/macfuse/macfuse-5.0.5/LICENSE.txt",
+  "WinFsp-1.11.txt": "https://raw.githubusercontent.com/winfsp/winfsp/v1.11/License.txt",
+  "Google-Android-SDK-Terms.txt": "https://developer.android.com/studio/terms",
+  "Google-APIs-Terms.txt": "https://developers.google.com/terms",
+  "Google-MLKit-Terms.txt": "https://developers.google.com/ml-kit/terms",
+  "Google-MLKit-GenAI-Terms.txt": "https://developers.google.com/ml-kit/genai-terms",
+  "CC0-1.0.txt": "https://raw.githubusercontent.com/qt/qtbase/v6.12.0/LICENSES/CC0-1.0.txt",
+  "SLF4J-1.7.36.txt": "https://raw.githubusercontent.com/qos-ch/slf4j/v_1.7.36/LICENSE.txt",
+  "MMKV-1.0.19.txt": "https://raw.githubusercontent.com/Tencent/MMKV/v1.0.19/LICENSE.TXT",
+  "Apache-Commons-IO-2.5-NOTICE.txt": "https://raw.githubusercontent.com/apache/commons-io/commons-io-2.5/NOTICE.txt",
+  "Chaquopy-17.0.0.txt": "https://raw.githubusercontent.com/chaquo/chaquopy/17.0.0/LICENSE.txt",
+  "Python-3.12.12.txt": "https://raw.githubusercontent.com/python/cpython/v3.12.12/LICENSE",
+  "OpenSSL-3.0.18.txt": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.0.18/LICENSE.txt",
+  "libffi-3.4.4.txt": "https://raw.githubusercontent.com/libffi/libffi/v3.4.4/LICENSE",
+  "bzip2-1.0.8.txt": "https://raw.githubusercontent.com/libarchive/bzip2/bzip2-1.0.8/LICENSE",
+  "XZ-5.4.6.txt": "https://raw.githubusercontent.com/tukaani-project/xz/v5.4.6/COPYING",
+  "CPython-3.12.12-expat.txt": "https://raw.githubusercontent.com/python/cpython/v3.12.12/Modules/expat/COPYING",
+  "CPython-3.12.12-mpdecimal.txt": [
+    "https://raw.githubusercontent.com/python/cpython/v3.12.12/Modules/_decimal/libmpdec/mpdecimal.c"
+  ],
+  "CPython-3.12.12-HACL.txt": [
+    "https://raw.githubusercontent.com/python/cpython/v3.12.12/Modules/_hacl/Hacl_Hash_MD5.c",
+    "https://raw.githubusercontent.com/python/cpython/v3.12.12/Modules/_hacl/Hacl_Hash_SHA1.c",
+    "https://raw.githubusercontent.com/python/cpython/v3.12.12/Modules/_hacl/Hacl_Hash_SHA2.c",
+    "https://raw.githubusercontent.com/python/cpython/v3.12.12/Modules/_hacl/Hacl_Hash_SHA3.c"
+  ]
 }

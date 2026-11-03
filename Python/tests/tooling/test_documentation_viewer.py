@@ -19,13 +19,20 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class DocumentationViewerTests(QtTestCase):
-    def setUp(self):
-        self.app = qt.QApplication.instance() or qt.QApplication([])
+    @classmethod
+    def setUpClass(cls):
+        cls.app = qt.QApplication.instance() or qt.QApplication([])
+        # The wiki is immutable in this suite; do not rescan it after every click.
+        scope = (ROOT / 'docs').resolve()
+        cls.expected_pages = {scope: frozenset(MarkdownWiki(scope).pages)}
 
     def assert_scope(self, viewer, path, scope):
+        scope = scope.resolve()
+        if scope not in self.expected_pages:
+            self.expected_pages[scope] = frozenset(MarkdownWiki(scope).pages)
         self.assertEqual(viewer.current_path, path.resolve())
-        self.assertEqual(viewer.wiki.catalog.root, scope.resolve())
-        self.assertEqual(set(viewer.wiki.catalog.pages), set(MarkdownWiki(scope).pages))
+        self.assertEqual(viewer.wiki.catalog.root, scope)
+        self.assertEqual(set(viewer.wiki.catalog.pages), self.expected_pages[scope])
         item = viewer.wiki.tree.currentItem()
         self.assertIsNotNone(item)
         self.assertEqual(item.data(0, qt.Qt.ItemDataRole.UserRole), path.resolve())
@@ -131,4 +138,22 @@ class DocumentationViewerTests(QtTestCase):
         self.assert_scope(viewer, first, ROOT / 'docs')
         viewer.forward_button.click()
         self.assert_scope(viewer, second, ROOT / 'docs')
+        viewer.close()
+
+    def test_external_wiki_links_restore_each_catalog_through_history(self):
+        scope = Path(self.temporary_directory().name).resolve() / 'docs'
+        scope.mkdir()
+        (scope / 'docs.md').write_text('# Synthetic wiki')
+        page = scope / 'child.md'
+        page.write_text('# Synthetic child\n\nExternal guide content.')
+        first = ROOT / 'docs/docs.md'
+        viewer = MarkdownViewer(first, directory=ROOT / 'docs')
+        self.assert_scope(viewer, first, ROOT / 'docs')
+        viewer.follow_link(qt.QUrl.fromLocalFile(str(page)))
+        self.assert_scope(viewer, page, scope)
+        self.assertIn('External guide content.', viewer.browser.toPlainText())
+        viewer.back_button.click()
+        self.assert_scope(viewer, first, ROOT / 'docs')
+        viewer.forward_button.click()
+        self.assert_scope(viewer, page, scope)
         viewer.close()

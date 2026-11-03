@@ -57,4 +57,5 @@ def prepare_managed_preview(owner, *, on_edit, valid):
     owner.preview_box._workspace_toolbar = owner.preview_toolbar
     owner.preview_box._native_reader_toolbar = owner.preview_toolbar
     owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.preview_actions_button]
+    owner.preview_box._document_path = owner.document_view._document_path
     owner.preview_box._native_reader_title = lambda: owner.document.name

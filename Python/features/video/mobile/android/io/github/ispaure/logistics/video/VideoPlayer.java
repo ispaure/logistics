@@ -467,8 +467,15 @@ public final class VideoPlayer {
         }
     }
 
-    void setVideoHeader(String title, String label, boolean remote) {
-        videoTitle.setText(title);
+    public TextView getTitleLabel() { return videoTitle; }
+
+    void setVideoHeader(String title, String path, String label, boolean remote) {
+        videoTitle.setOnLongClickListener(view -> {
+            showPlaybackDialog(new AlertDialog.Builder(activity).setTitle("Document location")
+                .setMessage(path).setPositiveButton("OK", null).create());
+            return true;
+        });
+        if (!android.text.TextUtils.equals(videoTitle.getText(), title)) videoTitle.setText(title);
         sourceLabel.setText(label);
         sourceLabel.setCompoundDrawablesWithIntrinsicBounds(new SourceIcon(remote), null, null, null);
         sourceLabel.setCompoundDrawablePadding(dp(6));

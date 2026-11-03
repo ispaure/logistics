@@ -61,7 +61,7 @@ request or test the account online. Old network clients disconnect in the
 background. Unlocking a remote to continue browsing resumes that online action
 only after the local unlock succeeds.
 
-This first mobile adapter includes Google Drive, Dropbox, OneDrive, S3 and WebDAV,
+The mobile adapter includes Google Drive, Dropbox, OneDrive, S3, WebDAV and SMB,
 plus the memory backend used by the offline diagnostic. Existing authenticated
 settings are required. It accepts a deliberately limited set of backend settings;
 local paths, scripts, service-account files, mounts, alias wrappers and
@@ -74,8 +74,11 @@ browser. Tap folders to open them.
 The header’s parent arrow moves up a folder; at the remote root it returns to
 Workspaces. The bottom **Workspaces** tab also returns to the folder list. Tap supported files for read-only,
 in-memory previews. Unsupported files show a dialog asking you to make a local
-copy yourself. The remote browser has no file or folder download/copy actions;
-use the managed Pull workflows to create or refresh offline folders.
+copy yourself. To keep a file or folder, use its **••• → Download locally…** menu
+and choose an ordinary or unlocked LocalCrypt destination. See
+[selected-item downloads](workflows.md#mobile-folder-navigation) for the steps and
+confirmation. Managed Pull workflows remain available to create or refresh mapped
+offline folders.
 
 Remote EPUB books and CBZ/ZIP comics download completely into memory once before opening.
 The status shows downloaded MiB and percentage; subsequent page turns read that

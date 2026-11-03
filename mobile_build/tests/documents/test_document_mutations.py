@@ -66,6 +66,8 @@ class DocumentMutationTests(unittest.TestCase):
         self.assertIs(owner.crypt_text, widget)
         self.assertIs(owner.session, session)
         self.assertNotEqual(session.identity, identity)
+        self.assertEqual(owner.crypt_view._native_reader_title(), 'moved.txt')
+        self.assertEqual(owner.crypt_view._document_path(), str(self.destination.root / 'moved.txt'))
         self.assertTrue(session.dirty)
         self.assertEqual(widget.value, 'Unsaved\nchanges\n')
         self.assertEqual((self.destination.root / 'moved.txt').read_bytes(), b'Original\r\n')

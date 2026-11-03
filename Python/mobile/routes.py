@@ -57,6 +57,15 @@ class MobileRoutes(Routes):
             # The ready reader replaces its loading route. Back goes straight
             # to the retained Home, Documents or workspace screen.
             self.trim(target, len(screens) - 1)
+        self.retire_other_presentations(view, target, route)
+        super().show(view, destination=destination, route=route, title=title, root=root)
+        if (not root and route is not None and target != origin
+                and route not in ('browser', 'remote-browser', 'folder-options', 'workspace-browser')):
+            # Opening a file/help page is a navigation action. Merely selecting
+            # another tab does not call show and must not create this return edge.
+            self.origins[target, route] = origin
+
+    def retire_other_presentations(self, view, target, route):
         presentations = [view]
         owner = getattr(self.app, 'editor_view', None)
         if route == 'editor' and owner is not None:
@@ -76,15 +85,23 @@ class MobileRoutes(Routes):
                 if view.parent is not None:
                     view.parent.remove(view)
                 self.render(previous)
-        super().show(view, destination=destination, route=route, title=title, root=root)
-        if (not root and route is not None and target != origin
-                and route not in ('browser', 'remote-browser', 'folder-options', 'workspace-browser')):
-            # Opening a file/help page is a navigation action. Merely selecting
-            # another tab does not call show and must not create this return edge.
-            self.origins[target, route] = origin
+        # iOS Documents keeps readers in a separate secondary stack. Retire
+        # that presentation too before moving its widget to another tab.
+        if target != 'documents':
+            details = getattr(self.app.adaptive, 'detail_routes', ())
+            index = next((i for i, (_, panel, _) in enumerate(details)
+                          if any(mode in panel.children for mode in presentations)), None)
+            if index is not None:
+                self.app.adaptive.trim_details(index)
+                if view.parent is not None:
+                    view.parent.remove(view)
 
     def trim(self, destination, count, *, native=True):
         removed = [screen[0] for screen in self.screens[destination][count:]]
+        if 'import-credentials-password' in removed:
+            owner = self.app.__dict__.get('_cloud_controller')
+            if owner is not None:
+                owner.credential_workflow.cancel_import()
         if any(route in ('browser', 'remote-browser', 'workspace-browser')
                or route.startswith(('folder:', 'notes-library:')) for route in removed):
             # A retained browser may reopen the same folder after Back. Its
@@ -136,7 +153,11 @@ class MobileRoutes(Routes):
     def back(self):
         picker = getattr(self.app, '_editor_picker', None)
         if picker is not None and picker.visible(self.body()):
-            picker.cancel_text_destination()
+            if (picker.location_panel is not None and picker.panel is picker.location_panel and not picker.cloud_busy
+                    and not picker.creation_layout.paired):
+                picker.show_creation_name()
+            else:
+                picker.cancel_text_destination()
             return True
         screens = self.screens[self.host.state.destination]
         if screens and screens[-1][0].startswith(('private-close:', 'close:')):
@@ -282,7 +303,9 @@ class MobileRoutes(Routes):
             return self.invoke_back(app.toggle_chat_conversations)
 
         picker = getattr(app, '_editor_picker', None)
-        if picker is not None and picker.visible(body):
+        if picker is not None and picker.visible(body) and picker.panel is not picker.name_panel:
+            if picker.new_folder_form in picker.save_as_view.children and not picker.cloud_busy:
+                return self.invoke_back(picker.hide_new_folder)
             action = picker.editor_browser.back_action()
             if action is not None:
                 return self.invoke_back(action)
@@ -315,6 +338,11 @@ class MobileRoutes(Routes):
             browser = getattr(app, browser_name, None)
             if browser is None or not contains(body, browser.widget):
                 continue
+            if (browser_name == 'file_browser' and not browser.search.value and not browser.search_open
+                    and (app.file_storage.value, app.file_path)
+                    == getattr(app.files_view, '_folder_entry_location', None)
+                    and browser.history.current in (None, (app.file_storage.value, app.file_path))):
+                return self.invoke_back(app.show_locations)
             action = browser.back_action()
             if action is not None:
                 return self.invoke_back(action)

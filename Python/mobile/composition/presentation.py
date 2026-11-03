@@ -177,20 +177,58 @@ def notes_host(app):
     from ..action_menu import FeatureCommands
     from .. import obsidian
     from ..notes_drawers import NotesDrawers
+    from ..folder_hub_style import source_tab
+    from ..appearance import accessible_name
 
-    async def open_editor(provider, path, destination):
-        from services.documents.mobile_storage import document_source
-        copies, key = document_source(provider, path)
-        if getattr(provider, 'remote_storage', False):
-            return await app.open_crypt(copies=copies, key=key)
-        opened = await app.open_crypt(copies=copies, key=key, destination=destination, edit=True)
-        if opened:
-            from services.documents.mobile_storage import attach_notes_return as attach_return
-            attach_return(app, app.vault_browser, getattr(getattr(app, 'private_sessions', None), 'active', None))
-        return opened
+    def tab_style(button, selected):
+        source_tab(button, selected)
+        accessible_name(button, button.text + (' selected' if selected else ''))
+
+    def toolbar_insets(toolbar):
+        if not app.routes.apple or app.native_host.adapter is None:
+            return 8, 8
+        from mobile.ios_toolbar import vertical_edge, system_occlusions
+        controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
+        if not vertical_edge(controller):
+            return 8, 8
+        width = float(controller.view.bounds.size.width)
+        regions = system_occlusions(controller)
+        # Some side-bar configurations omit button regions during the first layout.
+        # Keep one native touch target plus its system margins clear until reported.
+        left = max((x + w for x, y, w, h in regions if x < width * .25), default=64)
+        right = max((width - x for x, y, w, h in regions if x > width * .75), default=64)
+        return max(8, round(left) + 8), max(8, round(right) + 8)
+
+    async def confirm():
+        from features.text_editor.mobile.document_dialogs import DocumentDialog
+        return await app.main_window.dialog(DocumentDialog('Save document changes?',
+            'Save this document before leaving it.', discard_label='Discard changes'))
+
+    async def choose_type():
+        from features.text_editor.mobile.document_dialogs import DocumentTypeDialog
+        from mobile.document_choices import available_choices
+        icons = {'md': 'Ⓜ  Markdown', 'rmdoc': '▧  Remarkable Document'}
+        choices = [(icons[extension], extension) for _, extension in available_choices(app) if extension in icons]
+        return await app.main_window.dialog(DocumentTypeDialog(choices=choices)) if choices else 'cancel'
 
     from services.documents.mobile_storage import NotesDocumentAccess
+    from services.documents.mobile_notebooks import notes_editor
+    from pathlib import Path
+    timing_marker = Path(app.paths.cache) / 'notes-open-timing.enabled'
+    def open_timing(sample):
+        # Explicit device diagnostics contain numeric stages only, never paths,
+        # note bodies, credential identities or errors that could disclose them.
+        if timing_marker.is_file():
+            from commonUtils.persistence import atomic_write_json
+            try:
+                atomic_write_json(timing_marker.with_name('notes-open-timing.json'), sample, max_bytes=4096)
+            except OSError:
+                pass  # Optional measurement must not interrupt document opening.
     return NotesHost(
+        tab_style=tab_style,
+        open_timing=open_timing if timing_marker.is_file() else None,
+        document_editor=lambda library, path: notes_editor(app, library, path),
+        confirm=confirm, choose_type=choose_type, toolbar_insets=toolbar_insets,
         drawers=lambda files, article, links: NotesDrawers(files, article, links, app=app),
         storage=lambda provider: NotesDocumentAccess(provider,
             client=lambda: getattr(app, 'cloud_client', None), active=lambda: app.active_host,
@@ -213,7 +251,6 @@ def notes_host(app):
         show_view=app.show_view,
         destination=lambda: app.native_host.state.destination,
         render=app.adaptive.render,
-        open_editor=open_editor,
         speech=lambda *args, **kwargs: MarkdownSpeech(app, *args, **kwargs),
         commands=lambda button, *args: FeatureCommands(button, app, *args),
         list_button=list_button,
@@ -302,6 +339,7 @@ def provider_markdown(owner, view, footer):
 
     title, actions_button = view.crypt_title, view.crypt_actions
     host = ProviderMarkdownHost(
+        presentation=app.presentation,
         loop=owner.loop,
         reader=lambda: owner.crypt_reader,
         valid=valid,

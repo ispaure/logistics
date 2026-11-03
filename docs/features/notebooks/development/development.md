@@ -179,6 +179,12 @@ The eraser settings expose Partial and Whole Stroke as separate icon buttons
 with accessible pressed states, rather than a nested type dropdown. The same
 choices and shared handlers are used by desktop and mobile presentations;
 the brush probe exercises both choices and the retained size control.
+Desktop presents these controls in a compact nonmodal dropdown anchored to the
+eraser toolbar button. Outside pointer presses, Escape and repeated button
+presses dismiss it without changing the eraser mode. The brush probe checks its
+bounds, nonmodal behavior, dismissal and keyboard focus restoration.
+Drawing shortcuts and native tool menu actions remain usable while the dropdown
+is open; switching tools or hiding the toolbar closes it.
 The model suite tests all offered brush/color/width combinations and RGBA through
 move, undo, cross-notebook copy and recovery. Imported native eraser objects
 are preserved read-only rather than drawn with
@@ -236,6 +242,52 @@ Fit Page. WebEngine key fallback and Ctrl/Command+wheel use the same bounded
 The native probe checks real zoom keys and modified wheel events, pointer
 anchoring, both DOM modifier flags, ordinary-wheel behavior and numeric bounds.
 Regression tests cover menu publication, owner dispatch and page/history bounds.
+
+`assets/zoom.js` owns the shared desktop/mobile zoom controller, bottom zoom
+controls and actual percentage readout, including fit modes. Ctrl/Command+wheel,
+Safari trackpad GestureEvents and two-touch PointerEvents resize only the paper.
+The desktop workspace also intercepts Qt native magnification events from
+macOS/Wayland trackpads before WebEngine can magnify the browser chrome, using
+Qt's incremental `1 + value()` scale factor.
+Touch pinches keep their initial page point under the moving midpoint and batch
+redraws to animation frames. A second finger cancels any finger-ink preview;
+contacts during pen input cannot take over the page. Touch cancellation and
+capture loss clear pinch ownership, and remaining fingers stay suppressed until
+lifted. Preview bitmap budgets still apply at every zoom.
+The workspace margins use the same touch controller so a gesture can start
+outside the paper. Losing focus clears touch/trackpad ownership. Zoom preset
+changes during a stroke are rejected without changing the selected preset;
+viewport resizes deferred during ink are applied when the stroke finishes or
+is cancelled. Mobile modal sheets also make the bottom zoom controls inert.
+Unfolded mobile viewports reserve the top toolbar and bottom zoom bar plus safe
+areas, so Fit Page stays clear of both even in landscape. Folded viewports reserve
+the zoom bar below the paper while keeping the drawing area below the hinge.
+Mobile zoom buttons have 44px minimum tap targets.
+Canonical pen contact cancels an unfinished finger-ink gesture before taking
+ownership; duplicate trusted pen events on Android remain ignored.
+
+`assets/theme.css` maps control surfaces to the app's Slate roles while keeping
+the paper, PDF backgrounds and real ink swatches unchanged. Desktop embeds its
+current Qt palette and sends live changes through `notebookAppearance`, without
+reloading the document. Mobile receives the presentation service's stylesheet
+and follows system appearance; Android's existing e-ink override still wins.
+Desktop control corners use 6px radii; mobile uses 8px controls and 12px panels.
+Desktop error text uses the app's light/dark destructive role rather than Qt's
+BrightText role; the view probe checks its contrast against the control surface.
+
+`notebook_view_probe.py --output test-results/notebook-view` checks both
+presentations in real WebEngine across light/dark phone, tablet and desktop
+layouts, zoom buttons/percentages/bounds, wheel anchoring, Safari gesture events,
+native Qt magnification, two-finger zoom with finger drawing on/off, cancellation
+and palm arbitration.
+It also compares actual browser screenshots before and after committing
+Highlighter/Shader previews on white and colored page backdrops. `#inkLayers`
+isolates the saved-ink and live-draft canvases from the paper/PDF backdrop, matching
+the committed renderer's compositing order. The group must stay transparent even
+under the Android e-ink stylesheet. The brush probe models that same blend group
+and retains strict pen-up pixel comparisons at both backing-store budgets.
+The desktop platform runner includes it as `view-zoom`. These synthetic gesture
+checks do not certify physical Windows/Linux trackpads or native mobile drivers.
 
 Desktop enables queued continuous ink. Successful stroke commands acknowledge
 only the new durable stroke through `notebookStrokeUpdate`, updating native menu

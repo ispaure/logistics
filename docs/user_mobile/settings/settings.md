@@ -174,10 +174,11 @@ packaged source snapshot. Local modified builds are identified. This information
 is available offline; the About heading keeps its normal appearance.
 
 Open **Settings → About → Open-source licenses** to search component names or
-licenses and read the bundled notices offline. Tap a component for its license
+licenses or notice text and read the bundled notices offline. Tap a component for its license
 text and source address; use Back to return to the list. Python dependencies and
 native Go notices come from the installed build, and native entries are filtered
-for Android or iOS. Publisher terms that are only available online are identified.
+for Android or iOS. Android includes the resolved native dependency inventory and
+bundled Google publisher terms. Entries with missing publisher notices are identified.
 
 ### Trusted Wi-Fi session resume
 
@@ -218,10 +219,11 @@ also includes a monochrome variant for tinted icons; Android 13+ launchers can u
 the monochrome artwork for themed icons. The system or launcher controls this
 appearance, separately from the app's system-following surfaces and reader themes.
 
-### Local / LocalCrypt location
+### File storage
 
-Files shared from other apps appear in **Received Files** in Workspaces and
-**Browse All Files**. On iOS, Files shows **Logisticks/Received Files** beside
+Files shared from other apps appear in **Received Files** in Workspaces.
+**Browse All Files** omits the dedicated **Local** and **Received Files** folders;
+file destination pickers still offer them. On iOS, Files shows **Logisticks/Received Files** beside
 **Local**. Android keeps Received Files alongside the selected Local and LocalCrypt
 collections. Legacy Inbox contents are copied without overwriting existing files;
 see [receiving files](../documents/workflows.md#receive-files-from-another-app).
@@ -251,16 +253,24 @@ these files do not sync through iCloud Drive. File sharing becomes enabled when
 the update is installed, so the previous storage layout can be visible to a
 trusted computer until the updated app has been opened and migration completes.
 
-On Android, open **Settings → Workspaces → Local / LocalCrypt location…**.
-One setting controls Local, LocalCrypt and Received Files. Selecting a drive in the list only
-inspects it; it does not switch storage. The page shows the current location,
-whether the selected location is in use, and the exact Local, LocalCrypt and Received Files
-paths and whether they are empty or contain files.
+On Android, open **Settings → Workspaces → File storage…**.
+The current location covers Local, LocalCrypt and Received Files. Choose
+**Change location**, select a drive, then **Continue** to review the copy before
+confirming **Copy and switch**. Selecting or reviewing a drive changes no files.
+**Folder paths** shows exact paths and whether the folders contain files.
+Use **Refresh locations** after inserting a card.
+
+**Other storage options** contains **Use files from another location**,
+**Start with empty folders** and **Delete files from an old location**.
+The delete page has a red **Delete files…** button at the bottom and a final
+confirmation. The active location cannot be deleted. In E Ink mode the button
+uses high-contrast black and white.
 
 On Android 11 and newer, the shared-drive folders are `<drive>/Logistics/Local`,
 `<drive>/Logistics/LocalCrypt` and `<drive>/Logistics/Received Files`. Internal copies use the app's private
 `LocalFiles`, `LocalCryptFolders` and `Received Files`. Enable **All files access** using
-**Allow SD card / shared storage access…** before accessing shared drives.
+**Open Android settings** when prompted, then return and choose **Check access**.
+The permission controls appear only when needed for the selected operation.
 
 On Android 7–10 (including Android 9 on a Galaxy S8+), drive choices use
 Logistics' app-owned device-storage or SD-card directory. No storage permission
@@ -273,14 +283,14 @@ the app's Reset action. Keep a separate backup before doing so.
 
 | Action | Result | Files kept |
 | --- | --- | --- |
-| **Copy current files here, then use them…** | Copies and verifies all three folders, then selects the destination. Different destination files stop the operation; nothing is merged or overwritten. | Original files remain at the previous location. Matching copied files can be reused after an interrupted copy. |
-| **Use existing files here — no copy…** | Selects the collection folders already at this location. This is what the old “Recover” button meant. It does not restore newer changes, merge folders or copy the current collection. | Current files stay at their old location. The selected files may be an older backup. Original credentials are still needed for LocalCrypt. |
-| **Start empty here — keep old files…** | Creates/selects empty collection folders without copying. Refuses a location containing files. Works even if the previously selected card is unavailable. | Current files stay at their old location. Private documents, credentials and metadata remain. |
-| **Erase collection files at this location…** | Permanently deletes only the displayed Local, LocalCrypt and Received Files folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
+| **Copy and switch** | Copies and verifies all three folders, then selects the destination. Different destination files stop the operation; nothing is merged or overwritten. | Original files remain at the previous location. Matching copied files can be reused after an interrupted copy. |
+| **Use these files** | Selects the collection folders already at this location without copying or merging the current collection. | Current files stay at their old location. The selected files may be an older backup. Original credentials are still needed for LocalCrypt. |
+| **Start empty and switch** | Creates/selects empty collection folders without copying. Refuses a location containing files. Works even if the previously selected card is unavailable. | Current files stay at their old location. Private documents, credentials and metadata remain. |
+| **Delete files…** | Permanently deletes only the displayed Local, LocalCrypt and Received Files folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
 
 For retained shared-drive folders on Android 11 and newer, after reinstalling or
-resetting the app, select the SD card and choose **Use
-existing files here — no copy…** to reconnect retained collections. This checks
+resetting the app, choose **Use files from another location**, select the SD card,
+then confirm **Use these files** to reconnect retained collections. This checks
 the collection folder paths and saves the location without scanning subfolders,
 reading file contents or calculating checksums. It is not an integrity check;
 an unreadable file can still report an error when opened later.
@@ -288,8 +298,8 @@ an unreadable file can still report an error when opened later.
 “Inactive” previously meant **not currently selected by Logistics**, not empty,
 obsolete or safe to delete. Example: after copying internal collections to an SD
 card, the internal copy is retained but no longer selected. To return to that
-copy without the SD card, choose **App internal storage → Use existing files
-here — no copy…**. Later SD-card changes will not be present in the older copy.
+copy without the SD card, choose **Use files from another location → App internal
+storage**, then **Use these files**. Later SD-card changes will not be present in the older copy.
 To remove that older copy permanently, first verify that the correct SD-card
 collection is in use, then select internal storage and erase its collection
 folders. Never erase your only remaining copy.

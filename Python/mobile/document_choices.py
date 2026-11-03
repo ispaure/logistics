@@ -1,7 +1,7 @@
 """Shared new-document entry point and format choices for mobile."""
 from pathlib import PurePosixPath
 
-CHOICES = (('Plain text (.txt)', 'txt'), ('Markdown (.md)', 'md'), ('Notebook (.rmdoc)', 'rmdoc'))
+CHOICES = (('Plain text (.txt)', 'txt'), ('Markdown (.md)', 'md'), ('Remarkable Document (.rmdoc)', 'rmdoc'))
 
 
 def available_choices(app):
@@ -34,4 +34,13 @@ def choose_document_type(app):
         return
     destination = app.native_host.state.destination
     origin = (destination, len(app.routes.screens[destination]), len(app.adaptive.detail_routes))
-    return app.loop.create_task(app.editor_picker().show_document_creation('', origin))
+    generation = app.navigation_generation
+    async def choose():
+        from features.text_editor.mobile.document_dialogs import DocumentTypeDialog
+        icons = {'txt': '≡  Plain text', 'md': 'Ⓜ  Markdown', 'rmdoc': '▧  Remarkable Document'}
+        choices = [(icons[ext], ext) for _, ext in available_choices(app)]
+        extension = await app.main_window.dialog(DocumentTypeDialog(choices=choices))
+        if (app.active_host and app.navigation_generation == generation
+                and extension in {ext for _, ext in available_choices(app)}):
+            await app.editor_picker().show_document_creation('Untitled.' + extension, origin)
+    return app.loop.create_task(choose())

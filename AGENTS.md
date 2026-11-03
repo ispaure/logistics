@@ -101,3 +101,12 @@ simulators, shared SDKs, credentials or unclassified test evidence. Use
 `python -m logistics_build.build_retention` to preview, and `--apply` to prune expired
 owned outputs. Preserve build counters, signing material and the main installed
 app/data. Historical prepared artifact paths may expire unless pinned.
+
+
+Rebuildable compiler caches are a separate retention group from source, signed
+packages and evidence. Known snapshot/device compiler caches share a 12 GiB soft
+budget, one-day age limit and one-hour grace. Workflow holds do not pin these
+rebuildable caches; explicit `.keep` pins and active operation locks still do.
+Adopt legacy temporary probes or QA simulators explicitly before cleaning them;
+never infer ownership from a display name. Keep adoption records under the
+existing build-manager private root rather than creating another cache hierarchy.

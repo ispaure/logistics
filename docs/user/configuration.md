@@ -13,6 +13,8 @@ components and read their license notices offline. Select a component to view
 and copy its notice and source address.
 The pinned rclone CLI has its own MIT notice in this list; desktop LibVLC notices
 are also included after its managed runtime is downloaded.
+Search also covers notice text. The Qt/WebEngine and rclone dependency groups
+include upstream source notices for optional components as labelled in each entry.
 
 ## Configuration layers
 

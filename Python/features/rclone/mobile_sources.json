@@ -60,6 +60,11 @@
     "transfers/service.py",
     "transfers/transfer_options.py",
     "localcrypt/mobile/content.py",
-    "mobile/remote_downloads.py"
+    "mobile/remote_downloads.py",
+    "transfers/presentation.py",
+    "transfers/mobile/surface.py",
+    "transfers/assets/surface.html",
+    "transfers/assets/surface.css",
+    "transfers/assets/surface.js"
   ]
 }

@@ -77,6 +77,35 @@ class AndroidReaderChromeTests(unittest.TestCase):
         self.enterContext(patch.dict('sys.modules', modules))
         self.detach = self.enterContext(patch('mobile.workspace_navigation.detach'))
 
+    def test_notes_title_has_a_hold_target_and_all_actions_fit_or_scroll(self):
+        from mobile.android_reader_chrome import fit_document_title
+        from android.view import View
+        from unittest.mock import MagicMock
+        import sys
+        java = sys.modules['java']
+        widgets = sys.modules['android.widget']
+
+        root, titles, actions, scroll = [MagicMock() for _ in range(4)]
+        root.getResources.return_value = Native().resources
+        root.indexOfChild.return_value = 0
+        root.getChildCount.return_value = 3
+        children = [titles, None, actions]
+        root.getChildAt.side_effect = children.__getitem__
+        root.addView.side_effect = lambda child, params: children.__setitem__(2, child)
+        with patch.object(View, 'OnLayoutChangeListener', object, create=True), \
+                patch.object(java, 'dynamic_proxy', lambda interface: interface, create=True), \
+                patch.object(widgets, 'HorizontalScrollView', return_value=scroll, create=True):
+            fit_document_title(root, NS(getParent=lambda: titles), 2, 5)
+        layout = root.addOnLayoutChangeListener.call_args.args[0]
+        for width, start, end in [(320, 96, 176), (390, 96, 240), (800, 240, 240)]:
+            layout.onLayoutChange(root, 0, 0, width, 48, 0, 0, 0, 0)
+            margins = titles.getLayoutParams.return_value
+            margins.setMarginStart.assert_called_with(start)
+            margins.setMarginEnd.assert_called_with(end)
+            self.assertEqual(scroll.getLayoutParams.return_value.width, min(end, 240))
+            self.assertGreaterEqual(width - start - end, 48)
+        scroll.addView.assert_called_once_with(actions, -2, -1)
+
     def test_dirty_clean_dirty_releases_retired_save_before_reuse(self):
         sync(self.app, self.view, 'documents')
         self.buttons = [self.save, self.action]

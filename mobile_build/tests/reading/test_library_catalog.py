@@ -67,7 +67,7 @@ class LibraryCatalogTests(unittest.TestCase):
             (namespace / folder / library).mkdir(parents=True)
             config = namespace / folder / 'remoteConfig.ini'.encode().hex()
             config.write_bytes(b'[LogisticsComics]\nlibraries=Comics\n'[::-1])
-            job = dict(crypt=True, remote='Remote', identity=client.connection, prefix=folder)
+            job = dict(crypt=True, remote='Remote', identity=client.connection, cipher_identity=client.identity, prefix=folder)
             records, failures = discover_libraries(root, [job], client, ['Remote'])
             self.assertEqual(failures, 0)
             self.assertEqual([(row['name'], row['folder'], row['source']) for row in records],

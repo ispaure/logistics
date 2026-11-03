@@ -25,6 +25,56 @@ The review's `valid` binding includes mapping/record state. Its execution `activ
 binding tracks access lifetime without rejecting legitimate record saves by the
 transfer itself. Do not merge these checks.
 
+## Review and progress presentation
+
+`transfers/presentation.py` owns bounded review projections and progress display
+models. The desktop Qt review has a paged file table, path disclosure and selected
+file inspector. Mobile uses `transfers/mobile/surface.py` with the feature-owned,
+fully offline `transfers/assets/surface.*` surface. Compact panes show grouped
+rows and a file-detail sheet; wide panes add a side inspector. Comparison supplies
+real actions and paths, so the review does not invent sizes or modification dates.
+
+`ReviewScan` caches immutable snapshots until comparison data/state changes.
+Review counts/filtering are recomputed only for a new snapshot or filter, and
+only 30 entries cross the UI bridge per page. Complete approval requires both a
+rendered complete snapshot and a current session; a new comparison still checks
+for changes before execution. A removed review route cancels its scan and waits
+for retirement. A late confirmation cannot revive the route or approve a cancelled
+session.
+
+Mobile WebViews use the existing private, nonpersistent native adapter. The CSP
+blocks external resources and navigation; paths are escaped as text. An
+instance-specific command token, command allowlist, bounded arguments and rendered
+revision checks reject foreign or stale approval messages. Revocation, retirement
+and host disposal clear private content and detach callbacks. Progress retained
+after credential revocation is redacted, including file paths.
+
+Progress has explicit discovery, transfer, verification, complete, failed,
+conflicted and cancelled states. Unknown totals do not produce percentages, and
+verification is separate from successful completion. The Go bridge publishes at
+most three active file records; Python validates names/counters before display.
+`coalesced_progress` leaves a full second between normal UI deliveries and retains
+the final worker snapshot for terminal publication. Visible HTML updates preserve
+unchanged DOM nodes; hidden progress panes retain data without native redraws.
+Continue browsing preserves the transfer, while Stop asks for confirmation and
+binds cancellation to the same transfer epoch.
+
+The `rclone-transfer` native probe captures setup, both review directions, file
+details, filtering, paging, rotation and progress states using synthetic data.
+It verifies bounded rows, escaped filenames, confirmation bounds, larger text,
+suppressed offscreen updates and stable progress DOM nodes. Run through the owned
+disposable device helper:
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe rclone-transfer --family 'iPhone 17e' --output test-results/rclone-iphone
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe rclone-transfer --family iPad --output test-results/rclone-ipad
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools android --probe rclone-transfer --output test-results/rclone-android
+```
+
+Evidence remains outside the wiki. Helpers remove the QA app and disposable
+simulator/emulator after saving reports. These synthetic presentation checks do
+not replace real engine/credential tests or prove performance on a physical Boox.
+
 ## Native owners
 
 | Responsibility | Owner under `transfers/mobile/` |
@@ -64,7 +114,10 @@ verified success or trigger the successful-transfer notification timeout.
 ## Desktop launch contract
 
 `transfers/sync.py:rclone_sync` preserves the existing preview/bool interface.
-It performs push preflight before `_run_sync`. That compatibility boundary converts
+It performs push preflight before `_run_sync`. Desktop explicit incomplete
+approval passes `TransferContext.skip_localcrypt_integrity` through the captured
+adapter to bypass full crypt authentication/cleanup while retaining structural
+checks. Normal and programmatic requests default to full validation. That compatibility boundary converts
 `_execute_sync`'s named `SyncOutcome` back to the historical result shape.
 
 `transfers/launch.py:LaunchMode` makes preview, synchronous wait, integrated GUI and

@@ -253,7 +253,9 @@ passwords remain in session memory and are cleared with the private reader.
 `transfers/push_policy.py` owns desktop ciphertext validation and generated-file
 cleanup. Native `transfers/mobile/jobs.py` keeps execution admission and preflight
 in `MirrorJobs`, delegating records, proposal resolution and engine polling to
-separate owners. Neither a complete nor an incomplete review bypasses preflight.
+separate owners. Desktop explicit incomplete approval skips full ciphertext
+authentication and generated-file cleanup, retaining mapping, access and structural
+checks. Normal desktop approval and native mobile approval retain full preflight.
 Missing mappings, mismatched identities, changed ciphertext and linked storage
 are refused before transfer. See [transfer workflow](transfers.md).
 

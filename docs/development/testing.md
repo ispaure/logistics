@@ -293,6 +293,27 @@ behavior remains covered. Review critical workflows for real outcomes, failure
 paths and platform checks even if their existing unit tests are fast. Timing
 reports do not measure coverage or prove a test's value.
 
+For a speedup, run the same focused selection before and after with the same
+interpreter, backend and socket/process permissions. Compare whole-file durations
+in `modules`, then check that every original test ID still ran with the same
+outcome. Include any added coverage in the after result. A faster run caused by
+errors or extra skips is not an improvement. Keep both reports in ignored evidence
+storage and distinguish a focused comparison from a full-suite benchmark.
+
+Prefer removing repeated fixture work before narrowing coverage. The developer
+command and native-report tests stub repeated full-tree scans, with small real
+preflight fixtures protecting acceptance and rejection. LM UI tests still use
+real local HTTP requests and Qt events; only the server's shutdown polling is
+shortened. See [fixture guidance](adding-tests.md).
+
+Help-viewer tests build their expected page inventory once per unchanged wiki
+scope while still opening every feature guide and exercising every folder's
+Up/history navigation in real widgets. Git UI tests copy a configured empty repository into each case's private
+directory. Refs, indexes, configuration and working files remain independent;
+backend tests still exercise repository initialization directly. Dedicated checks
+cover cross-wiki history and prove per-case Git mutations leave the template
+unchanged. Managed Qt temporary directories drain owned work before deleting files.
+
 ## Make your first change
 
 1. Find your workflow in the [code map](code-map.md), then read its owning user
@@ -332,7 +353,7 @@ selection when a guide does not need to name an individual test class.
 | `blender/` | Blender integration, library, metadata and operation UI |
 | `tooling/` | Build, documentation, architecture and runner contracts |
 
-The 23 root `test_mobile*.py` profiles remain at their established paths because
+The root `test_mobile*.py` profiles remain at their established paths because
 the independent portable testbed consumes them. Root fixture and driver files
 also retain their paths: they are shared inputs, not extra subject groups.
 Desktop cross-group imports name `tests.<owner>` explicitly; shared contracts use

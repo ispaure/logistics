@@ -22,7 +22,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 
-def editor_html(source, *, image_source=None):
+def editor_runtime():
     # Load the HTML builder without importing/initializing the Toga backend.
     owner = Path(__file__).parents[1] / 'features/text_editor/mobile'
     namespace = dict(escape=escape, json=json, re=re, uuid4=uuid4,
@@ -35,9 +35,13 @@ def editor_html(source, *, image_source=None):
     namespace['_SCRIPT'] = namespace['SCRIPT']
     tree = ast.parse((owner / 'markdown_editor.py').read_text())
     tree.body = [node for node in tree.body if isinstance(node, ast.FunctionDef)
-                 and node.name in ('editor_html', 'editor_blocks')]
+                 and node.name in ('editor_html', 'editor_blocks', 'snapshot_script')]
     exec(compile(tree, 'markdown_editor.py', 'exec'), namespace)
-    return namespace['editor_html'](source, 'logistics-editor://test/', image_source=image_source)
+    return namespace
+
+
+def editor_html(source, *, image_source=None):
+    return editor_runtime()['editor_html'](source, 'logistics-editor://test/', image_source=image_source)
 
 
 class EditorPage(QWebEnginePage):
@@ -86,6 +90,18 @@ class MobileMarkdownEditingDOMTests(QtTestCase):
     def marker_sizes(self, section='root.lastElementChild'):
         return json.loads(self.evaluate(f"""return JSON.stringify([...{section}.querySelectorAll('.live-marker')]
             .map(marker => parseFloat(getComputedStyle(marker).fontSize)));"""))
+
+    def test_snapshot_rejects_previous_page_without_reading_its_draft(self):
+        script = editor_runtime()['snapshot_script']
+        self.evaluate('window.snapshotCalls=0;const original=window.markdownSnapshot;'
+                      'window.markdownSnapshot=()=>{window.snapshotCalls++;return original()};')
+        self.assertEqual(self.evaluate('return document.documentElement.dataset.editorBridge'),
+                         'logistics-editor://test/')
+        self.assertEqual(self.evaluate('return ' + script('logistics-editor://replacement/')), 'null')
+        self.assertEqual(self.evaluate('return window.snapshotCalls'), 0)
+        current = json.loads(self.evaluate('return ' + script('logistics-editor://test/')))
+        self.assertIn('revision', current)
+        self.assertEqual(self.evaluate('return window.snapshotCalls'), 1)
 
     def test_reading_and_editing_have_matching_typography_at_multiple_sizes(self):
         from commonUtils.ui.native.markdown_preview import markdown_preview

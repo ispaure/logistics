@@ -33,6 +33,21 @@ class ReviewSnapshot:
     fingerprint: str
     error: str = ''
 
+    @property
+    def counts(self):
+        counts = dict.fromkeys(('add', 'replace', 'delete', 'cleanup'), 0)
+        for action, _ in self.changes:
+            if action in counts:
+                counts[action] += 1
+        return counts
+
+    def rows(self, kind='all', query=''):
+        """Display projection; unchanged files never obscure pending changes."""
+        query = query.casefold().strip()
+        return tuple((action, path) for action, path in self.changes
+                     if action != 'match' and (kind == 'all' or action == kind)
+                     and query in path.casefold())
+
     def text(self):
         counts = {kind: sum(action == kind for action, _ in self.changes) for kind in ('add', 'replace', 'delete')}
         heading = ('Review complete' if self.complete else 'Partial review — incomplete')
@@ -56,6 +71,7 @@ class ReviewScan:
         self.lock = Lock()
         self.changes = {}
         self.complete, self.fingerprint, self.error = False, '', ''
+        self._snapshot = None
         self.thread = Thread(target=self._run, args=(scanner,), daemon=True)
         self.thread.start()
 
@@ -64,7 +80,9 @@ class ReviewScan:
             raise ValueError('Invalid comparison result.')
         with self.lock:
             key = ('cleanup' if kind == 'cleanup' else 'transfer', path)
-            self.changes[key] = (kind, path)
+            if self.changes.get(key) != (kind, path):
+                self.changes[key] = (kind, path)
+                self._snapshot = None
 
     def replace(self, changes):
         # Validate away from the live state, then publish a whole attempt at once.
@@ -74,7 +92,9 @@ class ReviewScan:
                 raise ValueError('Invalid comparison result.')
             rows[('cleanup' if kind == 'cleanup' else 'transfer', path)] = (kind, path)
         with self.lock:
-            self.changes = rows
+            if self.changes != rows:
+                self.changes = rows
+                self._snapshot = None
 
     def _run(self, scanner):
         try:
@@ -87,17 +107,21 @@ class ReviewScan:
                     if not fingerprint:
                         raise ValueError('Comparison did not return a valid revision.')
                     self.fingerprint, self.complete = fingerprint, True
+                    self._snapshot = None
         except Exception as error:
             with self.lock:
                 if not self.cancelled.is_set():
                     self.error = str(error)
+                    self._snapshot = None
         finally:
             self.retired.set()
 
     def snapshot(self):
         with self.lock:
-            return ReviewSnapshot(tuple(sorted(self.changes.values())),
-                                  self.complete, self.fingerprint, self.error)
+            if self._snapshot is None:
+                self._snapshot = ReviewSnapshot(tuple(sorted(self.changes.values())),
+                                                self.complete, self.fingerprint, self.error)
+            return self._snapshot
 
     def stop(self):
         self.cancelled.set()

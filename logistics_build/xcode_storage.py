@@ -6,7 +6,7 @@ import re
 import subprocess
 import time
 
-from build_manager.retention import linked, pinned
+from build_manager.retention import linked, explicitly_pinned
 
 GIB = 1024 ** 3
 
@@ -67,7 +67,9 @@ def storage_group(project, *, cache_root=None, processes=None, now=None):
         if not owned_workspace(project, source) or now - accessed < 3600:
             return False
         snapshot = source_snapshot(project, source)
-        if snapshot and snapshot.exists() and pinned(snapshot):
+        # A workflow retains its source and signed packages, not rebuildable
+        # compiler caches. Explicit user pins still protect both.
+        if snapshot and snapshot.exists() and explicitly_pinned(snapshot):
             return False
         scope = str(snapshot) if snapshot else str(source)
         if any(('xcodebuild' in line or 'briefcase' in line) and

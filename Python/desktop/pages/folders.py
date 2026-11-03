@@ -4,8 +4,9 @@ Generic folder sources, selection, and feature actions.
 
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from pathlib import Path
+from subprocess import SubprocessError
 
-from commonUtils.ui import pyside
+from commonUtils.ui import desktop_actions, pyside
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 from features.application import registry
@@ -200,7 +201,26 @@ class FoldersPage(pyside.QWidget):
         self.credential_combo.currentIndexChanged.connect(self._credential_changed)
         self.local_source_tabs.currentChanged.connect(self._local_source_changed)
         self.folder_tree.currentItemChanged.connect(self._selection_changed)
+        self.folder_tree.setContextMenuPolicy(pyside.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.folder_tree.customContextMenuRequested.connect(self._folder_context_menu)
         self.visibility.changed.connect(self.tree_presentation.refresh)
+
+    def _folder_context_menu(self, position):
+        item = self.folder_tree.itemAt(position)
+        entry = item.data(0, pyside.Qt.ItemDataRole.UserRole) if item is not None else None
+        source = self._get_selected_source()
+        if entry is None or entry.local is None or source is None or source[0] != 'local':
+            return
+        menu = pyside.QMenu(self)
+        action = menu.addAction(desktop_actions.reveal_label())
+        action.triggered.connect(lambda: self._reveal_folder(entry.local.path))
+        menu.exec(self.folder_tree.viewport().mapToGlobal(position))
+
+    def _reveal_folder(self, path):
+        try:
+            desktop_actions.reveal(path)
+        except (OSError, RuntimeError, SubprocessError) as error:
+            pyside.QMessageBox.warning(self, 'Reveal folder', str(error))
 
     def refresh(self):
         """Refresh source groups while preserving the selected credential and folder."""

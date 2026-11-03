@@ -32,6 +32,18 @@ class SelectedCredentialZIP:
         with BytesIO(self.data) as stream:
             yield self.name, stream
 
+    def needs_password(self):
+        from zipfile import ZipFile, BadZipFile
+        try:
+            with ZipFile(BytesIO(self.data)) as archive:
+                entries = archive.infolist()
+                files = [item for item in entries if not item.is_dir()]
+                if not files or len(entries) > 64 or any(not item.filename.lower().endswith('.txt') for item in files):
+                    raise ValueError('Choose a credential ZIP containing TXT files.')
+                return any(item.flag_bits & 1 for item in files)
+        except BadZipFile:
+            raise ValueError('Choose a valid credential ZIP file.') from None
+
 
 
 @dataclass
@@ -468,8 +480,7 @@ class CredentialWorkflow:
         async def unlock(widget=None, **kwargs):
             selected = labels[selector.value] if selector is not None else key
             if selected is None:
-                cloud.show_cloud_import()
-                await cloud.choose_cloud_package()
+                await cloud.begin_cloud_import()
                 return
             if cloud.cloud_busy or getattr(cloud, 'transfer_busy', False):
                 return
@@ -598,27 +609,66 @@ class CredentialWorkflow:
         cloud.cloud_status.value = (f'{len(names)} total remote(s) available. Saved packages reloaded; active session-only packages were kept.'
                                    if names else 'No saved credential package. Import a ZIP to get started.')
 
-    async def choose_cloud_package(self, widget=None, **kwargs):
+    def cancel_import(self):
+        cloud = self.cloud
+        cloud.cloud_pending_zip = None
+        cloud.cloud_password.value = ''
+        cloud.cloud_selected_zip.text = ''
+        page = cloud.cloud_import_view.content
+        if cloud.cloud_import_message.parent is not page:
+            if cloud.cloud_import_message.parent is not None:
+                cloud.cloud_import_message.parent.remove(cloud.cloud_import_message)
+            page.add(cloud.cloud_import_message)
+        cloud.cloud_import_message.text = 'Choose a credential ZIP to add its connections.'
+        self._import_storage_choice = None
+        self._import_encrypted = False
+        cloud.cloud_import.enabled = False
+
+    async def choose_cloud_package(self, widget=None, *, automatic=False, **kwargs):
         cloud = self.cloud
         pick_document = cloud.rclone_ui.pick_document
         if cloud.cloud_busy or cloud.cloud_client is None:
             return
+        automatic = automatic or widget is not None
+        self.cancel_import()
+        client, origin = cloud.cloud_client, cloud.navigation_generation
+        generation = getattr(client, 'generation', 0)
+        package = None
+        encrypted = False
+        picker_cancelled = False
         cloud.set_cloud_busy(True)
         try:
             selected = await pick_document(cloud)
+            if not self._current(client, navigation=origin, generation=generation):
+                return
             if selected is None:
-                cloud.cloud_import_message.text = import_hint('ZIP selection cancelled. Your loaded remotes are unchanged.')
+                picker_cancelled = True
+                cloud.cloud_import_message.text = 'No file selected.'
                 return
             package = await asyncio.to_thread(SelectedCredentialZIP, *selected)
+            if automatic:
+                encrypted = await asyncio.to_thread(package.needs_password)
+            if not self._current(client, navigation=origin, generation=generation):
+                package = None
+                return
             cloud.cloud_pending_zip = package
+            self._import_encrypted = encrypted
             cloud.cloud_selected_zip.text = import_hint('Selected ZIP: ' + package.name)
-            cloud.cloud_import_message.text = import_hint('Enter the ZIP password, then tap Unlock (or Return).\nLeave it blank for an unencrypted ZIP.')
+            cloud.cloud_import_message.text = 'Reading credential ZIP…'
         except Exception as error:
+            package = None
             cloud.cloud_import_message.text = import_hint('Could not select ZIP: ' + str(error)[:150])
         finally:
             cloud.set_cloud_busy(False)
+            if picker_cancelled and automatic and self._current(client, navigation=origin, generation=generation):
+                cloud._finish_cloud_import()
+        if automatic and package is not None and cloud.cloud_pending_zip is package:
+            if encrypted:
+                cloud._show_cloud_import_password(package)
+            else:
+                await cloud.import_cloud_package(interactive=True)
 
-    async def import_cloud_package(self, widget=None, **kwargs):
+    async def import_cloud_package(self, widget=None, *, interactive=False, **kwargs):
         cloud = self.cloud
         if cloud.cloud_busy or cloud.cloud_client is None:
             return
@@ -631,22 +681,32 @@ class CredentialWorkflow:
             await cloud.choose_cloud_package()
             if cloud.cloud_pending_zip is None:
                 return
+        interactive = interactive or widget is not None
         password = cloud.cloud_password.value
         cloud.cloud_password.value = ''
+        if interactive and getattr(self, '_import_encrypted', False) and not password:
+            cloud.cloud_import_message.text = 'Enter the ZIP password to continue.'
+            return
         selected = cloud.cloud_pending_zip
         cloud.set_cloud_busy(True)
         cloud.cloud_import_message.text = 'Loading remotes…'
+        finished = False
+        return_to_connections = False
         try:
             client, origin = cloud.cloud_client, cloud.navigation_generation
             generation = getattr(client, 'generation', 0)
-            remember = (await self.choose_credential_storage(selected.name) if widget is not None
-                        else cloud.cloud_remember.value)
+            remember = (getattr(self, '_import_storage_choice', None) if interactive else cloud.cloud_remember.value)
+            if interactive and remember is None:
+                remember = await self.choose_credential_storage(selected.name)
             if remember is None:
-                cloud.cloud_import_message.text = 'Unlock cancelled. Enter the ZIP password to retry.'
+                self.cancel_import()
+                return_to_connections = True
                 return
             if not self._current(client, navigation=origin, generation=generation):
                 cloud.cloud_import_message.text = 'Credentials changed. Try unlocking this package again.'
                 return
+            if interactive:
+                self._import_storage_choice = remember
             if not self.presentation.prepare_publication():
                 cloud.cloud_import_message.text = import_hint('Save or discard your private edits before loading another package.')
                 return
@@ -683,14 +743,23 @@ class CredentialWorkflow:
             cloud.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
             cloud.app.credential_document_lists.refresh()
             cloud.cloud_status.value = f'{selected.name} loaded ({"Persistent save" if remember else "Session-Only"}). {len(names)} total remote(s) available. Open Workspaces to browse. No connection has been made yet.'
+            finished = True
         except CredentialBusyError as error:
             cloud.cloud_status.value = str(error)
             cloud.cloud_import_message.text = import_hint(str(error))
         except Exception as error:
             report_failure('import credential package', error)
             cloud.cloud_status.value = 'Import failed: ' + str(error)[:300]
-            cloud.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Unlock again.\n' + str(error)[:150])
+            if interactive:
+                cloud.cloud_import_message.text = ('Could not unlock this ZIP. Check the password or choose a different file.'
+                    if getattr(self, '_import_encrypted', False)
+                    else 'Could not import this ZIP. Choose a different credential package.\n' + str(error)[:150])
+            else:
+                cloud.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Unlock again.\n' + str(error)[:150])
         finally:
             password = None
             cloud.set_cloud_busy(False)
+            if interactive and (finished or return_to_connections) and self._current(client, navigation=origin):
+                cloud._finish_cloud_import()
+                cloud.cloud_connections_status.text = selected.name + ' added.' + cache_error if finished else 'Import cancelled.'
 

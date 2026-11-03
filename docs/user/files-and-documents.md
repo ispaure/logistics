@@ -63,6 +63,9 @@ Choose **Local**, **Cloud** or **Home Server**, then a workspace in the compact 
 tree. Local's **Source** dropdown defaults to **Rclone** (ordinary
 Local and encrypted LocalCrypt copies), with **Dropbox** and **Others** for the remaining providers.
 The Local source filter survives refresh; switching tabs returns it to Rclone.
+Right-click a folder under **Local**, including an rclone local copy, and choose
+**Reveal in Finder**, **Reveal in Explorer**, or **Reveal in Linux File Explorer**
+to show its on-disk folder in your desktop file manager (such as Dolphin).
 Cloud and Home Server keep their **Credential** dropdown. Opening a source tab or
 changing its dropdown leaves the Files pane at **Select a folder** until you choose
 one. Refresh preserves an explicitly selected folder; removing or hiding that

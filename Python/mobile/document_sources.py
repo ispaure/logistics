@@ -198,6 +198,8 @@ def local_document_path(app, path):
     parts = path.parts
     # Only historical iOS application Documents paths can be relocated. Never
     # turn an arbitrary missing file into a same-named file in this app.
+    if parts[:3] == ('/', 'private', 'var'):
+        parts = ('/', *parts[2:])
     prefix = ('/', 'var', 'mobile', 'Containers', 'Data', 'Application')
     if parts[:len(prefix)] != prefix or len(parts) < 9 or parts[7] != 'Documents':
         return path

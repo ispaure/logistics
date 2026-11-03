@@ -133,9 +133,20 @@ class ToolbarProbe(LogisticsMobile):
             sample = await self.record('chat-settings')
             assert sample['pinned'] == ['Save & return to chat'], sample
             self.show_home()
-            await self.choose_document_type()
+            from .fixtures import choose_creation_type
+            await choose_creation_type(self, 'txt')
             sample = await self.record('new-document')
-            assert sample['pinned'] == ['Create document'], sample
+            picker = self.editor_picker()
+            paired = picker.creation_layout.paired
+            assert sample['pinned'] == ([] if paired else ['Choose location']), sample
+            picker.save_as_name.value = 'Toolbar'
+            await picker.choose_creation_location()
+            sample = await self.record('new-document-location')
+            assert sample['pinned'] == ([] if paired else ['Create document']), sample
+            assert sample['leading'] == (['Cancel'] if paired else ['Back to name']), sample
+            if not paired:
+                await self.press(picker.edit_name)
+                assert picker.panel is picker.name_panel
             self.routes.back()
             assert self.create_chosen_document('md', name='Toolbar.md', content='# Toolbar')
             await self.record('markdown-editor')

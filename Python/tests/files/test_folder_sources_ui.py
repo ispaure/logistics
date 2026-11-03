@@ -160,6 +160,61 @@ class FolderSourceTests(QtTestCase):
     def entries(self, page):
         return [item.data(0, qt.Qt.ItemDataRole.UserRole) for item in page._entry_items.values()]
 
+    def test_workspace_reveal_targets_right_clicked_local_rclone_copy(self):
+        first, second = self.folder('Books'), self.folder('Notes')
+        self.local_folders = [first, second]
+        self.remote(['Books', 'Notes'], 'keys.conf', feature='rclone')
+        page = self.page()
+        page.show()
+        self.app.processEvents()
+        items = list(page._entry_items.values())
+        self.assertEqual(len(items), 2)
+        page.folder_tree.setCurrentItem(items[0])
+        self.wait(page)
+        target = items[1].data(0, qt.Qt.ItemDataRole.UserRole).local.path
+        position = page.folder_tree.visualItemRect(items[1]).center()
+        menus = []
+
+        menu = qt.QMenu(page)
+
+        def choose(_position):
+            menus.append([action.text() for action in menu.actions()])
+            menu.actions()[0].trigger()
+
+        menu.exec = Mock(side_effect=choose)
+        from commonUtils.ui import desktop_actions
+        with patch('desktop.pages.folders.pyside.QMenu', return_value=menu), patch.object(
+                desktop_actions, 'reveal') as reveal:
+            page.folder_tree.customContextMenuRequested.emit(position)
+            reveal.assert_called_once_with(target)
+        self.assertEqual(menus, [[desktop_actions.reveal_label()]])
+        self.assertIs(page.folder_tree.currentItem(), items[0])
+
+    def test_workspace_reveal_ignores_groups_empty_space_and_cloud(self):
+        self.local_folders = [self.folder('Books')]
+        self.remote(['Books', 'RemoteOnly'], 'keys.conf', feature='rclone')
+        page = self.page()
+        page.show()
+        self.app.processEvents()
+        group = qt.QTreeWidgetItem(['Group'])
+        page.folder_tree.addTopLevelItem(group)
+        with patch.object(qt.QMenu, 'exec') as menu:
+            page._folder_context_menu(page.folder_tree.visualItemRect(group).center())
+            page._folder_context_menu(qt.QPoint(-1, -1))
+            page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+            self.wait(page)
+            self.app.processEvents()
+            for item in page._entry_items.values():
+                page._folder_context_menu(page.folder_tree.visualItemRect(item).center())
+            menu.assert_not_called()
+
+    def test_workspace_reveal_reports_launch_failure(self):
+        page = self.page()
+        with patch('desktop.pages.folders.desktop_actions.reveal', side_effect=OSError('No file manager')), patch.object(
+                qt.QMessageBox, 'warning') as warning:
+            page._reveal_folder(self.root)
+        warning.assert_called_once_with(page, 'Reveal folder', 'No file manager')
+
     def test_workspace_action_scope_keeps_both_transfer_endpoints(self):
         from features.contributions import FolderFeatureContribution
         self.local_folders = [self.folder('Notes')]

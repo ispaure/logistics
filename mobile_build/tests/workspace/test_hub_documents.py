@@ -6,6 +6,8 @@ TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import asyncio
+from unittest.mock import AsyncMock, patch
 from mobile.app import LogisticsMobile
 
 
@@ -72,6 +74,7 @@ class HubDocumentTests(unittest.TestCase):
                     app.documents_query = query
                     hub = app.build_documents_hub()
                     app.document_search.value = query
+                    app.loop.run_until_complete(asyncio.sleep(.35))
                     for section in (app.document_open_list, app.document_recent_list, app.document_saved_list):
                         self.assertFalse(any(getattr(widget, '_document_group', False) for widget in widgets(section)))
                         message = section.children[-1]
@@ -103,6 +106,32 @@ class HubDocumentTests(unittest.TestCase):
         self.app.loop.close()
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
+
+    def test_close_updates_retained_home_badge_without_switching_tabs(self):
+        app = self.app
+        owner = app.editor_view
+        app.save_workspace()
+        app.show_home()
+        self.assertIn('Open', labels(app.routes.roots['home']))
+        app.show_documents_hub()
+        app.session_closer(owner.session.id)()
+        self.assertNotIn(owner.session.id, app.workspace.sessions)
+        self.assertNotIn('Open', labels(app.routes.roots['home']))
+        self.assertFalse(any(getattr(widget, 'session_id', None) == owner.session.id
+                             for widget in widgets(app.document_open_list)))
+        self.assertEqual(app.store.open(owner.document.id).text, owner.document.text)
+
+    def test_close_reader_returning_home_removes_open_badge_immediately(self):
+        app = self.app
+        owner = app.editor_view
+        app.save_workspace()
+        app.show_home()
+        app.session_opener(owner.session.id)()
+        app.request_reader_close(owner.session.id)
+        self.assertEqual(app.native_host.state.destination, 'home')
+        self.assertFalse(app.routes.screens['home'])
+        self.assertNotIn('Open', labels(app.body))
+        self.assertNotIn(owner.session.id, app.workspace.sessions)
 
     def test_clear_recent_button_preserves_open_and_saved_documents(self):
         import toga
@@ -257,9 +286,11 @@ class HubDocumentTests(unittest.TestCase):
         first = app.current.id
         app.editor.value = 'Retain my draft'
         app.show_home()
-        app.loop.run_until_complete(app.new_hub_document())
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
+            app.loop.run_until_complete(app.new_hub_document())
         form = app.editor_picker()
         form.save_as_name.value = 'My notes'
+        app.loop.run_until_complete(form.choose_creation_location())
         app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         owner = app.private_sessions.active
@@ -376,6 +407,7 @@ class HubDocumentTests(unittest.TestCase):
             app.recent_documents.remember(session)
         app.show_documents_hub()
         app.document_search.value = 'No matching name'
+        app.loop.run_until_complete(asyncio.sleep(.35))
         app.show_home()
         buttons = list({id(widget): widget for widget in widgets(app.body)
                         if isinstance(widget, toga.Button)}.values())
@@ -401,6 +433,7 @@ class HubDocumentTests(unittest.TestCase):
         app.show_documents_hub()
         search = app.document_search
         search.value = 'OLD SAVED'
+        app.loop.run_until_complete(asyncio.sleep(.35))
         self.assertIs(app.document_search, search)
         found = [widget for widget in widgets(app.document_saved_list)
                  if isinstance(widget, toga.Button) and widget.text == 'Old saved draft.md']
@@ -425,7 +458,9 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual([widget.text for widget in widgets(app.document_recent_list)
                           if isinstance(widget, toga.Button)], ['Clear'])
         app.document_search.value = 'No such filename'
+        app.loop.run_until_complete(asyncio.sleep(.35))
         app.document_search.value = ''
+        app.loop.run_until_complete(asyncio.sleep(.35))
         rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
         self.assertEqual({row.session_id for row in rows}, {first.id, active.id})
 
@@ -581,7 +616,8 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = '# A retained draft'
         app.show_home()
         content = app.body.children[0].content
-        self.assertIs(content.children[0], app._home_status_row)
+        self.assertIsNone(app._home_status_row.parent)
+        self.assertIs(content.children[0], app.home_actions)
         self.assertIsNone(app.home_continue)
         self.assertIn('Focus.md', [getattr(widget, 'text', '') for widget in widgets(content)])
         self.assertNotIn('Markdown', labels(content))
@@ -589,7 +625,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertNotIn('Markdown', labels(app.session_panel(app.editor_view.session)))
         actions = app.home_actions
         self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
-        self.assertEqual([button.text for button in actions.children], ['Open file…', 'New document'])
+        self.assertEqual([button.text for button in actions.children], ['Open Document', 'New Document'])
         recent = next(widget for widget in widgets(content) if getattr(widget, 'text', '') == 'Focus.md')
         app.loop.run_until_complete(recent.on_press())
         self.assertIs(app.body.children[0], app.document_view)
@@ -833,22 +869,26 @@ class HubDocumentTests(unittest.TestCase):
         app = self.app
         previous = app.current
         count = len(app.store.documents()[0])
-        app.loop.run_until_complete(app.new_hub_document())
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
+            app.loop.run_until_complete(app.new_hub_document())
         form = app.editor_picker()
         for invalid in ('', '../bad'):
             form.save_as_name.value = invalid
-            app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
-            app.loop.run_until_complete(form.confirm_editor_file())
+            app.loop.run_until_complete(form.choose_creation_location())
+            self.assertIs(form.panel, form.name_panel)
+            self.assertFalse(form.next_button.enabled)
             self.assertIs(app.current, previous)
-            self.assertTrue(form.save_as_status.value)
+            self.assertTrue(form.effective_name.text)
             self.assertEqual(len(app.store.documents()[0]), count)
         form.cancel_text_destination()
         self.assertIs(app.current, previous)
-        app.loop.run_until_complete(app.new_hub_document())
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
+            app.loop.run_until_complete(app.new_hub_document())
         form = app.editor_picker()
         form.save_as_name.value = 'Notes.txt'
         form.creation_type.value = 'Markdown (.md)'
         form.creation_type.value = 'Plain text (.txt)'
+        app.loop.run_until_complete(form.choose_creation_location())
         app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Notes.txt')
@@ -856,11 +896,13 @@ class HubDocumentTests(unittest.TestCase):
 
     def test_markdown_choice_and_independent_chat_destination(self):
         app = self.app
-        app.loop.run_until_complete(app.new_hub_document())
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='md')):
+            app.loop.run_until_complete(app.new_hub_document())
         form = app.editor_picker()
-        self.assertIn(form.creation_type, form.save_as_view.children)
+        self.assertIn(form.creation_type, form.name_view.children)
         form.save_as_name.value = 'Trip.markdown'
         form.creation_type.value = 'Markdown (.md)'
+        app.loop.run_until_complete(form.choose_creation_location())
         app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Trip.markdown')

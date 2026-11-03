@@ -11,6 +11,7 @@ class HubController(HubUI):
         "recent_opener",
         "recent_row",
         "build_home",
+        "refresh_home_documents",
         "reflow_home",
         "reflow_documents_hub",
         "build_documents_hub",

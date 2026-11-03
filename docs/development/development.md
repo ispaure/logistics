@@ -63,6 +63,7 @@ Read only the contracts relevant to your change. Feature-specific implementation
 | iPhone Duo button placement and panel acceptance plan | [iPhone Duo UI brief](iphone-duo-ui-brief.md) |
 | Native phone/Watch widgets and Shortcuts actions | [Shortcut value widgets](shortcut-widgets.md) |
 | Mobile build/deployment reference | [Mobile launchers](mobile-launchers.md) |
+| Offline license inventories, artifact collectors and unresolved publisher notices | [Open-source notices](open-source-notices.md) |
 | Unified plans, profiles and reusable orchestration | [Build manager](build-manager.md) |
 | Combined platform validation and reviewed tester/release delivery | [Combined journey contracts](build-manager-journeys.md) |
 | Paired iPhone/iPad installation | [Device deployment](mobile-device-deployment.md) |

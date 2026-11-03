@@ -8,9 +8,8 @@ from ..audio_output import for_app
 
 def controls(app, box):
     owner = for_app(app)
-    box.add(SettingsLabel('Bluetooth approval applies to video and all read-aloud only while session-only protection is active. '
-        'During protection, changing audio outputs pauses playback. Adding a device never starts playback. '
-        'These approvals are saved only on this device.'))
+    box.add(SettingsLabel('Choose which Bluetooth devices can play session-only video and read-aloud. '
+        'Changing outputs pauses playback. Approving a device does not resume it.'))
     current = SettingsLabel('')
     status = SettingsLabel('')
     rows = toga.Box(style=Pack(direction=COLUMN))
@@ -35,8 +34,8 @@ def controls(app, box):
             row._settings_action_row = True
             rows.add(row)
         if not rows.children:
-            rows.add(SettingsLabel('No approved Bluetooth devices. Select a Bluetooth output in system '
-                'controls during session-only protection, then press Play or Approve current output.'))
+            rows.add(SettingsLabel('No approved Bluetooth devices. Connect one using system controls, '
+                'then choose Approve current output while a session-only document is open.'))
         settings_presentation(rows)
         adaptive = getattr(app, 'adaptive', None)
         if adaptive is not None:

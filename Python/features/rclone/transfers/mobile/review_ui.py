@@ -9,6 +9,7 @@ from toga.style.pack import COLUMN, ROW
 from features.rclone.transfers.transfer_options import TransferOptions, load_options, save_options
 from features.rclone.transfers.service import TransferContext
 from .plan import NativeTransferRequest
+from features.rclone.mobile.messages import import_hint
 
 
 async def _prepare(transfers, transfer):
@@ -43,26 +44,30 @@ def _display_review(session):
     snapshot = session.scan.snapshot()
     # A worker can finish between snapshot() and can_approve(). Never enable
     # full approval while the rendered comparison is still visibly partial.
-    return snapshot.text(), snapshot.complete and session.can_approve()
+    return snapshot, snapshot.complete and session.can_approve()
 
 
 class ReviewPresentation(Protocol):
+    app: object
     async def confirm(self, request, *, incomplete: bool) -> bool: ...
     def scanning(self, session) -> None: ...
     def show(self, box, cancel, request) -> None: ...
     def close(self) -> None: ...
+    def retained(self) -> bool: ...
 
 
 class TransferReviewDialog:
-    """Render and retire one review; execution stays in the transfer workflow."""
-
+    """One private surface over the shared review/approval lifetime."""
     def __init__(self, view: ReviewPresentation):
         self.view = view
+        self.surface = None
 
     async def run(self, session):
         try:
             return await self._present(session)
         finally:
+            if self.surface is not None:
+                self.surface.dispose()
             session.scan.stop()
             try:
                 while not session.scan.retired.is_set():
@@ -74,79 +79,92 @@ class TransferReviewDialog:
                 self.view.close()
 
     async def _present(self, session):
-        request = session.request
-        box = toga.Box(style=Pack(direction=COLUMN, margin=12, flex=1))
-        paths = toga.Label(f'From: {request.source}\nTo: {request.destination}', style=Pack(margin_bottom=8))
-        status = toga.Label('Scanning; comparison does not change files.', style=Pack(margin_bottom=8))
-        details = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
-        buttons = toga.Box(style=Pack(direction=ROW))
-        closed = False
-        confirming = False
-        async def choose(incomplete):
+        from features.rclone.transfers.presentation import ReviewProjection
+        from .surface import TransferSurface
+        projection = ReviewProjection(session.request)
+        closed = confirming = False
+        rendered = None
+        def publish():
+            if closed or self.surface.closed or rendered is None:
+                return
+            self.view.review_snapshot = rendered
+            self.surface.review_ready = rendered.complete and session.can_approve() and not confirming
+            self.surface.update(projection.model(rendered, state=session.state,
+                can_confirm=self.surface.review_ready,
+                can_early=not confirming and session.can_approve(incomplete=True)))
+
+        async def choose(incomplete=False):
             nonlocal confirming
-            if closed or confirming or not session.can_approve(incomplete=incomplete):
+            if (closed or confirming or rendered is None or not incomplete and not rendered.complete
+                    or not session.can_approve(incomplete=incomplete)):
                 return
             confirming = True
-            confirm.enabled = early.enabled = False
+            publish()
             try:
-                accepted = await self.view.confirm(request, incomplete=incomplete)
+                accepted = await self.view.confirm(session.request, incomplete=incomplete)
                 if not closed and accepted and session.approve(incomplete=incomplete):
                     self.view.scanning(session)
             finally:
                 confirming = False
-                if not closed:
-                    early.enabled = session.can_approve(incomplete=True)
+                publish()
+
         def cancel(widget=None, **kwargs):
             session.cancel()
-        async def full(widget=None, **kwargs):
-            await choose(False)
-        async def partial(widget=None, **kwargs):
-            await choose(True)
-        confirm = toga.Button('Confirm ' + request.operation + '…', on_press=full, enabled=False, style=Pack(flex=1, height=44))
-        early = toga.Button('Proceed without full review…', on_press=partial, style=Pack(height=44))
-        buttons.add(toga.Button('Cancel', on_press=cancel, style=Pack(height=44)), confirm)
-        box.add(toga.Label('Review ' + request.operation, style=Pack(font_size=22)), paths, status, details, early, buttons)
-        previous = None
+
+        async def command(action, args):
+            if action == 'approve':
+                await choose(False)
+            elif action == 'early':
+                await choose(True)
+            elif action == 'filter':
+                projection.select(kind=args.get('kind'), query=args.get('query', ''))
+                publish()
+            elif action in ('next', 'previous'):
+                projection.select(step=1 if action == 'next' else -1)
+                publish()
+            elif action == 'background':
+                cancel()
+
+        surface = self.surface = TransferSurface(self.view.app, command)
+        surface.approve_review, surface.cancel_review = choose, cancel
+        surface.review_ready = False
         try:
-            self.view.show(box, cancel, request)
+            self.view.show(surface, cancel, session.request)
             while True:
+                if not self.view.retained():
+                    session.cancel()
                 state = session.poll()
-                full_ready = False
                 if not session.valid():
-                    paths.text = 'Connection locked or changed.'
-                    details.value = ''
+                    surface.dispose()
                 else:
-                    text, full_ready = _display_review(session)
-                    if text != previous:
-                        details.value, previous = text, text
-                confirm.enabled = full_ready and not confirming
-                early.enabled = not confirming and session.can_approve(incomplete=True)
-                notices = dict(stopping='Stopping comparison…', checking='Checking that the completed review is still current…',
-                    changed='Files changed or could not be checked. Review the current results and confirm again.',
-                    failed='Comparison failed. Retry later, or explicitly proceed without a full review.')
-                if state in notices:
-                    status.text = notices[state]
+                    rendered, _ = _display_review(session)
+                    publish()
                 if state in ('approved', 'cancelled'):
                     break
                 await asyncio.sleep(.1)
         finally:
             closed = True
-            paths.text = ''
-            details.value = ''
-            status.text = 'Review closed.'
-            confirm.enabled = early.enabled = False
+            surface.review_ready = False
+            projection.clear()
+            surface.dispose()
         return session.approved
 
 
 class MobileReviewPresentation:
-    """Own the controller fields and navigation effects of a review dialog."""
-
     def __init__(self, owner):
         self.owner = owner
+        self.app = owner.app
+        self.review_snapshot = None
 
     async def confirm(self, request, *, incomplete):
+        counts = self.review_snapshot.counts
+        message = (f'{counts["add"]:,} added · {counts["replace"]:,} replaced · {counts["delete"]:,} deleted.\n'
+                   + (f'{counts["cleanup"]:,} local generated entries removed before Push.\n' if counts['cleanup'] else '')
+                   + f'Source: {request.source}\nDestination: {request.destination}\n\n'
+                   + ('Comparison incomplete. Additional replacements and deletions may occur.\n' if incomplete else '')
+                   + 'Destination replacements and deletions have no backup or undo.')
         return await self.owner.main_window.dialog(toga.ConfirmDialog(
-            'Confirm ' + request.operation, request.confirmation(incomplete=incomplete)))
+            request.operation + ' these changes?', message))
 
     def scanning(self, session):
         self.owner._transfer_cancel = session.scan.cancelled
@@ -154,11 +172,14 @@ class MobileReviewPresentation:
     def show(self, box, cancel, request):
         self.owner._transfer_review_view = box
         self.owner._cancel_transfer_review = cancel
-        self.owner.show_view(box, destination='files', route='transfer-review',
-                             title='Review ' + request.operation)
+        self.owner.show_view(box, destination='files', route='transfer-review', title='Review changes')
+
+    def retained(self):
+        return any(screen[0] == 'transfer-review' for screen in self.owner.routes.screens['files'])
 
     def close(self):
         owner = self.owner
+        self.review_snapshot = None
         owner._transfer_review_view = None
         owner._cancel_transfer_review = None
         try:
@@ -179,26 +200,32 @@ class TransferReviewUI:
     def show_local_push(self, folder):
         if self.cloud_busy or getattr(self, 'transfer_busy', False):
             return
+        from .surface import TransferSurface
         remotes = sorted(self.loaded_remote_names(), key=str.casefold)
-        box = toga.Box(style=Pack(direction=COLUMN, margin=12, flex=1))
-        box.add(toga.Label('Push Local/' + folder, style=Pack(font_size=22)))
-        box.add(toga.Label('Whole folder uses ' + folder + ': in the matching credential package.'))
-        def whole(widget=None, **kwargs):
-            self.begin_transfer_review(push=True, local_folder=folder)
-        box.add(toga.Button('Push whole folder…', on_press=whole, style=Pack(height=44)))
-        if remotes:
-            destination = toga.Selection(items=remotes, style=Pack(height=44))
-            preview = toga.Label('')
-            def update(widget=None, **kwargs):
-                preview.text = 'To: ' + destination.value + ':' + folder
-            destination.on_change = update
-            update()
-            def specific(widget=None, **kwargs):
-                self.begin_transfer_review(push=True, local_folder=folder, remote=destination.value, specific=True)
-            box.add(toga.Label('Or push this folder beneath a selected remote:'), destination, preview,
-                    toga.Button('Push as subfolder…', on_press=specific, style=Pack(height=44)))
-        box.add(toga.Button('Cancel', on_press=self.show_locations, style=Pack(height=44)))
-        self.show_view(box, destination='files', route='local-push', title='Push local folder')
+        selection = dict(specific=False, remote=remotes[0] if remotes else None)
+        previous = getattr(self, '_transfer_setup_surface', None)
+        if previous is not None:
+            previous.dispose()
+        async def command(action, args):
+            if action == 'scope':
+                selection['specific'] = args.get('specific') == '1'
+                selection['remote'] = args.get('remote') if args.get('remote') in remotes else None
+                target = (selection['remote'] or '') + ':' + folder if selection['specific'] else folder + ':'
+                surface.update(dict(surface.model, destination=target))
+            elif action == 'start-review':
+                if selection['specific'] and selection['remote'] is None:
+                    return
+                self.begin_transfer_review(push=True, local_folder=folder,
+                    remote=selection['remote'] if selection['specific'] else None, specific=selection['specific'])
+            elif action == 'settings':
+                self.show_transfer_options()
+            elif action == 'background':
+                surface.dispose()
+                self.routes.back()
+        surface = self._transfer_setup_surface = TransferSurface(self.app, command)
+        surface.update(dict(mode='setup', operation='Push', workspace=folder, source='Local/' + folder,
+                            destination=folder + ':', remotes=remotes))
+        self.show_view(surface, destination='files', route='local-push', title='Transfer')
 
 
     def transfer_options(self):
@@ -218,14 +245,14 @@ class TransferReviewUI:
                 updated = TransferOptions(track_renames=rename.value,
                     bw_limit=bandwidth.value.strip() or None, excludes=excludes.value.splitlines())
                 save_options(self.private_root / 'transfer-options.json', updated)
-                self.show_transfers()
+                self.routes.back()
             except (OSError, ValueError) as error:
                 status.text = str(error)
         box.add(toga.Label('Transfer settings', style=Pack(font_size=22)), rename,
                 toga.Label('Bandwidth limit (MB/s)'), bandwidth,
                 toga.Label('Push exclusions (one pattern per line)'), excludes, status,
                 toga.Button('Save settings', on_press=save, style=Pack(height=44)),
-                toga.Button('Cancel', on_press=self.show_transfers, style=Pack(height=44)))
+                toga.Button('Cancel', on_press=lambda widget, **kw: self.routes.back(), style=Pack(height=44)))
         self.show_view(box, route='transfer-settings', title='Transfer settings')
 
     def begin_transfer_review(self, key=None, *, push=False, remote=None, folder='', storage=None, local_folder=None, specific=False):
@@ -255,6 +282,9 @@ class TransferReviewUI:
                 return await self.review_transfer(key, push=push, remote=remote, folder=folder, storage=storage, local_folder=local_folder, specific=specific)
             except (OSError, ValueError) as error:
                 self.cloud_status.value = 'Review stopped: ' + str(error)[:250]
+                setup = getattr(self, '_transfer_setup_surface', None)
+                if setup is not None and not setup.closed:
+                    setup.update(dict(setup.model, notice=self.cloud_status.value))
                 return False
             finally:
                 self._review_starting = False

@@ -7,6 +7,11 @@ from .models import CopyMapping, MAX_COPIES
 from features.rclone.mobile.bridge_protocol import mirror_info
 
 
+def resolved_job(client, job):
+    resolve = getattr(client, 'resolve_remote', None)
+    return dict(job, remote=resolve(job['remote'], job['identity'])) if resolve else job
+
+
 class CopyPlanner:
     def __init__(self, root, jobs, check_name, guard):
         self.root = root
@@ -25,7 +30,7 @@ class CopyPlanner:
             (
                 job
                 for job in self.jobs.values()
-                if job["remote"] == remote
+                if resolved_job(client, job)["remote"] == remote
                 and job["identity"] == info["identity"]
                 and job["prefix"] == info["prefix"]
                 and job["crypt"] == info["crypt"]
@@ -69,7 +74,7 @@ class CopyPlanner:
         )
         if existing is not None:
             if (
-                existing["remote"] != remote
+                resolved_job(client, existing)["remote"] != remote
                 or existing["identity"] != info["identity"]
                 or existing["prefix"] != info["prefix"]
             ):
