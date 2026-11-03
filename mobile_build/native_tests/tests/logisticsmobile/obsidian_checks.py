@@ -55,10 +55,12 @@ async def exercise_obsidian(app, encrypted):
             assert owner.provider.identity == provider.identity
             assert owner.provider.storage_namespace == provider.storage_namespace
             assert not owner.provider.closed and not provider.closed
-        assert {row.children[-1].vault_path for row in owner.rows.children} == {
-            'Native Obsidian Vault/Projects', 'Native Obsidian Vault/Home.md'}
+        assert {child.vault_path for row in owner.rows.children for child in row.children
+                if hasattr(child, 'vault_path')} == {
+            'Native Obsidian Vault/Projects', 'Native Obsidian Vault/Home.md',
+            'Native Obsidian Vault/attachment.txt'}
         await owner.toggle_folder('Native Obsidian Vault/Projects')
-        assert len(owner.rows.children) == 3
+        assert len(owner.rows.children) == 4
         assert await owner.open_note('Native Obsidian Vault/Projects/Plan.md')
         for _ in range(150):
             text = await owner.web.evaluate_javascript('document.body ? document.body.textContent : ""')
@@ -69,8 +71,12 @@ async def exercise_obsidian(app, encrypted):
             raise AssertionError('Native vault Markdown did not render')
         owner.reflow(app.adaptive.content_width(owner.destination, margin=0))
         owner.menu.on_press()
-        assert owner.sidebar.side == 'files'
-        assert list(owner.sidebar.view.children) == [owner.article]
+        if owner.sidebar.expanded:
+            assert owner.sidebar.side is None
+            assert list(owner.sidebar.view.children) == [owner.tree, owner.article]
+        else:
+            assert owner.sidebar.side == 'files'
+            assert list(owner.sidebar.view.children) == [owner.article]
         await capture_window(app, output / (label + '-tree.png'))
         owner.sidebar.show_detail()
         await asyncio.sleep(.3)
