@@ -22,6 +22,28 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativePreflightTests(unittest.TestCase):
+    def test_ios_stall_samples_only_the_identified_test_app(self):
+        with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'):
+            path = Path(directory) / 'ios-native-ui.log'
+            for command, permitted in (('/usr/bin/python', False),
+                    ('/tmp/Fixture/Logistics Mobile.app/Logistics Mobile', True)):
+                process = SimpleNamespace(returncode=0, stdout=command + '\n')
+                with patch.object(ui_tools.subprocess, 'run', return_value=process) as run:
+                    ui_tools.record_ios_stall(path, dict(pid=123))
+                self.assertEqual(run.call_count, 2 if permitted else 1)
+                if permitted:
+                    self.assertEqual(run.call_args.args[0][:3], ['sample', '123', '3'])
+                    self.assertEqual(run.call_args.kwargs['timeout'], 10)
+            for invalid in (None, True, 1, -1, '123'):
+                with patch.object(ui_tools.subprocess, 'run') as run:
+                    ui_tools.record_ios_stall(path, dict(pid=invalid))
+                    run.assert_not_called()
+
+    def test_ios_stall_sampling_failure_does_not_change_acceptance(self):
+        with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'), \
+                patch.object(ui_tools.subprocess, 'run', side_effect=subprocess.TimeoutExpired('ps', 5)):
+            ui_tools.record_ios_stall(Path(directory) / 'ios-native-ui.log', dict(pid=123))
+
     def test_real_preflight_accepts_valid_sources_and_blocks_invalid_sources_before_launch_or_reuse(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
