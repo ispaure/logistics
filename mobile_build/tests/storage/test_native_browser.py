@@ -16,6 +16,51 @@ from commonUtils.ui.native_browser import NativeBrowser
 
 
 class NativeBrowserTests(unittest.TestCase):
+    def test_automatic_image_previews_exclude_private_local_subclasses(self):
+        from base64 import b64decode
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile_build.tests.support.app import create_app
+
+        class PrivateLocalFiles(LocalFiles):
+            private = True
+
+        app = create_app(self)
+        root = app.private_root / 'preview-fixture'
+        root.mkdir()
+        data = b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=')
+        (root / 'image.png').write_bytes(data)
+        app.loop.run_until_complete(app.show_files(location=('Local files', '')))
+        browser = app.file_browser
+        for private in (False, True):
+            with self.subTest(private=private):
+                provider = (PrivateLocalFiles if private else LocalFiles)(root)
+                app.file_provider, app.file_path = provider, ''
+                if private:
+                    # CryptFiles inherits LocalFiles too. Its automatic browser
+                    # presentation must never open/decrypt a private image.
+                    with patch.object(provider, 'open', side_effect=AssertionError('Automatic private read')):
+                        app.populate_file_browser(provider.list(), location=('Private fixture', ''))
+                        self.assertIsNone(browser.thumbnail)
+                        browser.show_tiles()
+                        app.loop.run_until_complete(browser.select(browser.entries[0]))
+                        if browser.tasks:
+                            app.loop.run_until_complete(asyncio.gather(*tuple(browser.tasks)))
+                        self.assertFalse(browser.icons)
+                        self.assertTrue(callable(browser.details))
+                        # An explicit private preview still uses its own native
+                        # provider API, independently of automatic folder icons.
+                        from mobile.browser_preview import callbacks
+                        from unittest.mock import Mock
+                        provider.thumbnail = Mock(return_value=b'explicit native preview')
+                        explicit_preview, _ = callbacks(provider, app.cloud_client)
+                        self.assertEqual(explicit_preview(provider.entry('image.png'), (160, 160), lambda: False),
+                                         b'explicit native preview')
+                        provider.thumbnail.assert_called_once()
+                else:
+                    app.populate_file_browser(provider.list(), location=('Ordinary fixture', ''))
+                    self.assertTrue(callable(browser.thumbnail))
+                    self.assertEqual(browser.thumbnail(provider.entry('image.png'), (160, 160), lambda: False), data)
+
     def test_information_preview_reuses_thumbnail_and_rejects_late_selection(self):
         from base64 import b64decode
         from commonUtils.runtime.resources.local import LocalFiles
