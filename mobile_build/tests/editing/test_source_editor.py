@@ -39,27 +39,38 @@ class SourceEditorTests(unittest.TestCase):
         owner = self.open('Search.txt')
         search = owner.search
         search.query.value = 'needle'
-        with patch.object(search, 'pattern', wraps=search.pattern) as count:
-            owner.editor.value = 'needle'
-            self.app.loop.run_until_complete(asyncio.sleep(.35))
-            count.assert_not_called()
-        search.toggle()
-        with patch.object(search, 'pattern', wraps=search.pattern) as count:
-            owner.editor.value = 'needle needle'
-            self.assertEqual(count.call_count, 0)
-            self.app.loop.run_until_complete(asyncio.sleep(.35))
-            self.assertEqual(count.call_count, 1)
-            self.assertEqual(search.notice.text, '2 match(es)')
-            search.query.value = 'other'
+        async def exercise():
+            with patch.object(search, 'pattern', wraps=search.pattern) as count:
+                owner.editor.value = 'needle'
+                self.assertIsNone(search.debounce.pending)
+                count.assert_not_called()
             search.toggle()
-            self.app.loop.run_until_complete(asyncio.sleep(.35))
-            self.assertEqual(count.call_count, 1)
-            search.query.value = 'pending'
-            owner.dispose()
-            search.replace()
-            search.replace_all()
-            self.app.loop.run_until_complete(asyncio.sleep(.35))
-            self.assertEqual(count.call_count, 1)
+            recounted = asyncio.Event()
+            pattern = search.pattern
+            def recount():
+                recounted.set()
+                return pattern()
+            with patch.object(search, 'pattern', side_effect=recount) as count:
+                owner.editor.value = 'needle needle'
+                self.assertEqual(count.call_count, 0)
+                await asyncio.wait_for(recounted.wait(), 2)
+                self.assertEqual(count.call_count, 1)
+                self.assertEqual(search.notice.text, '2 match(es)')
+                search.query.value = 'other'
+                pending = search.debounce.pending
+                search.toggle()
+                self.assertTrue(pending.cancelled())
+                self.assertIsNone(search.debounce.pending)
+                self.assertEqual(count.call_count, 1)
+                search.query.value = 'pending'
+                pending = search.debounce.pending
+                owner.dispose()
+                self.assertTrue(pending.cancelled())
+                self.assertIsNone(search.debounce.pending)
+                search.replace()
+                search.replace_all()
+                self.assertEqual(count.call_count, 1)
+        self.app.loop.run_until_complete(exercise())
 
     def test_explicit_find_during_typing_uses_new_query_and_bounds_match_count(self):
         owner = self.open('Search.txt')

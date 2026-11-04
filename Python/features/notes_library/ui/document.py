@@ -726,6 +726,7 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
     def __init__(self, workspace, label):
         super().__init__()
         self.workspace = workspace
+        self.library_label = workspace.library_label
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(label)
         self.init_document()
@@ -771,6 +772,9 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
     def parent_folder(self):
         if self.index >= 0:
             self.workspace.document_tabs.parent_folder(self)
+
+    def reveal_folder(self, path):
+        return self.workspace.reveal_folder(path)
 
     def showEvent(self, event):
         super().showEvent(event)
