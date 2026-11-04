@@ -135,11 +135,11 @@ class SettingsUITests(unittest.TestCase):
         scanner.next.return_value = json.dumps(inventory)
         java = SimpleNamespace(jclass=Mock(return_value=Mock(return_value=scanner)))
         with patch.dict('sys.modules', {'java': java}), \
-                patch('mobile.settings.licenses.sys', SimpleNamespace(platform='android')), \
+                patch('mobile.settings.licenses.get_current_platform', return_value='android'), \
                 patch.object(app._impl, 'native', Mock(), create=True), \
                 patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
             show_licenses(app)
-        collect.assert_called_once_with(native_inventory=inventory)
+        collect.assert_called_once_with(platform='android', native_inventory=inventory)
         java.jclass.assert_called_once_with('java.util.Scanner')
         scanner.close.assert_called_once_with()
 
@@ -151,13 +151,21 @@ class SettingsUITests(unittest.TestCase):
         scanner.next.return_value = json.dumps(dict(schema=2, platform='android', components=[]))
         java = SimpleNamespace(jclass=lambda name: lambda *args: scanner)
         with patch.dict('sys.modules', {'java': java}), \
-                patch('mobile.settings.licenses.sys', SimpleNamespace(platform='android')), \
+                patch('mobile.settings.licenses.get_current_platform', return_value='android'), \
                 patch.object(app._impl, 'native', Mock(), create=True), \
                 patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
             view = show_licenses(app)
-        collect.assert_called_once_with(native_inventory=None)
+        collect.assert_called_once_with(platform='android', native_inventory=None)
         self.assertIsNotNone(view)
         scanner.close.assert_called_once_with()
+
+    def test_ios_notice_collector_uses_mobile_dependency_set(self):
+        from mobile.settings.licenses import show_licenses
+        app = self.make_app()
+        with patch('mobile.settings.licenses.get_current_platform', return_value='iOS'), \
+                patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
+            show_licenses(app)
+        collect.assert_called_once_with(platform='ios', native_inventory=None)
 
     def test_about_license_navigation_search_and_native_back(self):
         import toga
@@ -614,6 +622,16 @@ class SettingsUITests(unittest.TestCase):
         page = SettingsCategories(app).help()
         self.assertEqual([child.text for child in page.children],
                          ['Help', 'Mobile documentation', 'About'])
+
+    def test_about_recognizes_chaquopy_linux_as_android(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'source.json'
+            path.write_text(json.dumps(dict(logistics_commit='a' * 40)))
+            with patch('mobile.settings.information.sys.platform', 'linux'), \
+                    patch('sys.getandroidapilevel', return_value=36, create=True):
+                text = build_information('0.2.0', path)
+            self.assertIn('Platform: Android', text)
+            self.assertNotIn('Platform: linux', text)
 
     def test_about_uses_packaged_identity_without_git(self):
         with TemporaryDirectory() as directory:
