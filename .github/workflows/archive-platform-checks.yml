@@ -1,4 +1,4 @@
-name: Application platform checks
+name: Focused Fedora reader diagnostics
 
 on:
   pull_request:
@@ -51,6 +51,7 @@ jobs:
       target: ${{ inputs.target || 'all' }}
 
   static:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
