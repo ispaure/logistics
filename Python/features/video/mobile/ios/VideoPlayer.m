@@ -202,6 +202,10 @@
     [self.controls addArrangedSubview:self.message];
     self.timeLabel = [[UILabel alloc] init];
     self.timeLabel.textColor = UIColor.whiteColor;
+    // Match the dark playback chrome even when the deck overlays bright video.
+    self.timeLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:.8];
+    self.timeLabel.layer.cornerRadius = 4;
+    self.timeLabel.clipsToBounds = YES;
     self.timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:13 weight:UIFontWeightRegular];
     self.timeLabel.adjustsFontSizeToFitWidth = YES;
     self.timeLabel.text = @"0:00 / 0:00";

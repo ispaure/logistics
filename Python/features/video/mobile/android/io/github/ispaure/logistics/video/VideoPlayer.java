@@ -256,6 +256,9 @@ public final class VideoPlayer {
         controls.addView(message);
         timeLabel = new TextView(activity);
         timeLabel.setTextColor(Color.WHITE);
+        // Keep contrast local to the label, including bright HDR frames.
+        timeLabel.setBackgroundColor(0xcc000000);
+        timeLabel.setPadding(dp(6), dp(2), dp(6), dp(2));
         timeLabel.setText("0:00 / 0:00");
         timeLabel.setContentDescription("Playback time");
         controls.addView(timeLabel);

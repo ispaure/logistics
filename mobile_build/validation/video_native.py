@@ -60,7 +60,7 @@ def ios(workspace):
     subprocess.run(['xcrun', 'clang', '-fsyntax-only', '-fobjc-arc', '-fmodules',
         '-fmodules-cache-path=' + str(workspace / 'modules'),
         '-target', 'arm64-apple-ios15.0-simulator', '-isysroot', sdk,
-        '-I', str(includes.parent), str(source)], check=True)
+        '-I', str(includes.parent), '-I', str(ROOT / 'Python/mobile/ios'), str(source)], check=True)
 
 
 def main():
