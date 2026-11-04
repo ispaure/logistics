@@ -29,6 +29,7 @@
 @property(nonatomic, copy) NSString *videoURL;
 @property(nonatomic, strong) LGScreenAwakeLease *awakeLease;
 @property(nonatomic, copy) NSString *subtitleJSON;
+@property(nonatomic, copy) NSString *pendingSubtitleURL;
 @property(nonatomic) int64_t startMilliseconds; // Deferred resume/paused seek; -1 means no pending seek.
 @property(nonatomic) int64_t knownDuration;
 @property(nonatomic) BOOL resumeSeekSubmitted;
@@ -116,6 +117,7 @@
 
 @interface LGVideoController (PlaybackControls)
 - (void)installPlaybackTools;
+- (void)setting:(NSString *)key value:(id)value;
 - (void)applyPlaybackOptions;
 - (void)applyPlaybackRate;
 - (void)applyPictureSize;
@@ -1122,20 +1124,20 @@
     [self setControlsShown:YES];
     UIAlertController *menu = [self menu:text ? @"Subtitles" : @"Audio tracks" sender:sender];
     if (text) [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitles off" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        if ([self canPlay:NO]) [self.player deselectAllTextTracks];
+        if ([self canPlay:NO]) { [self.player deselectAllTextTracks]; [self setting:@"subtitle_track" value:@(-1)]; }
     }]];
     NSArray<VLCMediaPlayerTrack *> *tracks = text ? self.player.textTracks : self.player.audioTracks;
     for (NSUInteger index = 0; index < tracks.count; index++) {
         VLCMediaPlayerTrack *track = tracks[index];
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[self trackLabel:track index:index] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            if ([self canPlay:NO]) track.selectedExclusively = YES;
+            if ([self canPlay:NO]) { track.selectedExclusively = YES; [self setting:text ? @"subtitle_track" : @"audio_track" value:@(index)]; }
         }]];
     }
     if (text) {
         NSArray *subtitles = [NSJSONSerialization JSONObjectWithData:[self.subtitleJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
         for (NSDictionary *subtitle in subtitles) {
             [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:subtitle[@"name"] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-                if ([self canPlay:NO]) [self.player addPlaybackSlave:[NSURL URLWithString:subtitle[@"url"]] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES];
+                if ([self canPlay:NO]) { [self.player addPlaybackSlave:[NSURL URLWithString:subtitle[@"url"]] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES]; [self emitCommand:@"subtitleSelect" value:subtitle[@"name"]]; }
             }]];
         }
     }

@@ -64,7 +64,7 @@ class PlaybackPanels:
 
     def select_audio(self, index):
         if self.controls_allowed():
-            self.player.setActiveAudioTrack(self.audio_tracks.itemData(index))
+            self.change_setting('audio_track', self.audio_tracks.itemData(index))
 
     def close_settings(self):
         for combo in self.settings_pane.findChildren(qt.QComboBox):

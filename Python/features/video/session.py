@@ -38,6 +38,9 @@ class PlaybackSettings:
     audio_language: str = ""
     subtitle_language: str = ""
     autoplay_next: bool = False
+    audio_track: int | None = None
+    subtitle_track: int | None = None
+    subtitle_file: str = ""
 
     @classmethod
     def from_dict(cls, values):
@@ -53,6 +56,12 @@ class PlaybackSettings:
             or type(result.autoplay_next) is not bool
         ):
             raise ValueError("Invalid playback preferences.")
+        if (not isinstance(result.subtitle_file, str) or len(json.dumps(result.subtitle_file)) > 2048
+                or any(c in result.subtitle_file for c in '\x00\r\n')):
+            raise ValueError('Invalid subtitle resource.')
+        for value in (result.audio_track, result.subtitle_track):
+            if value is not None and (type(value) is not int or not -1 <= value <= 10000):
+                raise ValueError('Invalid playback track.')
         for value in (result.subtitle_delay_ms, result.audio_delay_ms):
             if type(value) is not int or abs(value) > 600000:
                 raise ValueError("Delay must be within ten minutes.")

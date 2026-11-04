@@ -63,6 +63,7 @@
 }
 - (void)applyPlaybackOptions {
     if (!self.player || self.retired) return;
+    if (self.pendingSubtitleURL.length) [self attachSubtitleURL:self.pendingSubtitleURL];
     NSDictionary *options = [self playbackOptions];
     float rate = [options[@"rate"] floatValue];
     UIButtonConfiguration *speed = self.portraitSpeedButton.configuration;
@@ -90,6 +91,18 @@
             if (!preferred.length) continue;
             for (VLCMediaPlayerTrack *track in entry[1])
                 if (track.language.length && [track.language caseInsensitiveCompare:preferred] == NSOrderedSame) { track.selectedExclusively = YES; break; }
+        }
+    }
+    for (NSString *key in @[@"audio_track", @"subtitle_track"]) {
+        NSNumber *selected = options[key];
+        if (![selected isKindOfClass:NSNumber.class]) continue;
+        BOOL text = [key isEqualToString:@"subtitle_track"];
+        NSArray *tracks = text ? self.player.textTracks : self.player.audioTracks;
+        NSInteger index = selected.integerValue;
+        if (text && index == -1) [self.player deselectAllTextTracks];
+        else if (index >= 0 && index < (NSInteger)tracks.count) {
+            VLCMediaPlayerTrack *track = tracks[index];
+            if (!track.isSelected) track.selectedExclusively = YES;
         }
     }
     // Apply requested speed after the other output and track preferences.
@@ -299,7 +312,12 @@
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:autoNext ? @"✓ Play next automatically" : @"Play next automatically" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"autoplay_next" value:@(!autoNext)]; }]];
     [self presentPlaybackDialog:menu];
 }
-- (void)attachSubtitleURL:(NSString *)url { if ([self canPlay:NO]) [self.player addPlaybackSlave:[NSURL URLWithString:url] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES]; }
+- (void)attachSubtitleURL:(NSString *)url {
+    self.pendingSubtitleURL = url;
+    if ([self canPlay:NO] && self.player.isPlaying &&
+        [self.player addPlaybackSlave:[NSURL URLWithString:url] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES])
+        self.pendingSubtitleURL = nil;
+}
 - (void)showSubtitleBrowser:(NSString *)json {
     if (![self canPlay:NO]) return;
     NSArray *rows = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];

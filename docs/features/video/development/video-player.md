@@ -65,3 +65,39 @@ retain Apply/Cancel. The native chrome probe checks Fit/Fill geometry and gravit
 menu presentation without Cancel actions, inside/outside gesture filtering, and
 backdrop dismissal. Landscape coverage also checks that the filename stays
 visible above the timeline when the navigation bar has limited room.
+
+## Per-video resume preferences
+
+`VideoSettingsStore` writes validated `PlaybackSettings` into `VideoProgress`,
+sharing its lock, history generation and encryption boundary. Completed playback
+stores position zero while retaining settings. Legacy global preferences seed
+videos without a saved record; new choices do not write that global file.
+Local identity uses at most three 64 KiB decoded reads plus size; remote identity
+remains resource/revision based. Existing path records are read as a migration
+fallback before the first fingerprint checkpoint. Embedded track selections are
+backend track IDs on Android and ordered track indices on iOS/desktop.
+
+Regression coverage checks local moves across provider roots, completion,
+replacement invalidation, encrypted LocalCrypt settings, and mobile lifetimes.
+SDK compile checks validate adapter interfaces, not native playback acceptance.
+
+## Mobile PiP controls and captions
+
+Mobile never creates an Undo seek button or menu item. Android registers
+package-local immutable PendingIntents for ten-second back/forward and Play/Pause,
+updates their state only when it changes, and unregisters its receiver on disposal.
+VLC's subtitle surface stays attached through the PiP transition.
+
+iOS PiP delegate seeks use the bounded 64-bit on-screen seek path, including its
+paused-position bookkeeping. Every system request completes, including a no-op at
+a boundary, and seeking eligibility respects the control lock and access policy.
+The native `video_chrome_tools --pip-controls` probe checks forward/backward,
+start-boundary completion and control locking with real UIKit/VLC. It does not
+establish system PiP-window rendering or physical-device button interaction.
+
+**Unresolved:** iOS PiP captions. The current VLC Apple output draws subtitles in
+a separate view while submitting the uncomposited video sample buffer to PiP.
+Correcting that requires caption composition in the native video output; changing
+track selection or the Logistics control overlay cannot put that view into PiP.
+See the upstream [Apple sample-buffer output](https://github.com/videolan/vlc/blob/master/modules/video_output/apple/VLCSampleBufferDisplay.m).
+Do not claim embedded, external or bitmap PiP captions are fixed by the seek work.
