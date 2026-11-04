@@ -18,9 +18,7 @@ from mobile_build.tools import stage
 
 
 def fixtures(source, rclone):
-    spec=importlib.util.spec_from_file_location('image_qa_fixture',source/'Python/tests/notebooks/image_fixtures.py')
-    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-    data=module.fixture_bytes()
+    data=(source/'mobile_build/native_tests/tests/logisticsmobile/notebook-image-fixture.rmdoc').read_bytes()
     password=subprocess.check_output([str(rclone),'obscure','image-qa-crypt-password'],text=True,timeout=15).strip()
     credentials=BytesIO()
     with ZipFile(credentials,'w') as archive:

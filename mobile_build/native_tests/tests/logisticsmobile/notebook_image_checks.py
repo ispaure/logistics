@@ -166,3 +166,236 @@ class ImageWorkflow:
         self.cases.append('cross-page Cut preserves original geometry under different viewport zoom/scroll')
         await self.capture('cut-pasted')
         return self.cases
+
+
+IMAGE_FIXTURE_SHA256 = '35589f44738aa9281fe494e0cfbcef15ac9f5827610ac85ab904e5863bb9984e'
+
+
+def _cleanup_image_run(app, run):
+    """Synchronous teardown also runs during timeout/cancellation; never own credentials."""
+    from services.documents.mobile_notebooks import close_notebook, panels
+    from commonUtils.persistence import atomic_write_json
+    cleanup=run['report']['cleanup']
+    errors=cleanup['errors']
+    def attempt(label, action):
+        try:
+            action()
+        except BaseException as error:
+            errors.append(label+': '+type(error).__name__+': '+str(error))
+    def owned(panel):
+        if panel is None or id(panel) in run['original_panels']:
+            return False
+        if id(panel) in run['panels']:
+            return True
+        # An open can fail after publication but before remember(). Admit that
+        # partial panel only through its resource, never its arrival time.
+        resource=getattr(getattr(panel,'document',None),'resource',None)
+        provider=getattr(resource,'provider',None)
+        if provider is not None and any(provider is row['provider'] for row in run['providers']):
+            return True
+        if run['root'] is None or provider is None:
+            return False
+        from pathlib import Path
+        try:
+            return Path(provider.root).resolve().is_relative_to(run['root'].resolve())
+        except (AttributeError,TypeError,ValueError,OSError,RuntimeError):
+            return False
+    current=getattr(app,'notebook_panel',None)
+    for panel in [*panels(app).values(),current]:
+        if owned(panel):
+            run['remember'](panel)
+    for panel in run['panels'].values():
+        session=getattr(panel,'session',None)
+        key=getattr(session,'id',None)
+        def retire(panel=panel,key=key,session=session):
+            if panels(app).get(key) is panel:
+                # A timed-out canvas can still be busy. Retire its bridge first;
+                # pending production waits then stop at the existing lifetime guard.
+                if getattr(panel,'busy',False):
+                    panel.retire_canvas()
+                if not close_notebook(app,key,'discard'):
+                    raise AssertionError('Owned notebook refused teardown')
+            elif not getattr(panel,'closed',False):
+                panel.dispose()
+            if session is not None and app.workspace.sessions.get(key) is session:
+                app.workspace.close(key,guard=lambda session:True)
+            assert panels(app).get(key) is not panel
+            assert session is None or app.workspace.sessions.get(key) is not session
+        attempt('panel '+str(key),retire)
+    for record in run['providers']:
+        if not record['closed']:
+            def close(record=record):
+                getattr(record['provider'],'close',lambda:None)()
+                record['closed']=True
+            attempt('provider '+record['label'],close)
+    for repository,key in run['recoveries'].values():
+        attempt('recovery '+key,lambda repository=repository,key=key:repository.delete(key))
+    previous=run['previous_panel']
+    def restore():
+        if previous is None:
+            if hasattr(app,'notebook_panel'):
+                del app.notebook_panel
+        else:
+            app.notebook_panel=previous
+        assert run['original_sessions'] <= set(app.workspace.sessions)
+        for key,panel in run['original_registry'].items():
+            assert panels(app).get(key) is panel
+            assert getattr(panel,'closed',False)==run['original_closed'][id(panel)]
+        active=run['previous_active']
+        if active is not None:
+            app.workspace.activate(active)
+        # Restore the retained recent list as well: synthetic opens must not
+        # evict pre-existing entries from its bounded history.
+        recent=run['recent']
+        if recent is not None:
+            atomic_write_json(recent.path,run['recent_items'],max_bytes=64*1024,durable_directory=True)
+            recent.items=run['recent_items']
+        app.save_workspace()
+        app.routes.render(run['previous_destination'])
+        assert getattr(app,'notebook_panel',None) is previous
+        assert app.cloud_client is run['client']
+        assert getattr(app.cloud_client,'generation',None)==run['credential_generation']
+        cleanup['original_restored']=True
+    attempt('restore original session',restore)
+    if run['temporary'] is not None:
+        attempt('owned files',run['temporary'].cleanup)
+    cleanup['files_removed']=run['root'] is None or not run['root'].exists()
+    cleanup['providers_closed']=all(record['closed'] for record in run['providers'])
+    cleanup['panels_closed']=all(getattr(panel,'closed',False) for panel in run['panels'].values())
+    owned_sessions={id(panel.session) for panel in run['panels'].values() if getattr(panel,'session',None) is not None}
+    cleanup['sessions_removed']=(not any(id(panel) in run['panels'] for panel in panels(app).values())
+        and not any(id(session) in owned_sessions for session in app.workspace.sessions.values()))
+    cleanup['credential_generation_unchanged']=(app.cloud_client is run['client'] and
+        getattr(app.cloud_client,'generation',None)==run['credential_generation'])
+    for key in ('original_restored','files_removed','providers_closed','panels_closed',
+                'sessions_removed','credential_generation_unchanged'):
+        if not cleanup.get(key):
+            errors.append('Cleanup did not establish '+key)
+
+
+async def exercise_notebook_images(app, *, output=None):
+    """Required provider workflow; use the already-imported synthetic Secret remote.
+
+    The caller owns the stage deadline. This function never imports credentials
+    and propagates failures after publishing partial evidence and owned teardown.
+    """
+    from copy import deepcopy
+    from hashlib import sha256
+    from io import BytesIO
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from commonUtils.runtime.resources.local import LocalFiles
+    from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+    from features.rclone.localcrypt.mobile.resources import CryptFiles
+    from services.documents.storage import DocumentResource
+    from services.documents.mobile_notebooks import open_notebook,close_notebook,panels
+    from .fixtures import capture_window
+    import base64
+    import traceback
+    report=dict(success=False,providers=[],cleanup=dict(errors=[],original_restored=False),error='',
+        scope='Native WebView/PDF renderer and actual Local/Secret LocalCrypt; synthetic pointer-handler delivery',
+        fixture_sha256=IMAGE_FIXTURE_SHA256)
+    app._notebook_image_report=report
+    report['phase']='fixture'
+    try:
+        original=Path(__file__).with_name('notebook-image-fixture.rmdoc').read_bytes()
+        assert sha256(original).hexdigest()==IMAGE_FIXTURE_SHA256,'Staged notebook image fixture differs'
+        original_book=Notebook.read(original)
+        original_pdf=original_book.members[original_book.id+'.pdf']
+    except BaseException:
+        report['error']=traceback.format_exc()
+        report['cleanup']['not_started']=True
+        raise
+    output=Path(output) if output is not None else Path(app.paths.cache)/'notebook-image-evidence'
+    previous=getattr(app,'notebook_panel',None)
+    recent=getattr(app,'recent_documents',None)
+    run=dict(report=report,temporary=None,root=None,panels={},providers=[],recoveries={},
+        original_registry=dict(panels(app)),original_closed={id(panel):getattr(panel,'closed',False) for panel in panels(app).values()},
+        original_panels={id(panel) for panel in panels(app).values()} | ({id(previous)} if previous is not None else set()),
+        original_sessions=set(app.workspace.sessions),
+        previous_panel=previous,previous_active=app.workspace.active,
+        previous_destination=app.native_host.state.destination,recent=recent,
+        recent_items=deepcopy(recent.items) if recent is not None else None,
+        client=app.cloud_client,credential_generation=getattr(app.cloud_client,'generation',None))
+    def remember(panel):
+        run['panels'][id(panel)]=panel
+        document=getattr(panel,'document',None)
+        if document is not None and document.recovery is not None:
+            run['recoveries'][(id(document.recovery),document.key)]=(document.recovery,document.key)
+    run['remember']=remember
+    primary=None
+    try:
+        output.mkdir(parents=True,exist_ok=True)
+        temporary=TemporaryDirectory(prefix='notebook-images-',dir=app.private_root)
+        root=Path(temporary.name)
+        run.update(temporary=temporary,root=root)
+        app.set_feature_enabled('notebooks',True,refresh=False)
+        app.show_home()
+        for label in ('Local','LocalCrypt'):
+            report['phase']=label+':open'
+            folder=root/label;folder.mkdir()
+            provider=LocalFiles(folder) if label=='Local' else CryptFiles(folder,app.cloud_client,'Secret')
+            record=dict(label=label,provider=provider,closed=False);run['providers'].append(record)
+            provider.create_file('images.rmdoc',BytesIO(original))
+            assert await open_notebook(app,resource=DocumentResource(provider,'images.rmdoc',max_bytes=MAX_ARCHIVE))
+            panel=app.notebook_panel;remember(panel)
+            backend=type(panel.web._impl).__module__
+            assert backend.startswith(('toga_iOS.','toga_android.')),backend
+            async def evaluate(code):
+                return await panel.web.evaluate_javascript(code)
+            async def capture(phase):
+                await capture_window(app,output/(label+'-'+phase+'.png'))
+                encoded=await evaluate("canvas.toDataURL('image/png')")
+                (output/(label+'-'+phase+'-canvas.png')).write_bytes(base64.b64decode(encoded.split(',',1)[1]))
+            workflow=ImageWorkflow(evaluate,lambda:panel.editor,capture)
+            report['phase']=label+':capture-transform-arrange'
+            await workflow.run()
+            expected=signature(panel.editor.notebook)
+            assert panel.document.resource.read()==original,'Source changed before Save'
+            if label=='Local':
+                assert signature(panel.document.recovery.open(panel.document.key))==expected
+            else:
+                assert panel.document.recovery is None
+            await workflow.send(dict(op='save'))
+            saved=panel.document.resource.read();book=Notebook.read(saved)
+            assert signature(book)==expected
+            assert book.members[book.id+'.pdf']==original_pdf
+            (output/(label+'-saved.rmdoc')).write_bytes(saved)
+            if label=='LocalCrypt':
+                ciphertext=provider._physical('images.rmdoc').read_bytes()
+                assert b'%PDF' not in ciphertext and b'PNG' not in ciphertext
+            assert close_notebook(app,panel.session.id,'discard')
+            report['phase']=label+':reopen'
+            assert await open_notebook(app,resource=DocumentResource(provider,'images.rmdoc',max_bytes=MAX_ARCHIVE))
+            panel=app.notebook_panel;remember(panel)
+            reopened=ImageWorkflow(evaluate,lambda:panel.editor,capture)
+            await reopened.idle();await evaluate(HELPERS);await reopened.unlock()
+            assert signature(panel.editor.notebook)==expected
+            await capture('reopened')
+            report['providers'].append(dict(provider=label,backend=backend,cases=workflow.cases,
+                saved_sha256=sha256(saved).hexdigest(),password_reprompt=True,pdf_ciphertext_preserved=True,
+                recovery_checked=label=='Local',reopened=True))
+            assert close_notebook(app,panel.session.id,'discard')
+            getattr(provider,'close',lambda:None)();record['closed']=True
+        assert [row['provider'] for row in report['providers']]==['Local','LocalCrypt']
+    except BaseException as error:
+        primary=error
+        report['error']=traceback.format_exc()
+        raise
+    finally:
+        try:
+            _cleanup_image_run(app,run)
+            report['evidence_directory']=output.name
+            report['artifact_names']=sorted(p.name for p in output.iterdir() if p.suffix in ('.png','.rmdoc')) if output.is_dir() else []
+        except BaseException as cleanup_error:
+            report['cleanup']['errors'].append(type(cleanup_error).__name__+': '+str(cleanup_error))
+        if report['cleanup']['errors']:
+            detail='Notebook image cleanup: '+'; '.join(report['cleanup']['errors'])
+            if primary is not None:
+                primary.add_note(detail)
+            else:
+                report['error']=detail
+                raise AssertionError(detail)
+    report['phase']='complete'
+    report['success']=True
+    return report

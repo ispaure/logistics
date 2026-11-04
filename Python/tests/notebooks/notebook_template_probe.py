@@ -14,7 +14,7 @@ from features.notebooks.canvas import editor_html
 from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
 from features.notebooks.protocol import update_script, stroke_script
-from features.notebooks.templates import CATALOG
+from features.notebooks.templates import FORM_TEMPLATES, CATALOG
 from logistics_build.build_retention import scratch
 from tests.notebooks.webengine_driver import javascript, wait_until
 
@@ -56,6 +56,7 @@ def main(output):
                         wait(lambda: js(view, "$('pdfBackground').hidden||($('pdfBackground').complete&&$('pdfBackground').naturalWidth>0)"))
                         QTest.qWait(30)
                         assert js(view, "$('pageTemplate').value") == template
+                        assert js(view, "getComputedStyle($('templateFormatControl')).display!=='none'") == (template in FORM_TEMPLATES)
                         if template.startswith('Logistics '):
                             assert js(view, "$('templateFormat').value") == paper_format
                         assert js(view, "$('pdfBackground').hidden") == (template == 'Blank')
@@ -101,14 +102,14 @@ def main(output):
                 book.members[page.template + '.template'] = b'{"foreign":"artwork"}'
                 js(view, update_script(editor.state()))
                 assert js(view, "$('pdfBackground').hidden&&$('templateNotice').textContent.includes('unavailable')"), 'Foreign artwork was silently replaced'
-                assert js(view, "$('templateFormat').disabled&&$('templateVisible').disabled&&!$('pageTemplate').disabled")
+                assert js(view, "$('templateFormatControl').hidden&&$('templateFormat').disabled&&$('templateVisible').disabled&&!$('pageTemplate').disabled")
                 assert js(view, "$('templateDescription').textContent.includes('Imported')"), 'Imported artwork incorrectly claimed as original'
                 # Imported names which happen to match Object.prototype keys
                 # still need a preserved option and an unavailable-artwork notice.
                 for reference in ('toString', '__proto__', 'P Lines small Move'):
                     page.template = reference
                     js(view, update_script(editor.state()))
-                    assert js(view, "$('pageTemplate').value===" + json.dumps(reference) + "&&$('templateNotice').textContent.includes('unavailable')")
+                    assert js(view, "$('pageTemplate').value===" + json.dumps(reference) + "&&$('templateNotice').textContent.includes('unavailable')&&$('templateFormatControl').hidden")
                 # Exercise one-page changes and Add Page through the real shared
                 # UI queue, including inheritance without duplicating handwriting.
                 def change_template(template):

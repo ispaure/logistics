@@ -26,6 +26,41 @@ def exception_summary(formatted):
                  if line.strip()), 'Native check failed without an exception summary.')
 
 
+async def required_notebook_images(app):
+    """Require both providers before publishing the normal native image case."""
+    from .notebook_image_checks import exercise_notebook_images
+    try:
+        result = await asyncio.wait_for(measure(app, 'notebook-images',
+            exercise_notebook_images(app)), timeout=120)
+        app._notebook_image_report = result
+        assert isinstance(result, dict) and result.get('success') is True, result
+        providers = result.get('providers', [])
+        assert len(providers) == 2 and {row['provider'] for row in providers} == {'Local', 'LocalCrypt'}, result
+        assert all(row.get('reopened') and row.get('password_reprompt') for row in providers), result
+    except BaseException as error:
+        report = getattr(app, '_notebook_image_report', None)
+        if not isinstance(report, dict):
+            report = app._notebook_image_report = dict(providers=[])
+        report['success'] = False
+        report.setdefault('error', repr(error))
+        raise
+    return result
+
+
+async def localcrypt_with_required_images(app, passed):
+    from .localcrypt_checks import exercise_localcrypt
+    notebook_image_calls = 0
+    async def notebook_images():
+        nonlocal notebook_image_calls
+        notebook_image_calls += 1
+        assert notebook_image_calls == 1, 'Image workflow invoked more than once'
+        return await required_notebook_images(app)
+    await measure(app, 'localcrypt', exercise_localcrypt(app, passed,
+        notebook_images=notebook_images))
+    assert notebook_image_calls == 1, 'Required image workflow was not invoked'
+    passed.append('native_notebook_images')
+
+
 async def exercise(app):
     timings = SuiteTimings(Path(app.paths.cache) / 'logistics-native-ui-timings.json')
     app._native_suite_timings = timings
@@ -82,8 +117,7 @@ async def exercise(app):
         await measure(app, 'chat', exercise_chat(app, passed))
         from .connection_checks import exercise_connections
         await measure(app, 'connections', exercise_connections(app, fixtures, background_comic, passed))
-        from .localcrypt_checks import exercise_localcrypt
-        await measure(app, 'localcrypt', exercise_localcrypt(app, passed))
+        await localcrypt_with_required_images(app, passed)
         from .ui_review import exercise_ui_review
         ui_review = await measure(app, 'ui-review', exercise_ui_review(app))
         print('LOGISTICS_UI_REVIEW=complete; checking native browser Back', flush=True)
@@ -111,6 +145,7 @@ async def exercise(app):
                   success=success, error=error, source=source, native_picker_tested=False)
     report['timings'] = timings.summary()
     report['pdf_edge_links'] = locals().get('pdf_edge_links', getattr(app, '_native_pdf_edge_links', None))
+    report['notebook_images'] = getattr(app, '_notebook_image_report', None)
     report['navigation'] = locals().get('navigation_proof')
     report['ui_review'] = locals().get('ui_review')
     report['independent_windows_tested'] = app.scene_manager.supported

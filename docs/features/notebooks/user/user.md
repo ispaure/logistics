@@ -164,7 +164,8 @@ the toolbar, to change only the current page. These changes support Undo/Redo.
 Choose Blank, lined paper (large: 21 rules; small: 41), the native
 25-rule medium, or Logistics' more distinct 31-rule medium. Grid, Dots,
 Restaurant review, Meeting notes, Daily planner, Checklist, Cornell notes and Weekly planner are also available.
-**Template format** selects Paper Pro or Paper Pro Move for Logistics layouts.
+**Template format** selects Paper Pro or Paper Pro Move for layouts with distinct
+versions. It is hidden for Blank, repeating lined/grid/dot paper and imported templates.
 **Show template** hides only the background in Logistics; it leaves writing intact.
 These are per-page edits with Undo/Redo, Save, recovery and page-copy support.
 New pages inserted after the current page inherit its template, size and
@@ -176,7 +177,9 @@ Desktop and large tablets start with Paper Pro; phones start with Paper Pro Move
 centered, top-aligned region of the same page, expanding to include writing beyond
 its left, right or bottom edges. Pro reveals the surrounding paper. Select Pro
 to write in those extra margins. Paper view is a session display choice, separate
-from the saved template format; changing it does not edit the notebook.
+from the saved template format; changing it does not edit the notebook. Your choice
+applies across all pages of the open document, including after Reset zoom. Reopening
+the document starts with the automatic device framing again.
 
 **Save / Save As** retains the original notebook with editable per-page template
 settings and vector artwork. For reMarkable, use **Export Copy…** (mobile:

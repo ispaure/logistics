@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 
-async def exercise_localcrypt(app, passed):
+async def exercise_localcrypt(app, passed, *, notebook_images=None):
     def canvas(owner):
         spread = getattr(owner, 'provider_spread', None)
         return spread.canvases[0] if spread is not None else owner.crypt_image
@@ -638,6 +638,10 @@ async def exercise_localcrypt(app, passed):
     provider = CryptFiles(app.private_root / 'NativeMutationCrypt', app.cloud_client, 'Secret')
     await exercise_file_mutations(app, provider)
     await exercise_cross_storage(app, provider)
+    # The normal suite supplies its required, bounded image stage while Secret
+    # is still live. Focused LocalCrypt-only probes retain their original scope.
+    if notebook_images is not None:
+        await notebook_images()
     await app.clear_cloud()
     assert not browser.icons and not browser.info.children and not browser.entries
     passed.append('native_localcrypt_file_management')
