@@ -120,10 +120,30 @@ See [rmscene upstream](https://github.com/ricklupton/rmscene) and the
 
 ## Page template model and views
 
+### Template artwork and compatibility wording
+
+The notebook source package and mobile manifest contain no reMarkable PNG, SVG,
+PDF or `.template` artwork assets. `templates.geometry()` generates original
+Logistics line paths and text labels; SVG previews, custom template JSON and PDF
+backgrounds all derive from those primitives. Native ruled exports store only
+`P Lines small`, `P Lines medium` and `P Lines large` references, letting the
+user's reMarkable supply its installed background. User-imported artwork remains
+private document content and is preserved, not added to the application catalog.
+The vendored MIT-licensed rmscene codec is file-format code, not template artwork.
+
+Native lined menu labels say “reMarkable compatible”; selectors identify the
+Logistics previews/layouts as original and state that Logistics is not affiliated
+with or endorsed by reMarkable. Original everyday layouts include Checklist,
+Cornell notes and Weekly planner alongside the ruled, grid, dots, restaurant,
+meeting and daily-planner options. No workout or paid workbook replicas are
+included. `test_template_catalog.py` checks generated artwork, the package asset
+boundary, native reference-only exports and compatibility wording.
+
+
 `templates.py` owns the original vector catalog, user-confirmed lined counts
 (21 large, 25 native medium, 41 small), an additional 31-rule medium, saved page
-format/visibility and shared crop bounds. Stock names remain native `.pagedata`
-and `cPages.pages[].template` references; no PDF or ink strokes are synthesized.
+format/visibility and shared crop bounds. Saves retain stock names as native `.pagedata`
+and `cPages.pages[].template` references; no background ink strokes are synthesized.
 Custom layouts include original `.template` JSON artwork in the archive.
 Their format and Logistics-only visibility live in an owned page sidecar, so
 recovery, duplication and page transfer retain them. Cross-notebook copies also
@@ -140,6 +160,37 @@ Template edits mark structure dirty even when page IDs do not change. Export
 must therefore serialize page references on every structural change, rather than
 only a reordered page list. Failed checkpoints restore the prior page metadata
 and assets. PDF-backed notebooks reject template replacement.
+
+`remarkable_export.py` owns portable **Export Copy / Export .rmdoc**, shared by
+desktop and mobile. A notebook with Logistics templates or hidden nonblank rules
+gets a vector PDF background containing all its pages. Native `.rm` scene bytes
+are unchanged. The copy has `fileType: pdf`, `originalPageCount`, per-page PDF
+redirects and Blank template references to avoid a second background. Save,
+Save As and recovery keep the editable source notebook, while already PDF-backed
+documents keep their embedded PDF unchanged. Source objects and members are not
+mutated. Unknown visible artwork blocks conversion rather than becoming blank.
+Native scene units are 226 per inch; PDF page boxes and vector primitives use
+72/226 points per unit, matching the [upstream renderer](https://github.com/ricklupton/rmc/blob/main/src/rmc/exporters/svg.py).
+Structured forms have distinct Pro (1404 × 1872 units) and Move (821 × 1460
+units) PDF page sizes. Repeating backgrounds keep the shared full-size canvas.
+Page boxes extend symmetrically around native X=0 and downward to retain all
+recognized ink, including hidden layers. Unsupported objects block conversion
+when their bounds cannot be determined safely. An embedded PDF metadata marker identifies this coordinate contract. The
+editor positions those exported PDF images at their physical size relative to
+centered native ink; existing imported PDF view behavior stays unchanged.
+Native notebook editing still uses its original horizontal frame, so imported
+ink outside that frame is preserved in exports but is not fully editable in
+the Logistics canvas.
+PDF generation uses the existing pinned `pypdf` runtime, original template
+primitives and Helvetica, with no rasterization or additional dependency.
+
+The original named-asset export was tested in reMarkable Desktop 3.28.1: import
+retained both live-ink pages and their `.pagedata` names but discarded the custom
+`.template` files. The user observed ink on Layer 1 and blank backgrounds on both
+pages. This is an importer boundary, not a missing-ink problem. PDF-backed
+copies are the portable route; custom backgrounds do not become registered
+reMarkable notebook templates. Their template-picker and page-view behavior
+therefore differ from native stock notebooks.
 
 Desktop and mobile share the selector, background image, crop and pointer mapping.
 The background sits below the transparent ink group, so erasing never removes
@@ -159,10 +210,20 @@ native ink, undo/redo, recovery, inherited templates, transfers and rollback.
 WebEngine desktop/mobile presentations, including image loading and pointer
 mapping across Pro/Move view changes. Run with the desktop interpreter,
 `PYTHONPATH=Python:.`, and `--output test-results/notebook-templates`.
-This does not certify firmware discovery of custom embedded template assets,
-tablet view geometry or physical stylus behavior. No global tablet template
-registry is changed. Native template-name references are distinct from the
-PDF-backed route described above.
+`test_remarkable_export.py` and the mobile `test_notebook_template_export.py`
+verify the portable export path, per-page backgrounds, hidden rules, unchanged
+native ink, legacy/modern redirects, source isolation, cancellation and subsequent
+PDF-backed editing. The embedded PDF is additionally rendered with Poppler for
+layout review. The user confirmed both custom-background pages survived closing and reopening
+in reMarkable Desktop 3.28.1. A separate Pro/Move physical-size calibration
+aligned native black crosses with PDF red rings on both pages. Earlier
+uncalibrated copies retained the backgrounds but misplaced ink because their
+PDF page units were too large. These desktop observations do not certify
+physical tablet geometry or stylus behavior. A supplied native Move demo used
+`P Lines medium`, no PDF, and the shared notebook frame with ink extending
+beyond it; this supports keeping native ruled notebooks separate from fixed
+PDF page sizing.
+No global tablet template registry is changed.
 
 References: reMarkable's [template guide](https://support.remarkable.com/articles/Knowledge/Templates)
 describes per-notebook page backgrounds and PDF limitations; BOOX's

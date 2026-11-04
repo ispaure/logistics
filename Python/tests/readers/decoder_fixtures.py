@@ -13,5 +13,3 @@ def require_qt_decoder(case):
     from PySide6.QtMultimedia import QMediaFormat
     if not QMediaFormat().supportedFileFormats(QMediaFormat.ConversionMode.Decode):
         case.skipTest('This host has no optional Qt Multimedia decoder; production VLC is tested separately')
-
-

@@ -287,7 +287,8 @@ class NotebookPanel:
                     await canvas.wait(web.evaluate_javascript(update_script(self.state(), 'Cancelled.')))
                     return
                 from commonUtils.ui.native.documents import export_stream
-                data = await canvas.wait(asyncio.to_thread(editor.notebook.to_bytes))
+                from ..remarkable_export import export_rmdoc
+                data = await canvas.wait(asyncio.to_thread(export_rmdoc, editor.notebook))
                 name = editor.notebook.name.replace('/', '-').replace('\\', '-') + '.rmdoc'
                 saved = await canvas.wait(export_stream(self.app, name, lambda: BytesIO(data)))
                 if not saved:

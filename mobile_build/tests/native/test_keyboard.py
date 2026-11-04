@@ -1,10 +1,11 @@
 
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 import unittest
 from mobile import keyboard
+
+TEST_STAGE = TestStage.REGRESSION
 
 
 class AndroidEditorLayoutTests(unittest.TestCase):
@@ -115,3 +116,67 @@ class AndroidEditorLayoutTests(unittest.TestCase):
         keyboard._fit_source(editor, False)
         self.assertEqual(padding, [60, 12, 4, 8])
         self.assertEqual(editor.style.margin_top, 4)
+
+
+class ApplePickerRevealTests(unittest.TestCase):
+    def picker(self, *, keyboard_top=204):
+        from copy import copy
+        from unittest.mock import Mock
+        def rect(y, height):
+            return NS(origin=NS(x=0, y=y), size=NS(width=570, height=height))
+        class Scroll:
+            bounds = rect(0, 272)
+            contentSize = NS(width=570, height=230)
+            layoutIfNeeded = Mock()
+            scrollRectToVisible = Mock()
+            def __init__(self):
+                self.insets = NS(top=0, left=9, bottom=0, right=11)
+                self.offset = NS(x=0, y=0)
+                self.inset_writes = self.offset_writes = 0
+            @property
+            def contentInset(self): return copy(self.insets)
+            @contentInset.setter
+            def contentInset(self, value):
+                self.insets = copy(value)
+                self.inset_writes += 1
+            @property
+            def adjustedContentInset(self): return copy(self.insets)
+            @property
+            def contentOffset(self): return copy(self.offset)
+            def convertRect(self, value, *, toView): return rect(147, 272)
+            def setContentOffset(self, value, *, animated):
+                self.offset = copy(value)
+                self.offset_writes += 1
+        scroll = Scroll()
+        window = NS(layoutIfNeeded=Mock(), screen=NS(coordinateSpace=object()),
+                    convertRect=lambda frame, **kwargs: frame)
+        focused = NS(isFirstResponder=True, bounds=rect(0, 48),
+                     isDescendantOfView=lambda owner: owner is scroll,
+                     convertRect=lambda value, *, toView: rect(
+                         181 - scroll.offset.y if toView is window else 34, 48))
+        form = NS(_impl=NS(native=scroll), content=NS(refresh=Mock()))
+        adapter = NS(keyboard_visible=True, keyboard_frame=rect(keyboard_top, 262))
+        picker = NS(name_panel=None, picker_form=form,
+                    save_as_name=NS(_impl=NS(native=focused)),
+                    new_folder_name=NS(_impl=NS(native=NS(isFirstResponder=False))),
+                    app=NS(main_window=NS(_impl=NS(native=window)), native_host=NS(adapter=adapter)))
+        return picker, scroll, focused
+
+    def test_landscape_field_is_revealed_above_actual_keyboard_without_layout_loop(self):
+        picker, scroll, focused = self.picker()
+        keyboard.reveal_picker_input(picker)
+        field = focused.convertRect(focused.bounds, toView=picker.app.main_window._impl.native)
+        self.assertGreaterEqual(field.origin.y, 147)
+        self.assertLessEqual(field.origin.y + field.size.height, 204)
+        self.assertTrue(focused.isFirstResponder)
+        keyboard.reveal_picker_input(picker)
+        self.assertEqual((scroll.inset_writes, scroll.offset_writes), (1, 1))
+        picker.app.native_host.adapter.keyboard_visible = False
+        keyboard.reveal_picker_input(picker)
+        self.assertEqual((scroll.insets.left, scroll.insets.bottom, scroll.insets.right), (9, 0, 11))
+        self.assertFalse(hasattr(picker.picker_form, '_keyboard_bottom_inset'))
+
+    def test_uncovered_field_does_not_change_native_insets_or_scroll_position(self):
+        picker, scroll, _ = self.picker(keyboard_top=430)
+        keyboard.reveal_picker_input(picker)
+        self.assertEqual((scroll.inset_writes, scroll.offset_writes), (0, 0))
