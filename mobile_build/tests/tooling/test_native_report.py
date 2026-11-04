@@ -725,11 +725,68 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                         if tests:application.writestr('tests/logisticsmobile/__main__.pyc',b'synthetic test bytecode')
                     with zipfile.ZipFile(apk,'w') as archive:archive.writestr('assets/chaquopy/app.imy',stream.getvalue())
                 package(False)
-                with self.assertRaisesRegex(ValueError,'matching native test'):ui_tools.verify_prebuilt_android()
-                package(True);ui_tools.verify_prebuilt_android()
+                with self.assertRaisesRegex(ValueError,'matching native test'):ui_tools.verify_prebuilt_android(local=True)
+                package(True);ui_tools.verify_prebuilt_android(local=True)
                 Path('payload/source.json').write_text(json.dumps(dict(source,source_sha256='b'*64)))
-                with self.assertRaisesRegex(ValueError,'matching native test'):ui_tools.verify_prebuilt_android()
+                with self.assertRaisesRegex(ValueError,'matching native test'):ui_tools.verify_prebuilt_android(local=True)
             finally:os.chdir(previous)
+
+    def test_hosted_android_reuse_checks_exact_test_apk_before_launch_and_disables_rebuild(self):
+        import io
+        import os
+        import zipfile
+        with TemporaryDirectory() as directory:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                apk = Path('build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk')
+                apk.parent.mkdir(parents=True)
+                Path('payload').mkdir()
+                source = dict(source_sha256='a' * 64, logistics_commit='1' * 40,
+                              commonUtils_commit='2' * 40, dirty=False)
+                Path('payload/source.json').write_text(json.dumps(source))
+                def package(tests=True, sha='a' * 64):
+                    stream = io.BytesIO()
+                    with zipfile.ZipFile(stream, 'w') as application:
+                        application.writestr('mobile/source.json', json.dumps(dict(source, source_sha256=sha)))
+                        if tests:
+                            application.writestr('tests/logisticsmobile/__main__.pyc', b'test bytecode')
+                    with zipfile.ZipFile(apk, 'w') as archive:
+                        archive.writestr('assets/chaquopy/app.imy', stream.getvalue())
+                with patch.object(ui_tools, 'Thread'), patch.object(ui_tools, 'record_host_memory'), \
+                        patch.object(ui_tools, 'record_android_emulator'), \
+                        patch.object(ui_tools.subprocess, 'check_output', side_effect=lambda argv, **kwargs:
+                            source['commonUtils_commit' if 'commonUtils' in argv[2] else 'logistics_commit']), \
+                        patch.object(ui_tools.subprocess, 'Popen', side_effect=RuntimeError('verified launch')) as launch:
+                    for tests, sha in ((False, 'a' * 64), (True, 'b' * 64)):
+                        package(tests, sha)
+                        with self.assertRaisesRegex(ValueError, 'matching native test'):
+                            ui_tools.run('android', 'hosted-emulator', no_update=True)
+                        launch.assert_not_called()
+                    for invalid in (dict(source, dirty=True), dict(source, logistics_commit='3' * 40),
+                                    dict(source, commonUtils_commit='4' * 40), dict(source, source_sha256='invalid')):
+                        # APK and restored manifest can agree yet belong to another checkout.
+                        stream = io.BytesIO()
+                        with zipfile.ZipFile(stream, 'w') as application:
+                            application.writestr('mobile/source.json', json.dumps(invalid))
+                            application.writestr('tests/logisticsmobile/__main__.pyc', b'test bytecode')
+                        with zipfile.ZipFile(apk, 'w') as archive:
+                            archive.writestr('assets/chaquopy/app.imy', stream.getvalue())
+                        Path('payload/source.json').write_text(json.dumps(invalid))
+                        with self.assertRaisesRegex(ValueError, 'different source'):
+                            ui_tools.run('android', 'hosted-emulator', no_update=True)
+                        launch.assert_not_called()
+                    Path('payload/source.json').write_text(json.dumps(source))
+                    package()
+                    with self.assertRaisesRegex(RuntimeError, 'verified launch'):
+                        ui_tools.run('android', 'hosted-emulator', no_update=True)
+                    command = launch.call_args.args[0]
+                    self.assertIn('--no-update', command)
+                    self.assertIn('--test', command)
+                    self.assertIn('--shutdown-on-exit', command)
+                    self.assertIn('--Xemulator=-no-window', command)
+            finally:
+                os.chdir(previous)
 
     def test_local_ios_cached_app_requires_exact_dirty_manifest(self):
         import os
