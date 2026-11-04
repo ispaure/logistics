@@ -1,7 +1,9 @@
 # Alpha verification — 2026-10-14
 
 Three verification passes target alpha commit `6f954a19df2473866a1ea15e32c762033170ff87`,
-with local audit fixes. Further commits, pushes and releases are paused by the user.
+with local audit fixes. This is a historical audit: the commit/push/release hold
+described here applied to that verification session, and is not a current release
+status. These results do not accept later revisions.
 The concurrent “Improve mobile remote folders” work is excluded from the frozen
 snapshot; these results do not validate that ongoing work or the entire shared
 working tree. The snapshot is `/private/tmp/logistics-alpha-audit-snapshot`.
