@@ -109,7 +109,7 @@ class AviationToolsTests(QtTestCase):
                 expected = {DATA_DIR / 'airports.csv',
                             *(DATA_DIR / 'aircraft').glob('*.csv'),
                             *(DATA_DIR / 'airplane').glob('*/*.csv')}
-                self.assertEqual({browser.dataset.itemData(i) for i in range(browser.dataset.count())}, expected)
+                self.assertCountEqual([browser.dataset.itemData(i) for i in range(browser.dataset.count())], expected)
                 for index in range(browser.dataset.count()):
                     browser.dataset.setCurrentIndex(index)
                     self.assertGreater(browser.table.rowCount(), 0)
