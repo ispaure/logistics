@@ -1,5 +1,6 @@
 """Desktop software policy for LibVLC; independent of document provider storage."""
 
+import atexit
 import ctypes
 from ctypes.util import find_library
 from hashlib import sha256
@@ -9,6 +10,7 @@ import platform
 import sys
 import sysconfig
 from tempfile import NamedTemporaryFile
+from threading import RLock
 import zipfile
 
 from commonUtils.runtime.streams.downloads import DownloadSpec, provision
@@ -22,6 +24,8 @@ PACKAGES = {
 }
 _handles = []
 _binding = None
+_plugin_owner = None
+_plugin_lock = RLock()
 
 
 def extract(archive, destination, prefix):
@@ -114,3 +118,32 @@ def binding(*, interactive=False):
         raise RuntimeError('A different LibVLC runtime was already loaded. Restart Logistics.')
     _binding = vlc
     return vlc
+
+
+def decoder_instance(vlc, options):
+    """Keep plugin discovery alive without sharing per-player configuration.
+
+    LibVLC unloads its module bank after the final instance is released. Holding
+    one idle core avoids rescanning/loading every plugin for every opened video
+    or subtitle-size change. The core owns no media, provider or credentials.
+    """
+    global _plugin_owner
+    with _plugin_lock:
+        if _plugin_owner is None:
+            _plugin_owner = vlc.Instance('--quiet', '--ignore-config', '--no-media-library',
+                '--no-metadata-network-access', '--no-lua')
+            if _plugin_owner is None:
+                raise RuntimeError('The LibVLC runtime could not initialize its plugins.')
+            atexit.register(_release_plugin_owner)
+        instance = vlc.Instance(*options)
+    if instance is None:
+        raise RuntimeError('The LibVLC runtime could not initialize its plugins.')
+    return instance
+
+
+def _release_plugin_owner():
+    global _plugin_owner
+    with _plugin_lock:
+        if _plugin_owner is not None:
+            _plugin_owner.release()
+            _plugin_owner = None
