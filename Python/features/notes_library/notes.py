@@ -340,15 +340,21 @@ class NotesLibrary:
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
         with operation(self.provider, cancelled):
-            cacheable = callable(getattr(self.provider, 'transfer_location', None)) and not callable(getattr(self.provider, 'find_note_paths', None))
+            cacheable = (not getattr(self.provider, 'remote_storage', False)
+                         and callable(getattr(self.provider, 'transfer_location', None))
+                         and not callable(getattr(self.provider, 'find_note_paths', None)))
             key = current, target
             with self._link_lock:
                 cached = self._resolved_links.get(key)
             if cached is not None:
                 result, dependencies = cached
-                if all(self._link_listing(folder, cancelled) is rows for folder, rows in dependencies.items()):
-                    self.entry(result[0])  # Validate provider access even on a cache hit.
-                    return result
+                try:
+                    reusable = all(self._link_listing(folder, cancelled) is rows for folder, rows in dependencies.items())
+                    if reusable:
+                        self.entry(result[0])  # Validate provider access even on a cache hit.
+                        return result
+                except (FileNotFoundError, NotADirectoryError):
+                    pass
             listings = {}
             count = 0
             def listing(folder):
