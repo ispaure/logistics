@@ -27,6 +27,7 @@ class ScreenPrivacy:
         self.lock_view = None
         self.saved_content = None
         self.saved_lock_layout = None
+        self.android_lock_layout = None
         self.lock_gates = ()
         self.unlock_busy = False
         from .layout_participants import participants
@@ -367,21 +368,27 @@ class ScreenPrivacy:
                     on_confirm=self.unlock, style=Pack(height=48))
                 self.lock_confirmation = PasswordInput(placeholder='Confirm new lock password',
                     style=Pack(height=48))
+                from .keyboard import prepare_picker_input
+                prepare_picker_input(self.lock_password.field)
+                prepare_picker_input(self.lock_confirmation.field)
                 self.lock_status = SettingsLabel('', style=Pack(margin_top=12))
                 self.lock_button = action_button(toga.Button('Unlock', on_press=self.unlock, style=Pack(height=48, margin_top=16)))
                 self.lock_fields = toga.Box(children=[self.lock_icon, self.lock_title, self.lock_hint,
                     self.lock_credential, self.lock_password, self.lock_button, self.lock_status],
-                    style=Pack(direction=COLUMN, margin=24))
-                self.lock_card = surface(toga.Box(children=[self.lock_fields],
+                    style=Pack(direction=COLUMN, margin=12))
+                # The rounded surface stays inside the viewport; only its
+                # form scrolls, preserving all corners on short/IME layouts.
+                class LockFormScroll(toga.ScrollContainer):
+                    # The bounded card owns size, including IME heights below
+                    # Toga's ordinary 100-point scrolling-widget minimum.
+                    _MIN_HEIGHT = 0
+                self.lock_scroll = LockFormScroll(horizontal=False,
+                    content=self.lock_fields, style=Pack(flex=1, margin=12))
+                self.lock_card = surface(toga.Box(children=[self.lock_scroll],
                     style=Pack(direction=COLUMN)), radius=20)
-                # Scroll an unpainted, padded body, not the rounded surface itself.
-                # The whole available height belongs to the form, including with
-                # the keyboard open; card corners stay inside the scroll bounds.
                 self.lock_body = toga.Box(children=[self.lock_card],
-                    style=Pack(direction=COLUMN, align_items=CENTER, margin=20))
-                self.lock_scroll = toga.ScrollContainer(horizontal=False,
-                    content=self.lock_body, style=Pack(flex=1))
-                self.lock_view = toga.Box(children=[self.lock_scroll],
+                    style=Pack(direction=COLUMN, align_items=CENTER, flex=1, margin=20))
+                self.lock_view = toga.Box(children=[self.lock_body],
                     style=Pack(direction=COLUMN, flex=1))
             pending = tuple(gate for gate in gates if gate.locked)
             names = list(dict.fromkeys(getattr(gate, 'credential_name', '') for gate in pending
@@ -409,6 +416,7 @@ class ScreenPrivacy:
                     container.on_native_layout = self.layout_lock_view
                 self.app.main_window.content = self.lock_view
                 if self.backend.startswith('toga_android.'):
+                    self.install_android_lock_layout()
                     host = getattr(self.app, 'native_host', None)
                     if host is not None and getattr(host.adapter, '_reader_action_bar_active', False):
                         from .android_reader_chrome import sync
@@ -426,17 +434,66 @@ class ScreenPrivacy:
                 self.app.adaptive.render()
             self.resume_reader()
 
-    def fit_lock_view(self, width=None):
+    def fit_lock_view(self, width=None, height=None):
         if self.lock_view is None:
             return
         from .settings.forms import fit_section
+        if height is None and self.backend.startswith('toga_android.'):
+            viewport = self.android_lock_viewport()
+            if viewport is not None:
+                width, height = viewport
         # Explicit wrapping prevents long credential labels from imposing a
         # wider content minimum than the native viewport can display.
         width = self.app.main_window.size.width if width is None else width
         card_width = max(24, min(560, width - 40))
         if self.lock_card.style.width != card_width:
             self.lock_card.style.width = card_width
-        fit_section(self.lock_card, card_width)
+        if height is None:
+            height = self.lock_view.layout.height or self.app.main_window.size.height
+        # Keep a 48-point scrolling control viewport even on short landscape
+        # keyboards, reducing only vertical outer padding when necessary.
+        margin = max(12, min(20, (height - 72) / 2))
+        if self.lock_body.style.margin_top != margin:
+            self.lock_body.style.margin_top = self.lock_body.style.margin_bottom = margin
+        card_height = max(72, min(520, height - 2 * margin))
+        if self.lock_card.style.height != card_height:
+            self.lock_card.style.height = card_height
+        fit_section(self.lock_fields, max(24, card_width - 24))
+
+    def android_lock_viewport(self):
+        # A fixed card is also the toolkit root's minimum height. Measure the
+        # native visible frame independently so that minimum cannot hide IME
+        # overlap or prevent the next resize from shrinking the card.
+        from android.graphics import Rect
+        from java import jarray, jint
+        native = self.lock_view._impl.native
+        visible, position = Rect(), jarray(jint)(2)
+        native.getWindowVisibleDisplayFrame(visible)
+        native.getLocationOnScreen(position)
+        width = min(native.getWidth(), visible.right - max(visible.left, position[0]))
+        height = visible.bottom - max(visible.top, position[1])
+        if width > 0 and height > 0:
+            density = float(native.getResources().getDisplayMetrics().density)
+            return width / density, height / density
+        return None
+
+    def install_android_lock_layout(self):
+        if self.android_lock_layout is not None:
+            return
+        import weakref
+        from java import dynamic_proxy, jclass
+        reference = weakref.ref(self)
+        class Layout(dynamic_proxy(jclass('android.view.ViewTreeObserver$OnGlobalLayoutListener'))):
+            def onGlobalLayout(listener):
+                owner = reference()
+                if (owner is not None and not owner.disposed
+                        and owner.app.main_window.content is owner.lock_view):
+                    owner.fit_lock_view()
+        decor = self.app._impl.native.getWindow().getDecorView()
+        listener = Layout()
+        self.android_lock_layout = decor, listener
+        decor.getViewTreeObserver().addOnGlobalLayoutListener(listener)
+        self.fit_lock_view()
 
     def layout_lock_view(self, container):
         # The normal root hosts native navigation controllers, whose leaf
@@ -445,12 +502,20 @@ class ScreenPrivacy:
         insets = container.native.safeAreaInsets
         container.top_inset, container.bottom_inset = insets.top, insets.bottom
         container.left_inset, container.right_inset = insets.left, insets.right
-        self.fit_lock_view(self.app.main_window.size.width - insets.left - insets.right)
+        size = container.native.bounds.size
+        self.fit_lock_view(self.app.main_window.size.width - insets.left - insets.right,
+                           size.height - insets.top - insets.bottom)
         self.app.main_window._impl.notify_resize(container)
         if container.content is not None:
             container.content.interface.refresh()
 
     def restore_lock_layout(self):
+        if self.android_lock_layout is not None:
+            decor, listener = self.android_lock_layout
+            self.android_lock_layout = None
+            observer = decor.getViewTreeObserver()
+            if observer.isAlive():
+                observer.removeOnGlobalLayoutListener(listener)
         if self.saved_lock_layout is not None:
             container = self.app.main_window._impl.container
             container.on_native_layout = self.saved_lock_layout
