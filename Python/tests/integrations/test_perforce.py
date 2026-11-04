@@ -47,9 +47,10 @@ class PerforceConsoleTests(unittest.TestCase):
             command = launch.call_args.args[0]
             self.assertEqual(launch.call_args.kwargs, {'in_new_window': True, 'cwd': root})
             result = subprocess.run(
-                ['bash', '-lc', command], cwd=root,
+                ['bash', '--noprofile', '--norc', '-c', command], cwd=root,
                 input='p4 -u marca passwd\np4 info "argument with spaces"\nexit\n',
-                text=True, capture_output=True, timeout=10
+                text=True, capture_output=True, timeout=10,
+                env={'PATH': os.defpath, 'HOME': str(root), 'LC_ALL': 'C'}
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('ARG:-p\nARG:localhost:27182\nARG:-u\nARG:marca\nARG:passwd', result.stdout)
