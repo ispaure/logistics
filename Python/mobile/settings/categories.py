@@ -195,12 +195,19 @@ class SettingsCategories:
     def help(self):
         app = self.app
         box = self.category('Help')
-        if type(app._impl).__module__.startswith('toga_android.'):
-            box.add(page_button('Developer settings…', on_press=app.open_android_developer_settings, style=Pack(height=48)))
         from ..documentation_ui import show_documentation
         box.add(page_button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(app),
                             style=Pack(height=48)))
         box.add(page_button('About', on_press=self.show_about, style=Pack(height=48)))
+        if type(app._impl).__module__.startswith('toga_android.'):
+            from .forms import connection_disclosure, settings_presentation, fit_section
+            developer = toga.Button('Android Developer Settings…',
+                on_press=app.open_android_developer_settings, style=Pack(height=48))
+            more, _ = connection_disclosure('More', [developer],
+                on_toggle=lambda panel: fit_section(panel, app.settings_navigation.detail_width - 32))
+            settings_presentation(developer.parent)
+            more._settings_managed_content = True
+            box.add(more)
         return box
 
     def show_about(self, widget=None, **kwargs):
