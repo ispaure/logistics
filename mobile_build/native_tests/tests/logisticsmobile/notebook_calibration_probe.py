@@ -79,23 +79,32 @@ class NotebookCalibrationProbe(NotebookProbe):
                 raise TimeoutError('Calibration canvas did not acknowledge native input')
 
             native = panel.web._impl.native
+            # Phones start in a cropped Move view. Establish the same fitted
+            # full-page precondition as the shared input acceptance fixture.
+            await panel.web.evaluate_javascript("paperView='pro';$('paperView').value=paperView;setZoom('page')")
+            await asyncio.sleep(.2)
             props = jarray(MotionEvent.PointerProperties)(1)
             props[0] = MotionEvent.PointerProperties()
             props[0].id, props[0].toolType = 3, MotionEvent.TOOL_TYPE_STYLUS
             coords = jarray(MotionEvent.PointerCoords)(1)
             coords[0] = MotionEvent.PointerCoords()
             coords[0].size = 1
-            rows = []
+            rows = result['native_motion_events'] = []
             for tool, color, width in [(15, 0, 1), (15, 6, 2), (15, 7, 3), (18, 6, 1)]:
                 await panel.web.evaluate_javascript("$('tool').value=" + repr(str(tool))
                     + ";$('tool').onchange();$('color').value=" + repr(str(color))
                     + ";$('width').value=" + repr(str(width)) + ";document.dispatchEvent(new Event('change'))")
                 await idle()
                 geometry = json.loads(await panel.web.evaluate_javascript(
-                    'JSON.stringify({r:canvas.getBoundingClientRect().toJSON(),width:innerWidth})'))
+                    'JSON.stringify({r:canvas.getBoundingClientRect().toJSON(),width:innerWidth,height:innerHeight})'))
                 rect, ratio = geometry['r'], native.getWidth() / geometry['width']
                 x, y = (rect['left'] + rect['width'] * .2) * ratio, (rect['top'] + rect['height'] * .25) * ratio
                 distance = rect['width'] * .3 * ratio
+                hit = await panel.web.evaluate_javascript(
+                    f'document.elementFromPoint({x / ratio},{y / ratio})===canvas')
+                result['gesture_fixture'] = dict(geometry=geometry, native_width=native.getWidth(),
+                    native_height=native.getHeight(), starts_on_canvas=hit, tool=tool)
+                assert hit, result['gesture_fixture']
                 before = len(panel.editor.notebook.page(0).strokes)
                 start = SystemClock.uptimeMillis()
                 pressures = (.1, .25, .5, .75, 1, 1)
@@ -115,7 +124,8 @@ class NotebookCalibrationProbe(NotebookProbe):
                         break
                     await asyncio.sleep(.05)
                 await idle()
-                assert len(panel.editor.notebook.page(0).strokes) == before + 1
+                assert len(panel.editor.notebook.page(0).strokes) == before + 1, dict(
+                    before=before, after=len(panel.editor.notebook.page(0).strokes), fixture=result['gesture_fixture'])
                 stroke = panel.editor.notebook.page(0).strokes[-1]
                 assert stroke.tool == tool and stroke.color == native_color(tool, color)[0]
                 assert len(stroke.points) >= 5
