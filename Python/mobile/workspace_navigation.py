@@ -54,7 +54,9 @@ def mount_native_menu(app, menu, destination):
         menu._native_workspace_item.title = menu._native_workspace_item.accessibilityLabel
     item = controller.navigationItem
     item.leftItemsSupplementBackButton = True
-    item.leftBarButtonItem = menu._native_workspace_item
+    current = item.leftBarButtonItem
+    if current is None or current.ptr.value != menu._native_workspace_item.ptr.value:
+        item.leftBarButtonItem = menu._native_workspace_item
     return menu._native_workspace_item
 
 
@@ -535,11 +537,14 @@ class WorkspaceFrame:
             return
         self.menu.app, self.menu.window = app, app.main_window
         item = controller.navigationItem
+        if self.destination == 'files':
+            # This destination has no root drawer button. Do not insert and
+            # immediately remove one on every native resize/rotation callback.
+            if item.leftBarButtonItem is not None:
+                item.leftBarButtonItem = None
+            return
         item.leftItemsSupplementBackButton = True
         self.native_menu = mount_native_menu(app, self.menu, self.destination)
-        # Workspaces enters browsers through its folder actions. Keep the drawer
-        # implementation available without mounting a menu in this destination.
-        item.leftBarButtonItem = self.native_menu if self.destination != 'files' else None
         if hasattr(self, 'pair'):
             self.pair.app, self.pair.window = app, app.main_window
             if not hasattr(self, 'native_pair'):

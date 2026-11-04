@@ -125,7 +125,7 @@ class NativeCheckApp(LogisticsMobile):
     def startup(self):
         print('LOGISTICS_NATIVE_STARTUP', flush=True)
         from .navigation_trace import install
-        install()
+        install(self.paths.cache)
         if get_os() is OS.IOS:
             from . import enable_native_fault_log
             self._native_fault_stream = enable_native_fault_log(self.paths.cache)

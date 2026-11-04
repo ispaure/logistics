@@ -52,6 +52,7 @@ def verify(path, target, output, *, local_manifest=None):
 
 def verify_native_diagnostics(path):
     markers = ('Error in handler:', 'Error in handler cleanup:',
+               'Exception ignored on calling ctypes callback function:',
                'Error in async handler:', 'Error in async handler cleanup:',
                'Task exception was never retrieved', 'Task was destroyed but it is pending',
                'Exception in callback ', 'message sent to deallocated instance')
@@ -97,7 +98,7 @@ def simulator_report(device, started_ns, *, diagnostics=None):
         diagnostics.mkdir(exist_ok=True)
         # Fatal native crashes cannot write the final JSON. Capture their stack
         # before returning, and never leave the previous device's result here.
-        for name in ('cached.json', 'error.txt', 'fault.log', 'timings.json'):
+        for name in ('cached.json', 'error.txt', 'fault.log', 'timings.json', 'webview-counts.json'):
             target = diagnostics / ('ios-native-ui-' + name)
             target.unlink(missing_ok=True)
             source = path.with_name('logistics-native-ui-' + name) if name != 'cached.json' else path
@@ -194,6 +195,9 @@ def record_ios_stall(path, row):
         if not process.stdout.strip().endswith('/Logistics Mobile.app/Logistics Mobile'):
             save('unexpected-executable')
             return
+        if path.with_name('ios-native-ui-owned.json').is_file():
+            from mobile_build.validation.screen_time_rpc import capture
+            capture(path, record['executable'], pid)
         output = path.with_name('ios-webview-stall-' + str(pid) + '.sample.txt')
         if output.exists():
             return
