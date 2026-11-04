@@ -78,6 +78,31 @@ class RegressionRunnerTests(unittest.TestCase):
             self.assertFalse(report.data['coverage_complete'])
             self.assertTrue(any('test_b_stalled' in str(row) for row in report.data['not_run']))
 
+    def test_later_timeout_preserves_fixture_failure_and_diagnostics(self):
+        with patch.object(sys, 'path', [str(RUNNER.parent), *sys.path]):
+            spec = importlib.util.spec_from_file_location('fixture_timing_probe', RUNNER)
+            runner = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(runner)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_partial.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport time, unittest\n'
+                'def tearDownModule(): time.sleep(30)\n'
+                'class Cases(unittest.TestCase):\n'
+                ' @classmethod\n'
+                ' def setUpClass(cls): raise RuntimeError("fixture setup failed")\n'
+                ' def test_never_started(self): pass\n')
+            report = runner.TimingReport(root / 'result.json', root, 'test*.py', True)
+            with patch.object(runner, 'ISOLATED_FILE_TIMEOUT', 2):
+                self.assertEqual(runner.run_isolated(root, 'test*.py', 60, report=report), 1)
+            self.assertEqual(len(report.data['tests']), 1)
+            failure = report.data['tests'][0]
+            self.assertTrue(failure['fixture_event'])
+            self.assertEqual(failure['outcome'], 'error')
+            self.assertIn('fixture setup failed', failure['message'])
+            self.assertEqual(report.data['modules'][0]['outcome'], 'timeout')
+            self.assertFalse(report.data['coverage_complete'])
+
     def test_selected_suite_takes_precedence_over_runner_directory(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
