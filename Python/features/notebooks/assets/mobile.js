@@ -357,7 +357,7 @@ renderEraserChoices();
   grayLabel.append(control('grayscale'), document.createTextNode('Grayscale preview'));
   vp.append(grayLabel);
   let hint = document.createElement('p');
-  hint.textContent = 'Swipe left or right with a finger to change pages. Pinch with two fingers to zoom; drag with one finger to pan when zoomed in. Stylus input always draws. Ballpoint, Pencil, Marker, Paintbrush, Calligraphy and Shader respond to pen pressure. Grayscale changes the preview only.';
+  hint.textContent = 'Swipe left or right with a finger to change pages. Drag with two fingers to pan; pinch with two fingers to zoom. Swipe past the last page for the + Page button. Stylus input always draws. Ballpoint, Pencil, Marker, Paintbrush, Calligraphy and Shader respond to pen pressure. Grayscale changes the preview only.';
   vp.append(hint);
   dp.append(control('status'));
   let addPage = document.createElement('button');
