@@ -25,9 +25,9 @@ host field appears only in that mode; switching modes preserves stored values.
 ## Implemented operations and extension points
 
 Local mobile validation, build and tester-preparation plans inspect required host
-tools before host regressions or native preparation. Native app builds require pinned Briefcase, pip and Go;
+tools before host regressions or native preparation. Native app builds require pinned Briefcase, pip, Go and the verified pure langdetect wheel;
 interpreter-only runtime plans require pip. Failures name normal mobile setup or
-the pinned Go/PATH requirement. Inspection never installs tools, downloads a Go
+explicit project tooling repair for native prerequisites. Inspection never installs tools, downloads a Go
 toolchain or enables telemetry. Desktop, host-only and GitHub plans do not gain
 a local Go prerequisite. Existing source-structure and cleanup dependencies remain.
 Explicit Debug-device recipes assembled separately by the device owner are outside
@@ -848,3 +848,71 @@ guest_workload. Candidate compatibility tests use the explicit local manager;
 the dependency pin must be updated to the reviewed committed revision before
 fresh hosted installation. No hosted dispatch or native VM acceptance is implied
 by portable contract results.
+
+### Project-owned native prerequisite setup
+
+After `python3 dev.py setup desktop` and `python3 dev.py setup mobile`, use
+**Project tooling → Update project tooling…** or
+`python -m build_manager.cli tooling --project NAME --update --confirm`.
+Besides repairing the declared manager SDK, this explicit action prepares Go
+1.26.9 and a Python 3 compatible, pure langdetect 1.0.9 wheel when this checkout
+has a mobile environment on a supported macOS, Linux or Windows x86-64/ARM64
+host. SDK readiness and native readiness remain distinct in the status message;
+SDK readiness alone does not mean Xcode, Java or Android SDKs are configured.
+Desktop-only or unsupported hosts do not download native prerequisites.
+
+The tracked native-tool manifest pins official archive/source URLs, byte counts
+and SHA-256 digests. Downloads, extraction and offline wheel construction use
+the owning retention scratch context. The wheel builder uses the mobile
+interpreter's locked setuptools/wheel, without dependency installation or build
+isolation. Verified tools are published atomically to the existing project tool
+paths. The installed Go SDK and wheel receipt are persistent prerequisites,
+not disposable compiler caches; this action retains no historical SDK versions
+or downloaded archives. Scratch is removed on normal completion and remains
+eligible for the existing owned-scratch cleanup after interruption.
+
+An exact existing Go selection, including a read-only external reference, is
+preserved. Conflicting Go selectors and unverified nonempty wheel directories
+are never replaced: preserve their contents and move them aside before retrying.
+The existing environment/workflow exclusion and unfinished-mutation recovery
+policy also covers this action. Readiness and local build admission only inspect
+selected versions and wheel integrity; they never install tools. Runtime-only
+validation does not require the app wheel or Go. Xcode, Android SDK and signing
+configuration retain their existing separate setup requirements.
+
+For a legacy manually prepared `release-wheels` folder, preserve it before the
+first repair; its unrecorded bytes are not silently adopted as verified output.
+The following existing guarded sync action moves the whole folder into ignored
+evidence without deleting it. Run from the project root, using
+`mobile_build/.venv/Scripts/python.exe` instead of `bin/python` on Windows:
+
+```sh
+python3 -m logistics_build.tooling_bootstrap sync --venv mobile_build/.venv -- \
+  mobile_build/.venv/bin/python -c '
+from pathlib import Path
+from uuid import uuid4
+from logistics_build.tooling_bootstrap import owned_path
+root = Path.cwd().resolve()
+source = root / "mobile_build/.tools/release-wheels"
+target = root / "test-results" / ("native-wheels-preserved-" + uuid4().hex)
+if not all(owned_path(root, path) for path in (source, target)) or not source.is_dir():
+    raise SystemExit("Preserve the existing linked or missing path separately; no changes made.")
+target.parent.mkdir(parents=True, exist_ok=True)
+source.rename(target)
+print("Preserved legacy wheels:", target)
+'
+```
+
+An active workflow blocks the move. Enrolled checkouts restore their tooling
+before this guarded action returns; otherwise run the normal explicit tooling
+update afterward. Keep the preserved folder until its contents are no longer
+needed. No corresponding Go migration runs automatically: an existing exact Go
+reference remains intact, and a conflicting selection requires deliberate
+preservation before replacement.
+
+On Windows the helper validates the held project lock and a bounded, nonlinked
+root/nonce launch capability, rather than assuming the venv redirector's parent
+PID is the manager. This capability is not a durable mutation ledger or a
+replacement for the manager's Windows process ownership. The existing limitation
+for abrupt standalone Windows parent termination remains; no restart safety is
+claimed by the capability record.

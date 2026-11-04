@@ -29,7 +29,8 @@ def with_prerequisites(plan, target, interpreter):
     capability = 'native' if builds else 'runtime'
     output = Path(plan.workspace) / ('native-prerequisites-' + uuid4().hex + '.json')
     gate = Phase('native-prerequisites', (str(interpreter), '-m', 'logistics_build.native_prerequisites',
-        '--python', subject.argv[0], '--capability', capability, '--output', str(output)),
+        '--python', subject.argv[0], '--capability', capability, '--output', str(output),
+        '--wheel-directory', dict(subject.environment).get('PIP_FIND_LINKS', str(Path(subject.cwd) / 'mobile_build/.tools/release-wheels'))),
         subject.cwd, timeout=45, environment=dict(subject.environment), kind='setup', effect='inspect',
         artifacts=(str(output),), dependencies=('test-structure',) if any(p.id == 'test-structure' for p in plan.phases) else (),
         label='Check native host prerequisites', description='Read-only tool versions; no installation, download or device operation.')
@@ -40,7 +41,7 @@ def with_prerequisites(plan, target, interpreter):
     return replace(plan, phases=tuple(phases))
 
 
-def inspect(python, capability, *, environment=None):
+def inspect(python, capability, *, environment=None, wheel_directory=None):
     if capability not in {'native', 'runtime'}:
         raise ValueError('Choose the native or runtime prerequisite capability.')
     env = dict(os.environ if environment is None else environment,
@@ -51,7 +52,7 @@ def inspect(python, capability, *, environment=None):
     rows = []
     for name in selected:
         executable = shutil.which('go', path=env.get('PATH', '')) if name == 'go' else python
-        remedy = ('Install Go ' + EXPECTED['go'] + ' on PATH or configure mobile_build/.tools/go; no toolchain download was attempted.'
+        remedy = ('Explicitly Update project tooling to prepare Go ' + EXPECTED['go'] + '; no toolchain download was attempted by this check.'
                   if name == 'go' else 'Run python3 dev.py setup mobile for the selected project-owned mobile environment.')
         row = dict(tool=name, expected=EXPECTED[name], executable=executable, ready=False)
         if not executable or not Path(executable).is_file():
@@ -75,6 +76,10 @@ def inspect(python, capability, *, environment=None):
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             row['error'] = type(error).__name__ + ': version inspection failed. ' + remedy
         rows.append(row)
+    if capability == 'native':
+        from logistics_build.native_tooling import ROOT, wheel_status
+        wheel = wheel_status(ROOT, directory=wheel_directory)
+        rows.append(dict(tool='langdetect-wheel', **wheel))
     return dict(schema=1, capability=capability, ready=all(row['ready'] for row in rows), tools=rows)
 
 
@@ -83,12 +88,13 @@ def main():
     parser.add_argument('--python', required=True)
     parser.add_argument('--capability', required=True, choices=('native', 'runtime'))
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--wheel-directory', type=Path)
     args = parser.parse_args()
-    report = inspect(args.python, args.capability)
+    report = inspect(args.python, args.capability, wheel_directory=args.wheel_directory)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
     for row in report['tools']:
-        print(row['tool'] + ': ' + (row.get('version', '') if row['ready'] else row['error']), flush=True)
+        print(row['tool'] + ': ' + (row.get('version', row.get('filename', '')) if row['ready'] else row.get('error', row.get('message', 'Not ready'))), flush=True)
     return int(not report['ready'])
 
 

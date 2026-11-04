@@ -695,3 +695,10 @@ Desktop aggregate deadlines come from `build-tests.json` on every platform.
 The platform launcher must not silently shorten the declared suite budget.
 Individual test-file deadlines and all required checks still apply; hosted job
 limits include room for the complete sequence of declared suites.
+
+Native build prerequisites are prepared separately by explicit **Update project tooling…**
+(or `python -m build_manager.cli tooling --project NAME --update --confirm`) after
+the owned mobile environment exists. This prepares pinned Go and the verified
+pure langdetect wheel; `dev.py doctor` checks the selected native tools and wheel
+receipt. [Native prerequisite ownership](build-manager.md#project-owned-native-prerequisite-setup)
+explains preservation, supported hosts and recovery.
