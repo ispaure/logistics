@@ -628,6 +628,16 @@ repeated, plus at least fourfold median improvement. Native controls, recycling,
 body-read prohibition and private-row retirement are checked separately. These
 are acceptance targets; controlled-device results for this renderer are pending.
 
+The separate `tests.logisticsmobile.notes_rows_functional_probe` entry point uses
+the isolated `io.github.ispaure.logisticsnotebookqa` package without load gates or
+latency assertions. On November 4, 2026, committed source `8725d04a` with
+commonUtils `d44cfd4e` passed on a disposable Android API 36 ARM64 emulator:
+local and LocalCrypt cold/repeated expansion each published one 45-record
+snapshot without reading document bodies. Native landing activation, disclosure,
+context actions, viewport scrolling/reuse and private-title retirement passed.
+The synthetic drag checks source authorization and cancellation; it does not
+certify a physical drag/drop gesture. Device and scratch cleanup completed.
+
 
 ## Scoped desktop library tabs
 
@@ -892,7 +902,6 @@ scope, rather than a new passing result for the current checkout.
   `test_notes_library_panels.py`: search scopes, calendar, save-before-move,
   guarded callbacks and drawer/form return behavior.
 
-Android recycled-tree work is still an active implementation and acceptance task
-at this review. This guide describes the committed library behavior; it does not
-claim that the pending row implementation has passed native gesture, scrolling
-or device acceptance. Keep that evidence separate from earlier panel probes.
+Android recycled-tree functional acceptance is recorded above, separately from
+earlier panel probes. Controlled latency and physical drag/drop acceptance remain
+pending; the functional run does not establish a performance improvement.
