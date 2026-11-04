@@ -1,5 +1,6 @@
 """Run the native toolbar audit in an owned scratch build and simulator."""
 import argparse
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -19,7 +20,7 @@ BUNDLE = 'io.github.ispaure.logisticsconventionsqa'
 
 def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=False,
         duoctl=None, pose=None, extended=False, appearance=None, content_size=None,
-        extended_only=False, reader_space=False):
+        extended_only=False, reader_space=False, system_occlusions=False):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
@@ -32,9 +33,28 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
     with scratch(REPO) as workspace:
         app = prepare(source, workspace / 'build')
         entrypoint = (
+            ('from tests.logisticsmobile.system_occlusion_probe import main\nmain().main_loop()\n') if system_occlusions else
             ('from tests.logisticsmobile.reader_space_probe import ReaderSpaceProbe\n'
              f'ReaderSpaceProbe("Reader Layout QA", "{BUNDLE}").main_loop()\n') if reader_space else
             'from tests.logisticsmobile.toolbar_conventions_probe import main\nmain().main_loop()\n')
+        # The restaged Python title adapter can be newer than the cached shell.
+        # Compile its actual production helper into this disposable QA bundle;
+        # never substitute a test label or claim an older native class is current.
+        helper = app / 'app/commonUtils/ui/native/ios/ScrollingTitle.m'
+        framework = app / 'Frameworks'
+        framework.mkdir(exist_ok=True)
+        sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
+        compiled = subprocess.run(['xcrun', 'clang', '-dynamiclib', '-fobjc-arc', '-fmodules',
+            '-fmodules-cache-path=' + str(workspace / 'modules'), '-target', 'arm64-apple-ios15.0-simulator',
+            '-isysroot', sdk, '-framework', 'UIKit', '-framework', 'QuartzCore', str(helper),
+            '-o', str(framework / 'ToolbarTitleQA.dylib')], text=True, capture_output=True)
+        (output / 'native-helper-compile.log').write_text(compiled.stdout + compiled.stderr)
+        compiled.check_returncode()
+        entrypoint = ('from ctypes import CDLL\nfrom rubicon.objc import ObjCClass\n'
+            'try:\n    ObjCClass("CommonUtilsPanningTitle")\nexcept NameError:\n'
+            '    bundle = ObjCClass("NSBundle").mainBundle\n'
+            '    bundle = bundle() if callable(bundle) else bundle\n'
+            '    CDLL(str(bundle.bundlePath) + "/Frameworks/ToolbarTitleQA.dylib")\n') + entrypoint
         for package in ('logisticsmobile', 'tests/logisticsmobile'):
             (app / 'app' / package / '__main__.py').write_text(entrypoint)
             for bytecode in (app / 'app' / package / '__pycache__').glob('__main__*.pyc'):
@@ -43,7 +63,8 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
         value = plistlib.loads(info.read_bytes())
         (output / 'native-build.json').write_text(json.dumps(dict(
             sdk=value.get('DTSDKName'), minimum_os=value.get('MinimumOSVersion'),
-            runtime=runtime, device_type=model, restaged_native_shell=True), indent=2))
+            runtime=runtime, device_type=model, restaged_native_shell=True,
+            native_title_helper_sha256=sha256(helper.read_bytes()).hexdigest()), indent=2))
         value['CFBundleIdentifier'] = BUNDLE
         info.write_bytes(plistlib.dumps(value))
         # This panel audit does not launch production app extensions. Their
@@ -140,6 +161,7 @@ if __name__ == '__main__':
     parser.add_argument('--appearance', choices=('light', 'dark'))
     parser.add_argument('--content-size', help='Native simctl content-size category, on owned simulators only')
     parser.add_argument('--extended-only', action='store_true', help='Run only the additional panel inventory')
+    parser.add_argument('--system-occlusions', action='store_true', help='Focus on Markdown Close/Save, workspace roots and destination confirmation.')
     parser.add_argument('--reader-space', action='store_true', help='Check the portrait comic title and footer layout')
     args = parser.parse_args()
     if not os.environ.get('DEVELOPER_DIR'):
@@ -148,4 +170,4 @@ if __name__ == '__main__':
     run(args.app, args.output, family=args.family, timeout=args.timeout, device=args.device,
         sweep=args.sweep, duoctl=args.duoctl, pose=args.pose, extended=args.extended,
         appearance=args.appearance, content_size=args.content_size,
-        extended_only=args.extended_only, reader_space=args.reader_space)
+        extended_only=args.extended_only, reader_space=args.reader_space, system_occlusions=args.system_occlusions)

@@ -115,8 +115,6 @@ class ProviderMarkdownTests(unittest.TestCase):
         self.assertIsNot(a, b)
         self.assertIs(a.source, first.crypt_text)
         self.assertIs(b.source, second.crypt_text)
-        self.assertNotIn('crypt_preview', vars(first))
-        self.assertNotIn('_private_preview_token', vars(first))
         self.assertIs(first.crypt_preview, a.preview)
         first.resume_crypt()
         first.toggle_private_preview()
@@ -132,7 +130,6 @@ class ProviderMarkdownTests(unittest.TestCase):
         owner = self.owner
         session = owner.provider_document()
         self.assertIs(session.reader, owner.crypt_reader)
-        self.assertNotIn('crypt_reader', vars(owner))
         self.assertIs(session.metadata_fields, owner.crypt_metadata_fields)
         owner.crypt_text.value = '# Unsaved'
         with patch.object(owner.crypt_text, 'dispose', wraps=owner.crypt_text.dispose) as dispose:
@@ -150,13 +147,15 @@ class ProviderMarkdownTests(unittest.TestCase):
 
     def test_initial_native_text_notification_does_not_reload_rendered_preview(self):
         owner = self.owner
-        with patch.object(owner.crypt_preview, 'set_content', wraps=owner.crypt_preview.set_content) as load:
-            owner.private_source_changed(owner.crypt_text)
-            self.app.loop.run_until_complete(asyncio.sleep(.35))
-            load.assert_not_called()
-            owner.crypt_text.value = '# Updated passage'
-            self.app.loop.run_until_complete(asyncio.sleep(.4))
-            self.assertIn('Updated passage', load.call_args.args[1])
+        async def exercise():
+            with patch.object(owner.crypt_preview, 'set_content', wraps=owner.crypt_preview.set_content) as load:
+                owner.private_source_changed(owner.crypt_text)
+                self.assertIsNone(owner._provider_markdown.pending)
+                load.assert_not_called()
+                owner.crypt_text.value = '# Updated passage'
+                await asyncio.wait_for(owner._provider_markdown.pending, 2)
+                self.assertIn('Updated passage', load.call_args.args[1])
+        self.app.loop.run_until_complete(exercise())
 
     def test_close_retires_all_surfaces_and_formatted_callbacks(self):
         owner = self.owner

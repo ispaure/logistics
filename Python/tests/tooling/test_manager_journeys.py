@@ -69,7 +69,7 @@ class JourneyAdapterTests(unittest.TestCase):
                       manager=dict(commit='c' * 40, dirty=False, fingerprint='manager-fixture'),
                       commonUtils=dict(commit='b' * 40, dirty=False, fingerprint='commonutils-fixture'))
         for target, options in (
-                ('build_manager.identity.runtime_identity', {'return_value': engine}),
+                ('build_manager.identity.capture_engine_source_identity', {'return_value': engine}),
                 ('build_manager.test_manifest.resolve_test_group_suites', {'side_effect': lambda root, group: _resolve_suites(ROOT, group)}),
                 ('logistics_build.build_retention.clean', {'return_value': []}),
                 ('logistics_build.build_project.identity', {'return_value': self.source}),

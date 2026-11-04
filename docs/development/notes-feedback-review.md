@@ -111,3 +111,11 @@ and move workflows. These are host checks, not physical Android/iOS validation.
 Two final review passes checked items 3–5: the first traced reference lifetimes,
 loading/cancellation and separate action entry points; the second checked
 provider boundaries, stale callbacks, resource cleanup, platform scope and tests.
+
+### Folder-browser host boundary
+
+`NotesHost.folder_browser` supplies the mobile Move picker’s native browser.
+The application composition layer owns its implementation and disables persistent
+indexing; the feature supplies only library-rooted folder snapshots and callbacks.
+The move/cancel regression checks that the injected factory is used and that no
+local or resource index callback remains attached.

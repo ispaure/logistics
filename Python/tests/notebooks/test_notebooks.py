@@ -1,6 +1,6 @@
 """Synthetic native-ink archives, recovery, preservation and editing contracts."""
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 import json
@@ -211,17 +211,19 @@ class NotebookTests(unittest.TestCase):
         self.editor.apply(dict(op='stroke', points=[[10,20,.25],[50,60,.8]],tool=tool,color=color))
 
     def test_more_than_255_checkpoints_keep_saving_and_undoing(self):
-        for _ in range(300):
+        # Cross the historical one-byte author limit without extra full-page saves.
+        checkpoints = 256
+        for _ in range(checkpoints):
             self.draw()
-        self.assertEqual(len(self.repo.open(self.key).page(0).strokes), 300)
+        self.assertEqual(len(self.repo.open(self.key).page(0).strokes), checkpoints)
         self.editor.apply(dict(op='undo'))
         self.editor.apply(dict(op='redo'))
-        self.editor.apply(dict(op='add-layer', name='After 300 saves'))
+        self.editor.apply(dict(op='add-layer', name='After author boundary'))
         self.draw()
         reopened = Notebook.read(self.book.to_bytes()).page(0)
         self.assertFalse(reopened.warning)
-        self.assertEqual(len(reopened.strokes), 301)
-        self.assertEqual(len({s.id for s in reopened.strokes}), 301)
+        self.assertEqual(len(reopened.strokes), checkpoints + 1)
+        self.assertEqual(len({s.id for s in reopened.strokes}), checkpoints + 1)
         authors = [b for b in reopened._blocks if isinstance(b, ss.AuthorIdsBlock)]
         self.assertEqual(len(authors), 1)
 
@@ -491,8 +493,12 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(moved.scale, 2.5)
         self.assertEqual([p[3] for p in moved.points], [9.25, 9.25])
 
+    @stage(TestStage.SMOKE)
     def test_save_reopen_erase_undo_redo_transform(self):
         self.draw()
+        published = Notebook.read(self.book.to_bytes())
+        self.assertEqual(published.name, self.book.name)
+        self.assertEqual(published.page(0).to_bytes(), self.book.page(0).to_bytes())
         identity = self.book.page(0).strokes[0].id
         self.editor.apply(dict(op='transform',ids=[identity],dx=12,dy=3))
         self.assertEqual(self.repo.open(self.key).page(0).strokes[0].points[0][:2],[22,23])

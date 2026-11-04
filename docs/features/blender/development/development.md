@@ -104,6 +104,37 @@ preset independence, child environments, deletion boundaries and addon fallbacks
 `Python/tests/blender/test_blender_page.py` covers contribution discovery, absence of
 startup provisioning, inventory display and worker-close cancellation.
 
+Page and settings fixtures use `QtTestCase.temporary_directory()` so Qt owners
+retire before their files are removed, and condition-based waits yield while
+workers finish. Settings integration uses a private manager and an empty provided
+addon library, with registry state limited to its Blender fixture; it must not
+scan the checkout's local addon archives or discover unrelated features. Catalog
+version/platform assertions live in the manager tests. Blue Hole tests distinguish
+unsafe archives from incompatible metadata and assert invalid branches avoid the
+network. Inventory tests cover both an expired deadline and timeout after a child
+wait, without launching Blender or waiting for real timeout intervals.
+Background apply tests also verify kill-before-reap cleanup and temporary-log
+removal after cancellation or timeout. Extension compatibility checks include
+both sides of the inclusive minimum as well as the exclusive maximum.
+Migration cases use a plain unittest fixture; only widget cases pay for Qt
+window ownership and teardown. Repeated catalog-refresh coverage verifies that
+unchanged ZIP metadata is reused while newly added packages are still discovered.
+
+Path containment resolves each candidate once per check, without caching across
+operations, and still rejects intermediate symlinks. Settings-mode refreshes build
+the preset list without constructing hidden launch cards. Launch-mode cards check
+installation readiness once per populated version, rather than once per preset.
+Regressions cover parent symlinks introduced after validation, hidden card
+construction and readiness-call counts.
+
+For performance comparisons, freeze both application and commonUtils sources,
+keep the same test inventory, interpreter and offscreen backend, and warm each
+variant before interleaving runs. Record child CPU time as well as elapsed time
+and host load: process startup, Qt imports and scheduling contention can dominate
+the small fixture workloads. Use profiles and operation counts to distinguish
+local improvements from a claim about total suite speed. Do not suppress Qt
+worker retirement or garbage collection to make timings appear faster.
+
 Real OS-specific extraction and Blender startup should also be exercised on each
 supported desktop platform. Fixture ZIP/TAR/DMG tests do not substitute for Windows,
 Linux and Intel macOS runtime validation.

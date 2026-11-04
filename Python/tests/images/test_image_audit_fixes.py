@@ -17,7 +17,7 @@ from features.images import processing, actions
 from features.comics import cbz
 
 
-class ImageAuditFixTests(unittest.TestCase):
+class ImageFixture:
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -42,6 +42,14 @@ class ImageAuditFixTests(unittest.TestCase):
     def batch(self, force=False, preserve=None):
         return actions.batch_compress_to_webp(self.root, False, force, 60, 35, None, None, preserve)
 
+    def multiframe(self, format):
+        output = BytesIO()
+        Image.new('RGB', (128,128), 'red').save(output, format=format, save_all=True,
+            append_images=[Image.new('RGB', (128,128), 'blue')])
+        return output.getvalue()
+
+
+class ImageSourceSafetyTests(ImageFixture, unittest.TestCase):
     def test_shared_encoder_rejects_source_changed_during_encoding(self):
         source = self.source()
         image = processing.ImageFile(source)
@@ -95,12 +103,28 @@ class ImageAuditFixTests(unittest.TestCase):
         self.assertTrue(source.exists())
         self.assertEqual([path.name for path in self.root.iterdir()], ['page.WEBP'])
 
-    def multiframe(self, format):
-        output = BytesIO()
-        Image.new('RGB', (128,128), 'red').save(output, format=format, save_all=True,
-            append_images=[Image.new('RGB', (128,128), 'blue')])
-        return output.getvalue()
+    def test_unreadable_image_returns_failure_before_batch_mutation(self):
+        source = self.source()
+        original = source.read_bytes()
+        (self.root / 'bad.png').write_bytes(b'bad image')
+        self.assertFalse(self.batch(True))
+        self.assertEqual(source.read_bytes(), original)
+        self.assertFalse(source.with_suffix('.webp').exists())
 
+    def test_source_change_after_publication_keeps_edited_source(self):
+        source = self.source()
+        actual_link = processing.os.link
+        def editing_link(staged, destination):
+            result = actual_link(staged, destination)
+            source.write_bytes(b'edit made just after output publication')
+            return result
+        with patch.object(processing.os, 'link', editing_link):
+            self.assertFalse(self.batch(True))
+        self.assertEqual(source.read_bytes(), b'edit made just after output publication')
+        self.assertTrue(source.with_suffix('.webp').exists())
+
+
+class ImageMultiframeTests(ImageFixture, unittest.TestCase):
     def test_standalone_preserves_multiframe_originals_by_default(self):
         for format, ext in [('GIF', 'gif'), ('TIFF', 'tiff'), ('WEBP', 'webp'), ('PNG', 'png')]:
             with self.subTest(format=format):
@@ -138,6 +162,8 @@ class ImageAuditFixTests(unittest.TestCase):
             self.assertEqual(log.call_args.args[0], processing.Severity.ERROR)
         self.assertEqual(source.read_bytes(), original)
 
+
+class ImageMetadataTests(ImageFixture, unittest.TestCase):
     def test_shared_encoding_preserves_icc_exif_and_normalizes_orientation(self):
         source = self.source('photo.jpg', metadata=True)
         with Image.open(source) as original:
@@ -171,14 +197,6 @@ class ImageAuditFixTests(unittest.TestCase):
             with Image.open(BytesIO(archive.read('01.webp'))) as converted:
                 self.assertTrue(converted.info['icc_profile'])
                 self.assertEqual(converted.getexif()[270], 'Description to preserve')
-
-    def test_unreadable_image_returns_failure_before_batch_mutation(self):
-        source = self.source()
-        original = source.read_bytes()
-        (self.root / 'bad.png').write_bytes(b'bad image')
-        self.assertFalse(self.batch(True))
-        self.assertEqual(source.read_bytes(), original)
-        self.assertFalse(source.with_suffix('.webp').exists())
 
     def test_jpeg_output_preserves_icc_and_exif(self):
         source = self.source('photo.png', metadata=True)
@@ -254,18 +272,6 @@ class ImageAuditFixTests(unittest.TestCase):
         self.assertFalse(self.batch(True))
         self.assertEqual(source.read_bytes(), original)
         self.assertFalse(source.with_suffix('.webp').exists())
-
-    def test_source_change_after_publication_keeps_edited_source(self):
-        source = self.source()
-        actual_link = processing.os.link
-        def editing_link(staged, destination):
-            result = actual_link(staged, destination)
-            source.write_bytes(b'edit made just after output publication')
-            return result
-        with patch.object(processing.os, 'link', editing_link):
-            self.assertFalse(self.batch(True))
-        self.assertEqual(source.read_bytes(), b'edit made just after output publication')
-        self.assertTrue(source.with_suffix('.webp').exists())
 
 
 if __name__ == '__main__':

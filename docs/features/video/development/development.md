@@ -47,11 +47,22 @@ with a same-position seek before resuming. Manual Pause and existing playback
 authorization still control whether it resumes. Mobile preference writes are
 serialized so an older slow write cannot overwrite the latest selection.
 
-Small synthetic clips in `Python/tests/readers/fixtures/video/` let the desktop
-codec, caption, chapter and speed gates run when FFmpeg is absent. Their manifest
-records generator provenance and checksums; regenerate with
+Small synthetic clips in `Python/tests/readers/fixtures/video/` are the default
+inputs for desktop codec, caption, chapter and speed gates, including hosts with
+FFmpeg installed. Their manifest records generator provenance and checksums; regenerate with
 `PYTHONPATH=Python:. python -m tests.readers.video_fixtures`. Generated custom-duration
 and controlled-stall fixtures still require FFmpeg and use disposable workspaces.
+Fixture helpers accept `regenerate=True` for explicit encoder checks; routine
+tests must not generate a whole codec matrix to obtain one clip. Within
+`test_video_decode.py`, only the two track-muxing cases require external FFmpeg.
+Transport-start failure remains a regression check without that dependency.
+
+`test_video_cloud_decode.py` isolates real rclone plain/crypt playback from the
+other Qt decoder cases. It requires decoded audio and video, then a frame from
+the requested seek before native retirement. Its player owns the sink/output,
+and deferred destruction completes before the next provider is opened. Failure
+diagnostics identify the remote, filename, decode/seek phase and transport state;
+phase timings distinguish provider admission, decoding and retirement delays.
 
 ## Docked desktop controls
 
@@ -82,6 +93,12 @@ decoder, while its controls and resource lifetime remain covered on every host.
 These host checks do not establish physical display,
 receiver or native mobile presentation quality. Desktop HDR output remains
 unavailable because the current surface receives SDR memory frames.
+
+The widest and smallest panel matrices run in regression; intermediate sizes
+and the additional decoded-surface matrix run in extended. All combinations
+remain in the full profile. Layout screenshots are captured on failure; set
+`LOGISTICS_TEST_SCREENSHOTS=1` to record every checked layout for visual review.
+Frame collectors retain only the latest image rather than every decoded frame.
 
 ## Desktop HDR investigation
 

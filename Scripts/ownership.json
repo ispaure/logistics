@@ -43,7 +43,6 @@
       "tests": {
         "desktop": [
           "test_books*.py",
-          "test_document_preparation.py",
           "test_reading_feature.py",
           "test_reading_parity.py"
         ],
@@ -78,6 +77,8 @@
       "tests": {
         "desktop": [
           "test_comic*.py",
+          "test_async_comic_operations.py",
+          "test_viewer_page_progress.py",
           "test_encrypted_comics.py"
         ],
         "mobile": [
@@ -153,7 +154,8 @@
       "guide": "docs/features/ide/development/development.md",
       "tests": {
         "desktop": [
-          "test_ide*.py"
+          "test_ide*.py",
+          "test_editor_changes.py"
         ]
       }
     },
@@ -165,7 +167,8 @@
       "tests": {
         "desktop": [
           "test_feature_registry.py",
-          "test_image*.py"
+          "test_image*.py",
+          "test_viewer_orientation.py"
         ]
       },
       "mobile_manifest": "Python/features/images/mobile_sources.json"
@@ -188,12 +191,13 @@
       "guide": "docs/features/lm/development/development.md",
       "tests": {
         "desktop": [
-          "test_lm*.py"
+          "test_lm*.py",
+          "test_mobile_chat.py"
         ],
         "mobile": [
-          "test_chat_ui.py",
           "test_chat*.py",
-          "test_deferred_chat.py"
+          "test_deferred_chat.py",
+          "test_on_device.py"
         ]
       },
       "mobile_manifest": "Python/features/lm/mobile_sources.json"
@@ -341,7 +345,8 @@
       "tests": {
         "desktop": [
           "test_text_editor*.py",
-          "test_editor*.py"
+          "test_editor*.py",
+          "test_document_launchers.py"
         ],
         "mobile": [
           "test_editor_picker.py",
@@ -360,7 +365,8 @@
       "guide": "docs/features/youtube_downloader/development/development.md",
       "tests": {
         "desktop": [
-          "test_youtube_downloader*.py"
+          "test_youtube_downloader*.py",
+          "test_youtube_worker_ui.py"
         ]
       }
     },
@@ -375,7 +381,9 @@
         "desktop": [
           "test_feature_registry.py",
           "test_feature_runtime.py",
+          "test_feature_group_transactions.py",
           "test_architecture_contracts.py",
+          "test_portable_imports.py",
           "test_document_architecture.py"
         ]
       }
@@ -387,8 +395,12 @@
       "guide": "docs/development/ui-architecture.md",
       "tests": {
         "desktop": [
-          "test_main_window.py",
+          "test_main_window_navigation.py",
+          "test_document_hosting.py",
+          "test_notes_library_hosting.py",
+          "test_reader_host_integration.py",
           "test_document_workspace.py",
+          "test_document_catalog_ordering.py",
           "test_folder_controller.py",
           "test_folder_sources_ui.py"
         ]
@@ -407,6 +419,7 @@
         "desktop": [
           "test_document_protection.py",
           "test_document_storage*.py",
+          "test_document_preparation.py",
           "test_desktop_video_privacy.py",
           "test_mobile_packaging.py"
         ],
@@ -543,8 +556,7 @@
         "desktop": [
           "test_notes_library*.py",
           "test_markdown_library_modes.py",
-          "test_text_editor_dataview.py",
-          "test_main_window.py"
+          "test_text_editor_dataview.py"
         ],
         "mobile": [
           "test_notes_library*.py",

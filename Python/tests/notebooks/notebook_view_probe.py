@@ -5,7 +5,6 @@ Synthetic browser gestures cover the shared engine, not physical device drivers.
 import argparse
 import json
 from pathlib import Path
-import time
 
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.theme import configured_colors, theme_palette
@@ -13,11 +12,13 @@ from commonUtils.ui.appearance.colors import argb, contrast_ratio
 from PySide6.QtTest import QTest
 from PySide6.QtGui import QNativeGestureEvent, QPointingDevice
 from PySide6.QtWebEngineWidgets import QWebEngineView
+from features.notebooks.canvas import editor_html
 from features.notebooks.editor import Editor
 from features.notebooks.mobile.surface import mobile_editor_html
 from features.notebooks.notebook import Notebook
 from features.notebooks.ui.workspace import NotebookWorkspace
 from logistics_build.build_retention import scratch
+from tests.notebooks.webengine_driver import javascript, wait_until
 from mobile.palette import css_variables
 
 
@@ -157,20 +158,8 @@ def main(output):
     original_palette = app.palette()
     reports = []
 
-    def wait(predicate):
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            app.processEvents()
-            if predicate():
-                return
-            QTest.qWait(20)
-        raise AssertionError('WebEngine timeout')
-
-    def js(view, code):
-        result = []
-        view.page().runJavaScript(code, result.append)
-        wait(lambda: bool(result))
-        return result[0]
+    wait = wait_until
+    js = javascript
 
     def check_blend_commit(view, name):
         """Compare actual browser-composited pixels, including translucent ink edges."""
@@ -211,6 +200,37 @@ def main(output):
                 assert difference <= 8 and mean < .01, (label, difference, mean)
         js(view, "points=[];$('paperWrap').style.removeProperty('background-color');draw();setZoom('page')")
         js(view, 'paperView=' + json.dumps(original_view) + ";$('paperView').value=paperView;resize()")
+
+    # Inspect actual computed styles; CSS formatting and filter constants may evolve.
+    state = Editor(Notebook.new('Preview filter')).state()
+    before = json.dumps(state, sort_keys=True)
+    filter_view = QWebEngineView()
+    filter_view.resize(640, 480)
+    filter_view.show()
+    browser_state = None
+    try:
+        for enabled in (True, False):
+            loaded = []
+            filter_view.loadFinished.connect(loaded.append)
+            filter_view.setHtml(editor_html(state, 'logistics-notebook://filter-probe/',
+                                           desktop=True, paper_preview=enabled))
+            wait(lambda: bool(loaded))
+            assert loaded[-1], 'Filter fixture failed to load'
+            filter_view.loadFinished.disconnect(loaded.append)
+            wait(lambda: js(filter_view, "typeof state!=='undefined'&&!!document.getElementById('paperWrap')"))
+            actual = js(filter_view, "getComputedStyle(document.getElementById('paperWrap')).filter")
+            assert (actual != 'none') == enabled, (enabled, actual)
+            current_state = json.loads(js(filter_view, 'JSON.stringify(state)'))
+            if browser_state is None:
+                browser_state = current_state
+            else:
+                assert current_state == browser_state, 'Preview filtering changed browser state'
+            assert json.dumps(state, sort_keys=True) == before
+        reports.append(dict(check='paper-preview-filter', enabled_and_disabled=True, state_unchanged=True))
+    finally:
+        filter_view.close()
+        filter_view.deleteLater()
+        qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
 
     with scratch() as root:
         for desktop in (True, False):

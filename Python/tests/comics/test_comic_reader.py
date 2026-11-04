@@ -7,27 +7,24 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from io import BytesIO
+from contextlib import contextmanager
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import time
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
 from PIL import Image
 
 from features.comics.pages import ComicPages
+from tests.comics.fixtures import comic_library, encoded_page
 
 
 class ReaderFixture:
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
         self.path = self.root / 'comic.cbz'
-        stream = BytesIO()
-        Image.new('RGB', (600, 900), 'orange').save(stream, format='PNG')
-        self.image = stream.getvalue()
+        self.image = encoded_page(size=(600, 900))
         self.archive()
 
     def archive(self, manga='', entries=('10.png', '2.png', '1.png')):
@@ -38,7 +35,7 @@ class ReaderFixture:
             archive.writestr('__MACOSX/._0.png', b'not a page')
 
 
-class ReaderTests(ReaderFixture, unittest.TestCase):
+class ReaderTests(ReaderFixture, QtTestCase):
     def test_pages_natural_order_default_and_metadata_direction_cover_and_stale_archive(self):
         before = self.path.read_bytes()
         pages = ComicPages(self.path)
@@ -72,12 +69,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         return reader
 
     def wait_reader(self, reader):
-        deadline = time.monotonic() + 5
-        while reader.busy and time.monotonic() < deadline:
-            self.app.processEvents()
-            time.sleep(.01)
-        self.app.processEvents()
-        self.assertFalse(reader.busy)
+        self.wait_until(lambda: not reader.busy, message='Reader page load did not finish')
 
     def test_page_slide_follows_manga_direction(self):
         from services.documents.ui.page_transition import page_slide
@@ -240,30 +232,56 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             time.sleep(.01)
         self.assertFalse(reader._windows)
 
-    def test_reader_rapid_navigation_and_close_during_page_load(self):
+    @contextmanager
+    def blocked_page_load(self, reader):
         from threading import Event
-        from features.comics.ui import reader_pages as ui_reader
-        reader = self.native_reader()
-        released = Event()
-        original = ui_reader.read_image
+        from features.comics.ui import reader as ui_reader
+        reader.page_cache.stop()
+        self.wait_until(lambda: not reader.page_cache.busy)
+        entered, released = Event(), Event()
+        original = ui_reader.read_candidates
         def delayed(pages, index):
-            released.wait(2)
+            entered.set()
+            if not released.wait(5):
+                raise TimeoutError('Test did not release the page load')
             return original(pages, index)
-        with patch.object(ui_reader, 'read_image', delayed):
+        with patch.object(reader.page_cache, 'lookup', return_value=None), patch.object(
+                ui_reader, 'read_candidates', delayed):
+            try:
+                yield entered
+            finally:
+                released.set()
+                self.wait_reader(reader)
+
+    def test_reader_rapid_navigation_displays_only_latest_requested_page(self):
+        reader = self.native_reader()
+        reader.set_mode('single')
+        with self.blocked_page_load(reader) as entered:
             reader.go(1)
+            self.wait_until(entered.is_set, message='Page worker did not start')
             reader.go(2)
             reader.go(0)
-            released.set()
-            self.wait_reader(reader)
-            self.assertEqual(reader.page, 0)
-            self.assertFalse(reader.canvas.pixmap.isNull())
-            released.clear()
+            self.assertTrue(reader.busy)
+            self.assertEqual(reader.pending_page, (0, False))
+        self.assertEqual(reader.page, 0)
+        self.assertEqual(reader.shown_page, 0)
+        self.assertEqual(reader.displayed_pages, (0,))
+        self.assertFalse(reader.canvas.pixmap.isNull())
+
+    def test_close_waits_for_page_worker_and_discards_its_result(self):
+        reader = self.native_reader()
+        closed = []
+        reader.closed.connect(lambda: closed.append(True))
+        with self.blocked_page_load(reader) as entered:
             reader.go(2)
+            self.wait_until(entered.is_set, message='Page worker did not start')
             reader.close()
             self.assertTrue(reader.closing)
+            self.assertTrue(reader.busy)
             self.assertFalse(reader.isVisible())
-            released.set()
-            self.wait_reader(reader)
+            self.assertEqual(closed, [])
+        self.wait_until(lambda: bool(closed), message='Reader did not close after its worker finished')
+        self.assertEqual(reader.shown_page, 0)
 
     def test_tiff_is_converted_and_no_pages_reports_error(self):
         stream = BytesIO()
@@ -279,7 +297,7 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
             ComicPages(self.path)
 
 
-class BrowserViewTests(ReaderFixture, unittest.TestCase):
+class BrowserViewTests(ReaderFixture, QtTestCase):
     def setUp(self):
         super().setUp()
         from commonUtils.ui import pyside as qt
@@ -322,8 +340,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.assertEqual(completed, [True])
 
     def test_closing_reader_restores_library_without_changing_location(self):
-        from features.comics.ui.library import ComicLibraryWindow
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         window.show()
         self.wait(window)
         folder = self.root / 'Nested'
@@ -350,8 +367,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
 
     def test_reader_close_does_not_reopen_hidden_library(self):
-        from features.comics.ui.library import ComicLibraryWindow
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         window.show()
         self.wait(window)
         window.hide()
@@ -365,8 +381,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
 
     def test_modes_selection_preview_context_and_reader_activation(self):
         from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         window.show()
         self.wait(window)
         self.assertFalse(window.preview_panel.isHidden())
@@ -411,12 +426,11 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
 
     def test_compression_menu_uses_whole_mixed_selection_and_labels_comics(self):
         from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
         folder = self.root / 'nested'
         folder.mkdir()
         other = self.root / 'notes.txt'
         other.write_text('notes')
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         window.show()
         self.wait(window)
         for path in (self.path, folder, other):
@@ -441,8 +455,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
 
     def test_context_menu_reaches_column_child_views(self):
         from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         window.show()
         self.wait(window)
         window.view_selector.setCurrentIndex(2)
@@ -468,9 +481,8 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         from threading import Event
         from PySide6.QtTest import QTest
         from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
         from features.comics.pages import load_preview
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         window.show()
         self.wait(window)
         source = window.model.index(str(self.path))
@@ -492,8 +504,7 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
 
     def test_tiles_folder_navigation_and_cover_cache_are_bounded(self):
-        from features.comics.ui.library import ComicLibraryWindow
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         window.show()
         self.wait(window)
         folder = self.root / 'nested'
@@ -511,94 +522,66 @@ class BrowserViewTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
 
     def test_nested_modes_history_parent_navigation_and_folder_details(self):
-        from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
-        folder = self.root / 'series'
-        nested = folder / 'volume'
-        nested.mkdir(parents=True)
-        comic = nested / 'nested.cbz'
-        comic.write_bytes(self.path.read_bytes())
-        (folder / 'notes.txt').write_bytes(b'abc')
-        window = ComicLibraryWindow(self.root)
-        window.show()
-        self.wait(window)
-        window.tree.expand(window.model.index(str(folder)))
-        window.tree.expand(window.model.index(str(nested)))
-        # Allow QFileSystemModel to populate the descendants asynchronously.
-        self.app.processEvents()
-        index = window.model.index(str(comic))
-        window.tree.selectionModel().setCurrentIndex(index, qt.QItemSelectionModel.SelectionFlag.ClearAndSelect |
-                                                     qt.QItemSelectionModel.SelectionFlag.Rows)
-        self.wait(window)
-        self.assertEqual(window.navigation.directory, nested)
-        for mode in (1, 2, 0, 1):
-            window.view_selector.setCurrentIndex(mode)
-            self.wait(window)
-            self.assertEqual(window.browser.root, nested)
-            self.assertEqual(window.browser.selected_rows(), [index])
-            self.assertEqual(window.navigation.directory, nested)
-            self.assertTrue(window.up_button.isEnabled())
-        window.up_button.click()
-        self.assertEqual(window.browser.root, folder)
-        window.navigation.back.click()
-        self.assertEqual(window.browser.root, nested)
-        window.navigation.forward.click()
-        self.assertEqual(window.browser.root, folder)
-        window.navigation.breadcrumbs.buttons[0].click()
-        self.assertEqual(window.browser.root, self.root)
-        self.assertFalse(window.up_button.isEnabled())
-        folder_index = window.model.index(str(folder))
-        window.browser.tiles.selectionModel().setCurrentIndex(window.browser.covers.mapFromSource(folder_index),
-            qt.QItemSelectionModel.SelectionFlag.ClearAndSelect)
-        self.wait(window)
-        self.assertFalse(window.preview_panel.isHidden())
-        self.assertIn(f'Path: {folder}', window.preview.toPlainText())
-        self.assertIn('Comics: 1', window.preview.toPlainText())
-        self.assertIn('Subfolders: 1', window.preview.toPlainText())
-        from commonUtils.filesystem import format_size
-        expected = format_size(comic.stat().st_size + 3)
-        self.assertIn(f'Total size: {expected}', window.preview.toPlainText())
-        self.assertEqual(window.model.data(folder_index.siblingAtColumn(1)), expected)
-        window.browser.tiles.clearSelection()
-        self.wait(window)
-        self.assertFalse(window.preview_panel.isHidden())
-        self.assertIn(f'Path: {window.navigation.directory}', window.preview.toPlainText())
-        window.close()
-        self.app.processEvents()
-
-
-class FolderStatsTests(QtTestCase):
-    def test_recursive_sizes_counts_links_and_cancellation(self):
-        from commonUtils.filesystem import scan_folders
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            nested = root / 'one' / 'two'
-            nested.mkdir(parents=True)
-            (root / 'a.cbz').write_bytes(b'12345')
-            (nested / 'b.CBZ').write_bytes(b'123')
-            (nested.parent / 'notes.txt').write_bytes(b'12')
-            (nested / 'cycle').symlink_to(root, target_is_directory=True)
-            totals = scan_folders(root)
-            self.assertEqual(totals[root].size, 10)
-            self.assertEqual(totals[root].files, 3)
-            self.assertEqual(totals[root].extension_counts['cbz'], 2)
-            self.assertEqual(totals[root].folders, 2)
-            self.assertEqual(totals[root].skipped, 1)
-            self.assertEqual(totals[nested].size, 3)
-            self.assertIsNone(scan_folders(root, lambda: True))
-
-
-class DesktopActionTests(QtTestCase):
-    def test_platform_reveal_commands_and_linux_fallback(self):
-        from commonUtils.runtime.platform import OS
-        from commonUtils.ui import desktop_actions
-        path = Path('/tmp/test name.cbz').absolute()
-        with patch.object(desktop_actions, 'get_os', return_value=OS.MAC), patch.object(desktop_actions.subprocess, 'run') as run:
-            desktop_actions.reveal(path)
-            run.assert_called_once_with(['open', '-R', str(path)], check=True)
-        with patch.object(desktop_actions, 'get_os', return_value=OS.WIN), patch.object(desktop_actions.subprocess, 'Popen') as start:
-            desktop_actions.reveal(path)
-            self.assertEqual(start.call_args.args[0][0], 'explorer')
-        with patch.object(desktop_actions, 'get_os', return_value=OS.LINUX), patch.object(desktop_actions.subprocess, 'run', side_effect=FileNotFoundError), patch.object(desktop_actions, 'open_default') as opened:
-            desktop_actions.reveal(path)
-            opened.assert_called_once_with(path.parent)
+        from tempfile import TemporaryDirectory
+        from commonUtils.filesystem.index import DirectoryCache
+        # Exercise real indexing without the cross-process desktop coordinator.
+        # Retire Qt workers while the cache and its patch are still alive.
+        with TemporaryDirectory() as index_folder, DirectoryCache(
+                database=Path(index_folder) / 'index.sqlite3') as cache:
+            with patch('commonUtils.filesystem.index.directory_cache', cache):
+                with self.temporary_directory() as collection:
+                    root = Path(collection)
+                    (root / 'comic.cbz').write_bytes(self.path.read_bytes())
+                    from commonUtils.ui import pyside as qt
+                    folder = root / 'series'
+                    nested = folder / 'volume'
+                    nested.mkdir(parents=True)
+                    comic = nested / 'nested.cbz'
+                    comic.write_bytes(self.path.read_bytes())
+                    (folder / 'notes.txt').write_bytes(b'abc')
+                    window = comic_library(root, folder_sizes=True)
+                    window.show()
+                    self.wait(window)
+                    window.tree.expand(window.model.index(str(folder)))
+                    window.tree.expand(window.model.index(str(nested)))
+                    # Allow QFileSystemModel to populate the descendants asynchronously.
+                    self.app.processEvents()
+                    index = window.model.index(str(comic))
+                    window.tree.selectionModel().setCurrentIndex(index, qt.QItemSelectionModel.SelectionFlag.ClearAndSelect |
+                                                                 qt.QItemSelectionModel.SelectionFlag.Rows)
+                    self.wait(window)
+                    self.assertEqual(window.navigation.directory, nested)
+                    for mode in (1, 2, 0, 1):
+                        window.view_selector.setCurrentIndex(mode)
+                        self.wait(window)
+                        self.assertEqual(window.browser.root, nested)
+                        self.assertEqual(window.browser.selected_rows(), [index])
+                        self.assertEqual(window.navigation.directory, nested)
+                        self.assertTrue(window.up_button.isEnabled())
+                    window.up_button.click()
+                    self.assertEqual(window.browser.root, folder)
+                    window.navigation.back.click()
+                    self.assertEqual(window.browser.root, nested)
+                    window.navigation.forward.click()
+                    self.assertEqual(window.browser.root, folder)
+                    window.navigation.breadcrumbs.buttons[0].click()
+                    self.assertEqual(window.browser.root, root)
+                    self.assertFalse(window.up_button.isEnabled())
+                    folder_index = window.model.index(str(folder))
+                    window.browser.tiles.selectionModel().setCurrentIndex(window.browser.covers.mapFromSource(folder_index),
+                        qt.QItemSelectionModel.SelectionFlag.ClearAndSelect)
+                    self.wait(window)
+                    self.assertFalse(window.preview_panel.isHidden())
+                    self.assertIn(f'Path: {folder}', window.preview.toPlainText())
+                    self.assertIn('Comics: 1', window.preview.toPlainText())
+                    self.assertIn('Subfolders: 1', window.preview.toPlainText())
+                    from commonUtils.filesystem import format_size
+                    expected = format_size(comic.stat().st_size + 3)
+                    self.assertIn(f'Total size: {expected}', window.preview.toPlainText())
+                    self.assertEqual(window.model.data(folder_index.siblingAtColumn(1)), expected)
+                    window.browser.tiles.clearSelection()
+                    self.wait(window)
+                    self.assertFalse(window.preview_panel.isHidden())
+                    self.assertIn(f'Path: {window.navigation.directory}', window.preview.toPlainText())
+                    window.close()
+                    self.app.processEvents()

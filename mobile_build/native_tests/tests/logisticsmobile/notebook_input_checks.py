@@ -6,7 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 
 INPUT_CHECKS = r'''(()=>{
 const saved={send,state,active,points,pan,mode,inkSettings,selected,pendingInk,pendingErase,
-    busy,eraserKind,erasePreviewCount,
+    busy,eraserKind,erasePreviewCount,paperView,zoom:$('zoom').value,
     finger:$('finger').checked,tool:$('tool').value,capture:canvas.setPointerCapture,
     x:$('viewport').scrollLeft,y:$('viewport').scrollTop};
 let actions=[],paints=0;
@@ -16,6 +16,12 @@ try{
     state={...state,index:1,count:3,native_pen:true,warning:'',read_only:false};
     send=a=>actions.push(a);active=null;points=[];pan=null;mode='ink';selected=new Set();pendingInk=null;
     canvas.setPointerCapture=()=>{};$('finger').checked=false;
+    // Swiping is a full-page gesture. Phones now start with a cropped Move
+    // view, whose underlying full-scene canvas can exceed the viewport width.
+    // Establish the full-page precondition explicitly and restore it below.
+    busy=false;paperView='pro';$('paperView').value=paperView;setZoom('page');
+    require(canvas.getBoundingClientRect().width <= $('viewport').clientWidth + 1,
+        'Swipe fixture requires a fitted full page');
     const r=canvas.getBoundingClientRect(),x=r.left+30,y=r.top+120;
     const event=(id,px,py)=>({pointerId:id,pointerType:'touch',clientX:px,clientY:py,preventDefault(){}});
     canvas.onpointerdown(event(1,x+100,y));canvas.onpointermove(event(1,x,y+3));canvas.onpointerup(event(1,x,y+3));
@@ -66,6 +72,7 @@ try{
     busy=saved.busy;pendingErase=saved.pendingErase;eraserKind=saved.eraserKind;erasePreviewCount=saved.erasePreviewCount;
     mode=saved.mode;inkSettings=saved.inkSettings;selected=saved.selected;pendingInk=saved.pendingInk;
     $('finger').checked=saved.finger;$('tool').value=saved.tool;canvas.setPointerCapture=saved.capture;
+    paperView=saved.paperView;$('paperView').value=paperView;setZoom(saved.zoom);
     draw();$('viewport').scrollLeft=saved.x;$('viewport').scrollTop=saved.y;
 }
 })()'''

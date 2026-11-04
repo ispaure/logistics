@@ -120,6 +120,23 @@ class WindowOcclusionTests(unittest.TestCase):
                 regions.assert_called_with(native)
         self.loop.run_until_complete(exercise())
 
+    def test_outer_action_owner_receives_system_region_updates(self):
+        from mobile.ios_system_occlusions import observe_window_occlusions
+        outer = SimpleNamespace(view=Mock(), navigationBar=Mock())
+        self.app.native_host.adapter.outer_navigation = outer
+        more = SimpleNamespace(view=Mock(), navigationBar=Mock())
+        self.app.native_host.destinations = ['chat']
+        self.app.native_host.adapter.navigation_for = lambda destination: more
+        async def exercise():
+            with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=((382, 0, 84, 250),)):
+                observe_window_occlusions(self.app, object())
+                await asyncio.sleep(0)
+            self.clearance.assert_any_call(outer)
+            self.clearance.assert_any_call(more)
+            outer.view.layoutIfNeeded.assert_called_once()
+            more.view.layoutIfNeeded.assert_called_once()
+        self.loop.run_until_complete(exercise())
+
     def test_updates_coalesce_and_retired_windows_do_not_refresh(self):
         from unittest.mock import patch
         from mobile.ios_system_occlusions import observe_window_occlusions
@@ -255,7 +272,7 @@ class ControlClearanceTests(unittest.TestCase):
         from types import SimpleNamespace as NS
         def insets(top, left, bottom, right):
             return NS(top=top, left=left, bottom=bottom, right=right)
-        frame = NS(origin=NS(x=840, y=0), size=NS(width=100, height=700))
+        frame = NS(origin=NS(x=0, y=0), size=NS(width=940, height=44))
         bar = Mock(bounds=frame)
         bar.isHidden.return_value = False
         bar.convertRect.return_value = frame
@@ -274,3 +291,21 @@ class ControlClearanceTests(unittest.TestCase):
             regions.return_value = ()
             self.assertTrue(reserve_bar_clearance(owner))
             self.assertEqual(owner.additionalSafeAreaInsets, insets(5, 2, 3, 4))
+
+    def test_vertical_bar_prefers_controls_without_pushing_into_destination_tabs(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from mobile.ios_system_occlusions import reserve_bar_clearance
+        frame = NS(origin=NS(x=840, y=0), size=NS(width=940, height=700))
+        bar = Mock(bounds=frame)
+        bar.convertRect.return_value = frame
+        bar.isHidden.return_value = False
+        item = Mock(verticalBarCompressionBehavior=0)
+        owner = NS(view=NS(safeAreaInsets=NS(top=0)), navigationBar=bar,
+                   topViewController=NS(navigationItem=item))
+        with patch('mobile.ios_toolbar.vertical_edge', return_value=2), patch.dict(
+                sys.modules, {'rubicon.objc': NS(SEL=lambda name: name)}), patch(
+                'mobile.ios_reader_chrome.occlusion_geometry', return_value=((850, 0, 80, 170),)):
+            self.assertFalse(reserve_bar_clearance(owner))
+            self.assertEqual(item.verticalBarCompressionBehavior, 1)
+            self.assertFalse(hasattr(owner, 'additionalSafeAreaInsets'))

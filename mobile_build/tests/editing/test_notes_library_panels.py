@@ -26,8 +26,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             try:
                 with patch('features.notes_library.notes_links.connections', side_effect=slow):
                     task = self.app.loop.create_task(owner.show_links())
-                    while not started.is_set():
-                        await asyncio.sleep(.01)
+                    self.assertTrue(await asyncio.to_thread(started.wait, 2), 'Backlink worker did not start')
                     self.assertEqual(owner.links_tab, 'outgoing')
                     self.assertIs(owner.links_scroll.content, owner.link_rows)
                     self.assertTrue(owner.link_rows.children[0].text.startswith('Outgoing links ('))
@@ -35,7 +34,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
                     self.assertIs(owner.links_scroll.content, owner.backlink_rows)
                     self.assertEqual(owner.backlink_rows.children[0].text, 'Finding backlinks…')
                     release.set()
-                    await task
+                    await asyncio.wait_for(task, 3)
                     self.assertTrue(owner.backlink_rows.children[0].text.startswith('Backlinks ('))
             finally:
                 release.set()

@@ -41,15 +41,20 @@ class MkaRenameTests(unittest.TestCase):
             (self.root/f'Chapter_{number}.mka').write_bytes(bytes([number]))
         (self.root/'names.csv').write_text('1,First\n2,Second\n')
         rename = renameUtils._rename_exclusive
+        partial_publications = []
         def fail_second(source, target):
             if target.name == '2 - Second.mka':
+                partial_publications.append((self.root/'1 - First.mka').read_bytes())
                 raise OSError('simulated publication failure')
             return rename(source, target)
         with patch.object(renameUtils, '_rename_exclusive', side_effect=fail_second):
             self.assertFalse(mka.rename_from_csv(self.root))
+        self.assertEqual(partial_publications, [b'\x01'])
         for number in (1, 2):
             self.assertEqual((self.root/f'Chapter_{number}.mka').read_bytes(), bytes([number]))
         self.assertFalse(list(self.root.glob('.bulk-rename-*')))
         self.assertTrue(mka.rename_from_csv(self.root))
         self.assertEqual((self.root/'1 - First.mka').read_bytes(), b'\x01')
         self.assertEqual((self.root/'2 - Second.mka').read_bytes(), b'\x02')
+        self.assertFalse((self.root/'Chapter_1.mka').exists())
+        self.assertFalse((self.root/'Chapter_2.mka').exists())

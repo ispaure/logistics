@@ -1,9 +1,31 @@
 """Small deterministic codec fixtures; caller owns the disposable directory."""
 from pathlib import Path
+from contextlib import contextmanager
 from hashlib import sha256
 import json
+import os
 import shutil
 import subprocess
+
+
+@contextmanager
+def layout_evidence(window, path):
+    """Save screenshots on assertion failure, or explicitly for visual review."""
+    def save():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not window.grab().save(str(path)):
+            raise OSError('Could not save layout screenshot: ' + str(path))
+    try:
+        yield
+    except Exception as error:
+        try:
+            save()
+        except Exception as capture_error:
+            error.add_note('Layout screenshot capture failed: ' + str(capture_error))
+        raise
+    else:
+        if os.environ.get('LOGISTICS_TEST_SCREENSHOTS') == '1':
+            save()
 
 
 def bundled_movie(name, root):
@@ -22,12 +44,10 @@ def bundled_movie(name, root):
     return result
 
 
-def codec_matrix(root, ffmpeg='ffmpeg', *, duration=2):
+def codec_matrix(root, ffmpeg='ffmpeg', *, duration=2, regenerate=False):
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
-    if ffmpeg == 'ffmpeg' and not shutil.which(ffmpeg):
-        if duration != 2:
-            raise RuntimeError('FFmpeg is required to generate custom-duration video fixtures.')
+    if ffmpeg == 'ffmpeg' and duration == 2 and not regenerate:
         manifest = json.loads((Path(__file__).with_name('fixtures') / 'video/manifest.json').read_text())
         rows = manifest['codec_matrix']
         if len(rows) != 13:
@@ -127,9 +147,9 @@ def orientation_fixtures(root):
     root.joinpath('manifest.json').write_text(json.dumps(manifest))
 
 
-def chapter_movie(root, container='mkv', ffmpeg='ffmpeg'):
+def chapter_movie(root, container='mkv', ffmpeg='ffmpeg', *, regenerate=False):
     """A short movie with named chapter boundaries, for real decoder/menu tests."""
-    if container == 'mkv' and ffmpeg == 'ffmpeg' and not shutil.which(ffmpeg):
+    if container == 'mkv' and ffmpeg == 'ffmpeg' and not regenerate:
         return bundled_movie('chapters.mkv', root)
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
@@ -146,14 +166,14 @@ def chapter_movie(root, container='mkv', ffmpeg='ffmpeg'):
 
 
 def refresh_bundled(ffmpeg='ffmpeg'):
-    """Regenerate the small, committed clips used by hosts without FFmpeg."""
+    """Regenerate the committed clips used by deterministic decoder tests."""
     if not shutil.which(ffmpeg):
         raise RuntimeError('FFmpeg is required to regenerate the recorded fixtures.')
     from logistics_build.build_retention import scratch
     destination = Path(__file__).with_name('fixtures') / 'video'
     with scratch() as root:
-        matrix = codec_matrix(root / 'codecs', ffmpeg)
-        chapter = chapter_movie(root / 'chapters', ffmpeg=ffmpeg)
+        matrix = codec_matrix(root / 'codecs', ffmpeg, regenerate=True)
+        chapter = chapter_movie(root / 'chapters', ffmpeg=ffmpeg, regenerate=True)
         speed, black = root / 'speed-with-audio.mkv', root / 'black.mkv'
         subprocess.run([ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi', '-i',
             'testsrc2=size=128x72:rate=12:duration=24', '-f', 'lavfi', '-i',

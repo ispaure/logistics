@@ -2,37 +2,30 @@
 import argparse
 import json
 from pathlib import Path
-import time
 from unittest.mock import patch
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtTest import QTest
 from logistics_build.build_retention import scratch
+from tests.notebooks.webengine_driver import javascript, wait_until
 from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.ui.workspace import open_workspace
 from features.rclone import executable
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice
 from services.documents.storage import DocumentResource
-from local_crypt_fixture import crypt_fixture
+from tests.local_crypt_fixture import crypt_fixture
 
 
 def main(output):
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
     def wait(predicate, timeout=30):
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            app.processEvents()
-            if predicate():
-                return
-            QTest.qWait(20)
-        raise TimeoutError('Qt notebook state did not arrive')
+        wait_until(predicate, 'Qt notebook state', timeout)
+
     def evaluate(web, script):
-        answer = []
-        web.page().runJavaScript(script, lambda value: answer.append(value))
-        wait(lambda: bool(answer))
-        return answer[0]
+        return javascript(web, script, timeout=30)
+
     with scratch() as temporary, crypt_fixture(temporary, executable.get_rclone_path()) as fixture:
         provider = fixture.provider
         browser_release = provider.acquire()

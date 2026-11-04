@@ -2,7 +2,6 @@
 import argparse
 from datetime import datetime, timezone
 import hashlib
-import io
 import json
 import os
 from pathlib import Path, PureWindowsPath
@@ -11,12 +10,11 @@ import subprocess
 from threading import Event
 import time
 from uuid import uuid4
-import zipfile
 
 from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from build_manager.windows_guest import WindowsGuest
-from build_manager.guest_tools import WINDOWS_PREPARE, windows_parameters
+from build_manager.guest_tools import WINDOWS_PREPARE
 from logistics_build.build_snapshots import source_members
 from logistics_build.guest_results import GuestResultLifecycle, waiting_progress
 
@@ -127,13 +125,9 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
                       Phase('release-tooling', (python, '-m', 'unittest', 'discover', '-s', '.github/scripts', '-v'),
                             target, timeout=300, environment=environment))
         if getattr(args, 'native_notebooks', False):
-            probe_count = len(args.notebook_probe or ('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'view-zoom', 'brush-pixels'))
-            graphics_count = 4 if args.notebook_rendering == 'all' else 1
-            phases += (Phase('notebook-native', (python, 'Python/tests/notebooks/notebook_platform_probe.py',
-                '--output', str(root / reports / 'notebook-native'),
-                *(['--rendering', args.notebook_rendering] if args.notebook_rendering else []),
-                *(value for probe in args.notebook_probe or [] for value in ('--probe', probe))), target,
-                timeout=600 * probe_count * graphics_count + 30,
+            from logistics_build.notebook_validation import command
+            native_command, native_timeout = command(args, python, root / reports / 'notebook-native', windows=True)
+            phases += (Phase('notebook-native', native_command, target, timeout=native_timeout,
                 environment=environment, dependencies=('environment',)),)
         plan = Plan('Logistics', 'Focused Windows contracts' if args.pattern else 'Full local Windows platform checks',
                     args.source_identity, phases, str(root / ('operation-' + operation)), backend='Parallels Windows')
@@ -144,7 +138,8 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             execute=lambda argv, env, timeout: guest.run(argv[0], argv[1:], source, reports,
                 env, cancelled, timeout=timeout, progress=waiting_progress('Windows', 'selected checks')),
             plan_path=str(root / plan_name), reports=str(root / reports / 'manager'),
-            environment=environment, timeout=6000, cancel_file=str(root / ('cancel-' + operation)))
+            environment=environment, timeout=max(6000, sum(phase.timeout for phase in phases) + 300),
+            cancel_file=str(root / ('cancel-' + operation)))
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))
@@ -172,10 +167,8 @@ def main():
     parser.add_argument('--prepared', type=Path)
     parser.add_argument('--pattern', default='')
     parser.add_argument('--native-notebooks', action='store_true', help='Run native notebook UI probes after focused setup')
-    parser.add_argument('--notebook-probe', action='append', choices=('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'view-zoom', 'brush-pixels'),
-                        help='Select focused native checks; defaults to all checks')
-    parser.add_argument('--notebook-rendering', choices=('native', 'software', 'chromium-software', 'warp', 'all'),
-                        help='Select a graphics path for native notebook acceptance')
+    from logistics_build.notebook_validation import arguments
+    arguments(parser, windows=True)
     parser.add_argument('--manager-checkout', type=Path)
     parser.add_argument('--manager-working-tree', help='Exact captured manager content identity for explicit local testing only')
     parser.add_argument('--shutdown', action='store_true')

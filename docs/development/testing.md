@@ -306,9 +306,18 @@ storage and distinguish a focused comparison from a full-suite benchmark.
 
 Prefer removing repeated fixture work before narrowing coverage. The developer
 command and native-report tests stub repeated full-tree scans, with small real
-preflight fixtures protecting acceptance and rejection. LM UI tests still use
-real local HTTP requests and Qt events; only the server's shutdown polling is
-shortened. See [fixture guidance](adding-tests.md).
+preflight fixtures protecting acceptance and rejection. LM UI integration tests
+use real local HTTP requests and Qt events with short server shutdown polling.
+HTTP reads have a fixture timeout, and shutdown joins request workers as well as
+the listener thread. Loopback server setup avoids reverse DNS.
+Widget-only cases use a separate fixture that rejects HTTP starts. Inactivity
+checks establish a partial reply, then use a heartbeat to verify the transport
+rearms the short deadline; mobile send
+checks hold the fixture stream until the next draft is entered. Deferred-save
+checks wait for queued writes with a bounded deadline and retire them before
+removing storage. Mobile chat app fixtures restore enclosing storage/app/loop
+state even after setup failures and dispose their conversation menus. See
+[fixture guidance](adding-tests.md).
 
 Help-viewer tests build their expected page inventory once per unchanged wiki
 scope while still opening every feature guide and exercising every folder's
@@ -355,6 +364,7 @@ selection when a guide does not need to name an individual test class.
 | `chat/` | LM conversations, generation, streaming and storage adapters |
 | `ide/` | IDE layout, browser, navigation and search |
 | `blender/` | Blender integration, library, metadata and operation UI |
+| `calibre/` | Calibre library launch and transactional device exports |
 | `tooling/` | Build, documentation, architecture and runner contracts |
 
 The root `test_mobile*.py` profiles remain at their established paths because
@@ -383,7 +393,7 @@ the map does not invent individual maintainer assignments.
 | Owner | Start with |
 | --- | --- |
 | Feature infrastructure | `Python/tests/application/test_feature_registry.py`, `test_feature_preferences.py`, `test_settings_page.py` |
-| Desktop shell/documents | `Python/tests/application/test_main_window.py`, `Python/tests/readers/test_document_workspace.py` |
+| Desktop shell/documents | `Python/tests/application/test_main_window_navigation.py`, `test_document_hosting.py`, `test_notes_library_hosting.py`, `test_reader_host_integration.py`, `Python/tests/application/test_document_workspace.py` |
 | LM conversation lifecycle and presentation | `Python/tests/chat/test_lm_session.py`, `test_lm_ui.py`, `test_lm_appearance.py` |
 | Git history, search, preview and job ownership | `Python/tests/version_control/test_git_ui.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
 | Blender presentation and operation lifecycle | `Python/tests/blender/test_blender_page.py`, `test_blender_settings.py`, `test_blender_library.py` |

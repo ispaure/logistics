@@ -218,7 +218,7 @@ loaded packages together. The bridge remains the final busy/publication authorit
 across scenes and clients.
 
 `test_credential_service.py`, `test_native_credential_service.py`,
-`test_archive_credentials.py`, the Settings/Workspaces unlock tests and mobile
+`test_credential_archive.py`, the Settings/Workspaces unlock tests and mobile
 credential/retention/SMB suites cover these boundaries. The host native-bridge
 fixture saves/restores and forgets a native vault and retained ZIP using synthetic
 protected keys, loads credentials through the service, and runs the remote/transfer
@@ -274,7 +274,7 @@ for reusable verification, staging and worker behavior.
 ## Validation
 
 Use the [project test commands](../../../../development/getting-started.md).
-`test_archive_credentials.py` covers in-memory package validation/config output,
+`test_credential_archive.py` covers in-memory package validation/config output,
 `test_folder_sources_ui.py` covers source selection/context, and `test_software.py`
 covers provisioning policy. Tests use local fixtures and mocked providers; actual
 remote transfers and credential ownership of existing mounts need platform checks.
