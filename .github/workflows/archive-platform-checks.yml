@@ -162,12 +162,12 @@ jobs:
             test-results/browser-diagnostics/*.png
           retention-days: 14
 
-  fedora43:
+  fedora:
     needs: environment
     if: ${{ !inputs.target || inputs.target == 'all' || inputs.target == 'linux' }}
     name: Fedora desktop
     runs-on: ${{ needs.environment.outputs.linux_runner }}
-    timeout-minutes: 35
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -178,11 +178,24 @@ jobs:
         run: python logistics_build/release_test_evidence.py fetch
       - name: Fetch the historical public submodule for parity tests
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
+      - name: Set up the Fedora image builder
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Prepare the shared Fedora test image
+        timeout-minutes: 20
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: Python/tests/platform
+          file: Python/tests/platform/fedora.Containerfile
+          build-args: FEDORA_IMAGE=${{ needs.environment.outputs.fedora_image }}
+          load: true
+          pull: true
+          tags: logistics-fedora-tests:local
+          cache-from: type=gha,scope=fedora-tests-${{ runner.arch }}
+          cache-to: type=gha,mode=max,scope=fedora-tests-${{ runner.arch }}
       - name: Run the single Fedora desktop suite
         env:
-          FEDORA_IMAGE: ${{ needs.environment.outputs.fedora_image }}
           TEST_PYTHON: ${{ needs.environment.outputs.python_version }}
-        run: docker run --rm -e GITHUB_ACTIONS -e GITHUB_REPOSITORY -e GITHUB_SHA -e GITHUB_REF -e LOGISTICS_REUSE_TEST_RESULTS -e TEST_PYTHON -v "$PWD:/workspace" -w /workspace "$FEDORA_IMAGE" bash Python/tests/platform/fedora43.sh
+        run: docker run --rm -e GITHUB_ACTIONS -e GITHUB_REPOSITORY -e GITHUB_SHA -e GITHUB_REF -e LOGISTICS_REUSE_TEST_RESULTS -e TEST_PYTHON -v "$PWD:/workspace" -w /workspace logistics-fedora-tests:local bash Python/tests/platform/fedora.sh
       - name: Return container reports to the runner account
         if: always()
         run: |
@@ -193,7 +206,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: archive-checks-fedora43
+          name: archive-checks-fedora
           path: |
             test-results/**/*.json
             test-results/**/*.log
