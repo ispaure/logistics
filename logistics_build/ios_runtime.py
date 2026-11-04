@@ -84,7 +84,17 @@ def _test(root, cache, model, runtime, lease, output, run):
             device = client.create(name, model, runtime)
             save_json(lease, dict(device=device, name=name))
             record.update(device=device, model=model, runtime=runtime)
-            client.boot(device)
+            boot = time.monotonic()
+            try:
+                client.boot(device, name=name)
+            except subprocess.TimeoutExpired as error:
+                try:
+                    from mobile_build.validation.ui_tools import boot_timeout_details
+                    record['boot_timeout'] = boot_timeout_details(error, boot,
+                        dict(device=device, name=name, model=model, runtime=runtime), lease)
+                except Exception:
+                    error.add_note('Owned core boot timeout diagnostics could not be captured.')
+                raise
             base = cpython_testbed.ios_build_command(testbed, device,
                                                     deployment_target=settings()['ios_deployment_target'])
             command([*base, 'build-for-testing'], testbed, 600)

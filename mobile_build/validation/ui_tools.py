@@ -568,6 +568,22 @@ def ios_device(*, ipad=False, duo=False):
     return select_ios_device(data, ipad=ipad, duo=duo)
 
 
+def boot_timeout_details(error, started, record, lease):
+    """Capture the known owned lease and failing stage without another device action."""
+    def decoded(value):
+        return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
+    command = [str(part) for part in error.cmd] if isinstance(error.cmd, (tuple,list)) else str(error.cmd)
+    tokens = command if isinstance(command, list) else command.split()
+    stage = 'unknown'
+    for index, token in enumerate(tokens[:-1]):
+        if Path(token).name == 'simctl':
+            stage = {'boot': 'boot', 'bootstatus': 'bootstatus', 'list': 'inventory'}.get(tokens[index+1], 'unknown')
+            break
+    return dict(device=record['device'], command=command, stage=stage, timeout=error.timeout,
+        elapsed_seconds=time.monotonic()-started, lease=str(lease), lease_record=dict(record),
+        stdout=decoded(error.stdout), stderr=decoded(error.stderr))
+
+
 def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
     """Use the same fresh, owned simulator lifecycle as local native QA."""
     from build_manager.apple_simulators import AppleSimulators
@@ -593,27 +609,29 @@ def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
     name = 'Logistics Native Gate ' + uuid4().hex
     device = client.create(name, profile['deviceTypeIdentifier'], runtime)
     lease.parent.mkdir(parents=True, exist_ok=True)
-    lease.write_text(json.dumps(dict(device=device, name=name, runtime=runtime,
-        device_type=profile['deviceTypeIdentifier'], sdk=sdk)))
+    record = dict(device=device, name=name, runtime=runtime,
+                  device_type=profile['deviceTypeIdentifier'], sdk=sdk)
+    lease.write_text(json.dumps(record))
+    boot_started = time.monotonic()
     try:
-        client.boot(device)
+        client.boot(device, name=name)
     except subprocess.TimeoutExpired as error:
         # bootstatus reports its current boot phase on stdout. Keep that
         # evidence even when the simulator never becomes responsive.
-        def decoded(value):
-            return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
-        lease.with_name('ios-native-ui-boot-timeout.json').write_text(json.dumps(dict(
-            device=device, timeout=error.timeout,
-            stdout=decoded(error.stdout), stderr=decoded(error.stderr))))
+        try:
+            details = boot_timeout_details(error, boot_started, record, lease)
+            lease.with_name('ios-native-ui-boot-timeout.json').write_text(json.dumps(details))
+        except Exception:
+            error.add_note('Owned boot timeout diagnostics could not be captured or saved.')
         raise
     return device
 
 
 def cleanup_owned_ios_device(lease, *, client=None):
-    from build_manager.apple_simulators import AppleSimulators
     lease = Path(lease)
     if not lease.exists():
         return
+    from build_manager.apple_simulators import AppleSimulators
     record = json.loads(lease.read_text())
     if not record['name'].startswith('Logistics Native Gate '):
         raise ValueError('Refusing cleanup without the native gate ownership label.')
