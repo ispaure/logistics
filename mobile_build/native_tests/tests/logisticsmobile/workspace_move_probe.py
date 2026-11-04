@@ -40,8 +40,21 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
                              if entry.payload and entry.payload.get('path') == source)
                 await browser.select(entry)
                 menu = browser.show_item_menu(app.file_item_commands())
-                menu.invoke(dict(menu.actions)['Move…'])
-                menu.dispose()  # Native selection also dismisses the originating sheet.
+                if type(app._impl).__module__.startswith('toga_android.'):
+                    index = next(i for i, (title, _) in enumerate(menu.actions) if title == 'Move…')
+                    native = menu.native.getListView()
+                    assert native.performItemClick(native.getChildAt(index), index,
+                                                   native.getItemIdAtPosition(index))
+                    for _ in range(500):
+                        action = app.editor_picker().operation.destination_action
+                        if action is not None and action.path == source:
+                            break
+                        await asyncio.sleep(.01)
+                    else:
+                        raise AssertionError('Native Move selection did not open the destination picker')
+                else:
+                    menu.invoke(dict(menu.actions)['Move…'])
+                    menu.dispose()
                 await asyncio.wait_for(asyncio.gather(*tuple(browser.work.tasks)), 60)
                 picker = app.editor_picker()
                 assert picker.operation.destination_action.path == source
