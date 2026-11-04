@@ -35,6 +35,10 @@ therefore return to the retained source folder, preserving its viewport.
 `test_remote_downloads.py` covers the route handoff and retained source panel.
 The download picker's Shared files provider excludes managed collection rows;
 Local files and Received Files remain separate storage choices in its dropdown.
+Leaving a cleared picker on the stack exposes an empty Workspaces form even
+after the busy flag resets, and tab changes retain that unusable form.
+`test_transfer_feedback.py` covers Back, tab changes and local browsing during
+selected downloads, plus worker success, failure and cancellation cleanup.
 
 `workspace_navigation.WorkspaceNavigation` owns destination routes, open/closed
 drawer state, retained drawer references and paired-session selection.
