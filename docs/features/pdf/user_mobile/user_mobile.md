@@ -27,13 +27,16 @@ title and controls. The PDF reader does not show EPUB chapter or speech actions.
 PDFs are read-only, limited to 32 MiB and 10,000 pages. Pages are fitted to the
 reading pane and rasterized on demand. **× (Close document)** closes the reader
 and returns to its originating folder or screen; Android Back does the same
-after dismissing open search/tools. Reopening resumes the page during the app
-session. Remembered provider positions clear when private readers are locked
-or the app restarts.
+after dismissing open search/tools. Reopening can resume the saved page. Credential-backed remote and LocalCrypt
+positions can persist encrypted with the owning credential ZIP password; unlock
+that credential again to restore them. Passwordless private sessions retain
+positions only in memory. Locking retires the active reader, rather than deleting
+its encrypted checkpoint. See [reader state and history clearing](../../../development/reader-state.md)
+for password migration and clearing behavior.
 Decrypted bytes and page images stay in memory and clear on close; remote and
 LocalCrypt sessions also retire when credentials change. Password-protected and
-damaged PDFs cannot be opened. PDF password entry and PDF annotation editing
-are not supported.
+damaged PDFs cannot be opened. PDF password entry and editing annotations directly in the original PDF
+are not supported. Use the duplicate-to-notebook action for editable ink.
 
 PDFs open fullscreen. Tap the PDF page to restore the controls; tap it again to hide them.
 Fullscreen fits the whole page to the largest size the screen allows while
@@ -64,7 +67,9 @@ the document session closes.
 ## Search
 
 Open **Pages & search**. Enter text in **Find in PDF** and submit it or choose **Next match**. Search
-ignores case and covers the whole document. Next match and Previous match wrap
+ignores case, treats repeated whitespace as a single space, and searches literal
+text across the whole document. Queries are limited to 256 characters; regular
+expressions are not supported. Next match and Previous match wrap
 around the results and jump to the matching page. A result count and text snippet
 identify each match, including multiple matches on the same page. Clear the
 query to clear results.
