@@ -76,6 +76,10 @@ def main():
         try:
             if args.platform=='ios':
                 receipt=json.loads(args.ios_shell_receipt.read_text())
+                from mobile_build.validation.drawer_privacy_tools import verify_shell
+                verified=verify_shell(receipt,captured['logistics_commit'])
+                verified['scope']='Notebook image/password iPad simulator acceptance; synthetic pointer delivery'
+                (output/'verified-ios-shell.json').write_text(json.dumps(verified,indent=2))
                 (output/'compiled-shell.json').write_text(json.dumps(receipt,indent=2))
                 driver.run_ios(work,payload,output,env,family='iPad',source_app=Path(receipt['app']),**profile)
             elif args.android_shell_receipt:
