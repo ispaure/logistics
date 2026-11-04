@@ -14,11 +14,11 @@ def file_list_icon(folder):
 
 
 class RecycledFileList(RecycledList):
-    def __init__(self, *, row_kind='File', icon_kind='documents', **kwargs):
+    def __init__(self, *, row_kind='File', icon_kind='documents', icon_size=28, **kwargs):
         self.icon_kind = icon_kind
         appearance = ListAppearance(palette=android_palette, apple_color=apple_color,
             high_contrast=eink_enabled, icon=lambda folder: icon('files' if folder else icon_kind),
-            row_height=TOUCH_TARGET, body_text=BODY_TEXT, caption_text=CAPTION_TEXT)
+            row_height=TOUCH_TARGET, body_text=BODY_TEXT, caption_text=CAPTION_TEXT, icon_size=icon_size)
         super().__init__(row_kind=row_kind, appearance=appearance, **kwargs)
         app = toga.App.app
         if not hasattr(app, '_recycled_file_lists'):
