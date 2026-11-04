@@ -12,6 +12,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice
+from tests.readers.decoder_fixtures import headless_vlc_playback, require_qt_decoder
 
 
 class VideoDecodeTests(QtTestCase):
@@ -24,7 +25,8 @@ class VideoDecodeTests(QtTestCase):
             path = bundled_movie('h264-aac.mp4', root)
             release = Mock()
             with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
-                window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release))
+                window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release),
+                                     backend_factory=headless_vlc_playback)
             try:
                 window.show()
                 self.wait_until(lambda: window.player.duration() > 1000
@@ -82,7 +84,8 @@ class VideoDecodeTests(QtTestCase):
             path = chapter_movie(root)
             release = Mock()
             with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
-                window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release))
+                window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release),
+                                     backend_factory=headless_vlc_playback)
             try:
                 self.wait_until(lambda: window.player.duration() > 10000 and window.player.position() > 100)
                 window.player.pause()
@@ -100,6 +103,7 @@ class VideoDecodeTests(QtTestCase):
 
     @unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg track muxer is required')
     def test_embedded_track_selection_and_external_srt(self):
+        require_qt_decoder(self)
         from logistics_build.build_retention import scratch
         from tests.readers.video_fixtures import bundled_movie, multitrack_movie
         from features.video.ui.player import VideoWindow
@@ -137,6 +141,7 @@ class VideoDecodeTests(QtTestCase):
 
     @unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg track muxer is required')
     def test_repeated_track_changes_retire_native_audio_without_python_callbacks(self):
+        require_qt_decoder(self)
         import shiboken6
         from logistics_build.build_retention import scratch
         from tests.readers.video_fixtures import bundled_movie, multitrack_movie
@@ -172,6 +177,7 @@ class VideoDecodeTests(QtTestCase):
                     self.assertFalse(shiboken6.isValid(audio))
 
     def test_requested_codec_matrix_decodes_video_and_audio(self):
+        require_qt_decoder(self)
         from PySide6.QtMultimedia import QAudioBufferOutput, QMediaPlayer, QVideoSink
         from logistics_build.build_retention import scratch
         from tests.readers.video_fixtures import codec_matrix
