@@ -5,7 +5,8 @@ config and the platform's filesystem support.
 
 ## Open a mount
 
-1. Load credentials using the [rclone guide](../../rclone/user/user.md).
+1. Load and persist credentials using the [rclone guide](../../rclone/user/user.md).
+   Session-only credentials do not expose this mount action.
 2. Select the remote on **Workspaces**.
 3. Choose **Open Mount Folder** in its FUSE section.
 4. If asked, download the required rclone executable or platform driver installer.
@@ -41,3 +42,13 @@ Mount attempts show a progress dialog. Close/cancel waits for the current attemp
 an already completed mount remains mounted. Disabling the feature does not unmount
 an existing remote. Changes made through the mounted folder affect its remote
 storage; it is not a separate backup copy.
+
+## Credential changes and existing mounts
+
+An existing mount must match the credential file and credential identity that
+created it in this Logistics process. A mount inherited after restarting the app,
+or one whose credentials changed, is refused. Explicitly unmount it using your
+platform’s tools, then retry **Open Mount Folder**. Unknown mounts are preserved.
+
+Mounts are a [desktop capability](../user_mobile/user_mobile.md); Android and iOS
+use online browsing and downloaded copies instead.
