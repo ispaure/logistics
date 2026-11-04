@@ -1,8 +1,8 @@
 # Archives documentation
 
-Choose a guide for the task you want to complete.
+The Archive manager is a desktop feature. Choose a guide for controls, platform
+limits or implementation ownership.
 
-## Further reading
-
-- [Archives](development/development.md)
-- [Archive manager](user/user.md)
+- [Desktop Archive manager](user/user.md)
+- [Archives on mobile](user_mobile/user_mobile.md)
+- [Archives development](development/development.md)
