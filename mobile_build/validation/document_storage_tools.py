@@ -33,6 +33,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.notes_rows_performance_probe'):
+        return NATIVE_DIAGNOSTICS + ('notes-performance-progress.json', 'notes-performance-window.json')
     if entry_point.endswith('.chat_notes_feedback_probe'):
         return tuple(dict.fromkeys((*diagnostics('.chat_settings_probe'),
             *diagnostics('.notes_search_probe'), 'chat-settings-result.json', 'notes-search-result.json')))
@@ -475,9 +477,12 @@ def prepare_chat_notes_emulator(emulator, serial, output):
 
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
-                result_name='document-storage-result.json', device=None, tablet=False, reuse_project=False):
+                result_name='document-storage-result.json', device=None, tablet=False, reuse_project=False,
+                observe=None, probe_timeout=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
+        raise ValueError('Probe timeout must be 1 to 3600 seconds.')
     memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe', '.notebook_load_probe'))
     project = workspace / 'build/logisticsmobile/android/gradle'
     if reuse_project:
@@ -512,17 +517,21 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     command([project / 'gradlew', *([] if raw_ink else ['--offline']), '--no-daemon', 'assembleDebug'], output / 'android-build.log', cwd=project, env=env)
     return exercise_android_app(project / 'app/build/outputs/apk/debug/app-debug.apk',
         workspace, output, env, options, bundle=bundle, entry_point=entry_point,
-        result_name=result_name, device=device, tablet=tablet, reuse_project=reuse_project)
+        result_name=result_name, device=device, tablet=tablet, reuse_project=reuse_project,
+        observe=observe, probe_timeout=probe_timeout)
 
 
 def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         entry_point='tests.logisticsmobile.document_storage_probe',
-        result_name='document-storage-result.json', device=None, tablet=False, startup_timeout=600, install_timeout=180, reuse_project=False):
+        result_name='document-storage-result.json', device=None, tablet=False, startup_timeout=600, install_timeout=180, reuse_project=False,
+        observe=None, probe_timeout=None):
     """Run a verified QA APK on an owned device, independently of its build phase."""
     from hashlib import file_digest
     from mobile_build.deployment.android_deploy import build_tools
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
+        raise ValueError('Probe timeout must be 1 to 3600 seconds.')
     output.mkdir(parents=True, exist_ok=True)
     metadata = subprocess.check_output([str(build_tools(env) / 'aapt2'), 'dump', 'badging', str(apk)],
                                       env=env, text=True, timeout=30)
@@ -555,6 +564,8 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         else:
             record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
+        if observe is not None:
+            observe('ready', emulator, record, output)
         if device is None and not tablet and entry_point.endswith('.android_header_probe'):
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '720x1600')
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
@@ -581,10 +592,14 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         if device is None and entry_point.endswith('.chat_notes_feedback_probe'):
             prepare_chat_notes_emulator(emulator, serial, output)
+        if observe is not None:
+            observe('installed', emulator, record, output)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.lockscreen_probe', '.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe', '.documentation_header_probe', '.android_header_probe')) else 240)
+        deadline = time.monotonic() + (probe_timeout if probe_timeout is not None else 2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.lockscreen_probe', '.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe', '.documentation_header_probe', '.android_header_probe')) else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
+            if observe is not None:
+                observe('poll', emulator, record, output)
             if entry_point.endswith(('.documentation_header_probe', '.android_header_probe')):
                 capture = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/header-capture.json'], env=env, capture_output=True, timeout=15)
@@ -676,6 +691,8 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                     time.sleep(.2)
                     continue
                 (output / 'android-result.json').write_text(json.dumps(result, indent=2))
+                if observe is not None:
+                    observe('result', emulator, record, output)
                 if not result['success']:
                     raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
                 if result_name == 'notebook-result.json':

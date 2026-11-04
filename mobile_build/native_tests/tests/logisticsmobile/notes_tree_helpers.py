@@ -39,7 +39,8 @@ async def native_row_control(owner, path, control='title'):
         row = next(row for row in rows.children if row.path == path)
         generation = rows.native_list._impl.generation
         view = getattr(native, names[control])(row.index, generation)
-        if view is not None and view.getWidth() > 0 and view.getHeight() > 0:
+        if (view is not None and view.isAttachedToWindow() and view.isShown()
+                and view.getWidth() > 0 and view.getHeight() > 0):
             return view
         native.setSelection(row.index)
         await asyncio.sleep(.02)
