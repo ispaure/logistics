@@ -3,6 +3,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import json
+from dataclasses import replace
 import os
 from pathlib import Path
 import subprocess
@@ -118,6 +119,31 @@ class RetainedDeviceTests(unittest.TestCase):
         self.assertEqual(len({p.artifacts[0] for p in installs}), 3)
         self.assertTrue(all(p.retry_exit_codes == (75,) for p in plan.phases if p.kind == 'connection'))
         self.assertTrue(all('--receipt' in p.argv and p.artifacts[0] in p.argv for p in installs))
+
+    def test_real_executor_owns_primary_lock_and_protects_secondary_workspace(self):
+        from build_manager.executor import Executor
+        from build_manager.locking import workspace_lock
+        plan = self.make(['ios-devices', 'android-devices'],
+                         {'devices.ios': '["ios-a"]', 'devices.android': '["android-a"]'})
+        primary = Path(plan.workspace)
+        self.assertNotIn(str(primary / 'operation.lock'), plan.resource_locks)
+        proof = json.loads(Path(plan.settings['retained_delivery']['proof']).read_text())
+        secondary = next(Path(recipe).parent for recipe in proof['recipes'] if Path(recipe).parent != primary)
+        secondary_lock = str(secondary / 'operation.lock')
+        self.assertIn(secondary_lock, plan.resource_locks)
+        ran = self.root / 'harmless-phase-ran'
+        stub = Phase('harmless-lock-probe', (sys.executable, '-c',
+            'from pathlib import Path; Path(' + repr(str(ran)) + ').touch()'), str(primary), effect='inspect')
+        executable = replace(plan, phases=(stub,), effect='inspect')
+        runner = Executor(resource_directory=self.root / 'resource-slots', evidence_directory=self.root / 'evidence')
+        with workspace_lock(secondary / 'operation.lock'):
+            blocked = runner.run(executable, self.root / 'blocked-run')
+        self.assertEqual(blocked['status'], 'failed')
+        self.assertIn('Another operation owns this workspace', blocked['error'])
+        self.assertFalse(ran.exists())
+        completed = runner.run(executable, self.root / 'successful-run')
+        self.assertEqual(completed['status'], 'passed', completed.get('error'))
+        self.assertTrue(ran.is_file())
 
     def test_failed_applicable_gate_or_cleanup_is_rejected_before_workspace_creation(self):
         for index in (0, 1, 2, 3):
