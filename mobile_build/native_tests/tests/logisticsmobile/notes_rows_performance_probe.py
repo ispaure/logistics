@@ -168,8 +168,12 @@ class NotesRowsPerformanceProbe(DocumentWorkspaceProbe):
         assert owner.path == before
         owner.sidebar.show_sidebar()
         icon = await native_row_control(owner, 'Library/Folder/Note 00.md', 'icon')
-        assert icon.performLongClick()
-        assert owner.file_drag.source == 'Library/Folder/Note 00.md'
+        # performLongClick has no physical pointer stream: Android may deliver
+        # ACTION_DRAG_ENDED before it returns. Check the authorized source at
+        # initiation rather than requiring a cancelled gesture to remain live.
+        with patch.object(owner.file_drag, 'start', wraps=owner.file_drag.start) as started:
+            assert icon.performLongClick()
+            started.assert_called_once_with('Library/Folder/Note 00.md')
         icon.cancelDragAndDrop()
         owner.file_drag.end()
         native = rows.native_list._impl.native
