@@ -232,7 +232,10 @@ def make_plan(project, run_directory, destinations, run_overrides=None):
             workspace = Path(owned.workspace)
             runner = workspace / 'manager_devices.py'; runner.write_bytes(Path(devices.__file__).read_bytes())
             verifier = workspace / 'retained_devices.py'; verifier.write_bytes(Path(__file__).read_bytes())
-        locks.append(str(Path(owned.workspace) / 'operation.lock'))
+        else:
+            # Executor owns the primary Plan.workspace lock already. Only the
+            # other platform workspaces need additional lifetime protection.
+            locks.append(str(Path(owned.workspace) / 'operation.lock'))
         _require(all(phase.description != 'Development variant · separate from Release' for phase in owned.phases),
                  'Retained delivery must never fall back to compilation.')
         recipe = Path(owned.workspace) / 'recipe.json'
