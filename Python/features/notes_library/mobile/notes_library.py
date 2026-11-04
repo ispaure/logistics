@@ -828,6 +828,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     icon_name = 'folder_document' if page is not None else 'folder_hub'
                     entry_icon = self.host.presentation.icon_button(icon_name, toggle_label, on_press=expand)
                     self.host.presentation.apply_icon(entry_icon, icon_name, toggle_label, size=20)
+                    entry_icon.browser_entry_kind = 'folder_document' if page is not None else 'folder'
                     entry_icon.style.width = 32
                     entry_icon.style.height = 48
                     compact_file_row_padding(entry_icon)
