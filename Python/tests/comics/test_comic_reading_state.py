@@ -8,43 +8,32 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import json
 from contextlib import contextmanager
-import time
-from io import BytesIO
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import zipfile
 
-from PIL import Image
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
 from features.comics.reading_state import ReadingState
 from features.comics.ui.reader import ComicReaderWindow
+from tests.comics.fixtures import encoded_page
 
 
 class ComicResumeTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
         self.folder = self.root / 'state'
         self.path = self.root / 'a.cbz'
-        image = BytesIO()
-        Image.new('RGB', (100, 150), 'orange').save(image, format='PNG')
         for name in ('a.cbz', 'b.cbz'):
             with zipfile.ZipFile(self.root / name, 'w') as archive:
                 for number in range(4):
-                    archive.writestr(f'{number}.png', image.getvalue())
+                    archive.writestr(f'{number}.png', encoded_page(size=(100, 150)))
 
     def wait(self, reader):
-        deadline = time.monotonic() + 5
-        while (reader.busy or reader.page_cache.busy) and time.monotonic() < deadline:
-            self.app.processEvents()
-            time.sleep(.01)
-        self.app.processEvents()
-        self.assertFalse(reader.busy or reader.page_cache.busy)
+        self.wait_until(lambda: not (reader.busy or reader.page_cache.busy))
 
     def reader(self):
         reader = ComicReaderWindow(ComicPages(self.path), state_folder=self.folder)

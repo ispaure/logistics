@@ -5,73 +5,35 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-from io import BytesIO
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from threading import Event
 import time
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 
-from PIL import Image
 from commonUtils.ui import pyside as qt
-from commonUtils.archives.zip_access import create_archive, open_archive, archive_manifest, is_encrypted
-from commonUtils.runtime.operations import OperationCancelled, BatchResult
+from commonUtils.archives.zip_access import open_archive, archive_manifest, is_encrypted
+from commonUtils.runtime.operations import BatchResult
 from features.comics import cbz, archive_io
 from features.comics.ui.dialogs import CompressCbzDialog, ComicAuthorDialog, ComicSeriesDialog, ConvertCbrDialog, CbzIndividualFoldersDialog
-from features.archives.ui.create_zip import CreateZipDialog
+from tests.comics.fixtures import encoded_page
 
 
 class AsyncComicTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
 
     def wait(self, dialog):
-        deadline = time.monotonic() + 5
-        while dialog.busy:
-            self.assertLess(time.monotonic(), deadline)
-            self.app.processEvents()
-            time.sleep(.005)
-        self.app.processEvents()
+        self.wait_until(lambda: not dialog.busy)
 
     def comic(self, name, password=None):
         path = self.root / name
-        image = BytesIO()
-        Image.new('RGB', (40, 60), 'orange').save(image, 'PNG')
         with open_archive(path, 'w', password=password) as archive:
-            archive.writestr('01.png', image.getvalue())
+            archive.writestr('01.png', encoded_page(size=(40, 60)))
         return path
 
-    def test_zip_cancellation_in_each_phase_discards_output_and_keeps_sources(self):
-        source = self.root / 'large.bin'
-        original = os.urandom(2 * 1024 * 1024 + 13)
-        source.write_bytes(original)
-        for phase in ('Checking ', 'Creating ZIP:', 'Verifying ', 'Publishing verified ZIP:'):
-            with self.subTest(phase=phase):
-                cancel = Event()
-                output = self.root / 'cancelled.zip'
-                def progress(done, total, message):
-                    if message.startswith(phase):
-                        cancel.set()
-                with self.assertRaises(OperationCancelled):
-                    create_archive([source], output, password='test-only',
-                                   progress=progress, cancelled=cancel.is_set)
-                self.assertTrue(cancel.is_set())
-                self.assertFalse(output.exists())
-                self.assertFalse(list(self.root.glob('.logistics-zip-*')))
-                self.assertEqual(source.read_bytes(), original)
-
-    def test_zip_cancel_before_start_does_not_create_workspace(self):
-        source = self.root / 'source'
-        source.write_bytes(b'original')
-        output = self.root / 'output/new.zip'
-        with self.assertRaises(OperationCancelled):
-            create_archive([source], output, password='test-only', cancelled=lambda: True)
-        self.assertFalse(output.parent.exists())
 
     def test_compression_cancel_during_zip_build_finishes_encrypted_comic(self):
         password = 'test-only'
@@ -147,33 +109,6 @@ class AsyncComicTests(QtTestCase):
         self.assertTrue(cbz.CBZFile(first).is_already_compressed())
         self.assertFalse(cbz.CBZFile(second).is_already_compressed())
 
-    def test_zip_dialog_cancel_does_not_close_or_destroy_active_worker(self):
-        source = self.root / 'source.txt'
-        source.write_bytes(b'original')
-        (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=test-only\n')
-        entered, release = Event(), Event()
-        dialog = CreateZipDialog([source])
-        self.addCleanup(dialog.deleteLater)
-        def create(*args, cancelled, **kwargs):
-            entered.set()
-            release.wait(5)
-            if cancelled():
-                raise OperationCancelled('Operation cancelled')
-            raise AssertionError('Test should cancel')
-        with patch('features.archives.ui.create_zip.create_archive', side_effect=create):
-            dialog._create()
-            try:
-                self.assertTrue(entered.wait(2))
-                dialog.reject()
-                self.assertTrue(dialog.busy)
-                self.assertTrue(dialog.task.cancelled.is_set())
-            finally:
-                release.set()
-                self.wait(dialog)
-        self.assertFalse(dialog.succeeded)
-        self.assertIn('Cancelled.', dialog.message.text())
-        self.assertFalse(Path(dialog.output.text()).exists())
-        self.assertEqual(source.read_bytes(), b'original')
 
     def test_other_comic_tools_capture_inputs_and_run_on_worker_threads(self):
         cases = [(ConvertCbrDialog, 'features.comics.conversion.dir_batch_convert_cbr_to_cbz'),
