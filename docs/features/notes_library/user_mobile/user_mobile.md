@@ -133,9 +133,9 @@ Horizontal tables, selected text and zoomed pages retain their ordinary gestures
 Floating Files and Links panels dim the content behind them and block its controls until the
 panel closes. Tap the dimmed area to dismiss either panel; there is no panel X.
 The library drawer uses the full usable screen height. Its tabs stay at the top;
-the library name and storage/editability caption stay at the bottom. Files has
-a compact footer for New document, New folder, Collapse all folders and Library
-actions. Tap the library name to browse its root; it also accepts file drops.
+a centered row directly below them contains New document, New folder and
+Collapse all folders. The panel has no library identity/status footer or redundant
+library actions menu. The Files tab accepts drops to the library root.
 File rows keep the existing font size and touch height.
 
 The left panel has **Files**, **Search** and **Calendar** tabs. Files uses the
@@ -200,5 +200,5 @@ navigation visibility; destination tabs can remain hidden while a document is op
 
 Each Notes Library file/folder row has **…** actions for Move / rename, Copy and
 Delete when supported by its storage. Hold and drag its icon onto a folder
-to move it, or onto the library name in the footer to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
+to move it, or onto the Files tab to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
 confirmation and existing copy/move destinations are preserved.
