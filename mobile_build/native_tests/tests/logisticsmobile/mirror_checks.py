@@ -2,10 +2,37 @@
 
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from threading import Event
 from unittest.mock import patch
+
+TEST_STAGE = TestStage.REGRESSION
+
+
+async def browse_local_during_transfer(app, folder):
+    """Reach an ordinary folder through the actual Local / Others workspace."""
+    cancel = app.transfer_controller()._transfer_cancel
+    app.show_locations()
+    app.folder_source_buttons['Local'].on_press()
+    app.folder_local_buttons['Others'].on_press()
+    assert folder not in app.folder_buttons
+    assert await app.folder_buttons['All files'].on_press()
+    for name in ('Local', folder):
+        row = next(row for row in app.file_rows.values() if row['name'] == name)
+        assert await app.browser_file_folder(row)
+    assert app.file_path == folder
+    assert await app.browser_file_location(('Local files', folder))
+    assert any(item.label == 'Local note.txt' for item in app.file_browser.entries)
+    # Shared Files is the workspace entry point. Back traverses the ordinary
+    # collection and its shared parent before returning to Workspaces.
+    await app.parent_file_folder()
+    assert app.file_storage.value == 'Local files' and app.file_path == ''
+    await app.parent_file_folder()
+    assert app.file_storage.value == 'Shared files' and app.file_path == ''
+    await app.parent_file_folder()
+    assert not app.routes.screens['files']
+    assert app.cloud_busy and app.transfer_busy
+    assert app.transfer_controller()._transfer_cancel is cancel and not cancel.is_set()
 
 
 async def exercise_mirrors(app, comic_key):
@@ -44,20 +71,7 @@ async def exercise_mirrors(app, comic_key):
             app.choose_folder('Fixture')
             assert not app.folder_browse_button.enabled
             assert not await app.open_picker_folder(app.folder_picker_selected)
-            app.show_locations()
-            app.folder_source_buttons['Local'].on_press()
-            await app.folder_buttons['All files'].on_press()
-            browser = app.file_browser
-            await browser.activate_entry(next(item for item in browser.entries if item.label == 'Local'))
-            await browser.activate_entry(next(item for item in browser.entries if item.label == 'Browse during pull'))
-            assert app.file_path == 'Browse during pull'
-            assert any(item.label == 'Local note.txt' for item in browser.entries)
-            assert app.transfer_controller()._transfer_cancel is cancel and not cancel.is_set()
-            await app.parent_file_folder()
-            await app.parent_file_folder()
-            assert app.file_storage.value == 'Shared files'
-            await app.parent_file_folder()
-            assert not app.routes.screens['files']
+            await browse_local_during_transfer(app, 'Browse during pull')
             # Direct folder entry retains its root-to-Workspaces Back behavior.
             await app.browse_hub_folder('Browse during pull')
             assert app.file_path == 'Browse during pull'
