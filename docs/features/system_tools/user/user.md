@@ -32,3 +32,16 @@ Use a drive letter such as `D:`. The terminal shows the selected drive before ru
 On Mac laptops, the disable action changes battery idle sleep and the system-wide
 sleep-disable flag. Restore uses the saved values for both. Desktop Macs without
 battery settings cannot use this action.
+
+## Platform availability
+
+This guide describes the desktop application. See [mobile availability](../user_mobile/user_mobile.md) for Android and iOS.
+
+## Restoring saved Mac settings
+
+The first disable records the original values beside Logistics' feature
+preferences. Later disable/restore actions reuse that backup; restore does not
+capture a new baseline each time. If no saved settings exist, choose sleep
+behavior in macOS System Settings. Keep the terminal output available if
+authentication or a command fails: opening the terminal alone does not verify
+that the change took effect.
