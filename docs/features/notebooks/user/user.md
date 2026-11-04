@@ -41,6 +41,11 @@ Use **File → Save** (`Ctrl`/`⌘ S`) and **Save As…** (`Ctrl`/`⌘ Shift S`)
 notebook's name. **New**, **Open** and **Close Document** have the platform's usual
 shortcuts. The same menus follow the document into a detached window.
 
+After you finish drawing a stroke, Logistics removes redundant samples while
+preserving corners, pressure changes and stroke width within small bounds.
+Calligraphy retains every sample. Opening or saving existing handwriting does
+not reduce its points; the live pen preview is unchanged.
+
 **Edit → Undo/Redo** and their standard shortcuts retain up to 50 edits in the
 current editing session. Edits to an unsaved draft stay in memory until saved.
 Reopening a saved notebook starts a fresh undo history.

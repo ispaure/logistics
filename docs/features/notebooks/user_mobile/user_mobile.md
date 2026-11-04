@@ -26,6 +26,11 @@ workspace entries. Exporting or saving private content to ordinary storage asks
 before creating a decrypted copy. Save or explicitly discard unsaved private
 edits before closing or locking credentials. Cloud locations remain read-only.
 
+After pen or finger contact ends, Logistics removes redundant samples from new
+strokes while preserving corners, pressure changes and stroke width within small
+bounds. Calligraphy retains every sample. Opening or saving existing handwriting
+does not reduce its points; the live pen preview is unchanged.
+
 The document fills the editor viewport. A small floating strip at the top provides the
 current brush, **Erase**, **Select / move**, **Undo** and **Redo** in one row,
 including on narrow phones. Android’s canvas X and **…** share that row. On

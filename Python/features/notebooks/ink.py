@@ -232,6 +232,8 @@ class InkPage:
                 raise ValueError('Stroke is outside the page.')
             clean.append([x, y, pressure])
         clean = stroke_points(clean, tool, int(width))
+        from .sampling import simplify_stroke
+        clean = simplify_stroke(clean, tool, native_x_origin=WIDTH / 2)
         visible = [key for key, name, shown in self.layers if shown]
         layer = layer or (visible[-1] if visible else None)
         if layer not in visible:
