@@ -96,7 +96,7 @@ For a first contribution:
 2. Find its registration factory or mobile host callback and trace it to the
    implementation. Check who owns saved state, background work and closing.
 3. Locate tests by owner and behavior: for example `test_feature_registry.py`,
-   `test_git_ui.py`, `test_lm_ui.py` or `test_mobile_packaging.py` in `Python/tests/`.
+   `test_git_ui*.py`, `test_lm_ui.py` or `test_mobile_packaging.py` in `Python/tests/`.
    Use the [test folder map](testing.md#desktop-test-folders) to find each owner;
    search `mobile_build/tests/` too for mobile work.
 4. Run the focused tests using the [validation guide](testing.md). For example,
