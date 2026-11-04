@@ -2,12 +2,23 @@
 from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
+from threading import Event
+from time import monotonic
 from unittest.mock import patch
 from shiboken6 import isValid
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
 from features.notes_library.ui.library_workspace import TabbedNotesLibrary
+
+
+def wait_for_cancellation(cancelled):
+    deadline = monotonic() + 10
+    pause = Event()
+    while not cancelled():
+        if monotonic() >= deadline:
+            raise TimeoutError('Synthetic document worker was not cancelled')
+        pause.wait(.01)
 
 
 class NotesLibraryTabTests(QtTestCase):
@@ -34,12 +45,16 @@ class NotesLibraryTabTests(QtTestCase):
             owner = self.opened(Path(directory))
             child = self.note(owner, 'A.md')
             self.assertIsInstance(child, qt.QWidget)
+            self.assertEqual(child.breadcrumbs.entries, [('Tabs', None), ('A.md', None)])
             self.assertNotIsInstance(child, qt.QMainWindow)
             for name in ('tree', 'panel_tabs', 'calendar', 'search_results', 'aux'):
                 self.assertFalse(hasattr(child, name), name)
             self.assertIsNot(child.library, owner.library)
             self.assertIs(child.provider, owner.provider)
             with patch.object(owner, 'reveal_folder') as reveal:
+                child.breadcrumbs.linkActivated.emit('0')
+                reveal.assert_called_once_with('')
+                reveal.reset_mock()
                 child.up.click()
                 reveal.assert_called_once_with('')
             owner.close()
@@ -377,8 +392,7 @@ class NotesLibraryTabTests(QtTestCase):
             started = Event()
             def lookup(*args, cancelled, **kwargs):
                 started.set()
-                while not cancelled():
-                    Event().wait(.01)
+                wait_for_cancellation(cancelled)
                 raise OperationCancelled()
             with patch.object(second.library, 'link', side_effect=lookup):
                 second.open_note('Missing', resolve_link=True)
@@ -404,8 +418,7 @@ class NotesLibraryTabTests(QtTestCase):
             started = Event()
             def read(report, cancelled):
                 started.set()
-                while not cancelled():
-                    Event().wait(.01)
+                wait_for_cancellation(cancelled)
             views.progress.start(read, message='Reading data view files…')
             try:
                 self.wait_until(started.is_set)
@@ -445,8 +458,7 @@ class NotesLibraryTabTests(QtTestCase):
             started = Event()
             def read(report, cancelled):
                 started.set()
-                while not cancelled():
-                    Event().wait(.01)
+                wait_for_cancellation(cancelled)
             views.progress.start(read, message='Reading data view files…')
             try:
                 self.wait_until(started.is_set)
@@ -699,11 +711,10 @@ class NotesLibraryTabTests(QtTestCase):
             root = Path(directory)
             owner = self.opened(root)
             child = self.note(owner, 'A.md')
-            started, pause = Event(), Event()
+            started = Event()
             def read(*args, cancelled, **kwargs):
                 started.set()
-                while not cancelled():
-                    pause.wait(.01)
+                wait_for_cancellation(cancelled)
                 raise OperationCancelled()
             with patch.object(child.library, 'load_note', side_effect=read):
                 owner.open_note('B.md')

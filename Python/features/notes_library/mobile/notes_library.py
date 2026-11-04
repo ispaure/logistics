@@ -53,6 +53,7 @@ class NotesHost:
     preview: Callable
     drawers: Callable
     tab_style: Callable
+    folder_browser: Callable
     document_editor: Callable = None
     confirm: Callable = None
     choose_type: Callable = None
