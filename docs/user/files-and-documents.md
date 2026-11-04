@@ -70,14 +70,15 @@ feature contributions as right-clicking the current selection.
 File Browser starts at your home folder. Use it for arbitrary paths;
 **Workspaces** brings configured local folders and remote integrations together.
 Choose **Local**, **Cloud** or **Home Server**, then a workspace in the compact left
-tree. Local's **Source** dropdown defaults to **Rclone** (ordinary
-Local and encrypted LocalCrypt copies), with **Dropbox** and **Others** for the remaining providers.
-The Local source filter survives refresh; switching tabs returns it to Rclone.
+tree. Local has **Dropbox**, **Rclone** and **Others** source tabs; Rclone is selected
+initially and includes ordinary Local and encrypted LocalCrypt copies. Local →
+Rclone and Cloud → rclone have a **Credential** filter, initially **All**.
+Home Server has no credential filter and displays **Pending Implementation**;
+see the source grouping below before relying on that destination.
 Right-click a folder under **Local**, including an rclone local copy, and choose
 **Reveal in Finder**, **Reveal in Explorer**, or **Reveal in Linux File Explorer**
-to show its on-disk folder in your desktop file manager (such as Dolphin).
-Cloud and Home Server keep their **Credential** dropdown. Opening a source tab or
-changing its dropdown leaves the Files pane at **Select a folder** until you choose
+to show its on-disk folder in your desktop file manager.
+Changing a source tab or credential filter leaves the Files pane at **Select a folder** until you choose
 one. Refresh preserves an explicitly selected folder; removing or hiding that
 folder returns to the placeholder without opening another one. Locked workspaces
 show their credential ZIP password form directly in Files. Enter the password and
@@ -150,8 +151,8 @@ more scan time and cache storage than the visited-folder default.
 before a refresh finishes. Disabling automatic scanning does not remove files;
 use explicit refresh when you want current metadata. Shared controls and the
 individual scan settings are documented in the
-[commonUtils browser guide](https://github.com/ispaure/commonUtils/blob/main/ui/file_browser/user_docs/README.md)
-and [index reference](https://github.com/ispaure/commonUtils/blob/main/filesystem/index/README.md).
+[commonUtils browser guide](https://github.com/ispaure/commonUtils/blob/main/docs/user/file_browser/file_browser.md)
+and [index reference](https://github.com/ispaure/commonUtils/blob/main/docs/development/reference/filesystem/index/index.md).
 Logistics adds feature actions and document routing to that browser.
 
 The Logistics indexing settings apply on the next index request after **Save**:
@@ -235,14 +236,15 @@ external disk changes block overwriting. Use **Save As** to keep a separate vers
 In Formatted mode, click link labels to navigate. Syntax markers appear when the
 caret touches an element or a selection overlaps it; hovering keeps them hidden.
 
-Feature **User Guide** buttons open read-only help. When a feature's documentation
-folder contains only `README.md` and `index.md` as Markdown files, the button opens
-`README.md` directly. With additional Markdown pages, it opens `index.md`.
+Feature **User Guide** buttons open read-only help. Built-in feature guides open
+at their user landing page in this root documentation wiki, with its folder tree
+available for navigation. Compatibility help folders are a fallback for packages
+without a root-wiki guide.
 Alt/Option while opening help
 opts into editing; it can change the documentation file on disk if saved. Local
 links navigate within the guide viewer, while web links open a browser. For shared
 formatting, properties, search and read-aloud controls, use the
-[commonUtils Markdown guide](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/user_docs/README.md).
+[commonUtils Markdown guide](https://github.com/ispaure/commonUtils/blob/main/docs/user/markdown/markdown.md).
 For plain-source editing, choose [Text Editor](../features/text_editor/user/user.md).
 [Obsidian](../features/obsidian/user/user.md) launches vaults in the external app.
 
@@ -467,15 +469,20 @@ not show hover previews. Missing, binary and external web links have no preview.
 
 ## Notes Library
 
-On a location's Workspaces actions page, **Open as Notes Library** is offered when
-its root contains an `.obsidian` directory. It opens a document under Documents
-with an expandable folder/page sidebar and Back/Forward/Up navigation. Remote
-libraries have no search or recursive index; local filtering only filters loaded
-names. On desktop, the action opens only its selected Local or Cloud context.
-Local and LocalCrypt libraries start in edit mode and save to that same copy;
-Formatted and Source editing are both available. Cloud libraries remain read-only.
-Push and Pull retain both transfer endpoints in the actions panel. Private
-content remains in memory and stops being available when its credentials retire.
+Select **Notes Library** below Documents in the sidebar, then **Open Library** to
+choose a local folder or unlocked LocalCrypt copy. Explicit opens accept folders
+without an `.obsidian` marker. A marked local workspace also offers **Open as Notes
+Library** in its Actions panel. Libraries open in the separate Notes Library
+destination, with outer library tabs and inner document tabs/split groups.
+Cloud-only libraries must be downloaded or synced first; individual remote
+Markdown files still open in the read-only viewer.
+
+Existing Markdown notes start in reading mode; choose **Edit Markdown** for
+Formatted or Source editing. Save writes to the selected local copy. Resolve
+unsaved changes before navigating or closing. Search, daily notes, file management
+and link panels are described in the [Notes Library guide](../features/notes_library/user/user.md).
+Private content becomes unavailable when its credentials retire; save or discard
+private drafts before locking them. Push and Pull are separate reviewed transfers.
 
 ## Favourite files
 

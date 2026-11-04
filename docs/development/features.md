@@ -210,9 +210,10 @@ commonUtils contains no project-specific dependency logic.
 
 ## User documentation
 
-Each distributed feature owns a `docs/docs.md` wiki landing, `docs/user/user.md`
-for desktop usage and `docs/development/development.md` for implementation and
-validation. Features available on mobile also have `docs/user_mobile/user_mobile.md`.
+Each Logistics feature owns a section under `docs/features/<owner>/`, with a
+same-named landing (`<owner>/<owner>.md`), `user/user.md` for desktop usage and
+`development/development.md` for implementation and validation. Features available
+on mobile also have `user_mobile/user_mobile.md` under that section.
 Keep `user_docs/index.md` and package README files as short compatibility links.
 Settings opens the canonical user guide with the feature's entire docs tree even
 when the feature is disabled or a dependency is missing. Missing guides disable
@@ -224,7 +225,7 @@ with an H1, below optional YAML properties, and mention each child page in its
 parent's text. Use relative links. User guides explain prerequisites, controls,
 outcomes and recovery; developer guides explain ownership, contracts and checks.
 Application-wide UI and Workspaces workflows live in the root Logistics wiki;
-Bulk Rename stays with its existing `desktop` owner. Shared APIs and external
+Bulk Rename documentation lives under `docs/features/bulk_rename/`. Shared APIs and external
 feature internals remain documented in their own repositories.
 
 The shared `commonUtils.ui.markdown` viewer owns rendering, local link history and
