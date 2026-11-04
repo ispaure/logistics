@@ -142,3 +142,24 @@ Run `python3 dev.py test-owner document-services` for the document storage,
 protection, desktop resume, mobile screen/audio and payload contracts. This owner
 includes the backend-independent protection regressions as well as publication
 and provider-wrapper checks.
+
+## Explicit workflow access and assembly
+
+`services.workflow_host` declares the accessors used by composed mobile workflows.
+`HostService` reads a named capability from the injected app and rejects writes
+and deletion; `HostAttribute` permits writes unless explicitly configured read-only.
+`StateAttribute` forwards to a named state record on the controller. These are
+explicit descriptors, not a fallback that forwards arbitrary missing attributes.
+
+`mobile.composition.assembly.composed_workflow` installs only the controller's
+`METHODS` and `FIELDS` compatibility names on the host. Its factory constructs one
+controller lazily per app instance. Duplicate names within one controller and
+claims on an existing accessor belonging to another factory raise `ValueError`;
+explicit host methods retain precedence. Keep mutable workflow state on that
+controller so an app compatibility property and its feature view cannot diverge.
+The desktop registry is a separate composition path; this decorator does not
+register desktop contributions or change what gets packaged for mobile.
+
+`mobile_build/tests/workspace/test_workflow_ownership.py` checks retained owner
+identity, state aliases, read-only host capabilities and independent transfer/file
+cancellation. These host checks do not establish native lifecycle acceptance.
