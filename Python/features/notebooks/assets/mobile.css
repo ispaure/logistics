@@ -62,3 +62,5 @@ body.notebook-laptop #viewport{position:fixed;top:var(--fold-bottom);bottom:0;le
 body.notebook-laptop #mobileSheet,body.notebook-laptop #eraserDialog{top:56px!important;bottom:auto;max-height:calc(var(--fold-top) - 64px)}
 body.notebook-laptop #mobileBackdrop{bottom:calc(100% - var(--fold-top))}
 @media(max-width:600px){#laptopTools{grid-template-columns:1fr}}
+
+.mobile-tools .icon{width:clamp(34px,calc((100vw - 32px)/8),44px);padding:6px}.notebook-mobile .capture-tools{top:max(64px,calc(env(safe-area-inset-top) + 56px));right:8px}.notebook-mobile.tools-hidden .capture-tools{display:none}

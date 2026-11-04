@@ -30,6 +30,7 @@ window.notebookUpdate = function(next, error) {
     deferredUpdate = () => window.notebookUpdate(next, error);
     return
   }
+  if (queue[0]?.op === 'paste-image' && !error) imageSelection = next.images?.at(-1)?.id || null;
   state = next;
   pendingInk = null;
   pendingErase = null;
@@ -69,6 +70,7 @@ window.notebookInkUpdate = function(patch) {
   const strokes = new Map(state.strokes.map(s => [s.id, s]));
   for (const stroke of patch.strokes) strokes.set(stroke.id, stroke);
   state.strokes = patch.order.map(id => strokes.get(id));
+  if (patch.scene_order) state.scene_order = patch.scene_order;
   state.undo = patch.undo;
   state.redo = patch.redo;
   state.save_status = patch.save_status;

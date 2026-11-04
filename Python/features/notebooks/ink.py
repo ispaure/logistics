@@ -10,6 +10,7 @@ from ._vendor.rmscene import scene_stream as ss, scene_items as si
 from ._vendor.rmscene.crdt_sequence import CrdtSequenceItem
 from ._vendor.rmscene.tagged_block_common import CrdtId, LwwValue, HEADER_V6
 from ._vendor.rmscene.scene_tree import SceneTree
+from .images import ImageResources, ImageItem, ImageQuad, Picture
 from .brushes import TOOLS, COLORS, WIDTHS, native_color, native_scale, stroke_points
 
 WIDTH, HEIGHT = 1404, 1872
@@ -91,6 +92,11 @@ class InkPage:
     raw: bytes = b''
     strokes: list = field(default_factory=list)
     layers: list = field(default_factory=list)
+    images: list = field(default_factory=list)
+    image_resources: list = field(default_factory=list)
+    _image_baseline: dict = field(default_factory=dict, repr=False)
+    order: list = field(default_factory=list)
+    ordering_dirty: bool = False
     warning: str = ''
     _frames: list = field(default_factory=list, repr=False)
     _blocks: list = field(default_factory=list, repr=False)
@@ -125,11 +131,14 @@ class InkPage:
                 raise ValueError('Inconsistent ink frame count.')
             tree = SceneTree()
             ss.build_tree(tree, page._blocks)
+            for block in page._blocks:
+                if isinstance(block, ImageItem):
+                    tree.add_item(block.item, block.parent_id)
             if any(isinstance(b, (ss.UnreadableBlock, ss.SceneGlyphItemBlock))
                    or (isinstance(b, ss.RootTextBlock) and any(isinstance(v, str) and v.strip() for v in b.value.items.values()))
                    for b in page._blocks):
                 raise ValueError('This page has text, highlights or unknown objects. Ink editing is disabled; all bytes are preserved.')
-            mapping = {id(b.item.value): b for b in page._blocks if isinstance(b, ss.SceneLineItemBlock)}
+            mapping = {id(b.item.value): b for b in page._blocks if isinstance(b, (ss.SceneLineItemBlock, ImageItem))}
             prior_strokes = {s.id: s for s in previous.strokes} if previous else {}
             prior_blocks = {id(block) for block in previous._blocks} if previous else set()
             total = 0
@@ -145,6 +154,15 @@ class InkPage:
                 for child in group.children.values():
                     if isinstance(child, si.Group):
                         visit(child, depth + 1)
+                    elif isinstance(child, ImageQuad):
+                        block = mapping[id(child)]
+                        if not block.item.deleted_length:
+                            identity = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
+                            if len(page.images) >= 256:
+                                raise ValueError('Too many image objects on this page.')
+                            page.images.append(Picture(identity, key, child.resource,
+                                [[p[0] + WIDTH / 2, p[1]] for p in child.vertices]))
+                            page.order.append(identity)
                     elif isinstance(child, si.Line):
                         if depth == 0:
                             raise ValueError('Ink outside a layer is preserved but cannot yet be edited.')
@@ -152,6 +170,7 @@ class InkPage:
                         if block.item.deleted_length:
                             continue
                         identity = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
+                        page.order.append(identity)
                         baseline = previous._baseline.get(identity) if previous and id(block) in prior_blocks else None
                         candidate = prior_strokes.get(identity)
                         if baseline is not None and candidate is not None and candidate.payload() == baseline:
@@ -176,8 +195,11 @@ class InkPage:
             visit(tree.root)
             page._baseline.update({s.id: deepcopy(s.payload()) for s in page.strokes if s.id not in page._baseline})
             page._original_layers = list(page.layers)
+            page._image_baseline = {p.id: deepcopy(p.payload()) for p in page.images}
         except Exception as error:
             page.warning = str(error)
+            page.images = []
+            page.order = []
             page.strokes = []
             page.layers = []
         return page
@@ -216,6 +238,7 @@ class InkPage:
             raise ValueError('Choose a visible ink layer.')
         stroke = Stroke(uuid4().hex, layer, tool, native, clean, native_scale(tool, width), rgba)
         self.strokes.append(stroke)
+        self.order = [*self.order, stroke.id]
         return stroke
 
     def add_layer(self, name):
@@ -240,11 +263,24 @@ class InkPage:
         if self.warning:
             return self.raw
         current = {s.id: s for s in self.strokes}
-        if {s.id: s.payload() for s in self.strokes} == self._baseline and self.layers == self._original_layers:
+        if {s.id: s.payload() for s in self.strokes} == self._baseline and self.layers == self._original_layers and not self.ordering_dirty and not self.image_resources and {p.id: p.payload() for p in self.images} == self._image_baseline:
             return self.raw
         author, first, additions = allocation(self._blocks)
         chunks = []
+        pictures = {p.id: p for p in self.images}
         for raw, block in zip(self._frames, self._blocks):
+            if isinstance(block, ImageItem):
+                key = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
+                if key in self._image_baseline:
+                    if key not in pictures:
+                        block = deepcopy(block)
+                        block.item = replace(block.item, value=None, deleted_length=1)
+                        raw = encode([block])[len(HEADER_V6):]
+                    elif pictures[key].payload() != self._image_baseline[key]:
+                        block = deepcopy(block)
+                        for vertex, corner in zip(block.item.value.vertices, pictures[key].corners):
+                            vertex[:2] = [corner[0] - WIDTH / 2, corner[1]]
+                        raw = encode([block])[len(HEADER_V6):]
             if isinstance(block, ss.SceneLineItemBlock):
                 key = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
                 if key in self._baseline and key not in current:
@@ -297,7 +333,38 @@ class InkPage:
             line = si.Line(si.PenColor(stroke.color), si.Pen(stroke.tool),
                 [si.Point(x - WIDTH / 2, y, 0, 0, max(0, min(65535, round(w * 4))), round(p * 255))
                  for x, y, p, w in stroke.points], stroke.scale, 0, color_rgba=stroke.color_rgba)
+            left = tails.get(parent, CrdtId(0, 0))
             additions.append(ss.SceneLineItemBlock(parent, CrdtSequenceItem(identity,
-                tails.get(parent, CrdtId(0, 0)), right_neighbors[stroke.id], 0, line)))
+                left, right_neighbors[stroke.id], 0, line)))
             tails[parent] = identity
-        return HEADER_V6 + b''.join(chunks) + encode(additions)[len(HEADER_V6):]
+        # New image objects use the same resource table and quad format as native captures.
+        cursor = first + len(self.strokes) + 1
+        if self.image_resources:
+            resources = [r for b in self._blocks if isinstance(b, ImageResources) for r in b.resources]
+            resources += [replace(r, stamp=CrdtId(author, cursor + i)) for i, r in enumerate(self.image_resources)]
+            cursor += len(self.image_resources)
+            chunks = [raw for raw, b in zip(chunks, self._blocks) if not isinstance(b, ImageResources)]
+            additions.append(ImageResources(resources))
+        image_identities = {}
+        for picture in self.images:
+            if picture.id in self._image_baseline:
+                continue
+            parent = CrdtId(*map(int, picture.layer.split(':')))
+            identity, stamp, geometry_id = [CrdtId(author, cursor + i) for i in range(3)]
+            cursor += 3
+            image_identities[picture.id] = identity
+            original_tail = next((key for key in reversed(self.order)
+                if key in self._image_baseline and key in pictures and pictures[key].layer == picture.layer), None)
+            left = tails.get(parent, CrdtId(*map(int, original_tail.split(':'))) if original_tail else CrdtId(0, 0))
+            vertices = [[p[0] - WIDTH / 2, p[1], *uv] for p, uv in
+                        zip(picture.corners, [[0, 0], [1, 0], [1, 1], [0, 1]])]
+            additions.append(ImageItem(parent, CrdtSequenceItem(identity, left, CrdtId(0, 0), 0,
+                ImageQuad(stamp, picture.resource, geometry_id, vertices, [0, 1, 2, 2, 3, 0]))))
+            tails[parent] = identity
+        result = HEADER_V6 + b''.join(chunks) + encode(additions)[len(HEADER_V6):]
+        if self.ordering_dirty or (self.images and any(s.id not in self._baseline for s in self.strokes)):
+            from .images import reorder_native
+            ids = {**identities, **image_identities}
+            ids.update({p.id: CrdtId(*map(int, p.id.split(':'))) for p in self.images if p.id in self._image_baseline})
+            result = reorder_native(result, [ids[key] for key in self.order if key in ids])
+        return result
