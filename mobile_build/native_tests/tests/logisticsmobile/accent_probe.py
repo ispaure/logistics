@@ -109,10 +109,8 @@ class AccentProbe(LogisticsMobile):
                         key: value for key, value in colors.items() if key not in ('accent', 'primary')}
                 sample = dict(name=name, light=LIGHT['accent'], dark=DARK['accent'])
                 if apple:
-                    native = controls.selected._impl.native
-                    expected = DARK['accent'] if native.traitCollection.userInterfaceStyle == 2 else LIGHT['accent']
-                    sample['preview'] = apple_color_sample(native, native.textColor, expected)
                     tab_bar = self.native_host.adapter.controller.tabBar
+                    expected = DARK['accent'] if tab_bar.traitCollection.userInterfaceStyle == 2 else LIGHT['accent']
                     sample['tab_bar'] = apple_color_sample(tab_bar, tab_bar.tintColor, expected)
                 result['samples'].append(sample)
                 await capture_window(self, evidence / f'accent-{name}.png')
