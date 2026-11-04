@@ -120,6 +120,26 @@ See [rmscene upstream](https://github.com/ricklupton/rmscene) and the
 
 ## Page template model and views
 
+### Template artwork and compatibility wording
+
+The notebook source package and mobile manifest contain no reMarkable PNG, SVG,
+PDF or `.template` artwork assets. `templates.geometry()` generates original
+Logistics line paths and text labels; SVG previews, custom template JSON and PDF
+backgrounds all derive from those primitives. Native ruled exports store only
+`P Lines small`, `P Lines medium` and `P Lines large` references, letting the
+user's reMarkable supply its installed background. User-imported artwork remains
+private document content and is preserved, not added to the application catalog.
+The vendored MIT-licensed rmscene codec is file-format code, not template artwork.
+
+Native lined menu labels say “reMarkable compatible”; selectors identify the
+Logistics previews/layouts as original and state that Logistics is not affiliated
+with or endorsed by reMarkable. Original everyday layouts include Checklist,
+Cornell notes and Weekly planner alongside the ruled, grid, dots, restaurant,
+meeting and daily-planner options. No workout or paid workbook replicas are
+included. `test_template_catalog.py` checks generated artwork, the package asset
+boundary, native reference-only exports and compatibility wording.
+
+
 `templates.py` owns the original vector catalog, user-confirmed lined counts
 (21 large, 25 native medium, 41 small), an additional 31-rule medium, saved page
 format/visibility and shared crop bounds. Saves retain stock names as native `.pagedata`
