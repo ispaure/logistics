@@ -35,8 +35,19 @@ async def native_row_control(owner, path, control='title'):
     names = dict(title='getRowTitleView', actions='getRowActionView', disclosure='getRowDisclosureView',
                  icon='getRowIconView')
     native = rows.native_list._impl.native
+    apple = rows.native_list.factory.DetailedList.__module__.startswith('toga_iOS.')
     for _ in range(500):
         row = next(row for row in rows.children if row.path == path)
+        if apple:
+            from toga_iOS.libs import NSIndexPath
+            index = NSIndexPath.indexPathForRow(row.index, inSection=0)
+            cell = native.cellForRowAtIndexPath(index)
+            if cell is not None and cell.window is not None:
+                return dict(title=cell.textLabel, actions=cell.accessoryView,
+                            disclosure=cell.tree_disclosure, icon=cell.imageView)[control]
+            native.scrollToRowAtIndexPath(index, atScrollPosition=0, animated=False)
+            await asyncio.sleep(.02)
+            continue
         generation = rows.native_list._impl.generation
         view = getattr(native, names[control])(row.index, generation)
         if (view is not None and view.isAttachedToWindow() and view.isShown()
@@ -51,6 +62,20 @@ async def activate_entry(owner, path, *, expand=False):
     rows = owner.rows
     if getattr(rows, 'recycled', False):
         control = await native_row_control(owner, path, 'disclosure' if expand else 'title')
+        if rows.native_list.factory.DetailedList.__module__.startswith('toga_iOS.'):
+            from toga_iOS.libs import NSIndexPath
+            if expand:
+                control.sendActionsForControlEvents(1 << 6)
+            else:
+                row = next(row for row in rows.children if row.path == path)
+                native = rows.native_list._impl.native
+                native.selectRowAtIndexPath(NSIndexPath.indexPathForRow(row.index, inSection=0),
+                                            animated=False, scrollPosition=0)
+                rows.native_list._impl.native_controller.tableView_didSelectRowAtIndexPath_(
+                    native, NSIndexPath.indexPathForRow(row.index, inSection=0))
+            await asyncio.sleep(0)
+            await asyncio.gather(*tuple(rows.tasks))
+            return
         if expand:
             assert control.performClick()
         else:
