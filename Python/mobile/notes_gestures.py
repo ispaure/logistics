@@ -32,6 +32,10 @@ def install_opening_swipes(owner):
                         return False
                     view = native_value(touch.view)
                     while view is not None:
+                        # HTML owns document swipes so nested table scrolling,
+                        # text selection and zoom are resolved in the DOM.
+                        if view.isKindOfClass(ObjCClass('WKWebView')):
+                            return False
                         if view.respondsToSelector(SEL('selectedTextRange')):
                             selection = native_value(view.selectedTextRange)
                             if selection is not None and view.offsetFromPosition(selection.start, toPosition=selection.end):
