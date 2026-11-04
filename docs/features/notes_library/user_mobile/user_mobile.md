@@ -147,7 +147,14 @@ available height for its folder tree. Search keeps its query and results in a
 separate tab, with **File names** selected by default and **In documents** available
 for content searches. Files and Search retain separate rows and scroll positions;
 returning to either tab restores its own list immediately. New result batches replace
-the visible rows together. Returning to Files shows the tree even while a search query is retained. Calendar starts on the current
+the visible rows together. Returning to Files shows the tree even while a search query is retained.
+
+**File names** and **In documents** also keep independent query fields, result
+lists, scroll positions and **Show more notes** limits. Switching between them
+restores that scope's query and completed results. An unfinished search is cancelled
+and resumes when you return to its scope.
+
+Calendar starts on the current
 month; use its arrows to browse months. A dot marks a day with a note named
 `YYYY-MM-DD.md` anywhere in the library. Tap to open it, choosing a folder if
 several notes share that date. A missing day offers confirmation before creating

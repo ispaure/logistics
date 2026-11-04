@@ -71,6 +71,9 @@ File search offers
 folders. Name matches appear before content matches; quoted phrases and separate
 keywords use the same search rules as mobile. **Show more notes** extends the
 result list. Hidden configuration is excluded.
+Each search mode keeps its own query field, results, selected row, scroll position
+and result limit. Switching modes restores completed results; an unfinished scan
+is cancelled and resumes when that mode is selected again.
 
 Calendar marks days with a `YYYY-MM-DD.md` note anywhere in the library. Select
 a day to open it, choosing a path when several notes share that date. A missing

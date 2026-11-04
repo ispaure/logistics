@@ -104,6 +104,7 @@ class LibraryTabs(qt.QStackedWidget):
                                      pending=(path, fragment, remember, index))
         child.idle.connect(lambda child=child: self.ready(child))
         child.document_saved.connect(lambda child=child: self.refresh_connections(exclude=child))
+        child.document_saved.connect(self.owner.invalidate_search_interfaces)
         child.destroyed.connect(lambda obj=None, child=child: self.detach(child))
         group.addTab(child, PurePosixPath(path).name)
         group.setCurrentWidget(child)

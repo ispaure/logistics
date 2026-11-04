@@ -87,7 +87,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         if not remote:
             self.search = qt.QLineEdit()
             self.search.setPlaceholderText('Filter loaded notes')
-            qt.connect_search(self.search, self.filter)
+            qt.connect_search(self.search, lambda control=self.search: self.filter_search_input(control))
             side.addWidget(self.search)
         side.addWidget(qt.QLabel('Notes Library · File names'))
         self.note_controls = qt.QWidget()
@@ -456,6 +456,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             (parent.addChild if parent else self.tree.addTopLevelItem)(item)
         if path == self.library.root and parent is not None:
             parent.setExpanded(True)
+        self.invalidate_search_interfaces()
         if self.search and self.search.text():
             self.filter()
 
@@ -481,8 +482,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.loaded.clear()
         self.positions.clear()
         self.folder_pages.clear()
-        self.search_results.clear()
-        self.search_rows.clear()
+        self.clear_search_interfaces()
         self.links_tree.clear()
         self.backlinks_tree.clear()
         self.search_notice.clear()
