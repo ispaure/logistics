@@ -1,6 +1,6 @@
 let erasePreviewCount = 0, pendingErase = null;
-function sample(event) {
-  let point = coord(event);
+function sample(event, bounds) {
+  let point = coord(event, bounds);
   last = point;
   if (points.length >= 100000) return;
   let previous = points[points.length - 1];
@@ -10,8 +10,7 @@ function sample(event) {
     for (let id of hits(point)) selected.add(id)
 }
 
-function coord(e) {
-  let r = canvas.getBoundingClientRect();
+function coord(e, r = canvas.getBoundingClientRect()) {
   return [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), e.pointerType === 'pen' ? Math.max(0, Math.min(1, e.pressure)) : .5]
 }
 
@@ -95,8 +94,11 @@ canvas.onpointermove = e => {
   if (e.pointerId !== active || (state.native_pen && e.isTrusted && !e.nativePen)) return;
   e.preventDefault();
   let events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-  for (let event of events) sample(event);
-  sample(e);
+  // Sampling changes ink data, not layout. Reuse one geometry read for this
+  // delivered batch, and refresh it on the next event after scroll/resize.
+  const bounds = canvas.getBoundingClientRect();
+  for (let event of events) sample(event, bounds);
+  sample(e, bounds);
   // Mobile paints the delivered batch immediately. Desktop coalesces batches
   // to display frames, avoiding redundant canvas work during mouse bursts.
   if (mode === 'ink') {
