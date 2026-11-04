@@ -83,8 +83,21 @@ native IDs/palettes, Python/JavaScript parity, native-width preservation,
 grayscale isolation, Shader compositing and preview/completed raster agreement.
 The optional `boox_ballpoint_parity.py --output ...` checks all 256 pressure
 levels at three widths (768 cases) with portable Java and a TouchHelper stub.
-It does not build Android or exercise the real SDK. Updated native package/input
-acceptance remains a separately coordinated gate.
+It does not build Android or exercise the real SDK.
+
+Focused Android package acceptance also passes against the production compiled
+`BooxBallpoint`: all 768 cases through both the default and explicitly configured
+curve (1,536 Android method invocations). The packaged `TouchHelper` class links
+in Android. Four synthetic stylus MotionEvent gestures pass through production
+`NotebookInput`: three Ballpoint sizes/colors and blue Highlighter, each saving
+exactly one six-point stroke. Pressure, quarter-unit widths, native color/scale
+and archive roundtrips agree; Highlighter stays at 26 units with one UI size.
+The test fits the full page and verifies the visible canvas/native-view bounds
+before drawing. Reusing the source-verified QA package changes only its Python
+payload; DEX and native libraries are checked byte-for-byte after restaging.
+The QA app, disposable emulator and scratch workspace are removed afterward.
+This narrow check does not cover the complete native input/history suite, actual
+Onyx driver attachment, physical stylus behavior or optical latency.
 
 `measure_calibration.py --archive ... --pdf ... --output ...` reads a completed
 version-2 worksheet and emits counts, ranges, native colors and source hashes.
