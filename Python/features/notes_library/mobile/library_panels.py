@@ -89,7 +89,10 @@ class LibraryPanels:
         self.panel_body = toga.Box(children=[self.files_content], style=Pack(direction=COLUMN, flex=1))
         self.panel_body.style.margin_left = self.panel_body.style.margin_right = 8
         self.panel_body.style.margin_top = 8
-        self.panel_actions = toga.Box(style=Pack(direction=ROW, gap=4, justify_content='center'))
+        # Symmetric flex spaces make Pack allocate the complete pane width.
+        # Justify alone leaves a fixed-width command row at its intrinsic width.
+        self.panel_actions = toga.Box(children=[toga.Box(style=Pack(flex=1))],
+            style=Pack(direction=ROW, gap=4, justify_content='center'))
         self.tree.add(tabs, self.panel_actions, self.panel_body)
         self.search_mode.items = ['Search within Documents', 'Search in File Names']
         self.search_mode.value = 'Search in File Names'
@@ -197,6 +200,7 @@ class LibraryPanels:
                 button = presentation.icon_button(icon, label, on_press=callback)
                 presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
                 self.panel_actions.add(button)
+        self.panel_actions.add(toga.Box(style=Pack(flex=1)))
 
     async def browse_library_root(self, widget=None, **kwargs):
         if not self.valid():
