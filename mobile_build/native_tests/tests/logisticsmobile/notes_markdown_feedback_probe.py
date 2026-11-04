@@ -45,8 +45,13 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             import traceback
             snapshots = []
             for task in asyncio.all_tasks(loop):
-                snapshots.append(dict(task=repr(task), stack=[traceback.format_stack(frame)
-                    for frame in task.get_stack()]))
+                chain, frames = task.get_coro(), []
+                while chain is not None:
+                    frame = getattr(chain, 'cr_frame', None) or getattr(chain, 'gi_frame', None)
+                    if frame is not None:
+                        frames.append(traceback.format_stack(frame))
+                    chain = getattr(chain, 'cr_await', None) or getattr(chain, 'gi_yieldfrom', None)
+                snapshots.append(dict(task=repr(task), stack=frames))
             (cache / 'notes-markdown-tasks.json').write_text(json.dumps(snapshots, indent=2))
             timer = Timer(10, observe)
             timer.daemon = True
@@ -159,6 +164,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
                 await self.web_ready(owner.embedded.formatted.view, '!!window.markdownSnapshot')
                 self.click(owner.edit)
                 await self.until(lambda: not owner.editing, 'Read toggle did not restore reader')
+                await self.web_ready(owner.web, '!!document.querySelector("img") && document.querySelector("img").complete')
             assert opened == ['Library/old.png'], opened
             report['cases'].append('3_library_media_reused_' + label)
             from features.notes_library.link_policy import resolve_link
@@ -171,16 +177,24 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
                     assert resolve.call_count <= 1, resolve.call_count
             self.record_stage(label + '_library_edit_references')
             assert await owner.open_editor()
-            await owner.embedded.choose_mode(False)
+            await self.web_ready(owner.embedded.formatted.view, '!!window.markdownSnapshot')
+            self.record_stage(label + '_choose_source')
+            assert await owner.embedded.choose_mode(False)
             owner.embedded.source.value = '# Changed\n\n![New](new.png)\n\n[[Missing]]'
+            self.record_stage(label + '_save_source')
             assert await owner.embedded.save()
+            self.record_stage(label + '_read_source')
             assert await owner.open_editor()
             await self.web_ready(owner.web, '!!document.querySelector("img") && document.querySelector("img").alt === "New"')
             assert opened == ['Library/old.png', 'Library/new.png'], opened
             assert await owner.open_editor()
-            await owner.embedded.choose_mode(False)
+            await self.web_ready(owner.embedded.formatted.view, '!!window.markdownSnapshot')
+            self.record_stage(label + '_choose_source')
+            assert await owner.embedded.choose_mode(False)
             owner.embedded.source.value = '# References removed'
+            self.record_stage(label + '_save_source')
             assert await owner.embedded.save()
+            self.record_stage(label + '_read_source')
             assert await owner.open_editor()
             await self.web_ready(owner.web, 'document.body.textContent.includes("References removed") && !document.querySelector("img")')
             assert opened == ['Library/old.png', 'Library/new.png'], opened
