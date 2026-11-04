@@ -54,13 +54,13 @@ class DownloaderTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     settings.DownloadSettings.read(self.ini)
 
-    def test_existing_mp4_count_ignores_folders_and_sidecars(self):
+    def test_episode_numbering_ignores_folders_and_sidecars(self):
         value = settings.DownloadSettings.read(self.ini)
         destination = value.destination(self.directory)
         destination.mkdir(parents=True)
         (destination / 'Example - s10e01.mp4').touch()
-        (destination / 'Example - s10e01.mp4.info.json').touch()
-        (destination / 'Example - s10folder.mp4').mkdir()
+        (destination / 'Example - s10e99.mp4.info.json').touch()
+        (destination / 'Example - s10e88 - folder.mp4').mkdir()
         argv = settings.download_arguments(value, self.directory, 'ffmpeg')
         self.assertEqual(argv[argv.index('--autonumber-start') + 1], '2')
 
