@@ -35,8 +35,9 @@ or exporting private content.
 
 ## Make the app comfortable
 
-Documents always uses compact rows without text-preview cards. Under Settings →
-Text & Markdown, choose an editor and preview font size.
+Documents always uses compact rows without text-preview cards. Under **Settings →
+Text** and **Settings → Markdown**, choose the size for each format. Markdown
+preview and editing share the Markdown size.
 Books and comics have their own Appearance controls inside their readers.
 
 Android also offers High contrast / E Ink. Its switch applies immediately and
