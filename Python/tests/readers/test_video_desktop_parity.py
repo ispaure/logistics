@@ -50,7 +50,9 @@ class DesktopVideoParityTests(QtTestCase):
                         window.seek_to(1000)
                         if paused:
                             window.toggle_play()
-                        self.wait_until(lambda: window.have_frame and window.player.position() > 1200, timeout=10)
+                        # Let the post-seek decoded clock drain audio queued at
+                        # the previous rate before measuring its steady speed.
+                        self.wait_until(lambda: window.have_frame and window.player.position() > 2500, timeout=10)
                         start, position = monotonic(), window.player.position()
                         self.wait_until(lambda: monotonic() - start >= 2, timeout=3)
                         actual = (window.player.position() - position) / ((monotonic() - start) * 1000)
