@@ -40,6 +40,11 @@ only after verification; failures and cancellations preserve completed changes.
 active. **Stop transfer** asks for confirmation before requesting cancellation. Cloud previews requiring
 the connection show a dialog while transfers are running, including when opened
 from Recent or an open document. Local reader menus remain available.
+
+If the formatted transfer screen stops responding, it tries one fresh display.
+If that also fails, a simplified native view keeps progress, **Stop transfer**,
+**Continue browsing** and reviewed confirmation available. Display recovery does
+not restart a transfer or approve changes. Credential locking clears either view.
 Mobile does not offer mounts. See the [mobile transfer guide](../../../user_mobile/folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync)
 for connection scopes, encrypted storage, cancellation and credential persistence.
 

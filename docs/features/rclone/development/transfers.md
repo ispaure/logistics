@@ -34,6 +34,16 @@ fully offline `transfers/assets/surface.*` surface. Compact panes show grouped
 rows and a file-detail sheet; wide panes add a side inspector. Comparison supplies
 real actions and paths, so the review does not invent sizes or modification dates.
 
+The mobile surface bounds JavaScript responses to eight seconds and checks
+visible renderer progress against a 15-second deadline. It replaces an
+unresponsive WebView once, invalidates the retired bridge token, and then uses
+`native_fallback.py` if rendering still fails. The native presentation consumes
+the same bounded model and dispatches through the existing review, revision,
+confirmation and credential checks; it never restarts engine work. Hidden
+surfaces do not trigger recovery. The native acceptance suite injects unanswered
+renderer callbacks to verify progress controls, stale approvals and lock clearing
+without requiring an intermittent OS fault.
+
 `ReviewScan` caches immutable snapshots until comparison data/state changes.
 Review counts/filtering are recomputed only for a new snapshot or filter, and
 only 30 entries cross the UI bridge per page. Complete approval requires both a
