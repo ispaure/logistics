@@ -17,6 +17,35 @@ DESTINATION_ITEMS = (
 DESTINATION_ICON_NAMES = {key: 'nav_' + key for key in DESTINATIONS}
 
 
+def sync_feature_destinations(app):
+    """Keep logical tab indices stable while hiding unavailable destinations."""
+    host = app.native_host
+    available = app.feature_enabled('lm')
+    if not available and host.state.destination == 'chat':
+        app.show_home()
+    item = host.root.content[host.destinations.index('chat')]
+    if item.enabled != available:
+        changing, host.changing = host.changing, True
+        try:
+            # UIKit omits disabled OptionItems, retaining their controllers.
+            item.enabled = available
+        finally:
+            host.changing = changing
+    sync_android_destination_visibility(host)
+
+
+def sync_android_destination_visibility(host):
+    adapter = host.adapter
+    if adapter is None or not hasattr(adapter, 'bottom'):
+        return
+    for index, item in enumerate(host.root.content):
+        for bar in (adapter.bottom, adapter.rail):
+            if bar is not None:
+                native = bar.getMenu().getItem(index)
+                native.setEnabled(item.enabled)
+                native.setVisible(item.enabled)
+
+
 def eink_selection_indicator(bar, enabled, original=None):
     """Make monochrome selection visible without changing native geometry."""
     if enabled:
@@ -105,6 +134,7 @@ def install_android_navigation_appearance(host):
         if mode == 'rail' and adapter.rail is None:
             adapter.rail = create_android_destination_rail(host)
         original(mode)
+        sync_android_destination_visibility(host)
         if adapter.mode != previous:
             compact_chrome()
             from .appearance import refresh_android_navigation
