@@ -24,7 +24,7 @@ class SettingsUITests(unittest.TestCase):
             __module__ = 'toga_android.app'
         sliders = [SimpleNamespace(value=value, _impl=SimpleNamespace(native=Mock()))
                    for value in (150, 60)]
-        owner = SimpleNamespace(app=SimpleNamespace(_impl=AndroidImpl()), _dragging=True,
+        owner = SimpleNamespace(_settings_app=SimpleNamespace(_impl=AndroidImpl()), _dragging=True,
             hue=sliders[0], saturation=sliders[1], update_labels=Mock(), draw_spectrum=Mock(),
             _spectrum_width=200)
         tint = Mock()
@@ -92,6 +92,19 @@ class SettingsUITests(unittest.TestCase):
         self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 90)
         app.settings_navigation.choose('App')
         self.assertEqual(app.settings_status.text, '')
+
+    def test_reload_after_leaving_appearance_preserves_accent_owner(self):
+        app = self.make_app()
+        app.show_settings()
+        app.settings_navigation.choose('Appearance')
+        controls = app.accent_controls
+        app.settings_navigation.choose('App')
+        # Native Toga unsets Widget.app when navigation detaches the category.
+        controls.app = None
+        app.reload_preferences()
+        app.settings_navigation.choose('Appearance')
+        self.assertEqual(app.accent_controls.hue.value, 221)
+        self.assertEqual(app.preferences.error, '')
 
     def test_android_notice_asset_is_read_offline_and_closed(self):
         from mobile.settings.licenses import show_licenses
