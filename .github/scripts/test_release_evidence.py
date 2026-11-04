@@ -79,3 +79,34 @@ class ReleasePublicationWorkflowTests(unittest.TestCase):
         self.assertIn("needs.package.result == 'success'", condition)
         self.assertIn("github.event_name == 'push'", condition)
         self.assertIn("startsWith(github.ref, 'refs/tags/v')", condition)
+
+
+class StandaloneSelectorTests(unittest.TestCase):
+    def test_real_script_without_pythonpath_sdk_or_submodule_remains_dependency_free(self):
+        import json
+        import os
+        from pathlib import Path
+        import shutil
+        import subprocess
+        import sys
+        from tempfile import TemporaryDirectory
+        source = Path(__file__).resolve().parents[2]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            script = root / '.github/scripts/select_release_evidence.py'
+            script.parent.mkdir(parents=True)
+            shutil.copy2(source / '.github/scripts/select_release_evidence.py', script)
+            (root / 'logistics_build').mkdir()
+            # No package __init__, SDK, commonUtils or third-party dependencies.
+            for name in ('hosted_requirements.py', 'release_test_evidence.py'):
+                shutil.copy2(source / 'logistics_build' / name, root / 'logistics_build' / name)
+            environment = {key:value for key,value in os.environ.items() if key not in ('PYTHONPATH','PYTHONHOME')}
+            environment.update(GITHUB_REPOSITORY='fixture/repo', GITHUB_SHA='a'*40,
+                GITHUB_TOKEN='fixture-no-network', LOGISTICS_REUSE_TEST_RESULTS='off',
+                GITHUB_OUTPUT=str(root/'output'), GITHUB_STEP_SUMMARY=str(root/'summary'))
+            result = subprocess.run([sys.executable, '-I', '-S', str(script)], cwd=root,
+                env=environment, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads((root/'release-evidence.json').read_text()), {})
+            self.assertEqual((root/'output').read_text().splitlines(),
+                ['validate=false','mobile-build=false','mobile-runtime=false'])

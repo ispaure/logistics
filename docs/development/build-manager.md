@@ -916,3 +916,27 @@ PID is the manager. This capability is not a durable mutation ledger or a
 replacement for the manager's Windows process ownership. The existing limitation
 for abrupt standalone Windows parent termination remains; no restart safety is
 claimed by the capability record.
+
+### Reusing automatic hosted validation
+
+With verified-result reuse enabled, normal GitHub validation can adopt one
+matching automatic branch-push run instead of dispatching a duplicate. Intake
+requires the exact repository and head repository, workflow ID/path, commit,
+branch and a creation time within 24 hours. The selected target must be covered
+by reviewed full-scope push defaults; unsupported inputs and changed workflow
+contracts stop adoption with an explicit fresh-run choice. Workflow edits require deliberate updates
+to the tracked push-contract digest and its regression check.
+
+The immutable intake receipt identifies its **existing-run** origin, remote URL,
+creation time and run attempt. Observation rechecks those facts on every SDK
+poll and requires every job in the shared release coverage policy to succeed;
+a top-level green status or a partial target run is insufficient. A matching
+failed automatic run remains a failed validation gate. Explicitly disabling
+reuse requests a fresh dispatch; observation errors never dispatch another run.
+Multiple eligible automatic runs require inspection or that explicit fresh-run
+choice rather than an arbitrary selection.
+
+Automatic runs are shared evidence. Cancelling or timing out a local observer
+leaves them running and retains their saved identity. Original manager-dispatched
+runs retain their existing receipt, resume and cancellation behavior. This
+coalescing does not remove any selected platform validation or delivery review.
