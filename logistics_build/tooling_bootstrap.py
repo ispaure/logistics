@@ -30,6 +30,7 @@ MESSAGES = {
     'pin': 'The declared manager pin is invalid or missing. Update the project to a valid published dependency pin before retrying.',
     'verification': 'Installed tooling did not verify in both environments. Inspect Project tooling readiness, then update again.',
     'install': 'Pinned tooling installation failed. Check Git access and Python build prerequisites, then update again.',
+    'native_tooling': 'Native prerequisite preparation failed. Check access to go.dev and files.pythonhosted.org and run dev.py setup mobile. Preserve conflicting mobile_build/.tools/go or release-wheels folders before moving them aside and retrying Update project tooling.',
     'blocked': 'Tooling readiness could not be checked. Inspect the project environments and retry Project tooling readiness.',
     'unfinished_mutation': 'An earlier environment change is unfinished. Explicitly Update project tooling to repair verified stopped work; an unverified interruption requires a host restart first. Do not remove its recovery record.',
     'boot_identity': 'The host boot identity could not be verified. Restore access to the operating system boot identifier before changing project environments.',
@@ -391,7 +392,7 @@ def validate_interpreters(targets):
 
 def inspect_environment(root, name, folder, interpreter, declared):
     row = dict(name=name, interpreter=str(interpreter), ready=False,
-               installed_revision=None, source_checkout=None)
+               installed_revision='', source_checkout='')
     if not owned_path(root, folder) or not interpreter.is_file():
         return row
     try:
@@ -479,8 +480,14 @@ def status(root=ROOT):
     ready = all(row['ready'] for row in rows)
     blocked = any(not interpreter.is_file() or not owned_path(root, folder)
                   for _, folder, interpreter in environments(root))
-    return dict(ready=ready, status='ready' if ready else 'blocked' if blocked else 'needs_update',
-        message='Project tooling is ready.' if ready else MESSAGES['environments'] if blocked else 'Update project tooling to the declared revision.',
+    from logistics_build.native_tooling import status as native_status
+    native = native_status(root)
+    message = ('Project manager SDK is ready. ' if ready else MESSAGES['environments'] if blocked else 'Update project tooling to the declared revision. ')
+    if native['applicable']:
+        message += native['message'] + ' Explicit Update project tooling also prepares pinned Go and the pure langdetect wheel.'
+    return dict(native=native, action_description='Repair the pinned manager SDK; with a supported mobile environment, also prepare pinned Go and the pure Python app wheel.',
+        ready=ready, status='ready' if ready else 'blocked' if blocked else 'needs_update',
+        message=message,
         declared_revision=declared['revision'], environments=rows)
 
 
@@ -524,10 +531,39 @@ def _repair_locked(root, declared, targets):
     result = status(root)
     if not result['ready']:
         raise BootstrapError('verification')
+    repair_native(root)
     marker = enrollment(root)
     marker.parent.mkdir(parents=True, exist_ok=True)
     atomic_json(marker, dict(schema=1, root=str(root)))
-    return result
+    return status(root)
+
+def repair_native(root):
+    from logistics_build.native_tooling import host_key, declared
+    if host_key() not in declared()['go']:
+        return
+    mobile = next(interpreter for name, _, interpreter in environments(root) if name == 'mobile')
+    if mobile.is_file():
+        try:
+            state = _MUTATION.get()
+            if os.name == 'posix' and state is None:
+                raise BootstrapError('unfinished_mutation')
+            nonce = state['value']['nonce'] if state is not None else str(uuid.uuid4())
+            capability = private(root) / 'native-setup-owner.json'
+            if not owned_path(root, capability):
+                raise BootstrapError('linked_path')
+            if os.name != 'posix':
+                atomic_json(capability, dict(schema=1, root=str(Path(root).resolve()), nonce=nonce))
+            run([mobile, Path(root) / 'logistics_build/native_tooling.py', '--root', root, '--owner-nonce', nonce], cwd=root)
+            # Successful return includes owning run_command's bounded cleanup.
+            # A failed/uncertain launch may leave an inert record; it grants no
+            # authority without the held environment lock and matching nonce.
+            if os.name != 'posix' and capability.is_file() and capability.stat().st_size <= 4096:
+                value = json.loads(capability.read_text())
+                if value == dict(schema=1, root=str(Path(root).resolve()), nonce=nonce):
+                    capability.unlink()
+        except subprocess.SubprocessError:
+            raise BootstrapError('native_tooling') from None
+
 
 def after_sync(root=ROOT):
     """Only a previous explicit tooling repair enrolls automatic restoration."""

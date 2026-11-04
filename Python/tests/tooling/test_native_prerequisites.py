@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import zipfile
 import sys
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS
@@ -24,6 +25,16 @@ class NativePrerequisiteTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(TemporaryDirectory())).resolve()
         self.go = self.root / 'go'; self.go.touch()
+        from logistics_build.native_tooling import declared, digest
+        self.wheelhouse=self.root/'wheelhouse';self.wheelhouse.mkdir()
+        wheel=self.wheelhouse/'langdetect-1.0.9-py3-none-any.whl'
+        with zipfile.ZipFile(wheel,'w') as archive:
+            archive.writestr('langdetect/__init__.py','# fixture')
+            archive.writestr('langdetect-1.0.9.dist-info/METADATA','Name: langdetect\nVersion: 1.0.9\n')
+            archive.writestr('langdetect-1.0.9.dist-info/WHEEL','Root-Is-Purelib: true\nTag: py3-none-any\n')
+        (self.wheelhouse/'langdetect-receipt.json').write_text(json.dumps(dict(schema=1,
+            filename=wheel.name,source_sha256=declared()['langdetect']['sha256'],wheel_sha256=digest(wheel))))
+        self.enterContext(patch('logistics_build.native_tooling.wheel_status', return_value=dict(ready=True, filename='langdetect-1.0.9-py3-none-any.whl')))
 
     def fixture_plan(self, ids=('ios-build',), backend='This Mac', effect='build'):
         phases = tuple(Phase(name, (sys.executable, '-c', 'pass'), str(ROOT), kind='build' if name in owner.BUILD_PHASES else 'test', effect=effect) for name in ids)
@@ -50,8 +61,8 @@ class NativePrerequisiteTests(unittest.TestCase):
                 patch.object(owner.subprocess,'run',side_effect=self.version_command) as run:
             result=owner.inspect(sys.executable,'native',environment={'PATH':'fixture-path'})
         self.assertTrue(result['ready']); self.assertEqual(len(run.call_args_list),3)
-        self.assertEqual({row['tool'] for row in result['tools']},{'briefcase','pip','go'})
-        self.assertTrue(all(row['executable'] and row['resolved_executable'] for row in result['tools']))
+        self.assertEqual({row['tool'] for row in result['tools']},{'briefcase','pip','go','langdetect-wheel'})
+        self.assertTrue(all(row['executable'] and row['resolved_executable'] for row in result['tools'] if row['tool'] != 'langdetect-wheel'))
 
     def test_runtime_only_probes_pip_without_go_or_briefcase(self):
         with patch.object(owner.shutil,'which',side_effect=AssertionError('Unexpected Go requirement')), \
@@ -86,7 +97,7 @@ class NativePrerequisiteTests(unittest.TestCase):
         (binary/'briefcase.py').write_text('print("0.4.5")\n')
         (binary/'pip.py').write_text('print("pip 26.3 from fixture")\n')
         marker=self.root/'host-ran'; cleaned=self.root/'cleanup-ran'
-        env=dict(PATH=str(binary),PYTHONPATH=os.pathsep.join((str(binary),str(ROOT/'Python'),str(ROOT))),PYTHONDONTWRITEBYTECODE='1')
+        env=dict(PATH=str(binary),PYTHONPATH=os.pathsep.join((str(binary),str(ROOT/'Python'),str(ROOT))),PIP_FIND_LINKS=str(self.wheelhouse),PYTHONDONTWRITEBYTECODE='1')
         phases=(Phase('host-contracts',(sys.executable,'-c','from pathlib import Path;Path('+repr(str(marker))+').touch()'),str(ROOT),environment=env,effect='test'),
                 Phase('android-native',(sys.executable,'-c','pass'),str(ROOT),environment=env,effect='test',dependencies=('host-contracts',),artifacts=(str(self.root/'native.json'),)),
                 Phase('android-runtime',(sys.executable,'-c','pass'),str(ROOT),environment=env,effect='test',dependencies=('host-contracts',),artifacts=(str(self.root/'runtime.json'),)),
@@ -117,7 +128,7 @@ class NativePrerequisiteTests(unittest.TestCase):
         self.assertEqual(rows['cleanup']['status'],'passed')
         result=json.loads(Path(next(p for p in plan.phases if p.id=='native-prerequisites').artifacts[0]).read_text())
         go=next(r for r in result['tools'] if r['tool']=='go')
-        self.assertIn('Install Go 1.26.9',go['error'])
+        self.assertIn('Update project tooling',go['error']);self.assertIn('Go 1.26.9',go['error'])
         self.assertTrue(all(row['ready'] for row in result['tools'] if row['tool']!='go'),result)
 
     def test_normal_project_plan_places_gate_before_full_host_contracts(self):
@@ -173,3 +184,25 @@ class NativePrerequisiteTests(unittest.TestCase):
         requirements=(ROOT/'mobile_build/requirements-host.in').read_text()
         for name in ('briefcase','pip'):self.assertIn(name+'=='+owner.EXPECTED[name],requirements)
         self.assertIn("go-version: '"+owner.EXPECTED['go']+"'",(ROOT/'.github/workflows/mobile-build.yml').read_text())
+
+    def test_missing_verified_wheel_blocks_real_executor_before_host_effect(self):
+        binary=self.root/'tools';binary.mkdir()
+        (binary/'briefcase.py').write_text('print("0.4.5")\n')
+        (binary/'pip.py').write_text('print("pip 26.3 from fixture")\n')
+        go=binary/'go'
+        go.write_text('#!/bin/sh\necho "go version go1.26.9 fixture/fixture"\n');go.chmod(0o755)
+        marker=self.root/'host-effect'
+        env=dict(PATH=str(binary),PYTHONPATH=os.pathsep.join((str(binary),str(ROOT),str(ROOT/'Python'))),
+                 PIP_FIND_LINKS=str(self.root/'missing-wheelhouse'),PYTHONDONTWRITEBYTECODE='1')
+        host=Phase('host-contracts',(sys.executable,'-c','from pathlib import Path;Path('+repr(str(marker))+').touch()'),
+                   str(ROOT),environment=env,effect='test')
+        native=Phase('android-native',(sys.executable,'-c','pass'),str(ROOT),environment=env,effect='test',dependencies=(host.id,))
+        plan=Plan('Fixture','Missing app wheel',{},(host,native),str(self.root/'workspace'),backend='This Mac',effect='test')
+        plan=owner.with_prerequisites(plan,'android',sys.executable)
+        result=Executor(resource_directory=self.root/'resources',evidence_directory=self.root/'evidence').run(plan,self.root/'run')
+        self.assertEqual(result['status'],'failed')
+        self.assertFalse(marker.exists())
+        gate=next(p for p in plan.phases if p.id=='native-prerequisites')
+        proof=json.loads(Path(gate.artifacts[0]).read_text())
+        self.assertTrue(all(row['ready'] for row in proof['tools'] if row['tool']!='langdetect-wheel'))
+        self.assertFalse(next(row for row in proof['tools'] if row['tool']=='langdetect-wheel')['ready'])
