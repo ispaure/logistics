@@ -104,16 +104,12 @@ jobs:
 
   android:
     needs: environment
-    name: Build and validate Android
+    name: Build shared Android test app
     if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
     runs-on: ${{ needs.environment.outputs.android_runner }}
     timeout-minutes: 60
     env:
       GRADLE_OPTS: -Dorg.gradle.daemon=false
-      # These caches belong only to this disposable job. Release them after
-      # native compilation so the emulator image can fit alongside the APK.
-      GOCACHE: ${{ runner.temp }}/logistics-android-go-cache
-      GOMODCACHE: ${{ runner.temp }}/logistics-android-go-modules
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -131,6 +127,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Initialize owned Android Go caches
+        run: |
+          # Resolve runner paths inside the running job, before Go setup.
+          echo "GOCACHE=$RUNNER_TEMP/logistics-android-go-cache" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=$RUNNER_TEMP/logistics-android-go-modules" >> "$GITHUB_ENV"
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: '1.26.9'
@@ -150,9 +151,9 @@ jobs:
           python cloud_build.py licenses
           briefcase create android --no-input
           python cloud_build.py android
-          briefcase build android --no-input
+          briefcase build android --test --no-input
           cp build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/Logistics-android-debug.apk"
-      - name: Release owned Go caches before emulator installation
+      - name: Release owned Go caches after compilation
         if: always()
         run: |
           test "$GOCACHE" = "$RUNNER_TEMP/logistics-android-go-cache"
@@ -161,14 +162,85 @@ jobs:
           du -sh "$GOCACHE" "$GOMODCACHE" 2>/dev/null || true
           go clean -cache -modcache
           df -h "$RUNNER_TEMP"
+      - name: Archive the exact Android test application
+        working-directory: mobile_build
+        run: |
+          # Runtime needs only Briefcase metadata and the verified test APK,
+          # never the producer's Gradle, Go or compilation caches.
+          tar -czf "$RUNNER_TEMP/Logistics-android-test-project.tar.gz" build/logisticsmobile/android/gradle/briefcase.toml build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk payload/source.json
+      - name: Share the built Android test application
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-android-test-project
+          path: ${{ runner.temp }}/Logistics-android-test-project.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Preserve native builds and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-native-android-build
+          path: |
+            mobile_build/payload/source.json
+            mobile_build/logs/
+            ${{ runner.temp }}/Logistics-android-debug.apk
+          retention-days: 14
+
+  android-ui:
+    name: Validate Android
+    needs: [environment, android]
+    if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
+    runs-on: ${{ needs.environment.outputs.android_runner }}
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: ${{ needs.environment.outputs.python_version }}
+      - name: Install explicitly pinned external manager
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install the matching application runner
+        run: python -m pip install briefcase==0.4.5
+      - name: Download the exact Android test application
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: logistics-android-test-project
+          path: ${{ runner.temp }}/android-test-project
+      - name: Restore the exact Android test application
+        working-directory: mobile_build
+        run: |
+          tar -xzf "$RUNNER_TEMP/android-test-project/Logistics-android-test-project.tar.gz"
+          rm "$RUNNER_TEMP/android-test-project/Logistics-android-test-project.tar.gz"
+      - name: Check emulator disk headroom before installing the system image
+        run: |
+          # The combined job had only 6.3 GiB before API 36 image installation
+          # and failed the emulator disk check. Keep build caches off this VM.
+          df -h "$RUNNER_TEMP"
+          available_kib=$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')
+          if [ "$available_kib" -lt 12582912 ]; then
+            echo "::error::Android image installation and AVD startup require at least 12 GiB free on the fresh validation runner; found ${available_kib} KiB."
+            exit 1
+          fi
       - name: Exercise Android panels, rotation and safe areas
         working-directory: mobile_build
         env:
           ANDROID_TEST_DEVICE: ${{ needs.environment.outputs.android_device }}
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
+          mkdir -p "$BRIEFCASE_HOME"
           if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
-          python validation/ui_tools.py run android --device "$ANDROID_TEST_DEVICE"
+          python validation/ui_tools.py run android --device "$ANDROID_TEST_DEVICE" --no-update
+      - name: Record remaining emulator disk headroom
+        if: always()
+        run: df -h "$RUNNER_TEMP"
       - name: Preserve native builds and diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -177,7 +249,6 @@ jobs:
           path: |
             mobile_build/payload/source.json
             mobile_build/logs/
-            ${{ runner.temp }}/Logistics-android-debug.apk
           retention-days: 14
 
   ios-ui:
@@ -272,7 +343,7 @@ jobs:
 
   native-gate:
     name: Require every selected native check
-    needs: [ios-build, ios-ui, android]
+    needs: [ios-build, ios-ui, android, android-ui]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -281,6 +352,7 @@ jobs:
           TARGET: ${{ github.event_name == 'push' && 'both' || inputs.target }}
           IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
           ANDROID_RESULT: ${{ needs.android.result }}
+          ANDROID_UI_RESULT: ${{ needs.android-ui.result }}
           IOS_RESULT: ${{ needs.ios-ui.result }}
         run: |
           case "$TARGET" in
@@ -291,6 +363,6 @@ jobs:
           test "$IOS_BUILD_RESULT" = "$expected_ios"
           test "$IOS_RESULT" = "$expected_ios"
           case "$TARGET" in
-            android|both) test "$ANDROID_RESULT" = success ;;
-            ios) test "$ANDROID_RESULT" = skipped ;;
+            android|both) test "$ANDROID_RESULT" = success; test "$ANDROID_UI_RESULT" = success ;;
+            ios) test "$ANDROID_RESULT" = skipped; test "$ANDROID_UI_RESULT" = skipped ;;
           esac

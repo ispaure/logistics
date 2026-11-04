@@ -78,7 +78,21 @@ class UXWorkflowTests(unittest.TestCase):
         (root / 'Draft.md').write_text('# File')
         app.show_locations()
         app.folder_source_buttons['Local'].on_press()
-        app.loop.run_until_complete(app.folder_buttons['Notes'].on_press())
+        run = app.loop.run_until_complete
+        run(app.folder_buttons['All files'].on_press())
+        browser = app.file_browser
+        run(browser.activate_entry(next(item for item in browser.entries if item.label == 'Local')))
+        run(browser.activate_entry(next(item for item in browser.entries if item.label == 'Notes')))
+        self.assertEqual(app.file_path, 'Notes')
+        self.assertEqual([item.label for item in browser.entries], ['Draft.md'])
+        run(app.parent_file_folder())
+        self.assertEqual(app.file_path, '')
+        run(app.parent_file_folder())
+        self.assertEqual(app.file_storage.value, 'Shared files')
+        run(app.parent_file_folder())
+        self.assertEqual(app.routes.screens['files'], [])
+        # A direct folder route still returns to Workspaces at its entry root.
+        run(app.browse_hub_folder('Notes'))
         self.assertEqual([route[0] for route in app.routes.screens['files']], ['browser'])
         self.assertEqual(app.file_path, 'Notes')
         self.assertNotIn(app.file_browser.back_button, app.file_browser.navigation_controls.children)

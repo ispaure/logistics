@@ -3,6 +3,7 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import importlib.util
 import itertools
 import json
 import os
@@ -38,6 +39,126 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = jobs(REPO / '.github/workflows/mobile-build.yml')
 
+    @unittest.skipUnless(shutil.which('bash'), 'Workflow cache setup needs Bash')
+    def test_android_cache_setup_resolves_runtime_paths_with_spaces(self):
+        command = script(self.workflow['android'], 'Initialize owned Android Go caches')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = root / 'runner with spaces'
+            runtime.mkdir()
+            output = root / 'github-env'
+            env = dict(os.environ, RUNNER_TEMP=str(runtime), GITHUB_ENV=str(output))
+            subprocess.run(['bash', '-e', '-c', command], env=env, check=True)
+            values = dict(line.split('=', 1) for line in output.read_text().splitlines())
+            self.assertEqual(values, dict(GOCACHE=str(runtime / 'logistics-android-go-cache'),
+                GOMODCACHE=str(runtime / 'logistics-android-go-modules')))
+
+    @unittest.skipUnless(shutil.which('bash'), 'Workflow cache ownership guard needs Bash')
+    def test_android_cache_cleanup_rejects_unrelated_cache_before_invoking_go(self):
+        command = script(self.workflow['android'], 'Release owned Go caches after compilation')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = root / 'runner'
+            runtime.mkdir()
+            unrelated = root / 'unrelated'
+            unrelated.mkdir()
+            sentinel = unrelated / 'keep'
+            sentinel.write_text('preserve')
+            binary = root / 'bin'
+            binary.mkdir()
+            go = binary / 'go'
+            go.write_text('#!/bin/sh\nprintf invoked > "$CALLED"\n')
+            go.chmod(0o755)
+            called = root / 'called'
+            env = dict(os.environ, RUNNER_TEMP=str(runtime), GOCACHE=str(unrelated),
+                GOMODCACHE=str(runtime / 'logistics-android-go-modules'), CALLED=str(called),
+                PATH=str(binary) + os.pathsep + os.environ.get('PATH', ''))
+            result = subprocess.run(['bash', '-e', '-c', command], env=env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(called.exists())
+            self.assertEqual(sentinel.read_text(), 'preserve')
+
+    @unittest.skipUnless(shutil.which('bash'), 'Headroom gate needs Bash')
+    def test_android_headroom_fails_before_image_install_without_deleting_shared_paths(self):
+        command = script(self.workflow['android-ui'],
+                         'Check emulator disk headroom before installing the system image')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / 'df'
+            binary.write_text('#!/bin/sh\nif [ "$1" = "-Pk" ]; then\n'
+                              'printf "Filesystem 1024-blocks Used Available Capacity Mounted\n"\n'
+                              'printf "fixture 75000000 0 %s 0%% /\n" "$FREE_KIB"\nfi\n')
+            binary.chmod(0o755)
+            for available, expected in ((6606028, False), (12582911, False),
+                                        (12582912, True), (18000000, True)):
+                result = subprocess.run(['bash', '-e', '-c', command], env=dict(os.environ,
+                    RUNNER_TEMP=str(root), FREE_KIB=str(available),
+                    PATH=str(root) + os.pathsep + os.environ.get('PATH', '')), capture_output=True)
+                self.assertEqual(result.returncode == 0, expected)
+                if not expected:
+                    self.assertIn(b'::error::', result.stdout)
+            self.assertNotIn('rm ', command)
+
+    @unittest.skipUnless(shutil.which('tar') and os.name != 'nt', 'Unix archives')
+    def test_android_handoff_contains_exact_apk_metadata_without_compiler_caches(self):
+        import tarfile
+        build = self.workflow['android']
+        runtime = self.workflow['android-ui']
+        self.assertIn('needs: [environment, android]', runtime)
+        self.assertIn('briefcase build android --test --no-input', build)
+        self.assertNotIn('briefcase build', runtime)
+        self.assertNotIn('setup-go', runtime)
+        self.assertIn('--no-update', script(runtime, 'Exercise Android panels, rotation and safe areas'))
+        archive = script(build, 'Archive the exact Android test application')
+        restore = script(runtime, 'Restore the exact Android test application')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            producer = root / 'producer'
+            consumer = root / 'consumer'
+            producer.mkdir()
+            consumer.mkdir()
+            paths = ('build/logisticsmobile/android/gradle/briefcase.toml',
+                     'build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk',
+                     'payload/source.json')
+            for name in (*paths, 'build/logisticsmobile/android/gradle/.gradle/unrelated-cache'):
+                target = producer / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(name)
+            env = dict(os.environ, RUNNER_TEMP=str(root), COPYFILE_DISABLE="1")
+            subprocess.run(['bash', '-e', '-c', archive], cwd=producer, env=env, check=True)
+            output = root / 'Logistics-android-test-project.tar.gz'
+            with tarfile.open(output) as bundle:
+                self.assertEqual(bundle.getnames(), list(paths))
+            (root / 'android-test-project').mkdir()
+            shutil.move(output, root / 'android-test-project' / output.name)
+            subprocess.run(['bash', '-e', '-c', restore], cwd=consumer, env=env, check=True)
+            for name in paths:
+                self.assertEqual((consumer / name).read_bytes(), (producer / name).read_bytes())
+            self.assertFalse((consumer / 'build/logisticsmobile/android/gradle/.gradle').exists())
+            self.assertFalse((root / 'android-test-project' / output.name).exists())
+
+    @unittest.skipUnless(importlib.util.find_spec('briefcase'), 'Pinned Briefcase host dependency')
+    def test_minimal_android_handoff_uses_real_briefcase_run_without_building(self):
+        from unittest.mock import Mock
+        from briefcase.commands.run import RunCommand
+        from briefcase.platforms.android.gradle import GradleMixin
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / 'build/logisticsmobile/android/gradle'
+            apk = project / 'app/build/outputs/apk/debug/app-debug.apk'
+            apk.parent.mkdir(parents=True)
+            apk.write_bytes(b'verified fixture APK')
+            (project / 'briefcase.toml').write_text('[briefcase]\ntarget_version="0.3.27"\n')
+            app = SimpleNamespace(app_name='logisticsmobile', test_mode=True, external_package_path=None)
+            owner = SimpleNamespace(apps={app.app_name: app},
+                finalize=Mock(return_value={app.app_name: app}),
+                bundle_path=lambda app: project, verify_app=Mock(), run_app=Mock(),
+                build_command=Mock(side_effect=AssertionError('Handoff must never trigger a build')))
+            owner.binary_executable_path = lambda app: GradleMixin.binary_path(owner, app)
+            RunCommand.__call__(owner, test_mode=True, no_update=True)
+            owner.build_command.assert_not_called()
+            owner.run_app.assert_called_once_with(app, passthrough=[])
+
     @unittest.skipUnless(shutil.which('bash'), 'Bash is required for workflow shell contracts')
     def test_object_diagnostics_are_absent_when_disabled_and_explicit_when_enabled(self):
         prefix = script(self.workflow['ios-ui'], 'Exercise panels, rotation and safe areas').split('mkdir -p', 1)[0]
@@ -70,7 +191,7 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
         release = jobs(REPO / '.github/workflows/release.yml')
         self.assertIn('needs: [evidence, validate, mobile-build, mobile-runtime]', release['package'])
         self.assertIn('needs: package', release['publish'])
-        self.assertIn('needs: [ios-build, ios-ui, android]', workflow['native-gate'])
+        self.assertIn('needs: [ios-build, ios-ui, android, android-ui]', workflow['native-gate'])
         self.assertIn('if: always()', workflow['native-gate'])
         self.assertNotIn('continue-on-error', ''.join(workflow.values()))
 
@@ -100,14 +221,14 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
     def test_gate_rejects_each_failed_cancelled_or_required_skipped_result(self):
         gate = script(self.workflow['native-gate'], 'Reject failed, cancelled or required skipped checks')
         for target in ('ios', 'android', 'both', 'invalid'):
-            for results in itertools.product(('success', 'failure', 'cancelled', 'skipped'), repeat=3):
-                build, ios, android = results
-                expected = ((target == 'both' and results == ('success',) * 3)
-                            or (target == 'ios' and results == ('success', 'success', 'skipped'))
-                            or (target == 'android' and results == ('skipped', 'skipped', 'success')))
+            for results in itertools.product(('success', 'failure', 'cancelled', 'skipped'), repeat=4):
+                build, ios, android, android_ui = results
+                expected = ((target == 'both' and results == ('success',) * 4)
+                            or (target == 'ios' and results == ('success', 'success', 'skipped', 'skipped'))
+                            or (target == 'android' and results == ('skipped', 'skipped', 'success', 'success')))
                 with self.subTest(target=target, results=results):
                     result = subprocess.run(['bash', '-e', '-c', gate], env=dict(os.environ,
-                        TARGET=target, IOS_BUILD_RESULT=build, IOS_RESULT=ios, ANDROID_RESULT=android),
+                        TARGET=target, IOS_BUILD_RESULT=build, IOS_RESULT=ios, ANDROID_RESULT=android, ANDROID_UI_RESULT=android_ui),
                         capture_output=True)
                     self.assertEqual(result.returncode == 0, expected)
 
