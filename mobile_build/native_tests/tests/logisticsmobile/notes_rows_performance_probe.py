@@ -171,11 +171,16 @@ class NotesRowsPerformanceProbe(DocumentWorkspaceProbe):
         # performLongClick has no physical pointer stream: Android may deliver
         # ACTION_DRAG_ENDED before it returns. Check the authorized source at
         # initiation rather than requiring a cancelled gesture to remain live.
-        with patch.object(owner.file_drag, 'start', wraps=owner.file_drag.start) as started:
-            assert icon.performLongClick()
-            started.assert_called_once_with('Library/Folder/Note 00.md')
-        icon.cancelDragAndDrop()
-        owner.file_drag.end()
+        with patch.object(owner.view.window, 'dialog', new=cancel):
+            with patch.object(owner.file_drag, 'start', wraps=owner.file_drag.start) as started:
+                assert icon.performLongClick()
+                started.assert_called_once_with('Library/Folder/Note 00.md')
+            icon.cancelDragAndDrop()
+            owner.file_drag.end()
+            # The pointerless synthetic gesture can also queue ListView's
+            # fallback context event. Retire it before testing viewport scroll.
+            await asyncio.sleep(.1)
+            await asyncio.gather(*tuple(rows.tasks))
         native = rows.native_list._impl.native
         created = int(native.getCreatedRowCount())
         native.setSelection(44)
