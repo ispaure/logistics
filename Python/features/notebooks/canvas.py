@@ -6,11 +6,16 @@ from .bridge import MAX_COMMAND
 from .icons import ICON_SCRIPT
 
 
-def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=False, stylesheet=''):
+def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=False, stylesheet='', paper_preview=None):
+    if paper_preview is None:
+        from .preferences import paper_preview_enabled
+        paper_preview = paper_preview_enabled()
     if desktop and mobile:
         raise ValueError('Choose one notebook presentation.')
     from services.appearance_palette import css_variables
     style = css_variables() + '\n' + asset('base.css')
+    if paper_preview:
+        style += '\n#paperWrap,#pagePreviews img,.page-previews img{filter:saturate(.55) contrast(.88) brightness(1.04)}'
     chrome = asset('controls.html')
     presentation = ''
     if desktop:

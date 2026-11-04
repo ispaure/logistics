@@ -12,6 +12,15 @@ from features.notebooks.previews import BATCH, page_previews
 
 
 class PagePreviewTests(unittest.TestCase):
+    def test_display_filter_can_be_disabled_without_changing_state(self):
+        from features.notebooks.canvas import editor_html
+        state = {'title': 'Colors'}
+        enabled = editor_html(state, 'test:', paper_preview=True)
+        disabled = editor_html(state, 'test:', paper_preview=False)
+        self.assertIn('filter:saturate(.55)', enabled)
+        self.assertNotIn('filter:saturate(.55)', disabled)
+        self.assertEqual(state, {'title': 'Colors'})
+
     def test_visible_ink_and_fixed_ranges_do_not_change_page_order_or_bytes(self):
         book = Notebook.new('Overview')
         ink = book.page(0)

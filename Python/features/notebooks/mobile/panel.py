@@ -176,7 +176,8 @@ class NotebookPanel:
         if restore_location:
             self.view.insert(0, location)
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
-            self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables()))
+            self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables(),
+            paper_preview=self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'))
 
     async def canvas_loaded(self, widget=None, **kwargs):
         if widget is not self.web:

@@ -161,3 +161,7 @@ toolbar; tap the eraser icon again, tap outside, or start erasing
 outside the panel to close it. That first gesture erases immediately. Both types respect hidden
 layers and support Undo/Redo. The selected type and size remain active while
 you work in that editor.
+
+## Paper Pro preview
+
+A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Toggle it in **Settings → Features → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.

@@ -19,8 +19,11 @@ def activate(context):
 
 def register():
     from commonUtils.ui.features import FileType, BrowserExtension, FileActivation
-    from features.contributions import Feature, DocumentLauncherContribution
+    from features.contributions import Feature, DocumentLauncherContribution, SettingsContribution
+    from pathlib import Path
     return Feature(id='notebooks', label='Notebooks',
+        settings=[SettingsContribution('Notebook preview', 'notebooks.preview',
+            config_files=(Path(__file__).with_name('config.ini'),))],
         file_types=[FileType('features.notebooks.file_type:RMDOCFile', extensions=('rmdoc',))],
         browser=BrowserExtension(activation=[FileActivation('features.notebooks.file_type:RMDOCFile', activate)]),
         document_launchers=[DocumentLauncherContribution('rmdoc', 'Notebook (.rmdoc)', launch,
