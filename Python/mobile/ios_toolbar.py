@@ -47,6 +47,8 @@ def bar_item(button, *, prominent=False, symbol=None):
     title = getattr(button, 'accessible_name', None) or native.accessibilityLabel or button.text or ''
     item.accessibilityLabel = str(title)
     icon = getattr(button, 'control_icon', None)
+    from .appearance import apple_color
+    item.tintColor = apple_color('text') if icon in {'more', 'overflow'} else None
     item.title = ('Save' if icon == 'save' else
                   str(button.text or title) if icon is None else str(title))
     symbol = symbol or getattr(button, '_toolbar_symbol', None)

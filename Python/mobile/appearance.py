@@ -249,6 +249,9 @@ def reserve_navigation(app, *, view=None):
 
 def surface(widget, *, radius=12, background='surface', foreground=None, outlined=False,
             eink_outlined=True, eink_selected=False):
+    # Overflow is a neutral command even inside accent-coloured browser bars.
+    if getattr(widget, 'control_icon', None) in {'more', 'overflow'}:
+        foreground = 'text'
     widget._impl._surface_roles = (background, foreground, outlined)
     widget._impl._surface_eink_outlined = eink_outlined
     widget._impl._surface_eink_selected = eink_selected
