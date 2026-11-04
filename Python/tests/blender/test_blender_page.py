@@ -39,9 +39,13 @@ class BlenderPageTests(QtTestCase):
         feature = register()
         self.assertEqual(feature.id, 'blender')
         self.assertEqual(feature.pages[0].navigation_icon, 'blender')
-        with patch.object(self.manager, 'install') as install:
+        with patch.object(self.manager, 'install') as install, \
+                patch('features.blender.ui.page.inspect_addons') as inspect, \
+                patch('features.blender.addons.bluehole.update') as update:
             page = BlenderPage(manager=self.manager)
         install.assert_not_called()
+        inspect.assert_not_called()
+        update.assert_not_called()
         self.assertEqual(page.version.count(), len(self.builds))
         self.assertFalse(page.launch_button.isEnabled())
         self.assertFalse(self.manager.software.exists())
@@ -49,7 +53,9 @@ class BlenderPageTests(QtTestCase):
     def test_preset_selection_shows_installed_files_without_loading_addons(self):
         root = self.manager.create_preset(self.builds[0], 'Default')
         (root / 'scripts/addons/demo.py').write_text('bl_info={"name":"Demo","version":(1,0)}')
-        page = BlenderPage(manager=self.manager)
+        with patch('features.blender.ui.page.inspect_addons') as inspect:
+            page = BlenderPage(manager=self.manager)
+        inspect.assert_not_called()
         self.assertEqual(page.preset.currentText(), 'Default')
         self.assertEqual(page.table.item(0, 0).text(), 'Demo')
         self.assertEqual(page.table.item(0, 3).text(), 'Unknown')
@@ -335,7 +341,8 @@ class BlenderPageTests(QtTestCase):
             while not cancelled():
                 Event().wait(.005)
         page._run('Test operation', work)
-        self.assertTrue(started.wait(2))
+        self.wait_until(started.is_set, timeout=2,
+                        message='Blender close-test worker did not start')
         self.assertFalse(page.prepare_close())
         self._wait_for_operation(page)
         self.assertTrue(page.prepare_close())
