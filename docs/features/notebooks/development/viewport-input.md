@@ -22,10 +22,14 @@ A deliberate zoom preserves the current page scale and center through rotation,
 opening/closing and laptop transitions, subject to the document's scroll edges.
 The unchanged default instead adapts to the new layout. Fold changes wait until
 the live pen contact finishes. Every page change resets the zoom and position;
-returning to an earlier page also starts at its current layout's default.
+without an explicit Paper view choice, returning to an earlier page starts at
+its current layout's default.
 The visible mobile **Reset** zoom button applies that default immediately.
-An explicit Paper view choice remains a manual override until reset or a page
-change. Viewport state is presentation state and is not saved into native ink.
+An explicit Paper view choice applies across the open document. Page changes and
+Reset zoom reset scale and position while retaining that view; reopening restores
+automatic framing. Template format changes do not select a Paper view. Viewport
+state is presentation state and is not saved into native ink. The template format
+selector is shown only for `FORM_TEMPLATES`, whose Pro and Move layouts differ.
 
 ## Touch navigation
 

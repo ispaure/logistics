@@ -346,7 +346,7 @@ class Editor:
         return sorted(chosen, key=lambda s: order.get(s.id, len(order)))
 
     def state(self):
-        from .templates import CATALOG, settings, background, view_bounds, template_name, available, TEMPLATE_NOTICE, description
+        from .templates import CATALOG, FORM_TEMPLATES, settings, background, view_bounds, template_name, available, TEMPLATE_NOTICE, description
         ink = self.notebook.page(self.index)
         page = self.notebook.pages[self.index]
         paper = settings(self.notebook, page)
@@ -365,7 +365,7 @@ class Editor:
                     strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),
-                    templates=CATALOG, template_notice=TEMPLATE_NOTICE, template_description=template_description,
+                    templates=CATALOG, template_formats=sorted(FORM_TEMPLATES), template_notice=TEMPLATE_NOTICE, template_description=template_description,
                     template_settings=paper, template_editable=not pdf,
                     template_available=template_available,
                     move_paper=view_bounds([], True),
