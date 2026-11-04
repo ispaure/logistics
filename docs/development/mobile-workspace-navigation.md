@@ -688,8 +688,12 @@ Text-field touches keep normal cursor and selection behavior.
 The Save As picker keeps its filename and folder fields in the same scroll form
 when the keyboard or orientation changes. After UIKit and Toga resize that form,
 `keyboard.reveal_picker_input` refreshes its content geometry and reveals the
-current first responder without animation or a focus change. The queued reveal
-is coalesced and cancelled when the picker closes or leaves compact keyboard
+current first responder without animation or a focus change. It
+also measures the actual keyboard edge when a retained scroll frame still
+extends behind it. A temporary bottom inset permits the required scroll offset;
+the picker restores its original inset on keyboard dismissal or focus changes.
+Unchanged geometry does not trigger another inset or offset update.
+The queued reveal is coalesced and cancelled when the picker closes or leaves compact keyboard
 layout. Native destination checks repeat portrait/landscape transitions with
 both the standard keyboard and a test-only 32-point native accessory row. This
 reproduces the taller keyboard viewport that exposed the overlap. They keep the

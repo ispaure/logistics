@@ -538,11 +538,13 @@ class EditorPicker:
         """Keep naming and completion usable without reparenting the focused input."""
         if self.panel is None or not hasattr(self, 'picker_form') or getattr(self, '_fitting_keyboard', False):
             return
-        from .keyboard import _tuck_control
+        from .keyboard import _tuck_control, reset_picker_keyboard
         self._fitting_keyboard = True
         try:
             self._compact_keyboard = compact
             apple = type(self.app._impl).__module__.startswith('toga_iOS.')
+            if apple and not compact:
+                reset_picker_keyboard(self)
             def focused(control):
                 return bool(getattr(getattr(control._impl, 'native', None), 'isFirstResponder', False))
             if not compact or not apple or focused(self.save_as_storage):
