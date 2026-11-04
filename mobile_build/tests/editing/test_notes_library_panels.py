@@ -79,13 +79,11 @@ class NotesLibraryPanelTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
-    def test_footer_commands_browse_root_and_collapse_without_changing_document(self):
+    def test_centered_commands_collapse_without_changing_document(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
             await owner.open_note('Vault/Projects/Plan.MD')
             owner.sidebar.show_sidebar()
-            await owner.root_drop_button.on_press()
-            self.assertEqual(owner.selected_path, owner.root)
             self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
             self.assertEqual(owner.panel_tab, 'Files')
             await owner.toggle_folder('Vault/Projects')
@@ -94,13 +92,14 @@ class NotesLibraryPanelTests(unittest.TestCase):
             collapse.on_press()
             self.assertEqual(owner.expanded, {owner.root})
             self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
-            actions = [label for label, _ in owner.panel_menu.actions]
-            self.assertEqual(actions, ['Browse library root', 'All documents'])
+            self.assertFalse(hasattr(owner, 'panel_menu'))
+            self.assertFalse(hasattr(owner, 'panel_footer'))
+            self.assertEqual(owner.tree.children[1:3], [owner.panel_actions, owner.panel_body])
+            self.assertEqual(owner.panel_actions.style.justify_content, 'center')
+            self.assertEqual(len(owner.panel_actions.children), 3)
             owner.dispose()
             collapse.on_press()
-            await owner.root_drop_button.on_press()
             self.assertEqual(owner.expanded, set())
-            self.assertEqual(owner.root_drop_button.text, 'Notes Library')
         self.run_async(exercise())
 
     def test_menu_result_from_removed_library_visit_cannot_reopen_a_form(self):
@@ -419,7 +418,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertIs(owner.search.parent, owner.search_content)
             self.assertIsNone(owner.search_mode.parent)
             self.assertIs(owner.rows_scroll.parent, owner.search_content)
-            self.assertIsNone(owner.panel_actions.parent)
+            self.assertIs(owner.panel_actions.parent, owner.tree)
             owner.select_panel_tab('Calendar')
             self.assertEqual(owner.panel_body.children, [owner.calendar_scroll])
             self.assertIsNone(owner.files_content.parent)
@@ -435,9 +434,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual({child.vault_path for row in owner.rows.children for child in row.children
                               if hasattr(child, 'vault_path')},
                              {'Vault/Projects', 'Vault/attachment.txt', 'Vault/Home.md'})
-            self.assertIs(owner.root_drop_button.parent, owner.panel_identity)
-            self.assertIs(owner.panel_footer.parent, owner.tree)
-            self.assertIs(owner.panel_actions.parent, owner.panel_footer)
+            self.assertIs(owner.panel_actions.parent, owner.tree)
             owner.select_panel_tab('invalid')
             self.assertEqual(owner.panel_body.children, [owner.files_content])
         self.run_async(exercise())
@@ -654,14 +651,14 @@ class NotesLibraryPanelTests(unittest.TestCase):
     tearDown = fixtures.ObsidianTests.tearDown
     run_async = fixtures.ObsidianTests.run_async
 
-    def test_modal_drawers_have_no_close_button_and_discreet_storage_caption(self):
+    def test_modal_drawers_have_no_close_button_or_storage_footer(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
             owner.sidebar.show_sidebar()
             self.assertTrue(owner.sidebar.overlay.dim)
             self.assertFalse(owner.sidebar.overlay.passthrough_controls)
-            self.assertEqual(owner.panel_metadata.style.font_style, 'italic')
-            self.assertEqual(owner.panel_metadata.style.font_size, 10)
+            self.assertFalse(hasattr(owner, 'panel_metadata'))
+            self.assertFalse(hasattr(owner, 'panel_identity'))
             self.assertEqual(owner.links.children[0].text, 'Links')
             self.assertEqual(list(owner.panel_tabs), ['Files', 'Search', 'Calendar'])
             self.assertTrue(owner.sidebar.overlay.edge_panel)
