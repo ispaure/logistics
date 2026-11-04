@@ -175,6 +175,37 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.run_async(self.picker._storage_refresh)
         return source, destination
 
+    def test_workspace_move_menu_accepts_scheduled_picker_for_root_and_nested_files(self):
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
+        from mobile_build.tests.transfers.test_localcrypt_access import Client
+        from mobile.action_menu import BrowserActions
+
+        async def exercise():
+            provider = CryptFiles(Path(self.temp.name) / 'ciphertext', Client(), 'Secret')
+            (provider.root / 'nested').mkdir()
+            for path in ('root.md', 'nested/note.md'):
+                (provider.root / path).write_bytes(b'opaque fixture')
+                await self.app.show_files()
+                self.app.file_provider = provider
+                rows = provider.list(path.rpartition('/')[0])
+                self.app.file_rows = {row['name']: row for row in rows}
+                self.app.set_file_items(list(self.app.file_rows))
+                self.app.file_selection.value = path.rpartition('/')[2]
+                browser = self.app.file_browser
+                browser.set_entries(provider, path.rpartition('/')[0], rows)
+                entry = next(entry for entry in browser.tree.entries.values()
+                             if entry.payload and entry.payload.get('path') == path)
+                await browser.select(entry)
+                menu = BrowserActions(browser, self.app.file_item_commands())
+                menu.invoke(dict(menu.actions)['Move…'])
+                await asyncio.gather(*tuple(browser.work.tasks))
+                self.assertEqual(self.picker.operation.mode, 'destination')
+                self.assertEqual(self.picker.operation.destination_action.path, path)
+                self.assertEqual(self.picker.save_as_name.value, path.rpartition('/')[2])
+                self.picker.cancel_text_destination()
+
+        self.run_async(exercise())
+
     def test_browsed_move_uses_created_folder_and_preserves_default_name(self):
         source, destination = self.prepare_move()
         self.picker.new_folder_name.value = 'Organized'

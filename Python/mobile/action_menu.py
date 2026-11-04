@@ -89,7 +89,11 @@ class BrowserActions:
             return
         result = callback()
         if inspect.isawaitable(result):
-            browser._spawn(result)
+            # Commands may already schedule their work (Move opens its picker
+            # this way). create_task accepts coroutines, not existing Tasks.
+            async def complete():
+                return await result
+            browser._spawn(complete())
 
     def show(self):
         browser = self.browser()
