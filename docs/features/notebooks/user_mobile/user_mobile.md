@@ -104,8 +104,12 @@ menus and editing tools also leave the native preview. Unsupported firmware
 falls back automatically.
 
 Write with a stylus or enable **Draw with finger**. With finger drawing disabled,
-horizontal finger swipes change pages when the page fits the viewport width.
-Vertical drags scroll; when zoomed in, finger drags pan instead of turning pages.
+horizontal finger swipes change pages at any zoom. Pan in either direction with
+**two fingers**; one-finger vertical drags leave the page still. Swiping left past
+the final page reveals a **+ Page** button at the right of the page view. Tap it
+to create the next page. Select / move and Capture keep their explicit editing
+gestures. Inside Notes Library, notebook swipes stay in the editor; use the
+left-pane and right-pane buttons to open those panels.
 When finger drawing is enabled, stylus contact cancels an unfinished finger
 stroke and begins pen input with the supplied pressure.
 Pointer cancellation discards the unfinished stroke. Resize and zoom change the
