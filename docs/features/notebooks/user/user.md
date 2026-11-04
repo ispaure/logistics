@@ -100,6 +100,12 @@ color when they overlap. Textures and nominal widths remain approximations
 after the November 4 Paper Pro calibration; speed, tilt and exact firmware
 textures are not reproduced.
 
+The app's Pencil uses softer, broken graphite grain; Mechanical pencil uses a
+denser, finer lead texture. These original procedural textures stay aligned to
+the paper through zooming and redraws. They affect the editor's appearance;
+saved/exported stroke geometry, pressure, widths and native brush presets stay
+unchanged. The tablet applies its own rendering when opening an exported notebook.
+
 **Grayscale preview** approximates monochrome readability using luminance. It
 does not emulate a particular screen or firmware, or certify older-device import.
 Saved/exported ink keeps its native color IDs and RGBA overrides, including
