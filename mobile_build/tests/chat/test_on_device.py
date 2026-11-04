@@ -1,19 +1,15 @@
 """On-device inference shares recovery/cancellation without contacting HTTP."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-import asyncio
-from pathlib import Path
-from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
 from features.lm.mobile.on_device import OnDeviceClient, MODELS, client_for
 from features.lm.mobile.transport import ChatCancelled
+from mobile_build.tests.support.chat import create_chat_app
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS
-from mobile.app import LogisticsMobile
 
 
 class Bridge:
@@ -132,22 +128,9 @@ class OnDeviceUITests(unittest.TestCase):
         self.assertEqual(app.chat_models.value, 'Keep my server model')
 
     def setUp(self):
-        self.directory = TemporaryDirectory()
-        LogisticsMobile.storage_root = Path(self.directory.name)
         with patch('features.lm.mobile.ui.platform_provider', return_value='apple'):
-            self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.app = create_chat_app(self)
             self.app.show_chat()
-
-    def tearDown(self):
-        app = self.app
-        if app.chat_render_task is not None:
-            app.chat_render_task.cancel()
-            app.loop.run_until_complete(asyncio.gather(app.chat_render_task, return_exceptions=True))
-        app.chat_actions.dispose()
-        app.main_window.close()
-        close_loop(app.loop)
-        LogisticsMobile.storage_root = None
-        self.directory.cleanup()
 
     def test_native_model_works_without_url_or_key_and_saves_recovery_record(self):
         app = self.app
