@@ -379,7 +379,7 @@ class LibraryPanels:
         self.selected_path = path
         choices = []
         if self.library.supports('rename'):
-            choices.append(('Move / rename…', 'move'))
+            choices.extend([('Rename…', 'rename'), ('Move…', 'move')])
         if all(self.library.supports(action) for action in ('create', 'rename', 'delete')):
             choices.append(('Copy…', 'copy'))
         if self.library.supports('delete'):
@@ -401,9 +401,11 @@ class LibraryPanels:
             return
         # Native alerts can dismiss the floating drawer. Its origin still owns
         # cancellation and the return from any form opened by this decision.
-        if action == 'move':
+        if action == 'rename':
             self.selected_path = path
             self.manage_entry(move=True, return_side=side)
+        elif action == 'move':
+            await self.move_picker(path, return_side=side)
         elif action == 'copy':
             self.copy_entry_form(path, return_side=side)
         elif action == 'delete':
@@ -417,7 +419,7 @@ class LibraryPanels:
     def show_file_action(self, view, *, route, title, return_side=None):
         if not self.valid() or self.file_command_busy:
             return False
-        self.file_action_request = getattr(self, 'file_action_request', 0) + 1
+        self.clear_file_action()
         self.file_action_side = self.sidebar.side if return_side is None else return_side
         self.file_action_view = view
         self.file_action_destination = self.destination
@@ -439,10 +441,87 @@ class LibraryPanels:
             self.sidebar.show(side)
 
     def clear_file_action(self):
+        view = getattr(self, 'file_action_view', None)
+        browser = getattr(view, '_folder_browser', None)
+        if browser is not None:
+            self.host.loop.create_task(browser.close())
+            view._folder_browser = None
         self.file_action_request = getattr(self, 'file_action_request', 0) + 1
         self.file_action_view = None
         self.file_action_side = None
         self.file_action_destination = None
+
+    async def move_selected(self, widget=None, **kwargs):
+        if self.selected_path is not None:
+            await self.move_picker(self.selected_path)
+
+    async def move_picker(self, source, *, return_side=None):
+        if not self.valid() or self.file_command_busy or not self.library.supports('rename'):
+            return False
+        from mobile.browser_ui import FileBrowser
+        projection = library_files.LibraryFolderProvider(self.library, exclude=source)
+        folder = ''
+        generation = 0
+        status = toga.Label('Links are not rewritten.')
+        location = toga.Label('Library root')
+        up = toga.Button('Parent folder', style=Pack(height=48))
+        choose = toga.Button('Move here', enabled=False, style=Pack(height=48))
+
+        async def navigate(path):
+            nonlocal folder, generation
+            if not self.file_action_current(form) or self.file_command_busy:
+                return
+            generation += 1
+            request = generation
+            choose.enabled = False
+            try:
+                path = projection.relative(path)
+                rows = await asyncio.to_thread(projection.list, path,
+                    cancelled=lambda: not self.file_action_current(form) or generation != request)
+                if not self.file_action_current(form) or generation != request:
+                    return
+                folder = path
+                browser.set_entries(projection, path, rows, location=('Notes Library', path))
+                location.text = path or 'Library root'
+                up.enabled = bool(path)
+                choose.enabled = projection.library_path(path) != posixpath.dirname(source)
+                status.text = 'Links are not rewritten.'
+            except (OSError, ValueError) as error:
+                if self.file_action_current(form) and generation == request:
+                    status.text = str(error)
+
+        async def enter(row):
+            await navigate(row['path'])
+        async def retrace(location):
+            await navigate(location[1])
+        browser = FileBrowser(open_folder=enter, navigate=retrace,
+                              contextual_selection=False, preview=False)
+        # Limit search to the supplied folder-only snapshots; a destination
+        # picker must never build an index of the rest of the storage.
+        browser.local_search = None
+        browser.resource_search = None
+        async def parent(widget=None, **kwargs):
+            await navigate(posixpath.dirname(folder))
+        up.on_press = parent
+        async def submit(widget=None, **kwargs):
+            if not choose.enabled or not self.file_action_current(form):
+                return
+            choose.enabled = False
+            target = posixpath.join(projection.library_path(folder), PurePosixPath(source).name)
+            if await self.move_entry_to(source, target):
+                self.return_from_file_action(view=form)
+            elif self.file_action_current(form):
+                status.text = self.notice.text
+                choose.enabled = True
+        choose.on_press = submit
+        form = toga.Box(children=[toga.Label('Move ' + PurePosixPath(source).name), location, up,
+            browser.scroll_container(), status, choose,
+            toga.Button('Cancel', on_press=lambda widget: self.return_from_file_action(view=form), style=Pack(height=48))],
+            style=Pack(direction=COLUMN, flex=1, margin=12))
+        form._folder_browser = browser
+        self.show_file_action(form, route='notes-move', title='Move', return_side=return_side)
+        await navigate('')
+        return form
 
     def copy_entry_form(self, path, *, return_side=None):
         from services.documents.mutations import copy_path
