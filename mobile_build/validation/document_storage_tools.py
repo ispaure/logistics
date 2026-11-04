@@ -33,6 +33,9 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.drawer_privacy_probe'):
+        return tuple(f'drawer-privacy-{side}-{phase}.png' for side in ('files', 'links')
+                     for phase in ('open', 'returned', 'wrong', 'reopened'))
     if entry_point.endswith('.notes_rows_performance_probe'):
         return NATIVE_DIAGNOSTICS + ('notes-performance-progress.json', 'notes-performance-window.json')
     if entry_point.endswith('.speech_playback_probe'):
@@ -312,7 +315,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         next_progress = 0
         while time.monotonic() < deadline:
             background_request = cache / 'file-transfer-background'
-            if entry_point.endswith('.file_transfer_probe') and background_request.exists():
+            if entry_point.endswith(('.file_transfer_probe', '.drawer_privacy_probe')) and background_request.exists():
                 background_request.unlink()
                 client.invoke('launch', device, 'com.apple.Preferences')
                 time.sleep(1)
@@ -388,6 +391,9 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                     request.with_name('keyboard-done').touch()
             if report.exists():
                 result = json.loads(report.read_text())
+                if entry_point.endswith('.drawer_privacy_probe') and result.get('phase') not in ('complete', 'failed'):
+                    time.sleep(.1)
+                    continue
                 if entry_point.endswith('.lockscreen_probe') and result.get('phase') not in ('complete', 'failed'):
                     time.sleep(.2)
                     continue
