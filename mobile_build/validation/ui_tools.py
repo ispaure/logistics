@@ -63,26 +63,74 @@ def verify_native_diagnostics(path):
                 raise ValueError(f'Unhandled native app error in {path}:{number}: {line.strip()[:500]}')
 
 
-def verify_report(report, target, output, *, local_manifest=None):
+def validate_report_identity(report, target, *, local_manifest=None, partial=False):
+    """Validate provenance and inventory, including diagnostic-only failed prefixes."""
+    if not isinstance(report, dict):
+        raise ValueError('Invalid native app UI report.')
     source = report.get('source', {})
     if not isinstance(source, dict):
         raise ValueError('Invalid native app source manifest.')
     backend = 'toga_android.' if target == 'android' else 'toga_iOS.'
     expected_root = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()
     expected_shared = subprocess.check_output(['git', '-C', str(REPO / 'Python/commonUtils'), 'rev-parse', 'HEAD'], text=True).strip()
+    expected_cases = list(contract.CASES)
+    cases = report.get('cases')
+    valid_cases = (isinstance(cases, list) and cases == expected_cases[:len(cases)]
+                   if partial else cases == expected_cases)
     if (report.get('schema') != 1 or report.get('suite') != 'logistics-native-ui'
-            or report.get('success') is not True or report.get('target') != target
+            or report.get('target') != target
             or not isinstance(report.get('backend'), str) or not report['backend'].startswith(backend)
-            or report.get('cases') != list(contract.CASES) or report.get('expected_cases') != list(contract.CASES)
-            or report.get('error') or (local_manifest is None and source.get('dirty') is not False)
+            or not valid_cases or report.get('expected_cases') != expected_cases
+            or (partial and (report.get('success') is not False or not isinstance(report.get('error'), str)))
+            or (local_manifest is None and source.get('dirty') is not False)
             or source.get('logistics_commit') != expected_root or source.get('commonUtils_commit') != expected_shared):
         raise ValueError('Native app UI checks failed or came from a different source/backend.')
     if local_manifest is not None:
         expected = json.loads(Path(local_manifest).read_text())
         if source != expected or len(source.get('source_sha256', '')) != 64:
             raise ValueError('Local native report came from a different staged snapshot.')
+    return report
+
+
+def verify_report(report, target, output, *, local_manifest=None):
+    validate_report_identity(report, target, local_manifest=local_manifest)
+    if report.get('success') is not True or report.get('error'):
+        raise ValueError('Native app UI checks failed or came from a different source/backend.')
     Path(output).write_text(json.dumps(report, indent=2) + '\n')
     return report
+
+
+def collect_android_report(path, code, output, *, local_manifest=None):
+    """Retain a source-verified failed report without treating it as acceptance."""
+    path, output = Path(path), Path(output)
+    try:
+        incoming = read_report(path)
+    except (ValueError, KeyError, TypeError, AttributeError) as error:
+        raise RuntimeError(f'Native app UI run failed ({code}): native report unavailable or invalid '
+                           f'({type(error).__name__}); see retained log {path}.') from None
+    try:
+        validate_report_identity(incoming, 'android', local_manifest=local_manifest,
+                                 partial=isinstance(incoming, dict) and incoming.get('success') is False)
+        if incoming.get('success') is not True and incoming.get('success') is not False:
+            raise ValueError('Invalid native report success state.')
+    except (ValueError, KeyError, TypeError, AttributeError) as error:
+        raise RuntimeError(f'Native app UI run failed ({code}): native report rejected: {error}; '
+                           f'see retained log {path}.') from None
+    completed, expected = len(incoming['cases']), len(incoming['expected_cases'])
+    detail = next((line.strip()[:600] for line in reversed(str(incoming.get('error') or '').splitlines())
+                   if line.strip()), '')
+    failed = code != 0 or incoming.get('success') is not True or bool(incoming.get('error'))
+    if failed and not detail:
+        detail = 'process failed after reporting' if incoming.get('success') is True else 'native checks failed without an exception summary'
+    verified = None if failed else verify_report(incoming, 'android', output, local_manifest=local_manifest)
+    (path.parent / 'android-native-ui-stdout.json').write_text(json.dumps(incoming, indent=2) + '\n')
+    (path.parent / 'android-report-transport.json').write_text(json.dumps(dict(
+        transport='stdout', briefcase_exit_code=code, status='failed' if failed else 'passed',
+        completed_cases=completed, expected_cases=expected, error=detail), indent=2) + '\n')
+    if failed:
+        raise RuntimeError(f'Native app UI run failed ({code}); completed {completed}/{expected} cases: '
+                           f'{detail}. See retained report {path.parent / "android-native-ui-stdout.json"}.')
+    return verified
 
 
 
@@ -397,6 +445,8 @@ def _run_once(target, device, *, local=False, require_independent_windows=False,
     output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
     manifest = Path('payload/source.json') if local else None
     report = None
+    if target == 'android':
+        report = collect_android_report(path, code, output, local_manifest=manifest)
     if target == 'ios':
         # Retain failed reports too: the actual assertion belongs in the CLI
         # failure, not just a generic process exit. Accepted exits still require

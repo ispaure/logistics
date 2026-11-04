@@ -19,6 +19,12 @@ from .fixtures import make_books
 from .timings import SuiteTimings, measure
 
 
+def exception_summary(formatted):
+    """Keep the final exception detail when its message ends in blank lines."""
+    return next((line.strip()[:600] for line in reversed(formatted.splitlines())
+                 if line.strip()), 'Native check failed without an exception summary.')
+
+
 async def exercise(app):
     timings = SuiteTimings(Path(app.paths.cache) / 'logistics-native-ui-timings.json')
     app._native_suite_timings = timings
@@ -92,8 +98,9 @@ async def exercise(app):
     except Exception:
         success = False
         traceback.print_exc()
-        (Path(app.paths.cache) / 'logistics-native-ui-error.txt').write_text(traceback.format_exc())
-        error = traceback.format_exc().splitlines()[-1][:600]
+        formatted = traceback.format_exc()
+        (Path(app.paths.cache) / 'logistics-native-ui-error.txt').write_text(formatted)
+        error = exception_summary(formatted)
     import mobile
     source = json.loads(Path(mobile.__file__).with_name('source.json').read_text())
     report = dict(schema=1, suite='logistics-native-ui', target='android' if get_os() is OS.ANDROID else 'ios',
