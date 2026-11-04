@@ -92,6 +92,27 @@ class ImageFolderToolTests(unittest.TestCase):
         self.assertEqual(self.source.read_bytes(), original)
         self.assertFalse(self.source.with_suffix('.webp').exists())
 
+    def test_all_roots_are_validated_before_processing_any_images(self):
+        from services.folders.safety import require_safe_folder
+
+        blocked = self.root / 'protected'
+        blocked.mkdir()
+        original = self.source.read_bytes()
+
+        def check_folder(path, **kwargs):
+            if Path(path) == blocked:
+                raise ValueError('Protected')
+            return require_safe_folder(path, **kwargs)
+
+        with patch('services.folders.safety.require_safe_folder', side_effect=check_folder), \
+                patch.object(processing.ImageFile, 'compress') as encode:
+            with self.assertRaisesRegex(ValueError, 'Protected'):
+                self.compress([self.root, blocked])
+        encode.assert_not_called()
+        self.assertEqual(self.source.read_bytes(), original)
+        self.assertFalse(self.source.with_suffix('.webp').exists())
+        self.assertFalse(list(self.root.glob('.*.webp')))
+
     def test_default_policy_keeps_animated_original_bytes(self):
         self.source.unlink()
         animated = self.root / 'animated.gif'

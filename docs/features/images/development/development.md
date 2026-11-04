@@ -69,11 +69,13 @@ current folder workflow's per-file failure handling.
 cancellation requested during encoding, remaining inputs and progress,
 partial encoder-write failure cleanup with continued processing,
 case-insensitive WebP exclusion on repeated runs, overlapping-root deduplication,
-natural ordering, recursion, links, protected folders and conflicting options.
+natural ordering, recursion, links, validation of all target roots before mutation,
+protected folders and conflicting options.
 `test_image_folder_dialog.py` alone owns Qt setup and verifies selected options,
-real resized output and persistent results. `test_viewer_orientation.py` retains
+rejection of invalid options before confirmation/background work, real resized
+output and persistent results. `test_viewer_orientation.py` retains
 all eight orientations across JPEG, WebP and PNG, including decoded corners and
-thumbnails. Run the image owner selection with `python3 dev.py test-owner images`.
+thumbnail size bounds. Run the image owner selection with `python3 dev.py test-owner images`.
 
 The exhaustive color-classification matrix and filesystem fallback error dispatch
 belong to commonUtils' `test_image_color_detection.py` and
