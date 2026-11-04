@@ -9,7 +9,6 @@ from commonUtils.testing.stages import TestStage
 from mobile.obsidian import open_vault
 from .chat_settings_probe import ChatSettingsProbe
 from .fixtures import capture_window
-from .rotation_checks import rotate
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -36,7 +35,7 @@ class NotesSearchProbe(ChatSettingsProbe):
             documents_input, documents_rows = owner.search, owner.rows
             assert documents_rows is not names_rows and owner.rows_scroll is not names_scroll
             for pose in ('portrait', 'landscape-left'):
-                await rotate(self, pose, settle=.4)
+                await self.rotate_probe(pose)
                 owner.sidebar.show_sidebar()
                 owner.select_panel_tab('Search')
                 for scope, suffix, control, rows, query, path in (
