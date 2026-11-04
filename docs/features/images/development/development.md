@@ -66,7 +66,8 @@ policy and metadata. Legacy batch preflight coverage remains separate from the
 current folder workflow's per-file failure handling.
 
 `test_image_folder_tool.py` uses portable fixtures for `compress_folders`:
-cancellation after the current conversion, remaining inputs and progress,
+cancellation requested during encoding, remaining inputs and progress,
+partial encoder-write failure cleanup with continued processing,
 case-insensitive WebP exclusion on repeated runs, overlapping-root deduplication,
 natural ordering, recursion, links, protected folders and conflicting options.
 `test_image_folder_dialog.py` alone owns Qt setup and verifies selected options,
