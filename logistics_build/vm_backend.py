@@ -183,8 +183,9 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
                   Phase('release-tooling', (guest_python, '-m', 'unittest', 'discover', '-s', '.github/scripts', '-v'),
                         workspace + '/source', timeout=300, environment=env))
         if getattr(args, 'native_notebooks', False):
-            phases += (Phase('notebook-native', (guest_python, 'Python/tests/notebooks/notebook_platform_probe.py',
-                '--output', reports + '/notebook-native'), workspace + '/source', timeout=1200,
+            from logistics_build.notebook_validation import command
+            native_command, native_timeout = command(args, guest_python, reports + '/notebook-native')
+            phases += (Phase('notebook-native', native_command, workspace + '/source', timeout=native_timeout,
                 environment=env, dependencies=('environment',)),)
         plan = Plan('Logistics', 'Focused Linux contracts' if args.pattern else 'Full local Linux platform checks', args.source_identity, phases,
                     workspace + '/operation', backend='Parallels ' + args.distribution)
@@ -192,7 +193,7 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
         code = execute_plan(plan=plan, python=guest_python,
             write=lambda data: client.write_owned(vm, workspace, token, 'plan.json', data, account['uid'], account['gid']),
             execute=execute, plan_path=workspace + '/plan.json', reports=reports + '/manager',
-            environment=env, timeout=3400)
+            environment=env, timeout=max(3400, sum(phase.timeout for phase in phases) + 300))
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
         return int(code != 0)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
@@ -233,6 +234,8 @@ def main():
     parser.add_argument('--shutdown', action='store_true')
     parser.add_argument('--pattern', default='')
     parser.add_argument('--native-notebooks', action='store_true', help='Run native notebook UI probes after focused setup')
+    from logistics_build.notebook_validation import arguments
+    arguments(parser)
     parser.add_argument('--manager-checkout', type=Path)
     parser.add_argument('--manager-working-tree', help='Exact captured manager content identity for explicit local testing only')
     args = parser.parse_args()

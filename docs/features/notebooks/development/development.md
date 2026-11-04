@@ -858,6 +858,16 @@ and hands its legacy/modern archives to it. Storage and codec work runs once
 when comparing renderers; renderer-sensitive checks run in each requested mode.
 Repeated `--probe NAME` options select individual checks instead of the profile.
 
+The manager's `windows_backend` and `vm_backend` adapters accept
+`--native-notebooks --notebook-profile full` alongside a focused test pattern.
+Both forward `--notebook-probe`, `--notebook-rendering` and
+`--notebook-latency-mode`; Windows additionally supports WARP rendering.
+The guest wrapper provisions a checksum-verified portable Go compiler into a
+leased compiler cache when independent decoding is selected and Go is absent.
+No system Go installation is changed. Probe and outer guest deadlines include
+the selected workload and rendering matrix; guest evidence is collected before
+the owning workload removes its disposable source and test workspace.
+
 ```sh
 PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_platform_probe.py --profile full --output test-results/notebook-native
 ```
@@ -881,6 +891,12 @@ pass. Both options are forwarded by the platform probe. PID/parent/RSS counters
 contain no command-line or document content. The process-tree accounting and
 probe selection/failure contracts have portable host regressions; native OS
 counter paths still require acceptance on the relevant platform.
+
+Each renderer leg clears inherited Qt software/WARP overrides before applying
+its own settings, so a native leg cannot inherit the preceding software policy.
+Launch failures and timeouts are reported as failed probes while the remaining
+selected checks continue. The memory report retains rejected samples and both
+workload and teardown errors; a cleanup failure cannot suppress its result file.
 
 Focused synthetic tests cover native brush/color/pressure fields, geometry,
 erase/movement/undo/redo, page operations, opaque preservation, archive rejection,
