@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import androidx.core.view.ViewCompat;
 import com.google.android.material.navigationrail.NavigationRailView;
 import com.google.android.material.shape.ShapeAppearanceModel;
 
@@ -18,6 +19,10 @@ public final class DestinationRailView extends NavigationRailView {
     public DestinationRailView(Context context, int footerItemId) {
         super(context);
         this.footerItemId = footerItemId;
+        // The native window host already reserves system bars and cutouts.
+        // Material's inset listener would add the landscape cutout again,
+        // leaving the 56 dp rail with almost no room for its icons.
+        ViewCompat.setOnApplyWindowInsetsListener(this, null);
         setMenuGravity(Gravity.TOP);
         setLabelVisibilityMode(2); // LABEL_VISIBILITY_UNLABELED
         setItemIconSize(dp(26));
