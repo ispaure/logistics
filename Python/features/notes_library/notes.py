@@ -126,6 +126,10 @@ class NotesLibrary:
         for source in media.values():
             source.close()
 
+    def _link_stamp(self, folder):
+        info = self.provider.transfer_location(folder, directory=True).stat()
+        return info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+
     def _link_listing(self, folder, cancelled):
         """Reuse names only while the validated local directory is unchanged."""
         from commonUtils.runtime.operations import check_cancelled
@@ -135,8 +139,7 @@ class NotesLibrary:
             return self.provider.list(folder, cancelled=cancelled)
 
         def revision():
-            info = locate(folder, directory=True).stat()
-            stamp = info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+            stamp = self._link_stamp(folder)
             if os.name == 'nt':
                 # Windows can defer directory timestamp changes across rapid
                 # create/delete operations. Validate cached names against a
@@ -340,7 +343,7 @@ class NotesLibrary:
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
         with operation(self.provider, cancelled):
-            cacheable = (not getattr(self.provider, 'remote_storage', False)
+            cacheable = (os.name != 'nt' and not getattr(self.provider, 'remote_storage', False)
                          and callable(getattr(self.provider, 'transfer_location', None))
                          and not callable(getattr(self.provider, 'find_note_paths', None)))
             key = current, target
@@ -349,18 +352,30 @@ class NotesLibrary:
             if cached is not None:
                 result, dependencies = cached
                 try:
-                    reusable = all(self._link_listing(folder, cancelled) is rows for folder, rows in dependencies.items())
+                    reusable = all(self._link_stamp(folder) == stamp for folder, stamp in dependencies.items())
                     if reusable:
                         self.entry(result[0])  # Validate provider access even on a cache hit.
                         return result
                 except (FileNotFoundError, NotADirectoryError):
                     pass
-            listings = {}
+            listings, dependencies = {}, {}
+            def depend(folder):
+                if not cacheable:
+                    return
+                while True:
+                    try:
+                        dependencies.setdefault(folder, self._link_stamp(folder))
+                        return
+                    except (FileNotFoundError, NotADirectoryError):
+                        if folder == self.root:
+                            raise
+                        folder = posixpath.dirname(folder)
             count = 0
             def listing(folder):
                 nonlocal count
                 check_cancelled(cancelled)
                 if folder not in listings:
+                    depend(folder)
                     rows = self._link_listing(folder, cancelled)
                     count += len(rows)
                     if count > 10000:
@@ -371,8 +386,7 @@ class NotesLibrary:
             def exists(candidate):
                 check_cancelled(cancelled)
                 try:
-                    if cacheable:
-                        listing(posixpath.dirname(candidate))
+                    depend(posixpath.dirname(candidate))
                     return not self.entry(candidate)['directory']
                 except (FileNotFoundError, NotADirectoryError):
                     return False
@@ -403,10 +417,11 @@ class NotesLibrary:
                                   exists=exists, suffix_matches=suffix_matches, cancelled=cancelled)
             # Providers with indexed lookup own its invalidation; do not cache
             # those results without directory dependencies from the lookup.
-            if listings and cacheable:
+            if dependencies and cacheable and all(self._link_stamp(folder) == stamp for folder, stamp in dependencies.items()):
                 with self._link_lock:
                     check_cancelled(cancelled)
-                    if len(self._resolved_links) >= 128:
+                    if (len(self._resolved_links) >= 128
+                            or sum(len(value[1]) for value in self._resolved_links.values()) + len(dependencies) > 10000):
                         self._resolved_links.clear()
-                    self._resolved_links[key] = result, listings
+                    self._resolved_links[key] = result, dependencies
             return result
