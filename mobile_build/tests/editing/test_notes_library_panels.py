@@ -500,6 +500,23 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 await owner.calendar_task
         self.run_async(exercise())
 
+    def test_row_menus_reserve_a_full_target_separate_from_filename_and_disclosure(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            rows = list(owner.rows.children)
+            for row in rows:
+                button = next((child for child in row.children if hasattr(child, 'vault_path')), None)
+                if button is None:
+                    continue
+                menu = row.children[-1]
+                self.assertIsNot(menu, button)
+                self.assertEqual((menu.style.width, menu.style.height), (48, 48))
+                with patch.object(owner, 'file_actions', new=AsyncMock()) as actions:
+                    await menu.on_press()
+                    actions.assert_awaited_once_with(button.vault_path)
+            self.assertTrue(rows)
+        self.run_async(exercise())
+
     def test_filename_holds_keep_actions_separate_from_icon_drags(self):
         import sys
         from types import SimpleNamespace
