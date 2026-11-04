@@ -43,7 +43,7 @@ class Probe(LogisticsMobile):
         expected = name + (' Move' if paper_format == 'move' else ' Pro') if name.startswith('Logistics ') else name
         assert page.template == expected, dict(expected=expected, actual=page.template)
 
-    async def create(self, title, template, paper_format):
+    async def create_notebook(self, title, template, paper_format):
         from features.notebooks.templates import CATALOG, FORMATS
         await choose_creation_type(self, 'rmdoc')
         picker = self.editor_picker()
@@ -109,7 +109,7 @@ class Probe(LogisticsMobile):
             picker.cancel_text_destination()
             assert not list(Path(self.private_root).rglob('*.rmdoc'))
 
-            panel, path, backend = await self.create('Native lined', 'P Lines medium', 'pro')
+            panel, path, backend = await self.create_notebook('Native lined', 'P Lines medium', 'pro')
             book = panel.editor.notebook
             assert book.pages[0].template == 'P Lines medium'
             await self.command(panel, dict(op='stroke', points=[[690, 150, .5], [750, 150, .5]], tool=17, color=0, width=2))
@@ -142,7 +142,7 @@ class Probe(LogisticsMobile):
                 templates=[p.template for p in saved.pages], ink_counts=[1, 0, 0]))
 
             self.show_home()
-            panel, path, backend = await self.create('Custom Move', 'Logistics Cornell notes', 'move')
+            panel, path, backend = await self.create_notebook('Custom Move', 'Logistics Cornell notes', 'move')
             book = panel.editor.notebook
             assert book.pages[0].template == 'Logistics Cornell notes Move'
             await self.command(panel, dict(op='add-page'))
