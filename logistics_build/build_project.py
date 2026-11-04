@@ -222,6 +222,8 @@ class LogisticsProject:
             plan = replace(plan, source=dict(plan.source, focused_test_pattern=options['pattern']))
         from logistics_build.manager_suites import with_structure_gate
         plan = with_structure_gate(plan, str(self.interpreter))
+        from logistics_build.native_prerequisites import with_prerequisites
+        plan = with_prerequisites(plan, target, self.interpreter)
         plan = with_reports(plan, target)
         snapshot = self.private / 'snapshots' / plan.source.get('fingerprint', '')
         resources = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
