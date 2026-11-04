@@ -52,6 +52,19 @@ class ToolbarTests(TestCase):
         self.controller = NS(traitCollection=traits, navigationItem=Mock())
         self.owner = NS()
 
+    def test_retained_prominent_action_repaints_after_accent_change(self):
+        from mobile.palette import LIGHT, set_accent
+        button = Button(None, 'Move here')
+        button._toolbar_prominent = True
+        self.addCleanup(set_accent)
+        with patch('mobile.appearance.apple_color', side_effect=lambda role: LIGHT[role]):
+            mount_actions(self.controller, self.owner, [button])
+            item = button._ios_action_item
+            set_accent(120, 100)
+            mount_actions(self.controller, self.owner, [button])
+            self.assertIs(button._ios_action_item, item)
+            self.assertEqual(item.tintColor, LIGHT['accent'])
+
     def test_prominent_confirmation_uses_chosen_accent(self):
         self.assertEqual(bar_item(Button(None, 'Move here'), prominent=True).tintColor, 'accent')
 
