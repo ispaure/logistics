@@ -120,7 +120,7 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         image.setImageDrawable.assert_called_once_with(None)
         self.assertTrue(cover.future.cancelled())
 
-    async def test_android_cover_waits_for_measured_reflow_and_stable_draw(self):
+    async def test_android_cover_waits_for_measured_reflow_and_clean_draw(self):
         root, content = Mock(), Mock()
         for native in (root, content):
             native.getWidth.return_value = 0
@@ -144,6 +144,7 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         cover.before_draw()
         app.resize_workspace.assert_called_once_with()
         app.navigation.refresh.assert_called_once_with()
+        self.assertFalse(cover.future.done())
         # A rail resize before the next draw must reflow again under the cover.
         content.getWidth.return_value = 810
         cover.before_draw()
