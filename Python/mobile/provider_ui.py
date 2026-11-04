@@ -347,6 +347,12 @@ class ProviderUI(FilesUI):
                 return
         if kind == 'pdf-spread':
             view.crypt_reader.pdf_navigation.commit(pdf_indices, pdf_viewport)
+            canvas = view.crypt_image
+            if hasattr(canvas, 'return_box'):
+                if canvas.return_page and canvas.return_page[1] != pdf_indices[0]:
+                    canvas.clear_return()
+                if canvas.return_box not in view.crypt_content.children:
+                    view.crypt_content.add(canvas.return_box)
         if kind == 'spread':
             view.provider_spread = prepared_spread
             view.crypt_reader.comic_navigation.commit(indices)

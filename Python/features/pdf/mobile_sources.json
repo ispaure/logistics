@@ -2,6 +2,7 @@
   "schema": 1,
   "modules": [
     "__init__.py",
+    "links.py",
     "annotation.py",
     "backends/__init__.py",
     "backends/android.py",

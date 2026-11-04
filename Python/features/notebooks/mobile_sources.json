@@ -2,6 +2,7 @@
   "schema": 1,
   "modules": [
     "__init__.py",
+    "assets/links.js",
     "_vendor/__init__.py",
     "_vendor/rmscene/LICENSE.py",
     "_vendor/rmscene/__init__.py",
