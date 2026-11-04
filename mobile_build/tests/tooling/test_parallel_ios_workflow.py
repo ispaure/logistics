@@ -38,6 +38,45 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = jobs(REPO / '.github/workflows/mobile-build.yml')
 
+    @unittest.skipUnless(shutil.which('bash'), 'Workflow cache setup needs Bash')
+    def test_android_cache_setup_resolves_runtime_paths_with_spaces(self):
+        command = script(self.workflow['android'], 'Initialize owned Android Go caches')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = root / 'runner with spaces'
+            runtime.mkdir()
+            output = root / 'github-env'
+            env = dict(os.environ, RUNNER_TEMP=str(runtime), GITHUB_ENV=str(output))
+            subprocess.run(['bash', '-e', '-c', command], env=env, check=True)
+            values = dict(line.split('=', 1) for line in output.read_text().splitlines())
+            self.assertEqual(values, dict(GOCACHE=str(runtime / 'logistics-android-go-cache'),
+                GOMODCACHE=str(runtime / 'logistics-android-go-modules')))
+
+    @unittest.skipUnless(shutil.which('bash'), 'Workflow cache ownership guard needs Bash')
+    def test_android_cache_cleanup_rejects_unrelated_cache_before_invoking_go(self):
+        command = script(self.workflow['android'], 'Release owned Go caches before emulator installation')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = root / 'runner'
+            runtime.mkdir()
+            unrelated = root / 'unrelated'
+            unrelated.mkdir()
+            sentinel = unrelated / 'keep'
+            sentinel.write_text('preserve')
+            binary = root / 'bin'
+            binary.mkdir()
+            go = binary / 'go'
+            go.write_text('#!/bin/sh\nprintf invoked > "$CALLED"\n')
+            go.chmod(0o755)
+            called = root / 'called'
+            env = dict(os.environ, RUNNER_TEMP=str(runtime), GOCACHE=str(unrelated),
+                GOMODCACHE=str(runtime / 'logistics-android-go-modules'), CALLED=str(called),
+                PATH=str(binary) + os.pathsep + os.environ.get('PATH', ''))
+            result = subprocess.run(['bash', '-e', '-c', command], env=env, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(called.exists())
+            self.assertEqual(sentinel.read_text(), 'preserve')
+
     @unittest.skipUnless(shutil.which('bash'), 'Bash is required for workflow shell contracts')
     def test_object_diagnostics_are_absent_when_disabled_and_explicit_when_enabled(self):
         prefix = script(self.workflow['ios-ui'], 'Exercise panels, rotation and safe areas').split('mkdir -p', 1)[0]

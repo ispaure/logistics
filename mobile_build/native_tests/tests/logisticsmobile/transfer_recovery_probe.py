@@ -58,6 +58,10 @@ async def exercise_recovery(app):
             source='Local/private', destination='QA:', phase='transfer', busy=True,
             files=2, total_files=4, done=100, total=200, percentage=50,
             active_files=(dict(name='private-file.txt'),)))
+        from .web_checks import wait_for_transfer_surface
+        proof = await wait_for_transfer_surface(surface, timeout=5)
+        assert proof['renderer'] == 'native', proof
+        result['native_acceptance_helper'] = proof
         fallback = surface.native_fallback
         assert '50%' in fallback.metrics.text and 'Files: 2 / 4' in fallback.metrics.text
         await fallback.buttons.children[0].on_press()
