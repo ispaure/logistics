@@ -6,7 +6,7 @@ import android.view.ViewTreeObserver;
 import android.webkit.WebView;
 
 /** Deliver the digitizer's complete pen history without Chromium resampling it. */
-public final class NotebookInput implements View.OnTouchListener,
+public final class NotebookInput implements View.OnTouchListener, View.OnHoverListener,
         View.OnAttachStateChangeListener, ViewTreeObserver.OnWindowFocusChangeListener {
     private final WebView view;
     private final BooxRefresh refresh;
@@ -41,8 +41,30 @@ public final class NotebookInput implements View.OnTouchListener,
         this.refresh = refresh;
         ink = BooxInk.attach(view, refresh);
         view.setOnTouchListener(this);
+        view.setOnHoverListener(this);
         view.addOnAttachStateChangeListener(this);
         view.getViewTreeObserver().addOnWindowFocusChangeListener(this);
+    }
+
+    @Override public boolean onHover(View ignored, MotionEvent event) {
+        if (closed) return false;
+        int tool = event.getToolType(event.getActionIndex());
+        if (tool != MotionEvent.TOOL_TYPE_STYLUS && tool != MotionEvent.TOOL_TYPE_ERASER) return false;
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE
+                || action == MotionEvent.ACTION_HOVER_EXIT) {
+            boolean nearby = action != MotionEvent.ACTION_HOVER_EXIT;
+            float x = event.getX(), y = event.getY();
+            if (Float.isFinite(x) && Float.isFinite(y))
+                view.evaluateJavascript("window.logisticsPenProximity&&window.logisticsPenProximity("
+                    + nearby + "," + x + "," + y + "," + view.getWidth() + "," + view.getHeight() + ")", null);
+        }
+        // Preserve normal hover/PointerEvent delivery; this is an observation.
+        return false;
+    }
+
+    private void clearProximity() {
+        view.evaluateJavascript("window.logisticsPenProximity&&window.logisticsPenProximity(false)", null);
     }
 
     @Override public boolean onTouch(View ignored, MotionEvent event) {
@@ -143,6 +165,7 @@ public final class NotebookInput implements View.OnTouchListener,
 
     @Override public void onWindowFocusChanged(boolean focused) {
         if (!focused) {
+            clearProximity();
             cancel(); rawContact = false;
             if (ink != null) ink.ordinaryContact(false);
             view.removeCallbacks(verifyRaw); clearBackup();
@@ -153,18 +176,21 @@ public final class NotebookInput implements View.OnTouchListener,
         view.getViewTreeObserver().addOnWindowFocusChangeListener(this);
     }
     @Override public void onViewDetachedFromWindow(View ignored) {
+        clearProximity();
         cancel(); rawContact = false;
         if (ink != null) ink.ordinaryContact(false);
         view.removeCallbacks(verifyRaw); clearBackup();
     }
 
     public void close() {
+        clearProximity();
         cancel();
         closed = true;
         view.removeCallbacks(verifyRaw);
         clearBackup();
         if (ink != null) ink.close();
         view.setOnTouchListener(null);
+        view.setOnHoverListener(null);
         view.removeOnAttachStateChangeListener(this);
         if (view.getViewTreeObserver().isAlive()) view.getViewTreeObserver().removeOnWindowFocusChangeListener(this);
     }
