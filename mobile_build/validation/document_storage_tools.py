@@ -33,6 +33,9 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.speech_playback_probe'):
+        return NATIVE_DIAGNOSTICS + ('feedback-progress.json', 'speech-initialization.jsonl',
+            'feedback-speech-complete.png', 'feedback-speech-failure.png')
     if entry_point.endswith('.folder_feedback_probe'):
         return NATIVE_DIAGNOSTICS + ('folder-feedback-startup.json', 'folder-feedback-tasks.txt')
     if entry_point.endswith('.links_images_voices_probe'):
@@ -124,7 +127,7 @@ def notebook_lifecycle(read, write, background, launch, stop):
 
 def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             entry_point='tests.logisticsmobile.document_storage_probe',
-            result_name='document-storage-result.json', family='iPhone', increase_contrast=False, duoctl=None, source_app=None, pose=None):
+            result_name='document-storage-result.json', family='iPhone', increase_contrast=False, duoctl=None, source_app=None, pose=None, runtime_id=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     if source_app is None:
@@ -186,7 +189,7 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             try:
                 reports.append(exercise_ios_app(app, destination, env, bundle=bundle,
                     entry_point=entry_point, result_name=result_name, family=device_family,
-                    increase_contrast=increase_contrast, duoctl=duoctl, pose=pose))
+                    increase_contrast=increase_contrast, duoctl=duoctl, pose=pose, runtime_id=runtime_id))
             except Exception as error:
                 reports.append(dict(success=False, family=label, error=str(error)))
             (output / 'matrix.json').write_text(json.dumps(reports, indent=2))
@@ -197,22 +200,33 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             raise RuntimeError('Viewer matrix has failures; inspect matrix.json')
         return reports
     return exercise_ios_app(app, output, env, bundle=bundle, entry_point=entry_point,
-        result_name=result_name, family=family, increase_contrast=increase_contrast, duoctl=duoctl, pose=pose)
+        result_name=result_name, family=family, increase_contrast=increase_contrast, duoctl=duoctl, pose=pose, runtime_id=runtime_id)
+
+
+def simulator_selection(inventory, family, runtime_id=None):
+    """Select a model/runtime for a new device; existing devices stay read-only."""
+    for runtime, rows in inventory.items():
+        if runtime_id is not None and runtime != runtime_id:
+            continue
+        for row in rows:
+            if (row.get('isAvailable') and family in row['name']
+                    and (family != 'iPhone' or 'Duo' not in row['name'])):
+                return runtime, row['deviceTypeIdentifier']
+    raise ValueError('No available simulator model for ' + family
+                     + (' in runtime ' + runtime_id if runtime_id else ''))
 
 
 def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         entry_point='tests.logisticsmobile.document_storage_probe',
         result_name='document-storage-result.json', family='iPhone', increase_contrast=False,
-        duoctl=None, pose=None, keyboard_intro=None):
+        duoctl=None, pose=None, keyboard_intro=None, runtime_id=None):
     output.mkdir(parents=True, exist_ok=True)
     client = AppleSimulators(env)
     inventory = client.devices()['devices']
-    runtime, model = next((rt, row['deviceTypeIdentifier']) for rt, rows in inventory.items()
-                          for row in rows if row.get('isAvailable') and family in row['name']
-                          and (family != 'iPhone' or 'Duo' not in row['name']))
+    runtime, model = simulator_selection(inventory, family, runtime_id)
     name = 'Build Manager Focused QA ' + str(time.time_ns())
     device = client.create(name, model, runtime)
-    (output / 'ios-lease.json').write_text(json.dumps(dict(device=device, name=name)))
+    (output / 'ios-lease.json').write_text(json.dumps(dict(device=device, name=name, runtime=runtime, model=model)))
     cache = console = console_stream = None
     try:
         client.boot(device)
@@ -350,26 +364,41 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
             time.sleep(.3)
         raise TimeoutError('iOS focused QA probe timed out')
     finally:
-        if cache is not None:
-            for artifact_name in diagnostics(entry_point):
-                if (cache / artifact_name).exists():
-                    shutil.copyfile(cache / artifact_name, output / artifact_name)
-        if cache is not None and entry_point.endswith('.notebook_apple_memory_probe'):
-            for artifact_name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png'):
-                if (cache / artifact_name).exists():
-                    shutil.copyfile(cache / artifact_name, output / artifact_name)
-        if cache is not None and (cache / 'notebook-ui').is_dir():
-            shutil.copytree(cache / 'notebook-ui', output / 'notebook-ui', dirs_exist_ok=True)
-        if cache is not None and (cache / 'viewer-layout').is_dir():
-            shutil.copytree(cache / 'viewer-layout', output / 'viewer-layout', dirs_exist_ok=True)
-        if cache is not None and (cache / 'editor-keyboard-evidence').is_dir():
-            shutil.copytree(cache / 'editor-keyboard-evidence', output / 'editor-keyboard-evidence', dirs_exist_ok=True)
-        if cache is not None and (cache / result_name).exists():
-            shutil.copyfile(cache / result_name, output / 'ios-result.json')
         try:
-            client.invoke('terminate', device, bundle)
-        except RuntimeError:
-            pass
+            if cache is not None:
+                for artifact_name in diagnostics(entry_point):
+                    if (cache / artifact_name).exists():
+                        shutil.copyfile(cache / artifact_name, output / artifact_name)
+            if cache is not None and entry_point.endswith('.notebook_apple_memory_probe'):
+                for artifact_name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png'):
+                    if (cache / artifact_name).exists():
+                        shutil.copyfile(cache / artifact_name, output / artifact_name)
+            if cache is not None and (cache / 'notebook-ui').is_dir():
+                shutil.copytree(cache / 'notebook-ui', output / 'notebook-ui', dirs_exist_ok=True)
+            if cache is not None and (cache / 'viewer-layout').is_dir():
+                shutil.copytree(cache / 'viewer-layout', output / 'viewer-layout', dirs_exist_ok=True)
+            if cache is not None and (cache / 'editor-keyboard-evidence').is_dir():
+                shutil.copytree(cache / 'editor-keyboard-evidence', output / 'editor-keyboard-evidence', dirs_exist_ok=True)
+            if cache is not None and (cache / result_name).exists():
+                shutil.copyfile(cache / result_name, output / 'ios-result.json')
+        finally:
+            cleanup_ios_probe(client, device, name, bundle, output,
+                              installed=cache is not None, console=console, console_stream=console_stream)
+
+
+def cleanup_ios_probe(client, device, name, bundle, output, *, installed=False,
+                      console=None, console_stream=None):
+    """Always remove the leased simulator, including after failed boot/termination."""
+    if client.matching(device, name) is None:
+        (output / 'ios-cleanup.json').write_text(json.dumps(dict(device=device, removed=True)))
+        return
+    errors = []
+    try:
+        if installed:
+            try:
+                client.invoke('terminate', device, bundle, timeout=10)
+            except (RuntimeError, subprocess.TimeoutExpired) as error:
+                errors.append(type(error).__name__ + ': terminate')
         if console is not None:
             try:
                 console.wait(timeout=10)
@@ -377,12 +406,15 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 console.terminate()
         if console_stream is not None:
             console_stream.close()
-        try:
-            client.invoke('uninstall', device, bundle)
-        finally:
-            client.remove(device, name)
-            (output / 'ios-cleanup.json').write_text(json.dumps(dict(device=device, removed=client.matching(device, name) is None)))
-
+        if installed:
+            try:
+                client.invoke('uninstall', device, bundle, timeout=10)
+            except (RuntimeError, subprocess.TimeoutExpired) as error:
+                errors.append(type(error).__name__ + ': uninstall')
+    finally:
+        client.remove(device, name)
+        (output / 'ios-cleanup.json').write_text(json.dumps(dict(device=device,
+            removed=client.matching(device, name) is None, app_cleanup_errors=errors)))
 
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
@@ -619,9 +651,10 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
+    parser.add_argument('--ios-runtime', help='Explicit installed CoreSimulator runtime identifier for a disposable iOS probe.')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
     parser.add_argument('--pose', choices=('closed', 'open', 'partial'), help='Explicit Duo simulator posture')
     parser.add_argument('--duoctl', type=Path, help='Reviewed external simulator-only Duo pose helper')
@@ -728,6 +761,9 @@ def main():
         if args.probe == 'workspace-move':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.workspace_move_probe', result_name='workspace-move-result.json')
+        if args.probe == 'speech-playback':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.speech_playback_probe', result_name='speech-playback-result.json')
         if args.probe == 'links-images-voices':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.links_images_voices_probe', result_name='links-images-voices-result.json')
@@ -788,7 +824,7 @@ def main():
             if args.probe == 'notebook-memory':
                 profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                     entry_point='tests.logisticsmobile.notebook_apple_memory_probe', result_name='notebook-memory-result.json')
-            run_ios(workspace, payload, args.output, env, family=args.family, increase_contrast=args.increase_contrast, duoctl=args.duoctl, source_app=args.ios_app, pose=args.pose, **profile)
+            run_ios(workspace, payload, args.output, env, family=args.family, increase_contrast=args.increase_contrast, duoctl=args.duoctl, source_app=args.ios_app, pose=args.pose, runtime_id=args.ios_runtime, **profile)
         else:
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',
