@@ -57,6 +57,29 @@ EXIF operations modify JPG metadata in place.
 
 Use disposable copies when testing behavioral changes to these operations.
 
+## Compression regression coverage
+
+`Python/tests/images/` retains real encoding checks for transparency, metadata,
+animation, source-change detection and safe staged publication. The historical
+`test_image_audit_fixes.py` groups those checks by source safety, multiframe
+policy and metadata. Legacy batch preflight coverage remains separate from the
+current folder workflow's per-file failure handling.
+
+`test_image_folder_tool.py` uses portable fixtures for `compress_folders`:
+cancellation after the current conversion, remaining inputs and progress,
+case-insensitive WebP exclusion on repeated runs, overlapping-root deduplication,
+natural ordering, recursion, links, protected folders and conflicting options.
+`test_image_folder_dialog.py` alone owns Qt setup and verifies selected options,
+real resized output and persistent results. `test_viewer_orientation.py` retains
+all eight orientations across JPEG, WebP and PNG, including decoded corners and
+thumbnails. Run the image owner selection with `python3 dev.py test-owner images`.
+
+The exhaustive color-classification matrix and filesystem fallback error dispatch
+belong to commonUtils' `test_image_color_detection.py` and
+`test_exclusive_copy.py`; Logistics retains representative real-encoder and
+source-preservation integrations. These host/offscreen tests do not establish
+native device performance or large-photo memory/latency limits.
+
 ## Portable image validation
 
 `validation.py` validates bounded PNG/JPEG/WebP dimensions before native decoding. Books, Comics and provider readers share it without loading Qt, Toga or image-processing tools. The existing 8 MiB, 8192-pixel-axis and 16-megapixel limits are unchanged.
