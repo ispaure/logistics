@@ -14,20 +14,36 @@ from .ink import WIDTH, HEIGHT
 MOVE_WIDTH, MOVE_HEIGHT = 821, 1460
 CATALOG = {
     'Blank': 'Blank',
-    'P Lines small': 'Lined — small',
-    'P Lines medium': 'Lined — medium (reMarkable, 25 lines)',
+    'P Lines small': 'Lined — small (41 lines; reMarkable compatible)',
+    'P Lines medium': 'Lined — medium (25 lines; reMarkable compatible)',
     'Logistics Lined medium': 'Lined — medium (31 lines)',
-    'P Lines large': 'Lined — large',
+    'P Lines large': 'Lined — large (21 lines; reMarkable compatible)',
     'Logistics Grid': 'Grid',
     'Logistics Dots': 'Dots',
     'Logistics Restaurant review': 'Restaurant review',
     'Logistics Meeting notes': 'Meeting notes',
     'Logistics Daily planner': 'Daily planner',
+    'Logistics Checklist': 'Checklist',
+    'Logistics Cornell notes': 'Cornell notes',
+    'Logistics Weekly planner': 'Weekly planner',
 }
 # User-confirmed Paper Pro counts: large 21, medium 25, small 41.
 # Keep native medium faithful; offer the requested more distinct medium separately.
 LINE_COUNTS = {'P Lines small': 41, 'P Lines medium': 25, 'P Lines large': 21, 'Logistics Lined medium': 31}
-FORMATS = {'pro': 'Paper Pro', 'move': 'Paper Pro Move'}
+FORMATS = {'pro': 'Paper Pro size', 'move': 'Paper Pro Move size'}
+FORM_TEMPLATES = frozenset({'Logistics Restaurant review', 'Logistics Meeting notes',
+    'Logistics Daily planner', 'Logistics Checklist', 'Logistics Cornell notes', 'Logistics Weekly planner'})
+TEMPLATE_NOTICE = ('Logistics draws its own previews and layouts. Compatible with reMarkable; '
+                   'not affiliated with or endorsed by reMarkable.')
+
+
+def description(name):
+    name = template_name(name)
+    if name in LINE_COUNTS and not name.startswith('Logistics '):
+        return 'Original Logistics ruled preview. Native export uses the lined template already on your reMarkable.'
+    if name == 'Blank':
+        return 'Plain paper with no background markings.'
+    return 'Original Logistics layout. Export Copy embeds a fixed PDF background beneath editable handwriting.'
 
 
 def template_name(reference):
@@ -138,6 +154,33 @@ def geometry(name, paper_format):
         left = (WIDTH - width) / 2 + 40
         right = (WIDTH + width) / 2 - 40
         label(name.removeprefix('Logistics '), left, 64, 32)
+        if name == 'Logistics Checklist':
+            for y in range(132, height - 40, 70):
+                line(left, y - 20, left + 22, y - 20)
+                line(left + 22, y - 20, left + 22, y + 2)
+                line(left + 22, y + 2, left, y + 2)
+                line(left, y + 2, left, y - 20)
+                line(left + 42, y + 2, right, y + 2)
+            return paths, texts
+        if name == 'Logistics Cornell notes':
+            divider, summary = left + (right - left) * .28, height - 300
+            label('Cues', left, 115)
+            label('Notes', divider + 20, 115)
+            line(divider, 132, divider, summary)
+            line(left, summary, right, summary)
+            label('Summary', left, summary + 36)
+            for y in range(165, int(summary), 54):
+                line(divider + 20, y, right, y)
+            for y in range(int(summary + 80), height - 35, 54):
+                line(left, y, right, y)
+            return paths, texts
+        if name == 'Logistics Weekly planner':
+            step = (height - 180) / 7
+            for index, day in enumerate(('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')):
+                y = 132 + index * step
+                label(day, left, y)
+                line(left, y + step - 28, right, y + step - 28)
+            return paths, texts
         if name == 'Logistics Restaurant review':
             fields = [('Restaurant / location', 125), ('Date / occasion / company', 255),
                       ('Dishes and drinks', 385), ('Food / service / atmosphere / value', 675),
