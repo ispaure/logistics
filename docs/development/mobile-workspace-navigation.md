@@ -1744,13 +1744,28 @@ and partly open Duo postures; Android uses the owned disposable emulator.
 ## System occlusion clearance
 
 `ios_system_occlusions.control_top_clearance` computes clearance from the current
-column and every intersecting reserved system region. Navigation owners apply
-only the missing top inset, retaining UIKit's safe area and other additional
-insets. The same calculation budgets supplemental controls and content reader
-headers. Multiple activities and closed/open display changes invalidate layout;
+column and every intersecting reserved system region. Horizontal navigation owners apply only the missing top inset, retaining UIKit's
+safe area and other additional insets. Vertical navigation owners use UIKit's
+bar-item compression preference so destination tabs yield space to Close/Back
+and document actions; adding a top inset there can push actions into those tabs. The same calculation budgets supplemental controls and content reader
+headers. Outer root, per-destination and UIKit's current More navigation owners receive
+the policy. Optional
+drawer commands reuse the supplemental overflow budget; Close/Back stay direct.
+Multiple activities and closed/open display changes invalidate layout;
 shrinking regions release the extra inset without accumulating padding. No device
 model or fixed Dynamic Island height determines placement.
 
 Host checks cover column intersection, two activities, growth/shrink and inset
 ownership. Native toolbar acceptance checks actual accessible action frames against
 reserved regions; physical-device Live Activity transitions require device testing.
+
+The focused `toolbar_conventions_tools --system-occlusions --sweep` acceptance
+passed 32 native snapshots on the closed Duo and 32 on the opened Duo, including
+both landscape directions. It checks workspace roots, compact drawers, Markdown
+Close/Save in both document destinations, and creation confirmation controls.
+Actual control frames are checked against reserved regions and destination tabs;
+Save is dispatched through its native item. When a cached QA shell predates the
+panning-title class, the runner compiles the staged production title helper into
+the disposable bundle. Apps, helper binaries, compiler caches and simulators use
+the existing scratch/owned-device cleanup. Live Activity growth/shrink is covered
+by host wakeup tests; this focused native run does not stimulate external activities.
