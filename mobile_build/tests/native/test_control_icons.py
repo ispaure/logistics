@@ -12,6 +12,17 @@ from mobile.control_icons import apply_icon
 
 
 class ControlIconTests(unittest.TestCase):
+    def test_overflow_stays_neutral_when_browser_restyles_commands(self):
+        from mobile.control_icons import icon_button
+        from mobile.browser_ui import browser_command
+        from mobile.appearance import surface
+        for name in ('more', 'overflow'):
+            button = icon_button(name, 'Actions')
+            browser_command(button)
+            self.assertEqual(button._impl._surface_roles[1], 'text')
+            surface(button, foreground='accent')
+            self.assertEqual(button._impl._surface_roles[1], 'text')
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
