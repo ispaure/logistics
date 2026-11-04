@@ -71,6 +71,7 @@ class NotebookResourceTests(unittest.TestCase):
                         editor.apply(dict(op='undo')); editor.apply(dict(op='redo'))
                         self.assertEqual(resource.read(), original)
                         document.save()
+                        self.assertIsNotNone(editor.pdf_data(), 'Save must preserve this editor session unlock')
                         saved = Notebook.read(resource.read())
                         self.assertEqual(saved.page(0).order[0], saved.page(0).images[0].id)
                         self.assertEqual(saved.page(0).images[0].corners[0], [150,100])

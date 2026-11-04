@@ -239,8 +239,11 @@ acceptance remains pending.
 In Capture mode, tap an existing image with a finger or pen to select it, then
 drag to move. Drag its lower-right handle to scale or its upper handle to rotate.
 The floating controls also offer size changes and 15-degree rotation. **Copy**
-puts the selected image into the editor clipboard; **Delete image** removes that
-instance. Ordinary Select / Move continues to select handwriting.
+puts the selected image into the editor clipboard; **Cut** copies it and removes
+the source instance. **Delete image** removes an instance without copying it.
+Pasting onto a different page preserves the original page position, rotation and
+scale, even after changing zoom or scrolling. Same-page paste keeps the existing
+center placement. The source page identity remains stable when pages are reordered. Ordinary Select / Move continues to select handwriting.
 
 **Arrange** moves the selected image one position forward/backward or to the
 front/back among both handwriting and images on its layer. Layers retain their
