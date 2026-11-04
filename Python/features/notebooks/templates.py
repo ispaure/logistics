@@ -32,21 +32,61 @@ FORMATS = {'pro': 'Paper Pro', 'move': 'Paper Pro Move'}
 
 def template_name(reference):
     for name in CATALOG:
-        if reference == name or reference in (name + ' Pro', name + ' Move'):
+        if reference == name or (name.startswith('Logistics ') and reference in (name + ' Pro', name + ' Move')):
             return name
     return reference
 
 
-def settings(book, page):
+def _stored_settings(book, page):
     raw = book.members.get(f'{book.id}/{page.id}.logistics-template.json', b'{}')
     try:
         value = json.loads(raw)
-        if not isinstance(value, dict):
-            return dict(format='pro', visible=True)
-        return dict(format=value.get('format') if value.get('format') in FORMATS else 'pro',
-                    visible=value.get('visible') is not False)
-    except (ValueError, UnicodeError):
-        return dict(format='pro', visible=True)
+        return value if isinstance(value, dict) else {}
+    except (ValueError, UnicodeError, RecursionError):
+        return {}
+
+
+def settings(book, page):
+    reference_format = None
+    if page.template.startswith('Logistics '):
+        reference_format = 'move' if page.template.endswith(' Move') else 'pro' if page.template.endswith(' Pro') else None
+    value = _stored_settings(book, page)
+    paper_format = reference_format or value.get('format')
+    if not isinstance(paper_format, str) or paper_format not in FORMATS:
+        paper_format = 'pro'
+    return dict(format=paper_format, visible=value.get('visible') is not False)
+
+
+def available(book, page):
+    """Never substitute built-in artwork for a different imported asset."""
+    name = template_name(page.template)
+    if name not in CATALOG:
+        return False
+    raw = book.members.get(page.template + '.template')
+    if raw is None:
+        return True
+    if not name.startswith('Logistics '):
+        return False
+    return same_artwork(raw, native_template(name, settings(book, page)['format']))
+
+
+def same_artwork(first, second):
+    # Imported assets may belong to a private notebook. Do not retain their
+    # bytes in a process-wide cache after the document session is retired.
+    if first == second:
+        return True
+    try:
+        return json.loads(first) == json.loads(second)
+    except (ValueError, UnicodeError, RecursionError):
+        return False
+
+
+def inherit(book, source, target):
+    """A new page shares its reference and copies opaque display settings."""
+    target.template = source.template
+    raw = book.members.get(f'{book.id}/{source.id}.logistics-template.json')
+    if raw is not None:
+        book.members[f'{book.id}/{target.id}.logistics-template.json'] = raw
 
 
 def select(book, index, name, paper_format, visible):
@@ -55,15 +95,19 @@ def select(book, index, name, paper_format, visible):
     if book.content.get('fileType') == 'pdf':
         raise ValueError('PDF backgrounds are part of the source document; templates are available in notebooks.')
     page = book.pages[index]
-    page.template = name + (' Move' if paper_format == 'move' else ' Pro') if name.startswith('Logistics ') else name
-    book.members[f'{book.id}/{page.id}.logistics-template.json'] = json.dumps(
-        dict(format=paper_format, visible=visible)).encode()
-    book.structure_dirty = True
+    reference = name + (' Move' if paper_format == 'move' else ' Pro') if name.startswith('Logistics ') else name
+    path = reference + '.template'
+    artwork = None
     if name.startswith('Logistics '):
         artwork = native_template(name, paper_format)
-        path = page.template + '.template'
-        if path in book.members and book.members[path] != artwork:
+        if path in book.members and not same_artwork(book.members[path], artwork):
             raise ValueError('This template name already has different artwork; the original was preserved.')
+    page.template = reference
+    saved = _stored_settings(book, page)
+    saved.update(format=paper_format, visible=visible)
+    book.members[f'{book.id}/{page.id}.logistics-template.json'] = json.dumps(saved).encode()
+    book.structure_dirty = True
+    if artwork is not None and path not in book.members:
         book.members[path] = artwork
 
 
@@ -132,6 +176,7 @@ def background(name, paper_format='pro'):
     return 'data:image/svg+xml;base64,' + base64.b64encode(artwork.encode()).decode() if artwork else None
 
 
+@lru_cache(maxsize=32)
 def native_template(name, paper_format):
     """Embed original native vector artwork; no PDF conversion or ink flattening."""
     paths, texts = geometry(name, paper_format)
