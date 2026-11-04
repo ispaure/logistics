@@ -391,6 +391,8 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertTrue(self.app.private_sessions.close(owner.session.id, discard=True))
         self.assertTrue(run(self.app.open_crypt(copies=copies, key='Note.md', edit=True)))
         owner = self.app.private_sessions.active
+        if owner._provider_markdown.pending is not None:
+            run(owner._provider_markdown.pending)
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
         self.assertNotIn(owner.crypt_text, owner.crypt_content.children)
         self.assertNotIn(owner.crypt_preview if hasattr(owner, 'crypt_preview') else None, owner.crypt_content.children)
