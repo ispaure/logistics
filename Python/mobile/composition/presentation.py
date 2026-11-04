@@ -175,7 +175,7 @@ def notes_host(app):
     from features.notes_library.notes import MAX_NOTE, MAX_RENDERED_HTML, MAX_IMAGE_HTML
     from commonUtils.ui.native.markdown_preview import MarkdownPreviewLimits
     from ..appearance import list_button, batch_surfaces
-    from ..browser_ui import middle_filename, entry_icon, highlight_entry
+    from ..browser_ui import FileBrowser, middle_filename, entry_icon, highlight_entry
     from ..markdown_speech import MarkdownSpeech
     from ..action_menu import FeatureCommands
     from .. import obsidian
@@ -246,7 +246,16 @@ def notes_host(app):
         source, _ = resource_reference(app, provider, path)
         return await reopen_file(app, source)
 
+    def folder_browser(*, open_folder, navigate):
+        """A destination uses supplied folder snapshots, without storage indexing."""
+        browser = FileBrowser(open_folder=open_folder, navigate=navigate,
+                              contextual_selection=False, preview=False)
+        browser.local_search = None
+        browser.resource_search = None
+        return browser
+
     return NotesHost(
+        folder_browser=folder_browser,
         show_error=show_error,
         remember_document=lambda owner: obsidian.remember_note(app, owner),
         open_resource=open_resource,

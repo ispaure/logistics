@@ -1,6 +1,7 @@
 """Connection reuse validates external revisions and keeps library lifetimes scoped."""
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -45,11 +46,15 @@ class ConnectionIndexTests(unittest.TestCase):
         self.assertFalse(self.library.connection_index._rows)
 
     def test_concurrent_scans_read_each_unchanged_body_once(self):
+        ready = Barrier(2, timeout=2)
+        def scan(path):
+            ready.wait()
+            return connections(self.library, path)
         with patch.object(self.library, 'read', wraps=self.library.read) as read:
             with ThreadPoolExecutor(max_workers=2) as workers:
-                futures = [workers.submit(connections, self.library, path) for path in ('A.md', 'B.md')]
-                self.assertEqual(futures[0].result()['outgoing'], ['B.md'])
-                self.assertEqual(futures[1].result()['incoming'], ['A.md'])
+                futures = [workers.submit(scan, path) for path in ('A.md', 'B.md')]
+                self.assertEqual(futures[0].result(timeout=3)['outgoing'], ['B.md'])
+                self.assertEqual(futures[1].result(timeout=3)['incoming'], ['A.md'])
             self.assertEqual(read.call_count, 2)
 
 

@@ -519,7 +519,6 @@ class LibraryPanels:
     async def move_picker(self, source, *, return_side=None):
         if not self.valid() or self.file_command_busy or not self.library.supports('rename'):
             return False
-        from mobile.browser_ui import FileBrowser
         projection = library_files.LibraryFolderProvider(self.library, exclude=source)
         folder = ''
         generation = 0
@@ -555,12 +554,7 @@ class LibraryPanels:
             await navigate(row['path'])
         async def retrace(location):
             await navigate(location[1])
-        browser = FileBrowser(open_folder=enter, navigate=retrace,
-                              contextual_selection=False, preview=False)
-        # Limit search to the supplied folder-only snapshots; a destination
-        # picker must never build an index of the rest of the storage.
-        browser.local_search = None
-        browser.resource_search = None
+        browser = self.host.folder_browser(open_folder=enter, navigate=retrace)
         async def parent(widget=None, **kwargs):
             await navigate(posixpath.dirname(folder))
         up.on_press = parent
