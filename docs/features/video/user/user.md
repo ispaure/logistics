@@ -6,7 +6,9 @@ Enable **Video Player**, then open an MP4, MKV, AVI, MOV, M4V, WebM, MPEG, TS/M2
 **Video Player** in Documents. The picker includes Local and unlocked LocalCrypt
 locations. Open remote/crypt cloud videos directly from the Cloud browser.
 
-Windows and macOS offer a checksum-verified LibVLC runtime download on first use;
+macOS downloads a checksum-verified colour playback runtime on first use, using
+libmpv from the IINA distribution. An installed IINA application is not required.
+VLC compatibility playback on macOS and Windows also offers a verified download;
 an installed VLC application is not required. Linux uses the distribution's
 LibVLC 3 libraries and codec/subtitle plugins. On Ubuntu, install `libvlc5`,
 `vlc-plugin-base` and `vlc-plugin-video-output`; Fedora needs `vlc-libs`,
@@ -28,8 +30,20 @@ windows. In short narrow windows, an open settings pane provides a category
 selector in place of the secondary icon row; closing it restores the icons.
 Filename, track names and status messages expose their full text in tooltips
 when space is limited. **Picture** offers Fit, Fill and Original size. Desktop
-currently displays 8-bit SDR frames. Native HDR output is unavailable, and
-HDR-to-SDR tone-mapping quality remains limited by that conversion.
+uses colour-managed playback on macOS. **Picture → Output** automatically uses
+the screen’s available HDR brightness range, or tone maps to SDR when the screen
+has no HDR headroom. Choose **SDR** to force SDR output. PQ/HDR10 and HLG sources
+retain their colour metadata through the GPU conversion; the default BT.2390
+tone curve preserves highlight detail. Mobius, Hable and Reinhard are also
+available in **HDR tone mapping**. Output adapts when the window moves to another
+screen or the available brightness changes.
+
+**Picture → Renderer → Compatibility (VLC)** selects the earlier SDR renderer.
+Automatic playback falls back to VLC if the colour runtime cannot be prepared.
+Native colour output currently requires macOS; Windows and Linux retain VLC’s
+8-bit SDR surface. Native HDR brightness has not yet been checked on a physical
+HDR display. Host checks verify 16-bit float rendering and HDR-range pixels,
+plus PQ/HLG tone mapping in windowed and fullscreen layouts.
 
 The deck stays visible in a normal window. In fullscreen, it hides after three
 seconds of active playback; moving the pointer or clicking reveals it. Pausing,
@@ -58,7 +72,9 @@ touch and keyboard actions; the visible Unlock button or Escape restores them.
 **Show in folder** opens the provider browser, selects the video and closes playback.
 
 Detach the video tab using the workspace controls to place it in another window.
-**Cast…** discovers VLC-compatible receivers and offers a return-to-window action.
+**Cast…** switches colour playback to VLC compatibility playback while retaining
+position and Play/Pause intent, then discovers VLC-compatible receivers and
+offers a return-to-window action.
 Discovery can take a few seconds; use **Refresh receivers** in the Cast pane. Session-only
 credentials disable casting, including while another session-only
 credential package is loaded. Desktop LocalCrypt uses a session credential context.
