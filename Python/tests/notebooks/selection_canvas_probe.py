@@ -26,6 +26,16 @@ from tests.notebooks.webengine_driver import composited_image, javascript, wait_
 
 SETUP = r'''(()=>{
 window.qaCheck=(ok,message)=>{if(!ok)throw Error(message)};
+window.qaSelectionClearance=()=>{
+ const p=pasteStrokes.getBoundingClientRect(),a=selectionActions.getBoundingClientRect();
+ qaCheck(!pasteStrokes.hidden,'Copied strokes must expose Paste');
+ qaCheck(p.left>=0&&p.top>=0&&p.right<=innerWidth&&p.bottom<=innerHeight,'Paste leaves viewport');
+ for(const bar of [$('zoomControls'),document.querySelector('footer')].filter(b=>b&&!b.hidden&&b.getClientRects().length))
+  qaCheck(p.bottom+8<=bar.getBoundingClientRect().top,'Paste overlaps zoom dock/footer');
+ qaCheck(!(a.left<p.right&&p.left<a.right&&a.top<p.bottom&&p.top<a.bottom),'Paste overlaps selection actions');
+ qaCheck(getComputedStyle(selectionActions).zIndex<getComputedStyle(document.querySelector('header')).zIndex,'Selection actions cover menus');
+ return true
+};
 window.qaPointer=(kind,path,cancel=false)=>{
  const id=876,rect=canvas.getBoundingClientRect();
  const emit=(type,p)=>canvas.dispatchEvent(new PointerEvent(type,{
@@ -144,6 +154,7 @@ def main(output):
                     js(view, "$('copyStrokes').click()")
                     result['actions'].append(ack(view, engine, 'copy-strokes'))
                     assert js(view, "!pasteStrokes.disabled && pasteStrokes.parentElement===document.body"), 'Mobile paste must stay outside hidden panels'
+                    assert js(view, 'qaSelectionClearance()'), 'Light presentation controls must not overlap'
                     js(view, "send({op:'page',index:1})")
                     result['actions'].append(ack(view, engine, 'page'))
                     assert js(view, 'selected.size===0')
@@ -162,6 +173,7 @@ def main(output):
                     js(view, 'pasteStrokes.click()')
                     result['actions'].append(ack(view, engine, 'paste-strokes'))
                     js(view, "document.documentElement.style.cssText+=';--surface:#202329;--window:#16191e;--text:#f0f1f3;--border:#69727d;--hover:#353c48;--muted:#c0c5cc;--panel-bg:#202329;--text-color:#f0f1f3';draw()")
+                    assert js(view, 'qaSelectionClearance()'), 'Dark presentation controls must not overlap'
                     screenshot(view, name + '-pasted-dark.png')
                     data = book.to_bytes()
                     archive = output / (name + '-saved.rmdoc')
@@ -191,6 +203,10 @@ def main(output):
                     raise
                 finally:
                     view.close()
+                    page.deleteLater()
+                    qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+                    profile.deleteLater()
+                    qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
                     view.deleteLater()
                     qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
             report['success'] = True

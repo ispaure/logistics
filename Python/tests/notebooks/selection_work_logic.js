@@ -22,7 +22,7 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   for (const id of ['viewport', 'paperWrap', 'inkLayers', 'erase', 'select', 'tool', 'status', 'layer', 'finger', 'capture']) controls.set(id, node());
   controls.get('layer').value = 'L';
   const document = {body: node(), head: node(), createElement: node, elementFromPoint() {return canvas},
-    querySelector() {return node()}, addEventListener(name, callback) {
+    querySelector(selector) {return selector==='header'?node():null}, addEventListener(name, callback) {
       if (!listeners.has(name)) listeners.set(name, []); listeners.get(name).push(callback)
     }};
   document.body.classList.contains = value => value === 'notebook-mobile';
@@ -169,6 +169,11 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
     sandbox.mode='ink';before=commands.length;dispatch('v');
     assert.equal(commands.length,before,'Inactive clipboard modes must not paste');
     sandbox.mode='select';
+    const query=document.querySelector;
+    document.querySelector=selector=>selector.startsWith('dialog[open]')?node():query(selector);
+    before=commands.length;dispatch('v');dispatch('Delete');
+    assert.equal(commands.length,before,'An open dialog or mobile sheet blocks background selection shortcuts');
+    document.querySelector=query;
   }
   // Repeated point work is bounded across the entire gesture; an earlier
   // accepted stroke must not survive if a later stroke exhausts the budget.
