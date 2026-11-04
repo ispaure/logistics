@@ -50,18 +50,23 @@ def dismiss_picker_keyboard(picker, field=None):
         picker.app.main_window._impl.native.endEditing(True)
 
 
-def reset_picker_keyboard_insets(picker):
-    """Restore only the overlap reserved by the picker, preserving native insets."""
+def reset_picker_keyboard(picker, *, keep=None):
+    """Remove only the extra scroll inset owned by the picker keyboard reveal."""
     for name in ('name_form', 'picker_form'):
         form = getattr(picker, name, None)
-        overlap = getattr(form, '_keyboard_overlap', 0)
-        if not overlap:
+        if form is None or form is keep or not hasattr(form, '_keyboard_bottom_inset'):
             continue
         scroll = form._impl.native
         insets = scroll.contentInset
-        insets.bottom = max(0, insets.bottom - overlap)
-        scroll.contentInset = insets
-        form._keyboard_overlap = 0
+        if abs(float(insets.bottom) - form._keyboard_bottom_inset) > .5:
+            insets.bottom = form._keyboard_bottom_inset
+            scroll.contentInset = insets
+        del form._keyboard_bottom_inset
+
+
+def reset_picker_keyboard_insets(picker):
+    """Restore the keyboard reveal reservation after switching picker layout."""
+    reset_picker_keyboard(picker)
 
 
 def reveal_picker_input(picker):
@@ -73,43 +78,58 @@ def reveal_picker_input(picker):
                     if control._impl.native.isFirstResponder
                     and control._impl.native.isDescendantOfView(scroll)), None)
     if focused is None:
+        reset_picker_keyboard(picker)
         return
-    picker.app.main_window._impl.native.layoutIfNeeded()
+    window = picker.app.main_window._impl.native
+    window.layoutIfNeeded()
     # Toga refreshes scroll content on a deferred native callback. Refresh now
     # before scrolling, so its content size cannot clamp away the needed offset.
     form.content.refresh()
     scroll.layoutIfNeeded()
-    rect = focused.convertRect(focused.bounds, toView=scroll)
+    scroll.scrollRectToVisible(focused.convertRect(focused.bounds, toView=scroll), animated=False)
     adapter = picker.app.native_host.adapter
-    frame = adapter.keyboard_frame
-    overlap = 0
-    if adapter.keyboard_visible and frame is not None:
-        window = picker.app.main_window._impl.native
-        keyboard = window.convertRect(frame, fromCoordinateSpace=window.screen.coordinateSpace)
-        viewport = scroll.convertRect(scroll.bounds, toView=window)
-        # The form can retain its full native height during rotation. A field
-        # inside those bounds can still be behind the docked keyboard; UIKit's
-        # ordinary scrollRectToVisible then considers it already visible.
-        docked = keyboard.origin.y + keyboard.size.height >= window.bounds.size.height - 1
-        intersects = (keyboard.origin.x < viewport.origin.x + viewport.size.width
-                      and keyboard.origin.x + keyboard.size.width > viewport.origin.x)
-        if docked and intersects:
-            overlap = min(viewport.size.height,
-                          max(0, viewport.origin.y + viewport.size.height - keyboard.origin.y))
+    if not adapter.keyboard_visible or adapter.keyboard_frame is None:
+        reset_picker_keyboard(picker)
+        return
+    reset_picker_keyboard(picker, keep=form)
+    keyboard = window.convertRect(adapter.keyboard_frame, fromCoordinateSpace=window.screen.coordinateSpace)
+    viewport = scroll.convertRect(scroll.bounds, toView=window)
+    docked = keyboard.origin.y + keyboard.size.height >= window.bounds.size.height - 1
+    intersects = (keyboard.origin.x < viewport.origin.x + viewport.size.width
+                  and keyboard.origin.x + keyboard.size.width > viewport.origin.x)
+    if not docked or not intersects:
+        reset_picker_keyboard(picker)
+        return
     insets = scroll.contentInset
-    insets.bottom = max(0, insets.bottom - getattr(form, '_keyboard_overlap', 0)) + overlap
-    scroll.contentInset = insets
-    form._keyboard_overlap = overlap
-    scroll.scrollRectToVisible(rect, animated=False)
-    if overlap:
-        # UIKit can account for contentInset itself. Inspect the result rather
-        # than enlarging the requested rect and potentially scrolling twice.
-        actual = focused.convertRect(focused.bounds, toView=window)
-        remaining = actual.origin.y + actual.size.height - keyboard.origin.y
-        if remaining > 0:
-            offset = scroll.contentOffset
-            offset.y += remaining
-            scroll.setContentOffset(offset, animated=False)
+    if not hasattr(form, '_keyboard_bottom_inset'):
+        form._keyboard_bottom_inset = float(insets.bottom)
+    automatic = max(0, float(scroll.adjustedContentInset.bottom) - float(insets.bottom))
+    covered = max(0, min(float(viewport.size.height),
+        float(viewport.origin.y + viewport.size.height - keyboard.origin.y)))
+    bottom_inset = form._keyboard_bottom_inset + max(0, covered - automatic)
+    if abs(float(insets.bottom) - bottom_inset) > .5:
+        insets.bottom = bottom_inset
+        scroll.contentInset = insets
+    scroll.layoutIfNeeded()
+    # A retained UIKit scroll view can still span the keyboard after rotation.
+    # Its ordinary visibility check then succeeds for a physically covered
+    # field. Use the actual window keyboard edge and permit the needed offset.
+    rect = focused.convertRect(focused.bounds, toView=window)
+    adjusted = scroll.adjustedContentInset
+    top = float(viewport.origin.y + adjusted.top)
+    # Insets permit scrolling; the physical keyboard edge defines visibility.
+    bottom = min(float(viewport.origin.y + viewport.size.height), float(keyboard.origin.y))
+    offset = scroll.contentOffset
+    previous = float(offset.y)
+    if rect.origin.y + rect.size.height > bottom:
+        offset.y += rect.origin.y + rect.size.height - bottom
+    elif rect.origin.y < top:
+        offset.y += rect.origin.y - top
+    minimum = -float(adjusted.top)
+    maximum = max(minimum, float(scroll.contentSize.height - scroll.bounds.size.height + adjusted.bottom))
+    offset.y = max(minimum, min(maximum, float(offset.y)))
+    if abs(float(offset.y) - previous) > .5:
+        scroll.setContentOffset(offset, animated=False)
 
 
 def picker_keyboard_visible(app, adapter):

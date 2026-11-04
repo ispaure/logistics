@@ -73,12 +73,14 @@ class UXWorkflowTests(unittest.TestCase):
 
     def test_folder_tap_skips_actions_and_parent_navigation_stays_separate(self):
         app = self.app
-        root = app.private_root / 'LocalFiles' / 'Notes'
+        from services.documents.locations import collection_path
+        root = collection_path(app.private_root) / 'Notes'
         root.mkdir(parents=True)
         (root / 'Draft.md').write_text('# File')
         app.show_locations()
         app.folder_source_buttons['Local'].on_press()
         run = app.loop.run_until_complete
+        app.folder_local_buttons['Others'].on_press()
         run(app.folder_buttons['All files'].on_press())
         browser = app.file_browser
         run(browser.activate_entry(next(item for item in browser.entries if item.label == 'Local')))
@@ -95,15 +97,32 @@ class UXWorkflowTests(unittest.TestCase):
         run(app.browse_hub_folder('Notes'))
         self.assertEqual([route[0] for route in app.routes.screens['files']], ['browser'])
         self.assertEqual(app.file_path, 'Notes')
-        self.assertNotIn(app.file_browser.back_button, app.file_browser.navigation_controls.children)
-        app.loop.run_until_complete(app.parent_file_folder())
+        self.assertEqual([item.label for item in app.file_browser.entries], ['Draft.md'])
+        run(app.parent_file_folder())
         self.assertEqual(app.file_path, 'Notes')
         self.assertEqual(app.routes.screens['files'], [])
+        # Exercise the row callbacks independently of the direct-folder route.
+        run(app.folder_buttons['All files'].on_press())
+        self.assertEqual(app.file_path, '')
+        local_folder = next(row for row in app.file_rows.values()
+                            if row['path'] == collection_path(app.private_root).name)
+        app.loop.run_until_complete(app.browser_file_folder(local_folder))
+        self.assertEqual(app.file_storage.value, 'Local files')
+        note_folder = next(row for row in app.file_rows.values() if row['name'] == 'Notes')
+        app.loop.run_until_complete(app.browser_file_folder(note_folder))
+        self.assertEqual(app.file_path, 'Notes')
+        self.assertNotIn(app.file_browser.back_button, app.file_browser.navigation_controls.children)
+        app.loop.run_until_complete(app.parent_file_folder())
+        self.assertEqual(app.file_path, '')
+        app.loop.run_until_complete(app.parent_file_folder())
+        self.assertEqual(app.file_storage.value, 'Shared files')
+        self.assertEqual(app.file_path, '')
+        app.loop.run_until_complete(app.parent_file_folder())
+        self.assertEqual(app.routes.screens['files'], [])
         self.assertIs(app.body, app.routes.roots['files'])
-        app.choose_folder('Notes')
+        app.choose_folder('All files')
         buttons = [w for w in widgets(app.body) if isinstance(w, toga.Button)]
-        delete = next(w for w in buttons if w.text == 'Delete local folder…')
-        self.assertEqual(delete.action_role, 'destructive')
+        self.assertFalse(any(w.text == 'Delete local folder…' for w in buttons))
         self.assertEqual(app.folder_browse_button.action_role, 'primary')
 
     def test_android_retained_roots_use_outer_allocation_and_subtract_the_rail(self):

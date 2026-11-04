@@ -54,7 +54,7 @@ class NavigationContrastTests(unittest.TestCase):
             if mode == 'rail':
                 adapter.rail = rail
         adapter.set_mode = set_mode
-        host = NS(adapter=adapter, window=self.window, state=NS(destination='documents'),
+        host = NS(adapter=adapter, window=self.window, destinations=['documents', 'chat'], state=NS(destination='documents'),
                   root=NS(content=[NS(enabled=True), NS(enabled=False)],
                           _impl=NS(get_theme_color=lambda role: argb('#ffffff' if role == 4 else '#000000'))))
         menu_items = {id(bar): [Mock(), Mock()] for bar in (bottom, rail)}
@@ -116,7 +116,7 @@ class NavigationContrastTests(unittest.TestCase):
             adapter.impl.native_navigationview = rail
         adapter.set_mode = set_mode
         self.window.app._document_tabs_hidden = True
-        host = NS(adapter=adapter, window=self.window,
+        host = NS(adapter=adapter, window=self.window, destinations=['documents', 'chat'],
                   root=NS(content=[NS(enabled=True), NS(enabled=False)]))
         with patch.dict('sys.modules', {'android.view': NS(Gravity=NS(TOP=48))}), patch(
                 'mobile.appearance.refresh_android_navigation'):
