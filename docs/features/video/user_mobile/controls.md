@@ -23,7 +23,7 @@ buttons and timeline fade together when controls appear or disappear. Choose
 and select the video in the file browser.
 
 Double-tap the left/right side of the movie to skip ten seconds; double-tap its
-center to toggle Play/Pause. A large seek shows **Undo seek** for eight seconds.
+center to toggle Play/Pause. Mobile never displays Undo seek.
 **Lock controls** hides controls and prevents accidental touch or keyboard seeks.
 A visible **Unlock controls** button restores them. Escape also unlocks.
 
@@ -57,3 +57,11 @@ PiP/casting use their system/receiver presentation and need separate timing chec
 The new tools have SDK compilation and host checks. Physical Duo touch, keyboard,
 fold and pause timing still need acceptance; those checks are separate from the
 baseline installation requested before these additions.
+
+
+Picture-in-picture uses ten-second backward/forward actions on Android and the
+system skip controls on iOS. Seeking respects control locking and the source's
+access policy. iOS clamps skips at the start and end and completes no-op requests.
+Android keeps its subtitle surface attached when entering PiP. iOS PiP captions
+remain unavailable with the current VLC sample-buffer output: VLC draws those
+captions in a separate view that the system PiP surface does not include.
