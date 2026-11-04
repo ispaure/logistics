@@ -195,10 +195,13 @@ class NotesRowsPerformanceProbe(DocumentWorkspaceProbe):
         assert not rows.children and rows.closed
         report['cases'].append('native_tree_interactions_and_retirement_' + report['interaction_storage'])
 
-    async def run_checks(self, app, report):
+    def device_details(self, app):
         from android.os import Build
         assert type(app._impl).__module__ == 'toga_android.app'
-        report['device'] = dict(api=int(Build.VERSION.SDK_INT), model=str(Build.MODEL))
+        return dict(api=int(Build.VERSION.SDK_INT), model=str(Build.MODEL))
+
+    async def run_checks(self, app, report):
+        report['device'] = self.device_details(app)
         config = json.loads((Path(self.paths.cache) / 'notes-performance-config.json').read_text())
         fixture = json.loads(Path(__file__).with_name('localcrypt_fixture.json').read_text())
         app.cloud_client.request('import', package=fixture['package'], password='synthetic-session-password',
