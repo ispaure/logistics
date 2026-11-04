@@ -28,6 +28,7 @@ class NotebookPanel:
         self.web = None
         self.boox_refresh = None
         self.pen_input = None
+        self.pencil_hover = None
         self.key = None
         self.busy = False
         self.closed = False
@@ -151,6 +152,8 @@ class NotebookPanel:
         state['native_actions'] = hasattr(self, 'native_actions')
         state['native_pen'] = self.pen_input is not None
         state['frame_batched_ink'] = sys.platform == 'ios'
+        from .viewport import tablet_viewport
+        state['tablet'] = tablet_viewport(self.web)
         return state
 
     def open(self, book, key, *, mount=True):
@@ -180,6 +183,8 @@ class NotebookPanel:
             self.boox_refresh = jclass('io.github.ispaure.logistics.notebooks.BooxRefresh').attach(self.web._impl.native)
             self.pen_input = jclass('io.github.ispaure.logistics.notebooks.NotebookInput').attach(
                 self.web._impl.native, self.boox_refresh)
+        from .ios_input import attach
+        self.pencil_hover = attach(self.web)
         location = getattr(self.view, '_document_location_row', None)
         restore_location = location is not None and location.parent is self.view
         header = getattr(self.view, '_document_title_header', None)
@@ -417,6 +422,9 @@ class NotebookPanel:
         if bridge is not None:
             bridge.retire()
         self.busy = False
+        if self.pencil_hover is not None:
+            self.pencil_hover.close()
+            self.pencil_hover = None
         if self.pen_input is not None:
             self.pen_input.close()
             self.pen_input = None

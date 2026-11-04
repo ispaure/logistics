@@ -42,8 +42,10 @@ color, width and view.
 In iPhone Duo laptop posture, the upper screen keeps brushes, stroke widths,
 colors, view/input settings and layers open in a scrollable tool area. The lower
 screen holds the drawing canvas, with the hinge kept clear. The page initially
-fits the lower screen; use Zoom above it for closer work. Drawing does not dismiss
-the tools. Unfolding restores the floating toolbar and the previous zoom.
+fits the lower screen's width; use Zoom above it for closer work. Drawing does not dismiss
+the tools. Opening, closing, rotating and entering or leaving laptop mode keep
+a deliberate zoom and the viewed paper position where the page edges allow.
+At the default zoom, the page adapts to the new layout instead.
 
 Tap the current brush icon to open **Writing tools**: choose an instrument card,
 then a **Thin**, **Medium** or **Thick** stroke sample (Highlighter has one
@@ -69,8 +71,9 @@ the visible layer to draw on, shows or hides layers, and adds a named layer.
 
 Controls follow the device's light or dark appearance using the app's Slate
 colors. Paper and PDF backgrounds stay white, and ink colors stay unchanged.
-The bottom zoom bar provides **−**, **+**, the current percentage and **Fit**
-to fit the whole page clear of the floating toolbar and zoom bar. Pinch with two
+The bottom zoom bar provides **−**, **+**, the current percentage and **Reset**
+to restore the current layout's default zoom and position. Changing pages also
+resets zoom, including when returning to a page. Pinch with two
 fingers to zoom from 10% to 400%; this
 also works with **Draw with finger** enabled. Starting a pinch cancels the
 unfinished finger stroke. The fingers remaining after a pinch do not draw or
@@ -112,7 +115,10 @@ to the canvas, and iOS uses WebView pointer/coalesced samples. Ballpoint, Pencil
 Marker, Paintbrush, Calligraphy and Shader vary with pressure. Fineliner,
 Mechanical pencil and Highlighter keep a constant width. Calligraphy uses a fixed
 45-degree slanted nib; stroke direction changes its width independently of pen
-tilt. Hardware palm rejection is not guaranteed.
+tilt. Finger drawing, panning and pinching are blocked while a pen is drawing or
+detected near the paper, and for 350 milliseconds after release. Proximity needs
+hardware/OS support; contact-based protection works without hover. Physical palm
+classification still depends on the device.
 
 On iPad, the editor accepts pen events through the native **WKWebView** canvas.
 This is the Apple Pencil input path; the editor does not embed PencilKit or its
@@ -187,10 +193,13 @@ with **Save**; export failure does not require replacing it with a blank page.
 These restrictions apply when converting notebook templates to PDF backgrounds;
 an existing PDF-backed notebook retains its embedded PDF.
 
-Phones start in **Paper Pro Move** paper view (large tablets start in Pro): the same ink coordinates, centered
-and aligned to the top, with the visible area expanded for writing beyond the
-Move edges. Choose **Paper Pro** in Layers to reveal and write in the surrounding
-margins. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes)
+Portrait phones and the closed Duo fit the centered **Paper Pro Move** width.
+Portrait iPads and the wide opened Duo show the whole **Paper Pro** page.
+Landscape fits the full page width across the display; laptop mode fits the
+page width across its writing area. Zooming in from the default Move view exposes
+the surrounding page while keeping the viewed paper position. Choose a manual
+**Paper view** in Layers to override the framing until Reset or a page change.
+See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes)
 for line counts, saved-format versus viewing choices and reMarkable compatibility.
 
 ## Eraser types and sizes

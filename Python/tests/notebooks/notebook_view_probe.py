@@ -36,7 +36,8 @@ try{
   check(Math.abs(shown()-scale())<.006,'Visible zoom percentage');
   setZoom(100);check(scale()===4&&$('zoomIn').disabled,'Upper zoom bound');
   setZoom(.001);check(Math.abs(scale()-.1)<.001&&$('zoomOut').disabled,'Lower zoom bound');
-  $('zoomFit').click();check($('zoom').value==='page','Fit page button');
+  $('zoomFit').click();check($('zoom').value===defaultViewportChoice().zoom,'Reset zoom defaults');
+  check($('zoomFit').getAttribute('aria-label')==='Reset zoom','Reset zoom accessible label');
   check(Math.abs(shown()-scale())<.006,'Fit page shows actual percentage');
   setZoom(1);
   const viewport=$('viewport'),box=viewport.getBoundingClientRect();
@@ -261,6 +262,9 @@ def main(output):
                                           [(390, 844), (320, 568), (820, 1180), (900, 650), (844, 390), (320, 390)]):
                         owner.resize(width, height)
                         QTest.qWait(150)
+                        # Layout cases are independent gestures. Honor the real
+                        # post-stylus grace rather than clearing production state.
+                        wait(lambda: js(view, '!penTouchBlocked()'), 'pen release before gesture fixture')
                         report = json.loads(js(view, CHECKS))
                         report.update(presentation=name, mode=mode, width=width, height=height)
                         assert report['success'], report
