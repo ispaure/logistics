@@ -126,9 +126,19 @@ class NotesLibrary:
         for source in media.values():
             source.close()
 
-    def _link_stamp(self, folder):
+    def _link_stamp(self, folder, *, cancelled=lambda: False):
         info = self.provider.transfer_location(folder, directory=True).stat()
-        return info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+        stamp = info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns
+        if os.name == 'nt':
+            # Windows can defer directory timestamp changes across rapid
+            # create/delete operations. Both listing and resolution caches
+            # validate names without reading document content or metadata.
+            scan = getattr(self.provider, 'list_names', self.provider.list)
+            rows = scan(folder, cancelled=cancelled)
+            if len(rows) > 10000:
+                raise ValueError('Note lookup exceeds the 10,000-entry limit. Use an explicit note path.')
+            stamp += (tuple(sorted((row['name'], row['path'], row['directory']) for row in rows)),)
+        return stamp
 
     def _link_listing(self, folder, cancelled):
         """Reuse names only while the validated local directory is unchanged."""
@@ -139,17 +149,7 @@ class NotesLibrary:
             return self.provider.list(folder, cancelled=cancelled)
 
         def revision():
-            stamp = self._link_stamp(folder)
-            if os.name == 'nt':
-                # Windows can defer directory timestamp changes across rapid
-                # create/delete operations. Validate cached names against a
-                # fresh lightweight listing, without reading document content.
-                scan = getattr(self.provider, 'list_names', self.provider.list)
-                rows = scan(folder, cancelled=cancelled)
-                if len(rows) > 10000:
-                    raise ValueError('Note lookup exceeds the 10,000-entry limit. Use an explicit note path.')
-                stamp += (tuple(sorted((row['name'], row['path'], row['directory']) for row in rows)),)
-            return stamp
+            return self._link_stamp(folder, cancelled=cancelled)
 
         before = revision()
         with self._link_lock:
@@ -343,7 +343,7 @@ class NotesLibrary:
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
         with operation(self.provider, cancelled):
-            cacheable = (os.name != 'nt' and not document_remote(self.provider)
+            cacheable = (not document_remote(self.provider)
                          and callable(getattr(self.provider, 'transfer_location', None))
                          and not callable(getattr(self.provider, 'find_note_paths', None)))
             key = current, target
@@ -352,7 +352,7 @@ class NotesLibrary:
             if cached is not None:
                 result, dependencies = cached
                 try:
-                    reusable = all(self._link_stamp(folder) == stamp for folder, stamp in dependencies.items())
+                    reusable = all(self._link_stamp(folder, cancelled=cancelled) == stamp for folder, stamp in dependencies.items())
                     if reusable:
                         self.entry(result[0])  # Validate provider access even on a cache hit.
                         return result
@@ -364,7 +364,7 @@ class NotesLibrary:
                     return
                 while True:
                     try:
-                        dependencies.setdefault(folder, self._link_stamp(folder))
+                        dependencies.setdefault(folder, self._link_stamp(folder, cancelled=cancelled))
                         return
                     except (FileNotFoundError, NotADirectoryError):
                         if folder == self.root:
@@ -417,7 +417,7 @@ class NotesLibrary:
                                   exists=exists, suffix_matches=suffix_matches, cancelled=cancelled)
             # Providers with indexed lookup own its invalidation; do not cache
             # those results without directory dependencies from the lookup.
-            if dependencies and cacheable and all(self._link_stamp(folder) == stamp for folder, stamp in dependencies.items()):
+            if dependencies and cacheable and all(self._link_stamp(folder, cancelled=cancelled) == stamp for folder, stamp in dependencies.items()):
                 with self._link_lock:
                     check_cancelled(cancelled)
                     if (len(self._resolved_links) >= 128
