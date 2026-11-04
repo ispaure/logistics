@@ -16,6 +16,39 @@ def delete_document_tree(provider, path, *, cancelled=lambda: False):
         return delete_resource(provider, path, cancelled=cancelled)
 
 
+def copy_path(source, *, directory=False, number=1):
+    """A sibling name, retaining a file's extension and a folder's full name."""
+    from pathlib import PurePosixPath
+    path = PurePosixPath(source)
+    suffix = '' if directory else path.suffix
+    stem = path.name[:-len(suffix)] if suffix else path.name
+    label = ' - Copy' + (f' ({number})' if number > 1 else '')
+    return str(path.with_name(stem + label + suffix))
+
+
+def copy_document_sibling(provider, source, *, cancelled=lambda: False):
+    """Choose a free sibling under the same lock used for verified publication."""
+    if not document_writable(provider):
+        raise PermissionError('This storage cannot copy documents.')
+    source = provider.relative(source)
+    if not source:
+        raise ValueError('Select a file or folder inside this storage.')
+    with document_operation(provider, cancelled), mutation_lock:
+        directory = provider.entry(source)['directory']
+        number = 1
+        while True:
+            check_cancelled(cancelled)
+            target = copy_path(source, directory=directory, number=number)
+            try:
+                provider.entry(target)
+            except FileNotFoundError:
+                try:
+                    return copy_document_tree(provider, source, target, cancelled=cancelled)
+                except FileExistsError:
+                    pass  # Another process published this name; preserve it and retry.
+            number += 1
+
+
 def copy_document_tree(provider, source, target, *, cancelled=lambda: False):
     """Stage and verify a captured tree before a collision-safe provider rename."""
     if not document_writable(provider):

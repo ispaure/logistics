@@ -1,6 +1,6 @@
 """Rooted daily-note discovery and verified local library file commands."""
 from commonUtils.runtime.operations import check_cancelled
-from services.documents.mutations import delete_document_tree, copy_document_tree
+from services.documents.mutations import delete_document_tree, copy_document_tree, copy_document_sibling
 
 
 def daily_notes(library, *, visible=lambda path, **kw: True, cancelled=lambda: False):
@@ -41,11 +41,14 @@ def remove(library, path, *, cancelled=lambda: False):
     return delete_document_tree(library.provider, path, cancelled=cancelled)
 
 
-def copy(library, source, target, *, cancelled=lambda: False):
+def copy(library, source, target=None, *, cancelled=lambda: False):
     """Validate the library boundary before host-owned verified publication."""
     if not all(library.supports(action) for action in ('create', 'rename', 'delete')):
         raise PermissionError('This Notes Library cannot copy files.')
-    source, target = library.contained(source), library.contained(target)
+    source = library.contained(source)
+    target = library.contained(target) if target is not None else None
     if source == library.root or target == library.root:
         raise ValueError('Cannot copy or replace the Notes Library root.')
+    if target is None:
+        return copy_document_sibling(library.provider, source, cancelled=cancelled)
     return copy_document_tree(library.provider, source, target, cancelled=cancelled)

@@ -59,6 +59,9 @@ class FileOperationRequest:
                 raise ValueError('Enter one new name.')
             target = '/'.join(p for p in (self.path.rpartition('/')[0], part) if p)
             return rename_resource(self.provider, self.path, target, cancelled=cancelled)
+        if self.kind == 'copy':
+            from services.documents.mutations import copy_document_sibling
+            return copy_document_sibling(self.provider, self.path, cancelled=cancelled)
         if self.kind == 'delete':
             return delete_resource(self.provider, self.path, cancelled=cancelled)
         if self.kind == 'move':

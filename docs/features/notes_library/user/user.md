@@ -43,7 +43,8 @@ Existing destinations are never overwritten.
 Links in other notes are not rewritten when files move.
 
 Right-click a file or folder for **Move / rename…**, **Copy…** or **Delete…**,
-as supported by the location. Copy refuses existing destinations. Delete asks
+as supported by the location. Copy defaults to a sibling named “Filename - Copy”, retaining the file extension.
+Repeated default copies add “(2)”, “(3)”, and so on; custom paths refuse existing destinations. Delete asks
 for confirmation and permanently removes the selected item and its contents.
 Clicking a folder with a matching `Folder/Folder.md` opens that landing note;
 its name is underlined. Hovering over that folder shows a pointing-hand cursor. Use the expansion arrow to browse its children.
