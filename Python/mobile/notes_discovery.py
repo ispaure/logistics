@@ -23,12 +23,13 @@ def cancel(app):
 
 
 def find_libraries(provider, *, cancelled=lambda: False):
+    """Inspect root and two folder levels; never traverse a library's contents."""
     from collections import deque
-    pending, found, seen = deque(['']), [], set()
+    pending, found, seen = deque([('', 0)]), [], set()
     with operation(provider, cancelled):
         while pending:
             check_cancelled(cancelled)
-            folder = pending.popleft()
+            folder, depth = pending.popleft()
             if folder in seen:
                 continue
             seen.add(folder)
@@ -37,8 +38,9 @@ def find_libraries(provider, *, cancelled=lambda: False):
                 found.append(folder)
                 # A library owns its subtree; nested notebooks aren't libraries.
                 continue
-            pending.extend(row['path'] for row in rows
-                           if row['directory'] and not row['name'].startswith('.'))
+            if depth < 2:
+                pending.extend((row['path'], depth + 1) for row in rows
+                               if row['directory'] and not row['name'].startswith('.'))
     return found
 
 
