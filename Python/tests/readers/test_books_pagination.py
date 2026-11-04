@@ -6,9 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from zipfile import ZipFile
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from PySide6.QtTest import QTest
 from commonUtils.ui import pyside as qt
@@ -30,8 +28,7 @@ def replace_members(path, changes):
 class BookPaginationTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.tmp = TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
+        self.tmp = self.temporary_directory()
         self.root = Path(self.tmp.name)
         isolate_appearance(self, self.root)
         self.path = make_book(self.root / 'book.epub')
