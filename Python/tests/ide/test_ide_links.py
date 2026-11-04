@@ -3,7 +3,6 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,11 +18,11 @@ class IDELinkTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def test_reachable_link_preserves_buffer_and_rejects_stale_hover(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with self.temporary_directory() as directory:
             root = Path(directory)
             path = root / 'main.py'
             path.write_text('value = 1\nprint(value)\n')
-            view = ProjectWorkspace(Project('links', str(root)))
+            view = ProjectWorkspace(Project('links', str(root), autosave='off'))
             view.resize(900, 600)
             view.show()
             view.open_path(path)
@@ -69,10 +68,5 @@ class IDELinkTests(QtTestCase):
             view.close()
 
     def wait(self, view):
-        from PySide6.QtTest import QTest
-        for _ in range(1000):
-            self.app.processEvents()
-            if not view.worker and not view.queue:
-                return
-            QTest.qWait(5)
-        self.fail('Workspace worker did not finish')
+        self.wait_until(lambda: not view.worker and not view.queue,
+                        message='Workspace worker did not finish')
