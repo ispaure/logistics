@@ -5,7 +5,7 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from threading import Event
 from time import monotonic, sleep
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -27,7 +27,7 @@ class BulkRenameHostTests(QtTestCase):
         self.app.processEvents()
 
     def test_one_embedded_page_replaces_selection_preserves_rules_and_survives_refresh(self):
-        with TemporaryDirectory() as folder, patch.object(main_window.registry,'get_pages',return_value=[]):
+        with self.temporary_directory() as folder, patch.object(main_window.registry,'get_pages',return_value=[]):
             first=Path(folder)/'first.txt'; first.write_text('a')
             second=Path(folder)/'second.txt'; second.write_text('b')
             window=main_window.MainWindow()
@@ -58,11 +58,34 @@ class BulkRenameHostTests(QtTestCase):
 
     def test_latest_selection_wins_during_scan(self):
         from desktop.bulk_rename.widget import BulkRenameWidget
-        with TemporaryDirectory() as folder:
+        with self.temporary_directory() as folder:
             a=Path(folder)/'a'; a.write_text('a'); b=Path(folder)/'b'; b.write_text('b')
-            widget=BulkRenameWidget(paths=[a]); self.app.processEvents()
-            widget.set_inputs(paths=[a]); widget.set_inputs(paths=[b]); self.wait(widget)
-            self.assertEqual(widget.selected_paths(),(b.resolve(),))
+            entered, release = Event(), Event()
+            original = BulkRenameWidget._scan_items
+            scans = []
+
+            def delayed(paths, cancelled):
+                scans.append(tuple(paths))
+                if len(scans) == 1:
+                    entered.set()
+                    if not release.wait(5):
+                        raise TimeoutError('Scan barrier was not released')
+                return original(paths, cancelled)
+
+            with patch.object(BulkRenameWidget, '_scan_items', side_effect=delayed):
+                widget = BulkRenameWidget(paths=[a])
+                try:
+                    self.wait_until(entered.is_set)
+                    self.assertTrue(widget.progress.busy)
+                    widget.set_inputs(paths=[a])
+                    widget.set_inputs(paths=[b])
+                    self.assertTrue(widget.progress.cancelled.is_set())
+                    self.assertFalse(widget.rename_button.isEnabled())
+                finally:
+                    release.set()
+                    self.wait(widget)
+                self.assertEqual(widget.selected_paths(), (b.resolve(),))
+                self.assertEqual(scans, [(a.absolute(),), (b.absolute(),)])
             deadline = monotonic() + 10
             while not widget.prepare_close():
                 self.app.processEvents(); sleep(.005)

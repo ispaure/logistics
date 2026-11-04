@@ -20,7 +20,7 @@ from features.application import registry
 from desktop.file_browser import FileBrowserWindow
 
 
-class _FileToolsFixture(QtTestCase):
+class _FileToolsFixture:
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -33,7 +33,7 @@ class _FileToolsFixture(QtTestCase):
         return path
 
 
-class FileToolsTests(_FileToolsFixture):
+class FileToolsTests(_FileToolsFixture, unittest.TestCase):
     def test_scan_matches_composed_combining_and_parent_paths_without_printing(self):
         composed = self.file('composed-é.txt')
         combining = self.file('combining-e\u0301.txt')
@@ -84,8 +84,19 @@ class FileToolsTests(_FileToolsFixture):
         self.assertTrue(result.cancelled)
         self.assertTrue(second.exists())
 
+    def test_cleanup_preview_excludes_new_and_changed_files(self):
+        original = self.file('a.pyc')
+        candidates = filesystem.scan_pyc_files(self.root)
+        new = self.file('new.pyc')
+        original.write_bytes(b'changed since preview')
+        result = filesystem.cleanup_pyc_files(self.root, candidates=candidates)
+        self.assertEqual(result.completed, [])
+        self.assertIn(original, result.failed)
+        self.assertTrue(original.exists())
+        self.assertTrue(new.exists())
 
-class FileToolsWindowTests(_FileToolsFixture):
+
+class FileToolsWindowTests(_FileToolsFixture, QtTestCase):
     def setUp(self):
         super().setUp()
         self.app = qt.QApplication.instance() or qt.QApplication([])
@@ -124,17 +135,6 @@ class FileToolsWindowTests(_FileToolsFixture):
         self.assertIn('U+00E9', row.text(2))
         self.assertIn('Found 1', dialog.summary.text())
         self.assertTrue(path.exists())
-
-    def test_cleanup_preview_excludes_new_and_changed_files(self):
-        original = self.file('a.pyc')
-        candidates = filesystem.scan_pyc_files(self.root)
-        new = self.file('new.pyc')
-        original.write_bytes(b'changed since preview')
-        result = filesystem.cleanup_pyc_files(self.root, candidates=candidates)
-        self.assertEqual(result.completed, [])
-        self.assertIn(original, result.failed)
-        self.assertTrue(original.exists())
-        self.assertTrue(new.exists())
 
     def test_scan_without_pyc_files_finishes_progress_and_can_scan_again(self):
         source = self.file('source.py')
