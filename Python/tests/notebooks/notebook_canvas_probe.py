@@ -33,7 +33,15 @@ def main(output):
         window.setCentralWidget(workspace)
         window.notebook_menus = NotebookMenus(window)
         show_document(window)
+        def select_first_template():
+            setup = qt.QApplication.activeModalWidget()
+            setup.template.setCurrentIndex(setup.template.findData('P Lines medium'))
+            QTest.qWait(40)
+            setup.grab().save(str(output / 'creation.png'))
+            setup.create.click()
+        qt.QTimer.singleShot(0, select_first_template)
         workspace.new()
+        assert workspace.editor.notebook.pages[0].template == 'P Lines medium'
         assert window in documents.records
         assert window.windowTitle() == workspace.editor.notebook.name
         assert host.windowTitle() == 'Logistics host'

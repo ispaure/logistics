@@ -156,6 +156,26 @@ substitutes a different background. Equivalent JSON formatting does not block a
 page transfer or rewrite the destination's asset bytes. Template references are
 validated before rendering, including values that cannot fit one `.pagedata` line.
 
+`Notebook.new(..., template=..., paper_format=...)` applies the shared validated
+selection to its first page. Desktop creation uses `ui/setup.py` with generated
+previews, including drafts opened from New / Open Document and the standalone
+library. Cancelling creates no workspace or destination. Mobile New Document
+retains `NotebookTemplateChoices` in the naming form; format switches, folder
+navigation and resizing preserve its selection. `DestinationRequest.capture()`
+serializes that selection before publication. Native library creation uses the
+same catalog through a scrolling native choice dialog. Busy or retired creation
+requests cannot replace a newer notebook. The mobile owner manifest includes the
+native controls without importing the desktop dialog.
+
+Desktop Page → Page Template and the toolbar's labeled control open the existing
+per-page selector. Mobile exposes it in Page template and layers and from Pages.
+The editor's existing `add-page` command inserts immediately after the current
+page, inheriting its reference and opaque format/visibility sidecar without ink;
+PDF-backed page behavior is unchanged. `test_notebook_setup.py` and mobile
+`test_notebook_creation_templates.py` cover selection, cancellation, format
+switches, publication, middle insertion, unchanged neighbors and history/readback.
+The WebEngine template probe checks both visible Page Template entry points.
+
 Template edits mark structure dirty even when page IDs do not change. Export
 must therefore serialize page references on every structural change, rather than
 only a reordered page list. Failed checkpoints restore the prior page metadata

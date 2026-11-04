@@ -1,7 +1,9 @@
 # reMarkable notebooks on desktop
 
 Choose **Notebook (.rmdoc)** in the desktop **New / Open Document** chooser.
-**New** opens a blank notebook immediately. Choose a destination when you first
+**New** lets you name the notebook, choose its first-page template and select a
+Pro or Move size for Logistics layouts. Blank paper is also available. Create
+opens the editable draft; Cancel leaves the chooser unchanged. Choose a destination when you first
 use **Save** or **Save As**; cancelling leaves the draft open. Closing an edited,
 unsaved notebook asks whether to save, discard or cancel. **Open** chooses an
 existing `.rmdoc` file.
@@ -135,14 +137,17 @@ remain required before calling this fully tablet-verified. See the
 
 ## Page templates and paper sizes
 
-Open **Manage layers** in the desktop toolbar to choose the current page's
-template. Choose Blank, lined paper (large: 21 rules; small: 41), the native
+Open **Page → Page Template…**, or **Page template** beside the active layer in
+the toolbar, to change only the current page. These changes support Undo/Redo.
+
+Choose Blank, lined paper (large: 21 rules; small: 41), the native
 25-rule medium, or Logistics' more distinct 31-rule medium. Grid, Dots,
 Restaurant review, Meeting notes, Daily planner, Checklist, Cornell notes and Weekly planner are also available.
 **Template format** selects Paper Pro or Paper Pro Move for Logistics layouts.
 **Show template** hides only the background in Logistics; it leaves writing intact.
 These are per-page edits with Undo/Redo, Save, recovery and page-copy support.
-New pages inherit the current template. Imported PDFs keep their source background
+New pages inserted after the current page inherit its template, size and
+background visibility; existing pages stay unchanged. Imported PDFs keep their source background
 and do not offer notebook template replacement.
 
 **Paper view** changes the visible writing area without moving or scaling ink.
