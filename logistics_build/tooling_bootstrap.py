@@ -6,9 +6,12 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,12 +106,105 @@ def owned_path(root, path):
     return not any(linked(part) for part in (path, *path.parents) if part != root and root in part.parents)
 
 
+@contextmanager
+def cancellation_scope(*, cleaning=False):
+    """Unwind leases on bridge TERM; repeated cancellation cannot interrupt cleanup."""
+    state = dict(launching=False, cancelled=False)
+    if threading.current_thread() is not threading.main_thread():
+        yield state
+        return
+    previous = {}
+    def cancel(signum, frame):
+        signal.signal(signum, signal.SIG_IGN)
+        if state['launching']:
+            state['cancelled'] = True
+            return
+        raise KeyboardInterrupt
+    try:
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous[signum] = signal.signal(signum, signal.SIG_IGN if cleaning else cancel)
+        yield state
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def _retire(process):
+    """Retire only our child tree, within ten seconds, before releasing its lease."""
+    with cancellation_scope(cleaning=True):
+        if os.name == 'nt':
+            # In a bridge this tree also remains inside the SDK's owning job.
+            killer = subprocess.Popen(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                killer.wait(timeout=4)
+            except subprocess.TimeoutExpired:
+                killer.kill()
+                killer.wait(timeout=1)
+        else:
+            def send(sig):
+                try:
+                    os.killpg(process.pid, sig)
+                    return True
+                except ProcessLookupError:
+                    return False
+                except PermissionError:
+                    if sig == 0:
+                        # Darwin may deny the existence probe while an exiting
+                        # group is being reaped. Never treat that as retired.
+                        return True
+                    raise
+            if send(signal.SIGTERM):
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    process.poll()  # Reap the direct child even if descendants remain.
+                    if not send(0):
+                        break
+                    time.sleep(.02)
+                send(signal.SIGKILL)
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=2)
+        try:
+            process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            # An inherited pipe must never turn cancellation into an unbounded wait.
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
+            raise
+
+
+def run_command(args, *, timeout=None, check=False, capture_output=False, **kwargs):
+    """Own a child PGID, never a new SID that could escape the SDK bridge owner."""
+    options = (dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == 'nt'
+               else dict(process_group=0))
+    if capture_output:
+        options.update(stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    with cancellation_scope() as cancellation:
+        # Deliver cancellation only once the child's cleanup finally is installed.
+        # Do not block signals: the child must inherit an unblocked signal mask.
+        cancellation['launching'] = True
+        process = subprocess.Popen([str(arg) for arg in args], text=True, **options, **kwargs)
+        try:
+            cancellation['launching'] = False
+            if cancellation['cancelled']:
+                raise KeyboardInterrupt
+            stdout, stderr = process.communicate(timeout=timeout)
+            result = subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+            if check:
+                result.check_returncode()
+            return result
+        finally:
+            _retire(process)
+
+
 def run(args, **kwargs):
     environment = dict(os.environ, GIT_OPTIONAL_LOCKS='0', GIT_TERMINAL_PROMPT='0')
     for key in ('PYTHONPATH', 'PYTHONHOME'):
         environment.pop(key, None)
-    return subprocess.run([str(arg) for arg in args], env=environment, capture_output=True,
-                          text=True, check=True, timeout=180, **kwargs).stdout.rstrip()
+    return run_command(args, env=environment, capture_output=True,
+                       check=True, timeout=180, **kwargs).stdout.rstrip()
 
 
 def git(checkout, *args):
@@ -290,14 +386,14 @@ def after_sync(root=ROOT):
 @contextmanager
 def environment_sync(root=ROOT):
     """Hold the shared environment lock across sync and enrolled restoration."""
-    if not enrolled(root):
-        yield
-        return
     root = Path(root).resolve()
     if any(not owned_path(root, path) for path in (lock_path(root), *(folder for _, folder, _ in environments(root)))):
         raise BootstrapError('linked_path')
     with mutation_guard(root):
+        restore = enrolled(root)
         yield
+        if not restore:
+            return
         targets = environments(root)
         if any(not owned_path(root, folder) or not interpreter.is_file() for _, folder, interpreter in targets):
             raise BootstrapError('environments')
@@ -335,7 +431,7 @@ def main():
         if args.venv.absolute() not in [folder.absolute() for _, folder, _ in environments(args.root)]:
             parser.error('sync must select a project-owned desktop or mobile environment')
         with environment_sync(args.root):
-            return subprocess.run(command, check=True).returncode
+            return run_command(command, check=True).returncode
     if command:
         parser.error('Unexpected tooling arguments')
     result = (status(args.root) if args.action == 'status' else
