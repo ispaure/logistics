@@ -1739,3 +1739,18 @@ until the newly selected location has loaded.
 opening the native selector and changing local locations across portrait and
 landscape. The iOS `--family all` matrix includes iPhone, iPad, and closed, open
 and partly open Duo postures; Android uses the owned disposable emulator.
+
+
+## System occlusion clearance
+
+`ios_system_occlusions.control_top_clearance` computes clearance from the current
+column and every intersecting reserved system region. Navigation owners apply
+only the missing top inset, retaining UIKit's safe area and other additional
+insets. The same calculation budgets supplemental controls and content reader
+headers. Multiple activities and closed/open display changes invalidate layout;
+shrinking regions release the extra inset without accumulating padding. No device
+model or fixed Dynamic Island height determines placement.
+
+Host checks cover column intersection, two activities, growth/shrink and inset
+ownership. Native toolbar acceptance checks actual accessible action frames against
+reserved regions; physical-device Live Activity transitions require device testing.

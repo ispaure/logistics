@@ -169,6 +169,6 @@ def occlusion_geometry(native):
     if not native.respondsToSelector(SEL('reservedRegionsOfKind:options:')):
         return ()
     kind = ObjCClass('UIViewReservedRegionKind').occlusionRegionKind()
-    return tuple((float(r.frame.origin.x), float(r.frame.origin.y),
+    return tuple(sorted((float(r.frame.origin.x), float(r.frame.origin.y),
                   float(r.frame.size.width), float(r.frame.size.height))
-                 for r in native.reservedRegionsOfKind(kind, options=0))
+                 for r in native.reservedRegionsOfKind(kind, options=0)))

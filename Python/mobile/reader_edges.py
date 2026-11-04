@@ -63,9 +63,9 @@ def apple_reader_top(container, window):
         return top
     from .ios_reader_chrome import occlusion_geometry
     left, right = container.left_inset, float(native.bounds.size.width) - container.right_inset
-    return max((y + height for x, y, width, height in occlusion_geometry(native)
-                if x + width > left + .5 and x < right - .5
-                and y + height > 0 and (y <= .5 or y < top)), default=0)
+    from .ios_system_occlusions import control_top_clearance
+    return control_top_clearance(occlusion_geometry(native), left, right, top)
+
 
 
 def compact_apple_reader(container):

@@ -130,9 +130,9 @@ def supplemental_fits(controller, count):
         return True
     start = float(bounds.origin.y)
     left, right = float(frame.origin.x), float(frame.origin.x + frame.size.width)
-    for x, y, width, height in system_occlusions(controller):
-        if min(right, x + width) > max(left, x):
-            start = max(start, y + height)
+    from .ios_system_occlusions import control_top_clearance
+    start = control_top_clearance(system_occlusions(controller), left, right,
+                                  max(start, float(view.safeAreaInsets.top)), target=float('inf'))
     # The public tab-bar frame spans the entire side, including empty space.
     # Budget 44-point targets with 16 points between independent groups for
     # its visible destinations, Back/Close, overflow and supplemental controls.

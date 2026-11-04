@@ -7,7 +7,7 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from mobile.ios_reader_chrome import notify_viewport
 
 
@@ -87,6 +87,8 @@ class WindowOcclusionTests(unittest.TestCase):
     def setUp(self):
         self.loop = asyncio.new_event_loop()
         self.addCleanup(close_loop, self.loop)
+        clearance = patch('mobile.ios_system_occlusions.reserve_bar_clearance')
+        self.clearance = clearance.start(); self.addCleanup(clearance.stop)
         self.navigation = SimpleNamespace(view=Mock(), navigationBar=Mock())
         self.secondary = SimpleNamespace(view=Mock(), navigationBar=Mock())
         self.app = SimpleNamespace(active_host=True, loop=self.loop,
@@ -235,3 +237,40 @@ class FixedControlAuditTests(unittest.TestCase):
             rect.origin.x = -5
             with self.assertRaises(AssertionError):
                 rotation_checks.assert_visible_controls(app)
+
+
+class ControlClearanceTests(unittest.TestCase):
+    def test_closed_open_and_two_activities_use_current_column_geometry(self):
+        from mobile.ios_system_occlusions import control_top_clearance as clearance
+        self.assertEqual(clearance(((170, 8, 120, 62),), 0, 460, 59), 78)
+        self.assertEqual(clearance(((850, 0, 90, 40),), 840, 950, 0), 48)
+        self.assertEqual(clearance(((850, 0, 90, 40), (850, 52, 90, 52)), 840, 950, 0), 112)
+        self.assertEqual(clearance(((850, 0, 90, 40), (850, 52, 90, 52)), 0, 800, 0), 0)
+        self.assertEqual(clearance((), 0, 460, 59), 59)
+        self.assertEqual(clearance(((850, 400, 90, 40),), 840, 950, 0), 0)
+
+    def test_bar_inset_grows_and_shrinks_without_accumulating_or_losing_other_insets(self):
+        import sys
+        from mobile.ios_system_occlusions import reserve_bar_clearance
+        from types import SimpleNamespace as NS
+        def insets(top, left, bottom, right):
+            return NS(top=top, left=left, bottom=bottom, right=right)
+        frame = NS(origin=NS(x=840, y=0), size=NS(width=100, height=700))
+        bar = Mock(bounds=frame)
+        bar.isHidden.return_value = False
+        bar.convertRect.return_value = frame
+        owner = NS(view=NS(safeAreaInsets=insets(20, 0, 0, 0)), navigationBar=bar,
+                   additionalSafeAreaInsets=insets(5, 2, 3, 4))
+        with patch.dict(sys.modules, {'rubicon.objc': NS(UIEdgeInsets=insets)}), patch(
+                'mobile.ios_reader_chrome.occlusion_geometry', return_value=((850, 0, 80, 100),)) as regions:
+            self.assertTrue(reserve_bar_clearance(owner))
+            self.assertEqual(owner.additionalSafeAreaInsets.top, 93)
+            owner.view.safeAreaInsets.top = 108
+            self.assertFalse(reserve_bar_clearance(owner))
+            regions.return_value = ((850, 0, 80, 40), (850, 80, 80, 60))
+            self.assertTrue(reserve_bar_clearance(owner))
+            self.assertEqual(owner.additionalSafeAreaInsets.top, 133)
+            owner.view.safeAreaInsets.top = 148
+            regions.return_value = ()
+            self.assertTrue(reserve_bar_clearance(owner))
+            self.assertEqual(owner.additionalSafeAreaInsets, insets(5, 2, 3, 4))
