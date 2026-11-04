@@ -85,7 +85,12 @@ def doctor(root, interpreter):
         checks.append((name, ready))
     for name, ready in checks[:2]:
         print(f'{"OK" if ready else "MISSING"} {name}')
-    for tool in ('git', 'go', 'java', 'adb', 'xcodebuild'):
+    from logistics_build.native_tooling import status as native_status
+    native = native_status(root)
+    if native['applicable']:
+        print(('OK' if native['ready'] else 'MISSING') + ' native prerequisites: ' + json.dumps(native))
+        checks.append(('native prerequisites', native['ready']))
+    for tool in ('git', 'java', 'adb', 'xcodebuild'):
         print(f'{"AVAILABLE" if shutil.which(tool) else "OPTIONAL / absent"} native tool: {tool}')
     print('Setup: python3 dev.py setup desktop | python3 dev.py setup mobile')
     print('Missing commonUtils: git submodule update --init --recursive (preserve local edits first).')
