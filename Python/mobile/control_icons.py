@@ -10,6 +10,7 @@ ICONS = {
                                 (22, 8), (21, 12), (12, 21)),)),
     'archive': ('archivebox', '▤', (((3, 3), (21, 3), (21, 8), (3, 8), (3, 3)),
                                   ((5, 8), (5, 21), (19, 21), (19, 8)), ((10, 12), (14, 12)))),
+    'folder_document': ('folder.badge.doc', '▱', (((3, 6), (9, 6), (11, 9), (21, 9), (21, 20), (3, 20), (3, 6)), ((12, 12), (18, 12), (18, 18), (12, 18), (12, 12)))),
     'folder_hub': ('folder', '▱', (((3, 6), (9, 6), (11, 9), (21, 9), (21, 20), (3, 20), (3, 6)),)),
     'books': ('books.vertical', '▥', (((3, 4), (8, 4), (8, 21), (3, 21), (3, 4)),
                                      ((10, 4), (15, 4), (15, 21), (10, 21), (10, 4)),
@@ -107,7 +108,7 @@ def _spec(name, artwork):
         fills=FOLDER_FILLS.get(name, ()),
         stroke_width=FOLDER_STROKE_WIDTH if name in FOLDER_PATHS else 1.7 if skip else 1.8,
         filled=name in {'stop', 'play'}, text='15' if skip else None,
-        apple_vector=name in {'group', 'obsidian'} or skip or name in FOLDER_PATHS)
+        apple_vector=name in {'group', 'obsidian', 'folder_document'} or skip or name in FOLDER_PATHS)
 
 
 _renderer = IconRenderer({name: _spec(name, value) for name, value in ICONS.items()}, tint_android=tint_android)
