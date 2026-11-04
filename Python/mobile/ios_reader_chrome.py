@@ -71,7 +71,9 @@ def install():
 
     def layout_window(adapter, container):
         original_window_layout(adapter, container)
-        from .ios_system_occlusions import observe_window_occlusions
+        from .ios_system_occlusions import observe_window_occlusions, reserve_bar_clearance
+        reserve_bar_clearance(adapter.outer_navigation)
+        reserve_bar_clearance(adapter.navigation_for(adapter.host.state.destination))
         window = adapter.window._impl.native
         observe_window_occlusions(_hosts.get(window.ptr.value), container.native)
 
@@ -83,6 +85,10 @@ def install():
         container._logistics_layout_active = True
         try:
             original_layout(container)
+            controller = getattr(container, 'controller', None)
+            if controller is not None and hasattr(controller, 'navigationBar'):
+                from .ios_system_occlusions import reserve_bar_clearance
+                reserve_bar_clearance(controller)
             if fullscreen(container.native.window, images=True):
                 # Fullscreen image readers retain their existing all-edge policy.
                 changed = any((container.top_inset, container.bottom_inset,

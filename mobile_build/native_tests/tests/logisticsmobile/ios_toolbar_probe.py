@@ -31,8 +31,12 @@ class ToolbarProbe(LogisticsMobile):
 
     async def record(self, name):
         await asyncio.sleep(.5)
-        navigation = self.native_host.adapter.navigation[
-            self.native_host.destinations.index(self.native_host.state.destination)]
+        adapter = self.native_host.adapter
+        navigation = adapter.navigation_for(self.native_host.state.destination)
+        # Root-level actions can live on the outer navigation owner. Measure
+        # the same visible owner as the native frame/occlusion audit.
+        if not adapter.outer_navigation.isNavigationBarHidden():
+            navigation = adapter.outer_navigation
         controller = navigation.topViewController
         nav = controller.navigationItem
         leading = [item for group in nav.leadingItemGroups for item in group.barButtonItems]

@@ -82,8 +82,7 @@ class ChangesUITests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.store = Store(self.temp.name)
         self.page = LMPage(store=self.store)
         self.addCleanup(self.dispose)

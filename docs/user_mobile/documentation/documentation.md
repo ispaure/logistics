@@ -35,7 +35,8 @@ body text does not rename the navigation entry.
 The filename/title row keeps room for the current page. A separate command row
 keeps Back (‹), Forward (›) and speech available in both browse and read views.
 Open **••• → Parent folder page** to go Up; the menu also offers Find in this
-page and Browse documentation. These controls have accessible action labels.
+page, plus Browse documentation in narrow windows. When the tree is pinned,
+the Browse button is disabled. These controls have accessible action labels.
 Back and Forward revisit opened pages. Opening a new page after going Back starts
 a new history branch. Up opens the containing folder's same-named page; if you
 are already reading that folder page, it opens the parent folder's page. At the
