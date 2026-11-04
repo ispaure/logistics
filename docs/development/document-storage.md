@@ -270,6 +270,15 @@ material. Mobile Move/Rename retargets open notebook sessions through the existi
 verified mutation plan, retaining the draft and undo history.
 
 
+Mobile discard/reopen regression coverage lives in
+`mobile_build/tests/documents/test_discard_reopen.py`. It exercises managed text
+recovery before and after queued checkpoints publish; file-backed text, Markdown,
+JSON and HTML; Notes Library text/Markdown/code; and EPUB/comic metadata through
+both provider-backed and imported-copy routes. Discard must preserve saved bytes
+and reopen without the abandoned draft. These are host-side mobile contracts,
+with dummy native widgets; they do not certify a physical-device build.
+
+
 ## Editor boundary
 
 All current document editors enter through the shared host storage family:
