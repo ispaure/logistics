@@ -5,9 +5,73 @@ from commonUtils.ui.native.image_canvas import ImageCanvas
 
 class PDFCanvas(ImageCanvas):
     def __init__(self, *args, **kwargs):
+        self.link_owner = self.link_reader = self.return_page = self.return_timer = None
         super().__init__(*args, page_axis='vertical',
             description='PDF page. Tap to toggle fullscreen; swipe up for next page, down for previous page. Hold in fullscreen to magnify.',
             **kwargs)
+
+    def bind_links(self, owner, reader):
+        self.link_owner, self.link_reader = owner, reader
+        self.on_tap = self.follow_link
+        self.return_page = None
+        self.return_timer = None
+
+    def link_alive(self):
+        owner = self.link_owner
+        return (owner is not None and owner.active_host and owner.crypt_reader is self.link_reader
+                and owner.manager.active is owner
+                and owner.session.id in owner.workspace.sessions
+                and owner.app.native_host.state.destination == owner.presentation_destination)
+
+    def clear_return(self):
+        if self.return_timer is not None:
+            self.return_timer.cancel()
+            self.return_timer = None
+        self.return_page = None
+        if hasattr(self, 'return_box'):
+            self.return_box.clear()
+
+    def follow_link(self, x, y):
+        if not self.link_alive() or self.link_owner.cloud_busy:
+            return False
+        navigation = self.link_reader.pdf_navigation
+        from features.comics.mobile.composite import spread_geometry
+        size, rects = spread_geometry([navigation.sizes[i] for i in navigation.indices], navigation.viewport)
+        for index, (left, top, width, height) in zip(navigation.indices, rects):
+            px, py = (x*size[0]-left)/width, (y*size[1]-top)/height
+            for link in navigation.links.get(index, []):
+                l, t, r, b = link['rect']
+                if l <= px <= r and t <= py <= b:
+                    self.link_owner.loop.create_task(self.jump_link(link['index']))
+                    return True
+        return False
+
+    async def jump_link(self, index):
+        if not self.link_alive() or self.link_owner.cloud_busy:
+            return
+        previous = self.link_reader.pdf_navigation.indices[0]
+        self.clear_return()
+        await self.link_owner.move_private_page(index)
+        if self.link_alive() and self.link_reader.pdf_navigation.indices[0] == index and index != previous:
+            from toga.style import Pack
+            self.return_page = (previous, index)
+            button = toga.Button('Undo page jump', on_press=self.undo_link, style=Pack(height=44))
+            self.return_box.add(button)
+            self.return_timer = self.link_owner.loop.call_later(3, self.clear_return)
+
+    async def undo_link(self, widget=None, **kwargs):
+        if not self.link_alive() or self.link_owner.cloud_busy or self.return_page is None:
+            return
+        previous, target = self.return_page
+        self.clear_return()
+        if self.link_reader.pdf_navigation.indices[0] == target:
+            await self.link_owner.move_private_page(previous)
+
+    def dispose(self):
+        self.clear_return()
+        self.link_owner = self.link_reader = None
+        super().dispose()
+
 
 
 class PDFTools:
@@ -49,6 +113,7 @@ class PDFNavigation:
         self._spread_starts = {}
         self._stops = {}
         self._layout = None
+        self.links = {}
         from services.documents.page_visits import PageVisits
         self.visits = PageVisits()
 
@@ -74,6 +139,8 @@ class PDFNavigation:
         from features.images.validation import image_dimensions
         self._use_layout(viewport)
         first = self.document.page(index)
+        from features.pdf.links import safe_page_links
+        self.links = {index: safe_page_links(self.document.data, index)}
         self.sizes[index] = image_dimensions(first)
         indices, data = (index,), [first]
         width, height = viewport
@@ -83,6 +150,7 @@ class PDFNavigation:
             ratios = [w / h for w, h in (self.sizes[index], self.sizes[index + 1])]
             if width >= sum(ratios) * max(1, height):
                 indices, data = (index, index + 1), [first, second]
+                self.links[index + 1] = safe_page_links(self.document.data, index + 1)
         return indices, data
 
     def next(self):

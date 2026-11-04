@@ -59,3 +59,8 @@ two-page spreads and the hold magnifier described in the
 [mobile guide](../user_mobile/user_mobile.md) belong to the mobile reader. Desktop
 does not expose those controls. To edit ink, open the duplicated `.rmdoc` in
 [Notebooks](../../notebooks/user/user.md); the original PDF remains read-only.
+
+
+## Internal page links
+
+Click an internal PDF link to open its destination page. **Undo page jump** stays available for three seconds to return to the page you left.
