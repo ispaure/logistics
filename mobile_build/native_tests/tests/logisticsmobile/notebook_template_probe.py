@@ -89,7 +89,13 @@ class Probe(LogisticsMobile):
         replacement = self.notebook_panel
         assert replacement is not panel
         await self.idle(replacement)
-        await replacement.web.evaluate_javascript('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))')
+        await replacement.web.evaluate_javascript('window.templateProbePainted=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{window.templateProbePainted=true}));true')
+        for _ in range(100):
+            if await replacement.web.evaluate_javascript('window.templateProbePainted===true'):
+                break
+            await asyncio.sleep(.05)
+        else:
+            raise TimeoutError('Reopened notebook did not paint')
         await asyncio.sleep(.3)
         assert [p.template for p in replacement.editor.notebook.pages] == [p.template for p in original.pages]
         return replacement, original
