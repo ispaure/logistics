@@ -36,8 +36,10 @@ class RecycledNotesRowsTests(unittest.TestCase):
             owner = await self.library()
             rows, widget = owner.rows, owner.rows.native_list
             with patch.object(owner, 'bind_file_hold', side_effect=AssertionError('Per-row binding')), \
-                 patch.object(owner, 'host', replace(owner.host, entry_icon=Mock(side_effect=AssertionError('Per-row icon')))):
+                 patch.object(owner, 'host', replace(owner.host, entry_icon=Mock(side_effect=AssertionError('Per-row icon')))), \
+                 patch.object(rows, 'add', wraps=rows.add) as publish:
                 await owner.toggle_folder('Vault/Many')
+                self.assertEqual(publish.call_count, 1, 'Cold folder published twice')
             children = rows.children
             self.assertEqual(len([row for row in children if row.path.startswith('Vault/Many/')]), 41)
             self.assertEqual(owner._row_cache, {})
