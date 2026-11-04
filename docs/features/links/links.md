@@ -1,8 +1,7 @@
 # Links documentation
 
-Choose a guide for the task you want to complete.
+Personal Links is the desktop shortcut launcher for configured websites and services.
 
-## Further reading
-
-- [Links Feature](development/development.md)
-- [Open configured service shortcuts](user/user.md)
+- [Desktop user guide](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Development and validation](development/development.md)
