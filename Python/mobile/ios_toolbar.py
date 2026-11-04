@@ -101,6 +101,7 @@ def action_groups(buttons):
 
 def action_state(buttons):
     """Capture bar projection values without retaining widgets or private owners."""
+    from .palette import LIGHT, DARK
     def identity(value):
         pointer = getattr(value, 'ptr', None)
         return pointer.value if pointer is not None else id(value) if value is not None else None
@@ -108,7 +109,7 @@ def action_state(buttons):
                   getattr(button, 'accessible_name', None), getattr(button, 'control_icon', None),
                   getattr(button, '_toolbar_symbol', None), getattr(button, '_toolbar_group', None),
                   getattr(button, '_toolbar_prominent', False), getattr(button, '_toolbar_priority', False),
-                  getattr(button, '_toolbar_horizontal', False),
+                  getattr(button, '_toolbar_horizontal', False), (LIGHT['accent'], DARK['accent']),
                   identity(button._impl.native.menu), identity(button._impl.native.imageForState(0)))
                  for button in buttons)
 
