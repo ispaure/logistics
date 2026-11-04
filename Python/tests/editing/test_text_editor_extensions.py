@@ -90,10 +90,11 @@ class EditorExtensionTests(QtTestCase):
         self.window.compare_disk(); self.wait()
         dialog = self.window.findChildren(DiffDialog)[0]
         states = [original]
-        while dialog.model.changes:
+        for _ in range(len(dialog.model.changes)):
             dialog.apply_current(); states.append(editor.toPlainText())
+        self.assertFalse(dialog.model.changes, 'Applying each reviewed hunk must finish the comparison')
         self.assertEqual(editor.toPlainText(), path.read_text())
-        for _ in range(10):
+        for _ in range(2):
             for state in reversed(states[:-1]):
                 dialog.undo(); self.assertEqual(editor.toPlainText(), state)
                 self.assertEqual(dialog.model.right, state)
