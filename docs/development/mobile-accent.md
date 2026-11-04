@@ -28,7 +28,9 @@ exact opaque color while dragging, matching the selected preview tab. Inactive
 track segments remain neutral so the slider position stays clear.
 
 Accent roles color selected navigation tabs, tab indicators, settings commands,
-and native control tints. Neutral surfaces and ordinary text retain Slate colors.
+native control tints, and destination confirmation commands (including Move, Save
+and download destinations). Prominent UIKit completion items explicitly use the
+chosen accent too. Neutral surfaces and ordinary text retain Slate colors.
 File/folder artwork and workspace locked/unlocked roles retain their independent
 semantic colors. Destructive controls and document content are also independent.
 High contrast / E Ink keeps its black-and-white palette while retaining the saved

@@ -68,6 +68,9 @@ def bar_item(button, *, prominent=False, symbol=None):
     item.action = None if primary_menu else SEL('onPress:')
     item.enabled = button.enabled
     item.style = 2 if prominent else 0
+    if prominent:
+        from .appearance import apple_color
+        item.tintColor = apple_color('accent')
     if item.respondsToSelector(SEL('setSharesBackground:')):
         item.sharesBackground = not prominent and getattr(button, 'control_icon', None) != 'close'
     if item.respondsToSelector(SEL('setAxisBehavior:')):
