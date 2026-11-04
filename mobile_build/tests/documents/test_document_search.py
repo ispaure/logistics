@@ -181,9 +181,12 @@ class LocalDocumentSearchTests(TestCase):
     def test_libraries_are_two_direct_lists_with_deep_notes(self):
         app = self.app
         from services.documents.locations import collection_path
-        root = collection_path(app.private_root) / 'One/Two/Three/Vault'
+        root = collection_path(app.private_root) / 'One/Vault'
         (root / '.obsidian').mkdir(parents=True)
-        (root / 'Note.md').write_text('# Note')
+        # Library discovery is bounded; note paths inside a library are not.
+        note = root / 'Two/Three/Note.md'
+        note.parent.mkdir(parents=True)
+        note.write_text('# Note')
         app.show_documents_hub()
         app.document_view_buttons['Libraries'].on_press()
         async def wait():
@@ -195,6 +198,11 @@ class LocalDocumentSearchTests(TestCase):
         self.assertEqual([w.text for w in app.document_notes_list.children if isinstance(w, toga.Label)][:1], ['Notes'])
         self.assertEqual(labels(app.document_comics_list)[0], 'Comics')
         self.assertIn('Vault', [w.text for w in widgets(app.document_libraries_list) if isinstance(w, toga.Button)])
+        from features.notes_library.notes import NotesLibrary
+        from services.documents.locations import CollectionFiles
+        library = NotesLibrary(CollectionFiles(app.private_root), 'One/Vault')
+        self.addCleanup(library.close)
+        self.assertEqual(library.read_text('One/Vault/Two/Three/Note.md'), '# Note')
         self.assertFalse(any(getattr(w, 'text', '') in ('Refresh libraries', 'Open Books & Comics library')
                              for w in widgets(app.document_libraries_list)))
 
