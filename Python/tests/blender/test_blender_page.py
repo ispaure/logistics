@@ -74,6 +74,26 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.stack.currentWidget(), page.home)
         self.assertEqual(self.manager.settings_selection, (self.builds[0].version, 'Modeling'))
 
+    def test_settings_refresh_does_not_construct_hidden_launch_cards(self):
+        self.manager.create_preset(self.builds[0], 'Art')
+        self.manager.create_preset(self.builds[1], 'Other')
+        with patch('features.blender.ui.page.LaunchCard') as card:
+            page = BlenderPage(manager=self.manager, settings_mode=True)
+            page.refresh()
+        card.assert_not_called()
+        self.assertEqual(page.launch_cards, [])
+        self.assertEqual(page.preset_list.count(), 2)
+        self.assertEqual(page.stack.currentWidget(), page.preset_splitter)
+
+    def test_launch_cards_check_readiness_once_per_populated_version(self):
+        for name in ('Art', 'Other', 'Third'):
+            self.manager.create_preset(self.builds[0], name)
+        page = BlenderPage(manager=self.manager)
+        with patch.object(self.manager, 'ready', wraps=self.manager.ready) as ready:
+            page._rebuild_cards()
+        ready.assert_called_once_with(self.builds[0])
+        self.assertEqual(len(page.launch_cards), 3)
+
     def test_settings_contains_versions_and_presets_with_default_optional_bluehole(self):
         from features.blender.settings import BlenderSettings
         self.manager.create_preset(self.builds[0], 'Art')

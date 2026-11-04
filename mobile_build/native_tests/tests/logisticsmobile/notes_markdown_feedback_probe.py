@@ -3,7 +3,7 @@ import asyncio
 from io import BytesIO
 import json
 from pathlib import Path
-from threading import Event
+from threading import Event, Timer
 from unittest.mock import patch
 
 import toga
@@ -32,6 +32,27 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         self.checkpoint('startup')
         super().startup()
         self.checkpoint('startup_returned')
+        cache, loop = Path(self.paths.cache), self.loop
+        self.diagnostics_stop = Event()
+        def observe():
+            if self.diagnostics_stop.is_set():
+                return
+            import traceback
+            snapshots = []
+            for task in asyncio.all_tasks(loop):
+                snapshots.append(dict(task=repr(task), stack=[traceback.format_stack(frame)
+                    for frame in task.get_stack()]))
+            (cache / 'notes-markdown-tasks.json').write_text(json.dumps(snapshots, indent=2))
+            timer = Timer(10, observe)
+            timer.daemon = True
+            timer.start()
+        timer = Timer(10, observe)
+        timer.daemon = True
+        timer.start()
+        # Check startup explicitly too: deferred on_running itself can be the
+        # stalled boundary. start_once keeps the eventual hook from duplicating it.
+        from . import start_native_check
+        self.loop.call_later(.1, lambda: start_native_check(self, self.check))
 
     def on_running(self):
         self.checkpoint('on_running')
@@ -44,6 +65,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         finally:
             import faulthandler
             faulthandler.cancel_dump_traceback_later()
+            self.diagnostics_stop.set()
 
     async def until(self, predicate, message):
         for _ in range(200):

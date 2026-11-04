@@ -860,6 +860,8 @@ Repeated `--probe NAME` options select individual checks instead of the profile.
 
 The manager's `windows_backend` and `vm_backend` adapters accept
 `--native-notebooks --notebook-profile full` alongside a focused test pattern.
+Use `--pattern 'notebooks:test*.py'` to include every notebook regression file
+in the guest's model stage, rather than selecting only `test_notebooks.py`.
 Both forward `--notebook-probe`, `--notebook-rendering` and
 `--notebook-latency-mode`; Windows additionally supports WARP rendering.
 The guest wrapper provisions a checksum-verified portable Go compiler into a

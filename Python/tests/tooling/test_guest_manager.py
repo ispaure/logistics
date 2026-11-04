@@ -17,6 +17,15 @@ from logistics_build.guest_manager import archive, verify
 
 
 class GuestManagerTests(unittest.TestCase):
+    def test_notebook_focus_runs_the_complete_folder_without_unrelated_suites(self):
+        from logistics_build.guest_manager import focused_command
+        self.assertEqual(focused_command('python', 'notebooks:test*.py', '/owned/manager'),
+                         ('python', 'Python/tests/run_regressions.py', 'Python/tests/notebooks',
+                          '--pattern', 'test*.py', '--isolate-modules'))
+        for invalid in ('notebooks:', 'notebooks:../test.py', 'notebooks:sub/test.py', 'notebooks:*.txt'):
+            with self.assertRaises(ValueError):
+                focused_command('python', invalid, '/owned/manager')
+
     def setUp(self):
         # These fixtures exercise committed-pin policy, independently of the
         # outer suite's explicit working-manager capture.
