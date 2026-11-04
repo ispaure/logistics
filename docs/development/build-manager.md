@@ -33,6 +33,17 @@ and an unused channel tag, then waits for the existing gated release workflow.
 An existing tag is never moved. These capabilities do not grant permission to
 publish a project; the operator still chooses and confirms the operation.
 
+Hosted validation records accepted dispatch in an external-effect phase, then
+observes that immutable run receipt in a required test phase. A failed remote
+check is a failed test; a transient observation error can be resumed against the
+same run ID without another dispatch. The observer verifies repository, source,
+workflow, ref and platform/input binding before waiting or cancelling that run.
+Acceptance without a recorded run ID remains uncertain and requires review;
+it is never automatically posted again. Delivery gates still require successful
+observation. The legacy `github` command retains its combined dispatch/wait behavior.
+Previously saved plans keep their captured commands and uncertainty history;
+prepare a new plan to use the separated phases.
+
 Combined delivery plans give ready mobile validation, preparation and delivery
 phases scheduling priority over desktop work. Each tester upload keeps its own
 platform validation and prepared-artifact prerequisites; every selected desktop
