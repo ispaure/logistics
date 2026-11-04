@@ -196,3 +196,35 @@ def refresh_bundled(ffmpeg='ffmpeg'):
 
 if __name__ == '__main__':
     refresh_bundled()
+
+
+def luminance_movie(root, transfer='pq', *, duration=12, ffmpeg='ffmpeg'):
+    """Eight neutral 10-bit BT.2020 bands at known display luminances (nits)."""
+    import math
+    import struct
+    if transfer not in {'pq', 'hlg'}:
+        raise ValueError('Expected PQ or HLG.')
+    root = Path(root)
+    levels = (.1, 1, 10, 100, 203, 400, 1000, 4000) if transfer == 'pq' else (.1, 1, 10, 50, 100, 203, 400, 1000)
+    def signal(nits):
+        if transfer == 'pq':
+            linear = (nits / 10000) ** (2610 / 16384)
+            return ((3424 / 4096 + 2413 / 128 * linear) / (1 + 2392 / 128 * linear)) ** (2523 / 32)
+        linear = (nits / 1000) ** (1 / 1.2)
+        a, b, c = .17883277, .28466892, .55991073
+        return math.sqrt(3 * linear) if linear <= 1 / 12 else a * math.log(12 * linear - b) + c
+    width, height = 320, 180
+    row = b''.join(struct.pack('<H', round(64 + 876 * signal(levels[x * 8 // width]))) for x in range(width))
+    frame = row * height + struct.pack('<H', 512) * (width * height // 2)
+    raw, output = root / f'luminance-{transfer}.yuv', root / f'luminance-{transfer}.mp4'
+    raw.write_bytes(frame)
+    try:
+        subprocess.run([ffmpeg, '-hide_banner', '-loglevel', 'error', '-y', '-stream_loop', '-1',
+            '-f', 'rawvideo', '-pix_fmt', 'yuv420p10le', '-s', '320x180', '-r', '12', '-i', str(raw),
+            '-t', str(duration), '-c:v', 'libx265', '-preset', 'ultrafast', '-threads', '1',
+            '-x265-params', 'pools=1:frame-threads=1:log-level=error:colorprim=9:transfer=' + ('16' if transfer == 'pq' else '18') + ':colormatrix=9',
+            '-color_primaries', 'bt2020', '-color_trc', 'smpte2084' if transfer == 'pq' else 'arib-std-b67',
+            '-colorspace', 'bt2020nc', '-tag:v', 'hvc1', str(output)], check=True, capture_output=True, timeout=45)
+    finally:
+        raw.unlink(missing_ok=True)
+    return output, levels

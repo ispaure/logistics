@@ -41,12 +41,20 @@ class PlaybackSettings:
     audio_track: int | None = None
     subtitle_track: int | None = None
     subtitle_file: str = ""
+    renderer: str = 'auto'
+    colour_output: str = 'auto'
+    tone_mapping: str = 'bt.2390'
 
     @classmethod
     def from_dict(cls, values):
         if not isinstance(values, dict):
             raise ValueError("Invalid playback preferences.")
         result = cls(**{key: values[key] for key in asdict(cls()) if key in values})
+        if (any(not isinstance(value, str) for value in (result.renderer, result.colour_output, result.tone_mapping))
+                or result.renderer not in {'auto', 'compatibility'}
+                or result.colour_output not in {'auto', 'sdr'}
+                or result.tone_mapping not in {'bt.2390', 'mobius', 'hable', 'reinhard'}):
+            raise ValueError('Invalid colour video preferences.')
         if (
             type(result.rate) not in (float, int)
             or result.rate not in RATES

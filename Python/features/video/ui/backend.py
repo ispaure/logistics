@@ -33,3 +33,22 @@ class QtPlayback:
         self.audio.setMuted(True)
         self.player.stop()
         self.player.setSource(QUrl())
+
+
+def desktop_playback(owner):
+    """Prefer verified native colour output on Cocoa; retain VLC elsewhere."""
+    from services.documents.video_settings import SettingsStore
+    settings = owner.progress.settings
+    if settings is None:
+        from commonUtils.filesystem.storage import cache_directory
+        settings = SettingsStore(cache_directory(create=False) / 'Video').load()
+    if settings.renderer != 'compatibility':
+        from commonUtils.ui import pyside as qt
+        if qt.QApplication.platformName() == 'cocoa':
+            from .mpv_backend import MPVPlayback
+            try:
+                return MPVPlayback(owner)
+            except (OSError, RuntimeError, ValueError):
+                owner._renderer_warning = 'Colour output is unavailable. Using compatibility playback; Picture → Renderer can retry.'
+    from .vlc_backend import VLCPlayback
+    return VLCPlayback(owner)
