@@ -20,6 +20,31 @@ TEST_STAGE = TestStage.EXTENDED
 class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
     result_name = 'notes-markdown-feedback-result.json'
 
+    def checkpoint(self, stage):
+        print('MARKDOWN_NATIVE_STAGE=' + stage, flush=True)
+        (Path(self.paths.cache) / 'notes-markdown-progress.json').write_text(json.dumps(dict(stage=stage)))
+
+    def startup(self):
+        import faulthandler
+        from . import enable_native_fault_log
+        self.fault_log = enable_native_fault_log(self.paths.cache)
+        faulthandler.dump_traceback_later(25, repeat=True, file=self.fault_log)
+        self.checkpoint('startup')
+        super().startup()
+        self.checkpoint('startup_returned')
+
+    def on_running(self):
+        self.checkpoint('on_running')
+        super().on_running()
+
+    async def check(self, app):
+        self.checkpoint('check_entered')
+        try:
+            await super().check(app)
+        finally:
+            import faulthandler
+            faulthandler.cancel_dump_traceback_later()
+
     async def until(self, predicate, message):
         for _ in range(200):
             if predicate():
@@ -56,6 +81,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         await capture_window(self, self.evidence / (name + '.png'))
 
     async def run_checks(self, app, report):
+        self.checkpoint('checks_started')
         self.evidence = Path(self.paths.cache) / 'viewer-layout'
         self.evidence.mkdir(exist_ok=True)
         fixture = json.loads(Path(__file__).with_name('localcrypt_fixture.json').read_text())
@@ -86,6 +112,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             provider.create_file('Library/' + name, BytesIO(data))
 
     async def library_checks(self, owner, report, label):
+        self.checkpoint(label + '_library_open')
         opened = []
         original = owner.provider.open
         def read(path, *args, **kwargs):
@@ -96,6 +123,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             assert await owner.open_note('Library/Home.md'), owner.notice.text
             await self.web_ready(owner.web, '!!document.querySelector("img") && document.querySelector("img").complete')
             assert opened == ['Library/old.png'], opened
+            self.checkpoint(label + '_library_toggle')
             for _ in range(2):
                 self.click(owner.edit)
                 await self.until(lambda: owner.editing, 'Pencil did not open library editor')
@@ -112,6 +140,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
                 # Indexed encrypted providers may own their own live resolution.
                 if not callable(getattr(owner.provider, 'find_note_paths', None)):
                     assert resolve.call_count <= 1, resolve.call_count
+            self.checkpoint(label + '_library_edit_references')
             assert await owner.open_editor()
             await owner.embedded.choose_mode(False)
             owner.embedded.source.value = '# Changed\n\n![New](new.png)\n\n[[Missing]]'
@@ -127,8 +156,10 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             await self.web_ready(owner.web, 'document.body.textContent.includes("References removed") && !document.querySelector("img")')
             assert opened == ['Library/old.png', 'Library/new.png'], opened
             report['cases'].append('3_edited_and_deleted_references_' + label)
+        self.checkpoint(label + '_library_cancel')
         await self.cancel_preparation(owner, label)
         report['cases'].append('4_library_prepare_cancel_' + label)
+        self.checkpoint(label + '_library_rename_move')
         owner.selected_path = 'Library/Home.md'
         owner.manage_entry(move=True)
         form = owner.file_action_view.content
@@ -185,6 +216,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         assert list(owner.article.children) == retained
 
     async def regular_checks(self, app, report):
+        self.checkpoint('regular_editor')
         from features.text_editor.resources import LocalTextCopies
         from services.documents.authoring.markdown_editor import prepare_editor
         root = app.private_root / 'RegularMarkdown'
