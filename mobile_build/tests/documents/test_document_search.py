@@ -178,7 +178,7 @@ class LocalDocumentSearchTests(TestCase):
         finally:
             release.set()
 
-    def test_libraries_are_two_direct_lists_with_deep_notes(self):
+    def test_libraries_are_two_direct_lists_with_bounded_notes_discovery(self):
         app = self.app
         from services.documents.locations import collection_path
         root = collection_path(app.private_root) / 'One/Vault'
@@ -187,6 +187,7 @@ class LocalDocumentSearchTests(TestCase):
         note = root / 'Two/Three/Note.md'
         note.parent.mkdir(parents=True)
         note.write_text('# Note')
+        (root.parent / 'Two/Three/TooDeep/.obsidian').mkdir(parents=True)
         app.show_documents_hub()
         app.document_view_buttons['Libraries'].on_press()
         async def wait():
@@ -197,7 +198,9 @@ class LocalDocumentSearchTests(TestCase):
         import toga
         self.assertEqual([w.text for w in app.document_notes_list.children if isinstance(w, toga.Label)][:1], ['Notes'])
         self.assertEqual(labels(app.document_comics_list)[0], 'Comics')
-        self.assertIn('Vault', [w.text for w in widgets(app.document_libraries_list) if isinstance(w, toga.Button)])
+        libraries = [w.text for w in widgets(app.document_libraries_list) if isinstance(w, toga.Button)]
+        self.assertIn('Vault', libraries)
+        self.assertNotIn('TooDeep', libraries)
         from features.notes_library.notes import NotesLibrary
         from services.documents.locations import CollectionFiles
         library = NotesLibrary(CollectionFiles(app.private_root), 'One/Vault')

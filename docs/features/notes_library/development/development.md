@@ -766,3 +766,18 @@ PDF workers return structured page content on desktop and retain the same deferr
 resource retirement. Library/tab and mobile preview regressions cover image/PDF/
 video/unknown files, cancellation and cleanup; a native desktop image contract
 check refuses any HTML serialization while opening the preview.
+
+## Native links, local images and speech acceptance
+
+`mobile_build.validation.document_storage_tools --probe links-images-voices` runs
+inside a disposable Android emulator or iOS simulator. The fixture holds the
+backlink scan while checking that outgoing links remain usable, selects both tabs
+through native controls, follows a backlink and rotates the workspace. It also
+checks local image list/tile thumbnails and the information panel, corrupt-image
+fallback and exclusion of network/cloud content. Read-aloud checks open and reopen
+Settings without a manual load action, restore a missing saved voice to System
+default, and exercise default playback when the native engine is available.
+The report distinguishes native engine availability from the controlled missing-voice
+fallback assertion. This does not replace physical audio or accessibility testing.
+The runner records source fingerprints and evidence before removing its owned
+devices; do not select a physical `--device` for this acceptance pass.
