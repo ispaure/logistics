@@ -183,6 +183,15 @@ A successful explicit repair enrolls this checkout for restoration after future
 never install build tooling merely by launching Logistics. Exact dependency
 synchronization remains enabled; restoration reapplies the reviewed project's
 manager pin after synchronization, under the same workflow exclusion lock.
+Unenrolled environment syncs also hold that lock and refuse active workflows;
+they do not install or enroll project tooling. On POSIX, installer and sync
+process groups remain in the manager bridge's session; cooperative cancellation
+and local timeouts retire those groups before the environment lock is released.
+This does not guarantee lease safety after an abrupt bootstrap `SIGKILL`.
+Windows uses bounded local tree termination and the supported manager bridge's
+owning Job. Standalone Windows execution cannot guarantee orphan cleanup when
+an installer parent exits before its descendants; local `taskkill` cannot recover
+that ownership. Use the supported manager GUI/CLI bridge for that containment.
 The optional shared-launcher `environment_sync_wrapper` contract uses this same
 stdlib wrapper and returns before launching the app. It requires a shared launcher
 revision supporting that option; older launchers still require explicit repair.
