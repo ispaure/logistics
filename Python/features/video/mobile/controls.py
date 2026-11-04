@@ -6,7 +6,7 @@ from pathlib import Path
 
 from features.video.playback import SubtitleContent
 from features.video.session import FolderQueue, PlaybackSettings, parse_time
-from services.documents.video_settings import SettingsStore
+from services.documents.video_settings import VideoSettingsStore
 
 
 def native_options(options, content=None):
@@ -30,7 +30,7 @@ def native_options(options, content=None):
 class PlaybackControls:
     def __init__(self, owner):
         self.owner = owner
-        self.store = SettingsStore(Path(owner.app.private_root) / "Video")
+        self.store = VideoSettingsStore(owner.progress, Path(owner.app.private_root) / "Video")
         self.settings = self.store.load()
         self.queue = FolderQueue(owner.content.path, [])
         self.busy = False
@@ -69,6 +69,8 @@ class PlaybackControls:
         try:
             if name == "settings":
                 values = json.loads(value)
+                if values.get('subtitle_track') is not None:
+                    values['subtitle_file'] = ''
                 PlaybackSettings.from_dict(values)
                 self.settings_revision += 1
                 revision = self.settings_revision
@@ -84,6 +86,16 @@ class PlaybackControls:
                         owner.native.configure(
                             self.settings.json(), json.dumps(self.queue.rows())
                         )
+            elif name == "subtitleSelect":
+                from dataclasses import asdict
+                subtitle = next((item for item in owner.subtitles if Path(item.path).name == value), None)
+                if subtitle is None:
+                    raise ValueError('The selected subtitle is no longer available.')
+                async with self.settings_lock:
+                    self.settings = await asyncio.to_thread(self.store.save,
+                        dict(asdict(self.settings), subtitle_file=subtitle.path, subtitle_track=None))
+                if not owner.closed and owner.allowed():
+                    owner.native.configure(self.settings.json(), json.dumps(self.queue.rows()))
             elif name == "seek":
                 owner.native.seek(parse_time(value))
             elif name in ("previous", "next", "queue", "ended"):
@@ -140,6 +152,11 @@ class PlaybackControls:
                     if owner.closed or not owner.allowed():
                         return
                     url = owner.transport.add_subtitle(subtitle)
+                    from dataclasses import asdict
+                    async with self.settings_lock:
+                        self.settings = await asyncio.to_thread(self.store.save,
+                            dict(asdict(self.settings), subtitle_file=subtitle.path, subtitle_track=None))
+                    owner.native.configure(self.settings.json(), json.dumps(self.queue.rows()))
                     owner.native.add_subtitle(url)
                     owner.subtitles.append(subtitle)
                     subtitle = None
