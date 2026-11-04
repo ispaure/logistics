@@ -99,7 +99,7 @@ class AccentControls(toga.Box):
         set_accent(self.hue.value, self.saturation.value)
         refresh_appearance(self.app)
         self.preview_color()
-        self.app.settings_status.text = 'Accent color saved on this device.'
+        self.app.settings_status.text = ''
 
     def set_values(self, hue, saturation):
         # Programmatic changes must not preview half of a restored pair.
