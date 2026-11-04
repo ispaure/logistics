@@ -36,8 +36,10 @@ launches reuse the installed environment.
 The Qt 6.12 interface requires macOS 14 or newer, Windows 10/11, or Linux
 with glibc 2.34 or newer on x86-64 (2.39 or newer on ARM64).
 
-Desktop video uses LibVLC. Windows/macOS offer a verified runtime download on
-first use; Linux requires the distribution's LibVLC, codec and subtitle plugins.
+Desktop video uses colour-managed libmpv on macOS, with HDR output and HDR-to-SDR
+tone mapping. VLC compatibility playback remains available. Windows/macOS offer
+a verified runtime download on first use; Linux requires the distribution's
+LibVLC, codec and subtitle plugins.
 See [video setup and controls](docs/features/video/user/user.md).
 
 Using Git instead? Clone with the shared utilities included, then open the same launcher:

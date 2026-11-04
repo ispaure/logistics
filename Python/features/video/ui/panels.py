@@ -161,7 +161,15 @@ class PlaybackPanels:
         elif name == 'picture':
             choice('Framing', 'aspect', [(dict(fit='Fit · whole picture', fill='Fill · crop edges',
                                               original='Original size')[value], value) for value in ASPECTS])
-            note('HDR videos are displayed in SDR with this desktop renderer. Native HDR output is unavailable; tone mapping remains limited.')
+            choice('Renderer', 'renderer', [('Automatic · HDR on macOS', 'auto'),
+                                             ('Compatibility (VLC)', 'compatibility')])
+            if getattr(self.backend, 'colour_managed', False):
+                choice('Output', 'colour_output', [('Automatic HDR / SDR', 'auto'), ('SDR', 'sdr')])
+                choice('HDR tone mapping', 'tone_mapping', [('BT.2390', 'bt.2390'), ('Mobius', 'mobius'),
+                                                            ('Hable', 'hable'), ('Reinhard', 'reinhard')])
+                note('HDR uses the current screen’s available brightness range. SDR screens receive tone-mapped video.')
+            else:
+                note('Compatibility playback displays SDR. Colour-managed playback provides native HDR and improved tone mapping on macOS.')
         elif name == 'audio':
             note('Audio track')
             layout.addWidget(self.audio_tracks)
