@@ -523,10 +523,12 @@ class FilesUI:
         # Visible local image rows can load bounded thumbnails. Archive covers
         # and virtual/cloud content stay outside automatic folder previews.
         thumbnail, self.file_browser.details = callbacks(self.file_provider, client, password)
-        from commonUtils.filesystem.image_previews import local_provider_image
+        from commonUtils.filesystem.image_previews import local_provider_image, MAX_IMAGE_BYTES
         provider = self.file_provider
         def local_thumbnail(row, size, cancelled):
             if not row['directory'] and local_provider_image(provider, row['path']):
+                if provider.entry(row['path']).get('size', 0) > MAX_IMAGE_BYTES:
+                    return b''
                 if getattr(client, 'supports_streaming', False):
                     return thumbnail(row, size, cancelled)
                 from commonUtils.filesystem.image_previews import local_native_image
