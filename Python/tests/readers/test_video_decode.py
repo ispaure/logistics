@@ -68,12 +68,7 @@ class VideoDecodeTests(QtTestCase):
                 window.fullscreen_button.click()
                 self.assertFalse(window.isFullScreen())
                 self.assertFalse(window.fullscreen_action.isChecked())
-                window.floating.click()
-                self.assertTrue(window.floating.isChecked())
-                self.assertTrue(window.windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint)
-                window.floating.click()
-                self.assertFalse(window.floating.isChecked())
-                self.assertFalse(window.windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint)
+                self.assertFalse(hasattr(window, 'floating'))
             finally:
                 window.close()
                 self.wait_until(lambda: release.called, drain_deferred=True)
@@ -224,7 +219,7 @@ class VideoDecodeTests(QtTestCase):
                     open_video_choice(choice)
             self.assertTrue(release.called)
 
-    def test_window_controls_and_restricted_floating_action(self):
+    def test_window_controls_and_restricted_fullscreen_action(self):
         from features.video.ui.player import VideoWindow
         with self.temporary_directory() as directory:
             root = Path(directory)
@@ -236,9 +231,7 @@ class VideoDecodeTests(QtTestCase):
             choice = ResourceChoice(provider, path.name, release)
             with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
                 window = VideoWindow(choice)
-            self.assertFalse(window.floating.isEnabled())
-            window.toggle_floating()
-            self.assertIn('session-only', window.status.text())
+            self.assertFalse(hasattr(window, 'floating'))
             window.toggle_fullscreen()
             self.assertTrue(window.isFullScreen())
             window.toggle_fullscreen()
