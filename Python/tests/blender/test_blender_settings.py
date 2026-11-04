@@ -6,6 +6,8 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
 from unittest.mock import patch
 
 from commonUtils.configuration.layered import register_settings
@@ -21,12 +23,9 @@ from features.blender.settings import BlenderReleaseSettings
 from features.settings import migration_ledger
 
 
-class BlenderReleaseSettingsTests(QtTestCase):
-    def setUp(self):
-        super().setUp()
-        self.app = qt.QApplication.instance() or qt.QApplication([])
-        temporary = self.temporary_directory()
-        self.root = Path(temporary.name)
+class _ReleaseStoreFixture:
+    def configure_stores(self, root):
+        self.root = Path(root)
         self.directory = self.root / 'blender'; self.directory.mkdir()
         self.stores = {}
         for source in release_config_paths():
@@ -38,8 +37,16 @@ class BlenderReleaseSettingsTests(QtTestCase):
                 self.stores[path] = register_settings(path, self.root / 'configuration' / 'blender' / path.name)
             return self.stores[path]
         self.store = store
-        for target in ('features.settings.settings_store', 'features.blender.settings.settings_store'):
-            mock = patch(target, side_effect=store); mock.start(); self.addCleanup(mock.stop)
+        self.enterContext(patch('features.settings.settings_store', side_effect=store))
+
+
+class BlenderReleaseSettingsTests(_ReleaseStoreFixture, QtTestCase):
+    def setUp(self):
+        super().setUp()
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+        temporary = self.temporary_directory()
+        self.configure_stores(temporary.name)
+        self.enterContext(patch('features.blender.settings.settings_store', side_effect=self.store))
         self.manager = BlenderManager(self.root / 'managed')
         for target, options in (
                 ('features.blender.ui.page.get_manager', {'return_value': self.manager}),
@@ -112,6 +119,13 @@ class BlenderReleaseSettingsTests(QtTestCase):
             panel.set_scope('application')
             self.assertIs(default.parent(), panel.bodies['application'])
             self.assertTrue(personal.isHidden())
+
+
+class BlenderReleaseMigrationTests(_ReleaseStoreFixture, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        temporary = self.enterContext(TemporaryDirectory())
+        self.configure_stores(temporary)
 
     def test_legacy_overrides_migrate_once_without_overwriting_new_values(self):
         legacy = self.store(self.directory / 'config.ini')
