@@ -94,6 +94,23 @@ class MarkdownMediaTests(TestCase):
         self.media.close()
         self.assertFalse(self.media.rasters)
 
+    def test_editing_media_references_reuses_only_the_current_targets(self):
+        from PIL import Image
+        from commonUtils.ui.native.markdown_preview import markdown_body
+        for name, color in (('old.png', 'red'), ('new.png', 'blue')):
+            Image.new('RGB', (2, 2), color).save(self.root / name)
+        def render(text):
+            return markdown_body(text, image_source=self.media.render_source())
+        with patch.object(self.provider, 'open', wraps=self.provider.open) as opened:
+            first = render('![Old](old.png)')
+            self.assertEqual(render('![Old](old.png)'), first)
+            self.assertEqual(opened.call_count, 1)
+            changed = render('![New](new.png)')
+            self.assertNotEqual(changed, first)
+            self.assertEqual(opened.call_count, 2)
+            self.assertNotIn('<img', render('Image deleted'))
+            self.assertEqual(opened.call_count, 2)
+
     def test_link_resolution_reused_until_directory_changes(self):
         from features.notes_library.notes import NotesLibrary
         from features.notes_library.link_policy import resolve_link
