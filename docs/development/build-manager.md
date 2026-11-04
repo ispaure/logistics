@@ -369,12 +369,12 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
 - Provider histories keep the three highest-numbered build directories
   and every directory used within the last 24 hours.
 - Manager source snapshots keep the three most recently used snapshots and every
-  snapshot used within seven days, subject to a 24 GiB allocation budget.
+  snapshot used within five days, subject to a 24 GiB allocation budget.
   Above that budget, older snapshots can expire sooner after a one-hour grace
   period. Snapshot reuse refreshes its age. Execution holds a snapshot resource
   lock; pruning skips a leased snapshot.
 - Explicitly enrolled legacy build outputs keep the three most recently used
-  directories plus everything used within seven days. Enrollment refreshes age.
+  directories plus everything used within five days. Enrollment refreshes age.
 - A `.keep` file anywhere inside a tree pins that enclosing build or snapshot.
   Pin a prepared artifact before keeping its path for long-term upload/retry use.
 - Recipe-identified device-build workspaces retain the three newest per platform
@@ -409,7 +409,7 @@ python -m logistics_build.build_retention
 python -m logistics_build.build_retention --apply
 ```
 
-Enrollment writes `.manager-build-output` and starts a seven-day review window;
+Enrollment writes `.manager-build-output` and starts a five-day review window;
 it never prunes in the same command. Unknown directories are never enrolled by
 name pattern or swept automatically. Provider roots, canonical build directories,
 missing paths and links are rejected. Producers reusing an enrolled directory

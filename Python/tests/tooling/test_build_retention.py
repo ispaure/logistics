@@ -16,6 +16,29 @@ from build_manager.retention import lease
 
 
 class BuildRetentionTests(unittest.TestCase):
+    def test_five_day_window_expires_six_day_outputs_and_preserves_four_day_outputs(self):
+        import time
+        for snapshots in (False, True):
+            with self.subTest(snapshots=snapshots), TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                parent = root / ('mobile_build/.tools/build-manager/snapshots'
+                                 if snapshots else 'mobile_build/build')
+                paths = []
+                for index, days in enumerate((6, 4, 3, 2, 1)):
+                    path = parent / (str(index) * 64 if snapshots else f'probe-{index}')
+                    path.mkdir(parents=True)
+                    if snapshots:
+                        (path / '.manager-source.json').write_text('{}')
+                    else:
+                        enroll_output(path.name, root)
+                    stamp = time.time() - days * 86400
+                    os.utime(path, (stamp, stamp))
+                    paths.append(path)
+                self.assertEqual(clean(root), [str(paths[0])])
+                self.assertEqual(clean(root, apply=True), [str(paths[0])])
+                self.assertFalse(paths[0].exists())
+                self.assertTrue(all(path.exists() for path in paths[1:]))
+
     def test_scratch_command_keeps_document_history_out_of_parent_storage(self):
         from logistics_build.build_retention import main
         from services.documents.catalog import DocumentCatalog
