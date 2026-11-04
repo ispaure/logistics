@@ -133,6 +133,13 @@ class Probe(NotebookProbe):
                     await asyncio.sleep(.2)
                     assert owner.crypt_reader.pdf_navigation.indices[0] == 0, label
                     report['cases'].append('android_pdf_no_link_'+label)
+            point = await self.pdf_point(canvas)
+            end = [point[0], point[1] - (120 if self.apple else canvas._impl.native.getHeight()*.25)]
+            await self.touch_pdf(canvas, end=end)
+            await self.wait(lambda: owner.crypt_reader.pdf_navigation.indices[0] == 1, 'Native swipe did not advance one page')
+            assert canvas.return_page is None, 'Swipe followed the link instead of paging'
+            await owner.move_private_page(0)
+            report['cases'].append('native_pdf_swipe_does_not_follow_link')
             await self.touch_pdf(canvas)
             await self.wait(lambda: canvas.return_page is not None, 'Expiry fixture did not navigate')
             await asyncio.sleep(3.2)
