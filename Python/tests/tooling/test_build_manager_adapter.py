@@ -139,12 +139,14 @@ class ManagerAdapterTests(unittest.TestCase):
         project = LogisticsProject(root)
         source = dict(dirty=False, logistics_commit='a' * 40)
         plan = project.github_plan('Test', 'ios', source, root / 'test-results/fixture', {}, 'alpha', '')
-        self.assertEqual(len(plan.phases), 2)
+        self.assertEqual(len(plan.phases), 4)
         for phase in plan.phases:
             self.assertEqual(phase.argv[phase.argv.index('--ref') + 1], 'alpha')
             self.assertEqual(phase.argv[phase.argv.index('--commit') + 1], 'a' * 40)
         self.assertEqual(plan.effect, 'dispatch')
-        self.assertTrue(all(phase.effect=='dispatch' for phase in plan.phases))
+        self.assertEqual([phase.effect for phase in plan.phases], ['dispatch', 'test', 'dispatch', 'test'])
+        self.assertEqual(plan.phases[1].dependencies, (plan.phases[0].id,))
+        self.assertEqual(plan.phases[3].dependencies, (plan.phases[2].id,))
         with self.assertRaises(ValueError):
             project.github_plan('Test', 'ios', dict(source, dirty=True), root, {}, 'working-tree', '')
 
