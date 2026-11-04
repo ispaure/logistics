@@ -5,22 +5,14 @@ from time import perf_counter
 from unittest.mock import patch
 
 import toga
-from rubicon.objc import ObjCClass, objc_method, objc_property, CGRect
+from rubicon.objc import ObjCClass, objc_property
 from commonUtils.testing.stages import TestStage
+from commonUtils.ui.native.draw_ready import _install_draw_probe
+from . import enable_native_fault_log
 from .notes_rows_performance_probe import NotesRowsPerformanceProbe, atomic_json
 from .notes_tree_helpers import activate_entry, native_row_control
 
 TEST_STAGE = TestStage.EXTENDED
-
-
-class NotesDrawWitness(ObjCClass('UIView')):
-    callback = objc_property(object)
-
-    @objc_method
-    def drawRect_(self, rect: CGRect) -> None:
-        if self.callback is not None:
-            callback, self.callback = self.callback, None
-            callback(perf_counter())
 
 
 class NotesDragSession(ObjCClass('NSObject')):
@@ -29,6 +21,10 @@ class NotesDragSession(ObjCClass('NSObject')):
 
 class NotesRowsIOSProbe(NotesRowsPerformanceProbe):
     result_name = 'notes-rows-ios-result.json'
+
+    def startup(self):
+        self._notes_fault_stream = enable_native_fault_log(self.paths.cache)
+        super().startup()
 
     def device_details(self, app):
         assert type(app._impl).__module__ == 'toga_iOS.app'
@@ -42,21 +38,27 @@ class NotesRowsIOSProbe(NotesRowsPerformanceProbe):
             await self.settle(owner)
         if cold:
             owner.folders.pop(folder, None)
+        print(f'UIKit Notes rows: {storage} {variant} {"cold" if cold else "repeated"}', flush=True)
         drawn = owner.host.loop.create_future()
-        native = owner.rows_scroll._impl.native
-        origin = native.bounds.origin
-        witness = NotesDrawWitness.alloc().initWithFrame(CGRect((origin.x, origin.y), (1, 1)))
-        witness.opaque = False
-        native.addSubview(witness)
+        cleanups = []
         sample = dict(storage=storage, variant=variant, cold=cold, buttons_created=0, publications=[])
         add, create = owner.rows.add, toga.Button.__init__
+
+        def painted():
+            now = perf_counter()
+            def finish():
+                if not drawn.done():
+                    drawn.set_result(now)
+            owner.host.loop.call_soon_threadsafe(finish)
 
         def publish(*rows):
             sample['publications'].append(len(rows))
             result = add(*rows)
             if len(rows) == 45:
-                witness.callback = lambda now: drawn.set_result(now) if not drawn.done() else None
-                witness.setNeedsDisplay()
+                panel = owner.rows.widget if getattr(owner.rows, 'recycled', False) else owner.rows
+                cleanup = _install_draw_probe(panel, painted)
+                assert cleanup is not None, 'UIKit draw observer could not be installed'
+                cleanups.append(cleanup)
             return result
 
         def button(widget, *args, **kwargs):
@@ -83,8 +85,8 @@ class NotesRowsIOSProbe(NotesRowsPerformanceProbe):
                 assert sample['buttons_created'] >= 45, sample
             report['measurements'].append(sample)
         finally:
-            witness.callback = None
-            witness.removeFromSuperview()
+            for cleanup in cleanups:
+                cleanup()
 
     async def interactions(self, owner, report):
         rows = owner.rows
