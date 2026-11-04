@@ -103,7 +103,8 @@ class NotesDrawers:
         return False
 
     def open_swipe(self, direction):
-        if self.side is not None:
+        from .notes_gestures import opening_swipes_allowed
+        if self.side is not None or not opening_swipes_allowed(self):
             return False
         if direction > 0:
             if self.expanded:
