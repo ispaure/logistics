@@ -67,7 +67,10 @@ def run(root, cpython, payload, reports, *, install_image=True):
     token = uuid4().hex
     app_receipt, adb_receipt = receipt_paths(token)
     with scratch(root) as workspace:
-        emulator = AndroidEmulator(sdk, workspace / 'emulator', startup_timeout=240, gpu='swiftshader')
+        # Hosted Linux requires the SDK's explicit qualified Actions boundary;
+        # default local admission intentionally does not accept that host.
+        emulator = AndroidEmulator(sdk, workspace / 'emulator', startup_timeout=240,
+                                   gpu='swiftshader', execution_context='github-actions')
         record = None
         try:
             with emulator.session(image, values['android_model']) as record:
