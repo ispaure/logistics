@@ -29,7 +29,9 @@ class RecycledNotesRowsTests(unittest.TestCase):
         factory = presentation.notes_host
         with patch.object(presentation, 'notes_host', side_effect=lambda app: replace(factory(app),
                 tree_rows=lambda owner: NativeTreeRows(owner, RecycledFileList))):
-            return await open_vault(self.app, self.provider, 'Vault', 'documents')
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+        owner.sidebar.show_sidebar()
+        return owner
 
     def test_expansion_publishes_records_without_constructing_row_widgets(self):
         async def exercise():
@@ -94,6 +96,32 @@ class RecycledNotesRowsTests(unittest.TestCase):
                 restored = next(row for row in rows.children if row.path == current.path)
                 await rows.activate(restored)
                 opened.assert_awaited_once_with(current.path)
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_calendar_detail_and_detached_cells_cannot_dispatch_file_actions(self):
+        async def exercise():
+            owner = await self.library()
+            owner.reflow(320)
+            owner.sidebar.show_sidebar()
+            rows = owner.rows
+            with patch.object(owner, 'open_note', new=AsyncMock()) as opened:
+                row = next(row for row in rows.children if not row.folder)
+                owner.select_panel_tab('Calendar')
+                await rows.activate(row)
+                opened.assert_not_awaited()
+                owner.select_panel_tab('Files')
+                row = next(row for row in rows.children if not row.folder)
+                owner.sidebar.show_detail()
+                await rows.activate(row)
+                opened.assert_not_awaited()
+                owner.sidebar.show_sidebar()
+                native = Mock(isAttachedToWindow=Mock(return_value=True), isShown=Mock(return_value=False))
+                with patch.object(rows.native_list._impl, 'native', native, create=True):
+                    await rows.activate(row)
+                opened.assert_not_awaited()
+                await rows.activate(row)
+                opened.assert_awaited_once_with(row.path)
             owner.dispose()
         self.run_async(exercise())
 

@@ -37,7 +37,14 @@ class NativeTreeRows:
         return drag.token if drag is not None and self.owner.library.supports('rename') else None
 
     def active(self):
-        return not self.closed and self.owner.valid() and getattr(self.owner, 'rows', None) is self
+        if (self.closed or not self.owner.valid() or getattr(self.owner, 'rows', None) is not self
+                or getattr(self.owner, 'panel_tab', None) not in ('Files', 'Search')):
+            return False
+        sidebar = getattr(self.owner, 'sidebar', None)
+        if sidebar is None or not (sidebar.expanded or sidebar.side == 'files'):
+            return False
+        native = getattr(self.native_list._impl, 'native', None)
+        return native is None or (native.isAttachedToWindow() and native.isShown())
 
     def current(self, row):
         return (self.active() and row.epoch == self.epoch and 0 <= row.index < len(self.native_list.data)
