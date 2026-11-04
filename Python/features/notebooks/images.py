@@ -9,6 +9,8 @@ import base64
 import math
 from uuid import uuid4
 
+from ._vendor.rmscene.tagged_block_reader import TaggedBlockReader
+from ._vendor.rmscene.tagged_block_writer import TaggedBlockWriter
 from ._vendor.rmscene.scene_stream import Block
 from ._vendor.rmscene.crdt_sequence import CrdtSequenceItem
 from ._vendor.rmscene.tagged_block_common import CrdtId
@@ -31,7 +33,7 @@ class ImageResources(Block):
         return 3, 3
 
     @classmethod
-    def from_stream(cls, r):
+    def from_stream(cls, r: TaggedBlockReader):
         resources = []
         with r.read_subblock(1):
             count = r.data.read_varuint()
@@ -46,7 +48,7 @@ class ImageResources(Block):
                     resources.append(Resource(uuid, stamp, name, tail))
         return cls(resources)
 
-    def to_stream(self, w):
+    def to_stream(self, w: TaggedBlockWriter):
         with w.write_subblock(1):
             w.data.write_varuint(len(self.resources))
             for resource in self.resources:
@@ -78,7 +80,7 @@ class ImageItem(Block):
         return 2, 2
 
     @classmethod
-    def from_stream(cls, r):
+    def from_stream(cls, r: TaggedBlockReader):
         parent, identity, left, right = [r.read_id(i) for i in range(1, 5)]
         deleted = r.read_int(5)
         quad = None
@@ -108,7 +110,7 @@ class ImageItem(Block):
         return cls(parent, CrdtSequenceItem(identity, left, right, deleted, quad),
                    r.read_id_optional(5) if r.bytes_remaining_in_block() else None)
 
-    def to_stream(self, w):
+    def to_stream(self, w: TaggedBlockWriter):
         for i, value in enumerate([self.parent_id, self.item.item_id, self.item.left_id, self.item.right_id], 1):
             w.write_id(i, value)
         w.write_int(5, self.item.deleted_length)
