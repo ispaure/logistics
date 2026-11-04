@@ -17,11 +17,11 @@ class NotesBreadcrumbTests(QtTestCase):
     def tearDown(self):
         self._release_windows(self.existing)
 
-    def make_path(self):
+    def make_path(self, breadcrumb_type=NotesBreadcrumbs):
         opened, revealed = [], []
         owner = SimpleNamespace(library=SimpleNamespace(root=''), library_label='Library',
             folder_pages={}, open_note=opened.append, reveal_folder=revealed.append)
-        label = NotesBreadcrumbs(owner)
+        label = breadcrumb_type(owner)
         font = qt.QFontDatabase.systemFont(qt.QFontDatabase.SystemFont.FixedFont)
         font.setStyleHint(qt.QFont.StyleHint.Monospace)
         font.setFixedPitch(True)
@@ -32,13 +32,19 @@ class NotesBreadcrumbTests(QtTestCase):
         return owner, label, viewport, opened, revealed
 
     def test_new_path_with_same_width_reveals_its_end(self):
-        _, label, viewport, _, _ = self.make_path()
-        label.show_path('Folder/' + 'A' * 64 + '.md')
+        class EqualWidthBreadcrumbs(NotesBreadcrumbs):
+            def sizeHint(self):
+                size = super().sizeHint()
+                # Exercise equal scroll extents independently of font metrics.
+                size.setWidth(800)
+                return size
+        _, label, viewport, _, _ = self.make_path(EqualWidthBreadcrumbs)
+        label.show_path('Folder/First document.md')
         bar = viewport.horizontalScrollBar()
         self.wait_until(lambda: bar.maximum() > 0 and bar.value() == bar.maximum())
         previous_maximum = bar.maximum()
         bar.setValue(0)
-        label.show_path('Folder/' + 'B' * 64 + '.md')
+        label.show_path('Folder/Another.md')
         self.app.processEvents()
         self.assertEqual(bar.maximum(), previous_maximum)
         self.assertEqual(bar.value(), bar.maximum())
