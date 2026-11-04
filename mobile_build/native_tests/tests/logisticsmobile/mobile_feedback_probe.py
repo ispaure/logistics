@@ -1,5 +1,6 @@
 """Native acceptance for feedback 18–20 using isolated Notes and Settings data."""
 import asyncio
+import faulthandler
 import json
 from pathlib import Path
 import sys
@@ -12,6 +13,7 @@ from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.testing.stages import TestStage
 from mobile.app import LogisticsMobile
 from mobile.obsidian import open_vault
+from . import enable_native_fault_log
 from .fixtures import capture_window
 from .rotation_checks import rotate
 
@@ -62,6 +64,8 @@ class FeedbackProbe(LogisticsMobile):
         super().startup()
 
     def on_running(self):
+        self._feedback_fault_log = enable_native_fault_log(self.paths.cache)
+        faulthandler.dump_traceback_later(30, repeat=True, file=self._feedback_fault_log)
         self.loop.create_task(self.probe())
 
     async def probe(self):
@@ -171,15 +175,22 @@ class FeedbackProbe(LogisticsMobile):
             platform_label = 'Platform: Android' if android else 'Platform: iOS / iPadOS'
             assert platform_label in self.build_version_label.text and 'Source:' in self.build_version_label.text, self.build_version_label.text
             await capture_window(self, output / 'feedback-about-ready.png')
+            license_started = time.monotonic()
             tap(license_button)
+            assert time.monotonic() - license_started < 10, 'License controls blocked presentation'
             await until(lambda: self.routes.screens['settings'][-1][0] == 'open-source-licenses', 'Licenses did not open')
+            license_view = self.routes.screens['settings'][-1][1]
+            await until(lambda: frame(license_view)[2] > 0 and frame(license_view)[3] > 0,
+                        'License page did not acquire native bounds')
+            await asyncio.sleep(.3)
             await capture_window(self, output / 'feedback-licenses.png')
             self.routes.back()
             assert self.routes.screens['settings'][-1][0] == 'settings-about'
             self.routes.back()
             assert nav.options['Help'] in self.routes.body('settings').children
             report['items']['19'] = dict(immediate_feedback=True, back_while_loading=True,
-                build_before_licenses=True, installed_build=self.build_version_label.text, license_back=True)
+                build_before_licenses=True, installed_build=self.build_version_label.text, license_back=True,
+                license_open_seconds=time.monotonic() - license_started)
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()
@@ -188,6 +199,8 @@ class FeedbackProbe(LogisticsMobile):
             if owner is not None:
                 owner.dispose()
             (output / 'mobile-feedback-result.json').write_text(json.dumps(report, indent=2))
+            faulthandler.cancel_dump_traceback_later()
+            self._feedback_fault_log.close()
 
 
 def main():
