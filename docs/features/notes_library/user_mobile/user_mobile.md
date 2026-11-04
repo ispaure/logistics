@@ -145,6 +145,10 @@ Collapse all folders. The panel has no library identity/status footer or redunda
 library actions menu. The Files tab accepts drops to the library root.
 File rows keep the existing font size and touch height.
 
+Tap a folder icon or its enlarged disclosure triangle in Files to expand or collapse
+the folder. Tapping a folder name opens its landing note when one exists. Hold the
+icon to drag the folder.
+
 The left panel has **Files**, **Search** and **Calendar** tabs. Files uses the
 available height for its folder tree. Search keeps its query and results in a
 separate tab, with **File names** selected by default and **In documents** available
