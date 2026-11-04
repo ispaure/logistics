@@ -254,6 +254,18 @@ def notes_host(app):
         browser.resource_search = None
         return browser
 
+    def tree_rows(owner):
+        if not type(app._impl).__module__.startswith('toga_android.'):
+            return None
+        from features.notes_library.mobile.tree_rows import NativeTreeRows
+        from ..recycled_file_list import RecycledFileList
+        from ..hub_icons import icon
+        def row_list(**kwargs):
+            result = RecycledFileList(icon_size=20, **kwargs)
+            result.tree_landing_icon = icon('folder_document')
+            return result
+        return NativeTreeRows(owner, row_list)
+
     return NotesHost(
         folder_browser=folder_browser,
         show_error=show_error,
@@ -271,6 +283,7 @@ def notes_host(app):
             privacy_gates=lambda: app.screen_privacy.gates()),
         presentation=app.presentation,
         batch_rows=batch_surfaces,
+        tree_rows=tree_rows,
         loop=app.loop,
         workspace=app.workspace,
         apple=app.routes.apple,
