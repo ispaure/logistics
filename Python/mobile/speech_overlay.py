@@ -74,7 +74,9 @@ class SpeechOverlay:
         self.container = Container(on_refresh=lambda c: None)
         native = self.container.native
         native.backgroundColor = ObjCClass('UIColor').secondarySystemBackgroundColor()
-        native.layer.cornerRadius = 0 if self.edge_panel else 16
+        native.layer.cornerRadius = 16
+        if self.edge_panel:
+            native.clipsToBounds = True
         native.layer.shadowOpacity = .25
         native.layer.shadowRadius = 8
         native.accessibilityLabel = self.label or ('Chapters' if self.leading else 'Read aloud controls')

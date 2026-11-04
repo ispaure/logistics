@@ -53,6 +53,9 @@ class NativeSpeechOverlayTests(TestCase):
     def test_ios_observes_only_outside_taps_and_removes_observer(self):
         overlay = self.overlay()
         overlay.dim = True
+        overlay.edge_panel = True
+        overlay.full_height = True
+        overlay.owner = SimpleNamespace(_impl=SimpleNamespace(native=MagicMock()))
 
         class NSObject:
             def __init_subclass__(cls, **kwargs):
@@ -71,6 +74,8 @@ class NativeSpeechOverlayTests(TestCase):
         container = SimpleNamespace(native=native, content=None)
         window = MagicMock()
         window.bounds.size.width = 400
+        window.bounds.size.height = 800
+        window.safeAreaInsets.bottom = 20
         window.safeAreaInsets.left = window.safeAreaInsets.right = window.safeAreaInsets.top = 0
         app = SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
         modules = {
@@ -80,8 +85,12 @@ class NativeSpeechOverlayTests(TestCase):
                 SEL=lambda name: name, CGRect=lambda origin, size: (origin, size)),
             'toga_iOS.container': SimpleNamespace(Container=lambda **kwargs: container),
         }
-        with patch.dict('sys.modules', modules), patch('mobile.speech_overlay._apple_dismissal', None):
+        with patch.dict('sys.modules', modules), patch('mobile.speech_overlay._apple_dismissal', None), \
+                patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=[]):
             overlay.apple(app)
+            self.assertEqual(native.layer.cornerRadius, 16)
+            self.assertTrue(native.clipsToBounds)
+            self.assertEqual(native.frame, ((80.0, 0.0), (320, 780.0)))
             delegate = overlay.dismissal
             backdrop = overlay.backdrop
             self.assertIsNotNone(backdrop)

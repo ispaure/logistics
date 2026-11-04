@@ -133,11 +133,13 @@ opens **Backlinks** and **Outgoing links**. Swipe right in that drawer to
 close it. At 864 usable points of library width or more, the library panel stays
 beside the document; Links always opens on demand. Resizing preserves the current
 note and the selected panel tab.
-Horizontal tables, selected text and zoomed pages retain their ordinary gestures.
+Touches that start inside Markdown tables scroll the table without opening either
+side panel. Selected text and zoomed pages retain their ordinary gestures.
 
 Floating Files and Links panels dim the content behind them and block its controls until the
 panel closes. Tap the dimmed area to dismiss either panel; there is no panel X.
-The library drawer uses the full usable screen height. Its tabs stay at the top;
+Both drawers use the same width and full usable screen height. On iOS, both have
+rounded corners. The Files drawer tabs stay at the top;
 a centered row directly below them contains New document, New folder and
 Collapse all folders. The panel has no library identity/status footer or redundant
 library actions menu. The Files tab accepts drops to the library root.

@@ -50,7 +50,7 @@ class NotesDrawers:
         # at least 44 units opposite the drawer for outside dismissal.
         self.policy.sidebar_width = min(320, max(1, width - 32))
         self.sidebar.style.width = max(1, self.policy.sidebar_width)
-        self.links.style.width = max(1, self.policy.sidebar_width - 24)
+        self.links.style.width = max(1, self.policy.sidebar_width)
         if self.overlay is not None:
             self.overlay.reposition()
 
@@ -76,7 +76,7 @@ class NotesDrawers:
         panel = self.sidebar if side == 'files' else self.links
         self.overlay = SpeechOverlay(panel, self.view, self.app, leading=side == 'files',
                                      full_height=True, label='Files' if side == 'files' else 'Links',
-                                     dim=True, edge_panel=side == 'files')
+                                     dim=True, edge_panel=True)
         self.overlay.chapter_owner = self.view
         panel.overlay = self.overlay
         self.install_swipe(panel)
