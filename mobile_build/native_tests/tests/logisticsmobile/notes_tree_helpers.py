@@ -42,7 +42,7 @@ async def native_row_control(owner, path, control='title'):
             from toga_iOS.libs import NSIndexPath
             index = NSIndexPath.indexPathForRow(row.index, inSection=0)
             cell = native.cellForRowAtIndexPath(index)
-            if cell is not None and cell.window is not None:
+            if cell is not None and cell.window is not None and rows.active():
                 return dict(title=cell.textLabel, actions=cell.accessoryView,
                             disclosure=cell.tree_disclosure, icon=cell.imageView)[control]
             native.scrollToRowAtIndexPath(index, atScrollPosition=0, animated=False)
