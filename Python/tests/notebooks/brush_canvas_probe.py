@@ -63,7 +63,9 @@ let signatures=[],controls=[];
 const choose=tool=>{let button=document.querySelector('#brushes [data-value="'+tool+'"]')||document.querySelector('.brush-card[data-tool="'+tool+'"]');check(button,'Missing visual brush choice');button.click()};
 for(let tool of Object.values(state.tools)){
 choose(tool);
-check($('width').options.length===3,'Expected three widths');
+check($('width').options.length===(tool===18?1:3),'Wrong per-tool width choices');
+const widthButtons=[...document.querySelectorAll('#widths [data-value],.widths [data-width]')];
+check(widthButtons.filter(b=>!b.hidden&&b.style.display!=='none').length===(tool===18?1:3),'Wrong visible width buttons');
 check(JSON.stringify(Array.from($('color').options,o=>Number(o.value)))===JSON.stringify(brushes[tool].colors),'Wrong brush palette '+tool);
 check(document.querySelectorAll('.swatch').length===brushes[tool].colors.length,'Visual swatches out of sync '+tool);
 for(let b of document.querySelectorAll('.swatch')){let choice=Number(b.dataset.value??b.dataset.color),dot=b.querySelector('circle')||b.querySelector('span')||b;let shown=(dot.tagName.toLowerCase()==='circle'?getComputedStyle(dot).fill:getComputedStyle(dot).backgroundColor).match(/\d+/g).slice(0,3).map(Number);check(shown.join(',')===swatchColor(tool,choice).join(','),'Swatch ignores brush RGBA '+tool+'/'+choice)}
@@ -98,10 +100,13 @@ $('grayscale').checked=true;$('grayscale').dispatchEvent(new Event('change'));re
 check(gray[0]===gray[1]&&gray[1]===gray[2]&&gray[0]<255,'Grayscale preview not gray');
 check(JSON.stringify(state)===before,'Preview changed notebook state');
 check(red.color===7,'Preview changed native red');
-let orange=nativeColor(18,-1);check(orange.color===9&&orange.color_rgba.join(',')==='255,195,140,255','Lost native highlight RGBA');
+let orange=nativeColor(18,-1);check(orange.color===15&&orange.color_rgba===null,'Wrong measured native highlight color');
 reset();line({tool:17,color:9,color_rgba:[255,0,0,255],points:[[30,60,.5,4],[240,60,.5,4]]},target);
 check(pixel(80,60)[0]===pixel(80,60)[1],'RGBA bypassed grayscale');
 $('grayscale').checked=false;$('grayscale').dispatchEvent(new Event('change'));reset();
+check(inkColor(orange).rgb.join(',')==='255,195,140','Wrong native highlighter preview RGB');
+reset();line({tool:18,...nativeColor(18,13),points:[[30,60,.5,26],[240,60,.5,26]]},target);
+check(pixel(80,60).slice(0,3).join(',')==='255,237,117','Wrong legacy native highlighter yellow');
 let shader={tool:23,...nativeColor(23,1),points:[[30,60,.5,30],[130,60,.5,30],[240,60,.5,30]]};line(shader,target);
 let middle=pixel(130,60)[0],edge=pixel(80,60)[0];check(Math.abs(middle-edge)<=1,'Shader joins accumulate opacity');
 line(shader,target);check(pixel(80,60)[0]<edge,'Separate shader strokes must build up');

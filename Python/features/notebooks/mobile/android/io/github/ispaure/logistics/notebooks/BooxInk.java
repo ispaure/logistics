@@ -36,7 +36,7 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
     private boolean reconciling, failed, ordinaryContact;
     private int previewTool = -1, previewColor, previewStyle = -1;
     private final BooxBallpoint ballpoint = new BooxBallpoint();
-    private float pageScale, baseWidth;
+    private float pageScale, baseWidth, pressureFactor, pressureExponent;
     private boolean widthUnavailable;
     private long reconciliationStarted, lastReconciliationMs, longestReconciliationMs;
     private int handoffGeneration;
@@ -121,14 +121,18 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
                 for (int i = 0; i < blocked.length(); i++) exclusions.add(rect(blocked.getJSONArray(i)));
                 double width = config.optDouble("width");
                 baseWidth = (float) config.optDouble("baseWidth");
+                pressureFactor = (float) config.optDouble("pressureFactor", .34);
+                pressureExponent = (float) config.optDouble("pressureExponent", 3.875);
                 pageScale = (float) width * scaleX / baseWidth;
                 if (previewTool == 15 && (!Float.isFinite(pageScale) || pageScale <= 0
-                        || (baseWidth != 1 && baseWidth != 2 && baseWidth != 4))) enabled = false;
+                        || (baseWidth != 2.5f && baseWidth != 3.75f && baseWidth != 5.75f)
+                        || !Float.isFinite(pressureFactor) || pressureFactor < 0 || pressureFactor > 1
+                        || !Float.isFinite(pressureExponent) || pressureExponent <= 0 || pressureExponent > 10)) enabled = false;
                 if (!Double.isFinite(width) || width <= 0 || width > 500 || bounds.isEmpty()) enabled = false;
                 helper.setLimitRect(bounds, exclusions);
                 if (enabled) helper.setStrokeStyle(previewStyle)
                     .setStrokeColor(previewColor).setStrokeWidth(previewTool == 15
-                        ? BooxBallpoint.width(0, baseWidth) * pageScale : (float) width * scaleX);
+                        ? BooxBallpoint.width(0, baseWidth, pressureFactor, pressureExponent) * pageScale : (float) width * scaleX);
                 apply();
             } catch (Exception | LinkageError failure) { fail(failure); }
         });
@@ -187,7 +191,7 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
                 && !reconciling && !ordinaryContact && view.hasWindowFocus() && view.isAttachedToWindow());
             if (enabled && previewTool == 15 && !active) {
                 ballpoint.reset();
-                helper.setStrokeWidth(BooxBallpoint.width(0, baseWidth) * pageScale);
+                helper.setStrokeWidth(BooxBallpoint.width(0, baseWidth, pressureFactor, pressureExponent) * pageScale);
             }
         }
     }
@@ -322,7 +326,7 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
             if (!Float.isFinite(point.getX()) || !Float.isFinite(point.getY()) || !Float.isFinite(point.getPressure()))
                 throw new IllegalArgumentException("Invalid raw pen sample");
             ballpoint.point(helper, point.getPressure() / maxPressure,
-                baseWidth, pageScale);
+                baseWidth, pageScale, pressureFactor, pressureExponent);
         } catch (RuntimeException | LinkageError failure) {
             // Finish this contact through the existing save path even if a
             // firmware cannot update native widths. Future contacts fall back.
