@@ -211,12 +211,18 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.run_async(self.picker.show_destination(source.name,
             FileOperationRequest('move', provider, source.name)))
         self.run_async(self.picker.browser_editor_location(('Shared files', 'Movies')))
-        with patch('commonUtils.runtime.platform.get_os', return_value=OS.IOS), \
+        local_move_path = MobileLocalFiles.local_move_path
+        def iphone_move_path(provider, path):
+            # Exercise iOS provider policy while leaving the host's actual
+            # exclusive-rename syscall in place (Linux has no renamex_np).
+            with patch('commonUtils.runtime.platform.get_os', return_value=OS.IOS):
+                return local_move_path(provider, path)
+        with patch.object(MobileLocalFiles, 'local_move_path', iphone_move_path), \
                 patch.object(LocalFiles, 'open', side_effect=AssertionError('Must not read video')), \
                 patch.object(LocalFiles, 'create_file', side_effect=AssertionError('Must not copy video')):
             self.run_async(self.picker.confirm_editor_file())
         target = shared / 'Movies/Movie.mkv'
-        self.assertFalse(source.exists())
+        self.assertFalse(source.exists(), self.picker.save_as_status.value)
         self.assertEqual((target.stat().st_ino, target.stat().st_size), (before.st_ino, before.st_size))
         self.assertIsNone(self.picker._work)
         self.assertFalse(self.app.cloud_busy)
