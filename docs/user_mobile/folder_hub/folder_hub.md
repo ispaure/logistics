@@ -52,7 +52,8 @@ does not run Obsidian plugins.
 button above it. The folder header has Back (‹), Search and an upper-right
 actions menu (circled ellipsis on iOS, vertical dots on Android). On iOS it opens
 Logistics’ shared Files directory, showing other files and folders saved there.
-**Shared Files** opens the browse root, including **Local** and **Received Files**. Both folders remain visible in Apple’s Files app
+**Shared Files** shows the other public files and folders, omitting the dedicated
+**Local** and **Received Files** collections. Both collections remain available in Apple’s Files app
 and in destination pickers. No files are moved or duplicated.
 Workspaces lists downloaded/synced copies individually under Local → Rclone.
 Local → Others shows Received Files and Shared Files. **Shared Files** appears underneath
