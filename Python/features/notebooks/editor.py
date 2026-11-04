@@ -110,17 +110,12 @@ class Editor:
                 else:
                     ink.strokes = [s for s in ink.strokes if s.id not in action['ids']]
             elif op == 'add-page':
-                from .templates import settings, select
+                from .templates import inherit
                 current = book.pages[self.index]
-                paper = settings(book, current)
-                book.add_page(self.index + 1)
+                new_page = book.add_page(self.index + 1)
                 self.index += 1
                 if book.content.get('fileType') != 'pdf':
-                    from .templates import CATALOG, template_name
-                    if template_name(current.template) in CATALOG:
-                        select(book, self.index, template_name(current.template), paper['format'], paper['visible'])
-                    else:
-                        book.pages[self.index].template = current.template
+                    inherit(book, current, new_page)
             elif op == 'template':
                 from .templates import select
                 select(book, self.index, action['name'], action['format'], action['visible'])
@@ -150,11 +145,12 @@ class Editor:
         self.redo.clear()
 
     def state(self):
-        from .templates import CATALOG, settings, background, view_bounds, template_name
+        from .templates import CATALOG, settings, background, view_bounds, template_name, available
         ink = self.notebook.page(self.index)
         page = self.notebook.pages[self.index]
         paper = settings(self.notebook, page)
         pdf = self.notebook.content.get('fileType') == 'pdf'
+        template_available = available(self.notebook, page)
         return dict(name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=HEIGHT, tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS, shaders=SHADERS, widths=WIDTHS,
@@ -162,6 +158,7 @@ class Editor:
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),
                     templates=CATALOG, template_settings=paper, template_editable=not pdf,
+                    template_available=template_available,
                     move_paper=view_bounds([], True),
-                    background=self.background() if pdf else background(page.template, paper['format']) if paper['visible'] else None,
+                    background=self.background() if pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,
                     undo=bool(self.undo), redo=bool(self.redo))

@@ -40,6 +40,81 @@ def archive(members):
 
 
 class NotebookTests(unittest.TestCase):
+    def test_move_template_recovers_without_valid_display_settings(self):
+        from features.notebooks.templates import settings, background
+        self.editor.apply(dict(op='template', name='Logistics Restaurant review', format='move', visible=True))
+        page = self.book.pages[0]
+        sidecar = f'{self.book.id}/{page.id}.logistics-template.json'
+        for raw in (None, b'bad json', b'[]', b'{"format": []}', b'{"format": {}}', b'{"format": null}', b'{"format":"pro"}',
+                    b'[' * 1100 + b'0' + b']' * 1100):
+            with self.subTest(raw=raw):
+                if raw is None:
+                    self.book.members.pop(sidecar, None)
+                else:
+                    self.book.members[sidecar] = raw
+                self.assertEqual(settings(self.book, page), dict(format='move', visible=True))
+                state = self.editor.state()
+                self.assertTrue(state['template_available'])
+                self.assertEqual(state['background'], background('Logistics Restaurant review', 'move'))
+
+    def test_imported_artwork_is_preserved_on_new_pages_without_substitution(self):
+        from features.notebooks.templates import select
+        from features.notebooks.previews import page_previews
+        import base64
+        self.editor.apply(dict(op='template', name='Logistics Meeting notes', format='pro', visible=True))
+        page = self.book.pages[0]
+        asset = page.template + '.template'
+        self.book.members[asset] = b'{"custom": "imported artwork"}'
+        sidecar = f'{self.book.id}/{page.id}.logistics-template.json'
+        self.book.members[sidecar] = b'{"format":"pro","visible":true,"extra":"preserve"}'
+        members, reference = dict(self.book.members), page.template
+        with self.assertRaisesRegex(ValueError, 'different artwork'):
+            select(self.book, 0, 'Logistics Meeting notes', 'pro', True)
+        self.assertEqual(self.book.members, members)
+        self.assertEqual(page.template, reference)
+        self.assertFalse(self.editor.state()['template_available'])
+        self.assertIsNone(self.editor.state()['background'])
+        self.assertNotIn(b'Meeting notes', base64.b64decode(page_previews(self.book, 0)[0]['image'].split(',')[1]))
+        self.editor.apply(dict(op='add-page'))
+        target = self.book.pages[1]
+        self.assertEqual(target.template, reference)
+        self.assertEqual(self.book.members[f'{self.book.id}/{target.id}.logistics-template.json'], members[sidecar])
+        self.assertEqual(self.book.members[asset], members[asset])
+        recovered = self.repo.open(self.key)
+        self.assertEqual(recovered.members[asset], members[asset])
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual(len(self.book.pages), 1)
+        self.assertEqual(self.book.members[asset], members[asset])
+
+    def test_equivalent_template_json_transfers_without_overwriting_target_bytes(self):
+        self.editor.apply(dict(op='template', name='Logistics Daily planner', format='move', visible=True))
+        asset = self.book.pages[0].template + '.template'
+        target = Notebook.new()
+        pretty = json.dumps(json.loads(self.book.members[asset]), indent=2).encode()
+        target.members[asset] = pretty
+        target.copy_page(self.book, 0)
+        self.assertEqual(target.members[asset], pretty)
+        editor = Editor(target)
+        editor.index = 1
+        self.assertTrue(editor.state()['template_available'])
+        sidecar = f'{target.id}/{target.pages[1].id}.logistics-template.json'
+        saved = json.loads(target.members[sidecar])
+        saved['future'] = {'preserve': [1, 2, 3]}
+        target.members[sidecar] = json.dumps(saved).encode()
+        editor.apply(dict(op='template', name='Logistics Daily planner', format='move', visible=False))
+        self.assertEqual(target.members[asset], pretty)
+        self.assertEqual(json.loads(target.members[sidecar])['future'], {'preserve': [1, 2, 3]})
+
+    def test_malformed_template_references_are_rejected_before_canvas_rendering(self):
+        members = read_archive(self.book.to_bytes())
+        content = json.loads(members[self.book.id + '.content'])
+        for value in (None, [], {}, 42, 'bad\nreference', 'bad\u2028reference', 'x' * 513):
+            with self.subTest(value=value):
+                content['cPages'] = dict(pages=[dict(id=self.book.pages[0].id, template=dict(value=value))])
+                members[self.book.id + '.content'] = json.dumps(content).encode()
+                with self.assertRaisesRegex(ValueError, 'template reference'):
+                    Notebook.read(archive(members))
+
     def test_lined_templates_use_confirmed_counts_and_separate_adjusted_medium(self):
         from features.notebooks.templates import svg
         from xml.etree import ElementTree as ET

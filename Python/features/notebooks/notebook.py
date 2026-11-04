@@ -149,6 +149,9 @@ class Notebook:
             pages = [Page(identifier(r['id']), deepcopy(r),
                 r.get('template', {}).get('value', templates[i] if i < len(templates) else 'Blank'))
                 for i, r in enumerate(records)]
+            if any(not isinstance(p.template, str) or len(p.template) > 512
+                   or any(ord(c) < 32 or c in '\x85\u2028\u2029' for c in p.template) for p in pages):
+                raise ValueError('Invalid notebook page template reference.')
             if len({p.id for p in pages}) != len(pages):
                 raise ValueError('Duplicate notebook page identifiers.')
         except (KeyError, TypeError, AttributeError, UnicodeError, json.JSONDecodeError) as error:
@@ -222,11 +225,12 @@ class Notebook:
                 staged[self.id + parts[0][len(source.id):] + '/' + identity + parts[1][len(original.id):]] = data
         # Original custom template artwork is document-level, unlike page sidecars.
         artwork = original.template + '.template'
+        from .templates import same_artwork
         if (artwork in source.members and artwork in self.members
-                and self.members[artwork] != source.members[artwork]):
+                and not same_artwork(self.members[artwork], source.members[artwork])):
             raise ValueError('This template name has different artwork in the destination notebook.')
         self.members.update(staged)
-        if artwork in source.members:
+        if artwork in source.members and artwork not in self.members:
             self.members[artwork] = source.members[artwork]
         page = Page(identity, record, original.template)
         self.pages.insert(at, page)

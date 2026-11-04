@@ -45,8 +45,8 @@ def page_previews(book, start):
 
 
 def template_artwork(book, page):
-    from .templates import settings, svg
+    from .templates import settings, svg, available
     paper = settings(book, page)
-    if book.content.get('fileType') == 'pdf' or not paper['visible']:
+    if book.content.get('fileType') == 'pdf' or not paper['visible'] or not available(book, page):
         return ''
     return svg(page.template, paper['format'])

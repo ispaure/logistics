@@ -68,13 +68,13 @@ function render() {
   templateControls();
   if ($('pageTemplate')) {
     const name = state.template_name || state.template || 'Blank';
-    const catalog = {...(state.templates || {Blank: 'Blank'})};
-    if (!(name in catalog)) catalog[name] = name + ' (preserved)';
-    options('pageTemplate', Object.entries(catalog).map(([value, label]) => [label, value]));
+    const catalog = new Map(Object.entries(state.templates || {Blank: 'Blank'}));
+    if (!catalog.has(name)) catalog.set(name, name + ' (preserved)');
+    options('pageTemplate', [...catalog].map(([value, label]) => [label, value]));
     $('pageTemplate').value = name;
     $('templateFormat').value = name.startsWith('Logistics ') ? (state.template_settings?.format || 'pro') : paperView;
     $('templateVisible').checked = state.template_settings?.visible !== false;
-    const disabled = state.read_only || !state.template_editable || !(name in (state.templates || {}));
+    const disabled = state.read_only || !state.template_editable || !Object.prototype.hasOwnProperty.call(state.templates || {}, name) || state.template_available === false;
     $('pageTemplate').disabled = state.read_only || !state.template_editable;
     $('templateFormat').disabled = disabled || !name.startsWith('Logistics ');
     $('templateVisible').disabled = disabled;
@@ -88,7 +88,9 @@ function render() {
   if (document.activeElement !== $('notebookName')) $('notebookName').value = state.name;
   $('pageinfo').textContent = (state.index + 1) + ' / ' + state.count;
   $('warning').textContent = state.warning || '';
-  $('templateNotice').textContent = state.template && state.template !== 'Blank' && state.templates && !(state.template_name in state.templates) ? 'Template ' + state.template + ' is preserved; its artwork is unavailable here.' : '';
+  $('templateNotice').textContent = state.template && state.template !== 'Blank' && state.templates &&
+    (!Object.prototype.hasOwnProperty.call(state.templates, state.template_name) || state.template_available === false) ?
+    'Template ' + state.template + ' is preserved; its artwork is unavailable here.' : '';
   $('undo').disabled = !state.undo;
   $('redo').disabled = !state.redo;
   $('prev').disabled = !state.index;
