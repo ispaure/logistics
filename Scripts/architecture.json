@@ -610,6 +610,24 @@
       "scope": "LibraryPanels.filter.scan.read",
       "operation": "raw-method:read_text",
       "reason": "Bounded NotesLibrary.read_text delegates to DocumentResource after containment/type checks; this is not filesystem Path.read_text."
+    },
+    {
+      "module": "features.notebooks.recovery",
+      "scope": "Repository.delete",
+      "operation": "raw-method:read_bytes",
+      "reason": "Read only this validated ordinary recovery key manifest to compare the editor-observed revision before explicit orphan discard; no document source or private provider I/O."
+    },
+    {
+      "module": "features.notebooks.mobile.ios_input",
+      "scope": "PencilInputTrace.write_report",
+      "operation": "raw-call:commonUtils.persistence.atomic_write_json",
+      "reason": "Write only the host-supplied app-private native input diagnostic report, bounded to 16 KiB of event counts and control-state flags; never document content or a provider path."
+    },
+    {
+      "module": "features.notebooks.mobile.ios_input",
+      "scope": "attach_diagnostics",
+      "operation": "raw-call:commonUtils.persistence.atomic_write_json",
+      "reason": "Write only a fixed content-free observer-unavailable marker to the host-supplied app-private diagnostic destination; no exception text, document bytes or provider I/O."
     }
   ]
 }
