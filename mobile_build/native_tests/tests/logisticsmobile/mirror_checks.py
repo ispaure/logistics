@@ -17,18 +17,14 @@ async def browse_local_during_transfer(app, folder):
     app.folder_local_buttons['Others'].on_press()
     assert folder not in app.folder_buttons
     assert await app.folder_buttons['All files'].on_press()
-    for name in ('Local', folder):
-        row = next(row for row in app.file_rows.values() if row['name'] == name)
-        assert await app.browser_file_folder(row)
+    assert not {'Local', 'Received Files'} & {row['name'] for row in app.file_rows.values()}
+    await app.parent_file_folder()
+    assert not app.routes.screens['files']
+    # Managed local folders keep their dedicated workspace route.
+    assert await app.browse_hub_folder(folder)
     assert app.file_path == folder
     assert await app.browser_file_location(('Local files', folder))
     assert any(item.label == 'Local note.txt' for item in app.file_browser.entries)
-    # Shared Files is the workspace entry point. Back traverses the ordinary
-    # collection and its shared parent before returning to Workspaces.
-    await app.parent_file_folder()
-    assert app.file_storage.value == 'Local files' and app.file_path == ''
-    await app.parent_file_folder()
-    assert app.file_storage.value == 'Shared files' and app.file_path == ''
     await app.parent_file_folder()
     assert not app.routes.screens['files']
     assert app.cloud_busy and app.transfer_busy
@@ -60,7 +56,8 @@ async def exercise_mirrors(app, comic_key):
             assert started.is_set() and app.transfer_busy
             # Local directory browsing must not consume the cloud busy state or
             # overwrite the live transfer's cancellation handle.
-            local = app.private_root / 'LocalFiles' / 'Browse during pull'
+            from services.documents.locations import collection_path
+            local = collection_path(app.private_root) / 'Browse during pull'
             local.mkdir(parents=True, exist_ok=True)
             (local / 'Local note.txt').write_text('Unrelated local file')
             cancel = app.transfer_controller()._transfer_cancel
