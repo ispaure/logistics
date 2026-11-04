@@ -107,6 +107,7 @@ class ImageWorkflow:
         assert all(abs(b[0]-a[0]-40)<.01 and abs(b[1]-a[1]-35)<.01 for a,b in zip(before,moved)), moved
         await self.action("const p=imageQA.center();imageQA.gesture([p,[p[0]+10,p[1]+5]],'pen')")
         self.cases.append('finger and pen selection/movement via actual canvas handlers and durable bridge')
+        await self.wait('!penTouchBlocked()', 'Pen release palm-rejection grace did not expire')
         edge = await self.js('return imageQA.edge()')
         await self.action("const p=imageQA.current(),c=imageQA.center(p),h=imageHandles(p)[1],a=Math.PI/6,x=h[0]-c[0],y=h[1]-c[1];imageQA.gesture([h,[c[0]+x*Math.cos(a)-y*Math.sin(a),c[1]+x*Math.sin(a)+y*Math.cos(a)]])")
         rotated = await self.js('return imageQA.current().corners')
