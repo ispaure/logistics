@@ -93,7 +93,7 @@ renderEraserChoices();
   pages.append(iconButton(control('prev'), 'back', 'Previous page'), control('pageinfo'), iconButton(control('next'), 'next', 'Next page'));
   let pagesToggle = makeButton('pages', 'Pages Overview', e => openSheet('pages', e.currentTarget), 'Pages Overview');
   pagesToggle.id = 'pagesToggle';
-  let layersToggle = makeButton('layers', 'Layers', e => openSheet('layers', e.currentTarget), 'Layers');
+  let layersToggle = makeButton('layers', 'Page template and layers', e => openSheet('layers', e.currentTarget), 'Page template');
   layersToggle.id = 'layersToggle';
   let backdrop = document.createElement('div');
   backdrop.id = 'mobileBackdrop';
@@ -113,7 +113,7 @@ renderEraserChoices();
     returnFocus = null;
   const names = {
     brush: 'Writing tools',
-    layers: 'Layers',
+    layers: 'Page template and layers',
     pages: 'Pages Overview',
     document: 'Notebook',
     view: 'View and input'
@@ -216,6 +216,11 @@ renderEraserChoices();
     }
   };
   pp.append(go);
+  const pageTemplateButton = document.createElement('button');
+  pageTemplateButton.textContent = 'Page template…';
+  pageTemplateButton.id = 'pageTemplateButton';
+  pageTemplateButton.onclick = e => openSheet('layers', e.currentTarget);
+  pp.append(pageTemplateButton);
   let previews = document.createElement('div');
   previews.className = 'page-previews';
   previews.setAttribute('aria-label', 'Page thumbnails');

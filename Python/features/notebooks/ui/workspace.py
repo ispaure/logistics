@@ -115,7 +115,10 @@ class NotebookWorkspace(qt.QWidget):
 
     def new(self):
         try:
-            book = Notebook.new()
+            from .setup import choose_new_notebook
+            book = choose_new_notebook(self)
+            if book is None:
+                return
             key = self.repository.create(book)
             self.open(book, key)
         except Exception as error:

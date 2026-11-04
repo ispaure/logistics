@@ -94,7 +94,7 @@ class Notebook:
         self.metadata_dirty = False
 
     @classmethod
-    def new(cls, name='Notebook'):
+    def new(cls, name='Notebook', *, template=None, paper_format='pro'):
         identity = str(uuid4())
         result = cls({}, identity,
             dict(fileType='notebook', formatVersion=1, pageCount=1, pages=[],
@@ -103,6 +103,9 @@ class Notebook:
                  deleted=False, pinned=False, synced=False, modified=True, lastOpenedPage=0), [])
         result.add_page()
         result.metadata_dirty = True
+        if template is not None:
+            from .templates import select
+            select(result, 0, template, paper_format, True)
         return result
 
     @classmethod

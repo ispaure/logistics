@@ -65,9 +65,11 @@ class NotebookDesktopTests(unittest.TestCase):
 
     def test_new_opens_editable_draft_without_choosing_storage(self):
         from features.notebooks.editor import Editor
+        from features.notebooks.notebook import Notebook
         window = Mock()
         with patch('features.notebooks.ui.workspace.open_workspace', return_value=window) as open_workspace, \
-                patch('services.documents.ui.editors.choose_editor_resource') as choose:
+                patch('services.documents.ui.editors.choose_editor_resource') as choose, \
+                patch('features.notebooks.ui.setup.choose_new_notebook', return_value=Notebook.new()):
             self.assertIs(notebooks.new_document(), window)
         choose.assert_not_called()
         document = open_workspace.call_args.kwargs['document']
