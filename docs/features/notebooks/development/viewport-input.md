@@ -27,6 +27,29 @@ The visible mobile **Reset** zoom button applies that default immediately.
 An explicit Paper view choice remains a manual override until reset or a page
 change. Viewport state is presentation state and is not saved into native ink.
 
+## Touch navigation
+
+The shared canvas reserves ordinary single-finger horizontal drags for page
+navigation at any zoom, including touches beginning in the viewport margins or
+over PDF links. Vertical drags do not pan. The existing two-contact focal-point
+zoom also provides horizontal and vertical panning; a remaining finger stays
+inert until all contacts lift. Explicit finger drawing, Select / move and Capture
+retain their editing gestures. Pen proximity/contact rejection still takes priority.
+
+A left swipe beyond the last page offers a right-side **+ Page** button. Only its
+explicit click sends `add-page`; read-only and locked documents cannot offer it.
+The offer expires on navigation and successful creation, and permits retry after
+an acknowledged failure. Notes Library's embedded notebook marks ownership of
+horizontal document swipes, disabling native drawer-opening recognizers and the
+central `open_swipe` entry point while retaining the pane buttons.
+
+The reusable `touch_navigation_logic.js` executes production palm, input, zoom,
+link and navigation handlers together. It checks page boundaries, zoomed/margin
+swipes, link taps, cancellation, two-finger pan/pinch and page-creation acknowledgment.
+Mobile dummy-backend tests cover notebook drawer exclusion, button access and
+restoring ordinary Notes Library swipes after returning to Markdown. Native
+browser gesture delivery still requires the coordinated acceptance slot.
+
 ## Palm rejection
 
 The shared canvas rejects touch drawing, panning and pinching during a pen

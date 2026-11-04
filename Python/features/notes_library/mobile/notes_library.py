@@ -177,6 +177,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.links_generation = 0
         self.links_refresh_task = None
         self.sidebar = host.drawers(self.tree, self.article, self.links)
+        self.sidebar.opening_swipes_enabled = lambda: not getattr(self.embedded, 'owns_document_swipes', False)
         self.sidebar.open_links = lambda: host.loop.create_task(self.show_links(toggle=False))
         self.sidebar.on_close = self.cancel_links
         self.links_button = self.host.presentation.icon_button(
