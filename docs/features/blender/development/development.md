@@ -104,6 +104,16 @@ preset independence, child environments, deletion boundaries and addon fallbacks
 `Python/tests/blender/test_blender_page.py` covers contribution discovery, absence of
 startup provisioning, inventory display and worker-close cancellation.
 
+Page and settings fixtures use `QtTestCase.temporary_directory()` so Qt owners
+retire before their files are removed, and condition-based waits yield while
+workers finish. Settings integration uses a private manager and an empty provided
+addon library, with registry state limited to its Blender fixture; it must not
+scan the checkout's local addon archives or discover unrelated features. Catalog
+version/platform assertions live in the manager tests. Blue Hole tests distinguish
+unsafe archives from incompatible metadata and assert invalid branches avoid the
+network. Inventory tests cover both an expired deadline and timeout after a child
+wait, without launching Blender or waiting for real timeout intervals.
+
 Real OS-specific extraction and Blender startup should also be exercised on each
 supported desktop platform. Fixture ZIP/TAR/DMG tests do not substitute for Windows,
 Linux and Intel macOS runtime validation.

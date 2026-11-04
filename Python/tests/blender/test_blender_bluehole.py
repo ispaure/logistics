@@ -62,7 +62,7 @@ class BlueHoleTests(unittest.TestCase):
         self.assertNotEqual(first.digest, second.digest)
         self.assertTrue(first.package.exists())
 
-    def test_incompatible_or_unsafe_downloads_are_not_applied(self):
+    def test_unsafe_downloads_are_not_published(self):
         def unsafe(commit, path, cancelled):
             with zipfile.ZipFile(path, 'w') as archive:
                 archive.writestr('../escape.py', 'bad')
@@ -70,6 +70,18 @@ class BlueHoleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bluehole.update(self.manager, self.release, 'alpha')
         self.assertFalse((self.manager.root / 'escape.py').exists())
+        self.assertEqual(list(self.manager.root.rglob('addon.zip')), [])
+
+    def test_incompatible_download_is_rejected(self):
+        def incompatible(commit, path, cancelled):
+            with zipfile.ZipFile(path, 'w') as archive:
+                archive.writestr(f'BlueHole-{commit}/__init__.py',
+                                 'bl_info={"name":"Blue Hole","version":(1,0,0),"blender":(99,0,0)}')
+        with patch.object(bluehole, 'branch_commit', return_value='a' * 40), \
+                patch.object(bluehole, 'download', side_effect=incompatible):
+            with self.assertRaisesRegex(ValueError, 'not declared compatible'):
+                bluehole.update(self.manager, self.release, 'alpha')
+        self.assertFalse(self.manager.preferences.exists())
 
     def test_environment_preservation_replaces_only_default_and_keeps_custom_exactly(self):
         previous = self.manager.root / 'previous'; current = self.manager.root / 'current'
@@ -190,10 +202,12 @@ class BlueHoleTests(unittest.TestCase):
         self.assertEqual(new.branch, 'blender-4.5.1/main')
 
     def test_invalid_branch_is_rejected_before_network(self):
-        with self.assertRaises(ValueError):
-            bluehole.branch_commit('../unsafe')
-        with self.assertRaises(ValueError):
-            bluehole.validate({'enabled': True, 'branch': 'development'})
+        with patch('commonUtils.runtime.updates.github.json_get') as get:
+            with self.assertRaises(ValueError):
+                bluehole.branch_commit('../unsafe')
+            with self.assertRaises(ValueError):
+                bluehole.validate({'enabled': True, 'branch': 'development'})
+        get.assert_not_called()
 
 
 if __name__ == '__main__':
