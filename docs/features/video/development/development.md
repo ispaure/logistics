@@ -634,9 +634,10 @@ There is no plaintext fallback. LocalCrypt progress continues through its provid
 routes native commands, retains subtitle streams and waits for outstanding
 provider work before releasing resources. Native `PlaybackControls.m/.java`
 implement options, keyboard/touch input and sizing. `PausePresentation.m/.java`
-retain volatile paused frames; they do not write screenshots. Android uses a
-TextureView so its frame can be held without waiting for asynchronous decoder
-pause. The iOS build helper stages these imported implementation files, and the
+own pause presentation without writing screenshots. iOS preserves its native
+sample-buffer layer when available; only renderer fallbacks use a volatile
+snapshot. Android retains a volatile TextureView snapshot. See the
+[iOS HDR investigation](hdr-play-pause.md) for the reason and acceptance limits. The iOS build helper stages these imported implementation files, and the
 SDK validator fingerprints every native helper.
 
 The [desktop tools](../user/controls.md) and [mobile tools](../user_mobile/controls.md)
@@ -663,7 +664,9 @@ fallback, native output gravity and absence of a separate fullscreen toolbar ite
 It starts a synthetic local movie, observes the initial auto-hide and
 intermediate presentation-layer opacity, checks that status-bar visibility and
 header position remain stable during the fade, then opens Playback and its
-related option sheets. The shared menu factory owns their single Cancel action. Phone option lists use
+related option sheets. Selection menus dismiss from an outside tap and have no
+Cancel row; text-entry
+prompts retain explicit confirmation and cancellation. Phone option lists use
 scrollable alerts to avoid overflowing a compact Duo popover; iPad keeps anchored
 action sheets.
 The auto-hide timer retains its deadline across decoder notifications; explicit
