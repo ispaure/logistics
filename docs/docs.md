@@ -9,6 +9,9 @@ desktop, with a separate mobile workspace for supported features.
 | --- | --- |
 | Install and open the desktop app | [README setup](../README.md#get-started), then [desktop usage](user/user.md) |
 | Use the mobile app | [Mobile first steps](user_mobile/getting_started/getting_started.md) |
+| Choose local, private or remote storage | [Save and recover safely](user/working-safely.md) |
+| Configure settings or credentials | [Configuration](user/configuration.md) |
+| Clear reading positions or recent files | [Reader history](user/reader-history.md) |
 | Learn a particular tool | [Feature catalog](features/features.md) |
 | Make your first code change | [Contributor walkthrough](development/getting-started.md) |
 | Build, validate or deliver Logistics | [Build manager workflow](user/build-manager-journeys.md) |
