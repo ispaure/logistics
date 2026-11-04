@@ -27,7 +27,7 @@ It declares a PDF file type and a document launcher, with lazy desktop imports.
 
 `document.PDFDocument` accepts bounded memory bytes or reads at most 32 MiB plus
 one byte from a provider stream. It discovers page count, enforces 10,000 pages
-on mobile, and renders one page at a time to PNG with a 2048-pixel longest edge.
+for consumers of this facade, and renders one page at a time to PNG with a 2048-pixel longest edge.
 Desktop rendering uses QtPdf; iOS uses PDFKit; Android uses PdfRenderer with a
 duplicated anonymous Linux memory descriptor. No plaintext temporary file is
 created. Native renderer objects and descriptors close after each operation.
@@ -145,8 +145,8 @@ rasterization, navigation, search and memory release in an isolated test app.
 Native verification on 2026-10-17 passed PDFKit and Android PdfRenderer opening,
 rasterization, page jumps, embedded-text search, reading mode and memory release.
 Android bitmap background fill explicitly uses Chaquopy jint(-1), preventing the
-long color-space overload from raising Invalid ID: 63. Reports and screenshots
-are in the root development test-results/mobile-evidence/2026-10-17-pdf-search folder.
+long color-space overload from raising Invalid ID: 63. This is a historical verification scope, not acceptance of subsequent changes.
+Raw reports and screenshots remain local-only and are not part of this wiki.
 
 ## Mobile contents hierarchy
 
@@ -191,3 +191,24 @@ vertical scrubbing, session retirement and external privacy blanking.
 sequences at three viewport sizes forward, backward and forward again. It checks
 exact page coverage and identical spread boundaries, plus direct-jump Back and
 layout-refresh boundaries. These are host navigation checks without native rendering.
+
+## Reading-position ownership and validation limits
+
+Desktop `PDFWindow` obtains `desktop_state(provider, path, 'pdf')`, restores a
+valid zero-based page and saves on page synchronization. The mobile provider
+reader uses the shared document state contract. Credential-backed positions
+can survive restart encrypted with the owning ZIP password; passwordless private
+state stays in RAM. Closing releases PDF buffers and search state independently
+of the checkpoint. See [private reader state](../../../development/reader-state.md)
+for storage authority, migration, revocation and clear fences.
+
+The 10,000-page bound in `PDFDocument` applies to native/mobile rendering and
+notebook conversion input. Desktop `PDFWindow` loads `QPdfDocument` directly; it
+does not enforce that facade page-count bound. Desktop search independently
+enforces its 10,000-page limit. Desktop presentation is single-page and has no
+contents tree or hold magnifier; these are mobile adapters.
+
+Documentation audit on 2026-11-04 reviewed source and test definitions only.
+No Qt, native renderer, device, build or test suite was launched during the
+release quiet hold. The test coverage described above identifies reusable checks;
+it does not claim a new passing run or current physical-device acceptance.
