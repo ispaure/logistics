@@ -45,6 +45,8 @@ class NotesLibraryModeTests(unittest.TestCase):
                              ['Red sea TURTLE.md', 'Turtle red folder', 'Field guide.md'])
             with patch.object(owner.library, 'read', side_effect=AssertionError('read note body')):
                 owner.search_mode.value = 'Search in File Names'
+                self.assertEqual(owner.search.value, '')
+                owner.search.value = 'turtle red'
                 await owner.search_task
                 buttons = [next(child for child in row.children if hasattr(child, 'vault_path')) for row in owner.rows.children]
             self.assertEqual([button.text for button in buttons], ['Red sea TURTLE.md', 'Turtle red folder'])

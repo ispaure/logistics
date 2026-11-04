@@ -1009,3 +1009,93 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 self.assertTrue(await owner.open_note('Vault/Home.md'))
             self.assertEqual(owner.rows.children, rows)
         self.run_async(exercise())
+
+    def test_document_and_filename_scopes_own_inputs_results_and_pagination(self):
+        (self.vault / 'Body.md').write_text('Unique phrase in the body')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            names_input = owner.search
+            names_input.value = 'Plan'
+            await owner.search_task
+            names_rows, names_scroll = owner.rows, owner.rows_scroll
+            names_result = list(owner.search_rows)
+            owner.shown = 100
+            owner.search_scope_buttons['Search within Documents'].on_press()
+            self.assertIsNot(owner.search, names_input)
+            self.assertEqual(owner.search.value, '')
+            self.assertIsNot(owner.rows, names_rows)
+            self.assertIsNot(owner.rows_scroll, names_scroll)
+            documents_input = owner.search
+            documents_input.value = 'Unique phrase'
+            await owner.search_task
+            self.assertEqual([row['path'] for row in owner.search_rows], ['Vault/Body.md'])
+            documents_rows = owner.rows
+            owner.shown = 150
+            with patch.object(owner, 'run_search', side_effect=AssertionError('Completed scope was rescanned')):
+                owner.search_scope_buttons['Search in File Names'].on_press()
+                self.assertIs(owner.search, names_input)
+                self.assertEqual(owner.search.value, 'Plan')
+                self.assertIs(owner.rows, names_rows)
+                self.assertIs(owner.rows_scroll, names_scroll)
+                self.assertEqual(owner.search_rows, names_result)
+                self.assertEqual(owner.shown, 100)
+                owner.search_scope_buttons['Search within Documents'].on_press()
+                self.assertIs(owner.search, documents_input)
+                self.assertEqual(owner.search.value, 'Unique phrase')
+                self.assertIs(owner.rows, documents_rows)
+                self.assertEqual(owner.shown, 150)
+            owner.dispose()
+            self.assertEqual(names_input.value, '')
+            self.assertEqual(documents_input.value, '')
+            self.assertFalse(names_rows.children)
+            self.assertFalse(documents_rows.children)
+        self.run_async(exercise())
+
+    def test_search_scope_switch_cancels_late_document_results(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.search_mode.value = 'Search within Documents'
+            started, release = Event(), Event()
+            original = owner.library.read_text
+            def slow(*args, **kwargs):
+                started.set()
+                release.wait(5)
+                return original(*args, **kwargs)
+            try:
+                with patch.object(owner.library, 'read_text', side_effect=slow):
+                    owner.search.value = 'late body result'
+                    for _ in range(200):
+                        if started.is_set():
+                            break
+                        await asyncio.sleep(.01)
+                    self.assertTrue(started.is_set())
+                    owner.search_mode.value = 'Search in File Names'
+                    owner.search.value = 'Plan'
+                    await owner.search_task
+                    expected = list(owner.search_rows)
+                    release.set()
+                    await asyncio.sleep(.1)
+                    self.assertEqual(owner.search_rows, expected)
+                    self.assertEqual(owner.search.value, 'Plan')
+            finally:
+                release.set()
+                owner.dispose()
+        self.run_async(exercise())
+
+    def test_mutation_invalidates_inactive_scope_without_changing_its_query(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.search.value = 'Plan'
+            await owner.search_task
+            owner.search_mode.value = 'Search within Documents'
+            owner.search.value = 'Plan'
+            await owner.search_task
+            library_files.copy(owner.library, 'Vault/Projects/Plan.MD', 'Vault/Plan copy.MD')
+            owner.refresh_library_indexes()
+            await owner.search_task
+            owner.search_mode.value = 'Search in File Names'
+            self.assertEqual(owner.search.value, 'Plan')
+            await owner.search_task
+            self.assertEqual({row['path'] for row in owner.search_rows},
+                {'Vault/Projects/Plan.MD', 'Vault/Plan copy.MD'})
+        self.run_async(exercise())
