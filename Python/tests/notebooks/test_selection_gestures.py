@@ -17,3 +17,10 @@ class SelectionGestureTests(unittest.TestCase):
         result = subprocess.run(['node', str(driver)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(json.loads(result.stdout)['passed'])
+
+    @unittest.skipUnless(shutil.which('node'), 'Node is required for the V8 selection index driver')
+    def test_index_matches_exhaustive_geometry_and_bounds_dense_work(self):
+        driver = Path(__file__).with_name('selection_index_logic.js')
+        result = subprocess.run(['node', str(driver)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(json.loads(result.stdout)['passed'])
