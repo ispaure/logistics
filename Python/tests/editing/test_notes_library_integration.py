@@ -1,6 +1,15 @@
 """Real decoder and encrypted-provider Notes Library integration acceptance."""
+from contextlib import contextmanager
+import faulthandler
+import json
 from pathlib import Path
+import sys
+from threading import get_ident
+from time import monotonic
+import unittest
 from unittest.mock import patch
+
+from shiboken6 import isValid
 
 from commonUtils.testing.stages import TestStage
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -9,6 +18,74 @@ from commonUtils.runtime.resources.local import LocalFiles
 from features.notes_library.ui.notes_library import NotesLibraryWindow
 
 TEST_STAGE = TestStage.EXTENDED
+
+
+def _capture_note_open(window, trace):
+    """Snapshot the original admission failure before cancellation/cleanup alters it."""
+    try:
+        progress = window.progress
+        operation = progress.operation
+        valid = operation is not None and isValid(operation)
+        delivered, delivered_error = progress._result
+        state = dict(trace, captured_at=monotonic(), pending_kind=window.pending[0],
+            busy=progress.busy, cancelled=progress.cancelled.is_set(), progress=progress.message.text(),
+            operation_id=id(operation) if operation is not None else None, operation_valid=valid,
+            delivered_result_type=type(delivered).__name__, delivered_error=delivered_error)
+        if valid:
+            state.update(running=operation.isRunning(), finished=operation.isFinished(),
+                interruption_requested=operation.isInterruptionRequested(),
+                worker_result_type=type(operation.result).__name__, worker_error=operation.error)
+        print('NOTES_OPEN_DEADLINE ' + json.dumps(state, sort_keys=True), file=sys.stderr, flush=True)
+    finally:
+        # Do not retain live Python frames, or wait until teardown has cancelled
+        # the worker. This synchronous dump includes every Python thread.
+        faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+
+
+@contextmanager
+def _note_open_diagnostics(window):
+    progress = window.progress
+    original_start = progress.start
+    trace = dict(requested_at=monotonic(), worker_entered_at=None, worker_returned_at=None,
+                 worker_thread_id=None, worker_result_type_at_return=None,
+                 last_worker_stage=None, last_worker_stage_at=None)
+
+    def start(work, **options):
+        def traced_work(report, cancelled):
+            trace.update(worker_entered_at=monotonic(), worker_thread_id=get_ident())
+            try:
+                value = work(report, cancelled)
+                trace['worker_result_type_at_return'] = type(value).__name__
+                return value
+            finally:
+                trace['worker_returned_at'] = monotonic()
+        return original_start(traced_work, **options)
+
+    def stage(done, total, message):
+        # Direct delivery records worker progress even if GUI delivery is late.
+        # This observer stores primitives only and never accesses Qt widgets.
+        trace.update(last_worker_stage=message, last_worker_stage_at=monotonic())
+
+    progress.progress_changed.connect(stage, qt.Qt.ConnectionType.DirectConnection)
+    try:
+        with patch.object(progress, 'start', side_effect=start):
+            try:
+                yield
+            except AssertionError:
+                try:
+                    _capture_note_open(window, trace)
+                except Exception as error:
+                    try:
+                        print('NOTES_OPEN_DIAGNOSTIC_FAILED ' + type(error).__name__,
+                              file=sys.stderr, flush=True)
+                    except Exception:
+                        pass  # A broken diagnostic stream must not replace the assertion.
+                raise
+    finally:
+        try:
+            progress.progress_changed.disconnect(stage)
+        except Exception:
+            pass  # Diagnostic observer retirement must not mask the test outcome.
 
 
 class NotesLibraryIntegrationTests(QtTestCase):
@@ -36,8 +113,9 @@ class NotesLibraryIntegrationTests(QtTestCase):
             (root / 'Media').mkdir()
             shutil.copyfile(Path(__file__).parents[1] / 'readers/fixtures/video/h264-aac.mp4', root / 'Media/potato.mp4')
             window = self.open_library(root)
-            window.open_note('Home.md')
-            self.wait_until(lambda: not window.progress.busy)
+            with _note_open_diagnostics(window):
+                window.open_note('Home.md')
+                self.wait_until(lambda: not window.progress.busy)
             self.wait_until(lambda: bool(window.viewer.browser.inline_videos.cards))
             self.assertEqual(len(window.viewer.browser.inline_videos.cards), 1)
             card = next(iter(window.viewer.browser.inline_videos.cards.values()))
@@ -202,3 +280,96 @@ class NotesLibraryIntegrationTests(QtTestCase):
                     self.assertTrue(provider.closed)
                     if isValid(window):
                         window.close()
+
+
+class NotesOpenDiagnosticsTests(unittest.TestCase):
+    def window(self):
+        from threading import Event
+        from types import SimpleNamespace
+        class Signal:
+            def __init__(self):
+                self.callbacks = []
+            def connect(self, callback, *args):
+                self.callbacks.append(callback)
+            def disconnect(self, callback):
+                self.callbacks.remove(callback)
+            def emit(self, *args):
+                for callback in tuple(self.callbacks):
+                    callback(*args)
+        operation = SimpleNamespace(result=None, error=None, isRunning=lambda: False,
+            isFinished=lambda: True, isInterruptionRequested=lambda: False)
+        progress = SimpleNamespace(operation=operation, busy=True, cancelled=Event(),
+            message=SimpleNamespace(text=lambda: 'Preparing embedded media…'),
+            progress_changed=Signal(), _result=(None, ''))
+        def start(work, **options):
+            operation.result = work(lambda *args: None, progress.cancelled.is_set)
+        progress.start = start
+        return SimpleNamespace(progress=progress, pending=('note', 'Home.md', True, '', None))
+
+    def test_capture_precedes_cleanup_and_preserves_original_failure_and_worker_state(self):
+        from io import StringIO
+        window = self.window()
+        original_start = window.progress.start
+        failure = AssertionError('original note-open deadline')
+        events, output = [], StringIO()
+        @contextmanager
+        def cleanup():
+            try:
+                yield
+            finally:
+                events.append('cleanup')
+                window.progress.cancelled.set()
+        def work(report, cancelled):
+            window.progress.progress_changed.emit(0, 0, 'Preparing embedded media…')
+            return object()
+        with patch(__name__ + '.isValid', return_value=True), patch.object(sys, 'stderr', output), \
+                patch.object(faulthandler, 'dump_traceback', side_effect=lambda **kwargs: events.append('dump')) as dump:
+            with self.assertRaises(AssertionError) as caught:
+                with cleanup(), _note_open_diagnostics(window):
+                    window.progress.start(work, message='Reading Home.md…')
+                    raise failure
+        self.assertIs(caught.exception, failure)
+        self.assertEqual(events, ['dump', 'cleanup'])
+        dump.assert_called_once_with(file=output, all_threads=True)
+        state = json.loads(output.getvalue().removeprefix('NOTES_OPEN_DEADLINE '))
+        self.assertEqual(state['operation_id'], id(window.progress.operation))
+        self.assertEqual(state['worker_thread_id'], get_ident())
+        self.assertLessEqual(state['worker_entered_at'], state['worker_returned_at'])
+        self.assertEqual(state['last_worker_stage'], 'Preparing embedded media…')
+        self.assertEqual(state['worker_result_type'], 'object')
+        self.assertEqual(state['delivered_result_type'], 'NoneType')
+        self.assertTrue(state['busy'])
+        self.assertFalse(state['cancelled'])
+        self.assertFalse(state['running'])
+        self.assertTrue(state['finished'])
+        self.assertIs(window.progress.start, original_start)
+        self.assertEqual(window.progress.progress_changed.callbacks, [])
+
+    def test_broken_capture_or_diagnostic_stream_cannot_replace_the_assertion(self):
+        from io import StringIO
+        class BrokenStream:
+            def write(self, value):
+                raise OSError('closed diagnostic stream')
+            def flush(self):
+                raise OSError('closed diagnostic stream')
+        for output in (StringIO(), BrokenStream()):
+            with self.subTest(broken_stream=isinstance(output, BrokenStream)):
+                window = self.window()
+                failure = AssertionError('preserve this failure')
+                with patch(__name__ + '._capture_note_open', side_effect=RuntimeError('capture failed')), \
+                        patch.object(sys, 'stderr', output):
+                    with self.assertRaises(AssertionError) as caught:
+                        with _note_open_diagnostics(window):
+                            raise failure
+                self.assertIs(caught.exception, failure)
+                self.assertEqual(window.progress.progress_changed.callbacks, [])
+
+    def test_success_does_not_capture_or_change_the_work_result(self):
+        window = self.window()
+        value = object()
+        with patch(__name__ + '._capture_note_open') as capture:
+            with _note_open_diagnostics(window):
+                window.progress.start(lambda report, cancelled: value)
+        capture.assert_not_called()
+        self.assertIs(window.progress.operation.result, value)
+        self.assertEqual(window.progress.progress_changed.callbacks, [])
