@@ -55,7 +55,10 @@ def verify_native_transfer_fallback(surface):
             assert not node.isHidden() and float(native_value(node.alpha)) > 0, 'Native transfer view is hidden'
             node = native_value(node.superview)
         def text(widget):
-            return str(native_value(widget._impl.native.text) or '')
+            value = str(native_value(widget._impl.native.text) or '')
+            # Toga iOS 0.5.7 encodes an empty UILabel as exactly U+200B to
+            # preserve intrinsic size; its own get_text decodes this sentinel.
+            return '' if value == '\u200b' else value
     elif platform.startswith('toga_android.'):
         assert native.isAttachedToWindow(), 'Native transfer view is detached'
         assert int(native.getVisibility()) == 0 and native.isShown(), 'Native transfer view is hidden'

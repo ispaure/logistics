@@ -80,7 +80,14 @@ async def exercise_recovery(app):
         fallback = review.native_fallback
         assert 'no undo' in fallback.metrics.text
         approve = next(button for button in fallback.buttons.children if button.text.startswith('Approve'))
-        await approve.on_press()
+        # The review-specific driver waits for actual attachment/layout and
+        # checks the displayed native model before clicking its guarded action.
+        from .review_checks import press_review
+        from .web_checks import verify_native_transfer_fallback
+        await press_review(review, 'approve', timeout=5)
+        review_proof = verify_native_transfer_fallback(review)
+        assert review_proof['renderer'] == 'native' and review_proof['mode'] == 'review'
+        result['native_review_acceptance_helper'] = review_proof
         assert calls[-1][0] == 'approve'
         await next(button for button in fallback.buttons.children if button.text == 'Next changes').on_press()
         assert calls[-1][0] == 'next'
