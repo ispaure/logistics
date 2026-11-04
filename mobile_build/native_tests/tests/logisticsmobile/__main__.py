@@ -68,6 +68,8 @@ async def exercise(app):
         passed.append('native_notebooks')
         from .document_checks import exercise_documents
         await measure(app, 'documents', exercise_documents(app, passed))
+        from .native_pdf_edge_checks import exercise_pdf_edge_links
+        pdf_edge_links = await measure(app, 'pdf-edge-links', exercise_pdf_edge_links(app))
         fixtures = app.private_root / 'fixtures'
         fixtures.mkdir()
         epub, comic = make_books(fixtures)
@@ -108,6 +110,7 @@ async def exercise(app):
                   backend=type(app._impl).__module__, cases=passed, expected_cases=list(CASES),
                   success=success, error=error, source=source, native_picker_tested=False)
     report['timings'] = timings.summary()
+    report['pdf_edge_links'] = locals().get('pdf_edge_links', getattr(app, '_native_pdf_edge_links', None))
     report['navigation'] = locals().get('navigation_proof')
     report['ui_review'] = locals().get('ui_review')
     report['independent_windows_tested'] = app.scene_manager.supported
