@@ -27,6 +27,7 @@ function hits(p) {
   return state.strokes.filter(s => visible.has(s.layer) && s.points.some((v, i) => distance(p, i ? s.points[i - 1] : v, v) < (mode === 'erase' ? eraserRadius + v[3] / 2 : Math.max(12, v[3] / 2)))).map(s => s.id)
 }
 function beginPan(e, capture = canvas) {
+  if (e.pointerType === 'touch' && penTouchBlocked()) return;
   if (pan) {
     pan.cancelled = true;
     return
@@ -43,6 +44,7 @@ canvas.onpointerdown = e => {
   // A second contact (often the resting palm) must not fall through to the
   // browser's default selection even while a Pencil stroke owns the canvas.
   e.preventDefault();
+  if (e.pointerType === 'touch' && penTouchBlocked()) return;
   if (e.pointerType === 'pen' && state.native_pen && e.isTrusted && !e.nativePen) {
     e.preventDefault();
     return
@@ -56,6 +58,7 @@ canvas.onpointerdown = e => {
   }
   if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke'))) || state.warning || state.read_only) return;
   if (e.pointerType === 'pen') {
+    notePenContact(true);
     pan = null;
     cancelTouchZoom()
   }
@@ -125,6 +128,7 @@ function finish(e, cancelled = false) {
     return
   }
   if (e.pointerId !== active || (state.native_pen && e.isTrusted && !e.nativePen)) return;
+  if (e.pointerType === 'pen' || penContactActive) notePenContact(false);
   active = null;
   if (cancelled) {
     cancelPreview();

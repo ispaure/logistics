@@ -15,6 +15,37 @@ from mobile_build.validation import notebook_template_tools as tools
 
 
 class NotebookAndroidShellTests(unittest.TestCase):
+    def test_fresh_palm_package_evidence_survives_owned_build_cleanup(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            work, output = root / 'work', root / 'evidence'
+            native = work / 'payload/features/notebooks/mobile/android'
+            native.mkdir(parents=True)
+            (native / 'NotebookInput.java').write_text('synthetic source')
+            classes = work / 'build/classes'
+            classes.mkdir(parents=True)
+            (classes / 'NotebookInput.class').write_bytes(b'synthetic class')
+            apk = work / 'built.apk'
+            with ZipFile(apk, 'w') as archive:
+                archive.writestr('classes.dex', b'synthetic DEX')
+            output.mkdir()
+            digest = sha256(apk.read_bytes()).hexdigest()
+            (output / 'android-apk.json').write_text(json.dumps(dict(apk=str(apk), sha256=digest)))
+            (output / 'source.json').write_text(json.dumps(dict(logistics_commit='frozen')))
+            tools.retain_palm_package(work, output)
+            saved = output / 'notebook-palm.apk'
+            try:
+                apk.unlink()
+                receipt = json.loads((output / 'android-shell.json').read_text())
+                self.assertEqual(sha256(saved.read_bytes()).hexdigest(), digest)
+                self.assertEqual(receipt['source']['logistics_commit'], 'frozen')
+                self.assertIn('build/classes/NotebookInput.class', receipt['native_class_hashes'])
+                self.assertIn('NotebookInput.java', receipt['native_source_hashes'])
+                self.assertEqual(receipt['compiled_payload'], tools.compiled_payload(saved))
+                self.assertTrue(receipt['read_only'])
+            finally:
+                saved.chmod(0o644)
+
     def test_selected_probe_and_frozen_revision_preserve_dex_and_libraries(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
