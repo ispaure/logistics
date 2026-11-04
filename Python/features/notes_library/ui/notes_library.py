@@ -69,6 +69,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
     def __init__(self, factory, label, *, remote=False, root=""):
         super().__init__()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.library_label = label
         self.setWindowTitle('Notes Library — ' + label)
         self.resize(1000, 750)
         self.init_document(remote=remote)

@@ -51,9 +51,9 @@ its name is underlined. Hovering over that folder shows a pointing-hand cursor. 
 
 Every open file has a breadcrumb path beside the history arrows, including
 images, PDFs, source files, drawings and file-information previews. Underlined
-folders open their same-named Markdown page. Plain folder names have no action.
-When space is limited, ancestor names shorten first to preserve the current
-filename; hover over the desktop path to see its full names.
+folders open their same-named Markdown page. Other folder names reveal that folder in Files.
+When space is limited, the path initially shows its end. Swipe or use the
+mouse/trackpad wheel over it to reach earlier folders, including the library root.
 
 On desktop, the sidebar stays visible and has **Files** and **Calendar** tabs.
 Previous/next note and parent-folder controls sit in the document toolbar.
