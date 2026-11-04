@@ -2,7 +2,7 @@
 from commonUtils.ui.native.event_loop import DebouncedCallback
 import toga
 import json
-import sys
+from toga.platform import get_current_platform
 from toga.style import Pack
 from toga.style.pack import COLUMN
 
@@ -13,7 +13,7 @@ from .forms import SettingsLabel, page_button, fit_section, settings_presentatio
 def show_licenses(app, widget=None, **kwargs):
     inventory = None
     unavailable = None
-    if sys.platform == 'android':
+    if get_current_platform() == 'android':
         try:
             from java import jclass
             scanner = jclass('java.util.Scanner')(
