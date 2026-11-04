@@ -69,6 +69,7 @@ renderEraserChoices();
   brushToggle.setAttribute('aria-haspopup', 'dialog');
   brushToggle.setAttribute('aria-expanded', 'false');
   tools.append(brushToggle);
+  tools.append(iconButton(control('capture'), 'select', 'Capture cutouts and arrange images', 'Capture'));
   for (let [id, label] of [
       ['erase', 'Erase'],
       ['select', 'Move'],

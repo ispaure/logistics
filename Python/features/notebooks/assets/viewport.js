@@ -68,6 +68,7 @@ function paperBounds() {
   if (paperView !== 'move' || !state.template_editable) return {x: 0, y: 0, width: state.width, height: state.height};
   const box = state.move_paper || {x: 291.5, y: 0, width: 821, height: 1460};
   let left = box.x, right = box.x + box.width, bottom = box.height;
+  for (const image of state.images || []) for (const p of image.corners) { left=Math.min(left,p[0]);right=Math.max(right,p[0]);bottom=Math.max(bottom,p[1]) }
   for (const stroke of state.strokes) for (const p of stroke.points) {
     const radius = Math.max(0, p[3] || 0) / 2 + 2;
     left = Math.min(left, p[0] - radius); right = Math.max(right, p[0] + radius);
@@ -78,6 +79,7 @@ function paperBounds() {
 }
 
 function render() {
+  if (typeof imageRender === 'function') imageRender();
   templateControls();
   if ($('pageTemplate')) {
     const name = state.template_name || state.template || 'Blank';
@@ -179,6 +181,8 @@ function resize() {
 }
 
 function previewErase(samples, radius = eraserRadius) {
+  // Image pixels are immutable under the ink eraser; reconcile on acknowledgement.
+  if (state.images?.length) return;
   if (!samples.length) return;
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
@@ -196,11 +200,15 @@ function previewErase(samples, radius = eraserRadius) {
 }
 
 function draw() {
+  if (typeof imageRender === 'function') imageRender();
   clearDraft();
   ctx.clearRect(0, 0, state.width, state.height);
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
-  for (let s of state.strokes)
-    if (visible.has(s.layer)) line(s);
+  for (let s of sceneItems())
+    if (visible.has(s.layer)) { if (s.corners) paintPicture(s); else line(s) }
+  if (mode === 'capture' && points.length && !imageGesture) {
+    ctx.save(); ctx.strokeStyle='#2877cb'; ctx.lineWidth=3; ctx.setLineDash([8,6]); ctx.beginPath(); ctx.moveTo(points[0][0],points[0][1]); for(const p of points.slice(1))ctx.lineTo(p[0],p[1]); ctx.stroke(); ctx.restore()
+  }
   if (continuousInk)
     for (let action of queue)
       if (action.op === 'stroke') line({
