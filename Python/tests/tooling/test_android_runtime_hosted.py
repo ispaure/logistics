@@ -73,6 +73,7 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
                     events.append('scratch-preserved' if (workspace / '.keep').exists() else 'scratch-released')
             class Emulator:
                 def __init__(_self, sdk, path, **options):
+                    events.append(('execution-context', options.get('execution_context')))
                     _self.workspace = path
                     _self.marker = path / 'lease.json'
                     _self.adb = root / 'sdk/platform-tools/adb'
@@ -129,6 +130,14 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
             app_path = commands[0][commands[0].index('--result-file') + 1]
             adb_path = commands[1][-1]
             self.assertEqual(app_path.removeprefix('../../'), adb_path.removeprefix('files/'))
+
+    def test_hosted_runner_explicitly_requests_sdk_github_actions_admission(self):
+        # This boundary failed in the actual hosted runner when the default
+        # local context was used. The fake records selection only; SDK tests
+        # and an actual hosted run establish Linux/KVM qualification.
+        with self.fixture() as fixture:
+            self.run_fixture(*fixture[:4])
+            self.assertIn(('execution-context', 'github-actions'), fixture[4])
 
     def test_failed_skipped_partial_or_foreign_receipt_never_passes(self):
         for changes in ({'success': False, 'failures': 1}, {'skipped': 1}, {'tests_run': len(smoke.EXPECTED_TESTS) - 1},
