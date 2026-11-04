@@ -1,7 +1,7 @@
 """Independent Qt PDF reader with vertical, single-page navigation."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QEvent, QPoint
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QEvent, QPoint, QTimer
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
 from features.pdf.document import MAX_PDF
@@ -60,6 +60,14 @@ class PDFWindow(qt.QMainWindow):
         self.following.clicked.connect(lambda: self.go(self.index + 1))
         for widget in (self.previous, self.number, self.following):
             controls.addWidget(widget)
+        self.undo_jump = qt.QPushButton('Undo page jump')
+        self.undo_jump.hide()
+        self.undo_jump.clicked.connect(self.undo_link_jump)
+        controls.addWidget(self.undo_jump)
+        self.link_return = None
+        self.link_timer = QTimer(self)
+        self.link_timer.setSingleShot(True)
+        self.link_timer.timeout.connect(self.clear_link_return)
         controls.addStretch(1)
         self.find_button = reader_button(self, 'Find in PDF', text='Find in PDF')
         self.find_button.setCheckable(True)
@@ -104,9 +112,27 @@ class PDFWindow(qt.QMainWindow):
         self.search.input.setFocus()
         self.search.input.selectAll()
 
+    def clear_link_return(self):
+        self.link_timer.stop()
+        self.link_return = None
+        self.undo_jump.hide()
+
+    def offer_link_return(self, previous):
+        if self.index != previous:
+            self.link_return = previous
+            self.undo_jump.show()
+            self.link_timer.start(3000)
+
+    def undo_link_jump(self):
+        previous = self.link_return
+        self.clear_link_return()
+        if previous is not None:
+            self.go(previous)
+
     def go(self, index):
         if not 0 <= index < self.document.pageCount():
             return
+        self.clear_link_return()
         from services.documents.ui.page_transition import page_slide
         slide = page_slide(self.view.viewport())
         slide.begin(index - getattr(self, 'index', index), vertical=True)
@@ -115,6 +141,8 @@ class PDFWindow(qt.QMainWindow):
         slide.finish()
 
     def sync_page(self, index):
+        if index != getattr(self, 'index', index):
+            self.clear_link_return()
         self.index = index
         if self.position_state is not None:
             try:
@@ -152,6 +180,9 @@ class PDFWindow(qt.QMainWindow):
             if abs(delta.y()) >= 50 and abs(delta.y()) > abs(delta.x()):
                 self.go(self.index + (1 if delta.y() < 0 else -1))
                 return True
+            if kind == QEvent.Type.MouseButtonRelease and abs(delta.x()) < 8 and abs(delta.y()) < 8:
+                previous = self.index
+                QTimer.singleShot(0, self, lambda: self.offer_link_return(previous))
         elif kind == QEvent.Type.KeyPress:
             key = event.key()
             if key in (qt.Qt.Key.Key_Down, qt.Qt.Key.Key_PageDown, qt.Qt.Key.Key_Up, qt.Qt.Key.Key_PageUp):
@@ -160,6 +191,7 @@ class PDFWindow(qt.QMainWindow):
         return super().eventFilter(watched, event)
 
     def closeEvent(self, event):
+        self.clear_link_return()
         self.search.dispose()
         self.view.setDocument(None)
         self.document.close()

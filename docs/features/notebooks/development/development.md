@@ -1615,3 +1615,10 @@ repeated paste across pages, lasso clipping, cancellation and password gating.
 These host/mock checks do not establish browser pixels, native mobile file
 choosers, physical touch/stylus behavior or reMarkable firmware acceptance. No
 device deployment is part of this validation; native acceptance remains pending.
+
+
+## Internal page links
+
+PDF-backed notebooks expose internal link rectangles through `Editor.page_links`, caching only the current PDF page’s parsed annotations in memory. Targets are remapped through current `redir` values after insertion, movement, copying or deletion, without adding ink history or changing the embedded PDF. `assets/links.js`, loaded after image/capture handlers, reserves completed finger taps on mobile and Command-click (macOS) or Ctrl-click (Windows/Linux) mouse gestures on desktop. Pen input remains with the drawing engine. Movement, hold, cancellation, second contacts and pen proximity reject link activation; a swipe beginning on a link can still turn the page. Navigation acknowledgement starts a three-second Undo page jump overlay; errors and later page changes retire it.
+
+`link_gesture_logic.js` checks production handlers in V8 without platform claims. `notebook_links_probe.py` is the reusable real-WebEngine synthetic gesture/timer probe. Its first launch for this change failed at Chromium’s sandbox bootstrap before gesture execution; browser/native acceptance remains open, including the changed shared ImageCanvas Android Java input.

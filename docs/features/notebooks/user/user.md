@@ -245,3 +245,8 @@ copy stay in memory for that editing session. Save and Export retain the
 original encrypted PDF; reopening requires its password again. This applies to
 notebooks opened through Local and unlocked LocalCrypt. LocalCrypt continues
 to encrypt the entire saved notebook and keeps its unsaved draft in memory.
+
+
+## Internal page links
+
+In a PDF-backed `.rmdoc`, hold **Command** on macOS or **Ctrl** on Windows/Linux while clicking an internal PDF link to follow it. **Undo page jump** appears for three seconds. Ordinary clicks and pen strokes keep editing the page. Links follow the notebook’s page order; destinations whose original PDF page was removed are unavailable.

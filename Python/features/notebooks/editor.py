@@ -16,6 +16,7 @@ class Editor:
         self._background = (None, None)
         self._unlocked_pdf = None
         self._pdf_geometry = (None, None)
+        self._pdf_links = (None, None, [])
 
     def background(self):
         book = self.notebook
@@ -94,6 +95,23 @@ class Editor:
         writer.write(output)
         self._unlocked_pdf = (data, output.getvalue())
         return self._unlocked_pdf[1]
+
+    def page_links(self):
+        from features.pdf.links import safe_page_links
+        data = self.pdf_data()
+        if data is None:
+            return []
+        pages = self.notebook.pages
+        source = pages[self.index].record.get('redir', {}).get('value', -1)
+        if source < 0:
+            return []
+        targets = {}
+        for i, page in enumerate(pages):
+            targets.setdefault(page.record.get('redir', {}).get('value', -1), i)
+        if self._pdf_links[0] is not data or self._pdf_links[1] != source:
+            self._pdf_links = (data, source, safe_page_links(data, source))
+        return [dict(rect=link['rect'], index=targets[link['index']])
+                for link in self._pdf_links[2] if link['index'] in targets]
 
     def page_height(self):
         bounds = self.pdf_bounds()
@@ -271,7 +289,7 @@ class Editor:
             if pdf else description(page.template, artwork_available=template_available))
         from .images import image_payloads
         locked = self.notebook.content.get('fileType') == 'pdf' and self.pdf_data() is None
-        return dict(password_required=locked, images=image_payloads(self.notebook, self.index),
+        return dict(links=self.page_links() if pdf and not locked else [], password_required=locked, images=image_payloads(self.notebook, self.index),
                     scene_order=ink.order, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
