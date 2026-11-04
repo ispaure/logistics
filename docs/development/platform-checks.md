@@ -89,6 +89,28 @@ stack logging. A message sent to a deallocated object fails validation even if
 the native fixture otherwise reports success. This mode diagnoses lifetime
 failures; a passing diagnostic run alone does not resolve an intermittent crash.
 
+Hosted prebuilt iOS acceptance has one bounded recovery for an evidenced simulator
+startup failure. A failed private WebView must be attached and loading at 10%,
+with neither a live nor provisional WebContent process. Its fresh native report
+must match the prepared source, and the live process sample must show at least
+one distinct Swift task worker per host CPU synchronously blocked in Screen Time
+settings RPCs. This exhausts the cooperative executor also needed by WebKit's
+ExtensionKit process launch. A disposable native probe reproduces the mechanism:
+blocking every Swift worker prevents a new WebContent process from starting;
+leaving one worker available permits the expected page to render.
+
+Only the simulator recorded by the native gate's current ownership lease can
+recover, after the first app process is proven stopped. The driver archives the
+first failed report, sample and logs, records
+admission before retry, then starts the complete native suite once more on that
+already-booted simulator. Each attempt retains the original render deadline and
+the same prepared application and native assertions. Recovery rejects native
+faults, handler errors, stale evidence, source changes, ordinary DOM assertions
+and nonzero WebContent process identifiers. A controller restart cannot admit a
+second recovery for that simulator and prepared source. Both attempts and the
+admission record remain under the job's ignored logs and uploaded diagnostics.
+Local acceptance and ordinary application launches do not enable this recovery.
+
 The suite runner reports the active test and completed count every 60 seconds.
 Native crashes also produce Python tracebacks. The outer platform runner allows
 ten minutes for the shared suite and fifteen for Logistics and uploads its logs; macOS jobs also collect native Python

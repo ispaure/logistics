@@ -305,6 +305,15 @@ def clear_run_reports(logs, target):
 
 
 def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
+    operation = lambda: _run_once(target, device, local=local,
+        require_independent_windows=require_independent_windows, require_duo=require_duo, no_update=no_update)
+    if target == 'ios' and no_update and not local and os.environ.get('GITHUB_ACTIONS') == 'true':
+        from mobile_build.validation.ios_startup_recovery import run as recover_startup
+        return recover_startup(operation, device, tools=sys.modules[__name__])
+    return operation()
+
+
+def _run_once(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
     from logistics_build.test_structure import inventory
     inventory(REPO)
     if no_update:
