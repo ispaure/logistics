@@ -78,7 +78,9 @@ class Editor:
         if self.notebook.content.get('fileType') != 'pdf':
             return None
         data = self.notebook.members[self.notebook.id + '.pdf']
-        if self._unlocked_pdf and self._unlocked_pdf[0] is data:
+        # Structural recovery re-reads unchanged members into fresh byte objects.
+        # Keep the session unlock only for identical encrypted PDF contents.
+        if self._unlocked_pdf and self._unlocked_pdf[0] == data:
             return self._unlocked_pdf[1]
         from .pdf_crypto import enable_aes
         enable_aes()
@@ -290,7 +292,7 @@ class Editor:
         from .images import image_payloads
         locked = self.notebook.content.get('fileType') == 'pdf' and self.pdf_data() is None
         return dict(links=self.page_links() if pdf and not locked else [], password_required=locked, images=image_payloads(self.notebook, self.index),
-                    scene_order=ink.order, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
+                    scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,

@@ -4,7 +4,7 @@ let imageClipboard = null, imageSelection = null, imageGesture = null, forceImag
 const imageCache = new Map();
 const captureTools = document.createElement('div');
 captureTools.className = 'capture-tools';
-captureTools.innerHTML = '<button id="newCutout" type="button">New cutout</button><button id="pasteImage" type="button">Paste</button><label class="image-import">Add image<input id="imageFile" type="file" accept="image/png,image/jpeg" hidden></label><span id="imageActions" hidden><button id="copyImage" type="button">Copy</button><button id="imageSmaller" type="button" aria-label="Scale image down">− Size</button><button id="imageLarger" type="button" aria-label="Scale image up">+ Size</button><button id="imageRotate" type="button">Rotate 15°</button><select id="imageArrange" aria-label="Arrange selected image"><option value="">Arrange…</option><option value="forward">Bring forward</option><option value="backward">Send backward</option><option value="front">Bring to front</option><option value="back">Send to back</option></select><button id="deleteImage" type="button">Delete image</button></span>';
+captureTools.innerHTML = '<button id="newCutout" type="button">New cutout</button><button id="pasteImage" type="button">Paste</button><label class="image-import">Add image<input id="imageFile" type="file" accept="image/png,image/jpeg" hidden></label><span id="imageActions" hidden><button id="copyImage" type="button">Copy</button><button id="cutImage" type="button">Cut</button><button id="imageSmaller" type="button" aria-label="Scale image down">− Size</button><button id="imageLarger" type="button" aria-label="Scale image up">+ Size</button><button id="imageRotate" type="button">Rotate 15°</button><select id="imageArrange" aria-label="Arrange selected image"><option value="">Arrange…</option><option value="forward">Bring forward</option><option value="backward">Send backward</option><option value="front">Bring to front</option><option value="back">Send to back</option></select><button id="deleteImage" type="button">Delete image</button></span>';
 const captureToggle = document.createElement('button');
 captureToggle.id = 'capture'; captureToggle.type = 'button'; captureToggle.textContent = 'Capture';
 captureToggle.setAttribute('aria-label', 'Capture cutouts and arrange images');
@@ -19,6 +19,7 @@ pdfUnlock.onsubmit = e => {
   e.preventDefault();
   if (!busy) { const password = $('pdfPassword').value; $('pdfPassword').value = ''; send({op:'unlock-pdf', password}) }
 };
+function imagePageIdentity() { return state.page_id || 'index:' + state.index }
 function imageVisible(p) { return state.layers.some(row => row[0] === p.layer && row[2]) }
 function selectedPicture() { return (state.images || []).find(p => p.id === imageSelection && imageVisible(p)) }
 function imageRender() {
@@ -90,13 +91,20 @@ $('pasteImage').onclick = () => {
   if (!imageClipboard || busy || state.read_only || state.warning || state.password_required) return;
   mode='capture'; imageSelection=null;
   const {src, width, height} = imageClipboard, x=(state.width-width)/2, y=Math.max(0,(Math.min(state.height,1872)-height)/2);
-  const corners = imageClipboard.offsets ? imageClipboard.offsets.map(p => [state.width/2+p[0],Math.min(state.height,1872)/2+p[1]]) : [[x,y],[x+width,y],[x+width,y+height],[x,y+height]];
+  const crossPage = imageClipboard.sourcePageId && imageClipboard.sourcePageId !== imagePageIdentity();
+  const corners = crossPage && imageClipboard.sourceCorners ? imageClipboard.sourceCorners.map(p => [...p]) : imageClipboard.offsets ? imageClipboard.offsets.map(p => [state.width/2+p[0],Math.min(state.height,1872)/2+p[1]]) : [[x,y],[x+width,y],[x+width,y+height],[x,y+height]];
   send({op:'paste-image', src, corners, layer:$('layer').value})
 };
 $('copyImage').onclick = () => {
   const p=selectedPicture(); if (!p) return;
   const center=p.corners.reduce((a,q)=>[a[0]+q[0]/4,a[1]+q[1]/4],[0,0]);
-  imageClipboard={src:p.src,offsets:p.corners.map(q=>[q[0]-center[0],q[1]-center[1]]),width:Math.hypot(p.corners[1][0]-p.corners[0][0],p.corners[1][1]-p.corners[0][1]),height:Math.hypot(p.corners[3][0]-p.corners[0][0],p.corners[3][1]-p.corners[0][1])}; imageRender()
+  imageClipboard={src:p.src,sourcePageId:imagePageIdentity(),sourceCorners:p.corners.map(q=>[...q]),offsets:p.corners.map(q=>[q[0]-center[0],q[1]-center[1]]),width:Math.hypot(p.corners[1][0]-p.corners[0][0],p.corners[1][1]-p.corners[0][1]),height:Math.hypot(p.corners[3][0]-p.corners[0][0],p.corners[3][1]-p.corners[0][1])}; imageRender()
+};
+$('cutImage').onclick = () => {
+  const p=selectedPicture();
+  if(!p || busy || state.read_only || state.warning) return;
+  $('copyImage').onclick();
+  send({op:'delete-image',id:p.id})
 };
 $('imageSmaller').onclick = () => changeImage(.9);
 $('imageLarger').onclick = () => changeImage(1.1);
@@ -133,7 +141,7 @@ function captureCutout(path) {
   const bg=$('pdfBackground'); if(state.background) { if(!bg.complete || !bg.naturalWidth) { $('status').textContent='Wait for the background to load before capturing.'; return } const b=state.pdf_paper || {x:0,y:0,width:state.width,height:state.height};g.drawImage(bg,b.x,b.y,b.width,b.height) }
   const selection=imageSelection; imageSelection=null;const previous=selected;selected=new Set();
   try { for(const p of sceneItems()) if(imageVisible(p)) { if(p.corners) paintPicture(p,g,false);else line(p,g) } } finally { imageSelection=selection;selected=previous }
-  imageClipboard={src:boundedPNG(surface),width,height}; imageRender(); $('status').textContent='Cutout copied. Paste on this page or another page.'
+  imageClipboard={src:boundedPNG(surface),width,height,sourcePageId:imagePageIdentity(),sourceCorners:[[left,top],[left+width,top],[left+width,top+height],[left,top+height]]}; imageRender(); $('status').textContent='Cutout copied. Paste on this page or another page.'
 }
 const imageDown=canvas.onpointerdown,imageMove=canvas.onpointermove,imageUp=canvas.onpointerup,imageCancel=canvas.onpointercancel;
 canvas.onpointerdown = e => {
@@ -176,6 +184,7 @@ canvas.onpointerup=e=>finishImage(e);
 canvas.onpointercancel=e=>finishImage(e,true);
 canvas.onlostpointercapture=e=>finishImage(e,true);
 document.addEventListener('keydown',e=>{
+  if(mode!=='capture') return;
   if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || active!==null || busy)return;
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='v' && imageClipboard) { e.preventDefault();$('pasteImage').onclick() }
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='c' && selectedPicture()) {e.preventDefault();$('copyImage').onclick()}
