@@ -1,6 +1,14 @@
 # Notes Library
 
-Notes Library is an independent feature for local and LocalCrypt folder workspaces.
+Notes Library reads, edits and organizes local and unlocked LocalCrypt folder
+workspaces on desktop, iOS and Android. Desktop has a separate Notes Library
+destination with library tabs and document groups; mobile opens libraries from
+Documents and uses adaptive Files and Links panels. Cloud folders must first be
+downloaded or synced locally.
+
+An `.obsidian` directory enables automatic discovery; the desktop **Open Library**
+picker also accepts unmarked folders. The separate [Obsidian integration](../obsidian/obsidian.md)
+launches the external desktop application.
 
 - [Desktop user guide](user/user.md)
 - [Mobile user guide](user_mobile/user_mobile.md)
