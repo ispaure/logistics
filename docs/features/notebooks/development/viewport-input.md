@@ -47,8 +47,19 @@ The reusable `touch_navigation_logic.js` executes production palm, input, zoom,
 link and navigation handlers together. It checks page boundaries, zoomed/margin
 swipes, link taps, cancellation, two-finger pan/pinch and page-creation acknowledgment.
 Mobile dummy-backend tests cover notebook drawer exclusion, button access and
-restoring ordinary Notes Library swipes after returning to Markdown. Native
-browser gesture delivery still requires the coordinated acceptance slot.
+restoring ordinary Notes Library swipes after returning to Markdown.
+
+On November 4, 2026, the actual Cocoa Qt WebEngine check passed on Logistics
+`71629c9e`, build-manager `ffbc831c` and commonUtils `64f93308`: nine desktop and
+22 mobile assertions, including the document capture listeners at 200% zoom,
+viewport-margin paging, stationary PDF links, no one-finger panning, two-finger
+panning in both axes and the measured right-side page-creation button with an
+explicit click and acknowledgment. Both layouts also passed the real three-second
+Undo expiry. Rendered compositor screenshots were inspected; owned process groups,
+source scratch and private SDK bootstrap were removed. The browser check dispatches
+DOM PointerEvents; it does not certify OS finger delivery, native Notes Library
+pane buttons or physical stylus behavior. Those native boundaries remain separate
+from the passing browser and dummy-backend contracts.
 
 ## Palm rejection
 
