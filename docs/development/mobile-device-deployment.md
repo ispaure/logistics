@@ -26,6 +26,43 @@ configuration does not replace it. Version, plist capabilities, bundle identity,
 recursive signatures and every selected device's provisioning membership still
 have to match. The adapter retains that build number with the reviewed package.
 
+## Deliver a saved verified build to new devices
+
+In the manager, choose delivery from a saved run, select iOS devices, Android
+devices or both, and explicitly select the saved recipients again. The CLI
+prepares the same reviewable plan with `retained-delivery RUN --destination
+ios-devices --run-value 'devices.ios=["SAVED-UDID"]' --output NEWPLAN.json`.
+The selected platform's validation closure, required cleanup and retained Release
+preparation must have passed. A failure on the other platform remains recorded
+and does not block a separately verified device delivery. This does not establish
+that the original combined release passed.
+
+The adapter verifies both retained copies and original artifact hashes, archive
+or APK identity, the captured source snapshot and saved signing policy. It uses
+that snapshot even when the checkout has advanced, including a verified Current
+Files capture; it never rebuilds missing or expired input automatically. Missing,
+changed or unverifiable evidence gives an actionable rebuild error. Neither the
+original plan/result nor the captured source is rewritten.
+
+Each new delivery has immutable reviewed runner/verifier copies, fresh recipes,
+recipients and receipts. Device helpers execute against the captured source's
+application metadata, so a newer checkout version cannot silently replace an old
+archive's version. Execution rechecks the original review digest, source and
+artifact inputs before readiness, export/copy and installation. iOS provisioning
+updates are a new explicit execution choice; they permit profile/capability
+updates during export without registering devices or compiling an archive. Team,
+identity, signature and recipient membership checks remain required. Android
+recipients need a saved Beta certificate policy matching the retained Firebase
+APK. An incompatible Debug recipient requires an explicit compatible build.
+
+Device availability is shared by normal and retained delivery. **Try once (up to
+90 seconds)** is the default and does not retry an unreachable recipient. **Wait
+until reachable** retries that recipient without blocking unrelated recipients or
+providers. An unreachable device remains not installed; it never produces a
+passing delivery result. An uncertain installation requires the manager's
+separate, explicitly reviewed retry, with fresh receipt paths and unchanged
+source, prepared app and target identity.
+
 ## Recover a retained device app after a failed build process
 
 A standalone Duo/iPhone development build can leave a complete signed app even
