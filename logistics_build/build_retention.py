@@ -160,11 +160,11 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
     removed = []
     for provider in ('testflight', 'firebase'):
         removed += prune(mobile / 'build' / provider, eligible=lambda p: p.name.isdigit(), order_key=lambda p: int(p.name), apply=apply)
-    removed += prune(mobile / 'build', eligible=reviewed_output, ownership_files=(OUTPUT_MARKER,), age_days=7, apply=apply)
+    removed += prune(mobile / 'build', eligible=reviewed_output, ownership_files=(OUTPUT_MARKER,), age_days=5, apply=apply)
     if snapshots:
         removed += prune(mobile / '.tools/build-manager/snapshots',
                          eligible=owned_snapshot, ownership_files=('.manager-source.json',),
-                         age_days=7, max_bytes=SNAPSHOT_BUDGET, grace_days=1/24,
+                         age_days=5, max_bytes=SNAPSHOT_BUDGET, grace_days=1/24,
                          apply=apply, lock_path=lambda p: p.with_suffix('.lock'))
         for platform in ('ios', 'android'):
             removed += prune(**device_group(root, platform), age_days=1, max_bytes=DEVICE_BUDGET,
@@ -184,7 +184,7 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
                     warnings.append(message)
         from logistics_build.storage_extras import directory_groups, MARKER, clean_simulators
         for _, spec in directory_groups(root):
-            removed += prune(**spec, keep=0, age_days=7,
+            removed += prune(**spec, keep=0, age_days=5,
                              last_used=lambda p: (p / MARKER).stat().st_mtime, apply=apply)
         if sys.platform == 'darwin':
             removed += clean_simulators(root, apply=apply, warnings=warnings)
@@ -229,7 +229,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--apply', action='store_true', help='Delete expired owned outputs')
-    parser.add_argument('--enroll-directory', type=Path, help='Adopt a reviewed disposable temporary build directory (seven days)')
+    parser.add_argument('--enroll-directory', type=Path, help='Adopt a reviewed disposable temporary build directory (five days)')
     parser.add_argument('--enroll-simulator', help='Adopt an explicitly disposable simulator UUID (one day)')
     parser.add_argument('--enroll-output', action='append', default=[], metavar='NAME',
                         help='Enroll a reviewed disposable build folder; save useful evidence first. Does not prune.')
