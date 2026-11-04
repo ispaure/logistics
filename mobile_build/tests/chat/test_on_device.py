@@ -38,6 +38,17 @@ class Bridge:
 
 
 class OnDeviceTests(unittest.TestCase):
+    def test_legacy_android_runtime_offers_the_on_device_provider(self):
+        import sys
+        from features.lm.mobile.on_device import platform_provider
+        with patch('sys.platform', 'linux'), patch.object(sys, 'getandroidapilevel', return_value=36, create=True):
+            self.assertEqual(platform_provider(), 'nano')
+
+    def test_legacy_ios_runtime_offers_the_on_device_provider(self):
+        from features.lm.mobile.on_device import platform_provider
+        with patch('sys.platform', 'darwin'), patch('platform.system', return_value='iOS'):
+            self.assertEqual(platform_provider(), 'apple')
+
     def test_native_stream_preserves_messages_and_emits_only_new_text(self):
         bridge = Bridge(snapshots=[dict(text='Hi', done=False), dict(text='Hi there', done=True)])
         payload = dict(messages=[dict(role='system', content='Instructions'),
