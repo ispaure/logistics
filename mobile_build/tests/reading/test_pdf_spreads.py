@@ -13,7 +13,7 @@ from features.pdf.mobile.canvas import PDFNavigation
 
 class PDFSpreadTests(unittest.TestCase):
     def navigation(self, sizes):
-        return PDFNavigation(SimpleNamespace(count=len(sizes), page=sizes.__getitem__))
+        return PDFNavigation(SimpleNamespace(data=b'', count=len(sizes), page=sizes.__getitem__))
 
     def show(self, navigation, index, viewport):
         indices, _ = navigation.load(index, viewport)
