@@ -5,7 +5,6 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from unittest.mock import patch
-from tempfile import TemporaryDirectory
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 
@@ -13,8 +12,7 @@ from commonUtils.ui import pyside as qt
 class LMAppearanceTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
 
     def test_multiline_draft_grows_to_half_the_chat_area_then_scrolls_and_shrinks(self):
@@ -159,6 +157,8 @@ class LMAppearanceTests(QtTestCase):
             dock_right = page.composer_dock.mapTo(surface, page.composer_dock.rect().topRight()).x()
             scroll_left = bar.mapTo(surface, qt.QPoint()).x()
             self.assertLess(dock_right, scroll_left)
+            self.assertIs(page.send_button.parent(), page.composer_frame)
+            self.wait_until(lambda: page.send_button.y() > page.composer.geometry().bottom())
             self.assertLessEqual(page.send_button.width(), 32)
             self.assertLessEqual(page.composer_frame.height() - page.send_button.geometry().bottom(), 12)
             self.assertLess(page.model.geometry().right(), page.send_button.x())

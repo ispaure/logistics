@@ -167,7 +167,8 @@ class OwnershipTests(unittest.TestCase):
             'archives': [('desktop', 'test_archive_credentials.py'), ('desktop', 'test_archive_workspace_ui.py')],
             'books': [('mobile', 'test_reading_publication.py')],
             'comics': [('mobile', 'test_comic_sharing.py')],
-            'lm': [('mobile', 'test_chat_inventory.py')],
+            'lm': [('desktop', 'test_mobile_chat.py'),
+                   ('mobile', 'test_chat_inventory.py'), ('mobile', 'test_on_device.py')],
             'pdf': [('mobile', 'test_pdf_reader.py')],
             'rclone': [
                 ('desktop', 'test_remote_browser.py'),
