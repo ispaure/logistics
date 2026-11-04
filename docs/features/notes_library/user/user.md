@@ -31,18 +31,18 @@ their actual filenames. Use **Open as Notes Library** in the workspace action
 panel for a local folder containing an `.obsidian` directory. Browsing folders
 opens their files directly without a mode prompt.
 
-For writable libraries, use **New Document**, **New folder** and **Rename / Move…**
+For writable libraries, use **New Document**, **New folder** and **Rename…**
 in the sidebar. Click an already-selected file or folder name to rename it inline,
 or press F2. Enter applies the name; Escape cancels. Drag an entry onto a folder
 to move it; drop on empty sidebar space to move it to the library root.
-Rename / Move accepts a path relative to
-the library root, using existing folders. Moves preserve note history; unsaved
+**Rename…** changes only the name in the current folder. **Move…**, in the
+selection menu, opens a folder browser confined to this library and keeps the name. Moves preserve note history; unsaved
 changes must be resolved first. Choosing Save continues the requested move after
 saving succeeds; a failed save keeps the draft and its original path.
 Existing destinations are never overwritten.
 Links in other notes are not rewritten when files move.
 
-Right-click a file or folder for **Move / rename…**, **Copy…** or **Delete…**,
+Right-click a file or folder for **Rename…**, **Move…**, **Copy…** or **Delete…**,
 as supported by the location. Copy defaults to a sibling named “Filename - Copy”, retaining the file extension.
 Repeated default copies add “(2)”, “(3)”, and so on; custom paths refuse existing destinations. Delete asks
 for confirmation and permanently removes the selected item and its contents.

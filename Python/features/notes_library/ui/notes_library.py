@@ -104,7 +104,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             button.setAccessibleName(label)
             button.setToolTip(label)
         self.collapse_button.clicked.connect(self.tree.collapseAll)
-        self.rename_button = qt.QPushButton('Rename / Move…')
+        self.rename_button = qt.QPushButton('Rename…')
         self.file_actions_button = qt.QToolButton()
         self.file_actions_button.setText('…')
         self.file_actions_button.setAccessibleName('Selection actions')
@@ -375,11 +375,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         if item is None:
             return
         path, _ = item.data(0, qt.Qt.ItemDataRole.UserRole)
-        relative = PurePosixPath(path).relative_to(self.library.root or '.').as_posix()
-        destination, accepted = qt.QInputDialog.getText(self, 'Rename or move',
-            'Path inside Notes Library (existing folders). Links are not rewritten.', text=relative)
-        if accepted:
-            self.move_entry(path, '/'.join(filter(None, (self.library.root, destination))))
+        self.rename_path(path)
 
     def move_entry(self, source, destination):
         if self.library is None or not self.library.supports('rename'):
@@ -389,10 +385,13 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
     def rename_tree_entry(self, source, name):
         if name == PurePosixPath(source).name:
             return
-        if not name.strip() or name in ('.', '..') or '/' in name or '\\' in name:
-            self.viewer.status.setText('Enter a file or folder name without path separators.')
+        from ..library_files import renamed_path
+        try:
+            destination = renamed_path(source, name)
+        except ValueError as error:
+            self.viewer.status.setText(str(error))
             return
-        self.move_entry(source, str(PurePosixPath(source).with_name(name)))
+        self.move_entry(source, destination)
 
     def mutate(self, work, *, source=None, created=False, deleted=None, leave=True):
         if self.progress.busy or self.locked:

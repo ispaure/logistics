@@ -331,7 +331,8 @@ class LibraryPanels(LibraryConnections):
         if not directory and getattr(self, 'document_tabs', None) is not None:
             menu.addAction('Open in new tab', lambda: self.open_note(path, new_tab=True))
         if self.library.supports('rename'):
-            menu.addAction('Move / rename…', lambda: self.rename_path(path))
+            menu.addAction('Rename…', lambda: self.rename_path(path))
+            menu.addAction('Move…', lambda: self.move_path(path))
         if all(self.library.supports(action) for action in ('create', 'rename', 'delete')):
             menu.addAction('Copy…', lambda: self.copy_entry(path))
         if self.library.supports('delete'):
@@ -340,11 +341,24 @@ class LibraryPanels(LibraryConnections):
             menu.exec(tree.viewport().mapToGlobal(point))
 
     def rename_path(self, path):
-        relative = posixpath.relpath(path, self.library.root or '.')
-        destination, accepted = qt.QInputDialog.getText(self, 'Rename or move',
-            'Path inside Notes Library (existing folders). Links are not rewritten.', text=relative)
+        name, accepted = qt.QInputDialog.getText(self, 'Rename',
+            'Name. Links are not rewritten.', text=PurePosixPath(path).name)
         if accepted:
-            self.move_entry(path, posixpath.join(self.library.root, destination))
+            self.rename_tree_entry(path, name)
+
+    def move_path(self, path):
+        from commonUtils.ui.resources.picker import choose_resource
+        projection = library_files.LibraryFolderProvider(self.library, exclude=path)
+        choice = choose_resource([('Notes Library', lambda: (projection,
+            projection.acquire() if hasattr(projection, 'acquire') else lambda: None))],
+            parent=self, mode='folder')
+        if choice is not None:
+            try:
+                destination = posixpath.join(projection.library_path(choice.path), PurePosixPath(path).name)
+                if destination != path:
+                    self.move_entry(path, destination)
+            finally:
+                choice.close()
 
     def copy_entry(self, path):
         from services.documents.mutations import copy_path

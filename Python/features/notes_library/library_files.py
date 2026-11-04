@@ -52,3 +52,56 @@ def copy(library, source, target=None, *, cancelled=lambda: False):
     if target is None:
         return copy_document_sibling(library.provider, source, cancelled=cancelled)
     return copy_document_tree(library.provider, source, target, cancelled=cancelled)
+
+
+class LibraryFolderProvider:
+    """A folder-only browser projection rooted at one Notes Library."""
+    def __init__(self, library, *, exclude=None):
+        self.library = library
+        self.root = library.provider.root / library.root
+        self.exclude = library.contained(exclude) if exclude is not None else None
+
+    def __getattr__(self, name):
+        return getattr(self.library.provider, name)
+
+    def relative(self, path):
+        from pathlib import Path
+        import posixpath
+        if isinstance(path, Path) and path.is_absolute():
+            full = self.library.contained(path)
+        else:
+            full = self.library.contained('/'.join(part for part in (self.library.root, str(path)) if part))
+        if self.exclude is not None and (full == self.exclude or full.startswith(self.exclude + '/')):
+            raise ValueError('Choose a folder outside the item being moved.')
+        value = posixpath.relpath(full, self.library.root or '.')
+        return '' if value == '.' else value
+
+    def library_path(self, path):
+        return self.library.contained('/'.join(part for part in (self.library.root, self.relative(path)) if part))
+
+    def entry(self, path):
+        path = self.relative(path)
+        entry = dict(self.library.entry(self.library_path(path)))
+        entry['path'] = path
+        return entry
+
+    def list(self, path='', *, cancelled=lambda: False):
+        rows = self.library.folders(self.library_path(path), cancelled=cancelled)
+        result = []
+        for row in rows:
+            if row['directory']:
+                try:
+                    relative = self.relative(self.library.provider.root / row['path'])
+                except ValueError:
+                    continue
+                result.append(dict(row, path=relative))
+        return result
+
+
+def renamed_path(source, name):
+    """Rename accepts a single name; move destinations are chosen separately."""
+    from commonUtils.runtime.resources.paths import resource_name
+    import posixpath
+    if not name.strip():
+        raise ValueError('Enter a file or folder name.')
+    return posixpath.join(posixpath.dirname(source), resource_name(name))
