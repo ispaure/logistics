@@ -1,6 +1,24 @@
 # Text editing on mobile
 
-The mobile app provides its text editor in Documents and Workspaces.
+The mobile app provides its text editor in Documents and Workspaces on iOS and
+Android. Enable **Text Editor** in feature settings for text, Markdown and source
+file workflows. Notes Library has its own feature switch.
+
+## Plain text, storage and platform scope
+
+Plain text and source files use one native editor with a language dropdown and
+line count. **Find and replace…** searches the current source buffer; it does not
+search files across a workspace. The mobile text workflow limits documents to
+1 MiB. Desktop comparison/merge, multi-cursor, code-folding, shortcut customization
+and same-document split-view commands are not exposed by this mobile editor.
+
+Local files and unlocked LocalCrypt documents support editing and saving. Cloud
+and encrypted-cloud documents remain read-only; create a local copy to edit.
+Ordinary app-stored drafts keep a private recovery copy. LocalCrypt drafts are
+session-only: save before closing or locking; they are not ordinary recovered
+documents. Save errors keep the draft. If an ordinary stored document changes
+outside the editor, use **Save a copy…** to retain your edits.
+
 See the [Documents and editing](../../../user_mobile/documents/documents.md) guide for opening, editing, saving and exporting files.
 
 For folder libraries, see the [Notes Library mobile guide](../../notes_library/user_mobile/user_mobile.md).
@@ -108,8 +126,8 @@ document open while the content reflows to the available width. A landscape
 file sidebar collapses on return to portrait so the document uses the full
 reading width; the hamburger can reopen the file drawer.
 
-Tap the **speaker** icon in the Markdown preview or vault reader toolbar to open
-**Read aloud** in a floating panel with speed, pause/resume and stop controls.
+Choose **Read aloud…** from the Markdown preview’s **•••** menu (or the
+reader’s speaker control where shown) to open **Read aloud** in a floating panel with speed, pause/resume and stop controls.
 The panel leaves the page layout unchanged. Choose the saved offline voice in
 **Settings → Read aloud → Read-aloud voice**. Select a passage to read it, or
 play the whole rendered note. Speech follows the preview: links read their visible
@@ -128,7 +146,7 @@ the text and selection unchanged. The URL field appears only in this prompt.
 
 Markdown opened from Local, LocalCrypt or a connected remote displays animated GIFs and static
 WebP, PNG and JPEG images in preview and formatted editing. Use a path relative to the Markdown
-file, for example `![Photo](../../../../Python/features/text_editor/docs/user_mobile/images/photo.webp)` or `![[images/photo.webp]]`.
+file, for example `![Photo](images/photo.webp)` or `![[images/photo.webp]]`.
 Parent-folder paths work within the same storage root. Bare filenames refer to
 the Markdown file's folder; there is no vault-wide filename search.
 
@@ -140,7 +158,7 @@ The first matching image is used; this does not scan the library recursively.
 
 Images fit within the page width on phones and tablets. To request a smaller
 width in pixels, use `![[images/demo.gif|200]]` or
-`![Demo|200](../../../../Python/features/text_editor/docs/user_mobile/images/demo.gif)`. `|400x200` sets both dimensions; oversized requests
+`![Demo|200](images/demo.gif)`. `|400x200` sets both dimensions; oversized requests
 shrink proportionally to fit the page. Formatted editing and saving preserve the
 size hint. Source mode displays the editable reference.
 
