@@ -105,7 +105,10 @@ class DesktopRowRenderingTests(QtTestCase):
             self.fixture(provider, 40)
             results.append(self.exercise(provider, 40, 'local'))
             binary = executable.get_rclone_path()
-            self.assertTrue(binary.is_file(), 'Real desktop LocalCrypt verification needs pinned rclone')
+            if not binary.is_file():
+                if os.environ.get('LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'):
+                    self.fail('Required pinned rclone is missing')
+                self.skipTest('Optional pinned rclone is not installed')
             encrypted = workspace / 'encrypted'
             encrypted.mkdir()
             with crypt_fixture(encrypted, binary, pull=False) as fixture:
