@@ -25,7 +25,9 @@ PDFs report an opening error; PDF password entry is not supported.
 ## Search
 
 Enter text in **Find in PDF** and submit it or choose **Next match**. Search
-ignores case and covers the whole document. Next match and Previous match wrap
+ignores case, treats repeated whitespace as a single space, and searches literal
+text across the whole document. Queries are limited to 256 characters; regular
+expressions are not supported. Next match and Previous match wrap
 around the results and jump to the matching page. A result count and text snippet
 identify each match, including multiple matches on the same page. Clear the
 query to clear results. On desktop, Ctrl+F (Command+F on macOS) focuses search.
@@ -43,3 +45,17 @@ button stay in the compact reader toolbar; F11 toggles full screen.
 ## Page-turn motion
 
 Page turns use a short slide within the reading area. The toolbar stays still.
+
+## Reading position and platform differences
+
+Provider-backed readers can restore a saved page. Private credential-backed
+positions use the owning credential ZIP password; passwordless private sessions
+keep positions in memory. See [reader state and history clearing](../../../development/reader-state.md)
+for restoration, password changes and clearing controls. Search queries and
+snippets are not reading-position checkpoints.
+
+The desktop reader displays a single page. Embedded contents navigation, adaptive
+two-page spreads and the hold magnifier described in the
+[mobile guide](../user_mobile/user_mobile.md) belong to the mobile reader. Desktop
+does not expose those controls. To edit ink, open the duplicated `.rmdoc` in
+[Notebooks](../../notebooks/user/user.md); the original PDF remains read-only.
