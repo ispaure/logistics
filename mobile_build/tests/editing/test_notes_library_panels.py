@@ -1,6 +1,5 @@
 """Daily-note discovery, rooted file actions and abandoned opening behavior."""
 from commonUtils.testing.stages import TestStage
-TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from datetime import date
 from itertools import count
@@ -10,6 +9,8 @@ from unittest.mock import AsyncMock, patch
 import mobile_build.tests.documents.test_obsidian as fixtures
 from mobile.obsidian import open_vault
 from features.notes_library import library_files
+
+TEST_STAGE = TestStage.REGRESSION
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
@@ -954,10 +955,24 @@ class NotesLibraryPanelTests(unittest.TestCase):
     def test_stalled_position_callback_cannot_hold_up_local_open(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            entered, retired = asyncio.Event(), asyncio.Event()
             async def stalled():
-                await asyncio.sleep(10)
+                entered.set()
+                try:
+                    await asyncio.Future()
+                finally:
+                    retired.set()
             with patch.object(owner, 'remember_position', side_effect=stalled):
-                self.assertTrue(await asyncio.wait_for(owner.open_note('Vault/Home.md'), timeout=1))
+                task = asyncio.create_task(owner.open_note('Vault/Home.md'))
+                try:
+                    await asyncio.wait_for(entered.wait(), timeout=5)
+                    # Observe the hung callback's cancellation independently of
+                    # subsequent file I/O and rendering on a loaded host.
+                    await asyncio.wait_for(retired.wait(), timeout=5)
+                    self.assertTrue(await asyncio.wait_for(task, timeout=30))
+                finally:
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
         self.run_async(exercise())
 
     def test_refresh_and_second_tap_during_create_cannot_lose_success(self):

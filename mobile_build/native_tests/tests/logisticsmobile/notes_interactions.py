@@ -124,6 +124,29 @@ class NotesInteractionChecks:
         report['native_library_copy_' + storage] = True
         report['native_library_menu_edges_' + storage] = True
 
+    async def check_copy_contents(self, provider, source, target, *, directory):
+        # The native menu callback may be queued without setting cloud_busy yet.
+        # Wait for publication itself; a short fixed delay can race the worker.
+        for _ in range(200):
+            try:
+                entry = await asyncio.to_thread(provider.entry, target)
+            except FileNotFoundError:
+                pass
+            else:
+                if not self.cloud_busy:
+                    break
+            await asyncio.sleep(.05)
+        else:
+            raise AssertionError('Workspace copy was not published: ' + target)
+        assert entry['directory'] == directory
+        def content(path):
+            with provider.open(path) as stream:
+                return stream.read()
+        original = source + '/Child.md' if directory else source
+        copied = target + '/Child.md' if directory else target
+        assert await asyncio.to_thread(content, original) == await asyncio.to_thread(content, copied), (
+            'Workspace copy contents differ', source, target)
+
     async def check_private_copies(self, report):
         from features.rclone.localcrypt.mobile.resources import CryptFiles
         from mobile.obsidian import open_vault
@@ -201,9 +224,7 @@ class NotesInteractionChecks:
                 label = listing.getChildAt(next(i for i, (title, _) in enumerate(menu.actions) if title == 'Copy'))
             assert label is not None
             await self.touch_native(label)
-            await self.wait_for(lambda: not self.cloud_busy, 'Workspace copy did not finish')
-            await asyncio.sleep(.5)
             target = 'Workspace - Copy.md' if source.endswith('.md') else source + ' - Copy'
-            assert (await asyncio.to_thread(provider.entry, target))['directory'] == (not source.endswith('.md'))
+            await self.check_copy_contents(provider, source, target, directory=not source.endswith('.md'))
         report['native_workspace_file_folder_copy_' + storage] = True
         report['native_workspace_menu_edges_' + storage] = True
