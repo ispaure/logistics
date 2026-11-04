@@ -19,6 +19,7 @@
     "mobile/library_text.py",
     "mobile/library_tools.py",
     "mobile/notes_library.py",
+    "mobile/tree_rows.py",
     "mobile/preparation.py",
     "mobile/notes_swipe.py",
     "preparation.py",
