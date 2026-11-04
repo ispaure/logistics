@@ -191,6 +191,11 @@ Native log verification also rejects exceptions ignored by ctypes callbacks.
 A completed suite cannot pass while a native-to-Python callback reports a
 cleanup or layout exception.
 
+The hosted Android native job uses job-owned Go build and module caches. It
+clears those disposable caches after native compilation, before unpacking the
+emulator image, and records disk usage on either side. The APK and native
+libraries remain available for testing and artifact collection.
+
 Local scheduling validation uses `test_parallel_ios_workflow.py` and
 `test_native_report.py` under `mobile_build/tests/`: actual workflow shell steps
 run against disposable fixtures, covering archive reuse, executable permissions,
