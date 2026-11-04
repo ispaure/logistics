@@ -21,6 +21,10 @@ class NotebookPanelTests(unittest.TestCase):
         evaluator = patch.object(toga.WebView, 'evaluate_javascript', new_callable=AsyncMock)
         evaluator.start()
         self.addCleanup(evaluator.stop)
+        template_choice = patch('features.notebooks.mobile.setup.choose_new_notebook',
+            new_callable=AsyncMock, side_effect=lambda *args, **kwargs: Notebook.new())
+        template_choice.start()
+        self.addCleanup(template_choice.stop)
         self.temp=TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         LogisticsMobile.storage_root=Path(self.temp.name)
@@ -106,13 +110,16 @@ class NotebookPanelTests(unittest.TestCase):
         self.assertFalse(panel.document.dirty)
 
     def test_close_acknowledges_before_cancelled_dirty_guard(self):
+        from unittest.mock import AsyncMock, patch
         app = self.app
         path = Path(self.temp.name) / 'cancel-close.rmdoc'
         path.write_bytes(Notebook.new().to_bytes())
         app.loop.run_until_complete(open_notebook(app, path=path))
         panel = app.notebook_panel
         panel.editor.apply(dict(op='rename', name='Dirty'))
-        app.loop.run_until_complete(panel.perform(dict(op='library')))
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value='cancel')) as dialog:
+            app.loop.run_until_complete(panel.perform(dict(op='library')))
+        dialog.assert_awaited_once()
         panel.web.evaluate_javascript.assert_awaited()
         app.keep_reader_editing(panel.session.id)
         self.assertFalse(panel.busy)
@@ -242,6 +249,7 @@ class NotebookPanelTests(unittest.TestCase):
         self.assertFalse(app.routes.screens['home'])
 
     def test_notebook_close_keeps_unsaved_edits_for_the_close_prompt(self):
+        from unittest.mock import AsyncMock, patch
         app = self.app
         path = Path(self.temp.name) / 'unsaved.rmdoc'
         path.write_bytes(Notebook.new('Original').to_bytes())
@@ -249,7 +257,9 @@ class NotebookPanelTests(unittest.TestCase):
         app.loop.run_until_complete(open_notebook(app, path=path))
         panel = app.notebook_panel
         panel.editor.apply(dict(op='rename', name='Unsaved title'))
-        app.loop.run_until_complete(panel.perform(dict(op='library')))
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value='cancel')) as dialog:
+            app.loop.run_until_complete(panel.perform(dict(op='library')))
+        dialog.assert_awaited_once()
         self.assertIn(panel.session.id, app.workspace.sessions)
         self.assertTrue(panel.document.dirty)
         self.assertFalse(panel.closed)
