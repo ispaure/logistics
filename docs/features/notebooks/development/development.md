@@ -2,6 +2,28 @@
 
 The remaining physical procedure is [notebook hardware acceptance](hardware-acceptance.md).
 
+## Current implementation and acceptance boundary
+
+The November 4, 2026 documentation audit reviewed source and test definitions;
+it did not run Qt, builds, guests, simulators or devices. Notebook and template
+changes are integrated, but this is not an all-platform acceptance statement.
+The dated results below retain their original workload and source scope.
+
+| Area | Implemented behavior and remaining validation |
+| --- | --- |
+| Desktop | Qt WebEngine editor, document tabs, native menus, local/private Save and portable export. Historical macOS, Windows and Linux results below cover specific environments, not every renderer or architecture. |
+| Android and iOS | Native creation controls and WebView/WKWebView canvas share page templates, native ink and storage policy. Current source-bound native template and queued-command fence checks remain pending. |
+| Responsiveness | Remaining Linux latency acceptance is pending. Historical Fedora/Xvfb functional passes do not close it. Windows drawing responsiveness also remains unresolved as recorded below; diagnostic latency mode does not turn a failed guard into a pass. |
+| Physical hardware | Actual Pencil pressure/palm behavior, optical Boox latency and reMarkable import/select/move/erase remain separate acceptance gates. Synthetic input and successful codec readback do not complete them. |
+
+Before closing native template/fence acceptance, bind the result to the exact
+source snapshot and packaged payload. Check native first-page selection,
+cancellation/retry, per-page format and visibility, insertion after the current
+page, Undo/Redo and Save/reopen. Also check rapid ink followed by Save, navigation
+or close, including cancellation and retired canvases. Retain the result and
+archive identities under ignored test results; link only concise scope in this
+wiki. A probe implementation or an older passing report is not a current run.
+
 Desktop save/export progress uses commonUtils' shared compact `OperationProgress`
 footer below the canvas. The canvas takes the workspace stretch; progress stays
 in one row with the status message, meter and Cancel control. Notebook library
@@ -443,6 +465,18 @@ history without serializing or replaying the complete scene. Structural edits
 and errors still return full state; in-progress pointer gestures defer received
 acknowledgements until release/cancellation. Save and history commands follow
 pending ink in the same ordered queue.
+
+The queue's `window.notebookIdle()` predicate requires no active pointer, no
+queued commands and no command awaiting acknowledgement. `Bridge.command()`
+requires the originating canvas URL and the next integer sequence; retired
+bridges reject commands, and awaited mobile continuations check canvas lifetime.
+Desktop delivery also verifies the originating WebEngine page is still current.
+The embedded Notes Library adapter waits for this idle predicate before saving
+through the native host and reports an unfinished stroke instead of silently
+continuing after its wait expires. These mechanisms define the software fence;
+native input delivery and source-bound Save/close ordering still need the native
+acceptance described above. `test_notebook_protocol.py` covers malformed action
+rollback, acknowledged errors and retired asynchronous continuations.
 
 Pointer samples and pressure are captured immediately. Desktop preview painting
 is batched to animation frames; mobile paints delivered pen batches immediately.
