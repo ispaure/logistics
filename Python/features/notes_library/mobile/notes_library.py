@@ -15,7 +15,7 @@ from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
 from features.notes_library.notes import NotesLibrary, MAX_NOTE, MAX_PREVIEW_HTML, MARKDOWN, document_kind
-from ..notes import breadcrumb_folders, fit_breadcrumbs
+from ..notes import breadcrumb_folders
 from ..navigation import PathChange, MutationResult
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.search.names import natural_name_key, search_terms
@@ -259,11 +259,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 button.parent.remove(button)
             self.secondary.add(button)
         self.view.insert(1, self.secondary)
-        self.breadcrumbs = toga.Box(style=Pack(direction=ROW, margin_left=8, margin_right=8))
+        self.breadcrumbs = toga.Box(style=Pack(direction=ROW))
+        self.breadcrumb_scroll = toga.ScrollContainer(content=self.breadcrumbs, horizontal=True,
+            vertical=False, style=Pack(flex=1, height=44))
+        self.secondary.insert(2, self.breadcrumb_scroll)
         self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
         self._breadcrumb_key = None
         self._breadcrumb_width = 320
-        self.view.insert(2, self.breadcrumbs)
         # Keep the library identity between its pane controls, including when
         # UIKit moves the remaining reader actions to a vertical edge.
         if host.apple:
@@ -315,7 +317,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
         show = self.path is not None and not self.sidebar.sidebar_open
-        self.breadcrumbs.style.display = PACK if show else NONE
+        self.secondary.style.display = PACK if show else NONE
         self.refresh_breadcrumbs()
         header = getattr(self.view, '_document_title_header', None)
         parent = self.article if self.sidebar.expanded else self.view
@@ -324,27 +326,18 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if header.parent is not None:
                 header.parent.remove(header)
             parent.insert(0, header)
-        if show and not self.host.apple and self.secondary.parent is not parent:
+        if show and self.secondary.parent is not parent:
             if self.secondary.parent is not None:
                 self.secondary.parent.remove(self.secondary)
             anchors = [child for child in (header, self.toolbar)
                        if child is not None and child.parent is parent]
             index = max((list(parent.children).index(child) for child in anchors), default=-1) + 1
             parent.insert(index, self.secondary)
-        elif (not show or self.host.apple) and self.secondary.parent is not None:
+        elif not show and self.secondary.parent is not None:
             self.secondary.parent.remove(self.secondary)
-        siblings = [child for child in parent.children if child is not self.breadcrumbs]
-        index = (siblings.index(self.secondary) + 1 if self.secondary.parent is parent
-                 else siblings.index(self.toolbar) + 1 if self.toolbar.parent is parent
-                 else siblings.index(header) + 1 if header is not None and header.parent is parent else 0)
-        if (self.breadcrumbs.parent is not parent or
-                list(parent.children).index(self.breadcrumbs) != index):
-            if self.breadcrumbs.parent is not None:
-                self.breadcrumbs.parent.remove(self.breadcrumbs)
-            parent.insert(index, self.breadcrumbs)
         editable = not self.path or PurePosixPath(self.path).suffix.lower() in MARKDOWN
-        if editable and self.library.writable and self.edit.parent is None and not self.host.apple:
-            self.secondary.insert(2, self.edit)
+        if editable and self.library.writable and self.edit.parent is None:
+            self.secondary.insert(3, self.edit)
         elif not editable and self.edit.parent is self.secondary:
             self.secondary.remove(self.edit)
         if getattr(self, '_edit_chrome', None) != self.editing:
@@ -353,16 +346,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                                               'View document' if self.editing else 'Edit document')
 
     def native_note_buttons(self):
-        """UIKit owns adaptation and hit testing for document commands."""
-        if not self.host.apple:
-            return [self.links_button]
-        buttons = []
-        if self.path is not None:
-            buttons.extend((self.back_button, self.forward_button))
-            if self.library.writable and document_kind(self.path) == 'markdown':
-                buttons.append(self.edit)
-        buttons.append(self.reader_actions_button)
-        return buttons
+        """Keep panel controls in the title bar and document actions below it."""
+        return [] if self.host.apple else [self.links_button]
 
     async def breadcrumb_pages(self, path, cancelled):
         folders = breadcrumb_folders(self.root, path)
@@ -375,12 +360,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self._breadcrumb_key = None
             return
         folders = breadcrumb_folders(self.root, self.path)
-        # The filename already has a dedicated title. Spend this row on location
-        # and navigation; a phone needs only its immediate containing folder.
         if not folders:
             folders = [self.root]
-        if self._breadcrumb_width < 520:
-            folders = folders[-1:]
         entries = [(PurePosixPath(folder).name or self.library_title,
                     self.folder_pages.get(folder), folder) for folder in folders]
         key = (tuple(entries), self._breadcrumb_width)
@@ -399,11 +380,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 density = native.getResources().getDisplayMetrics().density
                 return native.getPaint().measureText(value) / density
             return len(value) * 8
-        labels = fit_breadcrumbs([name for name, _, _ in entries],
-            max(0, self._breadcrumb_width - 28), measure, minimum=44, padding=12)
-        for (name, page, folder), label in zip(entries, labels):
-            if not label:
-                continue
+        for name, page, folder in entries:
+            label = name
             if self.breadcrumbs.children:
                 self.breadcrumbs.add(toga.Label('/', style=Pack(margin_top=12, width=12, font_size=13)))
             async def open_folder(widget, path=page, folder=folder, **kwargs):
@@ -427,6 +405,10 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             button.breadcrumb_folder = folder
             underline_folder_link(button)
             self.breadcrumbs.add(button)
+        def reveal_end():
+            if self._breadcrumb_key == key and self.valid():
+                self.breadcrumb_scroll.horizontal_position = self.breadcrumb_scroll.max_horizontal_position
+        self.host.loop.call_soon(reveal_end)
 
 
     def valid(self):
