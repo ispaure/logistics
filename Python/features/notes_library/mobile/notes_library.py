@@ -536,13 +536,17 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if not self.valid():
             return
         self.selected_path = path
+        published = False
         if path in self.expanded:
             self.expanded.remove(path)
         else:
             self.expanded.add(path)
             if path not in self.folders:
-                await self.load_folder(path)
-        self.render_tree()
+                # A successful load already publishes the expanded snapshot.
+                # The synchronous recycler must not receive it a second time.
+                published = await self.load_folder(path)
+        if not published:
+            self.render_tree()
         self.refresh_reader_actions()
 
     def search_changed(self, widget=None, **kwargs):
