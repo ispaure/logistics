@@ -1,5 +1,7 @@
 # Back up and restore Plex server data
 
+This workflow uses the desktop application. See the [mobile support boundary](../user_mobile/user_mobile.md).
+
 Manage PMS is offered on **Workspaces** when a local folder has a matching
 `<folder>-PMSDATA` rclone remote. Load credentials using [rclone](../../rclone/user/user.md).
 
