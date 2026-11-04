@@ -1,8 +1,7 @@
 # Perforce documentation
 
-Choose a guide for the task you want to complete.
+Launch a configured local Perforce server and open its console on Linux desktop.
 
-## Further reading
-
-- [Perforce Feature](development/development.md)
-- [Launch a local Perforce server](user/user.md)
+- [Desktop user guide](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Developer guide](development/development.md)
