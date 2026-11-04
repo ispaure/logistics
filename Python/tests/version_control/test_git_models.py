@@ -49,3 +49,41 @@ class GitGraphTests(unittest.TestCase):
         rows = layout_graph([self.commit('a', 'unloaded'), self.commit('other')])
         self.assertEqual(rows[1].lane, 1)
         self.assertEqual(rows[1].outgoing, ((0, 0),))
+
+    def test_repeated_integration_merges_keep_first_parent_and_other_lanes_straight(self):
+        commits = [self.commit('tip', 'm0', 'side')]
+        for i in range(6):
+            commits.extend([self.commit(f'm{i}', f'm{i + 1}', f'doc{i}'),
+                            self.commit(f'doc{i}', 'base')])
+        commits.extend([self.commit('m6', 'base'), self.commit('side', 'base'),
+                        self.commit('base')])
+        rows = layout_graph(commits)
+        for commit, row in zip(commits, rows):
+            if commit.oid.startswith('m') or commit.oid == 'tip':
+                self.assertEqual(row.lane, 0)
+                if commit.parents[0] != 'base':
+                    self.assertIn((0, 0), row.outgoing)
+            # Every diagonal must originate at the actual commit. Unrelated
+            # branches must never weave merely because a lane opened/closed.
+            for source, target in row.outgoing:
+                if source != row.lane:
+                    self.assertEqual(source, target)
+        self.assertLessEqual(max(row.width for row in rows), 4)
+
+    def test_empty_columns_have_no_phantom_edges_and_are_reused(self):
+        rows = layout_graph([self.commit('merge', 'main', 'short', 'side'),
+                             self.commit('short'), self.commit('new', 'parent'),
+                             self.commit('main'), self.commit('side'),
+                             self.commit('parent')])
+        self.assertEqual(rows[2].lane, 1)
+        self.assertEqual(rows[2].incoming, ((0, 0), (2, 2)))
+        self.assertEqual(rows[2].outgoing, ((0, 0), (2, 2), (1, 1)))
+        self.assertEqual(rows[4].incoming, ((1, 1), (2, 2)))
+        self.assertEqual(rows[4].outgoing, ((1, 1),))
+
+    def test_loading_more_history_preserves_existing_rows(self):
+        commits = [self.commit('merge', 'main', 'side'), self.commit('main', 'base'),
+                   self.commit('side', 'base'), self.commit('base')]
+        rows = layout_graph(commits)
+        for count in range(len(commits) + 1):
+            self.assertEqual(layout_graph(commits[:count]), rows[:count])
