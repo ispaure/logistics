@@ -118,6 +118,8 @@ class RemoteDownloadPickerTests(unittest.TestCase):
         app = create_app(self)
         app.show_cloud(present=False)
         app.cloud_client = RemoteClient()
+        import toga
+        app.show_view(toga.Box(), destination='files', route='text-destination', title='Earlier picker')
         app.show_cloud()
         retained = app.routes.body('files')
         self.assertIn(app.cloud_view, retained.children)
@@ -131,6 +133,64 @@ class RemoteDownloadPickerTests(unittest.TestCase):
         self.assertTrue(app.routes.back())
         self.assertIs(app.routes.body('files'), retained)
         self.assertIn(app.cloud_view, retained.children)
+        self.assertNotIn('text-destination', [screen[0] for screen in app.routes.screens['files']])
+
+    def test_cancel_new_download_preserves_source_above_an_older_picker(self):
+        import toga
+        app = create_app(self)
+        app.show_cloud(present=False)
+        app.show_view(toga.Box(), destination='files', route='text-destination', title='Earlier picker')
+        app.show_cloud()
+        retained = app.routes.body('files')
+        picker = app.editor_picker()
+        request = RemoteDownload(NS(remote='Fixture'), 'note.txt', False)
+        app.loop.run_until_complete(picker.show_destination('note.txt', request))
+        result = picker.cancel_text_destination()
+        if hasattr(result, '__await__'):
+            app.loop.run_until_complete(result)
+        self.assertIs(app.routes.body('files'), retained)
+        self.assertIn(app.cloud_view, retained.children)
+        self.assertIsNone(picker.panel)
+        self.assertNotIn('text-destination', [screen[0] for screen in app.routes.screens['files']])
+
+    def test_native_picker_retirement_preserves_newer_folder_controllers(self):
+        from mobile.routes import MobileRoutes
+        owner = MobileRoutes.__new__(MobileRoutes)
+        base, old, source = object(), object(), object()
+        panes = [NS(controller=object()) for _ in range(3)]
+        root, navigation = object(), Mock()
+        adapter = NS(navigation=[navigation], containers=[(None, root)],
+                     navigation_for=Mock(return_value=navigation), release_pane=Mock())
+        owner.host = NS(adapter=adapter, destinations=['files'], state=NS(routes={}))
+        owner.screens = {'files': [('browser', base, panes[0]),
+                                  ('text-destination', old, panes[1]),
+                                  ('remote-browser', source, panes[2])]}
+        owner.changing = False
+        owner.origins = {('files', 'text-destination'): 'documents'}
+        owner.folders, owner.render = NS(forget=Mock()), Mock()
+        owner._selection_returns = {}
+        owner.retire_destination_picker('files')
+        navigation.setViewControllers.assert_called_once_with(
+            [root, panes[0].controller, panes[2].controller], animated=False)
+        adapter.release_pane.assert_called_once_with(panes[1])
+        self.assertIs(owner.screens['files'][-1][1], source)
+        self.assertEqual(owner.host.state.routes['files'], ['browser', 'remote-browser'])
+        self.assertFalse(owner.changing)
+
+    def test_native_download_cancel_already_popped_does_not_pop_source_twice(self):
+        import toga
+        app = create_app(self)
+        app.show_cloud(present=False)
+        app.show_view(toga.Box(), destination='files', route='text-destination', title='Earlier picker')
+        app.show_cloud()
+        retained = app.routes.body('files')
+        picker = app.editor_picker()
+        request = RemoteDownload(NS(remote='Fixture'), 'note.txt', False)
+        app.loop.run_until_complete(picker.show_destination('note.txt', request))
+        app.routes.trim('files', len(app.routes.screens['files']) - 1)
+        picker.cancel_text_destination(dismissed=True)
+        self.assertIs(app.routes.body('files'), retained)
+        self.assertIsNone(picker.panel)
         self.assertNotIn('text-destination', [screen[0] for screen in app.routes.screens['files']])
 
     def test_transfer_back_returns_to_retained_source_folder(self):

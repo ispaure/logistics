@@ -317,6 +317,10 @@ class EditorPicker:
         await self.show_editor_browser('save', name, data if data is not None else b'', creation=origin)
 
     async def show_destination(self, name, action):
+        if not self.cloud_busy and self.active_host and getattr(action, 'kind', '') == 'download':
+            # An older picker can sit below the current cloud folder. Reusing
+            # its route would trim away that newer source before downloading.
+            self.app.routes.retire_destination_picker(self.app.native_host.state.destination)
         await self.show_editor_browser('destination', name, destination_action=action)
 
     async def show_editor_browser(self, mode, name='', data=None, *, creation=None, destination_action=None, operation=None):
@@ -1121,6 +1125,10 @@ class EditorPicker:
             self.clear()
             if visible:
                 if destination_action is not None:
+                    if getattr(destination_action, 'kind', '') == 'download':
+                        # UIKit may already have popped this form; direct Back
+                        # and Cancel still need to retire it exactly once.
+                        return None if dismissed else self.app.routes.back()
                     return self.app.loop.create_task(self.app.show_files())
                 if creation is not None:
                     if dismissed:
