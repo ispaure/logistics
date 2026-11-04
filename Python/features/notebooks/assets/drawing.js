@@ -24,13 +24,13 @@ function brushFor(tool) {
   return brushes[aliases[tool] ?? tool] || brushes[17]
 }
 
+let normalWidth = '2';
 function brushOptions() {
   let brush = brushFor(Number($('tool').value));
   options('color', brush.colors.map(id => Object.entries(state.colors).find(([name, value]) => value === id)));
-  if (!$('width').options.length) {
-    options('width', Object.entries(state.widths));
-    $('width').value = '2'
-  }
+  if ($('width').options.length > 1) normalWidth = $('width').value;
+  options('width', brush.fixed_width ? [['Fixed', 1]] : Object.entries(state.widths));
+  $('width').value = brush.fixed_width ? '1' : normalWidth;
 }
 
 function chosenInk() {
@@ -44,24 +44,37 @@ function chosenInk() {
 
 function nativeColor(tool, color) {
   if (tool === 18) return {
-    color: 9,
-    color_rgba: state.highlights[color]
+    tool,
+    color: state.highlight_ids[color],
+    color_rgba: null
   };
   if (tool === 23) return {
+    tool,
     color: 9,
     color_rgba: state.shaders[color]
   };
   return {
+    tool,
     color,
     color_rgba: null
   };
 }
 
+function pressureWidth(brush, width, pressure) {
+  const curve = brush.pressure_widths;
+  if (!curve) return brush.widths[width - 1] * (1 - brush.pressure + brush.pressure * Math.pow(pressure, brush.exponent));
+  if (pressure <= curve[0][0]) return curve[0][1][width - 1];
+  for (let i = 1; i < curve.length; i++) {
+    let [start, before] = curve[i - 1], [end, after] = curve[i];
+    if (pressure <= end) return before[width - 1] + (pressure - start) / (end - start) * (after[width - 1] - before[width - 1]);
+  }
+  return curve.at(-1)[1][width - 1];
+}
+
 function strokePoint(samples, i, tool, width) {
   let brush = brushFor(tool),
-    base = brush.widths[width - 1],
     [x, y, p] = samples[i];
-  let w = base * (1 - brush.pressure + brush.pressure * Math.pow(p, brush.exponent));
+  let w = pressureWidth(brush, width, p);
   if (brush.directional) {
     let before = samples[i ? i - 1 : Math.min(1, samples.length - 1)],
       angle = Math.atan2(y - before[1], x - before[0]);
@@ -78,7 +91,7 @@ function strokePoints(samples, tool, width) {
 function inkColor(s) {
   let rgba = s.color_rgba,
     hex = palette[s.color] || '#000000',
-    rgb = rgba ? rgba.slice(0, 3) : [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    rgb = rgba ? rgba.slice(0, 3) : s.tool === 18 && state.native_highlights[s.color] ? state.native_highlights[s.color].slice(0, 3) : [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
   if ($('grayscale').checked) {
     let gray = Math.round(.2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2]);
     rgb = [gray, gray, gray]

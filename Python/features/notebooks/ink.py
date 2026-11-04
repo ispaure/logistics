@@ -10,7 +10,7 @@ from ._vendor.rmscene import scene_stream as ss, scene_items as si
 from ._vendor.rmscene.crdt_sequence import CrdtSequenceItem
 from ._vendor.rmscene.tagged_block_common import CrdtId, LwwValue, HEADER_V6
 from ._vendor.rmscene.scene_tree import SceneTree
-from .brushes import TOOLS, COLORS, WIDTHS, native_color, stroke_points
+from .brushes import TOOLS, COLORS, WIDTHS, native_color, native_scale, stroke_points
 
 WIDTH, HEIGHT = 1404, 1872
 MAX_POINTS = 100_000
@@ -214,7 +214,7 @@ class InkPage:
         layer = layer or (visible[-1] if visible else None)
         if layer not in visible:
             raise ValueError('Choose a visible ink layer.')
-        stroke = Stroke(uuid4().hex, layer, tool, native, clean, width, rgba)
+        stroke = Stroke(uuid4().hex, layer, tool, native, clean, native_scale(tool, width), rgba)
         self.strokes.append(stroke)
         return stroke
 

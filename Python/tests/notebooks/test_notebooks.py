@@ -21,7 +21,7 @@ from features.notebooks._vendor.rmscene.tagged_block_common import HEADER_V6
 from features.notebooks._vendor.rmscene.scene_tree import SceneTree
 from features.notebooks.notebook import Notebook, read_archive
 from features.notebooks.ink import InkPage, TOOLS
-from features.notebooks.brushes import BRUSHES, WIDTHS, native_color
+from features.notebooks.brushes import BRUSHES, WIDTHS, native_color, native_scale
 from features.notebooks.recovery import Repository
 from features.notebooks.editor import Editor
 from features.notebooks.bridge import Bridge
@@ -376,7 +376,7 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(int(line.tool), 17)
         # Independent wire inspection: locate the native float coordinate pair
         # and fixed point fields, without the application's decoder.
-        point = struct.pack('<ffHHBB', -692.,20.,0,8,0,64)
+        point = struct.pack('<ffHHBB', -692.,20.,0,14,0,64)
         self.assertIn(point, ink)
         self.assertTrue(ink.startswith(HEADER_V6))
 
@@ -394,7 +394,7 @@ class NotebookTests(unittest.TestCase):
                 for width in WIDTHS.values():
                     stroke = ink.strokes[index]
                     self.assertEqual((stroke.tool, stroke.color, stroke.color_rgba, stroke.scale),
-                                     (tool, *native_color(tool, color), width))
+                                     (tool, *native_color(tool, color), native_scale(tool, width)))
                     index += 1
 
     def test_brush_restrictions_reject_commands_without_changing_recovery(self):
@@ -409,15 +409,15 @@ class NotebookTests(unittest.TestCase):
             self.assertEqual(self.repo.open(self.key).page(0).to_bytes(), before)
 
     def test_native_rgba_and_widths_survive_move_copy_undo_and_recovery(self):
-        self.editor.apply(dict(op='stroke', points=[[20, 30, .5], [50, 60, .8]], tool=18, color=-1, width=3))
+        self.editor.apply(dict(op='stroke', points=[[20, 30, .5], [50, 60, .8]], tool=23, color=-1, width=3))
         original = self.book.page(0).strokes[0]
         self.assertEqual(original.color, 9)
-        self.assertEqual(original.color_rgba, (255, 195, 140, 255))
-        self.assertEqual([p[3] for p in original.points], [60, 60])
+        self.assertEqual(original.color_rgba, (254, 178, 0, 115))
+        self.assertEqual([p[3] for p in original.points], [28, 28])
         self.editor.apply(dict(op='transform', ids=[original.id], dx=4, dy=5))
         moved = self.repo.open(self.key).page(0).strokes[0]
         self.assertEqual(moved.color_rgba, original.color_rgba)
-        self.assertEqual(moved.points[0], [24, 35, 128 / 255, 60])
+        self.assertEqual(moved.points[0], [24, 35, 128 / 255, 28])
         self.editor.apply(dict(op='undo'))
         self.assertEqual(self.book.page(0).strokes[0].points, original.points)
         target = Notebook.new('Copy')
@@ -431,8 +431,8 @@ class NotebookTests(unittest.TestCase):
         samples = [[20, 30, .1], [60, 30, .9], [60, 70, .9]]
         fine = stroke_points(samples, 17, 2)
         mechanical = stroke_points(samples, 13, 2)
-        self.assertEqual({p[3] for p in fine}, {2})
-        self.assertEqual({p[3] for p in mechanical}, {1.5})
+        self.assertEqual({p[3] for p in fine}, {3.5})
+        self.assertEqual({p[3] for p in mechanical}, {5.25})
         for tool in (12, 14, 15, 16, 23):
             widths = [p[3] for p in stroke_points(samples, tool, 2)]
             self.assertLess(widths[0], widths[1])

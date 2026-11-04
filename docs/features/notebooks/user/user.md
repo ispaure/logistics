@@ -90,13 +90,15 @@ orange and gray. Shader offers gray, blue, red, green, yellow, cyan, magenta
 and orange, each with its own native transparency; it has no black or white
 choice.
 
-Each brush has **Thin**, **Medium** and **Thick** widths; these labels are not
+Highlighter has one **Fixed** width, matching the sampled Paper Pro firmware.
+Other brushes have **Thin**, **Medium** and **Thick** widths; these labels are not
 fixed physical measurements. Fineliner and mechanical pencil keep an even width.
 Pressure varies the other drawing tools, and calligraphy also responds to stroke
 direction. Pencil tools have a grain texture, paintbrush has softer edges,
 highlighter darkens the content beneath it, and separate Shader strokes build
 color when they overlap. Textures and nominal widths remain approximations
-pending comparison with strokes made on the tablet.
+after the November 4 Paper Pro calibration; speed, tilt and exact firmware
+textures are not reproduced.
 
 **Grayscale preview** approximates monochrome readability using luminance. It
 does not emulate a particular screen or firmware, or certify older-device import.
