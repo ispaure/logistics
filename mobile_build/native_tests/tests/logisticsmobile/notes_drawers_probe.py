@@ -77,11 +77,10 @@ class NotesDrawersProbe(LogisticsMobile):
     async def check_note_actions(self, owner, report):
         assert await owner.open_note('Other.md')
         await asyncio.sleep(.3)
-        assert owner.secondary.parent is None
+        assert owner.secondary.parent is not None
         async def invoke(button, complete):
-            item = button._ios_action_item
-            assert item.isEnabled() and item.target is not None
-            item.target.performSelector(item.action, withObject=item)
+            assert button.enabled
+            button._impl.native.sendActionsForControlEvents(1 << 6)
             for _ in range(100):
                 if complete():
                     break
@@ -91,7 +90,7 @@ class NotesDrawersProbe(LogisticsMobile):
                                       owner.notice.text, getattr(owner.embedded, 'dirty', None)))
             await asyncio.sleep(.2)
         await invoke(owner.back_button, lambda: owner.path == 'Home.md')
-        assert owner.forward_button._ios_action_item.isEnabled()
+        assert owner.forward_button.enabled
         await invoke(owner.forward_button, lambda: owner.path == 'Other.md')
         await invoke(owner.edit, lambda: owner.editing)
         formatted = owner.embedded.formatted
