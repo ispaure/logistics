@@ -26,6 +26,11 @@ workspace entries. Exporting or saving private content to ordinary storage asks
 before creating a decrypted copy. Save or explicitly discard unsaved private
 edits before closing or locking credentials. Cloud locations remain read-only.
 
+After pen or finger contact ends, Logistics removes redundant samples from new
+strokes while preserving corners, pressure changes and stroke width within small
+bounds. Calligraphy retains every sample. Opening or saving existing handwriting
+does not reduce its points; the live pen preview is unchanged.
+
 The document fills the editor viewport. A small floating strip at the top provides the
 current brush, **Erase**, **Select / move**, **Undo** and **Redo** in one row,
 including on narrow phones. Android’s canvas X and **…** share that row. On
@@ -148,6 +153,14 @@ unused status strip is reclaimed across the app; Android still reserves actual
 camera cutouts, navigation and keyboard space.
 
 Use **Undo**, **Redo**, **Erase**, and **Select / move** to edit.
+In **Select / move**, draw a dashed lasso with your finger or pen, even when
+**Draw with finger** is off. Only fully enclosed visible strokes are selected.
+Drag inside the selection box to move it; drag a square corner to scale uniformly
+or the upper circle to rotate. Moving farther from the centre makes rotation
+finer. **Copy**, **Cut** and **Delete** appear below the box. **Paste strokes**
+pastes into the current page at the original page position, independently of zoom
+or scroll. The private stroke clipboard lasts until this editor closes; it is
+separate from Capture's image clipboard. Cancelled gestures do not save edits.
 Open **Notebook actions → Pages Overview** for selectable ink thumbnails, the
 page count, previous/next arrows, **Go to page**, and commands to add, duplicate,
 delete, reorder or copy the current page to
@@ -260,3 +273,8 @@ copy stay in memory for that editing session. Save and Export retain the
 original encrypted PDF; reopening requires its password again. This applies to
 notebooks opened through Local and unlocked LocalCrypt. LocalCrypt continues
 to encrypt the entire saved notebook and keeps its unsaved draft in memory.
+
+
+## Internal page links
+
+In a PDF-backed `.rmdoc`, tap an internal PDF link with a **finger** to follow it, including when finger drawing is enabled. Pen input keeps drawing. Swipes, pinches and holds do not activate links. **Undo page jump** appears over the bottom of the editor for three seconds; tap it to return.

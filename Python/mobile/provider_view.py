@@ -88,6 +88,7 @@ class ProviderDocumentView:
             from features.pdf.mobile.canvas import PDFCanvas
             view.crypt_image = PDFCanvas(on_page=owner.swipe_crypt_page,
                 on_toggle=owner.toggle_private_reading_mode, style=Pack(flex=1))
+            view.crypt_image.bind_links(owner, reader)
         else:
             view.crypt_image = ImageCanvas(on_page=owner.swipe_crypt_page,
                 page_swipes_at_edges=reader.kind in {'.cbz', '.zip'},
@@ -95,6 +96,8 @@ class ProviderDocumentView:
         from .magnifier import bind
         bind(owner, view.crypt_image)
         view.crypt_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        if reader.kind == '.pdf':
+            view.crypt_image.return_box = toga.Box(style=Pack(direction=COLUMN))
         owner._show_crypt_content(kind, content, view=view)
         view.crypt_save = toga.Button('Save', on_press=owner.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
         view.crypt_read_page.enabled = not reader.editable
