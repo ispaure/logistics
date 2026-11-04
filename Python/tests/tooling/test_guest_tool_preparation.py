@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import json
+import os
 import argparse
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -15,6 +16,20 @@ from logistics_build import vm_backend, windows_backend
 
 
 class GuestToolPreparationTests(unittest.TestCase):
+    def test_portable_download_trust_preserves_custom_policy_and_restores_environment(self):
+        from logistics_build.notebook_validation import download_certificates
+        import certifi
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, 'failed download'):
+                with download_certificates():
+                    self.assertEqual(os.environ['SSL_CERT_FILE'], certifi.where())
+                    raise RuntimeError('failed download')
+            self.assertNotIn('SSL_CERT_FILE', os.environ)
+        with patch.dict(os.environ, {'SSL_CERT_FILE': '/custom/roots.pem'}):
+            with download_certificates():
+                self.assertEqual(os.environ['SSL_CERT_FILE'], '/custom/roots.pem')
+            self.assertEqual(os.environ['SSL_CERT_FILE'], '/custom/roots.pem')
+
     def test_notebook_guest_selection_preserves_full_coverage_and_timeout(self):
         from logistics_build.notebook_validation import arguments, command
         parser = argparse.ArgumentParser()
