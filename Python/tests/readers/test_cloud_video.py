@@ -1,6 +1,6 @@
 """Cloud video ranges use real rclone and credential-bound native resources."""
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 import base64
@@ -35,6 +35,7 @@ class CloudVideoTests(unittest.TestCase):
             self.assertEqual(request(start, end), (206, raw[start:end + 1]))
         return request
 
+    @stage(TestStage.EXTENDED)
     def test_real_rclone_plain_and_crypt_ranges_and_session_revocation(self):
         from features.rclone import executable, session
         from features.rclone.remote_resources import RemoteResources

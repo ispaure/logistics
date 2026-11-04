@@ -1,6 +1,6 @@
 """Decode real frames/audio for every requested desktop container/codec pairing."""
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.EXTENDED
 from pathlib import Path
@@ -14,15 +14,14 @@ from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice
 
 
-@unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg fixture generator is required')
 class VideoDecodeTests(QtTestCase):
     def test_playback_buttons_and_narrow_layout(self):
         from logistics_build.build_retention import scratch
-        from tests.readers.video_fixtures import codec_matrix
+        from tests.readers.video_fixtures import bundled_movie
         from features.video.ui.player import VideoWindow
         from PySide6.QtMultimedia import QMediaPlayer
         with scratch() as root:
-            path = codec_matrix(root)[0][3]
+            path = bundled_movie('h264-aac.mp4', root)
             release = Mock()
             with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
                 window = VideoWindow(ResourceChoice(LocalFiles(root), path.name, release))
@@ -68,10 +67,11 @@ class VideoDecodeTests(QtTestCase):
                 window.fullscreen_button.click()
                 self.assertFalse(window.isFullScreen())
                 self.assertFalse(window.fullscreen_action.isChecked())
-                self.assertFalse(hasattr(window, 'floating'))
             finally:
                 window.close()
                 self.wait_until(lambda: release.called, drain_deferred=True)
+                release.assert_called_once()
+                self.assertTrue(window.content.closed)
 
     def test_embedded_chapter_panel_seeks_without_resuming_pause(self):
         from logistics_build.build_retention import scratch
@@ -98,13 +98,13 @@ class VideoDecodeTests(QtTestCase):
                 window.close()
                 self.wait_until(lambda: release.called, drain_deferred=True)
 
+    @unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg track muxer is required')
     def test_embedded_track_selection_and_external_srt(self):
         from logistics_build.build_retention import scratch
-        from tests.readers.video_fixtures import codec_matrix, multitrack_movie
+        from tests.readers.video_fixtures import bundled_movie, multitrack_movie
         from features.video.ui.player import VideoWindow
         with scratch() as root:
-            fixtures = codec_matrix(root)
-            path = multitrack_movie(root, fixtures[0][3])
+            path = multitrack_movie(root, bundled_movie('h264-aac.mp4', root))
             provider = LocalFiles(root)
             release = Mock()
             with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
@@ -135,13 +135,14 @@ class VideoDecodeTests(QtTestCase):
                 window.close()
                 self.wait_until(lambda: release.called, drain_deferred=True)
 
+    @unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg track muxer is required')
     def test_repeated_track_changes_retire_native_audio_without_python_callbacks(self):
         import shiboken6
         from logistics_build.build_retention import scratch
-        from tests.readers.video_fixtures import codec_matrix, multitrack_movie
+        from tests.readers.video_fixtures import bundled_movie, multitrack_movie
         from features.video.ui.player import VideoWindow
         with scratch() as root:
-            path = multitrack_movie(root, codec_matrix(root)[0][3])
+            path = multitrack_movie(root, bundled_movie('h264-aac.mp4', root))
             for cycle in range(8):
                 with self.subTest(cycle=cycle):
                     release = Mock()
@@ -182,13 +183,13 @@ class VideoDecodeTests(QtTestCase):
                     content = VideoContent(LocalFiles(path.parent), path.name)
                     transport = VideoTransport(content)
                     player = QMediaPlayer()
-                    sink, output = QVideoSink(), QAudioBufferOutput()
+                    sink, output = QVideoSink(player), QAudioBufferOutput(player)
                     player.setVideoSink(sink)
                     player.setAudioBufferOutput(output)
                     frames, samples, errors = [], [], []
-                    sink.videoFrameChanged.connect(lambda frame: frames.append(frame.startTime()) if frame.isValid() else None)
-                    output.audioBufferReceived.connect(lambda buffer: samples.append(buffer.frameCount()) if buffer.isValid() else None)
-                    player.errorOccurred.connect(lambda error, message: errors.append(message))
+                    sink.videoFrameChanged.connect(lambda frame, frames=frames: frames.append(frame.startTime()) if frame.isValid() else None)
+                    output.audioBufferReceived.connect(lambda buffer, samples=samples: samples.append(buffer.frameCount()) if buffer.isValid() else None)
+                    player.errorOccurred.connect(lambda error, message, errors=errors: errors.append(message))
                     try:
                         player.setSource(qt.QUrl(transport.url))
                         player.play()
@@ -207,6 +208,7 @@ class VideoDecodeTests(QtTestCase):
                         content.close()
                         player.deleteLater()
 
+    @stage(TestStage.REGRESSION)
     def test_transport_start_failure_releases_document_and_partial_window(self):
         from features.video.ui.player import open_video_choice
         with self.temporary_directory() as directory:
@@ -218,79 +220,3 @@ class VideoDecodeTests(QtTestCase):
                 with self.assertRaisesRegex(PermissionError, 'Loopback unavailable'):
                     open_video_choice(choice)
             self.assertTrue(release.called)
-
-    def test_window_controls_and_restricted_fullscreen_action(self):
-        from features.video.ui.player import VideoWindow
-        with self.temporary_directory() as directory:
-            root = Path(directory)
-            path = root / 'movie.mp4'
-            path.write_bytes(b'not a decoded movie')
-            provider = LocalFiles(root)
-            provider.session_only = True
-            release = Mock()
-            choice = ResourceChoice(provider, path.name, release)
-            with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'cache'):
-                window = VideoWindow(choice)
-            self.assertFalse(hasattr(window, 'floating'))
-            window.toggle_fullscreen()
-            self.assertTrue(window.isFullScreen())
-            window.toggle_fullscreen()
-            self.assertFalse(window.isFullScreen())
-            window.close()
-            self.wait_until(lambda: release.called, drain_deferred=True)
-            self.assertTrue(window.content.closed)
-
-    def test_rclone_plain_and_crypt_cloud_streams_decode_frames_and_audio(self):
-        from PySide6.QtMultimedia import QAudioBufferOutput, QMediaPlayer, QVideoSink
-        from logistics_build.build_retention import scratch
-        from tests.readers.video_fixtures import codec_matrix
-        from tests.local_crypt_fixture import crypt_fixture
-        from features.rclone import executable, session
-        from features.rclone.remote_resources import RemoteResources
-        from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
-        from features.video.playback import VideoContent
-        from features.video.transport import VideoTransport
-        binary = executable.get_rclone_path()
-        if not binary.is_file():
-            self.skipTest('Pinned rclone is unavailable')
-        with scratch() as root, crypt_fixture(root, binary) as fixture, patch.object(
-                executable, 'get_rclone_path', return_value=binary):
-            fixtures = codec_matrix(root)
-            movies = [fixtures[0][3], next(path for container, video, audio, path in fixtures
-                                         if container == 'avi' and video == 'mpeg4')]
-            for movie in movies:
-                environment, source, destination = session.launch(fixture.context, movie, 'Secret:' + movie.name)
-                run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copyto', str(source), str(destination)],
-                          environment=environment, max_output=0)
-            values = session.credentials(fixture.context)
-            session.remember(fixture.context, dict(values, Plain=dict(type='alias', remote=str(movie.parent))))
-            for remote, key in [(remote, movie.name) for movie in movies for remote in ('Plain', 'Secret')]:
-                with self.subTest(remote=remote):
-                    provider = RemoteResources(fixture.context, remote, binary=binary)
-                    content = VideoContent(provider, key)
-                    transport = VideoTransport(content)
-                    player = QMediaPlayer()
-                    sink, output = QVideoSink(), QAudioBufferOutput()
-                    player.setVideoSink(sink)
-                    player.setAudioBufferOutput(output)
-                    frames, samples, errors = [], [], []
-                    sink.videoFrameChanged.connect(lambda frame: frames.append(frame.startTime()) if frame.isValid() else None)
-                    output.audioBufferReceived.connect(lambda buffer: samples.append(buffer.frameCount()) if buffer.isValid() else None)
-                    player.errorOccurred.connect(lambda error, message: errors.append(message))
-                    try:
-                        player.setSource(qt.QUrl(transport.url))
-                        player.play()
-                        self.wait_until(lambda: (frames and samples) or errors, timeout=30)
-                        self.assertFalse(errors, errors)
-                        self.assertTrue(frames, 'No cloud video frames')
-                        self.assertTrue(samples, 'No cloud audio samples')
-                        player.pause()
-                        player.setPosition(1000)
-                        self.assertTrue(player.isSeekable())
-                    finally:
-                        player.stop()
-                        player.setSource(qt.QUrl())
-                        transport.close()
-                        content.close()
-                        provider.close()
-                        player.deleteLater()

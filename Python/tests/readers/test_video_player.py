@@ -1,6 +1,6 @@
 """Video range, grant, resume and subtitle contracts without native decoders."""
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager, ExitStack
@@ -97,6 +97,7 @@ class VideoContracts(unittest.TestCase):
                 moved.close()
 
 
+    @stage(TestStage.EXTENDED)
     def test_real_localcrypt_video_ranges_and_encrypted_resume(self):
         from features.rclone import executable, session
         from tests.local_crypt_fixture import crypt_fixture
