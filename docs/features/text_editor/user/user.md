@@ -219,7 +219,8 @@ LocalCrypt text opens in a session-only editor with Open, Save and Save As.
 Its drafts and recent paths are not stored for recovery; save or discard changes
 before closing. The private text editor is a simpler editing surface than the
 ordinary editor. Markdown uses the private Markdown editor with its preview.
-Desktop private text and Markdown opens are limited to 8 MiB.
+Desktop private text opening is limited to 16 MiB; private Markdown opening is
+limited to 8 MiB.
 
 Saving an ordinary draft into LocalCrypt removes it from active editor recovery
 and hands it to a session-only editor. If saving or reopening fails, the draft
