@@ -40,6 +40,10 @@ inputs. The managed `document_storage_tools android|ios --probe chat-settings`
 probe checks native rotation, reachable Save, destination-local Back/Save,
 provider-specific controls, and hiding/restoring the Chat tab without losing a
 draft. It uses synthetic settings and does not prepare system model assets.
+Use `--probe chat-notes-feedback` to run those checks and the independent Notes
+search probe in the same disposable app. Repeat with `--android-tablet` for the
+wide rail layout. Android evidence retains the completed emulator lease so the
+removed AVD and process can be checked after the scratch workspace is deleted.
 
 | Module | Ownership |
 | --- | --- |
