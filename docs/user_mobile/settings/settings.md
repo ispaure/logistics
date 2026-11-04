@@ -405,6 +405,10 @@ use the installed payload and are available offline.
 
 ## Mobile documentation
 
+**Mobile documentation** is the first entry under **Settings → Help**. On Android,
+expand **More** to reveal **Android Developer Settings…**, which opens Android's
+system developer settings. More starts collapsed; this entry is absent on iOS.
+
 In the documentation sidebar, a folder with a same-named Markdown landing page
 uses a combined folder/document icon. Tap its title to open that page; use the
 separate disclosure button to expand or collapse its children. Ordinary folders

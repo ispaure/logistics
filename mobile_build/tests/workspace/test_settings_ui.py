@@ -538,6 +538,48 @@ class SettingsUITests(unittest.TestCase):
         self.assertIn('Build information unavailable.', app.build_version_label.text)
         self.assertTrue(app.settings_navigation.sections['About'].children)
 
+    def test_help_documentation_first_and_android_developer_settings_hidden_in_more(self):
+        import toga
+        from mobile.settings.categories import SettingsCategories
+        from mobile.settings.forms import settings_presentation, fit_section
+        from unittest.mock import AsyncMock
+        app = self.make_app()
+        class AndroidImpl:
+            __module__ = 'toga_android.app'
+        developer = AsyncMock()
+        host = SimpleNamespace(_impl=AndroidImpl(), open_android_developer_settings=developer,
+                               settings_navigation=SimpleNamespace(detail_width=390))
+        help_page = SettingsCategories(host).help()
+        self.assertEqual(help_page.children[1].text, 'Mobile documentation')
+        more = help_page.children[-1]
+        toggle = more.children[0]
+        self.assertEqual(toggle.text, 'More +')
+        self.assertEqual(len(more.children), 1)
+        settings_presentation(help_page)
+        fit_section(help_page, 390)
+        toggle.on_press()
+        self.assertEqual(toggle.text, 'More −')
+        def descendants(widget):
+            yield widget
+            for child in widget.children:
+                yield from descendants(child)
+        entry = next(widget for widget in descendants(more) if isinstance(widget, toga.Button)
+                     and widget.text.replace('\n', ' ') == 'Android Developer Settings…')
+        self.assertFalse(getattr(entry, '_settings_disclosure', False))
+        self.assertTrue(hasattr(entry, '_settings_available_width'))
+        app.loop.run_until_complete(entry.on_press())
+        developer.assert_awaited_once()
+        toggle.on_press()
+        self.assertEqual(len(more.children), 1)
+        self.assertIsNone(entry.parent.parent.parent)
+
+    def test_help_omits_android_more_on_other_platforms(self):
+        from mobile.settings.categories import SettingsCategories
+        app = self.make_app()
+        page = SettingsCategories(app).help()
+        self.assertEqual([child.text for child in page.children],
+                         ['Help', 'Mobile documentation', 'About'])
+
     def test_about_uses_packaged_identity_without_git(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'source.json'
