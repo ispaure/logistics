@@ -181,7 +181,7 @@ async def android_controls(owner):
         while pending:
             view = pending.pop(0)
             if view.getVisibility() != jclass('android.view.View').VISIBLE:
-                continue  # Collapsed Undo seek has no touch target until a seek.
+                continue  # Hidden controls have no touch target.
             if isinstance(view, jclass('android.widget.Button')):
                 label = str(view.getContentDescription())
                 assert view.getWidth() / density >= 47.5 and view.getHeight() / density >= 47.5, (

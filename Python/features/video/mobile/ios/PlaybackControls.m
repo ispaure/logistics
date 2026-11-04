@@ -116,7 +116,7 @@
         int64_t position = [self positionMilliseconds];
         self.player.rate = rate;
         // Discard pictures/audio queued at the previous rate without moving
-        // the user's timeline checkpoint or adding an Undo seek entry.
+        // the user's timeline checkpoint or changing the seek destination.
         if (position >= 0 && self.player.isSeekable) {
             self.startMilliseconds = position;
             self.resumeSeekSubmitted = YES;
@@ -186,13 +186,7 @@
     [alert lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Go" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"seek" value:input.text]; }]];
     [self presentPlaybackDialog:alert];
 }
-- (void)undoSeek:(id)sender {
-    if (NSProcessInfo.processInfo.systemUptime > self.undoUntil) return;
-    int64_t position = self.undoMilliseconds;
-    self.undoUntil = 0;
-    [self seekToMilliseconds:position];
-    self.undoUntil = 0; self.undoSeekButton.hidden = YES;
-}
+
 - (void)toggleMute:(id)sender {
     if (![self canPlay:NO] || self.controlsLocked) return;
     BOOL muted = self.audioSuppressed ? self.resumeMuted : self.player.audio.muted;
@@ -410,10 +404,7 @@
     strip.accessibilityLabel = @"Approximate cached byte ranges; variable bitrate can shift time mapping";
     self.cacheStrip = strip;
     [self.seek insertSubview:strip atIndex:0];
-    self.undoSeekButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.undoSeekButton setTitle:@"Undo seek" forState:UIControlStateNormal];
-    [self.undoSeekButton addTarget:self action:@selector(undoSeek:) forControlEvents:UIControlEventTouchUpInside];
-    [self.controls addArrangedSubview:self.undoSeekButton]; self.undoSeekButton.hidden = YES;
+
     self.unlockButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.unlockButton setTitle:@"Unlock controls" forState:UIControlStateNormal];
     self.unlockButton.backgroundColor = [UIColor colorWithWhite:0 alpha:.8];
