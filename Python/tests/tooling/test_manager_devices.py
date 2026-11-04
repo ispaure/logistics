@@ -326,12 +326,21 @@ class ManagerDeviceTests(unittest.TestCase):
         self.assertEqual(plan.phases[2].effect, 'deploy')
 
     def test_shared_ios_release_exports_existing_archive_without_compiling_or_devices(self):
+        self.check_shared_ios_release_export('existing')
+
+    def test_shared_ios_export_honors_captured_profile_update_and_api_references(self):
+        self.check_shared_ios_release_export('update')
+
+    def check_shared_ios_release_export(self, mode):
         from mobile_build.deployment import device_tools as ios
         workspace = self.root / 'workspace'; workspace.mkdir()
         config = self.mobile / '.device.json'
         data = dict(self.data, platform='ios', workspace=str(workspace), shared_report='archive.json',
-            config=str(config), config_sha256=file_sha256(config), targets=[dict(id='udid-1',name='iPhone')])
+            config=str(config), config_sha256=file_sha256(config), targets=[dict(id='udid-1',name='iPhone')],
+            source={'run_overrides': {'devices.ios_provisioning': mode}})
         identity = dict(team_id='ABCDEFGHIJ', bundle_id=devices.BUNDLE)
+        auth_args = ['-authenticationKeyPath', '/fixture/AuthKey.p8',
+            '-authenticationKeyID', 'fixture-key', '-authenticationKeyIssuerID', 'fixture-issuer']
         def export(command, **kwargs):
             output = Path(command[command.index('-exportPath')+1]); output.mkdir(); (output / 'app.ipa').write_bytes(b'ipa')
         def ditto(command, **kwargs):
@@ -339,6 +348,7 @@ class ManagerDeviceTests(unittest.TestCase):
             else:Path(command[-1]).write_bytes(b'provisioned app')
         with patch('logistics_build.manager_packages.checked_archive', return_value=(dict(workspace=str(self.root/'release')),dict(identity=identity, build=dict(build_number='captured-123')))), \
                 patch.object(ios, 'installed', return_value=[]), patch.object(ios, 'choose', return_value=('/fake/xcode','sdk')), \
+                patch.object(ios, 'provisioning_auth_args', return_value=auth_args) as auth, \
                 patch.object(ios, 'run', side_effect=export) as run, patch.object(ios, 'validate_app', return_value=identity) as validate, \
                 patch.object(ios, 'device_json', side_effect=AssertionError('No devices')), patch('subprocess.run', side_effect=ditto):
             devices.prepare_shared(data)
@@ -346,7 +356,15 @@ class ManagerDeviceTests(unittest.TestCase):
         validate.assert_called_once_with(workspace / 'exported-app/Payload/Logistics Mobile.app', 'ABCDEFGHIJ', 'udid-1', build_number='captured-123')
         self.assertIn('-exportArchive', run.call_args.args[0])
         self.assertNotIn('archive', run.call_args.args[0]); self.assertNotIn('build', run.call_args.args[0])
-        self.assertNotIn('-allowProvisioningUpdates', run.call_args.args[0])
+        command = run.call_args.args[0]
+        self.assertNotIn('-allowProvisioningDeviceRegistration', command)
+        if mode == 'update':
+            self.assertEqual(command[-len(auth_args)-1:], ['-allowProvisioningUpdates', *auth_args])
+            auth.assert_called_once_with()
+        else:
+            self.assertNotIn('-allowProvisioningUpdates', command)
+            self.assertNotIn('-authenticationKeyPath', command)
+            auth.assert_not_called()
         self.assertEqual(Path(data['package']).read_bytes(), b'provisioned app')
         self.assertFalse((workspace/'exported-app').exists())
 
