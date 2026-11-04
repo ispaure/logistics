@@ -55,6 +55,196 @@ class DiagnosticBoundaryTests(unittest.TestCase):
             finally:
                 owner.close()
 
+    def test_budget_overrun_is_persisted_before_rejection_and_capture_keeps_explicit_truncated_prefix(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'allocator'
+            source.mkdir()
+            path = source / 'stack-log.index'
+            path.write_bytes(b'0123456789')
+            owner = diagnostic.AllocatorFiles(root / 'growth.json')
+            try:
+                with patch.object(diagnostic, 'MAX_ALLOCATOR', 4), patch.object(diagnostic, 'MAX_TRUNCATED_CAPTURE', 3):
+                    with self.assertRaisesRegex(ValueError, 'logical budget'):
+                        owner.observe(source)
+                    growth = json.loads((root / 'growth.json').read_text())
+                    self.assertEqual(growth['samples'][-1]['logical_bytes'], 10)
+                    self.assertEqual(growth['latest']['file_count'], 1)
+                    self.assertEqual(growth['latest']['allocated_bytes'], path.stat().st_blocks * 512)
+                    records = owner.capture(root / 'captured')
+                self.assertEqual(records[0]['logical_bytes'], 10)
+                self.assertEqual(records[0]['captured_bytes'], 3)
+                self.assertTrue(records[0]['truncated'])
+                self.assertFalse(records[0]['complete'])
+                self.assertEqual((root / 'captured/inode-0.TRUNCATED').read_bytes(), b'012')
+                metadata = json.loads((root / 'captured/capture-metadata.json').read_text())
+                self.assertFalse(metadata['complete'])
+                self.assertTrue(metadata['history_incomplete'])
+                self.assertEqual(metadata['reason'], 'allocator-logical-budget')
+                self.assertEqual(metadata['captured_bytes'], 3)
+            finally:
+                owner.close()
+
+    def test_overbudget_prefix_is_bounded_across_all_files_together(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'allocator'
+            source.mkdir()
+            (source / 'first').write_bytes(b'first')
+            (source / 'second').write_bytes(b'second')
+            owner = diagnostic.AllocatorFiles()
+            try:
+                with patch.object(diagnostic, 'MAX_ALLOCATOR', 4), patch.object(diagnostic, 'MAX_TRUNCATED_CAPTURE', 3):
+                    with self.assertRaises(ValueError):
+                        owner.observe(source)
+                    records = owner.capture(root / 'captured')
+                self.assertEqual(sum(row['captured_bytes'] for row in records), 3)
+                self.assertEqual(sum(row['logical_bytes'] for row in records), 11)
+                self.assertTrue(all(row['truncated'] for row in records))
+            finally:
+                owner.close()
+
+    def test_logical_and_allocated_growth_are_distinct_and_sample_history_is_bounded(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'allocator'
+            source.mkdir()
+            path = source / 'sparse-history'
+            with path.open('wb') as stream:
+                stream.seek(1024 * 1024 - 1)
+                stream.write(b'x')
+            owner = diagnostic.AllocatorFiles(root / 'growth.json')
+            try:
+                with patch.object(diagnostic, 'MAX_GROWTH_SAMPLES', 2):
+                    for _ in range(4):
+                        owner.observe(source)
+                growth = json.loads((root / 'growth.json').read_text())
+                self.assertEqual(len(growth['samples']), 2)
+                self.assertEqual(growth['latest']['logical_bytes'], 1024 * 1024)
+                self.assertEqual(growth['latest']['allocated_bytes'], path.stat().st_blocks * 512)
+                self.assertEqual(growth['latest']['files'][0]['st_blocks'], path.stat().st_blocks)
+                self.assertIn('not RAM', growth['note'])
+            finally:
+                owner.close()
+
+    def test_disk_reserve_rejection_persists_actual_free_sample_and_keeps_incomplete_prefix(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'allocator'
+            source.mkdir()
+            (source / 'history').write_bytes(b'0123456789')
+            owner = diagnostic.AllocatorFiles(root / 'growth.json', scratch_path=root)
+            try:
+                with patch.object(diagnostic.shutil, 'disk_usage', return_value=types.SimpleNamespace(free=diagnostic.MIN_DISK_RESERVE - 1)):
+                    with self.assertRaisesRegex(ValueError, 'disk reserve'):
+                        owner.observe(source)
+                growth = json.loads((root / 'growth.json').read_text())
+                sample = growth['samples'][-1]
+                self.assertEqual(sample['scratch_free_bytes'], diagnostic.MIN_DISK_RESERVE - 1)
+                self.assertEqual(sample['output_free_bytes'], diagnostic.MIN_DISK_RESERVE - 1)
+                self.assertEqual(sample['logical_bytes'], 10)
+                with patch.object(diagnostic, 'MAX_TRUNCATED_CAPTURE', 3):
+                    owner.capture(root / 'captured')
+                metadata = json.loads((root / 'captured/capture-metadata.json').read_text())
+                self.assertEqual(metadata['reason'], 'disk-reserve')
+                self.assertFalse(metadata['complete'])
+                self.assertEqual(metadata['captured_bytes'], 3)
+                self.assertEqual((root / 'captured/inode-0.TRUNCATED').read_bytes(), b'012')
+            finally:
+                owner.close()
+
+    def test_scratch_preflight_records_actual_free_bytes_before_admission_failure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            receipt = {'diagnostic_only': True}
+            with patch.object(diagnostic.shutil, 'disk_usage', return_value=types.SimpleNamespace(free=12)):
+                with self.assertRaisesRegex(RuntimeError, '12 GiB'):
+                    diagnostic.require_scratch_space(root, root / 'output', receipt)
+            actual = json.loads((root / 'output/disk-preflight.json').read_text())
+            self.assertEqual(actual['free_bytes'], 12)
+            self.assertEqual(actual['minimum_free_bytes'], 12 * 1024 ** 3)
+            self.assertEqual(receipt['disk_preflight'], actual)
+
+    def test_scratch_preflight_accepts_exact_minimum_without_mutating_external_storage(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            receipt = {'diagnostic_only': True}
+            with patch.object(diagnostic.shutil, 'disk_usage', return_value=types.SimpleNamespace(free=diagnostic.MIN_SCRATCH_FREE)):
+                metadata = diagnostic.require_scratch_space(root, root / 'output', receipt)
+            self.assertEqual(metadata['free_bytes'], diagnostic.MIN_SCRATCH_FREE)
+
+    def test_free_space_for_capture_cannot_masquerade_as_complete_history(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'allocator'
+            source.mkdir()
+            (source / 'history').write_bytes(b'0123456789')
+            owner = diagnostic.AllocatorFiles()
+            try:
+                owner.observe(source)
+                with patch.object(diagnostic.shutil, 'disk_usage', return_value=types.SimpleNamespace(free=0)):
+                    records = owner.capture(root / 'captured')
+                metadata = json.loads((root / 'captured/capture-metadata.json').read_text())
+                self.assertFalse(metadata['complete'])
+                self.assertEqual(metadata['captured_bytes'], 0)
+                self.assertEqual(metadata['reason'], 'insufficient-free-space-for-complete-copy')
+                self.assertTrue(records[0]['truncated'])
+            finally:
+                owner.close()
+
+    def test_source_growth_during_copy_is_labeled_incomplete(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'allocator'
+            source.mkdir()
+            path = source / 'history'
+            path.write_bytes(b'old')
+            owner = diagnostic.AllocatorFiles()
+            real_read = diagnostic.os.read
+            def changing_read(descriptor, amount):
+                block = real_read(descriptor, amount)
+                with path.open('ab') as stream:
+                    stream.write(b'new')
+                return block
+            try:
+                owner.observe(source)
+                with patch.object(diagnostic.os, 'read', side_effect=changing_read):
+                    records = owner.capture(root / 'captured')
+                self.assertEqual(records[0]['captured_bytes'], 3)
+                self.assertEqual(records[0]['source_logical_bytes_after'], 6)
+                self.assertTrue(records[0]['source_changed_during_capture'])
+                self.assertFalse(records[0]['complete'])
+                self.assertTrue(records[0]['retained_file'].endswith('.TRUNCATED'))
+                metadata = json.loads((root / 'captured/capture-metadata.json').read_text())
+                self.assertFalse(metadata['complete'])
+                self.assertFalse(metadata['atomic_allocator_snapshot'])
+            finally:
+                owner.close()
+
+    def test_fd_limit_is_still128_and_rejecting_sample_retains_extra_file_metadata(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'allocator'
+            source.mkdir()
+            for number in range(129):
+                (source / str(number)).write_bytes(b'x')
+            owner = diagnostic.AllocatorFiles(root / 'growth.json')
+            try:
+                with self.assertRaisesRegex(ValueError, 'Too many'):
+                    owner.observe(source)
+                self.assertEqual(len(owner.files), 128)
+                growth = json.loads((root / 'growth.json').read_text())
+                self.assertEqual(growth['latest']['file_count'], 129)
+                self.assertEqual(growth['latest']['open_fds'], 128)
+                self.assertTrue(growth['latest']['file_count_is_lower_bound'])
+                owner.capture(root / 'captured')
+                captured = json.loads((root / 'captured/capture-metadata.json').read_text())
+                self.assertFalse(captured['complete'])
+                self.assertEqual(len(captured['unopened_files']), 1)
+                self.assertEqual(json.loads((root / 'growth.json').read_text())['latest']['file_count'], 129)
+            finally:
+                owner.close()
+
     def test_launch_environment_uses_only_noncompact_and_precreated_private_paths(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

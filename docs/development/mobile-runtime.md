@@ -1678,3 +1678,23 @@ request. Artifacts use `ipad-view-lifetime-diagnostic-*` names and explicitly se
 `diagnostic_only`; ordinary native acceptance jobs/gates are skipped in this mode.
 No diagnostic result establishes release acceptance. A non-reproduction does not
 exclude a fault that depends on earlier suite state or instrumentation timing.
+
+The diagnostic history budget is **8 GiB of logical file length**, with a required
+**12 GiB of free scratch-filesystem space** before preparation. These are disk and
+capture bounds, not RAM measurements. Growth samples are persisted before each
+history admission check and retain monotonic/wall time, logical length,
+`st_blocks`-derived allocated bytes and observed file count. The sample list is
+bounded to 1,024 entries; descriptor and native-trace caps remain 128 and 64 MiB.
+If history exceeds its budget or a complete copy cannot fit, capture retains at
+most 64 MiB of allocator prefixes in total, with per-file original/captured sizes
+and explicit `TRUNCATED`/incomplete metadata. Such a capture cannot establish a
+complete allocation history. This allowance follows the earlier diagnostic's
+last recorded 2,122,342,688 logical bytes near case29/420 seconds; it does not
+promise that a later full-suite attempt will reproduce the crash or fit the cap.
+
+Each growth sample also records current scratch/output free bytes. The diagnostic
+stops when either falls below a **512 MiB reserve**, after persisting the rejecting
+sample; capture then uses the same explicitly incomplete bounded-prefix path.
+The 12 GiB admission check does not guarantee space for an 8 GiB history plus a
+second complete copy after simulator preparation. Capture-time free-space checks
+and explicit completeness metadata remain authoritative.
