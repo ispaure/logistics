@@ -4,7 +4,7 @@ from dataclasses import asdict, replace
 from time import monotonic
 
 from commonUtils.ui import pyside as qt
-from services.documents.video_settings import SettingsStore
+from services.documents.video_settings import VideoSettingsStore
 from features.video.session import (
     FolderQueue,
     parse_time,
@@ -30,7 +30,7 @@ class CachedSlider(qt.QSlider):
 
 class PlaybackTools:
     def build_tools(self, root):
-        self.settings_store = SettingsStore(root)
+        self.settings_store = VideoSettingsStore(self.progress, root)
         self.settings = self.settings_store.load()
         self.undo_position, self.undo_deadline = None, 0
         self.body_layout = self.chrome.layout()
@@ -109,9 +109,12 @@ class PlaybackTools:
         if not self.controls_allowed():
             return
         try:
-            self.settings = self.settings_store.save(
-                asdict(replace(self.settings, **{key: value}))
-            )
+            updates = {key: value}
+            if key == 'subtitle_track' and value is not None:
+                updates['subtitle_file'] = ''
+            elif key == 'subtitle_file':
+                updates['subtitle_track'] = None
+            self.settings = self.settings_store.save(asdict(replace(self.settings, **updates)))
             self.apply_settings()
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
@@ -151,18 +154,23 @@ class PlaybackTools:
     def prefer_languages(self):
         from PySide6.QtMultimedia import QMediaMetaData
 
-        for preferred, tracks, select in (
+        for preferred, explicit, tracks, select in (
             (
                 self.settings.audio_language,
+                self.settings.audio_track,
                 self.player.audioTracks(),
                 self.player.setActiveAudioTrack,
             ),
             (
                 self.settings.subtitle_language,
+                self.settings.subtitle_track,
                 self.player.subtitleTracks(),
                 self.player.setActiveSubtitleTrack,
             ),
         ):
+            if explicit is not None and (explicit == -1 or explicit < len(tracks)):
+                select(explicit)
+                continue
             if not preferred:
                 continue
             for index, track in enumerate(tracks):

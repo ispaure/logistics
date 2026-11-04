@@ -65,6 +65,8 @@ class VideoSessionTests(unittest.TestCase):
                 ("subtitle_delay_ms", 1.5),
                 ("autoplay_next", 1),
                 ("audio_language", "fr:injected"),
+                ("audio_track", True),
+                ("subtitle_file", "bad\x00path"),
             ]:
                 with self.subTest(key=key), self.assertRaises(ValueError):
                     store.save(dict(values, **{key: value}))
@@ -83,13 +85,16 @@ class VideoSessionTests(unittest.TestCase):
                 check_access=lambda: None,
             )
             first = RemoteProgress(content, root, DesktopCipher(content))
+            first.settings = PlaybackSettings(rate=1.75, aspect="fill", audio_track=2, subtitle_track=-1)
             first.save(123456)
             content.provider.config_path = Path("/another-import.session")
             second = RemoteProgress(content, root, DesktopCipher(content))
             self.assertEqual(second.load(), 123456)
+            self.assertEqual(second.settings, first.settings)
             raw = first.path.read_bytes()
             self.assertNotIn(b"private-title", raw)
             self.assertNotIn(b"123456", raw)
+            self.assertNotIn(b"audio_track", raw)
             first.path.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
             self.assertEqual(second.load(), 0)
             first.path.write_bytes(raw)

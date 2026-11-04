@@ -264,6 +264,9 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         if selected is None:
             return
         if selected <= -3:
+            name = self.sidecar_data[-3 - selected][0]
+            resource = next((item for item in self.subtitle_resources if Path(item.path).name == name), None)
+            self.change_setting('subtitle_file', resource.path if resource is not None else name)
             if hasattr(self.player, 'add_subtitle'):
                 if self.player.add_subtitle(self.sidecar_data[-3 - selected][1]):
                     self.external_selection = selected
@@ -271,6 +274,8 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
                 return
             self.subtitles = self.sidecar_data[-3 - selected][1]
             selected = -2
+        if selected >= -1:
+            self.change_setting('subtitle_track', selected)
         self.external_selection = None
         self.external = selected == -2
         self.player.setActiveSubtitleTrack(-1 if self.external else selected)
@@ -294,6 +299,10 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
                     (self.content.provider.storage_id, getattr(self.content.provider, 'storage_namespace', ''))):
                 raise ValueError('Choose private subtitles from the same storage as the video.')
             resource = SubtitleContent(choice.provider, choice.path)
+            same_source = choice.provider is self.content.provider or (
+                choice.provider.storage_id == self.content.provider.storage_id and
+                getattr(choice.provider, 'storage_namespace', '') == getattr(self.content.provider, 'storage_namespace', ''))
+            self.change_setting('subtitle_file', choice.path if same_source else '')
             if hasattr(self.player, 'add_subtitle'):
                 url = self.transport.add_subtitle(resource)
                 if not self.player.add_subtitle(url):
@@ -326,7 +335,8 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             try:
                 resources = discover_sidecars(self.content,
                     cancelled=self.chapter_cancelled.is_set,
-                    extensions=self.backend.capabilities.external_formats)
+                    extensions=self.backend.capabilities.external_formats,
+                    preferred=self.settings.subtitle_file)
                 for resource in resources:
                     if self.chapter_cancelled.is_set():
                         break
@@ -368,6 +378,12 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             if row not in self.sidecar_data:
                 self.sidecar_data.append(row)
         self.refresh_tracks()
+        saved = Path(self.settings.subtitle_file).name
+        if saved:
+            for index, (name, _) in enumerate(self.sidecar_data):
+                if name == saved:
+                    self.select_subtitle(self.subtitle_tracks.findData(-3 - index))
+                    break
 
     def restore_sidecars(self):
         if self.deferred_sidecars is not None:

@@ -38,3 +38,21 @@ class SettingsStore:
             atomic_write_json(self.path, asdict(settings), max_bytes=4096)
         return settings
 
+
+
+class VideoSettingsStore:
+    """Per-document settings share the position record and its privacy policy."""
+    def __init__(self, progress, root):
+        self.progress = progress
+        self.defaults = SettingsStore(root)
+
+    def load(self):
+        self.progress.settings = self.progress.settings or self.defaults.load()
+        return self.progress.settings
+
+    def save(self, values):
+        settings = PlaybackSettings.from_dict(values)
+        with self.progress.lock:
+            self.progress.settings = settings
+            self.progress.save(self.progress.position)
+        return settings

@@ -415,7 +415,7 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         from features.video.mobile.player import MobileVideo
         owner = object.__new__(MobileVideo)
         owner.progress = Mock(load=lambda: 1234)
-        owner.controls = SimpleNamespace()
+        owner.controls = SimpleNamespace(store=Mock())
         owner.content = SimpleNamespace(path='movie.mp4', remote=True,
             provider=Mock(list=Mock(side_effect=OSError('listing unavailable'))))
         self.assertEqual(owner.prepare(), (1234, []))

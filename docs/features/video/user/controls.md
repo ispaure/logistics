@@ -46,3 +46,18 @@ including resume and ordinary autoplay. Markdown video embeds in Notes Library
 and standalone Markdown files keep simple inline Play/Pause and seeking controls.
 Each newly created embed starts paused at zero and does not load full-player
 resume state. Page rendering does not autoplay embedded media.
+
+## Remembered playback choices
+
+Speed, picture size (Fit/Fill), embedded audio and subtitle selection (including
+Subtitles off), and playback preferences are saved per video alongside its
+position. Reaching the end resets the position to the start and keeps these
+choices. A missing saved track falls back to the available tracks.
+
+Local files use a bounded content fingerprint (size plus samples from the start,
+middle and end), so renaming or moving the file keeps its state. Identical samples
+share state; this is not a full-file integrity hash. Cloud/server sources retain
+their resource identity and revision without extra fingerprint downloads.
+LocalCrypt state stays encrypted; session-only credential state uses the existing
+credential-password reader store, with no plaintext preference fallback on save.
+Selected subtitle files from the same storage source are restored when still available, including matching sidecars in a moved folder. Subtitles chosen from a different desktop storage source need to be attached again.

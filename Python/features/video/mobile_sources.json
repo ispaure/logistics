@@ -3,6 +3,7 @@
   "modules": [
     "__init__.py",
     "playback.py",
+    "subtitles.py",
     "transport.py",
     "mobile/__init__.py",
     "mobile/player.py",
@@ -19,6 +20,7 @@
     "mobile/android/io/github/ispaure/logistics/video/PlaybackControls.java",
     "mobile/ios/HDRDiagnostics.m",
     "mobile/ios/PausePresentation.m",
-    "mobile/android/io/github/ispaure/logistics/video/PausePresentation.java"
+    "mobile/android/io/github/ispaure/logistics/video/PausePresentation.java",
+    "sidecars.py"
   ]
 }

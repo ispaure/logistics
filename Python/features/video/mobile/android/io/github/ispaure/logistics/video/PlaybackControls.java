@@ -99,6 +99,18 @@ final class PlaybackControls {
         media.addOption(":freetype-rel-fontsize=" + Math.round(16 / settings.optDouble("subtitle_scale", 1)));
     }
     void apply() {
+        if (owner.pendingSubtitleURL != null) owner.attachSubtitleURL(owner.pendingSubtitleURL);
+        int audio = settings.optInt("audio_track", Integer.MIN_VALUE);
+        int text = settings.optInt("subtitle_track", Integer.MIN_VALUE);
+        MediaPlayer.TrackDescription[] audioTracks = owner.player.getAudioTracks();
+        if (audioTracks != null) for (MediaPlayer.TrackDescription track : audioTracks)
+            if (track.id == audio && owner.player.getAudioTrack() != audio) owner.player.setAudioTrack(audio);
+        if (text == -1) owner.player.setSpuTrack(-1);
+        else {
+            MediaPlayer.TrackDescription[] textTracks = owner.player.getSpuTracks();
+            if (textTracks != null) for (MediaPlayer.TrackDescription track : textTracks)
+                if (track.id == text && owner.player.getSpuTrack() != text) owner.player.setSpuTrack(text);
+        }
         owner.player.setRate((float) settings.optDouble("rate", 1));
         owner.player.setAudioDelay(settings.optLong("audio_delay_ms") * 1000);
         owner.player.setSpuDelay(settings.optLong("subtitle_delay_ms") * 1000);

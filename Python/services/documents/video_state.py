@@ -107,6 +107,7 @@ class MobileCipher:
 class RemoteProgress:
     def __init__(self, content, root, cipher=None):
         self.duration = 0
+        self.settings = None
         self.content, self.root, self.cipher = (
             content,
             Path(root) / "Remote",
@@ -132,6 +133,7 @@ class RemoteProgress:
 
     def load(self):
         self.duration = 0
+        self.settings = None
         self.content.check_access()
         try:
             if (
@@ -148,6 +150,11 @@ class RemoteProgress:
             record = json.loads(raw)
             if record.get("version") != 1 or record.get("revision") != self.revision:
                 return 0
+            from features.video.session import PlaybackSettings
+            try:
+                self.settings = PlaybackSettings.from_dict(record['settings'])
+            except (KeyError, TypeError, ValueError):
+                pass
             value = record.get("position", 0)
             from .video_progress import VideoProgress
             self.duration = VideoProgress.valid_duration(record.get("duration", 0))
@@ -157,8 +164,9 @@ class RemoteProgress:
 
     def save(self, position):
         self.content.check_access()
+        from dataclasses import asdict
         data = json.dumps(
-            dict(version=1, revision=self.revision, position=position, duration=self.duration)
+            dict(settings=asdict(self.settings) if self.settings else {}, version=1, revision=self.revision, position=position, duration=self.duration)
         ).encode()
         encrypted = self.cipher.transform(data, self.identity)
         self.content.check_access()

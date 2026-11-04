@@ -134,14 +134,14 @@ class MobileVideo:
 
     def prepare(self):
         position = self.progress.load()
+        self.controls.settings = self.controls.store.load()
         # Remote directory enumeration and optional sidecar stats must not sit
         # in front of the first video request. Keep the retained source until
         # background discovery finishes, including when the viewer closes.
         return position, [] if self.content.remote else self.prepare_sidecars()
 
     def prepare_sidecars(self):
-        folder, _, name = self.content.path.rpartition('/')
-        stem = Path(name).stem
+        folder = self.content.path.rpartition('/')[0]
         try:
             rows = self.content.provider.list(folder)
         except OSError:
@@ -150,26 +150,27 @@ class MobileVideo:
             rows = []  # Optional sidecars must not prevent cloud playback.
         from features.video.session import FolderQueue
         self.controls.queue = FolderQueue(self.content.path, rows)
+        from features.video.sidecars import discover_sidecars
+        saved = getattr(getattr(self.controls, 'settings', None), 'subtitle_file', '')
+        resources = discover_sidecars(self.content, cancelled=lambda: self.closed,
+            preferred=saved if isinstance(saved, str) else '', entries=rows)
         external = []
-        for row in rows:
-            if self.closed:
-                break
-            if len(external) >= 32:
-                break
-            if (not row['directory'] and Path(row['name']).suffix.lower() in SubtitleContent.extensions
-                    and (Path(row['name']).stem == stem or row['name'].startswith(stem + '.'))):
-                try:
-                    subtitle = SubtitleContent(self.content.provider, row['path'])
-                except OSError:
-                    if not self.content.remote:
-                        raise
-                    continue
-                if subtitle.size > 8 * 1024 * 1024:
-                    subtitle.close()
-                    continue
+        try:
+            for subtitle in resources:
+                external.append(dict(name=Path(subtitle.path).name, url=self.transport.add_subtitle(subtitle)))
                 self.subtitles.append(subtitle)
-                external.append(dict(name=row['name'], url=self.transport.add_subtitle(subtitle)))
+        finally:
+            for subtitle in resources:
+                if subtitle not in self.subtitles:
+                    subtitle.close()
         return external
+
+    def restore_subtitle(self, external):
+        saved = self.controls.settings.subtitle_file
+        if saved and self.native is not None:
+            selected = next((row for row in external if row['name'] == Path(saved).name), None)
+            if selected:
+                self.native.add_subtitle(selected['url'])
 
     async def discover_sidecars(self):
         try:
@@ -177,8 +178,7 @@ class MobileVideo:
             if not self.closed and self.native is not None and self.allowed():
                 import json
                 self.native.configure(self.controls.settings.json(), json.dumps(self.controls.queue.rows()))
-                for subtitle in external:
-                    self.native.add_subtitle(subtitle['url'])
+                self.restore_subtitle(external)
         except (OSError, ValueError):
             pass  # Optional discovery must not interrupt an already playing video.
 
@@ -195,6 +195,7 @@ class MobileVideo:
             raise ValueError('Native mobile video playback requires Android or iOS.')
         import json
         self.native.configure(self.controls.settings.json(), json.dumps(self.controls.queue.rows()))
+        self.restore_subtitle(external)
         self.task = self.app.loop.create_task(self.watch())
         self.app.routes.sync_back()
 
