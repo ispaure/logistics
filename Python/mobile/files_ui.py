@@ -520,10 +520,19 @@ class FilesUI:
     def populate_file_browser(self, rows, password='', *, location=None):
         from .browser_preview import callbacks
         client = self.cloud_client
-        # A folder listing needs names and filesystem metadata, not archive
-        # covers or decrypted content. Rich details remain explicit actions.
-        _, self.file_browser.details = callbacks(self.file_provider, client, password)
-        self.file_browser.thumbnail = None
+        # Visible local image rows can load bounded thumbnails. Archive covers
+        # and virtual/cloud content stay outside automatic folder previews.
+        thumbnail, self.file_browser.details = callbacks(self.file_provider, client, password)
+        from commonUtils.filesystem.image_previews import local_provider_image
+        provider = self.file_provider
+        def local_thumbnail(row, size, cancelled):
+            if not row['directory'] and local_provider_image(provider, row['path']):
+                if getattr(client, 'supports_streaming', False):
+                    return thumbnail(row, size, cancelled)
+                from commonUtils.filesystem.image_previews import local_native_image
+                return local_native_image(provider, row['path'], cancelled)
+            return b''
+        self.file_browser.thumbnail = local_thumbnail if isinstance(provider, LocalFiles) else None
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)
