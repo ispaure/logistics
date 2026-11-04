@@ -37,7 +37,8 @@ Before any files are renamed, Logistics validates the entire batch:
 - Every MKA filename contains a valid chapter number.
 - Every chapter has a matching CSV row.
 - CSV chapter numbering matches the MKA chapter number.
-- Every CSV row contains a chapter name.
+- Every row referenced by an MKA contains a chapter name.
+- Chapter N uses row N (one-based); a header row is not skipped.
 - Destination filenames are portable, stay in their original folder, and are unique
   including case and Unicode equivalents.
 - No destination filename already exists.
@@ -48,3 +49,13 @@ before execution, stages the batch, and rolls it back if publication fails. Any
 unresolved recovery paths are reported rather than overwritten.
 
 The [earlier video brief](video-player.md) redirects to the Video Player owner.
+
+## Platform boundary and validation
+
+`ui_contributions.py` registers a desktop Debug action and lazily opens
+`ui/dialogs.py`. There is no mobile MKA management adapter or feature-owned mobile
+source manifest. Mobile playback belongs to Video Player.
+
+`Python/tests/integrations/test_mka_renames.py` covers portable-name rejection,
+duplicate chapter destinations and rollback after publication failure. Its file
+fixtures verify rename behavior, not audio decoding or a physical-device UI.
