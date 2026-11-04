@@ -282,8 +282,10 @@ Files and Search reuse one retained scroll/list owner, mounted only in the
 selected panel. Files ignores a retained query; Search alone projects results
 and owns its query and two scope buttons. Leaving Search cancels its pending
 scan; returning restarts the retained query. Calendar remains independently
-cancellable. A pinned footer owns the library identity, root drop target and
-Files commands, outside the scrolling area. File row font and touch height are
+cancellable. A centered command row below the tabs owns New document, New folder
+and Collapse all folders, outside the scrolling area. The Files tab is the root
+drop target; the library identity/status footer and redundant library menu are removed.
+Desktop uses the same command artwork for its creation and collapse buttons. File row font and touch height are
 unchanged.
 
 Compact Files uses `SpeechOverlay(edge_panel=True)` to fill the window's usable
