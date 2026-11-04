@@ -59,7 +59,7 @@ class NotesLibraryTests(unittest.TestCase):
             owner.refresh_chrome()
             self.assertIs(owner.view.children[0], header)
             self.assertLess(list(owner.view.children).index(header), list(owner.view.children).index(owner.secondary))
-            self.assertLess(list(owner.view.children).index(owner.secondary), list(owner.view.children).index(owner.breadcrumbs))
+            self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
             owner.sidebar.show_sidebar()
             self.assertIs(owner.view.children[0], header)
             owner.sidebar.show_detail()
@@ -77,9 +77,8 @@ class NotesLibraryTests(unittest.TestCase):
                 owner.reflow(width)
                 await owner.open_note('Vault/Home.md')
                 await owner.open_note('Vault/Projects/Plan.MD')
-                self.assertIsNone(owner.secondary.parent)
-                self.assertEqual(owner.view._native_reader_buttons(), [owner.back_button,
-                    owner.forward_button, owner.edit, owner.reader_actions_button])
+                self.assertIsNotNone(owner.secondary.parent)
+                self.assertEqual(owner.view._native_reader_buttons(), [])
                 await owner.back_button.on_press()
                 self.assertEqual(owner.path, 'Vault/Home.md')
                 await owner.forward_button.on_press()
@@ -176,8 +175,10 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertEqual(owner.breadcrumbs.children[-1].text, 'Plain')
                 self.assertTrue(any(getattr(child, 'text', '') == 'Plain' for child in owner.breadcrumbs.children))
             owner.reflow(390)
-            self.assertEqual(len(owner.breadcrumbs.children), 1)
-            await owner.breadcrumbs.children[0].on_press()
+            self.assertEqual(len(owner.breadcrumbs.children), 5)
+            self.assertEqual(owner.secondary.children, [owner.back_button, owner.forward_button,
+                owner.breadcrumb_scroll, owner.reader_actions_button])
+            await owner.breadcrumbs.children[-1].on_press()
             self.assertEqual(owner.sidebar.side, 'files')
             self.assertIn('Vault/Projects/Plain', owner.expanded)
             owner.sidebar.show_detail()
@@ -354,7 +355,7 @@ class NotesLibraryTests(unittest.TestCase):
         (self.vault / 'Destination').mkdir()
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
-            self.assertIn(owner.root_drop_button, owner.panel_identity.children)
+            self.assertIn(owner.panel_tabs['Files'], owner.panel_tabs.values())
             await owner.open_note('Vault/Home.md')
             owner.sidebar.show_sidebar()
             from mobile.favourites import catalog, reference
