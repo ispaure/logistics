@@ -83,14 +83,16 @@ class ResponsivenessTests(unittest.TestCase):
         (root / 'Old').mkdir()
         app.select_destination('files')
         page = app.folder_picker_view
-        self.assertIn('Old', app.folder_buttons)
+        self.assertIn('Old', app.folder_picker_choices)
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Received Files'})
         app.show_home()
         (root / 'Old').rmdir()
         (root / 'New').mkdir()
         self.assertTrue(app.select_destination('files'))
         self.assertIs(app.folder_picker_view, page)
-        self.assertNotIn('Old', app.folder_buttons)
-        self.assertIn('New', app.folder_buttons)
+        self.assertNotIn('Old', app.folder_picker_choices)
+        self.assertIn('New', app.folder_picker_choices)
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Received Files'})
 
     def test_retained_workspace_refreshes_lock_state_and_hidden_source_cache(self):
         app = self.app
