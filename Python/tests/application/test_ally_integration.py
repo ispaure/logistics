@@ -90,7 +90,7 @@ class AllyIntegrationTests(unittest.TestCase):
                 shared_dir = logistics / 'Python/commonUtils/launchers'; shared_dir.mkdir(parents=True)
                 (shared_dir / shared).write_text('#!/bin/bash\nprintf "%s\\n" "$1" "$2" "$LOGISTICS_ROOT" "${LOGISTICS_ALLY_ROOT-unset}"\nexit 7\n')
                 env = dict(os.environ, LOGISTICS_ALLY_ROOT='stale')
-                result = subprocess.run(['bash', str(launcher)], env=env, capture_output=True, text=True)
+                result = subprocess.run(['bash', str(launcher)], env=env, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 7)
                 self.assertEqual(result.stdout.splitlines(), [str(logistics), str(logistics / 'launch_config.ini'), str(logistics), 'unset'])
                 ally = sandbox / 'ally-tools'; (ally / 'Python/ally_feature').mkdir(parents=True)
@@ -98,12 +98,12 @@ class AllyIntegrationTests(unittest.TestCase):
                 (ally / 'Python/pyproject.toml').write_text('[project]')
                 (ally / 'logistics_launch.ini').write_text('[Launch]')
                 lock = ally / 'Python/uv.lock'; lock.write_text('preserve')
-                result = subprocess.run(['bash', str(launcher)], env=env, capture_output=True, text=True)
+                result = subprocess.run(['bash', str(launcher)], env=env, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 7)
                 self.assertEqual(result.stdout.splitlines()[1:], [str(ally), str(ally / 'logistics_launch.ini'), str(logistics), 'unset'])
                 self.assertEqual(lock.read_text(), 'preserve')
                 (ally / 'logistics_launch.ini').unlink()
-                result = subprocess.run(['bash', str(launcher)], capture_output=True, text=True)
+                result = subprocess.run(['bash', str(launcher)], capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 1)
 
 

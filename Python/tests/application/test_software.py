@@ -21,6 +21,32 @@ from services import software
 
 class SoftwareTests(QtTestCase):
     @contextmanager
+    def dialog_deadline(self, dialog):
+        """Fail a stalled modal loop promptly and let its worker retire safely."""
+        from commonUtils.ui import pyside as qt
+        expired = []
+        timer = qt.QTimer(dialog)
+        timer.setSingleShot(True)
+
+        def expire():
+            expired.append(True)
+            dialog.task.request_cancel()
+            # The override of reject() deliberately keeps a busy dialog open.
+            qt.QDialog.done(dialog, qt.QDialog.DialogCode.Rejected)
+
+        timer.timeout.connect(expire)
+        timer.start(5000)
+        try:
+            yield
+        finally:
+            timer.stop()
+            if expired:
+                self.wait_until(lambda: not dialog.running,
+                                message='Timed-out download worker did not retire')
+            dialog.deleteLater()
+        self.assertFalse(expired, 'Download dialog did not finish within 5 seconds')
+
+    @contextmanager
     def resource_config(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -210,10 +236,10 @@ class SoftwareTests(QtTestCase):
         spec = DownloadSpec('Tool','1','https://example.test/tool','0'*64,'0'*64)
         with patch.object(download, 'provision', return_value=Path('/verified/tool')):
             dialog = download._DownloadDialog(spec, Path('/tool'))
-            dialog.exec()
+            with self.dialog_deadline(dialog):
+                dialog.exec()
             self.assertEqual(dialog.result_path, Path('/verified/tool'))
             self.assertFalse(dialog.running)
-            dialog.deleteLater()
 
     def test_download_dialog_cancellation_waits_for_worker(self):
         import time
@@ -232,11 +258,11 @@ class SoftwareTests(QtTestCase):
         with patch.object(download, 'provision', side_effect=work):
             dialog = download._DownloadDialog(spec, Path('/tool'))
             qt.QTimer.singleShot(20, dialog.reject)
-            dialog.exec()
+            with self.dialog_deadline(dialog):
+                dialog.exec()
             self.assertTrue(dialog.cancelled.is_set())
             self.assertFalse(dialog.running)
             self.assertIsNone(dialog.result_path)
-            dialog.deleteLater()
 
     def test_download_failure_is_not_hidden_by_a_late_cancel_request(self):
         from commonUtils.ui import pyside as qt
@@ -250,7 +276,8 @@ class SoftwareTests(QtTestCase):
             with patch.object(download, 'is_ready', return_value=False), \
                     patch.object(qt, 'display_msg_box_yes_no', return_value=True), \
                     patch.object(download, '_DownloadDialog', return_value=dialog), \
-                    patch.object(qt, 'display_msg_box_ok') as message:
+                    patch.object(qt, 'display_msg_box_ok') as message, \
+                    self.dialog_deadline(dialog):
                 self.assertIsNone(download.ensure_download(spec, Path('/tool')))
                 message.assert_called_once()
                 self.assertIn('SHA-256 verification failed', message.call_args.args[1])

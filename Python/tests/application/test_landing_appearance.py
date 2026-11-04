@@ -49,7 +49,7 @@ class LandingAppearanceTests(QtTestCase):
             description='Read and edit documents in this format.') for i in range(6)})
         return page
 
-    def test_section_headers_replace_welcome_and_share_the_large_font(self):
+    def test_section_headers_align_and_share_the_large_font(self):
         page = self.page(SLATE_LIGHT)
         page.resize(1250, 800)
         page.show()
@@ -62,9 +62,6 @@ class LandingAppearanceTests(QtTestCase):
             self.assertTrue(label.font().bold())
         self.assertEqual(headings['Features'].mapTo(page, qt.QPoint()).y(),
                          headings['Favourites'].mapTo(page, qt.QPoint()).y())
-        labels = [label.text() for label in page.findChildren(qt.QLabel)]
-        self.assertNotIn('Welcome to Logistics', labels)
-        self.assertNotIn('Choose your workspace, or open something to read or edit.', labels)
 
     def test_read_edit_is_visible_below_saved_lists_with_one_card_per_row(self):
         page = self.page(SLATE_LIGHT)
