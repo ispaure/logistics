@@ -162,12 +162,35 @@ class NotebookHostStorageTests(unittest.TestCase):
             self.assertEqual(show.await_count, 1)
             panel.closed = False
 
-    def test_ios_chrome_preserves_close_canvas_command(self):
+    def test_ios_chrome_exposes_native_shortcuts_and_preserves_canvas_queue(self):
         native = type('Native', (), {'__module__': 'toga_iOS.fixture'})()
-        panel = SimpleNamespace(view=SimpleNamespace(_impl=native), web=Mock(evaluate_javascript=AsyncMock()))
-        with patch('mobile.control_icons.icon_button', Mock()) as button:
+        panel = SimpleNamespace(view=SimpleNamespace(_impl=native), closed=False,
+            app=SimpleNamespace(active_host=True), web=Mock(evaluate_javascript=AsyncMock()))
+        controls = []
+        def button(icon, label, **kwargs):
+            control = Mock(icon=icon, label=label, **kwargs)
+            controls.append(control)
+            return control
+        with patch('mobile.control_icons.icon_button', side_effect=button), \
+                patch('mobile.action_menu.FeatureCommands') as menu, patch('toga.Box'):
             install_notebook_controls(panel)
-        self.assertIs(panel.view._reader_close_button, button.return_value)
-        self.assertEqual(panel.view._native_reader_buttons(), [])
-        self.run_async(button.call_args.kwargs['on_press']())
-        panel.web.evaluate_javascript.assert_awaited_once_with("send({op:'library'})")
+        self.assertIs(panel.view._reader_close_button, controls[0])
+        self.assertEqual([b.label for b in panel.view._native_reader_buttons()],
+            ['Pages Overview', 'Page template and layers', 'View and input', 'Notebook actions'])
+        for control, name in zip(controls[:4], ('library', 'pages', 'layers', 'view')):
+            self.run_async(control.on_press())
+            panel.web.evaluate_javascript.assert_awaited_with('window.notebookNativeAction?.("' + name + '")')
+        actions = dict(menu.call_args.args[2])
+        self.run_async(actions['Save']())
+        panel.web.evaluate_javascript.assert_awaited_with('window.notebookNativeAction?.("save")')
+        web = panel.web
+        before = web.evaluate_javascript.await_count
+        panel.closed = True
+        self.run_async(actions['Delete document…']())
+        panel.closed = False
+        panel.app.active_host = False
+        self.run_async(actions['Save']())
+        panel.app.active_host = True
+        panel.web = None
+        self.run_async(actions['Save']())
+        self.assertEqual(before, web.evaluate_javascript.await_count)

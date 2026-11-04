@@ -282,12 +282,36 @@ def install_notebook_controls(panel):
         return
     import toga
     from mobile.control_icons import icon_button
-    async def close(widget=None, **kwargs):
-        if panel.web is not None:
-            await panel.web.evaluate_javascript("send({op:'library'})")
+    import json
+    from mobile.action_menu import FeatureCommands
+
+    def action(name):
+        async def invoke(widget=None, **kwargs):
+            if panel.closed or not panel.app.active_host or panel.web is None:
+                return
+            await panel.web.evaluate_javascript('window.notebookNativeAction?.(' + json.dumps(name) + ')')
+        return invoke
+
+    close = action('library')
     panel.view._reader_close_button = icon_button('close', 'Close document', on_press=close)
-    panel.view._native_reader_toolbar = toga.Box()
-    panel.view._native_reader_buttons = lambda: []
+    buttons = [icon_button(icon, label, on_press=action(name)) for icon, label, name in (
+        ('contents', 'Pages Overview', 'pages'),
+        ('notes_links', 'Page template and layers', 'layers'),
+        ('appearance', 'View and input', 'view'),
+    )]
+    more = icon_button('more', 'Notebook actions')
+    panel.native_actions = FeatureCommands(more, panel.app, [
+        (label, action(name)) for label, name in (
+            ('Pages Overview', 'pages'), ('Page template and layers', 'layers'),
+            ('View and input…', 'view'), ('Save', 'save'), ('Save As…', 'save-as'),
+            ('Export .rmdoc', 'export'), ('Show in folder', 'show-in-folder'),
+            ('Document location', 'document-location'), ('Hide tools', 'hide-tools'),
+            ('Add page', 'add-page'), ('Close document', 'library'),
+            ('Delete document…', 'delete-file'),
+        )], action('document'))
+    buttons.append(more)
+    panel.view._native_reader_toolbar = toga.Box(children=buttons)
+    panel.view._native_reader_buttons = lambda: buttons
 
 
 async def show_notebook_in_folder(panel):
