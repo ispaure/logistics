@@ -39,8 +39,14 @@ def diagnostics(entry_point):
     if entry_point.endswith('.speech_playback_probe'):
         return NATIVE_DIAGNOSTICS + ('feedback-progress.json', 'speech-initialization.jsonl',
             'feedback-speech-complete.png', 'feedback-speech-failure.png')
+    if entry_point.endswith('.android_header_probe'):
+        return NATIVE_DIAGNOSTICS + ('android-header-startup.json',)
     if entry_point.endswith('.folder_feedback_probe'):
         return NATIVE_DIAGNOSTICS + ('folder-feedback-startup.json', 'folder-feedback-tasks.txt')
+    if entry_point.endswith('.lockscreen_probe'):
+        return tuple('lock-' + name + '.png' for name in
+            [*(f'{i}-{pose}{suffix}' for i, pose in enumerate(('portrait', 'landscape-left', 'landscape-right', 'portrait'))
+               for suffix in ('', '-keyboard')), 'unlock-keyboard'])
     if entry_point.endswith('.links_images_voices_probe'):
         return NATIVE_DIAGNOSTICS + ('feedback-progress.json',) + tuple(
             'feedback-' + name + '.png' for name in ('15-outgoing', '15-loading', '15-backlinks',
@@ -68,6 +74,18 @@ def diagnostics(entry_point):
             f'creation-{panel}-{pose}.png' for panel in ('formats', 'name', 'change-format', 'locations', 'location', 'folders')
             for pose in ('portrait', 'landscape-left', 'landscape-right'))
     return NATIVE_DIAGNOSTICS + (SYNC_SCREENSHOTS if entry_point.endswith('.sync_status_probe') else ())
+
+
+def lockscreen_capture_name(raw):
+    """Missing adb marker files are startup/polling state, not JSON requests."""
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return None
+    name = value.get('name') if isinstance(value, dict) else None
+    if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9-]+', name):
+        raise ValueError('Unexpected lock-screen screenshot name')
+    return name
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -241,7 +259,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
     cache = console = console_stream = None
     try:
         client.boot(device)
-        if entry_point.endswith('.document_creation_probe'):
+        if entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
             # Dismiss only the fresh QA simulator's first-use keyboard lesson.
             client.invoke('spawn', device, 'defaults', 'write', 'com.apple.keyboard.preferences',
                           'DidShowContinuousPathIntroduction', '-bool', 'true')
@@ -347,6 +365,15 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 client.invoke('io', device, 'screenshot', str(output / 'duo-keyboard-screen.png'))
                 keyboard_capture.unlink()
                 (cache / 'viewer-layout/keyboard-capture-done').touch()
+            request = cache / 'lockscreen-capture.json'
+            if entry_point.endswith('.lockscreen_probe') and request.exists():
+                capture_name = lockscreen_capture_name(request.read_bytes())
+                if capture_name is None:
+                    time.sleep(.1)
+                    continue
+                client.invoke('io', device, 'screenshot', str(output / ('screen-' + capture_name + '.png')))
+                request.unlink()
+                (cache / 'lockscreen-capture-done').touch()
             report = cache / result_name
             if entry_point.endswith('.document_creation_probe'):
                 request = cache / 'document-creation-evidence/keyboard-request.json'
@@ -359,6 +386,9 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                     request.with_name('keyboard-done').touch()
             if report.exists():
                 result = json.loads(report.read_text())
+                if entry_point.endswith('.lockscreen_probe') and result.get('phase') not in ('complete', 'failed'):
+                    time.sleep(.2)
+                    continue
                 (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
                 client.invoke('io', device, 'screenshot', str(output / 'ios-final.png'))
                 if not result['success']:
@@ -525,13 +555,23 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         else:
             record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
-        if device is None and entry_point.endswith('.document_creation_probe'):
+        if device is None and not tablet and entry_point.endswith('.android_header_probe'):
+            emulator.invoke('-s', serial, 'shell', 'wm', 'size', '720x1600')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
+        if device is None and entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
             emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
         if tablet:
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '1600x2400')
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
         if device is None and entry_point.endswith('.sync_status_probe'):
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '640x1136')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
+        if device is None and entry_point.endswith('.lockscreen_probe'):
+            # A fresh Pixel Launcher's first-boot ANR can steal the QA window's
+            # input focus. Stop only that unrelated launcher on our disposable
+            # emulator before installing the foreground form; retain app errors.
+            emulator.invoke('-s', serial, 'shell', 'am', 'force-stop', 'com.google.android.apps.nexuslauncher')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'size', '720x1600')
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
         emulator.invoke('-s', serial, 'install', str(apk), timeout=install_timeout)
         if device is not None:
@@ -542,10 +582,30 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         if device is None and entry_point.endswith('.chat_notes_feedback_probe'):
             prepare_chat_notes_emulator(emulator, serial, output)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
+        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.lockscreen_probe', '.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe', '.documentation_header_probe', '.android_header_probe')) else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
-            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
+            if entry_point.endswith(('.documentation_header_probe', '.android_header_probe')):
+                capture = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/header-capture.json'], env=env, capture_output=True, timeout=15)
+                try:
+                    request = json.loads(capture.stdout) if capture.returncode == 0 else {}
+                except (ValueError, UnicodeError):
+                    request = {}  # Retry a marker observed during its write.
+                name = request.get('name') if isinstance(request, dict) else None
+                if name is not None:
+                    if not isinstance(name, str) or not re.fullmatch(r'(?:help|notes)-[a-z-]+', name):
+                        raise ValueError('Unexpected header screenshot name')
+                    screen = subprocess.check_output([str(emulator.adb), '-s', serial,
+                        'exec-out', 'screencap', '-p'], env=env, timeout=45)
+                    if not screen.startswith(b'\x89PNG'):
+                        raise RuntimeError('Android header screenshot was not a PNG')
+                    directory = output / 'cache/viewer-layout'
+                    directory.mkdir(parents=True, exist_ok=True)
+                    (directory / (name + '.png')).write_bytes(screen)
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/header-capture.json')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/header-capture-done')
+            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe', '.lockscreen_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -553,6 +613,15 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                     emulator.invoke('-s', serial, 'shell', 'wm', 'user-rotation', 'lock',
                                     {b'landscape-left': '1', b'landscape-right': '3', b'portrait': '0'}[pose])
                     last_orientation = pose
+            if entry_point.endswith('.lockscreen_probe'):
+                request = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/lockscreen-capture.json'], env=env, capture_output=True, timeout=15)
+                capture_name = lockscreen_capture_name(request.stdout) if request.returncode == 0 else None
+                if capture_name is not None:
+                    screen = subprocess.check_output([str(emulator.adb), '-s', serial, 'exec-out', 'screencap', '-p'], env=env, timeout=15)
+                    (output / ('screen-' + capture_name + '.png')).write_bytes(screen)
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/lockscreen-capture.json')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/lockscreen-capture-done')
             if memory_probe:
                 progress = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/notebook-memory-progress.json'], env=env, capture_output=True, timeout=15)
@@ -603,6 +672,9 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                 except json.JSONDecodeError:
                     time.sleep(.1)
                     continue
+                if entry_point.endswith('.lockscreen_probe') and result.get('phase') not in ('complete', 'failed'):
+                    time.sleep(.2)
+                    continue
                 (output / 'android-result.json').write_text(json.dumps(result, indent=2))
                 if not result['success']:
                     raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
@@ -633,15 +705,22 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
     finally:
         try:
             if record is not None:
-                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe', '.notes_markdown_feedback_probe', '.documentation_header_probe')):
+                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe', '.notes_markdown_feedback_probe', '.documentation_header_probe', '.android_header_probe')):
                     import io
                     import tarfile
                     archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                         'run-as', bundle, 'tar', '-cf', '-', 'cache/viewer-layout'],
                         env=env, capture_output=True, timeout=45)
                     if archive.returncode == 0:
-                        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as evidence:
-                            evidence.extractall(output, filter='data')
+                        try:
+                            with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as evidence:
+                                evidence.extractall(output, filter='data')
+                        except (tarfile.TarError, EOFError):
+                            # A startup failure can leave no evidence directory;
+                            # Android's shell may still return status zero. Keep
+                            # the original run failure and continue cleanup.
+                            (output / 'android-evidence-archive-error.txt').write_text(
+                                archive.stdout[:4096].decode(errors='replace'))
                 if raw_ink or hands_on:
                     for name in ('baseline.png', 'raw-final.png', 'comparison.rmdoc', 'stage.json', 'observations.json'):
                         artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
@@ -724,7 +803,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -735,6 +814,8 @@ def main():
     parser.add_argument('--increase-contrast', action='store_true')
     parser.add_argument('--android-tablet', action='store_true', help='Use a tablet viewport on the disposable Android emulator.')
     args = parser.parse_args()
+    if args.probe == 'android-header' and args.platform != 'android':
+        parser.error('The android-header probe requires Android.')
     if args.android_tablet and (args.platform != 'android' or args.device):
         parser.error('--android-tablet requires the disposable Android emulator.')
     if args.pose and (args.platform != 'ios' or args.family != 'iPhone Duo'):
@@ -779,6 +860,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'android-header':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.android_header_probe', result_name='android-header-result.json')
         if args.probe == 'documentation-header':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.documentation_header_probe', result_name='documentation-header-result.json')
