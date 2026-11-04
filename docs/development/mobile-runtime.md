@@ -938,6 +938,18 @@ A fitted label reflows the result (or an unavailable message on failure). Help's
 About entry reuses the same retained page with its own Back route.
 It reads the packaged `mobile/source.json` to show the version, commit, local
 commit time, modified status, platform and source snapshot identifier offline.
+The focused native `mobile-feedback` probe checks feedback items 18–20 together:
+centered Notes commands below the tabs in portrait/landscape, removal of footer
+and redundant menu, native collapse/tab actions, documentation-first Help,
+Android's initially collapsed More entry, and About's loading/Back/license paths.
+Its driver is `mobile_build.validation.document_storage_tools`; select
+`--probe mobile-feedback` with `ios` or `android` and an ignored `--output`
+directory. It creates an isolated QA app and manager-owned disposable device,
+retrieves reports/screenshots, then removes the app and device. Configure each
+checkout's native tools and prepared wheel inputs first. This is focused local
+acceptance, rather than the complete native release suite. `--retain-build` is
+for managed build retries with explicit pin/workspace cleanup afterward.
+
 Reload preferences explicitly rebuilds category factories; ordinary visits reuse
 their controls. Saving preferences reads only the controls already constructed,
 preserving preference values belonging to unopened categories.
