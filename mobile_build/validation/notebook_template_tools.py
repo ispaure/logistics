@@ -1,4 +1,4 @@
-"""Native template acceptance through existing managed mobile build/device runners."""
+"""Focused notebook acceptance through existing managed mobile build/device runners."""
 import argparse
 import base64
 import json
@@ -21,6 +21,30 @@ def compiled_payload(apk):
     with ZipFile(apk) as archive:
         return {name: sha256(archive.read(name)).hexdigest() for name in archive.namelist()
                 if name.endswith('.dex') or name.startswith('lib/')}
+
+
+def retain_palm_package(work, output):
+    """Keep the new QA package and provenance before disposable build cleanup."""
+    manifest = output / 'android-apk.json'
+    if not manifest.exists():
+        return  # Compilation never reached a runnable package.
+    built = json.loads(manifest.read_text())
+    original = Path(built['apk'])
+    if sha256(original.read_bytes()).hexdigest() != built['sha256']:
+        raise ValueError('Built palm QA package changed before evidence capture')
+    target = output / 'notebook-palm.apk'
+    shutil.copyfile(original, target)
+    target.chmod(0o444)
+    names = {'NotebookInput', 'BooxBallpoint', 'BooxInk', 'BooxRefresh'}
+    classes = {str(path.relative_to(work)): sha256(path.read_bytes()).hexdigest()
+               for path in (work / 'build').rglob('*.class') if path.stem in names}
+    native = work / 'payload/features/notebooks/mobile/android'
+    sources = {str(path.relative_to(native)): sha256(path.read_bytes()).hexdigest()
+               for path in native.rglob('*.java')}
+    (output / 'android-shell.json').write_text(json.dumps(dict(
+        apk=str(target), sha256=built['sha256'], source=json.loads((output / 'source.json').read_text()),
+        native_class_hashes=classes, native_source_hashes=sources,
+        compiled_payload=compiled_payload(target), read_only=True), indent=2))
 
 
 def android_shell(receipt_path, source, work, output, env, *, probe='notebook_template_probe'):
@@ -70,12 +94,15 @@ def main():
     parser.add_argument('--revision', default='HEAD', help='Committed Logistics revision; excludes concurrent working edits')
     parser.add_argument('--ios-shell-receipt', type=Path, help='Verified simulator shell receipt; iOS never compiles implicitly')
     parser.add_argument('--android-shell-receipt', type=Path, help='Copy/repackage a verified QA APK instead of compiling')
-    parser.add_argument('--probe', choices=('templates', 'calibration'), default='templates')
+    parser.add_argument('--probe', choices=('templates', 'calibration', 'palm'), default='templates')
+    parser.add_argument('--ios-family', choices=('iPhone', 'iPad'), default='iPhone')
     args = parser.parse_args()
     if args.platform == 'ios' and args.ios_shell_receipt is None:
         parser.error('iOS requires --ios-shell-receipt (copy-only simulator shell)')
     if args.probe == 'calibration' and (args.platform != 'android' or args.android_shell_receipt is None):
         parser.error('Calibration requires Android and an explicit source-verified QA shell receipt')
+    if args.probe == 'palm' and args.platform == 'ios' and args.ios_family != 'iPad':
+        parser.error('Pencil hover observer acceptance requires --ios-family iPad')
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     root = Path(__file__).resolve().parents[2]
@@ -103,6 +130,9 @@ def main():
         if args.probe == 'calibration':
             profile.update(entry_point='tests.logisticsmobile.notebook_calibration_probe',
                            result_name='notebook-calibration-result.json')
+        elif args.probe == 'palm':
+            profile.update(entry_point='tests.logisticsmobile.notebook_palm_probe',
+                           result_name='notebook-palm-result.json')
         try:
             if args.platform == 'ios':
                 receipt = json.loads(args.ios_shell_receipt.read_text())
@@ -110,7 +140,7 @@ def main():
                 if not source_app.is_dir():
                     raise ValueError('Verified simulator shell no longer exists')
                 (output / 'compiled-shell.json').write_text(json.dumps(receipt, indent=2))
-                driver.run_ios(work, payload, output, env, family='iPhone', source_app=source_app, **profile)
+                driver.run_ios(work, payload, output, env, family=args.ios_family, source_app=source_app, **profile)
             else:
                 if args.android_shell_receipt is not None:
                     (work / 'repack').mkdir()
@@ -121,6 +151,8 @@ def main():
                 else:
                     driver.run_android(work, payload, output, env, options, **profile)
         finally:
+            if args.platform == 'android' and args.probe == 'palm' and args.android_shell_receipt is None:
+                retain_palm_package(work, output)
             report_path = output / (args.platform + '-result.json')
             if report_path.exists():
                 report = json.loads(report_path.read_text())
