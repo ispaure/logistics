@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+from zipfile import ZipFile
 
 from logistics_build.build_retention import scratch
 from logistics_build.build_snapshots import materialize
@@ -15,7 +16,14 @@ from mobile_build.deployment import manager_settings
 from mobile_build.tools import stage
 
 
-def android_shell(receipt_path, source, work, output, env):
+def compiled_payload(apk):
+    """Identify DEX and native libraries which Python-only restaging must preserve."""
+    with ZipFile(apk) as archive:
+        return {name: sha256(archive.read(name)).hexdigest() for name in archive.namelist()
+                if name.endswith('.dex') or name.startswith('lib/')}
+
+
+def android_shell(receipt_path, source, work, output, env, *, probe='notebook_template_probe'):
     """Restage only Python into an immutable, source-verified isolated QA APK."""
     from mobile_build.deployment.android_deploy import build_tools
     receipt = json.loads(receipt_path.read_text())
@@ -27,7 +35,7 @@ def android_shell(receipt_path, source, work, output, env):
     if compiled['dirty'] or compiled['commonUtils_dirty'] or compiled['commonUtils_commit'] != current['commonUtils_commit']:
         raise ValueError('Android shell requires clean matching commonUtils source')
     changed = subprocess.check_output(['git', '-C', str(source), 'diff', '--name-only',
-        compiled['logistics_commit'], 'HEAD', '--', 'Python'], text=True).splitlines()
+        compiled['logistics_commit'], current['logistics_commit'], '--', 'Python'], text=True).splitlines()
     if any('/android/' in name and Path(name).suffix in {'.java', '.kt', '.c', '.h'} for name in changed):
         raise ValueError('Android compiled source changed since the shell build')
     spec = importlib.util.spec_from_file_location('notebook_apk_restage', source / 'mobile_build/validation/video_probe_tools.py')
@@ -36,7 +44,7 @@ def android_shell(receipt_path, source, work, output, env):
     # The existing repacker stages from its explicit source root and preserves
     # compiled classes/libraries. Never mutate the source APK or its workspace.
     repack.ROOT = source
-    unsigned = repack.prepare(apk, work / 'repack', probe='notebook_template_probe')
+    unsigned = repack.prepare(apk, work / 'repack', probe=probe)
     tools = build_tools(env)
     key, aligned, signed = work / 'debug.jks', work / 'aligned.apk', work / 'notebook.apk'
     subprocess.run(['keytool', '-genkeypair', '-keystore', str(key), '-storepass', 'android',
@@ -45,6 +53,12 @@ def android_shell(receipt_path, source, work, output, env):
     subprocess.run([str(tools / 'zipalign'), '-f', '-P', '16', '4', str(unsigned), str(aligned)], env=env, check=True, capture_output=True)
     subprocess.run([str(tools / 'apksigner'), 'sign', '--ks', str(key), '--ks-pass', 'pass:android',
         '--out', str(signed), str(aligned)], env=env, check=True, capture_output=True)
+    before, after = compiled_payload(apk), compiled_payload(signed)
+    if not before or before != after:
+        raise ValueError('Python restaging changed the compiled Android payload')
+    (output / 'compiled-payload.json').write_text(json.dumps(dict(
+        unchanged=True, entries=before, original_sha256=receipt['sha256'],
+        restaged_sha256=sha256(signed.read_bytes()).hexdigest(), probe=probe), indent=2))
     (output / 'compiled-shell.json').write_text(json.dumps(receipt, indent=2))
     return signed
 
@@ -56,9 +70,12 @@ def main():
     parser.add_argument('--revision', default='HEAD', help='Committed Logistics revision; excludes concurrent working edits')
     parser.add_argument('--ios-shell-receipt', type=Path, help='Verified simulator shell receipt; iOS never compiles implicitly')
     parser.add_argument('--android-shell-receipt', type=Path, help='Copy/repackage a verified QA APK instead of compiling')
+    parser.add_argument('--probe', choices=('templates', 'calibration'), default='templates')
     args = parser.parse_args()
     if args.platform == 'ios' and args.ios_shell_receipt is None:
         parser.error('iOS requires --ios-shell-receipt (copy-only simulator shell)')
+    if args.probe == 'calibration' and (args.platform != 'android' or args.android_shell_receipt is None):
+        parser.error('Calibration requires Android and an explicit source-verified QA shell receipt')
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     root = Path(__file__).resolve().parents[2]
@@ -83,6 +100,9 @@ def main():
         (output / 'source.json').write_text(json.dumps(manifest, indent=2))
         profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
             entry_point='tests.logisticsmobile.notebook_template_probe', result_name='notebook-template-result.json')
+        if args.probe == 'calibration':
+            profile.update(entry_point='tests.logisticsmobile.notebook_calibration_probe',
+                           result_name='notebook-calibration-result.json')
         try:
             if args.platform == 'ios':
                 receipt = json.loads(args.ios_shell_receipt.read_text())
@@ -94,7 +114,8 @@ def main():
             else:
                 if args.android_shell_receipt is not None:
                     (work / 'repack').mkdir()
-                    apk = android_shell(args.android_shell_receipt, source, work, output, env)
+                    apk = android_shell(args.android_shell_receipt, source, work, output, env,
+                                        probe=profile['entry_point'].rsplit('.', 1)[1])
                     driver.exercise_android_app(apk, work, output, env, options,
                         startup_timeout=240, install_timeout=90, probe_timeout=180, **profile)
                 else:
