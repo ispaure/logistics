@@ -50,6 +50,31 @@ class ImageFolderToolTests(unittest.TestCase):
         self.assertEqual(bad.read_bytes(), b'not an image')
         self.assertEqual(unrelated.read_bytes(), b'preexisting output')
 
+    def test_encoder_failure_preserves_source_cleans_stage_and_continues(self):
+        second = self.image('second.png')
+        original = self.source.read_bytes()
+        save = Image.Image.save
+
+        def fail_first_save(image, destination, *args, **kwargs):
+            if Path(destination).name == '.sample.webp':
+                Path(destination).write_bytes(b'partial encoding')
+                raise OSError('encoder failed')
+            return save(image, destination, *args, **kwargs)
+
+        with patch.object(Image.Image, 'save', fail_first_save):
+            result, outcomes = self.compress()
+        self.assertEqual(result.completed, [second])
+        self.assertEqual(set(result.failed), {self.source})
+        self.assertEqual(result.remaining, [])
+        self.assertFalse(result.cancelled)
+        self.assertEqual(outcomes, {second: 'Converted to WEBP'})
+        self.assertEqual(self.source.read_bytes(), original)
+        self.assertFalse(self.source.with_suffix('.webp').exists())
+        self.assertFalse(list(self.root.glob('.*.webp')))
+        self.assertFalse(second.exists())
+        with Image.open(second.with_suffix('.webp')) as converted:
+            self.assertEqual(converted.size, (32, 32))
+
     def test_blocked_folder_never_calls_encoder(self):
         with patch('services.folders.safety.require_safe_folder', side_effect=ValueError('Protected')), \
                 patch.object(processing.ImageFile, 'compress') as encode:
@@ -86,14 +111,20 @@ class ImageFolderToolTests(unittest.TestCase):
         original = second.read_bytes()
         progress = []
         stop = False
+        encoder = processing.ImageFile.compress
 
         def report(done, total, message):
-            nonlocal stop
             progress.append((done, total))
-            if done == 1:
-                stop = True
 
-        result, outcomes = self.compress(report=report, cancelled=lambda: stop)
+        def cancel_during_encoding(image, *args, **kwargs):
+            nonlocal stop
+            stop = True
+            return encoder(image, *args, **kwargs)
+
+        with patch.object(processing.ImageFile, 'compress', autospec=True,
+                          side_effect=cancel_during_encoding) as encode:
+            result, outcomes = self.compress(report=report, cancelled=lambda: stop)
+        self.assertEqual(encode.call_count, 1)
         self.assertTrue(result.cancelled)
         self.assertEqual(result.completed, [self.source])
         self.assertEqual(result.remaining, [second])
