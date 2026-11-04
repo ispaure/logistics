@@ -297,11 +297,16 @@ def main(output):
                         })()""")
                         assert clears == 1, ('Cancellation with a pending viewport resize replayed the page', clears)
 
-                        assert js(view, '!viewportResizePending&&canvas.getBoundingClientRect().width') != paper_width
+                        after_cancel = json.loads(js(view, resize_state))
+                        report['cancelled_resize'] = after_cancel
+                        assert not after_cancel['pending'] and after_cancel['paper'] != paper_width, report
                         owner.resize(original_size)
-                        wait(lambda: js(view, 'resizeFrame===null&&!viewportResizePending&&JSON.stringify([innerWidth,innerHeight])')
-                             == json.dumps(before_resize['inner'], separators=(',', ':')),
-                             'browser viewport restored after pen cancellation')
+                        def restored_resize():
+                            current = json.loads(js(view, resize_state))
+                            report['restored_resize'] = current
+                            return (current['inner'] == before_resize['inner'] and current['paper'] == paper_width
+                                    and not current['pending'] and not current['scheduled'])
+                        wait(restored_resize, 'browser viewport restored after pen cancellation')
                         if desktop:
                             data = json.loads(js(view, "JSON.stringify({scale:canvas.getBoundingClientRect().width/state.width,box:$('viewport').getBoundingClientRect().toJSON()})"))
                             box = data['box']
