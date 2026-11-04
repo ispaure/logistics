@@ -32,14 +32,27 @@ in Settings. The paper and PDF backgrounds stay white; ink colors are unchanged.
 Colors appear directly in the toolbar; the toolbar wraps when the window narrows. Hover an
 icon for its name. Pick a brush directly with keys `1`–`9`, or click its icon;
 use `B` for Draw, `E` for Eraser settings and `V` for Select and Move.
-Single-key drawing shortcuts leave text fields alone. Select and Move picks the
-topmost stroke at the pointer, then moves it by dragging. On narrow windows the
+Single-key drawing shortcuts leave text fields alone. Select and Move draws a
+dashed lasso with the mouse, pen or finger. Only fully enclosed strokes on visible
+layers are selected; partly enclosed strokes are omitted. Drag inside the resulting
+box to move the selection. Its four square corner handles scale uniformly; the
+circle above its top edge rotates. Moving farther from the centre gives finer
+rotation control. **Copy**, **Cut** and **Delete** appear below the box.
+**Paste strokes** pastes into the current page at the original page position,
+regardless of zoom or scroll. This private stroke clipboard lasts until the editor
+closes and is separate from Capture's image clipboard. Undo/Redo covers edits;
+Copy does not change the page. On narrow windows the
 toolbar wraps while the page keeps the full content width.
 
 Use **File → Save** (`Ctrl`/`⌘ S`) and **Save As…** (`Ctrl`/`⌘ Shift S`) to save.
 **Export Copy…** writes a separate `.rmdoc` copy; **Rename Notebook…** changes the
 notebook's name. **New**, **Open** and **Close Document** have the platform's usual
 shortcuts. The same menus follow the document into a detached window.
+
+After you finish drawing a stroke, Logistics removes redundant samples while
+preserving corners, pressure changes and stroke width within small bounds.
+Calligraphy retains every sample. Opening or saving existing handwriting does
+not reduce its points; the live pen preview is unchanged.
 
 **Edit → Undo/Redo** and their standard shortcuts retain up to 50 edits in the
 current editing session. Edits to an unsaved draft stay in memory until saved.
@@ -131,8 +144,7 @@ EPUB-backed archives remain unsupported.
 
 The page surface uses 1404 × 1872 notebook units. Supported templates render beneath
 the ink; unrecognized template references remain preserved with an artwork notice.
-Stroke selection currently moves one stroke;
-there is no multi-stroke lasso, OCR, cloud sync or exact brush
+There is no OCR, cloud sync or exact brush
 texture simulation. Archives are limited to 32 MiB compressed, 128 MiB expanded,
 4096 members and 1000 pages. Very long strokes or densely populated pages can
 reach editing limits; rejected edits keep the previous saved content. Error
@@ -248,3 +260,8 @@ copy stay in memory for that editing session. Save and Export retain the
 original encrypted PDF; reopening requires its password again. This applies to
 notebooks opened through Local and unlocked LocalCrypt. LocalCrypt continues
 to encrypt the entire saved notebook and keeps its unsaved draft in memory.
+
+
+## Internal page links
+
+In a PDF-backed `.rmdoc`, hold **Command** on macOS or **Ctrl** on Windows/Linux while clicking an internal PDF link to follow it. **Undo page jump** appears for three seconds. Ordinary clicks and pen strokes keep editing the page. Links follow the notebook’s page order; destinations whose original PDF page was removed are unavailable.
