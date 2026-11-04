@@ -51,7 +51,8 @@ shows its nib and a small ink-color indicator. A border and check mark identify
 the selected color. Colors follow the selected brush's supported palette and
 remain visible in high-contrast mode and while grayscale document preview is on. The original brush icons are shared with the desktop editor.
 
-Open **Notebook actions** for **Pages Overview**, **Layers**, saving, Save As, export,
+Open **Notebook actions** for **Pages Overview**, **Layers** (the **Page template
+and layers** panel), saving, Save As, export,
 **Show in folder** for a saved source and **Delete document…**. **View and input…**
 contains zoom, **Grayscale preview** and **Draw with finger**. Rename saved files
 from the file browser; an open notebook follows its renamed source and retains
@@ -153,7 +154,8 @@ a simulator cannot certify writing latency, palm rejection or tablet editability
 
 ## Page templates
 
-Open **Page template and layers**, or **Pages → Page template…**, to select the current page's template, Paper Pro or Paper Pro Move
+Open **Notebook actions → Layers**, or **Pages Overview → Page template…**, to
+select the current page's template, Paper Pro or Paper Pro Move
 template format, and background visibility. The catalog includes lined paper,
 grids, dots, restaurant reviews, meeting notes, daily plans, checklists, Cornell
 notes and weekly plans. Edits use the same
@@ -170,6 +172,12 @@ picker; keep the original notebook for later template changes.
 Structured forms export with distinct Pro and Move PDF page sizes, extending
 the page box when necessary to retain handwriting beyond the form’s edges.
 Repeating paper keeps a shared canvas.
+
+Export can refuse unavailable visible artwork, unsupported native objects whose
+bounds cannot be determined, or ink above the page's top edge. Keep the original
+with **Save**; export failure does not require replacing it with a blank page.
+These restrictions apply when converting notebook templates to PDF backgrounds;
+an existing PDF-backed notebook retains its embedded PDF.
 
 Phones start in **Paper Pro Move** paper view (large tablets start in Pro): the same ink coordinates, centered
 and aligned to the top, with the visible area expanded for writing beyond the

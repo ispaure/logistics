@@ -48,8 +48,9 @@ Reopening a saved notebook starts a fresh undo history.
 The footer provides **Pages Overview**, page navigation, **Add Page** (`＋`) and zoom.
 Open **Pages Overview** in the footer or the **Page** menu to select a page by its
 numbered thumbnail. The current page is marked; **More pages** loads the next
-batch of previews. Preserved templates and unsupported content may not appear in
-thumbnails. **Add Page**, including the action inside the overview, inherits the current template and inserts a new ink-free
+batch of previews. Supported templates appear beneath ink; unavailable imported
+artwork and unsupported content may not appear in thumbnails. **Add Page**,
+including the action inside the overview, inherits the current template and inserts a new ink-free
 page immediately after the current page and opens it. Undo restores the previous
 page order and selection.
 **Fit page**
@@ -175,6 +176,12 @@ instead of silently replacing it with blank paper; select a supported template
 or hide that background first. Existing PDF-backed notebooks export their original
 PDF without rebuilding it. Physical tablet geometry and stylus behavior remain
 separate acceptance checks.
+
+Portable background conversion can also refuse pages containing unsupported
+native objects whose bounds cannot be determined, or ink above the page's top
+edge. Save preserves the source notebook in these cases; keep it for recovery
+and further work. A successful export does not certify tablet import or writing
+responsiveness.
 
 ## Eraser types and sizes
 
