@@ -95,7 +95,9 @@ def _contact_class():
     global _contact_trace_class
     if _contact_trace_class is None:
         class LogisticsNotebookPencilTrace(ObjCClass('UIGestureRecognizer')):
-            trace_owner = objc_property(object, weak=True)
+            # Rubicon's weak Python-property setter cannot accept None. Retain
+            # only a Python weakref in an ordinary property, so close can clear it.
+            trace_owner = objc_property(object)
 
             @objc_method
             def canPreventGestureRecognizer_(self, other) -> bool:
@@ -107,7 +109,8 @@ def _contact_class():
 
             @objc_method
             def touchesBegan_withEvent_(self, touches, event) -> None:
-                owner = self.trace_owner
+                owner_ref = self.trace_owner
+                owner = owner_ref() if owner_ref is not None else None
                 if owner is not None:
                     owner.record('begin', int(touches.count))
                 send_super(__class__, self, 'touchesBegan:withEvent:', touches, event,
@@ -115,7 +118,8 @@ def _contact_class():
 
             @objc_method
             def touchesEnded_withEvent_(self, touches, event) -> None:
-                owner = self.trace_owner
+                owner_ref = self.trace_owner
+                owner = owner_ref() if owner_ref is not None else None
                 if owner is not None:
                     owner.record('end', int(touches.count))
                 send_super(__class__, self, 'touchesEnded:withEvent:', touches, event,
@@ -124,7 +128,8 @@ def _contact_class():
 
             @objc_method
             def touchesCancelled_withEvent_(self, touches, event) -> None:
-                owner = self.trace_owner
+                owner_ref = self.trace_owner
+                owner = owner_ref() if owner_ref is not None else None
                 if owner is not None:
                     owner.record('cancel', int(touches.count))
                 send_super(__class__, self, 'touchesCancelled:withEvent:', touches, event,
@@ -151,7 +156,7 @@ class PencilInputTrace:
         self.gesture = None
         try:
             self.gesture = _contact_class().alloc().initWithTarget(None, action=None)
-            self.gesture.trace_owner = self
+            self.gesture.trace_owner = ref(self)
             self.gesture.allowedTouchTypes = ns_from_py([2])
             self.gesture.cancelsTouchesInView = False
             self.gesture.delaysTouchesBegan = False
