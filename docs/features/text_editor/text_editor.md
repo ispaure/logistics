@@ -1,10 +1,8 @@
 # Text Editor documentation
 
-Choose a guide for the task you want to complete.
+Create and edit plain text and source files on desktop, or text and Markdown on
+mobile. Choose the guide for your platform.
 
-## Further reading
-
-- [Text Editor](development/development.md)
-- [Using Text Editor](user/user.md)
-
+- [Desktop user guide](user/user.md)
 - [Mobile user guide](user_mobile/user_mobile.md)
+- [Development and validation](development/development.md)
