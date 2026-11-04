@@ -9,6 +9,15 @@ from features.images import processing as imageUtils
 tool_name = "features.comics.cbz"
 
 
+def page_padding_width(page_count: int) -> int:
+    """Keep the historical safety margins around two- and three-digit counts."""
+    if page_count < 90:
+        return 2
+    if page_count < 950:
+        return 3
+    return 5
+
+
 class CBZSanitizationMixin:
     def sanitize_extracted_cbz(self, extracted_dir) -> bool:
         """Apply established cleanup phases in order, stopping at the first failure.
@@ -281,13 +290,7 @@ class CBZSanitizationMixin:
         """
         padding_tool_name = "Repair .CBZ File Padding"
 
-        # Get padding length
-        if len(files) < 90:  # Could put 99, but being safer than sorry
-            padding_width: int = 2
-        elif len(files) < 950:  # Could put 999, but being safer than sorry
-            padding_width: int = 3
-        else:
-            padding_width: int = 5
+        padding_width = page_padding_width(len(files))
 
         # Validate the complete rename plan before changing any extracted page.
         planned_paths = set()
