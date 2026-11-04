@@ -721,6 +721,23 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual(owner.path, 'Vault/Projects/2026-10-15.md')
         self.run_async(exercise())
 
+    def test_default_copy_form_keeps_folder_and_extension_and_numbers_conflicts(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            for number in (1, 2):
+                owner.copy_entry_form('Vault/Projects/Plan.MD')
+                form = owner.file_action_view
+                self.assertEqual(next(child for child in form.children if isinstance(child, toga.TextInput)).value,
+                                 'Projects/Plan - Copy.MD')
+                await next(child for child in form.children if isinstance(child, toga.Button) and child.text == 'Copy').on_press()
+                name = 'Plan - Copy' + (' (2)' if number == 2 else '') + '.MD'
+                self.assertEqual((self.vault / 'Projects' / name).read_bytes(),
+                                 (self.vault / 'Projects/Plan.MD').read_bytes())
+            self.assertEqual(library_files.copy(owner.library, 'Vault/Projects'), 'Vault/Projects - Copy')
+            self.assertTrue((self.vault / 'Projects - Copy/Plan.MD').exists())
+        self.run_async(exercise())
+
     def test_copy_preserves_source_and_refuses_collision_escape_and_recursion(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')

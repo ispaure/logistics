@@ -347,12 +347,14 @@ class LibraryPanels(LibraryConnections):
             self.move_entry(path, posixpath.join(self.library.root, destination))
 
     def copy_entry(self, path):
+        from services.documents.mutations import copy_path
+        default = posixpath.relpath(copy_path(path, directory=self.library.provider.entry(path)['directory']), self.library.root or '.')
         destination, accepted = qt.QInputDialog.getText(self, 'Copy',
-            'New path inside Notes Library (existing folders). Existing files are kept.',
-            text=posixpath.relpath(path, self.library.root or '.'))
+            'Copy beside the source, or choose another path. Existing files are kept.',
+            text=default)
         if accepted:
             self.mutate(lambda cancelled: library_files.copy(self.library, path,
-                posixpath.join(self.library.root, destination), cancelled=cancelled), leave=False)
+                None if destination == default else posixpath.join(self.library.root, destination), cancelled=cancelled), leave=False)
 
     def delete_entry(self, path):
         if qt.QMessageBox.question(self, 'Delete ' + PurePosixPath(path).name + '?',

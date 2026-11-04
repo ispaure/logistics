@@ -47,6 +47,29 @@ class FileOperationTests(unittest.TestCase):
     def select(self, name):
         self.app.file_selection.value = next(key for key, row in self.app.file_rows.items() if row['name'] == name)
 
+    def test_copy_menu_copies_files_and_dotted_folders_beside_source(self):
+        self.assertIn('Copy', dict(self.app.file_item_commands()))
+        self.run_async(self.app.copy_file())
+        self.select('first.txt')
+        self.run_async(self.app.copy_file())
+        for name in ('first.txt', 'first - Copy.txt', 'first - Copy (2).txt'):
+            self.assertEqual((self.source.root / name).read_text(), 'First')
+        folder = self.source.root / 'Folder.v1'
+        folder.mkdir()
+        (folder / 'child.txt').write_text('Child')
+        self.run_async(self.app.browse_files())
+        self.select('Folder.v1')
+        self.assertIn('Copy', dict(self.app.file_item_commands()))
+        self.run_async(self.app.copy_file())
+        self.assertEqual((self.source.root / 'Folder.v1 - Copy/child.txt').read_text(), 'Child')
+        self.assertEqual((folder / 'child.txt').read_text(), 'Child')
+        self.assertFalse(list(self.source.root.glob('.notes-copy-*')))
+        with patch.object(self.app.file_provider, 'remote_storage', True, create=True):
+            self.select('first.txt')
+            self.assertNotIn('Copy', dict(self.app.file_item_commands()))
+            with self.assertRaises(PermissionError):
+                FileOperationRequest('copy', self.app.file_provider, 'first.txt').execute(lambda: False)
+
     def test_collection_name_listing_avoids_metadata_formatting(self):
         from services.documents.locations import CollectionFiles
         provider = CollectionFiles(self.root)

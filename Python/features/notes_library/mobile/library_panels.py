@@ -467,8 +467,10 @@ class LibraryPanels:
         self.file_action_destination = None
 
     def copy_entry_form(self, path, *, return_side=None):
-        name = toga.TextInput(value=posixpath.relpath(path, self.root or '.'), style=Pack(height=48))
-        status = toga.Label('Choose a new path inside this library. Existing files are kept.')
+        from services.documents.mutations import copy_path
+        default = posixpath.relpath(copy_path(path, directory=self.library.provider.entry(path)['directory']), self.root or '.')
+        name = toga.TextInput(value=default, style=Pack(height=48))
+        status = toga.Label('Copy beside the source, or choose another path. Existing files are kept.')
         button = toga.Button('Copy', style=Pack(height=48))
         async def submit(widget=None, **kw):
             if self.file_command_busy or not self.file_action_current(form):
@@ -477,7 +479,8 @@ class LibraryPanels:
             button.enabled = False
             try:
                 target = await asyncio.to_thread(library_files.copy, self.library, path,
-                    posixpath.join(self.root, name.value), cancelled=lambda: not self.valid())
+                    None if name.value == default else posixpath.join(self.root, name.value),
+                    cancelled=lambda: not self.valid())
                 if self.valid():
                     await self.load_folder(posixpath.dirname(target))
                     self.refresh_library_indexes()
