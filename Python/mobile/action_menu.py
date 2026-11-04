@@ -16,6 +16,13 @@ def android_menu_context(context):
     return ContextThemeWrapper(context, resource)
 
 
+def _apple_subviews(view):
+    # Rubicon can expose UIKit's getter as a method until its property metadata
+    # has been registered. Both forms return the same native child collection.
+    children = view.subviews
+    return list(children() if callable(children) else children)
+
+
 class NativeMenu(SharedNativeMenu):
     """Keep platform menu behavior with Logistics' Android popup surfaces."""
     def __init__(self, button, actions, *, context, **kwargs):
@@ -161,13 +168,13 @@ class BrowserActions:
             controller.presentViewController(self.native, animated=True, completion=None)
             if self.location:
                 from .document_location import bind_apple_hold
-                labels = list(self.native.view.subviews)
+                labels = _apple_subviews(self.native.view)
                 while labels:
                     label = labels.pop()
                     if label.isKindOfClass(ObjCClass('UILabel')) and str(label.text) == self.filename:
                         bind_apple_hold(self, label, BrowserActions.reveal_location)
                         break
-                    labels.extend(label.subviews)
+                    labels.extend(_apple_subviews(label))
 
     def reveal_location(self):
         if not self.disposed:

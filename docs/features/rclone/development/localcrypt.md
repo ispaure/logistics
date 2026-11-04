@@ -331,6 +331,10 @@ task, including the shared Move destination picker. Destination workflow host
 tests cover opening that picker from root and nested LocalCrypt files. The
 `workspace-move` native probe moves both through the item menu and verifies the
 destination bytes, source removal and encrypted storage on Android and iOS.
+The same fixture can run with the host's compiled bridge and dummy widgets.
+Apple action-sheet title discovery accepts both property and method forms of
+UIKit child-view getters, so enabling the full-path title hold cannot prevent
+the file menu from opening.
 
 The [implementation history](history/history.md) preserves earlier audits,
 streaming details and their original validation scope. Current owner entry points
