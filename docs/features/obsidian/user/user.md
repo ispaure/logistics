@@ -1,29 +1,40 @@
 # Open Obsidian vaults
 
-Vault controls appear on **Workspaces** for local folders containing `.obsidian`
-directories within the bounded discovery search.
+[Obsidian guides](../obsidian.md)
+
+Enable **Obsidian** in Features to offer vault launch actions for local folders
+on **Workspaces**. The external Obsidian application must be installed and able
+to handle `obsidian://` links. This launcher supports Windows, macOS and Linux.
 
 ## Open a vault
 
-1. Install Obsidian and make sure it can launch.
-2. Select the containing local folder on **Workspaces**.
-3. Choose **Open Vault** for the vault you want.
-4. If the vault is not registered, close Obsidian when asked and retry.
+1. Install and launch Obsidian once.
+2. Select the containing local folder on **Workspaces** and open its actions.
+3. Choose **Open "VaultName" Vault** for the vault you want.
+4. If the vault is new to this computer, close Obsidian completely when asked,
+   then retry the action.
 
-New vault registration updates Obsidian's global vault registry. Existing vaults
-open through their registered URI. Windows, macOS and Linux registry locations
-are supported, including Linux native, Flatpak and Snap installations.
+Discovery looks for `.obsidian` directories using a bounded directory search
+with depth two. Missing `app.json`, `appearance.json`, `core-plugins.json` or
+`workspace.json` files produce warnings but do not exclude a vault. This is not
+an unrestricted disk-wide vault search.
 
-Missing expected vault configuration files produce warnings but do not exclude
-the vault. If opening fails, check the installation and registry permissions.
-No remote synchronization is performed by this action.
+Registered vaults open through their vault ID. Opening an unregistered vault
+first adds it to Obsidian's global `obsidian.json` registry, preserving existing
+settings. Obsidian must be closed for that registration so it cannot overwrite
+the update. Existing registered vaults can open while Obsidian is running.
 
-## More help
+## If opening fails
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
+Install and launch Obsidian once if Logistics reports that it is unavailable.
+Check access to the local vault and registry if reading or writing fails. Invalid
+registry JSON is reported rather than replaced. On Linux, the selected registry
+follows the registered URI handler where possible and supports native, Flatpak
+and Snap installations. With several registries and no identifiable handler,
+Logistics uses the most recently modified existing registry and logs a warning.
 
-To edit a Markdown file without launching Obsidian, open it in Logistics'
-[Markdown reader/editor](../../../user/files-and-documents.md#read-and-edit-markdown),
-or choose **Open in Text Editor** for source editing. The vault launcher is owned
-by Logistics; reusable Markdown editing belongs to commonUtils. This integration
-does not implement Obsidian plugins, a vault graph or vault-wide note indexing.
+The action opens the local vault; it does not synchronize cloud files or install
+Obsidian plugins. Use [Notes Library](../../notes_library/user/user.md) to read,
+edit and organize a local or unlocked LocalCrypt library within Logistics.
+Notes Library has its own feature toggle and does not require Obsidian to be
+installed. [Mobile usage](../user_mobile/user_mobile.md) also uses Notes Library.
