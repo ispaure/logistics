@@ -124,7 +124,7 @@ class NotesDrawerTests(unittest.TestCase):
                 await owner.open_note('Vault/Projects/Plan.MD')
                 await owner.show_links()
                 self.assertEqual(owner.sidebar.side, 'links')
-                self.assertIn('Backlinks (1)', [getattr(w, 'text', '') for w in owner.link_rows.children])
+                self.assertIn('Backlinks (1)', [getattr(w, 'text', '') for w in owner.backlink_rows.children])
                 self.assertIs(owner.back_action().__self__, owner.sidebar)
                 self.assertTrue(self.app.routes.system_back())
                 self.assertIsNone(owner.sidebar.side)
@@ -234,7 +234,8 @@ class NotesDrawerTests(unittest.TestCase):
             owner.reflow(390)
             await owner.open_note('Vault/Home.md')
             await owner.show_links()
-            self.assertEqual(owner.link_rows.children[0].text, 'Home.md')
+            self.assertEqual(owner.link_rows.children[0].text, 'Outgoing links (1)')
+            self.assertIn('Projects/Plan.MD', [getattr(w, 'text', '') for w in owner.link_rows.children])
             await owner.open_note('Vault/Projects/Plan.MD')
             owner.reflow(900)
             self.assertEqual(owner.back_action(), owner.return_to_browsing)
@@ -242,7 +243,8 @@ class NotesDrawerTests(unittest.TestCase):
             if owner.links_refresh_task is not None:
                 await owner.links_refresh_task
             self.assertEqual(owner.sidebar.side, 'links')
-            self.assertEqual(owner.link_rows.children[0].text, 'Plan.MD')
+            self.assertEqual(owner.link_rows.children[0].text, 'Outgoing links (0)')
+            self.assertIn('Home.md', [getattr(w, 'text', '') for w in owner.backlink_rows.children])
             self.assertEqual(owner.back_action(), owner.sidebar.show_detail)
             owner.dispose()
         self.run_async(exercise())
