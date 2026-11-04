@@ -7,7 +7,8 @@ immediate child library with `metadata.db`.
 
 1. Select the local folder on **Workspaces**.
 2. Choose the library in its Calibre section.
-3. Use the launch action. Calibre must be installed or available through the
+3. Choose **Open Library Folder** to browse its directory, or **Launch Calibre**
+   to open it in the external application. Calibre must be installed or available through the
    feature's platform-specific software resources.
 
 On Linux, Logistics checks native Calibre and Flatpak. Windows uses the supplied
@@ -43,3 +44,25 @@ the plan. Copies are staged and checked before publication, and obsolete exports
 are removed only after copies succeed. This is not an all-or-nothing rollback:
 interruption during publication/deletion can leave a partly updated mirror. Review
 again to reconcile it; Logistics has no export Undo.
+
+## If controls or launching are unavailable
+
+Select the parent Local folder containing the library, rather than the library
+folder itself. Detection checks immediate child directories only, and each must
+contain a `metadata.db` file. A `[Calibre]` INI section is not required. This
+feature is separate from the EPUB reader and from configured Books & Comics
+collections.
+
+Windows expects `Calibre2/calibre.exe` under the configured Windows software
+folder. macOS checks `/Applications/calibre.app/Contents/MacOS/calibre`; if absent,
+it attempts to extract `calibre.app.zip` from the configured macOS software
+folder into `/Applications`. Linux first checks `calibre` on PATH, then an
+installed `com.calibre_ebook.calibre` Flatpak. Missing executables or failed
+installation/launch requests are reported by Logistics.
+
+If export review fails, resolve the reported collision, linked path or changed
+file before reviewing again. If the BOOX shortcut says the volume is unmounted,
+mount it or use **Export books…** to choose another dedicated destination.
+
+Calibre controls are desktop-only. See [mobile availability](../user_mobile/user_mobile.md)
+for transferring an EPUB to the native reader.
