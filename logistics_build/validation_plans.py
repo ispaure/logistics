@@ -20,6 +20,12 @@ def desktop_checks(system, results, root=None):
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
         ('manager-contracts', ['-m', 'build_manager.contracts'], 600),
     ])
+    if system == 'Windows':
+        # The measured full Windows inventory needs ~1900s/650s respectively.
+        # Keep smoke gates and all other platforms on their declared budgets.
+        minimums = {'logistics': 2100, 'manager-contracts': 780}
+        checks = [(name, argv, max(timeout, minimums.get(name, 0)))
+                  for name, argv, timeout in checks]
     return checks
 
 

@@ -27,10 +27,20 @@ class ValidationPlanTests(unittest.TestCase):
         with patch('build_manager.test_manifest.discover', return_value=suites):
             posix = desktop_checks('Darwin', Path('reports'))
             windows = desktop_checks('Windows', Path('reports'))
+            linux = desktop_checks('Linux', Path('reports'))
         self.assertEqual([p[0] for p in posix], ['test-structure', 'commonutils.smoke', 'logistics.smoke',
                          'commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
         self.assertEqual([p[2] for p in posix], [120, 1800, 1800, 1800, 1800, 600, 600])
-        self.assertEqual([windows[0], *windows[2:]], posix)
+        self.assertEqual(linux, posix)
+        windows_full = [windows[0], *windows[2:]]
+        self.assertEqual([(name, command) for name, command, _ in windows_full],
+                         [(name, command) for name, command, _ in posix])
+        self.assertEqual([timeout for _, _, timeout in windows_full],
+                         [120, 1800, 1800, 1800, 2100, 600, 780])
+        self.assertEqual({name for (name, _, timeout), (_, _, previous) in zip(windows_full, posix)
+                          if timeout != previous}, {'logistics', 'manager-contracts'})
+        from tests.runner_settings import ISOLATED_FILE_TIMEOUT
+        self.assertEqual(ISOLATED_FILE_TIMEOUT, 300)
         self.assertEqual(windows[1], ('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
         for name, command, _ in posix[1:5]:
             self.assertIn('--isolate-modules', command)
@@ -38,6 +48,16 @@ class ValidationPlanTests(unittest.TestCase):
                 self.assertEqual(command[-4:], ['--profile', 'smoke', '--mode', 'fast'])
             else:
                 self.assertNotIn('--profile', command)  # Full coverage stays the default.
+
+    def test_windows_full_suite_floor_never_shortens_larger_declared_budget(self):
+        suites = [dict(id='logistics', directory='Python/tests', timeout=2400,
+                       smoke_args=['--profile', 'smoke', '--mode', 'fast'])]
+        with patch('build_manager.test_manifest.discover', return_value=suites):
+            checks = desktop_checks('Windows', Path('reports'))
+        budgets = {name: timeout for name, _, timeout in checks}
+        self.assertEqual(budgets['logistics'], 2400)
+        self.assertEqual(budgets['logistics.smoke'], 2400)
+        self.assertEqual(budgets['manager-contracts'], 780)
 
     def test_compression_retries_get_fresh_attempts_and_preserve_previous_evidence(self):
         import importlib.util
