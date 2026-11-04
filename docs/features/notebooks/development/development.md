@@ -12,7 +12,7 @@ The dated results below retain their original workload and source scope.
 | Area | Implemented behavior and remaining validation |
 | --- | --- |
 | Desktop | Qt WebEngine editor, document tabs, native menus, local/private Save and portable export. Historical macOS, Windows and Linux results below cover specific environments, not every renderer or architecture. |
-| Android and iOS | Native creation controls and WebView/WKWebView canvas share page templates, native ink and storage policy. Current source-bound native template and queued-command fence checks remain pending. |
+| Android and iOS | Native creation controls and WebView/WKWebView canvas share page templates, native ink and storage policy. The scoped iOS template result below covers one iPhone simulator; Android template and queued-command fence acceptance remain pending. |
 | Responsiveness | Remaining Linux latency acceptance is pending. Historical Fedora/Xvfb functional passes do not close it. Windows drawing responsiveness also remains unresolved as recorded below; diagnostic latency mode does not turn a failed guard into a pass. |
 | Physical hardware | Actual Pencil pressure/palm behavior, optical Boox latency and reMarkable import/select/move/erase remain separate acceptance gates. Synthetic input and successful codec readback do not complete them. |
 
@@ -23,6 +23,20 @@ page, Undo/Redo and Save/reopen. Also check rapid ink followed by Save, navigati
 or close, including cancellation and retired canvases. Retain the result and
 archive identities under ignored test results; link only concise scope in this
 wiki. A probe implementation or an older passing report is not a current run.
+
+On November 4, 2026, the managed template probe passed on an iPhone 18 Pro
+simulator with iOS 27.0, Logistics `885482df` and commonUtils `d44cfd4e`.
+It checked native first-page selection and cancellation, isolated page changes,
+inherited template/size/hidden state without copied ink, Undo/Redo, Save and actual
+disk reopen. Native screenshots and saved archives were inspected, and owned
+app/simulator cleanup passed. The run reused a copied verified compiled shell
+from `0205df37` with matching native adapter inputs and a fresh committed Python
+payload. It exposed and verified a fix for overlapping wrapped template
+descriptions on iOS. This is functional simulator coverage, not touch-driven
+picker interaction, physical pen acceptance, a Duo layout run, or acceptance of
+later brush-calibration changes. The reusable driver is
+`mobile_build/validation/notebook_template_tools.py`; iOS requires an explicit
+verified shell receipt and never compiles implicitly.
 
 Desktop save/export progress uses commonUtils' shared compact `OperationProgress`
 footer below the canvas. The canvas takes the workspace stretch; progress stays
