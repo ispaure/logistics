@@ -67,7 +67,9 @@ acceptance and transport handoff.
 Use the standalone manager for Run checks, Build only and Prepare and deliver.
 Build only uses the existing Android test APK or iOS simulator-app build and
 stops before tests or delivery. Release/tester preparation retains its full
-project gates, signing and committed-source requirements. There is no generic
+project gates and signing requirements. Local tester and Release-device
+preparation can use captured working-tree application and commonUtils sources;
+GitHub publication requires committed source and a clean checkout. There is no generic
 desktop Build operation in Logistics.
 
 The six former `mobile_build/deploy_*.command` launchers, `deploy_ui.py` and
