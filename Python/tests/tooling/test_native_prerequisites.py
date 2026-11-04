@@ -104,6 +104,9 @@ class NativePrerequisiteTests(unittest.TestCase):
                 Phase('cleanup',(sys.executable,'-c','from pathlib import Path;Path('+repr(str(cleaned))+').touch()'),str(ROOT),kind='cleanup',effect='inspect',always=True,dependencies=('android-native',)))
         base=Plan('Fixture','Read-only admission',{},phases,str(self.root/'workspace'),backend='This Mac — Android Emulator',effect='test')
         project=LogisticsProject(ROOT);project.private=self.root/'private'
+        # This fixture executes in the current hosted test interpreter; an
+        # operator's checkout-local .venv need not exist on a CI runner.
+        project.interpreter=Path(sys.executable)
         with patch.object(project,'_make_plan',return_value=base), \
                 patch('logistics_build.build_retention.clean',return_value=[]):
             plan=project.make_plan('Test','android','This Mac — Android Emulator')
@@ -134,6 +137,9 @@ class NativePrerequisiteTests(unittest.TestCase):
     def test_normal_project_plan_places_gate_before_full_host_contracts(self):
         from logistics_build.build_project import LogisticsProject
         project=LogisticsProject(ROOT);project.private=self.root/'private'
+        # This fixture executes in the current hosted test interpreter; an
+        # operator's checkout-local .venv need not exist on a CI runner.
+        project.interpreter=Path(sys.executable)
         native=self.fixture_plan(backend='This Mac — iOS Simulators',effect='test')
         with patch.object(project,'_make_plan',return_value=native), \
                 patch('logistics_build.build_retention.clean',return_value=[]):

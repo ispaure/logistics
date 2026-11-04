@@ -76,10 +76,22 @@ class ManagerSuiteTests(unittest.TestCase):
             with patch.object(project, '_make_plan', return_value=full), patch('logistics_build.build_retention.clean'):
                 core = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.runtime')
                 native = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.native')
-            self.assertEqual([p.id for p in core.phases], ['test-structure','ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
-            self.assertEqual(core.phases[2].dependencies, ('ios-runtime-tools', 'test-structure'))
-            self.assertIn('--runtime', core.phases[2].argv)
-            self.assertEqual([p.id for p in native.phases], ['test-structure','ios-build','iphone','iphone-cleanup'])
+            self.assertEqual([p.id for p in core.phases], ['test-structure','native-prerequisites','ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
+            core_rows = {phase.id: phase for phase in core.phases}
+            self.assertEqual(core_rows['native-prerequisites'].dependencies, ('test-structure',))
+            gate = core_rows['native-prerequisites']
+            self.assertEqual(gate.argv[gate.argv.index('--capability') + 1], 'runtime')
+            self.assertEqual(gate.effect, 'inspect')
+            self.assertEqual(core_rows['ios-runtime-cleanup'].dependencies, ('ios-runtime',))
+            self.assertEqual(core_rows['ios-runtime'].dependencies,
+                             ('ios-runtime-tools', 'test-structure', 'native-prerequisites'))
+            self.assertIn('--runtime', core_rows['ios-runtime'].argv)
+            self.assertEqual([p.id for p in native.phases], ['test-structure','native-prerequisites','ios-build','iphone','iphone-cleanup'])
+            native_rows = {phase.id: phase for phase in native.phases}
+            native_gate = native_rows['native-prerequisites']
+            self.assertEqual(native_gate.argv[native_gate.argv.index('--capability') + 1], 'native')
+            self.assertIn(native_gate.id, native_rows['ios-build'].dependencies)
+            self.assertEqual(native_rows['iphone-cleanup'].dependencies, ('iphone',))
             with patch.dict('os.environ', LOGISTICS_IOS_RUNTIME_EVIDENCE='wrong-external-receipt.json'):
                 gate = suites.acceptance_phase(core, 'ios')
             self.assertEqual(gate.argv[gate.argv.index('--runtime-report')+1], str(root/'core.json'))
@@ -224,14 +236,14 @@ class ManagerSuiteTests(unittest.TestCase):
             host_gates = ('test-structure', 'commonutils.smoke', 'portable-contracts.smoke',
                           'desktop-ui.smoke', 'mobile-host.smoke',
                           'commonutils', 'portable-contracts', 'desktop-ui', 'mobile-host')
-            self.assertEqual(rows['release-acceptance'].dependencies, (*host_gates, 'android-native', 'android-runtime'))
-            self.assertEqual(rows['android-native'].dependencies, host_gates)
-            self.assertEqual(rows['android-runtime'].dependencies, host_gates)
+            self.assertEqual(rows['release-acceptance'].dependencies, (*host_gates, 'android-native', 'android-runtime', 'native-prerequisites'))
+            self.assertEqual(rows['android-native'].dependencies, (*host_gates, 'native-prerequisites'))
+            self.assertEqual(rows['android-runtime'].dependencies, (*host_gates, 'native-prerequisites'))
             self.assertIn('Python/tests/tooling', rows['portable-contracts'].argv)
             self.assertIn('Python/tests/application', rows['desktop-ui'].argv)
             self.assertIn('mobile_build/tests', rows['mobile-host'].argv)
             self.assertIn('release-acceptance', rows['prepare-verified-artifact'].dependencies)
-            self.assertEqual(rows['reviewed-distribution'].dependencies, ('prepare-verified-artifact',))
+            self.assertEqual(rows['reviewed-distribution'].dependencies, ('prepare-verified-artifact', 'native-prerequisites'))
             self.assertEqual(rows['reviewed-distribution'].effect, 'upload')
             self.assertNotIn('host.mobile-device-session', plan.resources)
             device_resource = 'android.device-workspace:' + plan.workspace
@@ -298,3 +310,28 @@ class ManagerSuiteTests(unittest.TestCase):
                         self.assertEqual(clients.return_value.remove.call_args_list[0].args,
                                          ('previous-owned-uuid','Build Manager previous-owned-token'))
                         self.assertFalse(lease.exists())
+
+    def test_ios_boot_timeout_captures_known_lease_before_strict_cleanup(self):
+        from logistics_build import ios_backend
+        with TemporaryDirectory() as directory:
+            root=Path(directory);(root/'mobile_build').mkdir()
+            (root/'.manager-source.json').write_text(json.dumps({'source':{'commit':'fixed'}}))
+            result,lease=root/'result.json',root/'lease.json'
+            timeout=subprocess.TimeoutExpired(['xcrun','simctl','bootstatus','owned-fixture-device','-b'],60,output=b'Boot phase',stderr=b'boot stderr')
+            with patch.object(ios_backend,'AppleSimulators') as clients, \
+                    patch('mobile_build.validation.ui_tools.run') as launch:
+                client=clients.return_value;client.create.return_value='owned-fixture-device'
+                client.boot.side_effect=timeout
+                with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                    ios_backend.test(root,result,'duo','fixture-model','fixture-runtime',lease)
+                self.assertIs(caught.exception,timeout)
+                name=client.create.call_args.args[0]
+                client.boot.assert_called_once_with('owned-fixture-device',name=name)
+                client.remove.assert_called_once_with('owned-fixture-device',name)
+                launch.assert_not_called()
+            data=json.loads(result.read_text());proof=data['boot_timeout']
+            self.assertEqual(proof['stage'],'bootstatus');self.assertEqual(proof['command'],timeout.cmd)
+            self.assertEqual(proof['lease_record']['name'],name)
+            self.assertEqual(proof['lease_record']['device'],'owned-fixture-device')
+            self.assertGreaterEqual(proof['elapsed_seconds'],0)
+            self.assertTrue(data['owned_simulator_removed']);self.assertFalse(lease.exists())

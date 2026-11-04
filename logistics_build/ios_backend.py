@@ -90,7 +90,15 @@ def test(root, result, kind, model, runtime, lease):
         lease.write_text(json.dumps(dict(device=device, name=name)))
         record['device'] = device
         boot = time.monotonic()
-        client.boot(device)
+        try:
+            client.boot(device, name=name)
+        except subprocess.TimeoutExpired as error:
+            try:
+                record['boot_timeout'] = ui_tools.boot_timeout_details(error, boot,
+                    dict(device=device, name=name, model=model, runtime=runtime), lease)
+            except Exception:
+                error.add_note('Owned boot timeout diagnostics could not be captured.')
+            raise
         record['startup_seconds'] = time.monotonic()-boot
         mobile = root/'mobile_build'
         os.chdir(mobile)

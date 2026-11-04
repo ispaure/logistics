@@ -4,6 +4,12 @@ from weakref import ref
 _apple_target = None
 
 
+def opening_swipes_allowed(owner):
+    """Embedded editors can own horizontal gestures while pane buttons stay active."""
+    enabled = getattr(owner, 'opening_swipes_enabled', None)
+    return enabled is None or bool(enabled())
+
+
 def install_opening_swipes(owner):
     backend = type(owner.detail._impl).__module__
     if owner.opening_gestures:
@@ -21,7 +27,7 @@ def install_opening_swipes(owner):
                 @objc_method
                 def gestureRecognizer_shouldReceiveTouch_(self, gesture, touch) -> bool:
                     current = self.owner()
-                    if current is None or current.side is not None or current.retiring:
+                    if current is None or current.side is not None or current.retiring or not opening_swipes_allowed(current):
                         return False
                     article = current.detail._impl.native
                     if native_value(article.window) is None or article.hidden:
@@ -78,7 +84,7 @@ def install_opening_swipes(owner):
             start = None
             def onTouch(self, view, event):
                 current = reference()
-                if current is None or current.side is not None or current.retiring:
+                if current is None or current.side is not None or current.retiring or not opening_swipes_allowed(current):
                     self.start = None
                     return self.forward(view, event)
                 action = event.getActionMasked()
