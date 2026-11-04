@@ -412,8 +412,15 @@ registry-driven folder discovery/workspace composition remain outside this scope
 `dev.py architecture` statically checks direct imports and deferred literal factories
 in every selected module. `test_portable_imports.py` additionally imports each owner
 in a fresh interpreter with Qt, Toga, host packages and `commonUtils.ui` blocked,
-including transitive and caught attempts. These checks establish import safety and
-reviewed dependency boundaries, not that invoking every optional operation avoids
+including transitive and caught attempts and forbidden dependencies already present
+in the child interpreter. The same probe exercises Notes Library registration
+without Text Editor or presentation dependencies, and checks provider adapter imports
+and private-text reading. Only the registration probe permits the shared feature
+declarations and their namespace; UI backend imports remain blocked. The mobile
+adapters for rclone, LM, Text Editor and Notes Library are also checked directly for
+imports of the `mobile` application host, independently of policy exceptions.
+These checks establish import safety and reviewed dependency boundaries, not that
+invoking every optional operation avoids
 presentation or external dependencies. Existing `CredentialBackend`, `RemoteSession`,
 resource-provider and mobile-presentation protocols remain the narrow contracts;
 there is no parallel interface framework or blanket typing migration.
