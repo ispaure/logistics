@@ -100,11 +100,11 @@ final class PlaybackControls {
         MediaPlayer.TrackDescription[] audioTracks = owner.player.getAudioTracks();
         if (audioTracks != null) for (MediaPlayer.TrackDescription track : audioTracks)
             if (track.id == audio && owner.player.getAudioTrack() != audio) owner.player.setAudioTrack(audio);
-        if (text == -1) owner.player.setSpuTrack(-1);
+        if (text == -1) owner.selectSubtitleTrack(-1);
         else {
             MediaPlayer.TrackDescription[] textTracks = owner.player.getSpuTracks();
             if (textTracks != null) for (MediaPlayer.TrackDescription track : textTracks)
-                if (track.id == text && owner.player.getSpuTrack() != text) owner.player.setSpuTrack(text);
+                if (track.id == text && owner.player.getSpuTrack() != text) owner.selectSubtitleTrack(text);
         }
         owner.player.setRate((float) settings.optDouble("rate", 1));
         owner.player.setAudioDelay(settings.optLong("audio_delay_ms") * 1000);

@@ -596,6 +596,15 @@ public final class VideoPlayer {
         if (allowed(false) && player.isPlaying() && player.addSlave(Media.Slave.Type.Subtitle, Uri.parse(url), true))
             pendingSubtitleURL = null;
     }
+    void selectSubtitleTrack(int track) {
+        if (player.getSpuTrack() == track) return;
+        long current = position();
+        if (player.setSpuTrack(track) && track >= 0) {
+            // VLC can leave the active cue blank after off/on until the next
+            // cue boundary. Re-decode this position without changing play intent.
+            seekTo(current);
+        }
+    }
     void reloadPlaybackOptions() {
         if (done) return;
         boolean requested = playRequested;
