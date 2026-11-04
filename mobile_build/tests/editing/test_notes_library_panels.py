@@ -516,6 +516,30 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 await owner.calendar_task
         self.run_async(exercise())
 
+    def test_folder_icon_and_wider_disclosure_toggle_without_opening_landing_note(self):
+        (self.vault / 'Projects' / 'Projects.md').write_text('# Projects')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            row = next(row for row in owner.rows.children
+                       if any(getattr(child, 'vault_path', None) == 'Vault/Projects'
+                              for child in row.children))
+            icon, disclosure, filename = row.children[1:4]
+            self.assertEqual((disclosure.style.width, disclosure.style.height), (44, 48))
+            self.assertEqual((icon.style.width, icon.style.height), (32, 48))
+            with patch.object(owner, 'toggle_folder', new=AsyncMock()) as toggle, \
+                    patch.object(owner, 'open_note', new=AsyncMock()) as opened:
+                await icon.on_press()
+                toggle.assert_awaited_once_with('Vault/Projects')
+                opened.assert_not_awaited()
+                toggle.reset_mock()
+                await disclosure.on_press()
+                toggle.assert_awaited_once_with('Vault/Projects')
+                opened.assert_not_awaited()
+                await filename.on_press()
+                opened.assert_awaited_once_with('Vault/Projects/Projects.md')
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_row_menus_reserve_a_full_target_separate_from_filename_and_disclosure(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
