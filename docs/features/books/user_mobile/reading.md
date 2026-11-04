@@ -116,7 +116,10 @@ including when paused. Skipping while paused keeps playback paused. Tapping outs
 and keeps playback running, including automatic page turns within the chapter.
 Tap the speaker again to reopen the same controls. Changing chapters,
 leaving a private reader or closing its session stops
-the engine and clears queued text. The app does not download voices or send text
+the engine and clears queued text. Settings → Read aloud loads installed voices
+automatically when opened; Refresh voices retries discovery after changing system
+voice data. If a saved voice is unavailable, playback uses the installed system
+default. The saved preference can be selected again if that voice is reinstalled. The app does not download voices or send text
 to a speech service. If no offline voice is available, use the operating system's
 speech settings to install one. EPUB and Markdown read-aloud detect the passage’s
 language offline and choose a matching installed voice. EPUB chapter/package

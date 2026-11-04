@@ -17,6 +17,26 @@ from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_read_aloud_loads_automatically_and_refreshes_when_reopened(self):
+        app = self.make_app()
+        app.preferences.save(speech_voice='Removed voice')
+        engines = [SimpleNamespace(ready=True, error='', voices={'Installed voice': object()}, close=Mock()),
+                   SimpleNamespace(ready=True, error='', voices={'Removed voice': object()}, close=Mock())]
+        with patch('commonUtils.ui.native.speech.NativeSpeech', side_effect=engines) as factory:
+            app.show_settings()
+            app.settings_navigation.choose('Read aloud')
+            app.loop.run_until_complete(app.speech_voice_load_task)
+            self.assertEqual(factory.call_count, 1)
+            self.assertEqual(app.speech_voice_choice.value, 'System default')
+            self.assertEqual(app.preferences.values['speech_voice'], 'Removed voice')
+            app.settings_navigation.choose('Appearance')
+            app.settings_navigation.choose('Read aloud')
+            app.loop.run_until_complete(app.speech_voice_load_task)
+            self.assertEqual(factory.call_count, 2)
+            self.assertEqual(app.speech_voice_choice.value, 'Removed voice')
+        for engine in engines:
+            engine.close.assert_called_once()
+
     def test_android_drag_tints_existing_sliders_without_rebuilding_artwork(self):
         from mobile.settings.accent import AccentControls
         from mobile.palette import accent_colors
