@@ -153,6 +153,8 @@ class BlenderLibraryTests(unittest.TestCase):
             archive.writestr('__init__.py', '# extension')
         addon = self.library.add(path)
         from dataclasses import replace
+        self.assertFalse(addon.compatible(replace(self.release, version='4.1.9')))
+        self.assertTrue(addon.compatible(replace(self.release, version='4.2.0')))
         self.assertTrue(addon.compatible(replace(self.release, version='4.5.1')))
         self.assertFalse(addon.compatible(replace(self.release, version='5.0.0')))
         self.assertFalse(addon.compatible(replace(self.release, version='4.5.1', platform='macos-arm64')))
