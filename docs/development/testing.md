@@ -198,7 +198,7 @@ evidence. Other runner scenarios remain regression coverage.
 
 Run `python3 dev.py architecture` for the live-tree boundary gate. Architecture
 unit tests exercise checker fixtures and policy declarations without repeating
-that complete scan. Completed testcase records are saved incrementally, so an
+that complete scan. Completed cases and fixture failures are saved incrementally, so an
 isolated-file timeout retains earlier outcomes while marking coverage incomplete.
 
 ### Shared-library test matrix
