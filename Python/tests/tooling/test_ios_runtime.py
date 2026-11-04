@@ -6,6 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 import plistlib
+import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -123,6 +124,35 @@ class CoreRuntimeTests(unittest.TestCase):
             self.assertTrue(data['owned_simulator_removed'])
             self.assertFalse(lease.exists())
             remove.assert_called_once_with(lease)
+
+    def test_owned_core_boot_timeout_keeps_name_and_stage_before_cleanup(self):
+        from mobile_build import tools
+        with TemporaryDirectory() as directory:
+            root=Path(directory);run=root/'run';run.mkdir()
+            lease,output=root/'lease.json',root/'result.json'
+            timeout=subprocess.TimeoutExpired(['xcrun','simctl','bootstatus','core-owned','-b'],60,output=b'Core boot phase')
+            def cleanup(path):path.unlink()
+            with patch.object(ios_runtime,'source'), \
+                    patch.object(ios_runtime,'validate_prepared',return_value={}), \
+                    patch.object(ios_runtime,'runtime_wheels',return_value=root), \
+                    patch.object(tools,'stage',return_value={'source_sha256':'a'*64}), \
+                    patch.object(ios_runtime.cpython_testbed,'install_payload_wheels'), \
+                    patch.object(ios_runtime.cpython_testbed,'prepare_ios',return_value={}), \
+                    patch.object(ios_runtime,'command') as command, \
+                    patch.object(ios_runtime,'AppleSimulators') as clients, \
+                    patch.object(ios_runtime,'cleanup',side_effect=cleanup):
+                client=clients.return_value;client.create.return_value='core-owned';client.boot.side_effect=timeout
+                with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                    ios_runtime._test(root,root/'cache','fixture-model','fixture-runtime',lease,output,run)
+                self.assertIs(caught.exception,timeout)
+                name=client.create.call_args.args[0]
+                client.boot.assert_called_once_with('core-owned',name=name)
+                command.assert_not_called()
+            data=json.loads(output.read_text());proof=data['boot_timeout']
+            self.assertEqual(proof['command'],timeout.cmd);self.assertEqual(proof['stage'],'bootstatus')
+            self.assertEqual(proof['lease_record']['name'],name)
+            self.assertGreaterEqual(proof['elapsed_seconds'],0)
+            self.assertTrue(data['owned_simulator_removed']);self.assertFalse(lease.exists())
 
 
 if __name__ == '__main__':
