@@ -2,15 +2,39 @@
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
 from mobile.app import LogisticsMobile
 
+TEST_STAGE = TestStage.REGRESSION
+
 
 class FileUITests(unittest.TestCase):
+    def test_private_local_images_never_bind_an_automatic_thumbnail_loader(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile_build.tests.support.app import mobile_app
+        class PrivateFiles(LocalFiles):
+            private = True
+        with mobile_app() as app:
+            app.loop.run_until_complete(app.show_files())
+            root = app.private_root / 'Private images'
+            root.mkdir()
+            (root / 'private.png').write_bytes(b'Never decode automatically')
+            provider = PrivateFiles(root)
+            app.file_provider, app.file_path = provider, ''
+            app.cloud_client = SimpleNamespace(supports_streaming=True, cancel=Mock())
+            decoder = Mock(side_effect=AssertionError('Private image was decoded automatically'))
+            with patch('mobile.browser_preview.callbacks', return_value=(decoder, None)):
+                app.populate_file_browser(provider.list())
+                app.file_browser.show_tiles()
+            self.assertIsNone(app.file_browser.thumbnail)
+            self.assertFalse(app.file_browser.icons)
+            decoder.assert_not_called()
+
     def test_local_thumbnail_decoder_errors_keep_file_icon_and_cancellation_propagates(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
@@ -27,7 +51,7 @@ class FileUITests(unittest.TestCase):
                 (root / 'broken.png').write_bytes(b'Invalid PNG')
                 app.file_provider = provider = LocalFiles(root)
                 app.file_path = ''
-                app.cloud_client = SimpleNamespace(supports_streaming=True)
+                app.cloud_client = SimpleNamespace(supports_streaming=True, cancel=Mock())
                 decoder = Mock(side_effect=ValueError('image exceeds decode dimensions'))
                 with patch('mobile.browser_preview.callbacks', return_value=(decoder, None)):
                     app.populate_file_browser(provider.list())

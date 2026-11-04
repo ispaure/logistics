@@ -79,6 +79,12 @@ def configure_ios(project):
     callkit_build = put('callkit-build', isa='PBXBuildFile', fileRef=callkit)
     if callkit_build not in phase['files']:
         phase['files'].append(callkit_build)
+    for name in ('AVKit', 'CoreImage'):
+        reference = put(name + '-reference', isa='PBXFileReference', lastKnownFileType='wrapper.framework',
+            path='System/Library/Frameworks/' + name + '.framework', sourceTree='SDKROOT')
+        linked = put(name + '-build', isa='PBXBuildFile', fileRef=reference)
+        if linked not in phase['files']:
+            phase['files'].append(linked)
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))
     info = project / 'LogisticsMobile/LogisticsMobile-Info.plist'
     metadata = plistlib.loads(info.read_bytes())

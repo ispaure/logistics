@@ -1,6 +1,7 @@
 // Logistics native video owner. VLCKit is linked by the mobile build manager.
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <AVKit/AVKit.h>
 #import <CallKit/CallKit.h>
 #import <math.h>
 #import <VLCKit/VLCKit.h>
@@ -21,6 +22,13 @@
 - (UIViewController *)childViewControllerForScreenEdgesDeferringSystemGestures { return self.topViewController; }
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations { return self.topViewController.supportedInterfaceOrientations; }
 - (BOOL)shouldAutorotate { return self.topViewController.shouldAutorotate; }
+@end
+
+@class LGVideoController;
+// Modern PiP is owned by the caption compositor. Expose only drawable methods
+// to VLC so its automatic background PiP cannot replace the captioned stream.
+@interface LGCaptionVideoDrawable : NSObject <VLCDrawable>
+@property(nonatomic, weak) LGVideoController *owner;
 @end
 
 @interface LGVideoController : UIViewController
@@ -83,7 +91,8 @@
 @property(nonatomic) NSUInteger chromeGeneration;
 @property(nonatomic, strong) NSTimer *controlsTimer;
 @property(nonatomic, strong) NSTimer *timer;
-@property(nonatomic, strong) id<VLCPictureInPictureWindowControlling> pipController;
+@property(nonatomic, strong) id<VLCPictureInPictureWindowControlling> pipController, captionPiP;
+@property(nonatomic, strong) LGCaptionVideoDrawable *captionDrawable;
 @property(nonatomic, strong) NSMutableArray<VLCRendererDiscoverer *> *discoverers;
 @property(nonatomic) BOOL pipActive;
 @property(nonatomic) BOOL casting;
@@ -111,7 +120,10 @@
 @property(nonatomic) CGSize lastVideoSize;
 @property(nonatomic) CGFloat sessionSubtitleScale; // Zero means use configured preference.
 @property(nonatomic) BOOL forceMaximumHDR; // Session-only diagnostic; default uses automatic HDR.
+- (void)invalidatePiPPlaybackState;
 @end
+
+static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoController *owner);
 
 @interface LGVideoController (PlaybackControls)
 - (void)installPlaybackTools;
@@ -374,7 +386,11 @@
     // Retain automatic fallback for formats the sample-buffer output cannot use.
     self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--stats",
         @"--vout=samplebufferdisplay,any"]];
-    self.player.drawable = self;
+    if (@available(iOS 17.4, *)) {
+        self.captionDrawable = [LGCaptionVideoDrawable new];
+        self.captionDrawable.owner = self;
+        self.player.drawable = self.captionDrawable;
+    } else self.player.drawable = self;
     self.player.delegate = self;
     self.player.media = [self playbackMedia];
     self.discoverers = [NSMutableArray array];
@@ -751,7 +767,7 @@
         self.pausePending = YES;
         [self.player pause];
     }
-    [self.pipController invalidatePlaybackState];
+    [self invalidatePiPPlaybackState];
 }
 - (BOOL)hasExternalAudio {
     for (AVAudioSessionPortDescription *output in AVAudioSession.sharedInstance.currentRoute.outputs) {
@@ -907,6 +923,7 @@
 - (void)suspendForLock {
     if (self.lockHidden) return;
     self.lockHidden = YES;
+    [self.captionPiP stopPictureInPicture];
     [self clearPausePresentation];
     [self pause];
     self.startMilliseconds = [self positionMilliseconds];
@@ -1053,10 +1070,10 @@
              self.hasPlayed && self.playRequested && !self.ended)) [self playbackFailed];
         if (state == VLCMediaPlayerStatePlaying) [self updateScreenAwake];
         else [self setScreenAwake:NO];
-        [self.pipController invalidatePlaybackState];
+        [self invalidatePiPPlaybackState];
     });
 }
-- (void)mediaPlayerLengthChanged:(int64_t)length { [self.pipController invalidatePlaybackState]; }
+- (void)mediaPlayerLengthChanged:(int64_t)length { [self invalidatePiPPlaybackState]; }
 
 - (UIAlertController *)menu:(NSString *)title sender:(id)sender {
     // Phone-sized Duo windows can offer less height than a long popover's
@@ -1177,8 +1194,16 @@
 }
 - (void)pip:(id)sender {
     if (![self canPlay:YES]) return;
-    if (self.pipController) [self.pipController startPictureInPicture];
+    if (@available(iOS 17.4, *)) {
+        if (!self.captionPiP) self.captionPiP = LGCreateCaptionPiP(self);
+        if (self.captionPiP) [self.captionPiP startPictureInPicture];
+        else [self showStatus:@"Picture in picture is unavailable on this device."];
+    } else if (self.pipController) [self.pipController startPictureInPicture];
     else [self showStatus:@"Picture in picture is not ready. Start playback first."];
+}
+- (void)invalidatePiPPlaybackState {
+    [self.pipController invalidatePlaybackState];
+    [self.captionPiP invalidatePlaybackState];
 }
 - (id<VLCPictureInPictureMediaControlling>)mediaController { return self; }
 - (void (^)(id<VLCPictureInPictureWindowControlling>))pictureInPictureReady {
@@ -1187,6 +1212,7 @@
         if (owner.restricted || owner.retired) return;
         owner.pipController = controller;
         controller.stateChangeEventHandler = ^(BOOL active) {
+            if (owner.captionPiP) return;
             owner.pipActive = active;
             [owner updateScreenAwake];
             [owner setControlsShown:YES];
@@ -1238,7 +1264,7 @@
     // relative helper uses a 32-bit clock and may never complete a boundary
     // seek, leaving the system's PiP skip controls waiting indefinitely.
     if ([self canPlay:YES]) [self skipMilliseconds:offset];
-    [self.pipController invalidatePlaybackState];
+    [self invalidatePiPPlaybackState];
     // Always release the system request, including denied/nonseekable seeks.
     if (completion) dispatch_async(dispatch_get_main_queue(), completion);
 }
@@ -1266,6 +1292,7 @@
     [self.timer invalidate]; self.timer = nil;
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [self.callObserver setDelegate:nil queue:NULL]; self.callObserver = nil;
+    [self.captionPiP stopPictureInPicture]; self.captionPiP = nil;
     [self.pipController stopPictureInPicture]; self.pipController = nil;
     self.player.delegate = nil;
     self.player.drawable = nil;
@@ -1300,3 +1327,10 @@
 
 #import "HDRDiagnostics.m"
 #import "PausePresentation.m"
+
+#import "CaptionPictureInPicture.m"
+
+@implementation LGCaptionVideoDrawable
+- (void)addSubview:(UIView *)view { [self.owner addSubview:view]; }
+- (CGRect)bounds { return [self.owner bounds]; }
+@end
