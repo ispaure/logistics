@@ -21,6 +21,7 @@ def sync_feature_destinations(app):
     """Keep logical tab indices stable while hiding unavailable destinations."""
     host = app.native_host
     available = app.feature_enabled('lm')
+    host._feature_destinations = {'chat': available}
     if not available and host.state.destination == 'chat':
         app.show_home()
     item = host.root.content[host.destinations.index('chat')]
@@ -38,12 +39,21 @@ def sync_android_destination_visibility(host):
     adapter = host.adapter
     if adapter is None or not hasattr(adapter, 'bottom'):
         return
-    for index, item in enumerate(host.root.content):
+    features = getattr(host, '_feature_destinations', {})
+    # Native OptionItems read the currently mounted menu. A newly constructed
+    # rail starts enabled, so retain feature policy independently of that view.
+    states = [features[key] if key in features else item.enabled
+              for key, item in zip(host.destinations, host.root.content)]
+    for index, enabled in enumerate(states):
         for bar in (adapter.bottom, adapter.rail):
             if bar is not None:
                 native = bar.getMenu().getItem(index)
-                native.setEnabled(item.enabled)
-                native.setVisible(item.enabled)
+                # Material menu setters request layout even for unchanged
+                # enabled values. Repeating them prevents startup from settling.
+                if native.isEnabled() != enabled:
+                    native.setEnabled(enabled)
+                if native.isVisible() != enabled:
+                    native.setVisible(enabled)
 
 
 def eink_selection_indicator(bar, enabled, original=None):
@@ -134,8 +144,8 @@ def install_android_navigation_appearance(host):
         if mode == 'rail' and adapter.rail is None:
             adapter.rail = create_android_destination_rail(host)
         original(mode)
-        sync_android_destination_visibility(host)
         if adapter.mode != previous:
+            sync_android_destination_visibility(host)
             compact_chrome()
             from .appearance import refresh_android_navigation
             refresh_android_navigation(host)
