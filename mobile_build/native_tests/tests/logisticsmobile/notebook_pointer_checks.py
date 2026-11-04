@@ -6,16 +6,49 @@ Capture is stubbed because untrusted PointerEvents cannot acquire native capture
 
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 import json
 
+TEST_STAGE = TestStage.REGRESSION
+
 POINTER_CHECKS = r'''(()=>{
+if(window.notebookPointerProbe){
+    const error=new Error('Pointer fixture is already active');
+    return JSON.stringify({error:String(error),stack:error.stack||'',fixture_owned:false})
+}
 const saved={send,mode,active,points,pan,start,last,selected,pendingInk,inkSettings,
     capture:canvas.setPointerCapture,finger:$('finger').checked,
-    x:$('viewport').scrollLeft,y:$('viewport').scrollTop};
+    x:$('viewport').scrollLeft,y:$('viewport').scrollTop,
+    penContact:penContactActive,penDeadline:penBlockedUntil,hover:[...penHoverSources],
+    nativePen:state.native_pen,nativePenPresent:Object.hasOwn(state,'native_pen'),
+    contacts:[...touchContacts],pinch:touchPinch,zoomBlocked:touchZoomBlocked};
 const captured=[];let result={};
 function require(value,message){if(!value)throw Error(message)}
+const restore=()=>{
+    delete window.notebookPointerProbe;
+    send=saved.send;mode=saved.mode;active=saved.active;points=saved.points;pan=saved.pan;
+    start=saved.start;last=saved.last;selected=saved.selected;pendingInk=saved.pendingInk;
+    inkSettings=saved.inkSettings;canvas.setPointerCapture=saved.capture;
+    penContactActive=saved.penContact;penBlockedUntil=saved.penDeadline;
+    penHoverSources.clear();for(const source of saved.hover)penHoverSources.add(source);
+    touchContacts.clear();for(const [id,point]of saved.contacts)touchContacts.set(id,point);
+    touchPinch=saved.pinch;touchZoomBlocked=saved.zoomBlocked;
+    if(saved.nativePenPresent)state.native_pen=saved.nativePen;else delete state.native_pen;
+    $('finger').checked=saved.finger;
+    try{draw()}finally{$('viewport').scrollLeft=saved.x;$('viewport').scrollTop=saved.y}
+};
+const failure=error=>({error:String(error),stack:error.stack||''});
+const outcome=(report,error=null)=>{
+    let payload=error?failure(error):report;
+    try{restore()}catch(cleanup){
+        if(error){payload.cleanup_error=String(cleanup);payload.cleanup_stack=cleanup.stack||''}
+        else payload=failure(cleanup)
+    }
+    return JSON.stringify(payload)
+};
+window.notebookPointerProbe={restore};
 try{
+    penContactActive=false;penBlockedUntil=0;penHoverSources.clear();
+    touchContacts.clear();touchPinch=null;touchZoomBlocked=false;
     send=action=>captured.push(action);mode='ink';active=null;points=[];pan=null;
     selected=new Set();pendingInk=null;canvas.setPointerCapture=()=>{};
     $('finger').checked=false;
@@ -57,21 +90,73 @@ try{
     $('finger').checked=true;
     canvas.dispatchEvent(event('pointerdown',75,'touch',30,30,.5));
     canvas.dispatchEvent(event('pointerup',75,'touch',40,40,0));
-    require(captured.length===2&&captured[1].op==='stroke','Explicit finger drawing failed');
-    result.finger_drawing=true;
-    return JSON.stringify(result);
-}finally{
-    send=saved.send;mode=saved.mode;active=saved.active;points=saved.points;pan=saved.pan;
-    start=saved.start;last=saved.last;selected=saved.selected;pendingInk=saved.pendingInk;
-    inkSettings=saved.inkSettings;canvas.setPointerCapture=saved.capture;
-    $('finger').checked=saved.finger;draw();
-    $('viewport').scrollLeft=saved.x;$('viewport').scrollTop=saved.y;
-}
+    require(penTouchBlocked()&&captured.length===1&&active===null&&points.length===0,
+        'Finger input must remain blocked during pen-release grace');
+    result.release_grace_blocked=true;
+    window.notebookPointerProbe.complete=()=>{
+        let failed=null;
+        try{
+            require(!penTouchBlocked(),'Finger phase requires actual pen-release grace to expire');
+            canvas.dispatchEvent(event('pointerdown',76,'touch',30,30,.5));
+            canvas.dispatchEvent(event('pointerup',76,'touch',40,40,0));
+            require(captured.length===2&&captured[1].op==='stroke','Explicit finger drawing failed after release grace');
+            result.finger_drawing=true;result.release_grace_recovered=true;
+        }catch(error){failed=error}
+        return outcome(result,failed)
+    };
+    return JSON.stringify({release_grace_blocked:true});
+}catch(error){return outcome(null,error)}
 })()'''
 
 
+POINTER_READY = 'JSON.stringify({blocked:penTouchBlocked()})'
+POINTER_FINGER_CHECKS = 'window.notebookPointerProbe.complete()'
+POINTER_CLEANUP = 'window.notebookPointerProbe?.restore();true'
+
+
+def pointer_report(value):
+    if not isinstance(value, str):
+        raise AssertionError('Notebook pointer JavaScript returned no JSON report: ' + repr(value))
+    report = json.loads(value)
+    if not isinstance(report, dict):
+        raise AssertionError('Notebook pointer JavaScript returned an invalid report: ' + repr(report))
+    if report.get('error'):
+        error = AssertionError('Notebook pointer JavaScript: ' + report['error'] + '\n' + report.get('stack', ''))
+        error.pointer_fixture_owned = report.get('fixture_owned', True)
+        if report.get('cleanup_error'):
+            error.add_note('JavaScript fixture cleanup also failed: ' + report['cleanup_error'] + '\n' + report.get('cleanup_stack', ''))
+        raise error
+    return report
+
+
 async def exercise_pointer_input(panel):
-    report = json.loads(await panel.web.evaluate_javascript(POINTER_CHECKS))
+    import asyncio
+    failure = None
+    owned = True
+    try:
+        initial = pointer_report(await panel.web.evaluate_javascript(POINTER_CHECKS))
+        assert initial.get('release_grace_blocked') is True, initial
+        deadline = asyncio.get_running_loop().time() + 3
+        while True:
+            gate = pointer_report(await panel.web.evaluate_javascript(POINTER_READY))
+            if gate.get('blocked') is False:
+                break
+            if asyncio.get_running_loop().time() >= deadline:
+                raise AssertionError('Notebook pen-release grace did not expire: ' + repr(gate))
+            await asyncio.sleep(.01)  # Poll the actual guard, rather than guessing a grace delay.
+        report = pointer_report(await panel.web.evaluate_javascript(POINTER_FINGER_CHECKS))
+    except BaseException as error:
+        failure = error
+        owned = getattr(error, 'pointer_fixture_owned', True)
+        raise
+    finally:
+        try:
+            if owned:
+                await panel.web.evaluate_javascript(POINTER_CLEANUP)
+        except BaseException as cleanup_error:
+            if failure is None:
+                raise
+            failure.add_note('Pointer fixture cleanup also failed: ' + repr(cleanup_error))
     report['backend'] = type(panel.web._impl).__module__
     if report['backend'].startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass
