@@ -46,9 +46,16 @@ class NotesInteractionChecks:
             root = native.getRootView()
             left, top, _, _ = self.native_rect(root)
             started = SystemClock.uptimeMillis()
-            for action, offset, elapsed in ((0, -65 * swipe, 0), (2, 0, 100), (1, 65 * swipe, 200)):
-                density = native.getContext().getResources().getDisplayMetrics().density
-                event = MotionEvent.obtain(started, started + elapsed, action, x - left + offset * density, y - top, 0)
+            # ScrollViews intercept the first Move before consuming drag deltas.
+            # Supply subsequent moves and real event times, as physical input does.
+            points = [(0, -65 * swipe)]
+            if swipe:
+                points.extend((2, offset * swipe) for offset in (-39, -13, 13, 39, 65))
+            points.append((1, 65 * swipe))
+            density = native.getContext().getResources().getDisplayMetrics().density
+            for action, offset in points:
+                event = MotionEvent.obtain(started, SystemClock.uptimeMillis(), action,
+                    x - left + offset * density, y - top, 0)
                 try:
                     root.dispatchTouchEvent(event)
                 finally:
