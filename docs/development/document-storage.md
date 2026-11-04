@@ -85,7 +85,8 @@ Notes Library opening root. Desktop LocalCrypt keeps these updates in the same
 credential-encrypted catalog; mobile also updates unlocked encrypted recent/open
 lists for documents that are closed. Failed renames leave references unchanged.
 Remote providers remain read-only and do not offer rename. The desktop and mobile
-`test_rename_references.py` suites cover these flows; desktop exercises standard,
+rename-reference suites cover these flows (`test_rename_references.py` plus
+`test_local_crypt_rename_*.py` on desktop); desktop exercises standard,
 obfuscated and unencrypted filename modes with real rclone providers. Mobile's
 native crypt case requires the host bridge; host checks do not certify device UI.
 Mobile history reconciliation runs on the UI loop even if the separate favourite
@@ -209,7 +210,8 @@ and credential policy. Reusable resource API documentation remains in
 Focused host contracts include backend-independent revocation and wrapped resume
 proofs in `Python/tests/resources/test_document_protection.py`,
 `Python/tests/resources/test_document_storage.py`,
-`Python/tests/resources/test_local_crypt.py` and the mobile document-storage tests.
+`Python/tests/resources/test_local_crypt_lifetime*.py`,
+`Python/tests/resources/test_local_crypt_storage.py` and the mobile document-storage tests.
 Native bridge tests cover binary round trips, limits, cancellation and rejection
 of nonempty output descriptors. Host tests do not establish native widget or
 physical-device behavior.

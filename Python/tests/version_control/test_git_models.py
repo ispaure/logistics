@@ -1,4 +1,4 @@
-"""Offscreen Qt tests with real repositories and asynchronous UI lifecycle."""
+"""Git graph projection and stored preferences remain portable model checks."""
 
 from commonUtils.testing.stages import TestStage
 
