@@ -39,17 +39,31 @@ def show_licenses(app, widget=None, **kwargs):
         app.show_view(toga.Box(children=[text], style=Pack(direction=COLUMN, flex=1)),
                       destination='settings', route='open-source-notice', title=notice.title)
 
-    def filter_notices(widget=None, **kwargs):
+    shown = 20
+
+    def render_notices():
         query = (search.value or '').casefold()
         rows.clear()
-        for notice in notices:
-            if query in notice.content.casefold():
-                rows.add(page_button(notice.title, on_press=lambda widget, notice=notice, **kw: show_notice(notice),
-                                     style=Pack(height=48)))
+        matches = [notice for notice in notices if query in notice.content.casefold()]
+        for notice in matches[:shown]:
+            rows.add(page_button(notice.title, on_press=lambda widget, notice=notice, **kw: show_notice(notice),
+                                 style=Pack(height=48)))
+        if len(matches) > shown:
+            rows.add(page_button('Show more components', on_press=show_more, style=Pack(height=48)))
         if not rows.children:
             rows.add(SettingsLabel('No matching components.'))
         settings_presentation(rows)
         fit_section(rows, app.adaptive.content_width('settings'))
+
+    def show_more(widget=None, **kwargs):
+        nonlocal shown
+        shown += 20
+        render_notices()
+
+    def filter_notices(widget=None, **kwargs):
+        nonlocal shown
+        shown = 20
+        render_notices()
 
     search = toga.TextInput(placeholder='Search components', on_change=DebouncedCallback(filter_notices))
     body = toga.Box(children=[SettingsLabel('Open-source licenses', style=Pack(font_size=22)),
