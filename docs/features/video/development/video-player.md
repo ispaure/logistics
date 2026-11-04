@@ -95,12 +95,30 @@ The native `video_chrome_tools --pip-controls` probe checks forward/backward,
 start-boundary completion and control locking with real UIKit/VLC. It does not
 establish system PiP-window rendering or physical-device button interaction.
 
-**Unresolved:** iOS PiP captions. The current VLC Apple output draws subtitles in
-a separate view while submitting the uncomposited video sample buffer to PiP.
-Correcting that requires caption composition in the native video output; changing
-track selection or the Logistics control overlay cannot put that view into PiP.
-See the upstream [Apple sample-buffer output](https://github.com/videolan/vlc/blob/master/modules/video_output/apple/VLCSampleBufferDisplay.m).
-Do not claim embedded, external or bitmap PiP captions are fixed by the seek work.
+On iOS 17.4 and later, `CaptionPictureInPicture.m` supplies AVKit with a
+composited sample containing the decoded video and VLC's rendered subtitle
+planes. It descends through VLC's shared drawable wrapper to exclude video
+without excluding captions. A drawable-only adapter prevents VLC's automatic
+PiP controller from replacing this captioned stream when the app backgrounds.
+Caption parsing, track selection, styling and timing continue to belong to VLC.
+
+The compositor uses volatile pixel buffers, at most 30 frames per second and
+720 pixels on the longest side, with a three-buffer allocation limit. HDR input
+uses a tagged 10-bit output and converts the subtitle plane into that color
+space; SDR output is tagged for its actual sRGB conversion. Stop, lock and
+retirement discard the timer, layer contents and pixel pool. Earlier iOS
+versions retain VLC's original video-only PiP path because displayed-buffer
+readback requires iOS 17.4.
+
+`video_chrome_tools --pip-subtitles` tests actual active PiP with external SRT
+captions, background frame/clock progress, subtitles off/on, paused forward seek,
+backward cue restoration and retirement. `--embedded-subtitles --hdr` selects a
+muxed subtitle track and checks the enqueued 10-bit format and PQ attachment.
+The disposable iPad simulator supports system PiP; iPhone Simulator reports it
+unsupported. Simulator rendering does not establish physical HDR headroom or
+physical-device button interaction. The upstream
+[Apple sample-buffer output](https://github.com/videolan/vlc/blob/master/modules/video_output/apple/VLCSampleBufferDisplay.m)
+explains why its separate subtitle plane needs composition.
 
 ## Desktop plugin lifetime
 
