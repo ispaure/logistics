@@ -24,6 +24,21 @@ from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
 from features.notebooks.ui.menus import NotebookMenus
 
 
+def scheduler_sample():
+    """Retain optional guest scheduling evidence outside timed input delivery."""
+    sample = dict(monotonic_seconds=time.monotonic(), process_cpu_seconds=time.process_time())
+    if platform.system() == 'Linux':
+        sources = {'cpu': '/proc/stat', 'load': '/proc/loadavg',
+                   'cpu_pressure': '/proc/pressure/cpu', 'memory_pressure': '/proc/pressure/memory'}
+        for name, filename in sources.items():
+            try:
+                text = Path(filename).read_text()
+                sample[name] = text.splitlines()[0] if name == 'cpu' else text.strip()
+            except OSError as error:
+                sample[name] = dict(unavailable=str(error))
+    return sample
+
+
 def windows_foreground():
     """Qt's active widget is not proof of Windows' actual foreground process."""
     import ctypes
@@ -360,7 +375,9 @@ def main(output, *, latency_mode='enforce'):
             probe.js("""(()=>{window.qaCosts={};window.qaLongTasks=[];
                 function measured(name,fn){return function(...args){let t=performance.now();try{return fn.apply(this,args)}finally{let ms=performance.now()-t,row=qaCosts[name]||(qaCosts[name]={calls:0,total:0,max:0});row.calls++;row.total+=ms;row.max=Math.max(row.max,ms)}}}
                 preview=measured('preview',preview);line=measured('line',line);clearDraft=measured('clearDraft',clearDraft);sample=measured('sample',sample);finish=measured('finish',finish);
-                if(PerformanceObserver.supportedEntryTypes.includes('longtask'))new PerformanceObserver(list=>{for(let e of list.getEntries())qaLongTasks.push({start:e.startTime,duration:e.duration})}).observe({entryTypes:['longtask']});return true})()""")
+                coord=measured('coord',coord);flushPreview=measured('flushPreview',flushPreview);commitDraft=measured('commitDraft',commitDraft);
+                canvas.onpointermove=measured('pointermove',canvas.onpointermove);
+                if(PerformanceObserver.supportedEntryTypes.includes('longtask'))new PerformanceObserver(list=>{for(let e of list.getEntries())qaLongTasks.push({start:e.startTime,duration:e.duration,name:e.name,attribution:Array.from(e.attribution||[],a=>({name:a.name,containerType:a.containerType}))})}).observe({entryTypes:['longtask']});return true})()""")
             host_costs = []
             perform = probe.panel.perform
             def timed_perform(action):
@@ -370,7 +387,7 @@ def main(output, *, latency_mode='enforce'):
                 finally:
                     host_costs.append(dict(op=action['op'], ms=(time.monotonic() - started) * 1000))
             probe.panel.perform = timed_perform
-            probe.js("(()=>{window.qaDraws=0;window.qaFrames=0;window.qaGap=0;window.qaDeferred=0;window.qaFramePrevious=performance.now();let base=draw;draw=function(){qaDraws++;return base()};let ack=window.notebookStrokeUpdate;window.notebookStrokeUpdate=function(...args){if(active!==null)qaDeferred++;return ack(...args)};window.qaFrameLoop=true;function frame(now){qaFrames++;qaGap=Math.max(qaGap,now-qaFramePrevious);qaFramePrevious=now;if(qaFrameLoop)requestAnimationFrame(frame)}requestAnimationFrame(frame);$('tool').value='23';$('tool').onchange();return true})()")
+            probe.js("(()=>{window.qaDraws=0;window.qaFrames=0;window.qaGap=0;window.qaGapEvents=[];window.qaDeferred=0;window.qaFramePrevious=performance.now();let base=draw;draw=function(){qaDraws++;return base()};let ack=window.notebookStrokeUpdate;window.notebookStrokeUpdate=function(...args){if(active!==null)qaDeferred++;return ack(...args)};window.qaFrameLoop=true;function frame(now){qaFrames++;let gap=now-qaFramePrevious;qaGap=Math.max(qaGap,gap);if(gap>=80&&qaGapEvents.length<100)qaGapEvents.push({start:qaFramePrevious,end:now,duration:gap,active:active!==null,busy,queued:queue.length,visibility:document.visibilityState});qaFramePrevious=now;if(qaFrameLoop)requestAnimationFrame(frame)}requestAnimationFrame(frame);$('tool').value='23';$('tool').onchange();return true})()")
             delivered = probe.panel.deliver
             pending_commands = []
             probe.panel.deliver = lambda page, action: pending_commands.append((page, action))
@@ -401,11 +418,14 @@ def main(output, *, latency_mode='enforce'):
             # to distinguish an artificial event flood from steady input.
             paced_runs = []
             for gesture in range(3):
-                probe.js('(()=>{qaDraws=0;qaFrames=0;qaGap=0;qaFramePrevious=performance.now();return true})()')
+                scheduler_before = scheduler_sample()
+                host_start = len(host_costs)
+                probe.js('(()=>{qaDraws=0;qaFrames=0;qaGap=0;qaGapEvents=[];window.qaGestureStarted=performance.now();qaFramePrevious=qaGestureStarted;return true})()')
                 duration = probe.stroke(6 + gesture, samples=200, pace_ms=5)
                 probe.idle()
-                row = probe.js('({draws:qaDraws,frames:qaFrames,max_frame_gap:qaGap})')
-                row['duration_ms'] = duration
+                row = probe.js('({draws:qaDraws,frames:qaFrames,max_frame_gap:qaGap,started_ms:qaGestureStarted,finished_ms:performance.now(),frame_gaps:qaGapEvents,function_costs_cumulative:qaCosts,long_tasks:qaLongTasks.filter(task=>task.start+task.duration>=qaGestureStarted)})')
+                row.update(duration_ms=duration, scheduler_before=scheduler_before,
+                           scheduler_after=scheduler_sample(), native_command_costs=host_costs[host_start:])
                 paced_runs.append(row)
             paced = dict(draws=sum(row['draws'] for row in paced_runs), frames=sum(row['frames'] for row in paced_runs),
                          max_frame_gap=max(row['max_frame_gap'] for row in paced_runs))

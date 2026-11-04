@@ -125,3 +125,27 @@ lease on it. Retiring a temporary destination browser must not close the active
 library's encrypted resource view. A regression exercises Move and Cancel with a
 provider that closes on its last lease release, then verifies that the note is
 still readable and that library disposal closes its owned provider.
+
+## Disposable native acceptance
+
+The `notes-markdown-feedback` probe exercises items 3–5 through native controls
+in an isolated QA application, using build-manager source snapshots and disposable
+devices. The focused Android ARM64 API 36 and iOS simulator runs each passed ten
+cases: media reuse, changed and removed references, preparation cancellation,
+separate Rename and browsed Move, folder exclusion and Move cancellation for
+local and LocalCrypt libraries, plus regular Markdown cancellation and reuse.
+The preparation and destination-picker screenshots were also reviewed.
+
+Native validation exposed the encrypted-provider lifetime issue described above.
+Its host regression reproduced the premature closure before the fix; all fourteen
+Notes Library mode checks passed afterward. The final native runs used committed
+snapshots without runtime overlays. Their Notes provider fix and probe bytes were
+identical; Android additionally included the existing committed startup readiness
+fix. The retained iOS shell's compiled inputs were verified before reuse.
+
+Two final review passes covered the entire items 3–5 list: the first traced shared
+cache validity, edited references, loading/cancellation and action entry points;
+the second checked native results, visible controls, provider lifetime and cleanup.
+Every disposable device owned by this validation was removed, and the retained
+native build was retired. Release integration and physical deployment remain with
+the release coordinator.

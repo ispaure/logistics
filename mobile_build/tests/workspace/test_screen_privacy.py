@@ -249,24 +249,49 @@ class ResumeLockTests(unittest.TestCase):
         self.privacy.lock_password.value = password
         self.app.loop.run_until_complete(self.privacy.unlock())
 
-    def test_lock_form_owns_full_scroll_height_with_inset_card_and_wrapped_labels(self):
+    def test_android_keyboard_fit_ignores_the_previous_root_minimum_height(self):
+        self.privacy.conceal()
+        self.privacy.reveal()
+        self.privacy.fit_lock_view(360, 724)
+        self.assertEqual(self.privacy.lock_card.style.height, 520)
+        self.privacy.backend = 'toga_android.app'
+        try:
+            with patch.object(self.privacy, 'android_lock_viewport', return_value=(360, 449)):
+                self.privacy.fit_lock_view()
+            self.assertLessEqual(self.privacy.lock_card.style.height + 40, 449)
+            with patch.object(self.privacy, 'android_lock_viewport', return_value=(800, 140)):
+                self.privacy.fit_lock_view()
+            self.assertLessEqual(self.privacy.lock_card.style.height + 40, 140)
+            self.assertEqual(self.privacy.lock_card.style.width, 560)
+            with patch.object(self.privacy, 'android_lock_viewport', return_value=(800, 96)):
+                self.privacy.fit_lock_view()
+            self.assertLessEqual(self.privacy.lock_card.style.height + 2 * self.privacy.lock_body.style.margin_top, 96)
+            self.assertGreaterEqual(self.privacy.lock_card.style.height - 24, 48)
+        finally:
+            self.privacy.backend = 'toga_dummy.app'
+
+    def test_lock_card_keeps_corners_inside_viewport_and_scrolls_wrapped_form(self):
         import toga
         self.gate.credential_name = 'Very long credential name ' * 20 + '.zip'
         self.privacy.conceal()
         self.privacy.reveal()
         scroll = self.privacy.lock_scroll
         self.assertIsInstance(scroll, toga.ScrollContainer)
-        self.assertIs(scroll.content, self.privacy.lock_body)
-        self.assertEqual(self.privacy.lock_view.children, [scroll])
+        self.assertEqual(scroll._MIN_HEIGHT, 0)
+        self.assertIs(scroll.content, self.privacy.lock_fields)
+        self.assertEqual(self.privacy.lock_card.children, [scroll])
+        self.assertEqual(self.privacy.lock_view.children, [self.privacy.lock_body])
         self.assertEqual(scroll.style.flex, 1)
         self.assertGreater(self.privacy.lock_body.style.margin_left, 0)
         self.assertGreater(self.privacy.lock_body.style.margin_top, 0)
         self.assertEqual(self.privacy.lock_card.style.margin_top, 0)
         self.assertIn('\n', self.privacy.lock_credential.text)
-        for width in (320, 844, 1200):
-            self.privacy.fit_lock_view(width)
+        for width, height in ((320, 568), (844, 390), (844, 170), (1200, 900)):
+            self.privacy.fit_lock_view(width, height)
             self.assertLessEqual(self.privacy.lock_card.style.width, width - 40)
             self.assertLessEqual(self.privacy.lock_card.style.width, 560)
+            self.assertLessEqual(self.privacy.lock_card.style.height, height - 40)
+            self.assertLessEqual(self.privacy.lock_card.style.height, 520)
         self.unlock('session-password')
         self.assertIs(self.app.main_window.content, self.original)
 
@@ -295,7 +320,8 @@ class ResumeLockTests(unittest.TestCase):
         def navigation_layout(container):
             container.top_inset = container.bottom_inset = 0
             container.left_inset = container.right_inset = 0
-        container = SimpleNamespace(native=SimpleNamespace(safeAreaInsets=insets),
+        container = SimpleNamespace(native=SimpleNamespace(safeAreaInsets=insets,
+                                    bounds=SimpleNamespace(size=SimpleNamespace(height=self.app.main_window.size.height))),
                                     content=SimpleNamespace(interface=Mock()),
                                     on_native_layout=navigation_layout)
         with patch.object(impl, 'container', container, create=True), \

@@ -466,7 +466,10 @@ renderer, and pixel fixtures allocate only their ink bounds at high DPI.
 Run with the desktop runtime and `PYTHONPATH=Python:.`, passing
 `--output test-results/notebook-desktop-stress`. Documents and storage fixtures
 use manager scratch; retained reports include exact source hashes and observed
-frame timings. Timings describe the tested runtime rather than physical stylus
+frame timings. Per-gesture evidence aligns frame-gap timestamps with browser
+long tasks and cumulative input/drawing function costs. Linux additionally records
+guest CPU and pressure counters outside timed input delivery; unavailable counters
+remain optional diagnostics. Timings describe the tested runtime rather than physical stylus
 latency. The probe waits for the native input widget and canvas presentation
 after reopening, then observes delivery of each pointer release before checking
 bridge idleness; Windows can process a JavaScript query ahead of native input.

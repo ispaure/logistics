@@ -108,10 +108,23 @@ open/partial Duo. The partial Duo's final whole-display capture was black;
 its app-window captures and native geometry checks succeeded. These are
 simulator layout checks, not physical-device or full-app release certification.
 
-Android phone and tablet APK builds succeeded, but both disposable emulators
-timed out during startup before the app launched. Their cleanup receipts confirm
-removal. Native Android visual acceptance remains pending; host checks cover
-both allocations and the shared Android control-gutter calculation.
+The November 4 Android native matrix passed three orientation samples each on
+Android 15 disposable phone and tablet emulators (360-dp and 800-dp portrait
+viewports). The full app opened Settings → Help and rendered its article before
+capturing the article/tree layouts. Native Help titles measured 232/672 dp on the
+phone and 640/969.5 dp on the tablet in portrait/landscape; tree labels retained
+at least 164 dp. Screenshots were visually reviewed, including pinned tablet
+browsing. This completes the earlier Android startup/visual acceptance gap.
+
+`document_storage_tools android --probe android-header` also checks Notes toolbar
+order, actual title gutters, history/edit/menu taps, unabridged breadcrumb labels,
+and native swipes/taps back to the library root and ancestor landing pages. Add
+`--android-tablet` for the tablet allocation. Notes titles measured 184/624 dp on
+the phone and 592/921.5 dp on the tablet. All six orientation samples passed;
+the tablet pinned Files in landscape and returned to compact Files in portrait.
+The native checks exposed Android button insets clipping breadcrumb labels;
+those insets and the measured/drawn typeface now agree. The runners removed their
+QA packages and disposable devices, and the owned scratch build was deleted.
 
 Notes toolbar/breadcrumb checks, the desktop folder-navigation/scroll check,
 17 Help host tests and 16 shared/native-bar host tests pass. A broader 33-case
