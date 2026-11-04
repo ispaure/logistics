@@ -50,9 +50,11 @@ class ArchiveCredentialsTests(unittest.TestCase):
             source, output = root / 'credentials.zip', root / 'credentials.conf'
             self.package(source)
             output.write_text('existing config')
+            before = source.read_bytes()
             with patch.object(credentials.configuration, 'get_credential_config_path', return_value=output), patch.object(
                     credentials.ui, 'display_msg_box_ok') as message:
                 self.assertFalse(credentials.load_remote_from_zip_to_config(source, 'test-only-wrong'))
             message.assert_called_once()
             self.assertEqual(output.read_text(), 'existing config')
+            self.assertEqual(source.read_bytes(), before)
             self.assertEqual(set(root.iterdir()), {source, output})
