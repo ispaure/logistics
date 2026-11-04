@@ -331,7 +331,7 @@ function line(s, target = ctx) {
     geometry(target, p, family);
     target.restore()
   } else geometry(target, p, family);
-  if (selected.has(s.id)) {
+  if (selected.has(s.id) && mode !== 'select') {
     target.globalAlpha = 1;
     target.globalCompositeOperation = 'source-over';
     target.filter = 'none';

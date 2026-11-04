@@ -294,12 +294,16 @@ class InkPage:
                     changed = current[key]
                     block = deepcopy(block)
                     original = block.item.value.points
-                    if len(changed.points) == len(original) and all(
-                            values[2:] == baseline[2:] for values, baseline in
-                            zip(changed.points, self._baseline[key]['points'])):
-                        # Ordinary movement retains native point dynamics exactly.
-                        for point, values in zip(original, changed.points):
+                    block.item.value.thickness_scale = changed.scale
+                    if len(changed.points) == len(original):
+                        # Geometric transforms retain the native point dynamics;
+                        # only explicitly edited positions/width/pressure change.
+                        for point, values, baseline in zip(original, changed.points, self._baseline[key]['points']):
                             point.x, point.y = values[0] - WIDTH / 2, values[1]
+                            if values[2] != baseline[2]:
+                                point.pressure = round(values[2] * 255)
+                            if values[3] != baseline[3]:
+                                point.width = max(0, min(65535, round(values[3] * 4)))
                     else:
                         block.item.value.points = [si.Point(x - WIDTH / 2, y, 0, 0,
                             max(0, min(65535, round(w * 4))), round(p * 255))

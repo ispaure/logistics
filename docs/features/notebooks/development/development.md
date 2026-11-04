@@ -6,6 +6,8 @@ Responsive paper defaults, zoom and proximity guards are described in
 [viewport and pen input](viewport-input.md).
 New ink's bounded point reduction and imported-stroke preservation are described
 in [saved stroke sampling](stroke-sampling.md).
+Native lasso controls and clipboard contracts are described in
+[stroke selection](stroke-selection.md).
 
 ## Current implementation and acceptance boundary
 
