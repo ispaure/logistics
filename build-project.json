@@ -725,6 +725,8 @@
     "delete_storage",
     "storage_maintenance",
     "enroll_storage",
-    "retained_delivery_plan"
+    "retained_delivery_plan",
+    "tooling_status",
+    "tooling_update"
   ]
 }

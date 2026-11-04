@@ -12,6 +12,16 @@ def main():
     request = json.load(sys.stdin)
     if request.get('schema') != 1:
         raise ValueError('Unsupported bridge schema.')
+    # Setup remains available before the external SDK exists in this interpreter.
+    if request.get('action') in {'tooling_status', 'tooling_update'}:
+        from logistics_build.tooling_bootstrap import handle
+        values = request.get('values', {})
+        if not isinstance(values, dict):
+            raise ValueError('Invalid tooling request.')
+        with contextlib.redirect_stdout(sys.stderr):
+            result = handle(ROOT, request['action'], values)
+        print(json.dumps(dict(schema=1, result=result)))
+        return 0
     from logistics_build.build_project import LogisticsProject
     import os
     os.environ['LOGISTICS_MANAGER_ACCOUNT_DEFAULTS'] = json.dumps(request.get('account_defaults', {}))
@@ -59,6 +69,9 @@ def main():
             result = project.delete_storage(values['selections'])
         else:
             raise ValueError('Unsupported bridge action.')
+    if isinstance(result, dict) and all(key in result for key in ('phases', 'source', 'workspace')):
+        from logistics_build.tooling_bootstrap import lock_path
+        result['resource_locks'] = list(dict.fromkeys([*result.get('resource_locks', ()), str(lock_path(ROOT))]))
     print(json.dumps(dict(schema=1, result=result)))
     return 0
 
@@ -66,7 +79,11 @@ def main():
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, RuntimeError) as error:
-        from build_manager.redaction import Redactor
-        print(Redactor()(str(error)), file=sys.stderr)
+    except (ImportError, OSError, ValueError, RuntimeError) as error:
+        try:
+            from build_manager.redaction import Redactor
+        except ImportError:
+            print('Project tooling is unavailable; inspect tooling readiness or explicitly update it.', file=sys.stderr)
+        else:
+            print(Redactor()(str(error)), file=sys.stderr)
         raise SystemExit(1)

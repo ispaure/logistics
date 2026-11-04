@@ -1,6 +1,7 @@
 """Standard-library-only check planning, execution and contributor setup."""
 import json
 from fnmatch import fnmatchcase
+from contextlib import nullcontext
 import os
 from pathlib import Path
 import shutil
@@ -91,6 +92,11 @@ def doctor(root, interpreter):
     return int(not all(ready for _, ready in checks))
 
 
+class _SetupFailed(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
 def setup(root, suite, interpreter, *, dry_run=False):
     """Install a declared host environment; never build or deploy an application."""
     import shlex
@@ -107,10 +113,15 @@ def setup(root, suite, interpreter, *, dry_run=False):
         # Additive installation preserves native build tools in an existing environment.
         commands.append([uv, 'pip', 'install', '--python', str(python), '--require-hashes',
                          '-r', str(root / 'mobile_build/requirements-host.txt')])
-    for command in commands:
-        print(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command), flush=True)
-        if not dry_run:
-            result = subprocess.run(command, cwd=root, env=environment)
-            if result.returncode:
-                return result.returncode
+    from logistics_build.tooling_bootstrap import environment_sync
+    try:
+        with nullcontext() if dry_run else environment_sync(root):
+            for command in commands:
+                print(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command), flush=True)
+                if not dry_run:
+                    result = subprocess.run(command, cwd=root, env=environment)
+                    if result.returncode:
+                        raise _SetupFailed(result.returncode)
+    except _SetupFailed as error:
+        return error.code
     return 0
