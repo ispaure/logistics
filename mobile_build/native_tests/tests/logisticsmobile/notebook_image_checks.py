@@ -134,11 +134,23 @@ class ImageWorkflow:
         assert sum(abs(a-b) for a,b in zip(above[:3],below[:3]))>40, (above,below)
         self.cases.append('mixed stroke/image forward/backward/front/back order with overlapping pixel change')
         await self.capture('arranged')
-        await self.action("$('copyImage').click()")
+        copied = await self.js('return imageQA.current().corners')
+        await self.action("$('zoom').value='1.5';$('zoom').dispatchEvent(new Event('change'));$('viewport').scrollLeft=175;$('viewport').scrollTop=350;$('copyImage').click()")
         await self.send(dict(op='add-page'))
-        await self.action("$('pasteImage').click()")
+        await self.action("$('zoom').value='fit';$('zoom').dispatchEvent(new Event('change'));$('viewport').scrollLeft=0;$('viewport').scrollTop=0;$('pasteImage').click()")
         await self.action("$('pasteImage').click()")
         assert len(self.editor().notebook.page(1).images)==2
-        self.cases.append('clipboard survives page change and repeats rotated/scaled image paste')
+        pasted=await self.js('return imageQA.current().corners')
+        assert all(abs(a-b)<.1 for p,q in zip(copied,pasted) for a,b in zip(p,q)), (copied,pasted)
+        self.cases.append('cross-page Copy preserves exact page position/rotation/scale across zoom and scroll; repeated paste')
         await self.capture('second-page')
+        await self.action("$('zoom').value='1.5';$('zoom').dispatchEvent(new Event('change'));$('viewport').scrollTop=430;$('cutImage').click()")
+        assert len(self.editor().notebook.page(1).images)==1
+        await self.send(dict(op='page',index=0))
+        await self.action("$('zoom').value='fit';$('zoom').dispatchEvent(new Event('change'));$('viewport').scrollTop=0;$('pasteImage').click()")
+        cut_pasted=await self.js('return imageQA.current().corners')
+        assert all(abs(a-b)<.1 for p,q in zip(copied,cut_pasted) for a,b in zip(p,q)), (copied,cut_pasted)
+        assert len(self.editor().notebook.page(0).images)==4
+        self.cases.append('cross-page Cut preserves original geometry under different viewport zoom/scroll')
+        await self.capture('cut-pasted')
         return self.cases

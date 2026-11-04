@@ -152,6 +152,45 @@ class NotebookImageTests(unittest.TestCase):
             self.assertEqual(ink.order,[s.id for s in ink.strokes]+[ink.images[0].id])
             self.assertEqual(Notebook.read(book.to_bytes()).page(0).order,ink.order)
 
+    def test_unlocked_pdf_survives_structural_recovery_publication(self):
+        with TemporaryDirectory() as directory:
+            repository=Repository(directory);book=locked_book(password='image-qa-password')
+            key=repository.create(book)
+            editor=Editor(book,lambda value:repository.save(key,value))
+            editor.apply(dict(op='unlock-pdf',password='image-qa-password'))
+            original=book.members[book.id+'.pdf']
+            decrypted=editor.pdf_data()
+            editor.apply(paste_action())
+            self.assertEqual(book.members[book.id+'.pdf'],original)
+            self.assertIsNot(book.members[book.id+'.pdf'],original)
+            self.assertEqual(editor.pdf_data(),decrypted,'Identical encrypted bytes must retain the session unlock')
+            editor.apply(paste_action())
+            self.assertEqual(len(book.page(0).images),2)
+            self.assertEqual(editor.pdf_data(),decrypted)
+            self.assertIsNone(Editor(repository.open(key)).pdf_data(),'A new editor must still ask for the password')
+
+    def test_different_embedded_pdf_bytes_invalidate_session_unlock(self):
+        book=locked_book(password='first-password');editor=Editor(book)
+        editor.apply(dict(op='unlock-pdf',password='first-password'))
+        self.assertIsNotNone(editor.pdf_data())
+        replacement=locked_book(password='second-password')
+        book.members[book.id+'.pdf']=replacement.members[replacement.id+'.pdf']
+        self.assertIsNone(editor.pdf_data())
+        with self.assertRaisesRegex(ValueError,'Incorrect'):
+            editor.apply(dict(op='unlock-pdf',password='first-password'))
+        editor.apply(dict(op='unlock-pdf',password='second-password'))
+        self.assertIsNotNone(editor.pdf_data())
+
+    def test_page_identity_is_stable_when_pages_move(self):
+        book=Notebook.new();editor=Editor(book)
+        first=editor.state()['page_id']
+        editor.apply(dict(op='add-page'))
+        second=editor.state()['page_id']
+        self.assertNotEqual(first,second)
+        editor.apply(dict(op='move-page',index=0))
+        self.assertEqual(editor.state()['page_id'],second)
+        self.assertEqual(editor.index,0)
+
     def test_empty_password_pdf_opens_without_prompt(self):
         editor=Editor(locked_book(password=''))
         self.assertIsNotNone(editor.pdf_data())
