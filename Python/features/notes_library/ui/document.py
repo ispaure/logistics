@@ -252,10 +252,11 @@ class DocumentPresentation:
     def place_navigation(self, *args):
         markdown = self.document_stack.currentWidget() is self.viewer
         self.controls_bar.setVisible(not markdown and self.document_stack.currentWidget() is not self.welcome)
-        self.links_tree.setVisible(markdown and self.links_button.isChecked())
+        self.links_panel.setVisible(markdown and self.links_button.isChecked())
         if not markdown:
             self.cancel_connections()
             self.links_tree.clear()
+            self.backlinks_tree.clear()
         if markdown:
             self.viewer.place_navigation(self.navigation)
             toolbar = self.viewer.navigation_toolbar
@@ -679,7 +680,7 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
         self.init_connections()
         self.split = qt.QSplitter()
         self.split.addWidget(self.document_stack)
-        self.split.addWidget(self.links_tree)
+        self.split.addWidget(self.links_panel)
         self.split.setStretchFactor(0, 1)
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -766,6 +767,7 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
         self.positions.clear()
         self.folder_pages.clear()
         self.links_tree.clear()
+        self.backlinks_tree.clear()
 
     def retire(self):
         self.locked = True

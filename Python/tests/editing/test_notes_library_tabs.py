@@ -108,10 +108,9 @@ class NotesLibraryTabTests(QtTestCase):
             self.wait_until(lambda: not second.connections_progress.busy)
             self.assertTrue(second.links_tree.isVisible())
             self.assertTrue(second.isAncestorOf(second.links_tree))
-            self.assertIn('Backlinks (1)', [second.links_tree.topLevelItem(i).text(0)
-                for i in range(second.links_tree.topLevelItemCount())])
+            self.assertEqual(second.backlinks_tree.topLevelItem(0).text(0), 'Backlinks (1)')
             owner.open_note('A.md', new_tab=True)
-            self.assertTrue(first.links_tree.isHidden())
+            self.assertTrue(first.links_panel.isHidden())
             self.assertFalse(first.links_button.isChecked())
             owner.open_note('B.md', new_tab=True)
             self.assertTrue(second.links_tree.isVisible())
@@ -141,7 +140,7 @@ class NotesLibraryTabTests(QtTestCase):
             for path in ('plain.txt', 'unknown.binary'):
                 owner.open_note(path)
                 self.wait_until(lambda: not child.progress.busy)
-                self.assertTrue(child.links_tree.isHidden())
+                self.assertTrue(child.links_panel.isHidden())
                 self.assertTrue(child.links_button.isChecked())
                 self.assertEqual(child.links_tree.topLevelItemCount(), 0)
                 self.assertTrue(child.controls_bar.isVisible())
@@ -165,12 +164,12 @@ class NotesLibraryTabTests(QtTestCase):
             first.open_note('C.md')
             self.wait_until(lambda: not first.progress.busy and not first.connections_progress.busy)
             self.assertFalse(first.isVisible())
-            self.assertEqual(first.links_tree.topLevelItem(2).text(0), 'Outgoing links (1)')
+            self.assertEqual(first.links_tree.topLevelItem(1).text(0), 'Outgoing links (1)')
             (root / 'C.md').write_text('# C\n[Missing](Missing.md)')
             owner.open_note('C.md', new_tab=True)
             self.wait_until(lambda: not first.connections_progress.busy)
-            self.assertEqual(first.links_tree.topLevelItem(2).text(0), 'Outgoing links (0)')
-            self.assertEqual(first.links_tree.topLevelItem(3).child(0).text(0), 'Missing.md')
+            self.assertEqual(first.links_tree.topLevelItem(1).text(0), 'Outgoing links (0)')
+            self.assertEqual(first.links_tree.topLevelItem(2).child(0).text(0), 'Missing.md')
             owner.close()
 
     def test_library_mutation_refreshes_connections_in_other_tabs(self):
@@ -185,8 +184,8 @@ class NotesLibraryTabTests(QtTestCase):
             owner.move_entry('B.md', 'Renamed.md')
             self.wait_until(lambda: not owner.progress.busy and not second.progress.busy
                             and not first.connections_progress.busy)
-            self.assertEqual(first.links_tree.topLevelItem(2).text(0), 'Outgoing links (0)')
-            self.assertEqual(first.links_tree.topLevelItem(3).child(0).text(0), 'B.md')
+            self.assertEqual(first.links_tree.topLevelItem(1).text(0), 'Outgoing links (0)')
+            self.assertEqual(first.links_tree.topLevelItem(2).child(0).text(0), 'B.md')
             owner.close()
 
     def test_saved_links_refresh_backlinks_in_another_split_group(self):
@@ -205,8 +204,8 @@ class NotesLibraryTabTests(QtTestCase):
             second.save_current_document()
             self.wait_until(lambda: not second.progress.busy and not first.connections_progress.busy)
             self.assertTrue(first.links_tree.isVisible())
-            self.assertEqual(first.links_tree.topLevelItem(1).text(0), 'Backlinks (1)')
-            self.assertEqual(first.links_tree.topLevelItem(1).child(0).text(0), 'B.md')
+            self.assertEqual(first.backlinks_tree.topLevelItem(0).text(0), 'Backlinks (1)')
+            self.assertEqual(first.backlinks_tree.topLevelItem(0).child(0).text(0), 'B.md')
             owner.close()
 
     def test_images_pdf_and_unknown_files_remain_in_same_library_tab(self):

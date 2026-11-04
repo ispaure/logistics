@@ -362,7 +362,11 @@ opened a form yet. Delete rechecks the originating document epoch, action reques
 and destination after unsaved-change and confirmation dialogs, before starting
 the filesystem mutation.
 
-`notes_links.py` builds connections on a worker only when Links opens. It uses the
+`notes_links.py` builds connections on a worker only when Links opens.
+The right panel has Outgoing links (selected by default) and Backlinks tabs.
+The first stage reads only the current note and resolves its targets; the second
+scans library notes for backlinks. Backlink loading and errors stay in their own
+tab so outgoing links remain usable while the scan runs. It uses the
 same Markdown/wiki-link parser as preview, resolves relative/root/unique suffix
 paths, excludes hidden and host-filtered folders, and never saves an index.
 Cancellation and generation checks prevent late private results publishing after
