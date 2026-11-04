@@ -85,10 +85,12 @@ class DataViewTests(QtTestCase):
             page = runtime.page
             profile = page.profile()
             self.assertTrue(profile.isOffTheRecord())
+            self.assertTrue(page.isVisible(), 'Document computation must not be background-throttled')
             retired = []
             page.destroyed.connect(lambda: retired.append('page'))
             profile.destroyed.connect(lambda: retired.append('profile'))
             runtime.stop()
+            self.assertFalse(page.isVisible())
             def drained():
                 qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
                 return retired == ['page', 'profile']
@@ -437,6 +439,7 @@ class DataViewTests(QtTestCase):
         from PySide6.QtWebEngineWidgets import QWebEngineView
         web = QWebEngineView()
         self.addCleanup(web.deleteLater)
+        web.show()
         loaded = []
         web.loadFinished.connect(loaded.append)
         plan = view_plan('```dataviewjs\nconst data=JSON.parse(await dv.io.load("data.json"));'
