@@ -206,7 +206,7 @@ def installed_notices(*, root=None, platform=None, native_inventory=None):
 
 
 def desktop_native_notices(software):
-    """Expose notices retained by the managed desktop LibVLC downloader."""
+    """Expose notices retained by managed desktop video runtime downloaders."""
     notices = []
     for directory in sorted((Path(software) / 'video').glob('libvlc-*/notices')):
         texts, seen = [], set()
@@ -217,4 +217,11 @@ def desktop_native_notices(software):
         if any(texts):
             notices.append(Notice('LibVLC desktop runtime', directory.parent.name.removeprefix('libvlc-'),
                 '', 'https://www.videolan.org/vlc/libvlc.html', '\n\n'.join(filter(None, texts))))
+    for directory in sorted((Path(software) / 'video').glob('libmpv-iina-*/notices')):
+        texts = [path.relative_to(directory).as_posix() + '\n\n' + _read(path)
+                 for path in sorted(directory.rglob('*')) if path.is_file()]
+        if texts:
+            notices.append(Notice('libmpv desktop runtime (IINA distribution)',
+                directory.parent.name.removeprefix('libmpv-iina-'), '',
+                'https://github.com/iina/deps-buildscripts', '\n\n'.join(texts)))
     return notices
