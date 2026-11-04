@@ -161,7 +161,8 @@ class SettingsCategories:
     def chat(self):
         app = self.app
         box = self.category('LM Chat')
-        box.add(page_button('Server & generation settings…', on_press=app.show_chat_configuration, style=Pack(height=48)))
+        box.add(page_button('Server & generation settings…', on_press=lambda widget, **kw:
+            app.show_chat_configuration(destination='settings'), style=Pack(height=48)))
         return box
 
 

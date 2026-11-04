@@ -15,6 +15,56 @@ from mobile.fold_layout import Division
 
 
 class SettingsNavigationTests(unittest.TestCase):
+    def test_cold_chat_settings_stays_in_settings_and_back_restores_category(self):
+        app, nav = self.app, self.nav
+        with patch('features.lm.mobile.ui.ChatClient') as client:
+            nav.choose('LM Chat')
+            button = nav.sections['LM Chat'].children[1].children[0]
+            button.on_press()
+            chat = app.chat_controller()
+            self.assertEqual(app.native_host.state.destination, 'settings')
+            self.assertEqual(app.routes.screens['settings'][-1][0], 'chat-settings')
+            self.assertFalse(app.routes.screens['chat'])
+            chat.chat_config_back.on_press()
+            self.assertEqual(app.routes.screens['settings'][-1][0], 'settings-category')
+            self.assertEqual(nav.selected, 'LM Chat')
+            client.assert_not_called()
+
+    def test_chat_settings_save_and_validation_keep_origin_on_phone_and_tablet(self):
+        app, nav = self.app, self.nav
+        for width in (390, 900):
+            with self.subTest(width=width):
+                self.width.return_value = width
+                app.resize_workspace()
+                nav.choose('LM Chat')
+                app.show_chat_configuration()
+                app.save_chat_configuration()
+                self.assertEqual(app.native_host.state.destination, 'settings')
+                self.assertEqual(app.routes.screens['settings'][-1][0], 'chat-settings')
+                app.chat_url.value = 'http://127.0.0.1:1234'
+                app.chat_model.value = 'example-model'
+                with patch('features.lm.mobile.ui.ChatClient') as client:
+                    app.save_chat_configuration()
+                    client.assert_not_called()
+                self.assertEqual(app.native_host.state.destination, 'settings')
+                self.assertFalse(any(route == 'chat-settings' for route, *_ in app.routes.screens['settings']))
+                self.assertEqual(nav.selected, 'LM Chat')
+                app.chat_model.value = ''
+
+    def test_chat_settings_moves_between_tabs_without_leaving_empty_routes(self):
+        app = self.app
+        self.nav.choose('LM Chat')
+        app.show_chat_configuration()
+        config = app.chat_config_view
+        app.show_chat()
+        app.show_chat_configuration()
+        self.assertIs(app.chat_config_view, config)
+        self.assertEqual(app.native_host.state.destination, 'chat')
+        self.assertFalse(any(route == 'chat-settings' for route, *_ in app.routes.screens['settings']))
+        app.routes.back()
+        self.assertEqual(app.native_host.state.destination, 'chat')
+        self.assertFalse(app.routes.screens['chat'])
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
