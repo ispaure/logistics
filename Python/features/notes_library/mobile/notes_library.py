@@ -821,9 +821,22 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 compact_file_row_padding(button)
                 button.vault_path = path
                 self.bind_file_hold(button, path, directory=directory)
-                entry_icon = self.host.entry_icon(directory, landing_page=page is not None)
-                entry_icon.style.width = entry_icon.style.height = 20
-                entry_icon.style.margin_left = entry_icon.style.margin_right = 2
+                async def expand(widget=None, path=path, **kwargs):
+                    await self.toggle_folder(path)
+                toggle_label = ('Collapse ' if path in self.expanded else 'Expand ') + entry['name']
+                if directory and not searching:
+                    icon_name = 'folder_document' if page is not None else 'folder_hub'
+                    entry_icon = self.host.presentation.icon_button(icon_name, toggle_label, on_press=expand)
+                    self.host.presentation.apply_icon(entry_icon, icon_name, toggle_label, size=20)
+                    entry_icon.style.width = 32
+                    entry_icon.style.height = 48
+                    compact_file_row_padding(entry_icon)
+                    self.host.presentation.surface(entry_icon, radius=0, background='transparent',
+                        foreground='accent', outlined=False)
+                else:
+                    entry_icon = self.host.entry_icon(directory, landing_page=page is not None)
+                    entry_icon.style.width = entry_icon.style.height = 20
+                    entry_icon.style.margin_left = entry_icon.style.margin_right = 2
                 if hasattr(self, 'file_drag') and self.library.supports('rename'):
                     self.file_drag.bind(entry_icon, path, target=directory)
                     button._notes_drag_icon = entry_icon
@@ -836,8 +849,6 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     style=Pack(direction=ROW, align_items=CENTER),
                 )
                 if directory and not searching:
-                    async def expand(widget=None, path=path, **kwargs):
-                        await self.toggle_folder(path)
                     disclosure = self.host.presentation.icon_button(
                         'down' if path in self.expanded else 'forward',
                         ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'],
@@ -845,7 +856,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     )
                     self.host.presentation.apply_icon(disclosure, 'down' if path in self.expanded else 'forward',
                         ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'], size=16)
-                    disclosure.style.width = 24
+                    disclosure.style.width = 44
                     disclosure.style.height = 48
                     compact_file_row_padding(disclosure)
                     self.host.presentation.surface(disclosure, radius=0, background='transparent', foreground='muted', outlined=False)
