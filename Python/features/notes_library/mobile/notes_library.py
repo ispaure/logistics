@@ -309,15 +309,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.init_panels()
         from .library_drag import LibraryDrag
         self.file_drag = LibraryDrag(self)
-        self.root_drop_button = toga.Button(self.library_title, on_press=self.browse_library_root,
-            style=Pack(height=36, flex=1, font_size=CONTROL_FONT))
-        self.host.presentation.surface(self.root_drop_button, radius=0, background='transparent', foreground='text', outlined=False)
-        self.host.list_button(self.root_drop_button)
-        self.host.middle_filename(self.root_drop_button)
-        self.panel_identity.insert(0, self.root_drop_button)
         self.install_panel_actions()
         if self.library.supports('rename'):
-            self.file_drag.bind(self.root_drop_button, self.root, source=False, target=True)
+            self.file_drag.bind(self.panel_tabs['Files'], self.root, source=False, target=True)
         self.reflow(host.content_width(destination))
 
     def refresh_chrome(self):
