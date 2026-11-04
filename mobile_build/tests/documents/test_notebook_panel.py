@@ -325,6 +325,8 @@ class NotebookPanelTests(unittest.TestCase):
 
     def test_retired_canvas_and_busy_commands_do_not_consume_current_sequence(self):
         import json
+        from threading import Event
+        from unittest.mock import patch
         from urllib.parse import quote
         self.app.loop.run_until_complete(open_notebook(self.app))
         panel = self.app.notebook_panel
@@ -333,16 +335,47 @@ class NotebookPanelTests(unittest.TestCase):
         self.app.loop.run_until_complete(panel.new())
         self.assertIsNone(old.on_navigation_starting._raw)
         command = panel.bridge.url + '?command=' + quote(json.dumps(dict(sequence=1,action=dict(op='rename',name='Current'))))
-        panel.navigate(old, command)
-        self.assertEqual(panel.bridge.sequence, 0)
-        panel.busy = True
-        panel.navigate(panel.web, command)
-        self.assertEqual(panel.bridge.sequence, 0)
-        panel.busy = False
-        panel.navigate(panel.web, command)
-        self.assertTrue(panel.busy)
-        self.app.loop.run_until_complete(asyncio.sleep(.1))
+        applied, released = asyncio.Event(), Event()
+        apply = panel.editor.apply
+        def held_apply(action):
+            apply(action)
+            self.app.loop.call_soon_threadsafe(applied.set)
+            if not released.wait(5):
+                raise TimeoutError('fixture was not released')
+        scheduled = []
+        create_task = self.app.loop.create_task
+        def schedule(coroutine):
+            task = create_task(coroutine)
+            scheduled.append(task)
+            return task
+        with patch.object(panel.editor, 'apply', side_effect=held_apply):
+            with patch.object(self.app.loop, 'create_task', side_effect=schedule):
+                panel.navigate(old, command)
+                self.assertEqual(panel.bridge.sequence, 0)
+                panel.busy = True
+                panel.navigate(panel.web, command)
+                self.assertEqual(panel.bridge.sequence, 0)
+                self.assertEqual(scheduled, [])
+                panel.busy = False
+                panel.navigate(panel.web, command)
+                self.assertTrue(panel.busy)
+                self.assertEqual(len(scheduled), 1)
+            async def complete_command():
+                try:
+                    await asyncio.wait_for(applied.wait(), 5)
+                    self.assertEqual(panel.editor.notebook.name, 'Current')
+                    self.assertTrue(panel.busy)
+                    self.assertFalse(scheduled[0].done())
+                    next_command = panel.bridge.url + '?command=' + quote(json.dumps(
+                        dict(sequence=2, action=dict(op='rename', name='Must not run'))))
+                    panel.navigate(panel.web, next_command)
+                    self.assertEqual(panel.bridge.sequence, 1)
+                finally:
+                    released.set()
+                    await asyncio.wait_for(scheduled[0], 5)
+            self.app.loop.run_until_complete(complete_command())
         self.assertEqual(panel.editor.notebook.name, 'Current')
+        self.assertEqual(panel.bridge.sequence, 1)
         self.assertFalse(panel.busy)
 
     def test_disposal_during_import_cannot_reopen_canvas(self):
