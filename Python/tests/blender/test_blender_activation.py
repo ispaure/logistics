@@ -7,15 +7,36 @@ import json
 import os
 from pathlib import Path
 import runpy
+import subprocess
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
+from commonUtils.runtime.operations import OperationCancelled
 from features.blender.addons.scanning import run_blender_script
 
 
 class BlenderActivationTests(unittest.TestCase):
+    def test_interrupted_apply_kills_reaps_and_removes_temporary_log(self):
+        for reason, error in (('timeout', TimeoutError), ('cancelled', OperationCancelled)):
+            with self.subTest(reason=reason):
+                process = Mock()
+                process.poll.return_value = None
+                process.wait.side_effect = [subprocess.TimeoutExpired('blender', .1), None]
+                cancelled = Mock(side_effect=[False, reason == 'cancelled'])
+                with patch('features.blender.addons.scanning.subprocess.Popen', return_value=process) as popen, \
+                        patch('features.blender.addons.scanning.monotonic', side_effect=[100, 100.05, 101]):
+                    with self.assertRaises(error):
+                        run_blender_script('blender.exe', {}, 'apply_addons.py', 'request.json',
+                                           timeout=.5, cancelled=cancelled)
+                self.assertEqual(process.wait.call_args_list, [call(timeout=.1), call()])
+                process.kill.assert_called_once()
+                self.assertEqual(process.method_calls[-2:], [call.kill(), call.wait()])
+                log = popen.call_args.kwargs['stdout']
+                self.assertTrue(log.closed)
+                self.assertFalse(Path(log.name).parent.exists())
+
     def test_interactive_activation_preserves_original_exception(self):
         original = ModuleNotFoundError('Missing bundled dependency')
 

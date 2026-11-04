@@ -98,7 +98,6 @@ class BlenderReleaseSettingsTests(QtTestCase):
         with patch('features.application.registry.get_settings', return_value=entries), \
                 patch('features.application.registry.get_feature_states', return_value=[state]):
             panel = FeatureSettingsPanel(state, scope='personal')
-            self.addCleanup(panel.deleteLater)
             personal = panel.custom['blender_release_overrides']
             default = panel.custom['blender_release_defaults']
             from features.blender.settings import BlenderSettings
