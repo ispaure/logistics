@@ -7,14 +7,39 @@ from commonUtils.ui.markdown.navigation import MarkdownNavigation
 from .dataview import NotesMarkdownViewer
 from .library_connections import LibraryConnections
 from ..preparation import prepare_document
-from ..notes import NotesLibrary, MAX_NOTE, breadcrumb_folders, fit_breadcrumbs
+from ..notes import NotesLibrary, MAX_NOTE, breadcrumb_folders
+
+
+class BreadcrumbViewport(qt.QScrollArea):
+    """A single toolbar row, scrollable with touch or a mouse/trackpad wheel."""
+    def __init__(self, label):
+        super().__init__()
+        self.setFrameShape(qt.QFrame.Shape.NoFrame)
+        self.setMinimumWidth(0)
+        self.setFixedHeight(max(28, label.sizeHint().height() + 4))
+        self.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setWidget(label)
+        self.horizontalScrollBar().rangeChanged.connect(
+            lambda minimum, maximum: self.horizontalScrollBar().setValue(maximum))
+        qt.QScroller.grabGesture(self.viewport(), qt.QScroller.ScrollerGestureType.TouchGesture)
+
+    def wheelEvent(self, event):
+        delta = event.pixelDelta()
+        movement = delta.x() or delta.y()
+        if not movement:
+            delta = event.angleDelta()
+            movement = (delta.x() or delta.y()) / 3
+        bar = self.horizontalScrollBar()
+        bar.setValue(bar.value() - int(movement))
+        event.accept()
 
 
 class NotesBreadcrumbs(qt.QLabel):
-    """A shrinking path beside history, with links only to folder notes."""
+    """The full folder path beside history, with every ancestor reachable."""
     def __init__(self, owner):
         super().__init__()
-        self.owner, self.entries = owner, []
+        self.owner, self.entries, self.folders = owner, [], []
         self.setMinimumWidth(0)
         self.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
         self.setTextFormat(qt.Qt.TextFormat.RichText)
@@ -26,17 +51,19 @@ class NotesBreadcrumbs(qt.QLabel):
         target = self.entries[int(index)][1]
         if target:
             self.owner.open_note(target)
+        elif int(index) < len(self.folders):
+            self.owner.reveal_folder(self.folders[int(index)])
 
     def show_path(self, path):
         folders = breadcrumb_folders(self.owner.library.root, path)
-        self.entries = [(PurePosixPath(folder).name, self.owner.folder_pages.get(folder)) for folder in folders]
+        if self.owner.library.root not in folders:
+            folders.insert(0, self.owner.library.root)
+        self.folders = folders
+        self.entries = [(PurePosixPath(folder).name or self.owner.library_label,
+                         self.owner.folder_pages.get(folder)) for folder in folders]
         self.entries.append((PurePosixPath(path).name, None))
         self.setToolTip(' / '.join(label for label, _ in self.entries))
         self.setAccessibleName(self.toolTip())
-        self.render_path()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
         self.render_path()
 
     def changeEvent(self, event):
@@ -46,13 +73,12 @@ class NotesBreadcrumbs(qt.QLabel):
 
     def render_path(self):
         from html import escape
-        labels = fit_breadcrumbs([label for label, _ in self.entries], self.contentsRect().width(),
-                                 self.fontMetrics().horizontalAdvance)
         color = self.palette().color(qt.QPalette.ColorRole.WindowText).name()
         self.setText(' / '.join(
-            f'<a href="{i}" style="color:{color};text-decoration:underline">{escape(label)}</a>'
-            if self.entries[i][1] else escape(label)
-            for i, label in enumerate(labels) if label))
+            f'<a href="{i}" style="color:{color};text-decoration:{"underline" if page else "none"}">{escape(label)}</a>'
+            if i < len(self.folders) else escape(label)
+            for i, (label, page) in enumerate(self.entries)))
+        self.resize(self.sizeHint())
 
 
 class NotesStatusLine(StatusLine):
@@ -197,7 +223,8 @@ class DocumentPresentation:
         self.navigation = MarkdownNavigation(self, up=True)
         self.breadcrumbs = NotesBreadcrumbs(self)
         self.idle.connect(self.refresh_breadcrumb_path)
-        self.navigation.layout().addWidget(self.breadcrumbs, 1)
+        self.breadcrumb_viewport = BreadcrumbViewport(self.breadcrumbs)
+        self.navigation.layout().addWidget(self.breadcrumb_viewport, 1)
         self.navigation.setMinimumWidth(0)
         self.navigation.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
         self.back = self.navigation.back_button
