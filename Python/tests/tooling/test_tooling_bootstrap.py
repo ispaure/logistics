@@ -3,12 +3,15 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import signal
+import time
 from tempfile import TemporaryDirectory
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 from unittest.mock import Mock, patch
 
 from logistics_build import tooling_bootstrap as tooling
@@ -153,12 +156,24 @@ class ToolingBootstrapTests(TestCase):
         command = ['/tool with spaces/uv', 'sync', '--project', 'literal;$value']
         argv = ['tooling_bootstrap.py', 'sync', '--project-root', str(self.root),
                 '--venv', str(self.root / '.venv'), '--', *command]
-        with patch.object(sys, 'argv', argv), patch.object(subprocess, 'run', return_value=Mock(returncode=0)) as run, \
+        with patch.object(sys, 'argv', argv), patch.object(tooling, 'run_command', return_value=Mock(returncode=0)) as run, \
                 patch.object(tooling, 'update') as update:
             self.assertEqual(tooling.main(), 0)
         run.assert_called_once_with(command, check=True)
         update.assert_not_called()
-        self.assertFalse(tooling.private(self.root).exists())
+        self.assertTrue(tooling.lock_path(self.root).is_file())
+        self.assertFalse(tooling.enrollment(self.root).exists())
+
+    def test_unenrolled_sync_blocks_active_workflow_before_uv_or_install(self):
+        lock = tooling.private(self.root) / 'workspaces' / 'fixture.operation.lock'
+        with tooling.file_lock(lock, create=True), patch.object(tooling, 'run_command') as run, \
+                patch.object(tooling, '_repair_locked') as repair:
+            with self.assertRaises(tooling.ActiveWorkflowError):
+                with tooling.environment_sync(self.root):
+                    run(['uv', 'sync'])
+            run.assert_not_called()
+            repair.assert_not_called()
+        self.assertFalse(tooling.enrolled(self.root))
 
     def test_enrolled_sync_restores_only_after_successful_command_and_releases_guard(self):
         self.target_environments()
@@ -241,12 +256,100 @@ class ToolingBootstrapTests(TestCase):
         marker.parent.mkdir(parents=True)
         marker.write_text(json.dumps(dict(schema=1, root=str(self.root))))
         with patch.object(development, 'find_uv', return_value='uv'), \
-                patch.object(development.subprocess, 'run', return_value=Mock(returncode=7)), \
+                patch.object(tooling, 'run_command', return_value=Mock(returncode=7)), \
                 patch.object(tooling, '_repair_locked') as repair:
             self.assertEqual(development.setup(self.root, 'desktop', lambda _: None), 7)
             repair.assert_not_called()
         with tooling.file_lock(tooling.lock_path(self.root)):
             pass
+
+    @skipUnless(os.name == 'posix', 'POSIX owned-group lifecycle')
+    def test_cancellation_during_launch_is_deferred_until_cleanup_is_registered(self):
+        spawned = []
+        popen = subprocess.Popen
+        def launch(*args, **kwargs):
+            child = popen(*args, **kwargs)
+            spawned.append(child)
+            os.kill(os.getpid(), signal.SIGTERM)
+            return child
+        with patch.object(tooling.subprocess, 'Popen', side_effect=launch):
+            with self.assertRaises(KeyboardInterrupt):
+                tooling.run_command([sys.executable, '-c', 'import time; time.sleep(60)'])
+        self.assertIsNotNone(spawned[0].poll())
+        with self.assertRaises(ProcessLookupError):
+            os.killpg(spawned[0].pid, 0)
+
+    @skipUnless(os.name == 'posix', 'POSIX owned-group lifecycle')
+    def test_timeout_stops_mutating_grandchild_after_parent_exits_with_inherited_pipe(self):
+        marker = self.root / 'writes'
+        identity = self.root / 'identity'
+        grandchild = ('import os,signal,sys,time; from pathlib import Path; '
+                      'signal.signal(signal.SIGTERM,signal.SIG_IGN); '
+                      'Path(sys.argv[2]).write_text(str(os.getpgrp())+":"+str(os.getsid(0))); '
+                      'f=open(sys.argv[1],"a",buffering=1); '
+                      '\nwhile True: f.write("x"); time.sleep(.01)')
+        parent = ('import subprocess,sys; subprocess.Popen([sys.executable,"-c",'
+                  + repr(grandchild) + ',sys.argv[1],sys.argv[2]])')
+        started = time.monotonic()
+        try:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                tooling.run_command([sys.executable, '-c', parent, marker, identity],
+                                    timeout=.5, capture_output=True)
+            self.assertLess(time.monotonic() - started, 10)
+            pgid, sid = map(int, identity.read_text().split(':'))
+            self.assertEqual(sid, os.getsid(0))  # Never escape the SDK's session.
+            self.assertNotEqual(pgid, os.getpgrp())
+            count = marker.stat().st_size
+            time.sleep(.15)
+            self.assertEqual(marker.stat().st_size, count)
+        finally:
+            if identity.exists():
+                try:
+                    os.killpg(int(identity.read_text().split(':')[0]), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
+    @skipUnless(os.name == 'posix', 'POSIX bridge cancellation lifecycle')
+    def test_term_retires_installer_before_environment_lease_is_released(self):
+        marker = self.root / 'writes'
+        identity = self.root / 'identity'
+        child = ('import os,signal,sys,time; from pathlib import Path; '
+                 'signal.signal(signal.SIGTERM,signal.SIG_IGN); '
+                 'Path(sys.argv[2]).write_text(str(os.getpgrp())); '
+                 'f=open(sys.argv[1],"a",buffering=1); '
+                 '\nwhile True: f.write("x"); time.sleep(.01)')
+        driver = ('from logistics_build import tooling_bootstrap as t; import sys; '
+                  'from pathlib import Path; '
+                  '\nwith t.environment_sync(Path(sys.argv[1])): '
+                  't.run_command([sys.executable,"-c",' + repr(child) + ',sys.argv[2],sys.argv[3]])')
+        owner = subprocess.Popen([sys.executable, '-c', driver, str(self.root), str(marker), str(identity)],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            deadline = time.monotonic() + 5
+            while not identity.exists() and time.monotonic() < deadline:
+                time.sleep(.02)
+            self.assertTrue(identity.exists())
+            owner.send_signal(signal.SIGTERM)
+            # TERM-ignoring installer is still mutating during its bounded grace.
+            time.sleep(.1)
+            with self.assertRaises(tooling.ActiveWorkflowError):
+                with tooling.file_lock(tooling.lock_path(self.root)):
+                    pass
+            self.assertNotEqual(owner.wait(timeout=10), 0)
+            with tooling.file_lock(tooling.lock_path(self.root)):
+                count = marker.stat().st_size
+                time.sleep(.15)
+                self.assertEqual(marker.stat().st_size, count)
+            self.assertFalse(tooling.enrolled(self.root))
+        finally:
+            if owner.poll() is None:
+                owner.kill()
+                owner.wait(timeout=3)
+            if identity.exists():
+                try:
+                    os.killpg(int(identity.read_text()), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
     def test_exact_clean_manager_and_submodule_provenance_required(self):
         def git(checkout, *args):
