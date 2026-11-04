@@ -87,6 +87,9 @@ Mobile never creates an Undo seek button or menu item. Android registers
 package-local immutable PendingIntents for ten-second back/forward and Play/Pause,
 updates their state only when it changes, and unregisters its receiver on disposal.
 VLC's subtitle surface stays attached through the PiP transition.
+Selecting an Android subtitle track refreshes the current seekable position so
+turning captions back on redraws the active cue immediately. The existing seek
+path preserves play/pause intent and enforces access and control-lock policy.
 
 iOS PiP delegate seeks use the bounded 64-bit on-screen seek path, including its
 paused-position bookkeeping. Every system request completes, including a no-op at
