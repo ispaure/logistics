@@ -73,7 +73,15 @@ class UXWorkflowTests(unittest.TestCase):
 
     def test_folder_tap_skips_actions_and_parent_navigation_stays_separate(self):
         app = self.app
-        from services.documents.locations import collection_path
+        from services.documents.locations import collection_path, use_shared_local, _shared_local_roots
+        shared_directory = TemporaryDirectory()
+        self.addCleanup(shared_directory.cleanup)
+        documents = Path(shared_directory.name)
+        use_shared_local(app.private_root, documents)
+        self.addCleanup(_shared_local_roots.pop, app.private_root, None)
+        shared = documents / 'Notes'
+        shared.mkdir(parents=True)
+        (shared / 'Draft.md').write_text('# Shared file')
         root = collection_path(app.private_root) / 'Notes'
         root.mkdir(parents=True)
         (root / 'Draft.md').write_text('# File')
@@ -83,13 +91,13 @@ class UXWorkflowTests(unittest.TestCase):
         app.folder_local_buttons['Others'].on_press()
         run(app.folder_buttons['All files'].on_press())
         browser = app.file_browser
-        run(browser.activate_entry(next(item for item in browser.entries if item.label == 'Local')))
+        self.assertNotIn('Local', [item.label for item in browser.entries])
+        self.assertNotIn('Received Files', [item.label for item in browser.entries])
         run(browser.activate_entry(next(item for item in browser.entries if item.label == 'Notes')))
         self.assertEqual(app.file_path, 'Notes')
         self.assertEqual([item.label for item in browser.entries], ['Draft.md'])
         run(app.parent_file_folder())
         self.assertEqual(app.file_path, '')
-        run(app.parent_file_folder())
         self.assertEqual(app.file_storage.value, 'Shared files')
         run(app.parent_file_folder())
         self.assertEqual(app.routes.screens['files'], [])
@@ -104,17 +112,12 @@ class UXWorkflowTests(unittest.TestCase):
         # Exercise the row callbacks independently of the direct-folder route.
         run(app.folder_buttons['All files'].on_press())
         self.assertEqual(app.file_path, '')
-        local_folder = next(row for row in app.file_rows.values()
-                            if row['path'] == collection_path(app.private_root).name)
-        app.loop.run_until_complete(app.browser_file_folder(local_folder))
-        self.assertEqual(app.file_storage.value, 'Local files')
         note_folder = next(row for row in app.file_rows.values() if row['name'] == 'Notes')
         app.loop.run_until_complete(app.browser_file_folder(note_folder))
         self.assertEqual(app.file_path, 'Notes')
         self.assertNotIn(app.file_browser.back_button, app.file_browser.navigation_controls.children)
         app.loop.run_until_complete(app.parent_file_folder())
         self.assertEqual(app.file_path, '')
-        app.loop.run_until_complete(app.parent_file_folder())
         self.assertEqual(app.file_storage.value, 'Shared files')
         self.assertEqual(app.file_path, '')
         app.loop.run_until_complete(app.parent_file_folder())
