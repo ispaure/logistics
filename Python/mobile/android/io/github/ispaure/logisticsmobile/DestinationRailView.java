@@ -20,9 +20,10 @@ public final class DestinationRailView extends NavigationRailView {
         super(context);
         this.footerItemId = footerItemId;
         // The native window host already reserves system bars and cutouts.
-        // Material's inset listener would add the landscape cutout again,
-        // leaving the 56 dp rail with almost no room for its icons.
-        ViewCompat.setOnApplyWindowInsetsListener(this, null);
+        // An explicit pass-through also prevents framework inset padding when
+        // an existing tablet rail rotates; removing the listener falls back to
+        // that dispatch and can add a cutout wider than the whole 56 dp rail.
+        ViewCompat.setOnApplyWindowInsetsListener(this, (view, insets) -> insets);
         setMenuGravity(Gravity.TOP);
         setLabelVisibilityMode(2); // LABEL_VISIBILITY_UNLABELED
         setItemIconSize(dp(26));
