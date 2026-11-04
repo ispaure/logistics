@@ -45,6 +45,12 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     if not hasattr(button, 'on_press') or not button.enabled:
                         continue
                     native = button._impl.native
+                    if hasattr(button, 'breadcrumb_folder'):
+                        viewport = owner.breadcrumb_scroll._impl.native
+                        rect = native.convertRect(native.bounds, toView=viewport)
+                        center = float(rect.origin.x + rect.size.width / 2)
+                        if not 0 <= center <= float(viewport.bounds.size.width):
+                            continue
                     point = native.convertPoint(CGPoint(native.bounds.size.width / 2,
                                                         native.bounds.size.height / 2), toView=window)
                     hit = window.hitTest(point, withEvent=None)
