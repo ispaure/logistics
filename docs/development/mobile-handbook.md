@@ -414,6 +414,15 @@ preserved.
 
 ## Hosted Android graphics diagnostics
 
+The disposable Android native test app gives startup 120 seconds to enter its
+first check or an intentional hold coroutine. Activity recreation retires the
+previous watchdog. While startup is pending, bounded diagnostics record phase
+progress, view dimensions and layout flags, loop/task ownership, and source
+function locations from Python stacks. They omit locals, arguments and document
+or provider names. A timeout emits a failed native report and exits the test app;
+it does not restart startup or count missing checks as passed. Normal application
+startup decisions are unchanged, and the outer full-suite time limit still applies.
+
 The Android native workflow builds its test APK and validates the UI in separate
 jobs, so emulator image installation and AVD startup have a fresh runner without
 the build job's Go or Gradle caches. The handoff contains only the test APK,
