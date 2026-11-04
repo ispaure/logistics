@@ -388,6 +388,7 @@ class SettingsUITests(unittest.TestCase):
             self.assertEqual(saved['text_font_size'], '23')
             self.assertEqual(saved['restore_last_document'], 'true')
             nav.choose('About')
+            app.loop.run_until_complete(app.build_information_task)
             about.assert_called_once()
             nav.choose('Text')
             self.assertIs(app.text_font_size_choice, font)
@@ -463,7 +464,7 @@ class SettingsUITests(unittest.TestCase):
                              'Resume the last active document when the app starts.')
             self.assertEqual(list(app.settings_navigation.sections)[-1], 'About')
             self.assertEqual(box.children[0].text, 'About')
-            self.assertIs(box.children[-1], app.build_version_label)
+            self.assertIs(box.children[1], app.build_version_label)
             self.assertIn('0.1.5', app.build_version_label.text)
             self.assertIsNotNone(app.build_version_label.style.color)
             from mobile.preferences import Preferences
@@ -475,6 +476,69 @@ class SettingsUITests(unittest.TestCase):
                 self.assertEqual(Preferences(app.private_root).values[key], saved)
             self.assertEqual(app.preferences.values['restore_last_document'], 'false')
             self.assertEqual(app.preferences.values['clear_unmodified_documents_on_restart'], 'false')
+
+    def test_about_opens_before_build_information_finishes_and_refits_result(self):
+        from threading import Event
+        app = self.make_app()
+        entered, release = Event(), Event()
+        def slow_information(version):
+            entered.set()
+            release.wait(5)
+            return 'Installed build\n' + 'abcdef' * 30
+        with patch('mobile.settings.categories.build_information', side_effect=slow_information), \
+                patch.object(app.adaptive, 'content_width', return_value=390):
+            app.show_settings()
+            app.settings_navigation.buttons['About'].on_press()
+            label = app.build_version_label
+            self.assertIn('Loading build information…', label.text)
+            self.assertIs(app.body.children[0], app.settings_navigation.options['About'])
+            async def finish():
+                try:
+                    for _ in range(100):
+                        if entered.is_set():
+                            break
+                        await asyncio.sleep(.01)
+                    self.assertTrue(entered.is_set())
+                    self.assertIn('Loading build information…', label.text)
+                    app.routes.back()
+                    self.assertIs(app.body.children[0], app.settings_navigation)
+                finally:
+                    release.set()
+                await app.build_information_task
+            app.loop.run_until_complete(finish())
+            self.assertIn('Installed build', label.text)
+            self.assertGreater(len(label.text.splitlines()), 2)
+            app.settings_navigation.buttons['About'].on_press()
+            self.assertIs(app.build_version_label, label)
+
+    def test_help_about_reuses_build_page_and_back_returns_to_help(self):
+        import toga
+        app = self.make_app()
+        with patch.object(app.adaptive, 'content_width', return_value=390):
+            app.show_settings()
+            nav = app.settings_navigation
+            nav.choose('Help')
+            def descendants(widget):
+                yield widget
+                for child in widget.children:
+                    yield from descendants(child)
+            entry = next(widget for widget in descendants(nav.sections['Help'])
+                         if isinstance(widget, toga.Button) and widget.text == 'About')
+            entry.on_press()
+            self.assertEqual(app.routes.screens['settings'][-1][0], 'settings-about')
+            self.assertIs(app.body.children[0], nav.options['About'])
+            app.loop.run_until_complete(app.build_information_task)
+            app.routes.back()
+            self.assertIs(app.body.children[0], nav.options['Help'])
+
+    def test_about_keeps_licenses_reachable_when_build_information_fails(self):
+        app = self.make_app()
+        with patch('mobile.settings.categories.build_information', side_effect=ValueError('old manifest')):
+            app.show_settings()
+            app.settings_navigation.choose('About')
+            app.loop.run_until_complete(app.build_information_task)
+        self.assertIn('Build information unavailable.', app.build_version_label.text)
+        self.assertTrue(app.settings_navigation.sections['About'].children)
 
     def test_about_uses_packaged_identity_without_git(self):
         with TemporaryDirectory() as directory:
