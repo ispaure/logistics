@@ -101,6 +101,18 @@ def main(output):
                 js(view, update_script(editor.state()))
                 assert js(view, "$('pdfBackground').hidden"), 'Hidden template still visible'
                 assert len(book.page(0).strokes) == 2, 'Background selection changed ink'
+                editor.apply(dict(op='template', name='Logistics Restaurant review', format='move', visible=True))
+                page = book.pages[0]
+                book.members[page.template + '.template'] = b'{"foreign":"artwork"}'
+                js(view, update_script(editor.state()))
+                assert js(view, "$('pdfBackground').hidden&&$('templateNotice').textContent.includes('unavailable')"), 'Foreign artwork was silently replaced'
+                assert js(view, "$('templateFormat').disabled&&$('templateVisible').disabled&&!$('pageTemplate').disabled")
+                # Imported names which happen to match Object.prototype keys
+                # still need a preserved option and an unavailable-artwork notice.
+                for reference in ('toString', '__proto__', 'P Lines small Move'):
+                    page.template = reference
+                    js(view, update_script(editor.state()))
+                    assert js(view, "$('pageTemplate').value===" + json.dumps(reference) + "&&$('templateNotice').textContent.includes('unavailable')")
                 reports.append(report)
             finally:
                 view.close()

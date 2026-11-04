@@ -128,6 +128,13 @@ Custom layouts include original `.template` JSON artwork in the archive.
 Their format and Logistics-only visibility live in an owned page sidecar, so
 recovery, duplication and page transfer retain them. Cross-notebook copies also
 carry their referenced vector asset. Unknown imported templates stay opaque.
+Missing or malformed display sidecars fall back to the format encoded in a custom
+template's reference. New pages copy opaque sidecars instead of regenerating
+inherited artwork. Imported artwork that differs from the bundled layout is
+preserved with an unavailable-artwork notice; neither canvas nor overview
+substitutes a different background. Equivalent JSON formatting does not block a
+page transfer or rewrite the destination's asset bytes. Template references are
+validated before rendering, including values that cannot fit one `.pagedata` line.
 
 Template edits mark structure dirty even when page IDs do not change. Export
 must therefore serialize page references on every structural change, rather than
