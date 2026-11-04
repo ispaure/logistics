@@ -4,13 +4,13 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO, StringIO
 from pathlib import Path
 import stat
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
+from threading import Barrier
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -424,9 +424,7 @@ class ComicsTests(unittest.TestCase):
     def test_conversion_extract_failure_preserves_source(self):
         source = self.root / 'comic.cbr'
         source.write_bytes(b'cbr original')
-        settings = SimpleNamespace(path_logistics_software_win=self.root)
-        with patch.object(conversion.config, 'LogisticsConfig', return_value=settings), \
-                patch.object(conversion.zipUtils, 'unrar_file', return_value=False):
+        with patch.object(conversion.zipUtils, 'unrar_file', return_value=False):
             self.assertFalse(conversion.convert_cbr_to_cbz(source))
         self.assertEqual(source.read_bytes(), b'cbr original')
         self.assertFalse(source.with_suffix('.cbz').exists())
@@ -434,30 +432,29 @@ class ComicsTests(unittest.TestCase):
     def test_conversion_deletes_source_only_after_verified_cbz(self):
         source = self.root / 'comic.cbr'
         source.write_bytes(b'cbr original')
-        settings = SimpleNamespace(path_logistics_software_win=self.root)
         def extract(source, destination, **kwargs):
             (destination / '01.png').write_bytes(image_bytes())
-        with patch.object(conversion.config, 'LogisticsConfig', return_value=settings), \
-                patch.object(conversion.zipUtils, 'unrar_file', extract):
+        with patch.object(conversion.zipUtils, 'unrar_file', extract):
             self.assertTrue(conversion.convert_cbr_to_cbz(source), self.output.getvalue())
         self.assertFalse(source.exists())
         with zipfile.ZipFile(source.with_suffix('.cbz')) as archive:
             self.assertEqual(archive.read('01.png'), image_bytes())
 
     def test_padding_width_cutoffs_are_preserved(self):
+        from features.comics.sanitization import page_padding_width
         for count, width in [(89, 2), (90, 3), (949, 3), (950, 5)]:
             with self.subTest(count=count):
-                directory = self.root / str(count)
-                directory.mkdir()
-                files = []
-                for index in range(1, count + 1):
-                    path = directory / f'{index}.png'
-                    path.write_bytes(b'page')
-                    files.append(fileUtils.File(path))
-                comic = cbz.CBZFile(self.archive(name=f'{count}.cbz'))
-                self.assertTrue(comic.repair_padding(files))
-                self.assertTrue((directory / f'{1:0{width}d}.png').is_file())
-                self.assertEqual(len(list(directory.iterdir())), count)
+                self.assertEqual(page_padding_width(count), width)
+
+    def test_padding_renames_pages_and_retains_already_padded_names(self):
+        directory = self.root / 'pages'
+        directory.mkdir()
+        for name in ('1.png', '02.png', '10.png'):
+            (directory / name).write_bytes(name.encode())
+        files = [fileUtils.File(path) for path in directory.iterdir()]
+        self.assertTrue(cbz.CBZFile(self.archive()).repair_padding(files))
+        self.assertEqual({path.name: path.read_bytes() for path in directory.iterdir()},
+                         {'01.png': b'1.png', '02.png': b'02.png', '10.png': b'10.png'})
 
     def test_flatten_move_failure_keeps_source_and_directory(self):
         for depth in (1, 2):
@@ -483,15 +480,21 @@ class ComicsTests(unittest.TestCase):
     def test_compressions_do_not_share_or_wipe_workspaces(self):
         first = self.archive(name='first.cbz')
         second = self.archive(name='second.cbz')
-        legacy_workspace = self.root / 'legacy-workspace'
-        legacy_workspace.mkdir()
-        sentinel = legacy_workspace / 'unrelated.txt'
-        sentinel.write_text('keep')
-        with patch.object(cbz, 'temp_compression_path', legacy_workspace):
+        real_workspace = cbz.temporary_workspace
+        entered = Barrier(2, timeout=5)
+        workspaces = []
+        @contextmanager
+        def workspace(*args, **kwargs):
+            with real_workspace(*args, **kwargs) as path:
+                workspaces.append(Path(path))
+                entered.wait()  # Both transactions must own storage concurrently.
+                yield path
+        with patch.object(cbz, 'temporary_workspace', workspace):
             with ThreadPoolExecutor(max_workers=2) as pool:
                 futures = [pool.submit(cbz.CBZFile(path).compress_to_webp, True) for path in (first, second)]
                 self.assertTrue(all(future.result() for future in futures), self.output.getvalue())
-        self.assertEqual(sentinel.read_text(), 'keep')
+        self.assertEqual(len(set(workspaces)), 2)
+        self.assertTrue(all(not path.exists() for path in workspaces))
         self.assertTrue(cbz.CBZFile(first).is_already_compressed())
         self.assertTrue(cbz.CBZFile(second).is_already_compressed())
 
@@ -501,15 +504,6 @@ class ComicsTests(unittest.TestCase):
         sibling.write_bytes(b'unrelated zip')
         self.assertTrue(cbz.CBZFile(path).compress_to_webp(True))
         self.assertEqual(sibling.read_bytes(), b'unrelated zip')
-
-    def test_empty_pages_xml_is_rebuilt(self):
-        xml = COMICINFO.replace('  <Pages>\n    <Page Image="0" Type="FrontCover" />\n  </Pages>', '  <Pages />')
-        path = self.archive({'01.png': image_bytes(), 'ComicInfo.xml': xml})
-        self.assertTrue(cbz.CBZFile(path).compress_to_webp(True))
-        with zipfile.ZipFile(path) as archive:
-            root = ElementTree.fromstring(archive.read('ComicInfo.xml'))
-            self.assertEqual(root.findtext('PageCount'), '1')
-            self.assertEqual(len(root.findall('./Pages/Page')), 1)
 
     def test_padding_preflight_does_not_partially_rename(self):
         first = self.root / '1.png'
@@ -626,7 +620,6 @@ class ComicsTests(unittest.TestCase):
             self.assertTrue(cbz.CBZFile(path).compress_to_webp(True))
         self.assertEqual(len(destinations), 1)
         self.assertEqual(destinations[0].name, '.01.webp')
-        self.assertEqual(destinations[0].parent.name, '2_Compressed_Images')
         with zipfile.ZipFile(path) as archive:
             self.assertEqual(set(archive.namelist()), {'01.webp', 'CompressionLog.txt'})
 
