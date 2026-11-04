@@ -45,6 +45,45 @@ class NotebookResourceTests(unittest.TestCase):
                             self.assertNotIn(b'Private notebook sentinel', provider.encrypted_path('draft.rmdoc').read_bytes())
                             self.assertIsNone(document.recovery)
 
+    def test_images_order_and_protected_pdf_save_through_both_providers(self):
+        from io import BytesIO
+        from pypdf import PdfReader
+        from Python.tests.notebooks.image_fixtures import locked_book, paste_action, png_source
+        from features.notebooks.images import image_payloads
+        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+            for provider in (LocalFiles(fixture.plain), fixture.provider):
+                with self.subTest(private=provider.private):
+                    book = locked_book()
+                    original_pdf = book.members[book.id + '.pdf']
+                    original = book.to_bytes()
+                    DocumentResource.publish(provider, 'images.rmdoc', original, max_bytes=MAX_ARCHIVE, validate=Notebook.read)
+                    with DocumentResource(provider, 'images.rmdoc', max_bytes=MAX_ARCHIVE) as resource:
+                        document = NotebookDocument(Notebook.read(resource.read()), resource=resource)
+                        editor = Editor(document.book, document.checkpoint)
+                        self.assertIsNone(editor.pdf_data())
+                        editor.apply(dict(op='unlock-pdf', password='secret'))
+                        editor.apply(dict(op='stroke', points=[[110,110,.5],[200,200,.5]]))
+                        editor.apply(paste_action())
+                        picture = editor.notebook.page(0).images[0]
+                        editor.apply(dict(op='image-transform', id=picture.id,
+                                          corners=[[150,100],[350,100],[350,250],[150,250]]))
+                        editor.apply(dict(op='arrange-image', id=picture.id, direction='back'))
+                        editor.apply(dict(op='undo')); editor.apply(dict(op='redo'))
+                        self.assertEqual(resource.read(), original)
+                        document.save()
+                        saved = Notebook.read(resource.read())
+                        self.assertEqual(saved.page(0).order[0], saved.page(0).images[0].id)
+                        self.assertEqual(saved.page(0).images[0].corners[0], [150,100])
+                        self.assertEqual(image_payloads(saved,0)[0]['src'], png_source())
+                        self.assertEqual(saved.members[saved.id + '.pdf'], original_pdf)
+                        self.assertTrue(PdfReader(BytesIO(original_pdf)).is_encrypted)
+                        self.assertIsNone(Editor(saved).pdf_data())
+                        if provider.private:
+                            ciphertext = provider.encrypted_path('images.rmdoc').read_bytes()
+                            self.assertNotIn(b'Locked notebook', ciphertext)
+                            self.assertNotIn(b'PNG', ciphertext)
+                            self.assertIsNone(document.recovery)
+
     def test_browser_lease_release_preserves_document_and_revocation_retires_it(self):
         with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
             provider = fixture.provider

@@ -1577,3 +1577,41 @@ renderer resources during repeated complete editor reopens; the physical QA
 recorded an Android foreground LOW_MEMORY kill. Six subsequent remounts with
 explicit destruction completed with app PSS around 346–351 MB. This retirement
 check supplements the separate page/zoom bitmap-memory limits.
+
+
+## Native image cutouts and protected PDF backgrounds
+
+`images.py` adds native v6 resource-table blocks (0x0e, version 3) and textured
+quad items (0x0f, version 2), verified against a supplied reMarkable export with
+five PNGs. Resource filenames resolve inside the owning page folder. Original
+frames stay unchanged until edited; image movement replaces only quad geometry,
+while arrangement rewrites CRDT sequence links among both lines and images.
+PNG assets survive Save, recovery, page copy, Undo and failed-checkpoint rollback.
+New resources trigger the existing structural recovery publication. The shared
+editor snapshots image lists alongside ink; transforms replace immutable values.
+Unknown objects and unsupported meshes retain the existing preservation gate.
+
+`assets/images.js` supplies the separate Capture mode, bounded lasso rasterization
+and editor-local clipboard, affine rendering, finger/pen gestures and Arrange
+controls. It is shared by desktop and mobile compositions and explicitly listed
+in the mobile manifest. Capture includes the visible PDF/template background
+and scene objects in layer/sequence order. The clipboard never uses browser
+storage or the system clipboard. Image pages defer partial-eraser raster feedback
+until acknowledgement so the ink mask cannot remove image pixels.
+
+`Editor.pdf_data` decrypts an embedded PDF only for rendering. The notebook member
+remains encrypted, and passwords/decrypted bytes are excluded from checkpoints
+and history. `pdf_crypto.py` supplies the pinned pypdf missing-AES interface via
+CommonCrypto on Apple platforms, JCE on Android, and the existing desktop
+Cryptodome dependency elsewhere. Installed pypdf crypto providers remain in use.
+RC4, AES-128, AES-256, empty passwords and wrong-password retry have host coverage.
+
+`test_notebook_images.py` covers native readback, mixed stacking, image transforms,
+asset preservation, repeated/cross-page paste, recovery, rollback and password
+retention. The resource suite exercises real Local and LocalCrypt publication
+with a protected embedded PDF and ordered image edits. `image_work_logic.js` is a
+pure-JS gesture harness for finger movement, rotation commands, arrangement,
+repeated paste across pages, lasso clipping, cancellation and password gating.
+These host/mock checks do not establish browser pixels, native mobile file
+choosers, physical touch/stylus behavior or reMarkable firmware acceptance. No
+device deployment is part of this validation; native acceptance remains pending.
