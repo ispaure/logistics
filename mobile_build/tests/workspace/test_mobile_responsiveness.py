@@ -86,6 +86,7 @@ class ResponsivenessTests(unittest.TestCase):
         # Ordinary folders are discovered in the catalog; the Local panel
         # intentionally exposes them through its All files entry.
         self.assertIn('Old', app.folder_all_choices)
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Received Files'})
         app.show_home()
         (root / 'Old').rmdir()
         (root / 'New').mkdir()
@@ -93,6 +94,7 @@ class ResponsivenessTests(unittest.TestCase):
         self.assertIs(app.folder_picker_view, page)
         self.assertNotIn('Old', app.folder_all_choices)
         self.assertIn('New', app.folder_all_choices)
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Received Files'})
 
     def test_retained_workspace_refreshes_lock_state_and_hidden_source_cache(self):
         app = self.app

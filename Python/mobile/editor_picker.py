@@ -603,6 +603,9 @@ class EditorPicker:
                 form.style.height = height
         finally:
             self._fitting_keyboard = False
+        if not compact and apple:
+            from .keyboard import reset_picker_keyboard_insets
+            reset_picker_keyboard_insets(self)
         pending = getattr(self, '_keyboard_reveal', None)
         if pending is not None:
             pending.cancel()

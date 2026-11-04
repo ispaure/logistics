@@ -42,6 +42,23 @@ class ReleaseEvidenceTests(unittest.TestCase):
             self.run = saved
 
 
+    def test_android_build_and_ui_are_both_required_for_native_evidence_reuse(self):
+        self.run['path'] = REQUIRED['mobile-build'][0]
+        required = REQUIRED['mobile-build'][1]
+        self.assertIn('Build shared Android test app', required)
+        self.assertIn('Validate Android', required)
+        self.jobs = [dict(name=name, status='completed', conclusion='success',
+                         completed_at='2026-10-26T23:00:00Z') for name in required]
+        self.assertIn('mobile-build', self.inspect())
+        original = deepcopy(self.jobs)
+        for name in ('Build shared Android test app', 'Validate Android'):
+            for status in ('failure', 'skipped', 'cancelled'):
+                self.jobs = deepcopy(original)
+                next(job for job in self.jobs if job['name'] == name)['conclusion'] = status
+                self.assertNotIn('mobile-build', self.inspect())
+            self.jobs = [job for job in deepcopy(original) if job['name'] != name]
+            self.assertNotIn('mobile-build', self.inspect())
+
     def test_debug_off_forces_fresh_without_consulting_previous_hosted_passes(self):
         from unittest.mock import Mock
         request = Mock(side_effect=AssertionError('Fresh debug policy must not reuse prior runs'))
