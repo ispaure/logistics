@@ -10,7 +10,7 @@ REQUIRED = {
     'validate': ('.github/workflows/archive-platform-checks.yml',
                  {'static', 'macos', 'windows', 'Fedora desktop'}),
     'mobile-build': ('.github/workflows/mobile-build.yml',
-                     {'Build shared iOS test app', 'Build and validate Android', 'Validate iOS iphone',
+                     {'Build shared iOS test app', 'Build shared Android test app', 'Validate Android', 'Validate iOS iphone',
                       'Validate iOS duo', 'Validate iOS ipad', 'Require every selected native check'}),
     'mobile-runtime': ('.github/workflows/mobile-runtime.yml', {'ios', 'android'}),
 }
