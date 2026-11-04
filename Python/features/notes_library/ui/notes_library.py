@@ -116,7 +116,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.split = qt.QSplitter()
         self.split.addWidget(self.panel_tabs)
         self.split.addWidget(self.document_stack)
-        self.split.addWidget(self.links_tree)
+        self.split.addWidget(self.links_panel)
         self.split.setStretchFactor(1, 1)
         self.split.setCollapsible(0, False)
         self.split.setSizes([260, 740])
@@ -270,7 +270,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
                 if self.storage.path is not None:
                     self.storage.path = (self.provider.root / change.remap(current)).resolve()
                 self.open_note(change.remap(current), remember=False)
-            elif self.links_tree.isVisible():
+            elif self.links_panel.isVisible():
                 self.refresh_connections()
             self.idle.emit()
             return
@@ -472,6 +472,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.search_results.clear()
         self.search_rows.clear()
         self.links_tree.clear()
+        self.backlinks_tree.clear()
         self.search_notice.clear()
         self.calendar_notice.clear()
         self.calendar_entries = None

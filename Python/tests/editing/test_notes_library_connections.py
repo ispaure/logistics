@@ -7,7 +7,7 @@ from unittest.mock import patch
 from commonUtils.testing.stages import TestStage
 from commonUtils.runtime.resources.local import LocalFiles
 from features.notes_library.notes import NotesLibrary
-from features.notes_library.notes_links import connections
+from features.notes_library.notes_links import connections, outgoing_connections
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -19,6 +19,16 @@ class ConnectionIndexTests(unittest.TestCase):
         (self.root / 'B.md').write_text('# B')
         self.library = NotesLibrary(LocalFiles(self.root))
         self.addCleanup(self.library.close)
+
+    def test_outgoing_reads_only_current_note_and_filters_hidden_targets(self):
+        (self.root / 'A.md').write_text('[B](B.md) [missing](Missing.md) [self](#title)')
+        with patch.object(self.library, 'read', wraps=self.library.read) as read:
+            result = outgoing_connections(self.library, 'A.md')
+            self.assertEqual(result['outgoing'], ['B.md'])
+            self.assertEqual(result['unresolved'], ['Missing.md'])
+            self.assertEqual([call.args[0] for call in read.call_args_list], ['A.md'])
+        result = outgoing_connections(self.library, 'A.md', visible=lambda *args, **kw: False)
+        self.assertEqual(result['outgoing'], [])
 
     def test_shared_tabs_reuse_parsed_notes_and_external_edits_invalidate(self):
         sibling = NotesLibrary(self.library.provider, connection_index=self.library.connection_index)

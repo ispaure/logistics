@@ -20,6 +20,23 @@ class Targets(HTMLParser):
                 self.targets.add(target)
 
 
+def outgoing_connections(library, current, *, cancelled=lambda: False, visible=lambda path, **kw: True):
+    """Resolve only this note's targets; never read other document bodies."""
+    note = library.connection_index.note(library, current, cancelled=cancelled)
+    outgoing, unresolved = set(), set()
+    for target in note['targets']:
+        check_cancelled(cancelled)
+        try:
+            resolved = library.link(current, target, cancelled=cancelled)[0]
+            if resolved != current and visible(resolved, directory=False):
+                outgoing.add(resolved)
+        except ValueError:
+            if not urlsplit(target).scheme:
+                unresolved.add(target)
+    return dict(outgoing=sorted(outgoing), unresolved=sorted(unresolved),
+                words=note['words'], characters=note['characters'])
+
+
 def connections(library, current, *, cancelled=lambda: False, visible=lambda path, **kw: True):
     """Read at most 5,000 notes / 64 MiB and fail explicitly on incomplete scans."""
     from .notes import MARKDOWN
