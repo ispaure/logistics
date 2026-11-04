@@ -780,7 +780,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     await self.file_actions(path)
                 if any(self.library.supports(action) for action in ('rename', 'delete')):
                     actions = self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions)
-                    actions.style.width = 28
+                    actions.style.width = 48
                     compact_file_row_padding(actions)
                     self.host.presentation.surface(actions, radius=0, background='transparent', foreground='muted', outlined=False)
                     row.add(actions)
