@@ -164,13 +164,14 @@ class OwnershipTests(unittest.TestCase):
     def test_workflow_owners_include_their_specialist_regressions(self):
         from Scripts.ownership import selected_tests
         required = {
-            'archives': [('desktop', 'test_archive_credentials.py'), ('desktop', 'test_archive_workspace_ui.py')],
+            'archives': [('desktop', 'test_archive_password_ui.py'), ('desktop', 'test_archive_workspace_ui.py')],
             'books': [('mobile', 'test_reading_publication.py')],
-            'comics': [('mobile', 'test_comic_sharing.py')],
+            'comics': [('desktop', 'test_comic_password_ui.py'), ('mobile', 'test_comic_sharing.py')],
             'lm': [('desktop', 'test_mobile_chat.py'),
                    ('mobile', 'test_chat_inventory.py'), ('mobile', 'test_on_device.py')],
             'pdf': [('mobile', 'test_pdf_reader.py')],
             'rclone': [
+                ('desktop', 'test_credential_archive.py'),
                 ('desktop', 'test_remote_browser.py'),
                 ('desktop', 'test_transfer_adapters.py'),
                 ('desktop', 'test_transfer_service.py'),

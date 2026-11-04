@@ -199,7 +199,9 @@ Use the [project test commands](../../../development/getting-started.md) and
 [cross-platform checks](../../../development/platform-checks.md). Comic tests cover compression,
 metadata, reader/spreads/decoding, catalog, file-type integration, passwords,
 encryption and asynchronous cancellation using disposable fixtures. Shared ZIP and
-browser tests belong to commonUtils. The [parity report](zip-compression-parity.md)
+browser tests belong to commonUtils. `Python/tests/comics/test_comic_password_ui.py`
+checks GUI-thread password prompts, reader/editor retries, adjacent-comic cancellation
+and suppression of queued browser retries after closure. The [parity report](zip-compression-parity.md)
 records decrypted full-run comparisons; ZIP container timestamps are not expected
 to match. Tests do not reproduce the ComicRack crash, invoke a real RAR extractor
 or replace native desktop/remote-mount validation. EPUB reading/editing belongs to the separate Books engine.
