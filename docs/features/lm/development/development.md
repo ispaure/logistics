@@ -372,7 +372,7 @@ are read-only references that follow the application's current services.
 
 ## Mobile source manifest
 
-`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+`Python/features/lm/mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
 
 ## Injected desktop adapters
 
@@ -483,3 +483,42 @@ stop playback, another answer replaces it, and hide/close, conversation changes
 or message removal stop queued utterances. The engine is disposed with the view.
 `test_lm_speech.py` uses a silent adapter to verify toggling, chunking, stale
 completion rejection, default parameters, unavailable voices and view lifetime.
+
+## Mobile persistence and validation boundaries
+
+`mobile/storage.ChatStore` owns a flat private conversation directory and a
+separate `profile.json`. It shares domain validation with desktop but additionally
+rejects Code records, draft/message images, more than 200 messages, drafts above
+65,536 characters and records above 2 MiB. Shared schema compatibility does not
+imply an import UI or synchronization. The mobile profile admits only schema,
+URL, model, settings and provider fields; session keys never enter this store.
+
+Queued draft saves debounce for 250 ms with a one-second maximum delay while
+typing. Publication runs off the event loop under the store's write lock; sequence
+and generation counters prevent queued snapshots from overtaking explicit saves.
+Explicit saves invalidate pending work. Atomic publication checks the prior bytes
+again before replacement and rejects mismatched revisions or missing previously
+saved records. These are optimistic conflict checks, not desktop QLockFile leases.
+Malformed and oversized files remain on disk and appear as inventory warnings.
+
+Inventory summaries cache only ID, title and update time against filesystem
+identity/size/timestamps. The drawer uses recycled native rows with stable IDs;
+loading the inventory must not replace a draft typed while discovery is pending.
+See `mobile_build/tests/chat/test_chat_inventory.py`, `test_chat_ui.py` and
+`test_deferred_chat.py` for these contracts, and
+`Python/tests/chat/test_lm_storage_adapters.py` for the portable storage boundary.
+
+`mobile/on_device.py` lazily constructs native bridges only for an explicit
+availability/preparation or generation action. Its client checks readiness again
+before inference; downloadable Nano assets are prepared only through the explicit
+settings action. Apple uses the feature's `mobile/ios/FoundationChat.swift` bridge;
+Nano uses ML Kit/AICore through Java. Both close their bridge in `finally`, retain
+partial text on errors and reject revisions of already emitted output.
+`mobile_build/tests/chat/test_on_device.py` uses injected bridges to cover these
+policies. It does not prove actual system-model availability, download success,
+physical-device inference or eligibility on a particular device.
+
+The November 4, 2026 documentation audit used source/test inspection and static
+Markdown/link checks only under the release quiet hold. It did not rerun Qt,
+native probes, builds or device/model acceptance. Earlier probe descriptions in
+this guide describe their validation scope, not fresh acceptance for this audit.

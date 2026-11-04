@@ -388,5 +388,7 @@ Sent messages fit short text and wrap longer text within 75% of the chat panel w
 
 ## Mobile development builds
 
-See [Lm mobile workflows](../user_mobile/workflows.md#mobile-development-builds).
+See [LM mobile workflows](../user_mobile/workflows.md#mobile-development-builds)
+for server and on-device text chat, export and a desktop/mobile capability table.
+Saved conversations do not automatically synchronize between desktop and mobile.
 
