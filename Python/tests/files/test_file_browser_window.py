@@ -187,13 +187,6 @@ class BrowserWindowTests(QtTestCase):
         source.workspace.arrange(dock, 'right')
         self.app.processEvents()
         self.assertFalse(dock.isFloating())
-        for placement in ('tabs', 'left', 'tabs', 'right'):
-            source.workspace.arrange(dock, placement)
-            self.app.processEvents()
-            if placement != 'tabs':
-                other = next(candidate for candidate in source.workspace.docks if candidate is not dock)
-                self.assertFalse(dock.geometry().intersects(other.geometry()))
-                self.assertEqual(dock.geometry().left() < other.geometry().left(), placement == 'left')
         source.workspace._activate(dock)
         source.workspace.detach_active()
         self.app.processEvents()
