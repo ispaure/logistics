@@ -197,6 +197,17 @@ class MobileFeatureTests(unittest.TestCase):
             other.main_window.close()
             close_loop(other.loop)
 
+    def test_explicit_chat_command_while_hidden_offers_enable_in_current_tab(self):
+        app = self.app
+        app.show_settings()
+        app.set_feature_enabled('lm', False)
+        self.run_async(asyncio.sleep(0))
+        app.show_chat()
+        self.assertEqual(app.native_host.state.destination, 'settings')
+        self.assertEqual(app.routes.screens['settings'][-1][0], 'feature-disabled:lm')
+        self.assertFalse(app.navigation.content[3].enabled)
+        self.assertFalse(hasattr(app.chat_controller(), 'chat_store'))
+
     def test_cloud_off_keeps_local_text_creation_and_hides_remote_sources(self):
         app = self.app
         app.set_feature_enabled('rclone', False)
