@@ -20,6 +20,13 @@
 @property(nonatomic) int64_t firstVideoClock;
 @property(nonatomic) float initialTimeline;
 @property(nonatomic) BOOL initialTimelineHidden;
+@property(nonatomic) NSInteger pipStage, pipSeekCompletions;
+@property(nonatomic) NSTimeInterval pipStageTime;
+@property(nonatomic) NSUInteger pipFrameCheckpoint;
+@property(nonatomic) int64_t pipClockCheckpoint;
+@end
+@interface LGVideoChromeChecks (PiPChecks)
+- (void)samplePipSubtitles;
 @end
 @implementation LGVideoChromeChecks
 - (NSString *)outputPath:(NSString *)name {
@@ -147,7 +154,7 @@
     if (@available(iOS 26.0, *)) hdrEnabled = [layer.preferredDynamicRange isEqualToString:CADynamicRangeHigh] ||
         [layer.preferredDynamicRange isEqualToString:CADynamicRangeAutomatic];
     else if (@available(iOS 17.0, *)) hdrEnabled = layer.wantsExtendedDynamicRangeContent;
-    if (!error && [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDR"] boolValue] &&
+    if (!error && ![[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipSubtitles"] boolValue] && [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDR"] boolValue] &&
         (!ready || !hdrEnabled || self.video.player.time.intValue < 1000))
         error = @"HDR fixture did not reach an EDR-enabled sample-buffer display";
     [self.sampler invalidate];
@@ -252,6 +259,7 @@
         [self.video startByUser];
         self.started = NSProcessInfo.processInfo.systemUptime;
         self.sampler = [NSTimer scheduledTimerWithTimeInterval:1.0/60 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
+        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipSubtitles"] boolValue]) return;
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipControls"] boolValue]) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self checkPipControls]; });
             return;
@@ -267,6 +275,7 @@
 }
 - (void)sample:(NSTimer *)timer {
     LGVideoController *v = self.video;
+    if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipSubtitles"] boolValue]) { [self samplePipSubtitles]; return; }
     if (!self.firstVideoClock && v.player.media.statistics.displayedPictures > 0 && v.player.time.value.longLongValue > 0)
         self.firstVideoClock = v.player.time.value.longLongValue;
     if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue] ||
@@ -580,3 +589,5 @@ int main(int argc, char **argv) {
     }
     @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(LGVideoChromeChecks.class)); }
 }
+
+#import "video_pip_checks.m"

@@ -1,6 +1,6 @@
 """Explicit, local-only model dispatch; importing this module loads no native APIs."""
 import json
-import sys
+from commonUtils.runtime.platform import get_os, OS
 from threading import Event
 from time import monotonic
 
@@ -11,7 +11,7 @@ PROVIDERS = {'OpenAI-compatible server': 'server', **{name: key for key, name in
 
 
 def platform_provider():
-    return {'ios': 'apple', 'android': 'nano'}.get(sys.platform)
+    return {OS.IOS: 'apple', OS.ANDROID: 'nano'}.get(get_os())
 
 
 def configured(profile):

@@ -193,7 +193,7 @@ class InkPage:
             ss.SceneGroupItemBlock(root, CrdtSequenceItem(CrdtId(0, 13), end, end, 0, layer)),
         ]))
 
-    def add(self, points, tool=17, color=0, width=2, layer=None):
+    def add(self, points, tool=17, color=0, width=2, layer=None, *, page_height=HEIGHT):
         if self.warning:
             raise ValueError(self.warning)
         if type(width) not in (int, float) or width not in WIDTHS.values():
@@ -206,7 +206,7 @@ class InkPage:
             if len(point) != 3 or any(type(v) not in (int, float) or not math.isfinite(v) for v in point):
                 raise ValueError('Invalid stroke point.')
             x, y, pressure = point
-            if not 0 <= x <= WIDTH or not 0 <= y <= HEIGHT or not 0 <= pressure <= 1:
+            if not 0 <= x <= WIDTH or not 0 <= y <= page_height or not 0 <= pressure <= 1:
                 raise ValueError('Stroke is outside the page.')
             clean.append([x, y, pressure])
         clean = stroke_points(clean, tool, int(width))

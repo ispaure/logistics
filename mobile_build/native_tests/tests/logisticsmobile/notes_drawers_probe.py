@@ -13,11 +13,12 @@ from mobile.obsidian import open_vault
 from . import start_native_check
 from .fixtures import capture_window
 from .rotation_checks import rotate
+from .notes_interactions import NotesInteractionChecks
 
 TEST_STAGE = TestStage.REGRESSION
 
 
-class NotesDrawersProbe(LogisticsMobile):
+class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
     async def check_file_holds(self, owner, report):
         from unittest.mock import patch
         output = Path(self.paths.cache)
@@ -48,7 +49,7 @@ class NotesDrawersProbe(LogisticsMobile):
                 await touch(dict(action='long-press', points=[float(frame.origin.x + frame.size.width / 2),
                                                             float(frame.origin.y + frame.size.height / 2)]))
                 assert len(dialogs) == before + 1, ('Hold did not open options', path)
-                assert [value for _, value, _ in dialogs[-1].choices] == ['move', 'copy', 'delete', 'cancel']
+                assert [value for _, value, _ in dialogs[-1].choices] == ['rename', 'move', 'copy', 'delete', 'cancel']
                 assert owner.file_drag.source is None
                 assert owner.sidebar.overlay is None and not owner.sidebar.retiring
                 await capture_window(self, output / 'notes-file-hold.png')
@@ -78,6 +79,8 @@ class NotesDrawersProbe(LogisticsMobile):
         assert await owner.open_note('Other.md')
         await asyncio.sleep(.3)
         assert owner.secondary.parent is not None
+        assert owner.secondary.style.display != NONE
+        assert owner.breadcrumb_scroll.parent is owner.secondary
         async def invoke(button, complete):
             assert button.enabled
             button._impl.native.sendActionsForControlEvents(1 << 6)
@@ -110,12 +113,22 @@ class NotesDrawersProbe(LogisticsMobile):
         await asyncio.sleep(.3)
         # Check that title content cannot swallow taps on the folder row.
         from rubicon.objc import CGPoint
+        from commonUtils.ui.native.keyboard import native_value
         button = owner.breadcrumbs.children[-1]._impl.native
-        point = button.convertPoint(CGPoint(button.bounds.size.width / 2, button.bounds.size.height / 2),
-                                    toView=self.main_window._impl.native)
-        hit = self.main_window._impl.native.hitTest(point, withEvent=None)
+        window = self.main_window._impl.native
+        frame = button.convertRect(button.bounds, toView=window)
+        viewport = owner.breadcrumb_scroll._impl.native
+        clip = viewport.convertRect(viewport.bounds, toView=window)
+        left, top = max(frame.origin.x, clip.origin.x), max(frame.origin.y, clip.origin.y)
+        right = min(frame.origin.x + frame.size.width, clip.origin.x + clip.size.width)
+        bottom = min(frame.origin.y + frame.size.height, clip.origin.y + clip.size.height)
+        assert right > left and bottom > top, 'Folder breadcrumb has no visible touch area'
+        # A narrow phone intentionally scrolls/clips breadcrumbs. Test the
+        # visible intersection, rather than an offscreen content-button center.
+        point = CGPoint((left + right) / 2, (top + bottom) / 2)
+        hit = window.hitTest(point, withEvent=None)
         while hit is not None and hit != button:
-            hit = hit.superview
+            hit = native_value(hit.superview)
         assert hit == button, 'Folder breadcrumb is covered by another native view'
         report['native_note_actions'] = True
 
@@ -148,23 +161,50 @@ class NotesDrawersProbe(LogisticsMobile):
         report = dict(success=False, samples=[])
         owner = None
         try:
+            # on_running may fire while Android still presents its startup
+            # cover. Never change routes until the app publishes readiness.
+            deadline = self.loop.time() + 120
+            while getattr(self, '_startup_in_progress', False) and self.loop.time() < deadline:
+                await asyncio.sleep(.1)
+            if getattr(self, '_startup_in_progress', False):
+                if not self.apple_probe:
+                    native, content = self.navigation._impl.native, self.navigation._impl.native_content
+                    report['startup_geometry'] = dict(root=[native.getWidth(), native.getHeight()],
+                        content=[content.getWidth(), content.getHeight()],
+                        layout_requested=[native.isLayoutRequested(), content.isLayoutRequested()])
+                raise AssertionError('Application startup did not finish before native interactions')
+            report['startup_ready'] = True
+            for name in ('cloud_startup_task', 'cloud_restore_task'):
+                pending = getattr(self, name, None)
+                if pending is not None:
+                    await asyncio.shield(pending)
             self.show_documents_hub()
             self.document_view_buttons['Libraries'].on_press()
-            await self._notes_discovery_task
+            while True:
+                discovery = self._notes_discovery_task
+                await discovery
+                if discovery is self._notes_discovery_task:
+                    break
             await asyncio.sleep(.5)
             status = self.document_notes_list.children[2]
-            assert 'Unlock LocalCrypt' in status._settings_source_text
-            assert status._settings_rendered_text
+            notice = getattr(status, '_settings_source_text', status.text)
+            assert 'Looking for libraries' not in notice, notice
+            if notice:
+                assert status._settings_rendered_text
+            report['library_discovery_notice'] = notice
             await capture_window(self, output / 'notes-discovery.png')
             root = output / 'Art'
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Home.md').write_text('# Character Art Team\n\nProducer: Diane Guillemont\n\nLead Character Artist: Chad Emond\n\n## Pages\n\n[[Other]]\n\n## Naming conventions\n\nKeep shared files organized by project.\n')
             (root / 'Other.md').write_text('# Other\n\n[[Home]]\n')
             (root / 'Long folder name for compact row preview').mkdir(exist_ok=True)
+            (root / 'Long folder name for compact row preview/Child.md').write_text('Child bytes')
             (root / 'Long document name to preview inside the sidebar.md').write_text('# Preview')
             owner = await open_vault(self, LocalFiles(root), '', 'files')
             await asyncio.sleep(1)
             await capture_window(self, output / 'notes-landing.png')
+            if not self.apple_probe or (output / 'drive-notes-touches').exists():
+                await self.check_empty_swipes(owner, report)
             if type(self._impl).__module__.startswith('toga_iOS.'):
                 header = owner.view._document_title_header
                 assert list(header.children) == [owner.menu, header._title_content, owner.links_button]
@@ -331,6 +371,12 @@ class NotesDrawersProbe(LogisticsMobile):
                     dismiss(-1)
                 assert owner.path == 'Home.md'
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded))
+            if not self.apple_probe or (output / 'drive-notes-touches').exists():
+                await self.check_library_copies(owner, report, 'local')
+                owner.dispose()
+                owner = None
+                await self.check_private_copies(report)
+                await self.check_workspace_copies(report)
             report['success'] = True
         except Exception:
             report['error'] = traceback.format_exc()

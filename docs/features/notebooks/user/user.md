@@ -138,7 +138,7 @@ remain required before calling this fully tablet-verified. See the
 Open **Manage layers** in the desktop toolbar to choose the current page's
 template. Choose Blank, lined paper (large: 21 rules; small: 41), the native
 25-rule medium, or Logistics' more distinct 31-rule medium. Grid, Dots,
-Restaurant review, Meeting notes and Daily planner are also available.
+Restaurant review, Meeting notes, Daily planner, Checklist, Cornell notes and Weekly planner are also available.
 **Template format** selects Paper Pro or Paper Pro Move for Logistics layouts.
 **Show template** hides only the background in Logistics; it leaves writing intact.
 These are per-page edits with Undo/Redo, Save, recovery and page-copy support.
@@ -152,12 +152,24 @@ its left, right or bottom edges. Pro reveals the surrounding paper. Select Pro
 to write in those extra margins. Paper view is a session display choice, separate
 from the saved template format; changing it does not edit the notebook.
 
-Stock lined templates remain native template-name references, rather than PDFs
-or ink layers. Logistics layouts include original vector `.template` artwork in
-the archive. Their appearance and per-page format/visibility are supported in
-Logistics on all platforms. ReMarkable firmware discovery of these embedded custom
-assets and matching tablet view behavior have not been certified; a successful
-Logistics export does not prove custom backgrounds will appear on the tablet.
+**Save / Save As** retains the original notebook with editable per-page template
+settings and vector artwork. For reMarkable, use **Export Copy…** (mobile:
+**Export .rmdoc**). The exported copy embeds custom backgrounds as vector PDF
+pages inside the `.rmdoc`; handwriting stays separate as editable native ink.
+Restaurant review, Meeting notes, Daily planner, Checklist, Cornell notes and Weekly planner use distinct Pro and Move
+PDF page sizes. Repeating paper keeps a shared canvas. The export extends a
+form’s page box if needed to retain handwriting beyond its nominal edges.
+Hidden backgrounds also stay hidden in that copy. Stock-only lined notebooks
+with visible backgrounds retain native template references instead of a PDF.
+
+The original Logistics notebook stays unchanged. Custom-template export copies
+are PDF-backed documents, so their backgrounds are fixed when reopened in either
+app; reMarkable's notebook template picker cannot replace them. Keep the original
+to change presets, format or visibility later. Export refuses unavailable artwork
+instead of silently replacing it with blank paper; select a supported template
+or hide that background first. Existing PDF-backed notebooks export their original
+PDF without rebuilding it. Physical tablet geometry and stylus behavior remain
+separate acceptance checks.
 
 ## Eraser types and sizes
 
@@ -174,3 +186,7 @@ you work in that editor.
 ## Paper Pro preview
 
 A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Toggle it in **Settings → Notebooks → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
+
+Logistics draws its own template previews and custom layouts. Native lined options
+are labeled reMarkable compatible; Logistics is not affiliated with or endorsed
+by reMarkable. Native exports reference the tablet’s installed lined backgrounds.
