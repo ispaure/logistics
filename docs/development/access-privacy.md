@@ -268,3 +268,11 @@ The Android image option selects an explicitly installed manager-supported
 image without changing the saved project profile. The complete Android scenario
 has a ten-minute budget for startup and system screenshots; individual keyboard,
 rotation and unlock assertions retain their own shorter limits.
+
+Functional acceptance passed on an iOS phone simulator and an Android 15
+emulator, including the final native Unlock button and software-keyboard
+dismissal. The Android run used an exact committed Python payload in a retained
+managed Debug native shell; its compiled system-chrome source matched that
+commit. This certifies the lockscreen flow, not a full merged native release or
+the detached navigation rail. All owned test devices and retained QA builds were
+removed after preserving the evidence.
