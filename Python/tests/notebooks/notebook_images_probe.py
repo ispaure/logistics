@@ -30,7 +30,7 @@ def main(output, rclone=None):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     app=qt.QApplication.instance() or qt.QApplication([])
     report=dict(success=False,scope='Native macOS Qt WebEngine; actual Local/LocalCrypt resources',providers=[])
-    workspace=None
+    workspace=None;workflow=None
     try:
         with scratch() as work, crypt_fixture(work,rclone or executable.get_rclone_path(),pull=False) as fixture:
             for label,provider in [('Local',LocalFiles(fixture.plain)),('LocalCrypt',fixture.provider)]:
@@ -82,6 +82,12 @@ def main(output, rclone=None):
             report['success']=True
     except Exception:
         report['error']=traceback.format_exc()
+        report['partial_cases']=workflow.cases if workflow else []
+        if workspace is not None and workspace.web is not None:
+            try:
+                report['canvas_state']=json.loads(javascript(workspace.web,"JSON.stringify({locked:state.password_required,count:state.images.length,status:$('status').textContent,pasteDisabled:$('pasteImage').disabled})"))
+                workspace.web.grab().save(str(output/'failure.png'))
+            except Exception:pass
         raise
     finally:
         if workspace is not None:
