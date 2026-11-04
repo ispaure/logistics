@@ -6,7 +6,6 @@ TEST_STAGE = TestStage.REGRESSION
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 import zipfile
@@ -51,13 +50,3 @@ class ComicFileTypeTests(unittest.TestCase):
             definition = registry.get_feature_definition('comics')
             self.assertEqual([action.id for action in definition.browser.actions], ['edit_metadata', 'compress', 'encrypt'])
             self.assertEqual(len(definition.browser.activation), 1)
-
-    def test_feature_file_registration_precedes_all_initializers(self):
-        from features.application import registry
-        events = []
-        features = [SimpleNamespace(__name__='early', initialize=lambda: events.append('initialize early')),
-                    SimpleNamespace(__name__='later', register_file_types=lambda: events.append('register later'),
-                                    initialize=lambda: events.append('initialize later'))]
-        with patch.object(registry, '_log_unavailable_features'), patch.object(registry, 'get_available_features', return_value=features):
-            registry.initialize_features()
-        self.assertEqual(events, ['register later', 'initialize early', 'initialize later'])

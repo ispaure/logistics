@@ -6,10 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
-from tempfile import TemporaryDirectory
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
-import time
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
 from features.comics.ui.dialogs import CompressCbzDialog
@@ -19,17 +16,11 @@ from features.comics.compression_stats import CompressionStats
 class CompressionDialogTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
 
     def wait(self, dialog):
-        deadline = time.monotonic() + 5
-        while dialog.busy:
-            self.assertLess(time.monotonic(), deadline)
-            self.app.processEvents()
-            time.sleep(.005)
-        self.app.processEvents()
+        self.wait_until(lambda: not dialog.busy)
 
     def test_selected_targets_replace_picker_and_pass_normal_options(self):
         targets = (self.root / 'first.cbz', self.root / 'folder')

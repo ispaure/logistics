@@ -8,20 +8,25 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import time
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 
 from features.comics.library_config import configured_libraries, has_library_configuration
+from tests.comics.fixtures import comic_library
 
 
-class LibraryConfigurationTests(QtTestCase):
+class LibraryConfigurationFixture:
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        if isinstance(self, QtTestCase):
+            self.temp = self.temporary_directory()
+        else:
+            self.temp = TemporaryDirectory()
+            self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.config = self.root / 'remoteConfig.ini'
 
+
+class LibraryConfigurationTests(LibraryConfigurationFixture, unittest.TestCase):
     def test_configured_order_spaces_duplicates_and_missing_folders(self):
         self.config.write_text('[LogisticsComics]\nlibraries = Artbooks, Comics, Comics [Marvel], Mangas, Manhwa, Comics\n')
         libraries, error = configured_libraries(self.root)
@@ -44,14 +49,15 @@ class LibraryConfigurationTests(QtTestCase):
         self.assertTrue(configured_libraries(self.root)[1])
         self.assertFalse(has_library_configuration(self.root))
 
+
+class LibraryTabsTests(LibraryConfigurationFixture, QtTestCase):
     def test_tabs_include_all_and_keep_catalog_at_collection_root(self):
         from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
         app = qt.QApplication.instance() or qt.QApplication([])
         self.config.write_text('[LogisticsComics]\nlibraries = Missing, Artbooks, Comics [Marvel]\n')
         for name in ('Artbooks', 'Comics [Marvel]'):
             (self.root / name).mkdir()
-        window = ComicLibraryWindow(self.root)
+        window = comic_library(self.root)
         self.assertEqual([window.library_tabs.tabText(i) for i in range(window.library_tabs.count())],
                          ['All', 'Missing', 'Artbooks', 'Comics [Marvel]'])
         self.assertFalse(window.library_tabs.isTabEnabled(1))
@@ -66,10 +72,6 @@ class LibraryConfigurationTests(QtTestCase):
         self.assertEqual(Path(window.model.filePath(window.tree.rootIndex())), self.root / 'Comics [Marvel]')
         self.assertEqual(window.catalog.root, self.root)
         self.assertEqual(window.tree.header().visualIndex(3), 1)
-        deadline = time.monotonic() + 5
-        while window.catalog_busy and time.monotonic() < deadline:
-            app.processEvents()
-            time.sleep(.01)
-        self.assertFalse(window.catalog_busy)
+        self.wait_until(lambda: not window.catalog_busy, message='Library catalog did not finish')
         window.close()
         app.processEvents()
