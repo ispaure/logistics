@@ -358,7 +358,7 @@ class VideoBuildTests(unittest.TestCase):
             configure_ios(project)
             result = plistlib.loads(pbx.read_bytes())
             self.assertEqual(len(result['objects']['project']['packageReferences']), 1)
-            self.assertEqual(len(result['objects']['frameworks']['files']), 2)
+            self.assertEqual(len(result['objects']['frameworks']['files']), 4)
             packages = [value for value in result['objects'].values() if value.get('isa') == 'XCRemoteSwiftPackageReference']
             self.assertEqual(packages[0]['requirement']['kind'], 'revision')
             self.assertEqual((app / 'main.m').read_text().count('Support/VideoPlayer.m'), 1)
