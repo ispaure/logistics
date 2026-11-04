@@ -23,7 +23,13 @@ class ArchivePasswordUITests(QtTestCase):
         self.addCleanup(clear_passwords)
 
     def wait(self, dialog):
-        self.wait_until(lambda: not dialog.busy, message='Encrypted ZIP creation did not finish')
+        def pending():
+            operation = dialog.task.operation
+            return ('Encrypted ZIP creation did not finish: '
+                    f'phase={dialog.task.message.text()!r}; task_busy={dialog.task.busy}; '
+                    f'worker_running={operation.isRunning() if operation else False}; '
+                    f'worker_finished={operation.isFinished() if operation else True}')
+        self.wait_until(lambda: not dialog.busy, message=pending)
 
     def test_creation_uses_config_and_keeps_source(self):
         (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password = test-only\n')
