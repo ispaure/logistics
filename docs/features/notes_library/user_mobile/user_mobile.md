@@ -206,3 +206,7 @@ Each Notes Library file/folder row has **…** actions for Move / rename, Copy a
 Delete when supported by its storage. Hold and drag its icon onto a folder
 to move it, or onto the Files tab to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
 confirmation and existing copy/move destinations are preserved.
+
+Panel swipes also work over the empty document area containing the New/Open cards.
+Swipe right for Files or left for Links; ordinary card taps and vertical scrolling
+retain their actions. Wide layouts keep Files visible.
