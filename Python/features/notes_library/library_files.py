@@ -64,6 +64,11 @@ class LibraryFolderProvider:
     def __getattr__(self, name):
         return getattr(self.library.provider, name)
 
+    def acquire(self):
+        # The library owns this provider. A temporary picker borrows it; its
+        # browser must not close the library's view when the picker retires.
+        return lambda: None
+
     def relative(self, path):
         from pathlib import Path
         import posixpath

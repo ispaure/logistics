@@ -20,7 +20,7 @@ TEST_STAGE = TestStage.EXTENDED
 class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
     result_name = 'notes-markdown-feedback-result.json'
 
-    def checkpoint(self, stage):
+    def record_stage(self, stage):
         print('MARKDOWN_NATIVE_STAGE=' + stage, flush=True)
         (Path(self.paths.cache) / 'notes-markdown-progress.json').write_text(json.dumps(dict(stage=stage)))
 
@@ -29,9 +29,14 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         from . import enable_native_fault_log
         self.fault_log = enable_native_fault_log(self.paths.cache)
         faulthandler.dump_traceback_later(25, repeat=True, file=self.fault_log)
-        self.checkpoint('startup')
+        self.record_stage('startup')
+        import logging
+        self.startup_log = logging.FileHandler(Path(self.paths.cache) / 'notes-markdown-startup.log')
+        self.startup_logger = logging.getLogger('mobile.startup')
+        self.startup_logger.addHandler(self.startup_log)
+        self.startup_logger.setLevel(logging.DEBUG)
         super().startup()
-        self.checkpoint('startup_returned')
+        self.record_stage('startup_returned')
         cache, loop = Path(self.paths.cache), self.loop
         self.diagnostics_stop = Event()
         def observe():
@@ -40,8 +45,13 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             import traceback
             snapshots = []
             for task in asyncio.all_tasks(loop):
-                snapshots.append(dict(task=repr(task), stack=[traceback.format_stack(frame)
-                    for frame in task.get_stack()]))
+                chain, frames = task.get_coro(), []
+                while chain is not None:
+                    frame = getattr(chain, 'cr_frame', None) or getattr(chain, 'gi_frame', None)
+                    if frame is not None:
+                        frames.append(traceback.format_stack(frame))
+                    chain = getattr(chain, 'cr_await', None) or getattr(chain, 'gi_yieldfrom', None)
+                snapshots.append(dict(task=repr(task), stack=frames))
             (cache / 'notes-markdown-tasks.json').write_text(json.dumps(snapshots, indent=2))
             timer = Timer(10, observe)
             timer.daemon = True
@@ -55,17 +65,19 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         self.loop.call_later(.1, lambda: start_native_check(self, self.check))
 
     def on_running(self):
-        self.checkpoint('on_running')
+        self.record_stage('on_running')
         super().on_running()
 
     async def check(self, app):
-        self.checkpoint('check_entered')
+        self.record_stage('check_entered')
         try:
             await super().check(app)
         finally:
             import faulthandler
             faulthandler.cancel_dump_traceback_later()
             self.diagnostics_stop.set()
+            self.startup_logger.removeHandler(self.startup_log)
+            self.startup_log.close()
 
     async def until(self, predicate, message):
         for _ in range(200):
@@ -103,7 +115,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         await capture_window(self, self.evidence / (name + '.png'))
 
     async def run_checks(self, app, report):
-        self.checkpoint('checks_started')
+        self.record_stage('checks_started')
         self.evidence = Path(self.paths.cache) / 'viewer-layout'
         self.evidence.mkdir(exist_ok=True)
         fixture = json.loads(Path(__file__).with_name('localcrypt_fixture.json').read_text())
@@ -134,7 +146,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             provider.create_file('Library/' + name, BytesIO(data))
 
     async def library_checks(self, owner, report, label):
-        self.checkpoint(label + '_library_open')
+        self.record_stage(label + '_library_open')
         opened = []
         original = owner.provider.open
         def read(path, *args, **kwargs):
@@ -145,13 +157,14 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             assert await owner.open_note('Library/Home.md'), owner.notice.text
             await self.web_ready(owner.web, '!!document.querySelector("img") && document.querySelector("img").complete')
             assert opened == ['Library/old.png'], opened
-            self.checkpoint(label + '_library_toggle')
+            self.record_stage(label + '_library_toggle')
             for _ in range(2):
                 self.click(owner.edit)
                 await self.until(lambda: owner.editing, 'Pencil did not open library editor')
                 await self.web_ready(owner.embedded.formatted.view, '!!window.markdownSnapshot')
                 self.click(owner.edit)
                 await self.until(lambda: not owner.editing, 'Read toggle did not restore reader')
+                await self.web_ready(owner.web, '!!document.querySelector("img") && document.querySelector("img").complete')
             assert opened == ['Library/old.png'], opened
             report['cases'].append('3_library_media_reused_' + label)
             from features.notes_library.link_policy import resolve_link
@@ -162,26 +175,34 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
                 # Indexed encrypted providers may own their own live resolution.
                 if not callable(getattr(owner.provider, 'find_note_paths', None)):
                     assert resolve.call_count <= 1, resolve.call_count
-            self.checkpoint(label + '_library_edit_references')
+            self.record_stage(label + '_library_edit_references')
             assert await owner.open_editor()
-            await owner.embedded.choose_mode(False)
+            await self.web_ready(owner.embedded.formatted.view, '!!window.markdownSnapshot')
+            self.record_stage(label + '_choose_source')
+            assert await owner.embedded.choose_mode(False)
             owner.embedded.source.value = '# Changed\n\n![New](new.png)\n\n[[Missing]]'
+            self.record_stage(label + '_save_source')
             assert await owner.embedded.save()
+            self.record_stage(label + '_read_source')
             assert await owner.open_editor()
             await self.web_ready(owner.web, '!!document.querySelector("img") && document.querySelector("img").alt === "New"')
             assert opened == ['Library/old.png', 'Library/new.png'], opened
             assert await owner.open_editor()
-            await owner.embedded.choose_mode(False)
+            await self.web_ready(owner.embedded.formatted.view, '!!window.markdownSnapshot')
+            self.record_stage(label + '_choose_source')
+            assert await owner.embedded.choose_mode(False)
             owner.embedded.source.value = '# References removed'
+            self.record_stage(label + '_save_source')
             assert await owner.embedded.save()
+            self.record_stage(label + '_read_source')
             assert await owner.open_editor()
             await self.web_ready(owner.web, 'document.body.textContent.includes("References removed") && !document.querySelector("img")')
             assert opened == ['Library/old.png', 'Library/new.png'], opened
             report['cases'].append('3_edited_and_deleted_references_' + label)
-        self.checkpoint(label + '_library_cancel')
+        self.record_stage(label + '_library_cancel')
         await self.cancel_preparation(owner, label)
         report['cases'].append('4_library_prepare_cancel_' + label)
-        self.checkpoint(label + '_library_rename_move')
+        self.record_stage(label + '_library_rename_move')
         owner.selected_path = 'Library/Home.md'
         owner.manage_entry(move=True)
         form = owner.file_action_view.content
@@ -189,7 +210,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         assert name.value == 'Home.md'
         name.value = 'Renamed.md'
         self.click(self.button(form, 'Rename'))
-        await self.until(lambda: owner.path == 'Library/Renamed.md', 'Rename did not publish')
+        await self.until(lambda: owner.path == 'Library/Renamed.md' and not owner.file_command_busy and owner.file_action_view is None, 'Rename did not finish')
         picker = await owner.move_picker(owner.path)
         browser = picker._folder_browser
         assert all(row.entry.container for row in browser.native_list.data)
@@ -206,7 +227,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         await self.until(lambda: browser.search_directory == 'Destination', 'Native folder tap did not browse')
         await self.screenshot(label + '-move-destination')
         self.click(self.button(picker, 'Move here'))
-        await self.until(lambda: owner.path == 'Library/Destination/Renamed.md', 'Move did not publish')
+        await self.until(lambda: owner.path == 'Library/Destination/Renamed.md' and not owner.file_command_busy and owner.file_action_view is None, 'Move did not finish')
         assert owner.library.read(owner.path).endswith(b'References removed')
         picker = await owner.move_picker('Library/Folder')
         assert all(row.entry.label != 'Folder' for row in picker._folder_browser.native_list.data)
@@ -238,7 +259,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         assert list(owner.article.children) == retained
 
     async def regular_checks(self, app, report):
-        self.checkpoint('regular_editor')
+        self.record_stage('regular_editor')
         from features.text_editor.resources import LocalTextCopies
         from services.documents.authoring.markdown_editor import prepare_editor
         root = app.private_root / 'RegularMarkdown'
