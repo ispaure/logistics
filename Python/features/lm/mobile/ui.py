@@ -112,18 +112,18 @@ class ChatUI:
         self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
         from commonUtils.ui.native.forms import FittedLabel
-        def label(text, *, heading=False):
+        def label(text, *, heading=False, field=False):
             control = FittedLabel(text, style=Pack(font_size=16 if heading else 12,
                 font_weight='bold' if heading else 'normal', margin_top=12 if heading else 4))
             return self.presentation.surface(control, radius=0,
-                foreground='text' if heading else 'muted', background='transparent', outlined=False, eink_outlined=False)
+                foreground='text' if heading or field else 'muted', background='transparent', outlined=False, eink_outlined=False)
 
         self.chat_config_back = toga.Button('Back', on_press=lambda widget, **kw: self.routes.back(), style=Pack(height=48))
         self.chat_config_save = toga.Button('Save settings', on_press=self.save_chat_configuration, style=Pack(height=48, margin_top=12))
-        self.chat_server_section = toga.Box(children=[label('Connection', heading=True),
-            label('Server address', heading=True), self.chat_url,
+        self.chat_server_section = toga.Box(children=[
+            label('Server address', field=True), self.chat_url,
             label('Use your computer’s LAN address. /v1 is added automatically.'),
-            label('API key · optional', heading=True), self.chat_key,
+            label('API key · optional', field=True), self.chat_key,
             label('Kept for this session only.')], style=Pack(direction=COLUMN))
         self.chat_device_note = label('')
         self.chat_manual_box = toga.Box(style=Pack(direction=COLUMN))
@@ -136,18 +136,19 @@ class ChatUI:
         self.chat_model_hint = label('Connect to load available models, or enter a model ID.')
         self.chat_generation_box = toga.Box(style=Pack(direction=COLUMN))
         self.chat_generation_fields = toga.Box(children=[
-            label('Context tokens', heading=True), self.chat_context,
-            label('Maximum reply tokens', heading=True), self.chat_max_tokens], style=Pack(direction=COLUMN))
+            label('Context tokens', field=True), self.chat_context,
+            label('Maximum reply tokens', field=True), self.chat_max_tokens], style=Pack(direction=COLUMN))
         self.chat_generation_toggle = toga.Button('Generation limits…',
             on_press=self.toggle_chat_generation, style=Pack(height=48))
         self.chat_model_section = toga.Box(children=[label('Model', heading=True), self.chat_model_choices,
             self.chat_manual_toggle, self.chat_manual_box,
             self.chat_generation_toggle, self.chat_generation_box], style=Pack(direction=COLUMN))
         self.chat_provider_content = toga.Box(style=Pack(direction=COLUMN))
-        self.chat_config_content = toga.Box(children=[self.chat_config_back, label('Chat settings', heading=True)],
-            style=Pack(direction=COLUMN, margin=16))
+        self.chat_config_content = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        if not self.routes.apple:
+            self.chat_config_content.add(self.chat_config_back, label('Chat settings', heading=True))
         if len(choices) > 1:
-            self.chat_config_content.add(label('Provider', heading=True), self.chat_provider)
+            self.chat_config_content.add(label('Provider', field=True), self.chat_provider)
         self.chat_config_content.add(self.chat_provider_content, self.chat_config_save)
         self.chat_config_view = toga.ScrollContainer(horizontal=False,
             content=self.chat_config_content, style=Pack(flex=1))
