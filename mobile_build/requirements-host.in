@@ -1,4 +1,6 @@
-# Host tests only; never copied into a native payload.
+# Host tooling and tests only; never copied into a native payload.
+briefcase==0.4.5
+pip==26.3
 toga-dummy==0.5.7
 langdetect==1.0.9
 markdown-it-py==4.2.0
