@@ -166,10 +166,20 @@ installed after Toga publishes the initial data source, since assigning the
 footer can synchronously query row counts. Every UIKit row, including the last
 and single-row groups, keeps the same bounded separator inset: oversized leading
 insets also shift native cell content and can hide the final entry on iPhone.
-See the native group checks and Boox
-deployment (local artifact `test-results/mobile-evidence/2026-10-20-rounded-file-lists.json`).
+The native grouped-list checks cover these layout boundaries.
 
 ## iOS Workspaces folder ancestry
+
+Landscape Workspaces columns retire their layout callbacks before detaching
+native child controllers. Late callbacks return without rebuilding a closed
+column. The native controller keeps a weak Python owner reference; teardown
+does not assign `None` to Rubicon's weak property, whose setter requires a
+weak-referenceable object.
+
+The Workspaces root has no drawer button in its navigation bar. Header refreshes
+clear a stale button once instead of inserting and removing a hidden button on
+every resize. Other workspace menus retain their existing native bar item when
+it is already mounted.
 
 The native Workspaces columns apply only to browsing. A document, including its
 loading screen and child tools, hides the workspace sidebar and expands the

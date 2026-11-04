@@ -65,6 +65,18 @@ class NativeStartupRecoveryTests(unittest.TestCase):
         return recovery.qualification(self.logs, self.device, 0, self.source,
             self.tools.simulator_report, cpus=3, expected_cases=self.cases)
 
+    def test_attempt_archive_keeps_both_rpc_receipt_and_service_stack(self):
+        with TemporaryDirectory() as directory:
+            logs = Path(directory) / 'logs'
+            logs.mkdir()
+            receipt = logs / 'ios-screen-time-rpc-123.json'
+            sample = logs / 'ios-screen-time-rpc-123.sample.txt'
+            receipt.write_text('{"pid": 456, "status": "sampled"}')
+            sample.write_text('Thread_789 DispatchQueue_1')
+            saved = recovery.preserve(logs, Path(directory) / 'attempt-1')
+            self.assertEqual(set(saved), {receipt.name, sample.name})
+            self.assertEqual((Path(directory) / 'attempt-1' / sample.name).read_text(), sample.read_text())
+
     def test_current_zero_process_and_all_blocked_swift_workers_qualify(self):
         proof = self.qualify()
         self.assertEqual(proof['blocked_workers'], [11, 12, 13])
@@ -286,3 +298,33 @@ class NativeWebCheckTests(unittest.IsolatedAsyncioTestCase):
         view.evaluate_javascript.return_value = 'Document closed. Nested Markdown note'
         with self.assertRaisesRegex(RuntimeError, 'did not render'):
             await wait_for_text(view, 'Document closed.', absent='Nested Markdown note', timeout=.02)
+
+
+class WebViewLifecycleCounterTests(unittest.TestCase):
+    def test_counts_creations_and_retired_views_without_retaining_them(self):
+        import gc
+        from mobile_build.native_tests.tests.logisticsmobile.navigation_trace import WebViewLifecycle
+        class View:
+            private_closed = False
+        counts = WebViewLifecycle()
+        view = View()
+        self.assertEqual(counts.create(view), 1)
+        view.private_closed = True
+        self.assertEqual(counts.snapshot()['live_retired_views'], 1)
+        del view
+        gc.collect()
+        self.assertEqual(counts.snapshot()['views_created'], 1)
+        self.assertEqual(counts.snapshot()['live_python_views'], 0)
+
+    def test_counts_continue_past_sixty_five_in_one_lifetime(self):
+        from mobile_build.native_tests.tests.logisticsmobile.navigation_trace import WebViewLifecycle
+        class View:
+            pass
+        with TemporaryDirectory() as directory:
+            counts = WebViewLifecycle(directory)
+            retained = [View() for _ in range(130)]
+            for number, view in enumerate(retained, 1):
+                self.assertEqual(counts.create(view), number)
+            saved = json.loads((Path(directory) / 'logistics-native-ui-webview-counts.json').read_text())
+            self.assertEqual(saved['views_created'], 130)
+            self.assertEqual(saved['live_python_views'], 130)
