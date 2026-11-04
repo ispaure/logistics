@@ -113,6 +113,15 @@ Local acceptance and ordinary application launches do not enable this recovery.
 The hosted job's outer budget includes the possible additional 30-minute native
 attempt; individual render and native-attempt deadlines remain unchanged.
 
+Native transfer-review drivers acknowledge an action when its guarded native
+handler starts. If comparison progress changes the revision before a click's
+navigation message arrives, the driver retries the current rendered action within
+the existing 30-second action deadline. Full and incomplete approval retain the
+production revision checks. The held-comparison fixture has a 90-second failsafe
+covering the separate 30-second render, action and retirement assertions; cleanup
+releases it immediately when any assertion fails. Diagnostics record accepted
+actions, click counts and revisions.
+
 The suite runner reports the active test and completed count every 60 seconds.
 Native crashes also produce Python tracebacks. The outer platform runner allows
 ten minutes for the shared suite and fifteen for Logistics and uploads its logs; macOS jobs also collect native Python
