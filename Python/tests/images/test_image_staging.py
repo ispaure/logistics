@@ -108,10 +108,22 @@ class ImageStagingTests(unittest.TestCase):
     def test_non_webp_conversion_publishes_normal_name_before_deletion(self):
         source = self.source('page.png')
         original = source.read_bytes()
-        with patch.object(processing.ImageFile, 'compress', self.fake_encoder(source, original, 74)):
+        destination = source.with_suffix('.webp')
+        delete_file = processing.ImageFile.delete_file
+
+        def observe_deletion(image):
+            self.assertEqual(image.path, source)
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(destination.read_bytes(), b'compressed output')
+            return delete_file(image)
+
+        with patch.object(processing.ImageFile, 'compress', self.fake_encoder(source, original, 74)), \
+                patch.object(processing.ImageFile, 'delete_file', autospec=True,
+                             side_effect=observe_deletion) as delete:
             self.assertTrue(self.run_batch())
+        delete.assert_called_once()
         self.assertFalse(source.exists())
-        self.assertEqual((self.root / 'page.webp').read_bytes(), b'compressed output')
+        self.assertEqual(destination.read_bytes(), b'compressed output')
         self.assertFalse((self.root / '.page.webp').exists())
 
     def test_non_webp_retained_original_leaves_no_webp(self):
