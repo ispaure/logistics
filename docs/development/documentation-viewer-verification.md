@@ -81,3 +81,21 @@ this pass.
 The October 16 full-app limitation above retains its original snapshot scope.
 Later full-app simulator and portable-catalog evidence is recorded in the
 [maintenance assessment](maintenance/history/architecture-audit.md#current-assessment-after-the-october-23-maintenance-pass).
+
+## November 3 title and command rows
+
+The Logistics Help host keeps page Back/Forward and speech in a content command
+row. Android places its actions menu there as well, leaving native Close/Browse
+and the title above it. Apple uses the existing document-title row with Browse
+and Actions at its edges; history and speech stay below. Both rows follow the
+article pane when the documentation tree becomes pinned, including after a
+resize back to a phone layout. Desktop retains its existing wiki layout.
+
+The focused Help host suite covers Settings entry, page history, folder links,
+search, speech lifetime, and allocations from 320 through 1400 logical units.
+`documentation_header_probe.py`, selected with
+`document_storage_tools --probe documentation-header`, opens Settings → Help on
+an isolated native QA app, rotates between portrait and landscape, measures title
+and tree-label widths, and saves article/tree screenshots before owned cleanup.
+The `--family all` option covers iPhone, iPad and closed/open/partial iPhone Duo;
+Android phone and `--android-tablet` runs use disposable emulators.
