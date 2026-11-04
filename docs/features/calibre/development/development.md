@@ -65,5 +65,28 @@ launchers. It covers naming, collisions, links, copy failures, changed files,
 disconnected storage and Linux launcher selection. Actual device exports and
 desktop launching still require platform validation.
 
-`ui/folder_widget.py` owns desktop folder presentation. The root
-`folder_widget.py` keeps its public widget import for existing consumers.
+`ui_contributions.py` registers the desktop `FolderFeatureContribution`; it
+requires a local entry and lazily constructs `ui/folder_widget.py`. That widget
+owns the library selector and reviewed export route through `ui/export_dialog.py`.
+The BOOX button in this route prefills the destination after checking the mount.
+`ui/manage_dialog.py` retains an older confirmation-based BOOX workflow; do not
+confuse that direct facade call with the registered folder widget's review dialog.
+There is no root `folder_widget.py` compatibility module.
+
+## Platform and ownership boundaries
+
+The native mobile catalogue in `Python/services/mobile_features.py` has no
+Calibre entry, and this package has no mobile source manifest or presentation.
+EPUB parsing, reading and direct EPUB metadata editing belong to Books; Calibre
+export does not implement conversion or mobile database synchronization. See
+[mobile availability](../user_mobile/user_mobile.md). Shared filesystem and UI
+mechanisms remain in commonUtils; this guide documents the Logistics adapter.
+
+## Static audit scope
+
+On November 4, 2026, documentation was checked against registration, discovery,
+launching, export planning/execution, both UI routes and the test source.
+`Python/tests/calibre/test_calibre.py` also covers cancellation before copying,
+truncated staging, destination replacement and argument-safe launching. These
+are test contracts, not newly executed results. No Qt launch, device export,
+build or runtime test was performed during the release quiet hold.

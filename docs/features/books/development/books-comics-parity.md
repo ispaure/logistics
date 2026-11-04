@@ -2,7 +2,8 @@
 
 [Developer index](../../../development/development.md) · [Mobile architecture](../../../development/mobile-architecture-roadmap.md)
 
-Updated October 15, 2026. Delivery order: EPUB navigation/resume/search, comic
+Current capability table audited November 4, 2026; dated validation below is
+from October 15 and was not rerun for this documentation pass. Original delivery order: EPUB navigation/resume/search, comic
 spreads/navigation, then library/editing. The core implementation below is local;
 full desktop/mobile parity is not claimed. Differences and validation scope are
 explicit so shared parsing is not mistaken for matching product capabilities.
@@ -14,20 +15,21 @@ explicit so shared parsing is not mistaken for matching product capabilities.
 | EPUB parsing and XHTML | Shared feature package/parser and named-entity handling | Simplified renderers retain different supported presentation styles |
 | EPUB contents and links | Imported and provider rich rendering share nested contents and safe archive-local links | Simplified HTML/CSS remains less complete than the desktop renderer |
 | EPUB turns | Imported and native provider WebViews move a viewport at a time and cross chapters | Desktop has discrete adaptive page/spread layout; unsupported-backend provider fallback uses bounded text passages |
-| EPUB resume/bookmarks | Imported chapter path + UTF-16 DOM text offset; exact session passage anchors for providers | Desktop Qt offsets and browser DOM offsets use the same units but have different rendered-text models; records are not interchangeable |
+| EPUB resume/bookmarks | Imported chapter path + UTF-16 DOM text offset; credential-bound passage anchors for providers | Desktop Qt offsets and browser DOM offsets use the same units but have different rendered-text models; records are not interchangeable |
 | EPUB search | Feature-owned Unicode casefold search, wrap, UTF-16 ranges; imported and native provider WebViews highlight selection | Search remains within the current chapter |
-| EPUB speech/appearance | Native offline read-aloud, selected/current passage, speed, sentence-boundary pause/resume, range follow; local font families, custom spacing/width and shared desktop themes | Resume repeats the current utterance; physical-device audio/accessibility and fixed-layout EPUB fidelity remain to validate |
+| EPUB speech/appearance | Native offline read-aloud, selected/current passage, speed, current-word pause/resume, range follow; local font families, custom spacing/width and shared desktop themes | Physical-device audio/accessibility and fixed-layout EPUB fidelity remain to validate |
 | Comic page policy | Shared natural order, resource-fork exclusion, explicit native decoder limits | Mobile PNG/JPEG/static WebP only; broader native decoders remain outstanding |
 | Comic spreads | Shared page rules and manga order; one native composite zoom/pan surface with proportional pages | Mobile composite output is bounded to 16 MP / 8192 pixels per side; physical pinch ergonomics remain to validate |
-| Comic navigation | Spread-aware turns/swipes, direct page selection, imported first/last and adjacent comics; provider adjacent comics within a managed folder | No adjacent-folder route for standalone encrypted-copy UUID storage; no desktop slider/held-key UX |
+| Comic navigation | Spread-aware turns/swipes, direct page selection, direct page selection and adjacent-comic buttons when siblings are available | No adjacent-folder route for standalone encrypted-copy UUID storage; no desktop slider/held-key UX |
 | Comic resize | Imported and provider auto layouts share a feature-owned viewport watcher; defer while zoomed | Physical-device gesture and resize validation remains outstanding |
 | Imported library | Incremental persistent ordinary-import metadata index and shared suggestions; imports open directly and remain in document sessions | Catalogue shows configured folders only; provider-wide indexing and native processing/organization remain outstanding |
 | Single metadata editing | Shared feature patch helpers for provider and ordinary imported EPUB/comics | Standalone encrypted imports need a native archive writer before rewriting is enabled |
 | Comic batch metadata | Ordinary-local and managed LocalCrypt recursive selection; suggestions, explicit fields, all-file preflight, verified per-file publication, cancellation/retry and private retirement | Imported-library selection UI removed; standalone encrypted imported publication and live-remote recursive editing remain outstanding |
 | Processing | Existing desktop compression/encryption/conversion untouched | Native compression, CBR conversion and organization require additional codec/job work |
 
-Provider EPUB positions/bookmarks deliberately remain in memory. Ordinary import
-records remain UUID/digest-owned. Private models, titles and image bytes must not
+Provider EPUB positions/bookmarks use credential-bound encrypted persistence
+when a credential ZIP password is available, with RAM-only passwordless state.
+Ordinary import records remain UUID/digest-owned. Private models, titles and image bytes must not
 enter ordinary recovery, recent files or persistent collection caches.
 
 ## Ownership and implementation
@@ -48,14 +50,14 @@ Books owns:
   byte bound before toolkit calls and explicit disposal. Unsupported backends use
   `mobile/text_reader.py`'s bounded native passages.
 - `mobile/appearance.py`: common native appearance form; hosts save preferences.
-- `mobile/metadata.py`: native EPUB field values and sparse patches.
+- `library/metadata.py`: portable EPUB/comic metadata field values and sparse patches.
 
 Comics owns:
 
 - `pages.py:comic_page_names` and `double_page_indices`: shared page/metadata rules.
 - `reading.py:visible_pages`: common spread decisions. The desktop filesystem
   sibling import is now lazy so importing these decisions is portable.
-- `mobile/{pages,validation}.py`: mobile page-format/image bounds.
+- `collection/pages.py` and `features/images/validation.py`: mobile page-format/image bounds.
 - `mobile/navigation.py`: validated spread loading, forward/backward spread bounds
   and naturally ordered neighboring identities supplied by the host.
 - `mobile/composite.py`: bounded, memory-only native bitmap composition with
@@ -85,7 +87,8 @@ provider readers use the same geometry and composition. `test_fold_layout.py`
 checks inactive/active geometry, asymmetric panes and equal page heights;
 `test_comic_split.py` covers both reader adapters and reading directions.
 
-`mobile_build/tools.py` explicitly stages every added runtime module. Portable feature
+Feature `mobile_sources.json` manifests declare the portable/mobile runtime modules
+selected by the mobile preparation tooling. Portable feature
 imports do not load Qt, Toga, Pillow, Rubicon or Java. Platform presentations may
 load Toga; native image decoding remains subject to the mobile bounds.
 
@@ -155,6 +158,11 @@ the retry baseline; failures retain form values. Batch cancellation is checked
 between comics and is not forwarded into the active comic replacement.
 
 ## Verification and remaining validation
+
+The results and implementation snapshots below are historical October 15 records.
+They preserve the scope of those probes; subsequent ownership and UI changes are
+described in the [current integration guide](development.md). No native or
+rendered acceptance was rerun during the November 4 documentation audit.
 
 Generated-book tests cover entity handling, local links/fragments, UTF-16 offsets,
 casefold expansions, search wrap, legacy/new bookmarks, spread bounds, landscape/
