@@ -199,10 +199,30 @@ Use the [project test commands](../../../development/getting-started.md) and
 [cross-platform checks](../../../development/platform-checks.md). Comic tests cover compression,
 metadata, reader/spreads/decoding, catalog, file-type integration, passwords,
 encryption and asynchronous cancellation using disposable fixtures. Shared ZIP and
-browser tests belong to commonUtils. The [parity report](zip-compression-parity.md)
+browser tests belong to commonUtils. `Python/tests/comics/test_comic_password_ui.py`
+checks GUI-thread password prompts, reader/editor retries, adjacent-comic cancellation
+and suppression of queued browser retries after closure. The [parity report](zip-compression-parity.md)
 records decrypted full-run comparisons; ZIP container timestamps are not expected
 to match. Tests do not reproduce the ComicRack crash, invoke a real RAR extractor
 or replace native desktop/remote-mount validation. EPUB reading/editing belongs to the separate Books engine.
+
+Reader concurrency tests force cache misses and wait for worker entry before
+queuing navigation or closing. Held-key mapping and slow-load checks dispatch
+repeat ticks explicitly; a separate real-timer check verifies dispatch and release.
+Fixtures reuse immutable PNG bytes while keeping archives, reader state and worker
+lifetimes private to each test. The Retina preview check retains full-size pixels.
+Menu, metadata and library-tab fixtures disable unrelated shared folder-size jobs;
+the nested browser details scenario indexes real files in a private SQLite cache
+and verifies totals without the cross-process desktop coordinator.
+Bulk metadata coverage enters every editable field and verifies both saved archives
+in one Apply operation. Padding cutoffs are checked independently of a small real
+rename fixture; collision and failure-preservation checks remain end-to-end.
+
+ZIP creation/dialog cancellation checks live in
+`Python/tests/archives/test_archive_zip_creation_lifecycle.py`; mobile browser
+geometry lives in `Python/tests/test_mobile_browser_columns.py`. Generic XML,
+folder-total and platform-reveal contracts live in commonUtils' own tests. The
+comics owner selection includes asynchronous operations and viewer page progress.
 
 ## Portable document boundary
 

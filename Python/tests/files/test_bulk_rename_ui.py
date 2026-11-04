@@ -8,7 +8,6 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from dataclasses import replace
 from threading import Event
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import json
 import time
 import unittest
@@ -22,12 +21,14 @@ from commonUtils.filesystem.rename import RenameRules
 class BulkRenameWidgetTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name).resolve()
         self.first = self.root / 'page2.txt';self.first.write_text('two')
         self.second = self.root / 'page10.txt';self.second.write_text('ten')
         self.widget = BulkRenameWidget(self.root)
+        self.preview_interval = self.widget.preview_timer.interval()
+        # Debounce timing has a dedicated case; workflow tests await real workers.
+        self.widget.preview_timer.setInterval(0)
         self.widget.resize(1280, 900)
         self.widget.show()
         self.addCleanup(self._close)
@@ -41,17 +42,17 @@ class BulkRenameWidgetTests(QtTestCase):
         self.widget.deleteLater()
         self.app.processEvents()
 
-    def wait_idle(self):
-        deadline = time.monotonic() + 8
-        while time.monotonic() < deadline:
+    def wait_idle(self, widget=None):
+        widget = self.widget if widget is None else widget
+
+        def settled():
+            if widget.progress.busy or widget.preview_timer.isActive():
+                return False
+            # Flush queued initial singleShots and finished signals once more.
             self.app.processEvents()
-            if not self.widget.progress.busy and not self.widget.preview_timer.isActive():
-                # Flush queued initial singleShots and finished signals once more.
-                self.app.processEvents()
-                if not self.widget.progress.busy and not self.widget.preview_timer.isActive():
-                    return
-            time.sleep(.005)
-        self.fail('Rename UI worker did not finish')
+            return not widget.progress.busy and not widget.preview_timer.isActive()
+
+        self.wait_until(settled, timeout=8, message='Rename UI worker did not finish')
 
     def test_rules_resize_hide_and_reflow_without_resetting(self):
         self.widget.controls.fields['prefix'].setText('keep_')
@@ -84,21 +85,20 @@ class BulkRenameWidgetTests(QtTestCase):
             self.assertLessEqual(section.mapTo(self.widget.controls, qt.QPoint()).y() + section.height(),
                                  scroll.viewport().height())
 
-    def test_footer_groups_secondary_actions_beside_rename_at_narrow_width(self):
+    def test_footer_actions_remain_visible_at_narrow_width(self):
         widget = self.widget
         widget.resize(680, 650)
         for _ in range(12):
             self.app.processEvents()
+        rectangles = []
         for button in (widget.preview_button, widget.reset_button, widget.undo_button, widget.rename_button):
             self.assertTrue(widget.action_area.isAncestorOf(button))
             self.assertTrue(button.isVisible())
             rectangle = qt.QRect(button.mapTo(widget.action_area, qt.QPoint()), button.size())
             self.assertTrue(widget.action_area.rect().contains(rectangle))
-        self.assertLess(widget.preview_button.y(), widget.reset_button.y())
-        self.assertLess(widget.reset_button.y(), widget.undo_button.y())
-        self.assertGreater(widget.rename_button.height(), widget.undo_button.height())
-        self.assertGreater(widget.rename_button.x(), widget.undo_button.mapTo(widget.action_area, qt.QPoint()).x()
-                           + widget.undo_button.width())
+            for previous in rectangles:
+                self.assertFalse(rectangle.intersects(previous), 'Footer actions overlap')
+            rectangles.append(rectangle)
 
     def test_menu_actions_follow_preview_readiness_and_reuse_rule_controls(self):
         from desktop.bulk_rename.menus import build_menus
@@ -268,6 +268,275 @@ class BulkRenameWidgetTests(QtTestCase):
         self.widget._folder_directory_loaded(str(self.root))
         self.assertFalse(self.widget.folder_tree.isExpanded(index.parent()))
 
+
+    def test_preview_apply_and_undo_use_background_work_and_preserve_data(self):
+        self.assertEqual(len(self.widget.selected_paths()), 2)
+        self.widget.controls.fields['prefix'].setText('new_')
+        self.assertFalse(self.widget.rename_button.isEnabled())
+        self.wait_idle()
+        self.assertTrue(self.widget.rename_button.isEnabled())
+        self.assertTrue(self.first.exists())
+        self.assertFalse((self.root / 'new_page2.txt').exists())
+        self.assertTrue(self.widget.apply())
+        self.assertFalse(self.widget.controls.isEnabled())
+        self.wait_idle()
+        self.assertEqual((self.root / 'new_page2.txt').read_text(), 'two')
+        self.assertEqual((self.root / 'new_page10.txt').read_text(), 'ten')
+        self.assertTrue(self.widget.undo_button.isEnabled())
+        self.assertFalse(self.widget.rename_button.isEnabled())
+        self.assertTrue(self.widget.undo())
+        self.wait_idle()
+        self.assertEqual(self.first.read_text(), 'two')
+        self.assertEqual(self.second.read_text(), 'ten')
+        self.assertFalse(self.widget.undo_button.isEnabled())
+
+    def test_selection_conflicts_and_invalid_regex_block_rename(self):
+        self.widget.controls.set_rules(RenameRules(name_mode='fixed', fixed_name='same'))
+        self.wait_idle()
+        self.assertFalse(self.widget.rename_button.isEnabled())
+        self.assertIn('errors', self.widget.status.text())
+        self.widget.table.clearSelection()
+        self.widget.table.topLevelItem(0).setSelected(True)
+        self.wait_idle()
+        self.assertTrue(self.widget.rename_button.isEnabled())
+        self.assertEqual(len(self.widget.plan.entries), 1)
+        self.widget.controls.fields['regex_pattern'].setText('[')
+        self.wait_idle()
+        self.assertFalse(self.widget.rename_button.isEnabled())
+        self.assertIn('unterminated', self.widget.status.text())
+        self.assertTrue(self.first.exists())
+
+    def test_superseded_preview_does_not_enable_outdated_rename(self):
+        from desktop.bulk_rename import widget as module
+        old_entered, release_old, new_entered, release_new = (Event() for _ in range(4))
+        original = module.plan_renames
+        initial_plan = self.widget.plan
+        published = []
+        self.widget.preview_ready.connect(lambda *args: published.append(args))
+
+        def delayed(paths, rules, **kwargs):
+            entered, release = (old_entered, release_old) if rules.prefix == 'old_' else (new_entered, release_new)
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError('Preview barrier was not released')
+            return original(paths, rules, **kwargs)
+
+        with patch.object(module, 'plan_renames', side_effect=delayed):
+            try:
+                self.widget.controls.fields['prefix'].setText('old_')
+                self.wait_until(old_entered.is_set)
+                self.widget.controls.fields['prefix'].setText('latest_')
+                self.assertFalse(self.widget.rename_button.isEnabled())
+                release_old.set()
+                # The replacement worker starts only after the old completion
+                # has been handled. Hold it so an invalid transient plan is visible.
+                self.wait_until(new_entered.is_set)
+                self.assertIs(self.widget.plan, initial_plan)
+                self.assertFalse(published)
+                self.assertFalse(self.widget.rename_button.isEnabled())
+            finally:
+                release_old.set()
+                release_new.set()
+                self.wait_idle()
+        self.assertTrue(all(entry.target.name.startswith('latest_') for entry in self.widget.plan.entries))
+        self.assertEqual(len(self.widget.plan.entries), 2)
+        self.assertTrue(self.widget.rename_button.isEnabled())
+        self.assertEqual(len(published), 1)
+
+    def test_rule_changes_are_debounced_into_one_latest_preview(self):
+        from desktop.bulk_rename import widget as module
+        self.assertGreater(self.preview_interval, 0)
+        self.widget.preview_timer.setInterval(self.preview_interval)
+        with patch.object(module, 'plan_renames', wraps=module.plan_renames) as planned:
+            self.widget.controls.fields['prefix'].setText('old_')
+            self.widget.controls.fields['prefix'].setText('latest_')
+            self.assertTrue(self.widget.preview_timer.isActive())
+            self.assertFalse(self.widget.rename_button.isEnabled())
+            planned.assert_not_called()
+            self.wait_idle()
+        planned.assert_called_once()
+        self.assertEqual(planned.call_args.args[1].prefix, 'latest_')
+        self.assertTrue(self.widget.rename_button.isEnabled())
+
+    def test_selection_and_rule_previews_keep_layout_scroll_and_selection_stable(self):
+        from desktop.bulk_rename import widget as module
+        for index in range(100):
+            (self.root / f'sample{index}.txt').write_text('sample')
+        self.widget.resize(1000, 800)
+        self.widget.load_directory(self.root)
+        self.wait_idle()
+        self.widget.table.clearSelection()
+        item = self.widget.table.topLevelItem(50)
+        self.widget.table.setCurrentItem(item)
+        item.setSelected(True)
+        self.wait_idle()
+        self.widget.table.verticalScrollBar().setValue(200)
+        self.widget.table.horizontalScrollBar().setValue(100)
+        self.app.processEvents()
+        table_rect = self.widget.table.geometry()
+        controls_rect = self.widget.controls.parentWidget().parentWidget().geometry()
+        button_rect = self.widget.preview_button.geometry()
+        selection = self.widget.selected_paths()
+        vertical = self.widget.table.verticalScrollBar().value()
+        horizontal = self.widget.table.horizontalScrollBar().value()
+        entered, release = Event(), Event()
+        original = module.plan_renames
+        def delayed(*args, **kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError('Preview barrier was not released')
+            return original(*args, **kwargs)
+        with patch.object(module, 'plan_renames', side_effect=delayed) as planned:
+            try:
+                self.widget.controls.fields['remove_digits'].setChecked(True)
+                self.wait_until(entered.is_set)
+                self.app.processEvents()
+                self.assertTrue(self.widget.progress.busy)
+                self.assertTrue(self.widget.progress.isHidden())
+                self.assertEqual(self.widget.table.geometry(), table_rect)
+                self.assertEqual(self.widget.controls.parentWidget().parentWidget().geometry(), controls_rect)
+                self.assertEqual(self.widget.preview_button.geometry(), button_rect)
+                self.assertEqual(self.widget.selected_paths(), selection)
+            finally:
+                release.set()
+                self.wait_idle()
+        planned.assert_called_once()
+        self.assertEqual(self.widget.table.geometry(), table_rect)
+        self.assertEqual(self.widget.controls.parentWidget().parentWidget().geometry(), controls_rect)
+        self.assertEqual(self.widget.preview_button.geometry(), button_rect)
+        self.assertEqual(self.widget.table.verticalScrollBar().value(), vertical)
+        self.assertEqual(self.widget.table.horizontalScrollBar().value(), horizontal)
+        self.assertEqual(self.widget.selected_paths(), selection)
+        self.assertIs(self.widget.table.currentItem(), item)
+
+    def test_quiet_preview_can_be_cancelled_from_existing_preview_button(self):
+        from desktop.bulk_rename import widget as module
+        entered, release = Event(), Event()
+        original = module.plan_renames
+        def delayed(*args, **kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError('Preview barrier was not released')
+            return original(*args, **kwargs)
+        with patch.object(module, 'plan_renames', side_effect=delayed) as planned:
+            try:
+                self.widget.request_preview()
+                self.wait_until(entered.is_set)
+                self.assertEqual(self.widget.preview_button.text(), 'Cancel preview')
+                self.assertTrue(self.widget.preview_button.isEnabled())
+                self.widget.preview_button.click()
+                self.assertTrue(self.widget.progress.cancelled.is_set())
+                self.assertTrue(self.widget.progress.busy)
+            finally:
+                release.set()
+                self.wait_idle()
+        planned.assert_called_once()
+        self.assertEqual(self.widget.preview_button.text(), 'Preview')
+        self.assertIn('cancelled', self.widget.status.text())
+        self.assertFalse(self.widget.rename_button.isEnabled())
+
+    def test_json_presets_round_trip_and_bad_preset_is_atomic(self):
+        preset = self.root / 'rules.json'
+        expected = RenameRules(prefix='Photo_', number_mode='suffix', number_padding=3)
+        self.widget.controls.set_rules(expected)
+        self.wait_idle()
+        with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(preset), '')):
+            self.assertTrue(self.widget.save_preset())
+        self.widget.controls.set_rules(RenameRules())
+        self.wait_idle()
+        with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=(str(preset), '')):
+            self.assertTrue(self.widget.load_preset())
+        self.assertEqual(self.widget.controls.rules(), expected)
+        self.wait_idle()
+        preset.write_text(json.dumps({'prefix': 'wrong_', 'remove_first': 'bad'}))
+        with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=(str(preset), '')):
+            self.assertFalse(self.widget.load_preset())
+        self.assertEqual(self.widget.controls.rules(), expected)
+
+    def test_explicit_paths_limit_initial_scope(self):
+        window = open_bulk_rename(paths=[self.first])
+        self.wait_idle(window.renamer)
+        self.assertEqual(window.renamer.selected_paths(), (self.first,))
+        window.close()
+        self.app.processEvents()
+
+    def test_closing_busy_widget_requests_cancel_and_waits_for_rollback(self):
+        from commonUtils.filesystem import rename as renameUtils
+        self.widget.controls.fields['prefix'].setText('new_')
+        self.wait_idle()
+        entered, release = Event(), Event()
+        original = renameUtils._rename_exclusive
+        def delayed(source, target):
+            if source == self.first:
+                entered.set()
+                release.wait(3)
+            return original(source, target)
+        with patch.object(renameUtils, '_rename_exclusive', side_effect=delayed):
+            try:
+                self.widget.apply()
+                self.wait_until(entered.is_set, timeout=3)
+                self.assertFalse(self.widget.can_close())
+                self.assertTrue(self.widget.progress.busy)
+            finally:
+                release.set()
+                self.wait_idle()
+        self.assertTrue(self.widget.can_close())
+        self.assertEqual(self.first.read_text(), 'two')
+        self.assertEqual(self.second.read_text(), 'ten')
+        self.assertFalse(list(self.root.glob('.bulk-rename-*')))
+
+    def test_parent_window_close_waits_for_child_rename_to_cancel(self):
+        from commonUtils.filesystem import rename as renameUtils
+        host = qt.QMainWindow()
+        host.show()
+        window = open_bulk_rename(paths=[self.first, self.second], parent=host)
+        renamer = window.renamer
+        entered, release = Event(), Event()
+        original = renameUtils._rename_exclusive
+        def delayed(source, target):
+            if source == self.first:
+                entered.set()
+                release.wait(3)
+            return original(source, target)
+        try:
+            self.wait_idle(renamer)
+            renamer.controls.fields['prefix'].setText('new_')
+            self.wait_idle(renamer)
+            with patch.object(renameUtils, '_rename_exclusive', side_effect=delayed):
+                renamer.apply()
+                self.wait_until(entered.is_set, timeout=3)
+                self.assertFalse(host.close())
+                self.assertTrue(host.isVisible())
+                self.assertTrue(renamer.progress.busy)
+                release.set()
+                self.wait_until(lambda: not host.isVisible())
+                self.assertEqual(self.first.read_text(), 'two')
+                self.assertEqual(self.second.read_text(), 'ten')
+        finally:
+            release.set()
+            # A failure before releasing the worker must still drain it before
+            # destroying its parent and the filesystem fixture.
+            self.wait_until(host.close, timeout=8)
+            host.deleteLater()
+            self.app.processEvents()
+
+    def test_stale_source_error_keeps_ui_and_files_available(self):
+        self.widget.controls.fields['prefix'].setText('new_')
+        self.wait_idle()
+        self.first.write_text('edited after preview')
+        self.widget.apply()
+        self.wait_idle()
+        self.assertIn('changed since preview', self.widget.status.text())
+        self.assertEqual(self.first.read_text(), 'edited after preview')
+        self.assertFalse(self.widget.rename_button.isEnabled())
+
+
+class FolderTreeLayoutTests(QtTestCase):
+    """Exercise tree layout without starting a rename scan and preview."""
+
+    def setUp(self):
+        self.app = qt.QApplication.instance()
+
     def test_late_model_layout_preserves_visible_selection_but_respects_manual_scroll(self):
         from desktop.bulk_rename.widget import _FolderTree
         model = qt.QStandardItemModel()
@@ -345,248 +614,24 @@ class BulkRenameWidgetTests(QtTestCase):
         self.app.processEvents()
         self.assertTrue(visible(), f'Layout hid the folder: {tree.visualRect(index).getRect()}')
 
-    def test_preview_apply_and_undo_use_background_work_and_preserve_data(self):
-        self.assertEqual(len(self.widget.selected_paths()), 2)
-        self.widget.controls.fields['prefix'].setText('new_')
-        self.assertFalse(self.widget.rename_button.isEnabled())
-        self.wait_idle()
-        self.assertTrue(self.widget.rename_button.isEnabled())
-        self.assertTrue(self.first.exists())
-        self.assertFalse((self.root / 'new_page2.txt').exists())
-        self.assertTrue(self.widget.apply())
-        self.assertFalse(self.widget.controls.isEnabled())
-        self.wait_idle()
-        self.assertEqual((self.root / 'new_page2.txt').read_text(), 'two')
-        self.assertEqual((self.root / 'new_page10.txt').read_text(), 'ten')
-        self.assertTrue(self.widget.undo_button.isEnabled())
-        self.assertFalse(self.widget.rename_button.isEnabled())
-        self.assertTrue(self.widget.undo())
-        self.wait_idle()
-        self.assertEqual(self.first.read_text(), 'two')
-        self.assertEqual(self.second.read_text(), 'ten')
-        self.assertFalse(self.widget.undo_button.isEnabled())
 
-    def test_selection_conflicts_and_invalid_regex_block_rename(self):
-        self.widget.controls.set_rules(RenameRules(name_mode='fixed', fixed_name='same'))
-        self.wait_idle()
-        self.assertFalse(self.widget.rename_button.isEnabled())
-        self.assertIn('errors', self.widget.status.text())
-        self.widget.table.clearSelection()
-        self.widget.table.topLevelItem(0).setSelected(True)
-        self.wait_idle()
-        self.assertTrue(self.widget.rename_button.isEnabled())
-        self.assertEqual(len(self.widget.plan.entries), 1)
-        self.widget.controls.fields['regex_pattern'].setText('[')
-        self.wait_idle()
-        self.assertFalse(self.widget.rename_button.isEnabled())
-        self.assertIn('unterminated', self.widget.status.text())
-        self.assertTrue(self.first.exists())
-
-    def test_superseded_preview_does_not_enable_outdated_rename(self):
-        self.widget.controls.fields['prefix'].setText('old_')
-        self.widget._preview()
-        self.widget.controls.fields['prefix'].setText('latest_')
-        self.wait_idle()
-        self.assertTrue(all(entry.target.name.startswith('latest_') for entry in self.widget.plan.entries))
-        self.assertTrue(self.widget.rename_button.isEnabled())
-
-    def test_selection_and_rule_previews_keep_layout_scroll_and_selection_stable(self):
-        from desktop.bulk_rename import widget as module
-        for index in range(100):
-            (self.root / f'sample{index}.txt').write_text('sample')
-        self.widget.resize(1000, 800)
-        self.widget.load_directory(self.root)
-        self.wait_idle()
-        self.widget.table.clearSelection()
-        item = self.widget.table.topLevelItem(50)
-        self.widget.table.setCurrentItem(item)
-        item.setSelected(True)
-        self.wait_idle()
-        self.widget.table.verticalScrollBar().setValue(200)
-        self.widget.table.horizontalScrollBar().setValue(100)
-        self.app.processEvents()
-        table_rect = self.widget.table.geometry()
-        controls_rect = self.widget.controls.parentWidget().parentWidget().geometry()
-        button_rect = self.widget.preview_button.geometry()
-        selection = self.widget.selected_paths()
-        vertical = self.widget.table.verticalScrollBar().value()
-        horizontal = self.widget.table.horizontalScrollBar().value()
-        entered, release = Event(), Event()
-        original = module.plan_renames
-        def delayed(*args, **kwargs):
-            entered.set()
-            release.wait(5)
-            return original(*args, **kwargs)
-        with patch.object(module, 'plan_renames', side_effect=delayed):
-            try:
-                self.widget.controls.fields['remove_digits'].setChecked(True)
-                self.widget._preview()
-                self.assertTrue(entered.wait(2))
-                self.app.processEvents()
-                self.assertTrue(self.widget.progress.busy)
-                self.assertTrue(self.widget.progress.isHidden())
-                self.assertEqual(self.widget.table.geometry(), table_rect)
-                self.assertEqual(self.widget.controls.parentWidget().parentWidget().geometry(), controls_rect)
-                self.assertEqual(self.widget.preview_button.geometry(), button_rect)
-                self.assertEqual(self.widget.selected_paths(), selection)
-            finally:
-                release.set()
-                self.wait_idle()
-        self.assertEqual(self.widget.table.geometry(), table_rect)
-        self.assertEqual(self.widget.controls.parentWidget().parentWidget().geometry(), controls_rect)
-        self.assertEqual(self.widget.preview_button.geometry(), button_rect)
-        self.assertEqual(self.widget.table.verticalScrollBar().value(), vertical)
-        self.assertEqual(self.widget.table.horizontalScrollBar().value(), horizontal)
-        self.assertEqual(self.widget.selected_paths(), selection)
-        self.assertIs(self.widget.table.currentItem(), item)
-
-    def test_quiet_preview_can_be_cancelled_from_existing_preview_button(self):
-        from desktop.bulk_rename import widget as module
-        entered, release = Event(), Event()
-        original = module.plan_renames
-        def delayed(*args, **kwargs):
-            entered.set()
-            release.wait(5)
-            return original(*args, **kwargs)
-        with patch.object(module, 'plan_renames', side_effect=delayed):
-            try:
-                self.widget.request_preview()
-                self.widget._preview()
-                self.assertTrue(entered.wait(2))
-                self.assertEqual(self.widget.preview_button.text(), 'Cancel preview')
-                self.assertTrue(self.widget.preview_button.isEnabled())
-                self.widget.preview_button.click()
-                self.assertTrue(self.widget.progress.cancelled.is_set())
-                self.assertTrue(self.widget.progress.busy)
-            finally:
-                release.set()
-                self.wait_idle()
-        self.assertEqual(self.widget.preview_button.text(), 'Preview')
-        self.assertIn('cancelled', self.widget.status.text())
-        self.assertFalse(self.widget.rename_button.isEnabled())
-
-    def test_json_presets_round_trip_and_bad_preset_is_atomic(self):
-        preset = self.root / 'rules.json'
-        expected = RenameRules(prefix='Photo_', number_mode='suffix', number_padding=3)
-        self.widget.controls.set_rules(expected)
-        self.wait_idle()
-        with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(preset), '')):
-            self.assertTrue(self.widget.save_preset())
-        self.widget.controls.set_rules(RenameRules())
-        self.wait_idle()
-        with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=(str(preset), '')):
-            self.assertTrue(self.widget.load_preset())
-        self.assertEqual(self.widget.controls.rules(), expected)
-        self.wait_idle()
-        preset.write_text(json.dumps({'prefix': 'wrong_', 'remove_first': 'bad'}))
-        with patch.object(qt.QFileDialog, 'getOpenFileName', return_value=(str(preset), '')):
-            self.assertFalse(self.widget.load_preset())
-        self.assertEqual(self.widget.controls.rules(), expected)
-
-    def test_explicit_paths_limit_initial_scope(self):
-        window = open_bulk_rename(paths=[self.first])
-        original = self.widget
-        self.widget = window.renamer
-        self.wait_idle()
-        self.assertEqual(self.widget.selected_paths(), (self.first,))
-        window.close()
-        self.widget = original
-        self.app.processEvents()
-
-    def test_closing_busy_widget_requests_cancel_and_waits_for_rollback(self):
-        from commonUtils.filesystem import rename as renameUtils
-        self.widget.controls.fields['prefix'].setText('new_')
-        self.wait_idle()
-        entered, release = Event(), Event()
-        original = renameUtils._rename_exclusive
-        def delayed(source, target):
-            if source == self.first:
-                entered.set()
-                release.wait(3)
-            return original(source, target)
-        with patch.object(renameUtils, '_rename_exclusive', side_effect=delayed):
-            self.widget.apply()
-            deadline = time.monotonic() + 3
-            while not entered.is_set() and time.monotonic() < deadline:
-                self.app.processEvents()
-                time.sleep(.005)
-            self.assertTrue(entered.is_set())
-            self.assertFalse(self.widget.can_close())
-            self.assertTrue(self.widget.progress.busy)
-            release.set()
-            self.wait_idle()
-        self.assertTrue(self.widget.can_close())
-        self.assertEqual(self.first.read_text(), 'two')
-        self.assertEqual(self.second.read_text(), 'ten')
-        self.assertFalse(list(self.root.glob('.bulk-rename-*')))
-
-    def test_parent_window_close_waits_for_child_rename_to_cancel(self):
-        from commonUtils.filesystem import rename as renameUtils
-        host = qt.QMainWindow()
-        host.show()
-        window = open_bulk_rename(paths=[self.first, self.second], parent=host)
-        original_widget = self.widget
-        self.widget = window.renamer
-        self.wait_idle()
-        self.widget.controls.fields['prefix'].setText('new_')
-        self.wait_idle()
-        entered, release = Event(), Event()
-        original = renameUtils._rename_exclusive
-        def delayed(source, target):
-            if source == self.first:
-                entered.set()
-                release.wait(3)
-            return original(source, target)
-        try:
-            with patch.object(renameUtils, '_rename_exclusive', side_effect=delayed):
-                self.widget.apply()
-                deadline = time.monotonic() + 3
-                while not entered.is_set() and time.monotonic() < deadline:
-                    self.app.processEvents()
-                    time.sleep(.005)
-                self.assertTrue(entered.is_set())
-                self.assertFalse(host.close())
-                self.assertTrue(host.isVisible())
-                self.assertTrue(self.widget.progress.busy)
-                release.set()
-                self.widget = original_widget
-                deadline = time.monotonic() + 5
-                while host.isVisible() and time.monotonic() < deadline:
-                    self.app.processEvents()
-                    time.sleep(.005)
-                self.assertFalse(host.isVisible())
-                self.assertEqual(self.first.read_text(), 'two')
-                self.assertEqual(self.second.read_text(), 'ten')
-        finally:
-            release.set()
-            self.widget = original_widget
-            host.close()
-            host.deleteLater()
-            self.app.processEvents()
+class BulkRenameActionTests(unittest.TestCase):
+    """Action routing needs paths and a host double, not a live rename widget."""
 
     def test_opt_in_browser_provider_uses_selection_and_refreshes_after_rename(self):
         from types import SimpleNamespace
         from unittest.mock import MagicMock
         from desktop.bulk_rename import bulk_rename_actions
+        first = Path("/synthetic/page2.txt")
         browser = MagicMock()
-        context = SimpleNamespace(selection=(SimpleNamespace(path=self.first),), widget=browser, browser=browser)
+        context = SimpleNamespace(selection=(SimpleNamespace(path=first),), widget=browser, browser=browser)
         actions = bulk_rename_actions(None, context)
         self.assertEqual(actions[0].title, 'Bulk Rename…')
         self.assertEqual(actions[0].category, 'rename')
         with patch('desktop.bulk_rename.open_bulk_rename') as opened:
             actions[0].run(context)
-            opened.assert_called_once_with(paths=[self.first], parent=browser.window())
+            opened.assert_called_once_with(paths=[first], parent=browser.window())
             callback = opened.return_value.renamer.renamed.connect.call_args.args[0]
             callback(None)
             browser.refresh.assert_called_once_with()
         self.assertEqual(bulk_rename_actions(None, SimpleNamespace(selection=())), ())
-
-    def test_stale_source_error_keeps_ui_and_files_available(self):
-        self.widget.controls.fields['prefix'].setText('new_')
-        self.wait_idle()
-        self.first.write_text('edited after preview')
-        self.widget.apply()
-        self.wait_idle()
-        self.assertIn('changed since preview', self.widget.status.text())
-        self.assertEqual(self.first.read_text(), 'edited after preview')
-        self.assertFalse(self.widget.rename_button.isEnabled())

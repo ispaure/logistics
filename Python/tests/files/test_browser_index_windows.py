@@ -8,7 +8,6 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
-from time import monotonic, sleep
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
@@ -27,6 +26,7 @@ class BrowserWindowIndexTests(QtTestCase):
 
     def setUp(self):
         self.temp = TemporaryDirectory(); base = Path(self.temp.name)
+        self.addCleanup(self.temp.cleanup)
         self.root = base / 'files'; self.root.mkdir()
         self.first = self.root / 'view-a'; self.first.mkdir()
         self.second = self.root / 'view-b'; self.second.mkdir()
@@ -44,7 +44,7 @@ class BrowserWindowIndexTests(QtTestCase):
         # These cases exercise the optional recursive background mode. The
         # cache-first/visited default has separate policy and navigation tests.
         self.patches.append(patch('commonUtils.ui.file_browser.index_policy.index_policy', return_value=IndexPolicy()))
-        for item in self.patches: item.start()
+        for item in self.patches: self.enterContext(item)
         self.hosts = []; self.workspaces = []; self.views = []; self.releases = []
 
     def tearDown(self):
@@ -56,14 +56,13 @@ class BrowserWindowIndexTests(QtTestCase):
         self.app.processEvents()
         for host in self.hosts: host.close(); host.deleteLater()
         self.app.sendPostedEvents(None,qt.QEvent.Type.DeferredDelete)
-        for item in reversed(self.patches): item.stop()
-        self.temp.cleanup()
+        # LIFO cleanups restore patches, close cached SQLite snapshots, then
+        # remove the fixture. Windows cannot remove an open index database.
 
     def wait(self, condition):
-        deadline = monotonic() + 8
-        while not condition():
-            self.assertLess(monotonic(),deadline)
-            self.app.processEvents(); sleep(.005)
+        # Like BrowserWindowTests, await worker completion rather than asserting
+        # scan speed. Check the condition after pumping queued completions.
+        self.wait_until(condition, timeout=15)
         self.app.processEvents()
 
     def window(self):

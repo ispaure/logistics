@@ -26,6 +26,8 @@ PROBES = {
     'independent-codec': ('independent_codec_probe.py', 900, False),
 }
 CORE_PROBES = tuple(PROBES)[:5]
+RENDERING_ENVIRONMENT = ('QT_OPENGL', 'QT_QUICK_BACKEND', 'QTWEBENGINE_CHROMIUM_FLAGS',
+                         'QSG_RHI_BACKEND', 'QSG_RHI_PREFER_SOFTWARE_RENDERER')
 
 
 def main(output, rendering=None, probes=None, *, profile='core', go=None, latency_mode='enforce',
@@ -59,6 +61,10 @@ def main(output, rendering=None, probes=None, *, profile='core', go=None, latenc
         for mode_index, rendering in enumerate(modes):
             env = dict(os.environ, QT_QPA_PLATFORM=backend, PYTHONUNBUFFERED='1',
                        PYTHONPATH=os.pathsep.join((str(root / 'Python'), str(root))))
+            # A software/WARP parent must not silently turn the native leg into
+            # another software run. Each leg owns these rendering choices.
+            for key in RENDERING_ENVIRONMENT:
+                env.pop(key, None)
             if rendering == 'warp':
                 if system != 'Windows':
                     raise ValueError('WARP acceptance requires Windows')
@@ -101,6 +107,8 @@ def main(output, rendering=None, probes=None, *, profile='core', go=None, latenc
                         row = dict(name=name, rendering=rendering, exit_code=process.returncode, status='passed' if process.returncode == 0 else 'failed')
                     except subprocess.TimeoutExpired:
                         row = dict(name=name, rendering=rendering, status='failed', error='Native probe timed out')
+                    except OSError as error:
+                        row = dict(name=name, rendering=rendering, status='failed', error=str(error))
                 row['seconds'] = time.monotonic() - started
                 result['checks'].append(row)
                 print(json.dumps(row), flush=True)
