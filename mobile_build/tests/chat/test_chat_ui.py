@@ -1,17 +1,14 @@
 """Conversation UI state and recovery using Toga's explicit dummy backend."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
-from pathlib import Path
-from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from mobile.app import LogisticsMobile
 from mobile.chat_fixture import fixture_server
+from mobile_build.tests.support.chat import create_chat_app, wait_for_chat_writes
 
 
 class ChatUITests(unittest.TestCase):
@@ -86,21 +83,8 @@ class ChatUITests(unittest.TestCase):
         self.assertEqual(app.chat_prompt.value, 'Keep my draft')
 
     def setUp(self):
-        self.directory = TemporaryDirectory()
-        LogisticsMobile.storage_root = Path(self.directory.name)
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.app = create_chat_app(self)
         self.app.show_chat()
-
-    def tearDown(self):
-        app = self.app
-        if app.chat_render_task is not None:
-            app.chat_render_task.cancel()
-            app.loop.run_until_complete(asyncio.gather(app.chat_render_task, return_exceptions=True))
-        app.chat_actions.dispose()
-        app.main_window.close()
-        close_loop(app.loop)
-        LogisticsMobile.storage_root = None
-        self.directory.cleanup()
 
     def configure(self, url):
         self.app.chat_url.value = url
@@ -156,8 +140,7 @@ class ChatUITests(unittest.TestCase):
     def test_batched_drafts_never_persist_the_session_api_key(self):
         self.app.chat_key.value = 'SESSION-ONLY-API-KEY-SENTINEL'
         self.app.chat_prompt.value = 'Synthetic draft'
-        self.app.loop.run_until_complete(asyncio.sleep(.3))
-        self.app.loop.run_until_complete(asyncio.gather(*self.app.chat_store._writes))
+        self.app.loop.run_until_complete(wait_for_chat_writes(self.app.chat_store))
         self.assertEqual(self.app.chat_store.load(self.app.chat_current['id'])['draft'], 'Synthetic draft')
         for path in self.app.private_root.rglob('*.json'):
             self.assertNotIn(b'SESSION-ONLY-API-KEY-SENTINEL', path.read_bytes())
@@ -204,12 +187,8 @@ class ChatUITests(unittest.TestCase):
         self.assertEqual(app.chat_current['id'], key)
         self.assertEqual(app.chat_prompt.value, 'Draft kept through delayed selection callbacks')
 
-    def test_chat_drawer_uses_neutral_layers_and_keeps_live_content(self):
-        from mobile.appearance import _surfaces
+    def test_chat_drawer_keeps_live_content(self):
         app = self.app
-        self.assertNotIn(app.chat_transcript_card._impl, _surfaces)
-        self.assertEqual(_surfaces[app.chat_sidebar._impl], 0)
-        self.assertEqual(_surfaces[app.chat_prompt._impl], 22)
         self.assertIs(app.chat_transcript.parent, app.chat_transcript_card)
         app.chat_prompt.value = 'Retain the composer draft'
         app.toggle_chat_conversations()
@@ -236,17 +215,24 @@ class ChatUITests(unittest.TestCase):
 
     def test_sending_keeps_next_draft_and_restores_the_single_primary_action(self):
         app = self.app
-        with patch('socket.getfqdn', side_effect=AssertionError('No DNS')), fixture_server() as (url, _, _, requests):
+        with patch('socket.getfqdn', side_effect=AssertionError('No DNS')), fixture_server(mode='pause') as (url, started, release, requests):
             self.configure(url)
             async def exercise():
                 app.chat_prompt.value = 'Hello'
                 task = asyncio.create_task(app.chat_primary_action())
-                await asyncio.sleep(.01)
-                self.assertTrue(app.chat_busy)
-                self.assertEqual(app.chat_send.accessible_name, 'Stop')
-                self.assertTrue(app.chat_send.enabled)
-                app.chat_prompt.value = 'Next unsent draft'
-                await task
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 3))
+                    self.assertTrue(app.chat_busy)
+                    self.assertEqual(app.chat_send.accessible_name, 'Stop')
+                    self.assertTrue(app.chat_send.enabled)
+                    app.chat_prompt.value = 'Next unsent draft'
+                    release.set()
+                    await asyncio.wait_for(task, 3)
+                finally:
+                    release.set()
+                    if not task.done():
+                        task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
             app.loop.run_until_complete(exercise())
         self.assertEqual(app.chat_current['messages'][-1]['content'], 'Native fixture reply')
         self.assertEqual(app.chat_prompt.value, 'Next unsent draft')

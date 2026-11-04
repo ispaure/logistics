@@ -52,6 +52,21 @@ class ToolbarTests(TestCase):
         self.controller = NS(traitCollection=traits, navigationItem=Mock())
         self.owner = NS()
 
+    def test_screen_drawer_uses_supplemental_budget_but_close_stays_direct(self):
+        from mobile.ios_toolbar import sync_screen
+        app = NS(routes=NS(apple=True, screens={'chat': []}), main_window=object(),
+                 native_host=NS(adapter=NS(content_controller=lambda destination: self.controller)))
+        for icon, flexible in (('notes_files', True), ('close', False)):
+            with self.subTest(icon=icon):
+                button = Button(icon, 'Drawer' if flexible else 'Close')
+                button.parent = None
+                view = NS(_ios_toolbar_buttons=[], _ios_toolbar_leading=[button])
+                with patch('mobile.ios_toolbar.mount_actions') as actions, patch(
+                        'mobile.ios_toolbar.mount_leading') as leading:
+                    sync_screen(app, view, 'chat')
+                self.assertEqual(actions.call_args.kwargs['supplemental'], [button] if flexible else None)
+                self.assertEqual(leading.call_count, 0 if flexible else 1)
+
     def test_retained_prominent_action_repaints_after_accent_change(self):
         from mobile.palette import LIGHT, set_accent
         button = Button(None, 'Move here')

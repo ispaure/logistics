@@ -65,13 +65,18 @@ def install_opening_swipes(owner):
         from android.view import View
         from java import dynamic_proxy
         reference = ref(owner)
+        surface = getattr(owner, 'opening_surface', owner.detail)._impl
+        # Toga nests a disabled horizontal ScrollView inside the vertical one.
+        # Its listener consumes touches even when horizontal scrolling is off.
+        native = getattr(surface, 'hScrollView', surface.native)
+        previous_touch = getattr(surface, 'hScrollListener', None)
         class Touch(dynamic_proxy(View.OnTouchListener)):
             start = None
             def onTouch(self, view, event):
                 current = reference()
                 if current is None or current.side is not None or current.retiring:
                     self.start = None
-                    return False
+                    return self.forward(view, event)
                 action = event.getActionMasked()
                 if action == 0:
                     self.start = (event.getRawX(), event.getRawY(), event.getEventTime())
@@ -85,16 +90,17 @@ def install_opening_swipes(owner):
                     dx, dy = event.getRawX() - x, event.getRawY() - y
                     density = view.getContext().getResources().getDisplayMetrics().density
                     if abs(dx) > 60 * density and abs(dx) > 2 * abs(dy) and event.getEventTime() - started < 800:
-                        return current.open_swipe(1 if dx > 0 else -1)
+                        if current.open_swipe(1 if dx > 0 else -1):
+                            return True
                 elif action in (3, 5):
                     self.start = None
-                return False
-        # ScrollContainer consumes empty-state touches before its parent Box
-        # sees them. Observe that scroll surface; document WebViews retain
-        # their own selection/scroll-aware JavaScript recognizer.
-        native = getattr(owner, 'opening_surface', owner.detail)._impl.native
+                return self.forward(view, event)
+
+            def forward(self, view, event):
+                return bool(previous_touch.onTouch(view, event)) if previous_touch is not None else False
         native.setClickable(True)
         listener = Touch()
+        listener.previous_touch = previous_touch
         native.setOnTouchListener(listener)
         owner.opening_gestures.append((native, None, listener))
 
@@ -105,5 +111,5 @@ def clear_opening_swipes(owner):
             native.removeGestureRecognizer(gesture)
             gesture.delegate = None
         else:
-            native.setOnTouchListener(None)
+            native.setOnTouchListener(getattr(target, 'previous_touch', None))
     owner.opening_gestures.clear()

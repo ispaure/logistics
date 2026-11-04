@@ -10,6 +10,8 @@ from threading import Event, Thread
 def fixture_server(*, mode='reply'):
     started, release, requests = Event(), Event(), []
     class Handler(BaseHTTPRequestHandler):
+        timeout = 3  # Bound incomplete HTTP reads during worker cleanup.
+
         def log_message(self, *args):
             pass
 
@@ -49,6 +51,8 @@ def fixture_server(*, mode='reply'):
             except (BrokenPipeError, ConnectionResetError):
                 pass
     class LoopbackServer(ThreadingHTTPServer):
+        daemon_threads = False  # server_close must join request workers too.
+
         def server_bind(self):
             # HTTPServer normally reverse-resolves its address for CGI metadata.
             # This synthetic loopback service never needs DNS or CGI.
@@ -56,9 +60,12 @@ def fixture_server(*, mode='reply'):
             self.server_name = 'localhost'
             self.server_port = self.server_address[1]
     server = LoopbackServer(('127.0.0.1', 0), Handler)
-    server.daemon_threads = True
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+    thread = Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True)
+    try:
+        thread.start()
+    except BaseException:
+        server.server_close()
+        raise
     try:
         yield f'http://127.0.0.1:{server.server_port}/v1', started, release, requests
     finally:
@@ -66,3 +73,5 @@ def fixture_server(*, mode='reply'):
         server.shutdown()
         server.server_close()
         thread.join(3)
+        if thread.is_alive():
+            raise RuntimeError('Chat fixture server did not stop')

@@ -146,6 +146,21 @@ class BlenderLibraryTests(unittest.TestCase):
             self.assertEqual(inspect_package(path).version, '2.0.0')
             self.assertEqual(inspect.call_count, 2)
 
+    def test_repeated_catalog_refresh_reuses_metadata_and_discovers_new_packages(self):
+        import shutil
+        from features.blender.addons import library
+        provided = self.library.provided_root
+        provided.mkdir()
+        shutil.copyfile(self.package('first.zip'), provided / 'first.zip')
+        with patch.object(library, '_inspect_package', wraps=library._inspect_package) as inspect:
+            first = self.library.entries(shared_only=True)
+            self.assertEqual(len(first), 1)
+            self.assertEqual(self.library.entries(shared_only=True), first)
+            self.assertEqual(inspect.call_count, 1)
+            shutil.copyfile(self.package('second.zip', module='other'), provided / 'second.zip')
+            self.assertEqual(len(self.library.entries(shared_only=True)), 2)
+            self.assertEqual(inspect.call_count, 2)
+
     def test_extension_minimum_exclusive_maximum_and_platform(self):
         path = self.root / 'extension.zip'
         with zipfile.ZipFile(path, 'w') as archive:
