@@ -249,6 +249,27 @@ class ResumeLockTests(unittest.TestCase):
         self.privacy.lock_password.value = password
         self.app.loop.run_until_complete(self.privacy.unlock())
 
+    def test_lock_form_owns_full_scroll_height_with_inset_card_and_wrapped_labels(self):
+        import toga
+        self.gate.credential_name = 'Very long credential name ' * 20 + '.zip'
+        self.privacy.conceal()
+        self.privacy.reveal()
+        scroll = self.privacy.lock_scroll
+        self.assertIsInstance(scroll, toga.ScrollContainer)
+        self.assertIs(scroll.content, self.privacy.lock_body)
+        self.assertEqual(self.privacy.lock_view.children, [scroll])
+        self.assertEqual(scroll.style.flex, 1)
+        self.assertGreater(self.privacy.lock_body.style.margin_left, 0)
+        self.assertGreater(self.privacy.lock_body.style.margin_top, 0)
+        self.assertEqual(self.privacy.lock_card.style.margin_top, 0)
+        self.assertIn('\n', self.privacy.lock_credential.text)
+        for width in (320, 844, 1200):
+            self.privacy.fit_lock_view(width)
+            self.assertLessEqual(self.privacy.lock_card.style.width, width - 40)
+            self.assertLessEqual(self.privacy.lock_card.style.width, 560)
+        self.unlock('session-password')
+        self.assertIs(self.app.main_window.content, self.original)
+
     def test_lock_names_credential_files_and_updates_remaining_password_prompt(self):
         self.gate.credential_name = 'Personal.zip'
         other = ResumePassword('work-password', credential_name='Work.zip')
