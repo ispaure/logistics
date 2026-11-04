@@ -79,7 +79,10 @@ and pinned bootstrap uv. Hosted builds cache image layers through GitHub Actions
 and check for base-image updates; source and dependency-lock changes still run
 inside a fresh disposable test container. The image cache is preparation only,
 never passing test evidence. Local image reuse includes the Containerfile and
-configured Fedora image in its definition hash.
+configured Fedora image in its definition hash. Standalone image-build timeout
+calls retain their parent shell: coreutils 9.10 otherwise mistakes children of
+container PID 1 for orphaned processes and exits with code 125. Deadlines still
+apply to the command's process group.
 
 `Python/tests/platform/fedora.sh` runs only inside that prepared CI image.
 Interpreter, manager and dependency setup have separate deadlines and elapsed-time

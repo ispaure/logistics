@@ -18,12 +18,14 @@ class ProjectBrowserTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def wait_for_names(self, browser, path, expected):
+        names = []
         def matches():
+            nonlocal names
             parent = browser.proxy.mapFromSource(browser.model.index(str(path)))
             names = [browser.proxy.data(browser.proxy.index(row, 0, parent))
                      for row in range(browser.proxy.rowCount(parent))]
             return names == expected
-        self.wait_until(matches, message=f'Project browser did not display {expected}')
+        self.wait_until(matches, message=lambda: f'Project browser expected {expected}, got {names}; filter={browser.proxy.query!r}')
 
     def test_folders_first_natural_names_nested_filter_and_new_entries(self):
         with self.temporary_directory() as directory:
@@ -36,7 +38,7 @@ class ProjectBrowserTests(QtTestCase):
             (nested / 'a.py').touch()
             (nested / 'z_folder').mkdir()
             owner = qt.QWidget()
-            browser = ProjectBrowser(Project('test', str(root)), owner)
+            browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
             self.wait_for_names(browser, root, ['z2', 'z10', 'a2.py', 'a10.py', 'B.py'])
             nested_index = browser.proxy.mapFromSource(browser.model.index(str(nested)))
             browser.tree.expand(nested_index)
@@ -74,7 +76,7 @@ class ProjectBrowserTests(QtTestCase):
             (ignored / 'nested' / 'child.py').write_text('ignored child\n')
             (root / 'deleted_folder' / 'gone.py').unlink()
             owner = qt.QWidget()
-            browser = ProjectBrowser(Project('test', str(root)), owner)
+            browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
             self.wait_until(lambda: root / 'edited.py' in browser.proxy.git_changes)
             names = ['deleted_folder', 'ignored_folder', 'new_folder', 'clean.py', 'edited.py', 'ignored.py']
             if browser.model.index(str(root / '.gitignore')).isValid():
@@ -106,6 +108,7 @@ class ProjectBrowserTests(QtTestCase):
                 self.assertIn('Git: Ignored', data(path, tooltip))
             self.assertNotIn(root / 'clean.py', browser.proxy.git_changes)
             git('add', str(new))
+            browser.git_status.refresh()
             self.wait_until(lambda: 'staged' in browser.proxy.git_changes[new][1])
             self.assertIn('staged', data(new, tooltip))
             (root / 'edited.py').write_text('original\n')
@@ -121,7 +124,7 @@ class ProjectBrowserTests(QtTestCase):
             path.write_text('fixture')
             subprocess.run(['git', '-C', str(root), 'init'], check=True, capture_output=True)
             owner = qt.QWidget()
-            browser = ProjectBrowser(Project('test', str(root)), owner)
+            browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
             self.wait_until(lambda: path in browser.proxy.git_changes and browser.git_status.future is None)
             for error in (OSError('synthetic start failure'), RuntimeError()):
                 with self.subTest(error=type(error).__name__):
@@ -141,7 +144,7 @@ class ProjectBrowserTests(QtTestCase):
             root = Path(directory).resolve()
             (root / 'file.py').touch()
             owner = qt.QWidget()
-            browser = ProjectBrowser(Project('test', str(root)), owner)
+            browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
             self.wait_until(lambda: browser.git_status.future is None)
             self.assertEqual(browser.proxy.git_changes, {})
 
@@ -159,7 +162,7 @@ class ProjectBrowserTests(QtTestCase):
             owner = qt.QWidget()
             owner.documents, owner.pending_opens, owner.error = {}, {}, Mock()
             layout = qt.QVBoxLayout(owner)
-            browser = ProjectBrowser(Project('test', str(root)), owner)
+            browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
             layout.addWidget(browser)
             owner.resize(640, 400)
             owner.show()
@@ -210,7 +213,7 @@ class ProjectBrowserTests(QtTestCase):
             (root / 'existing.py').write_text('existing\n')
             owner = qt.QWidget()
             owner.documents, owner.pending_opens, owner.error = {}, {}, Mock()
-            browser = ProjectBrowser(Project('test', str(root)), owner)
+            browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
             self.wait_for_names(browser, root, ['existing.py', 'file.py'])
             index = browser.proxy.mapFromSource(browser.model.index(str(path)))
             self.assertTrue(browser.proxy.flags(index) & qt.Qt.ItemFlag.ItemIsEditable)

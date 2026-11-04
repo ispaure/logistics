@@ -46,7 +46,16 @@ class PlexPublicationTests(unittest.TestCase):
             self.assertEqual((destination / 'settings').read_bytes(), b'new settings')
 
     def test_each_promotion_or_journal_failure_restores_old_generation(self):
-        for fail_at in range(1, 11):
+        # Observe a successful transaction so every move/journal checkpoint is
+        # covered even when the implementation adds or removes checkpoints.
+        checkpoints = []
+        with TemporaryDirectory() as directory:
+            destination, staging = self.fixture(Path(directory))
+            with self.interrupt_moves(lambda source, target: checkpoints.append((source, target))):
+                PackagePublication(destination, sorted(staging.iterdir()),
+                                   [destination / 'archive.002']).publish()
+        self.assertTrue(checkpoints)
+        for fail_at in range(1, len(checkpoints) + 1):
             with self.subTest(fail_at=fail_at), TemporaryDirectory() as directory:
                 destination, staging = self.fixture(Path(directory))
                 original = {p.name: p.read_bytes() for p in destination.iterdir()}

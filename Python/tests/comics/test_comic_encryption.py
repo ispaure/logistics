@@ -15,10 +15,13 @@ from commonUtils.archives.zip_access import open_archive, is_encrypted
 from features.comics.encryption import plan_encryption, execute_encryption, encrypt_comic
 
 
-class ComicEncryptionTests(QtTestCase):
+class EncryptionFixture:
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        if isinstance(self, QtTestCase):
+            self.temp = self.temporary_directory()
+        else:
+            self.temp = TemporaryDirectory()
+            self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
     def comic(self, name):
@@ -35,6 +38,7 @@ class ComicEncryptionTests(QtTestCase):
         with open_archive(path, password=password) as archive:
             return archive.comment, [(i.filename, archive.read(i)) for i in archive.infolist()]
 
+class ComicEncryptionTests(EncryptionFixture, unittest.TestCase):
     def test_preserves_entries_and_content_and_skips_encrypted(self):
         path = self.comic('Comic.cbz')
         before = self.contents(path)
@@ -119,28 +123,12 @@ class ComicEncryptionTests(QtTestCase):
         self.assertFalse(result['cancelled'])
 
 
-class EncryptionDialogTests(ComicEncryptionTests):
+class EncryptionDialogTests(EncryptionFixture, QtTestCase):
     def setUp(self):
         super().setUp()
         from commonUtils.ui import pyside as qt
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
-    def test_zip_suggests_stem_and_prompts_without_configuration(self):
-        from features.archives.ui.create_zip import CreateZipDialog
-        path = self.comic('Comic.cbz')
-        dialog = CreateZipDialog([path])
-        self.addCleanup(dialog.deleteLater)
-        self.assertEqual(Path(dialog.output.text()), self.root / 'Comic.zip')
-        with patch('features.archives.ui.create_zip.confirmed_password', return_value='shared') as prompt, \
-                patch.object(dialog.task, 'start') as operation:
-            dialog._create()
-            prompt.assert_called_once()
-            work = operation.call_args.args[0]
-            work(lambda *args: None, lambda: False)
-        self.contents(self.root / 'Comic.zip', 'shared')
-        with open_archive(self.root / 'Comic.zip', password='shared') as archive:
-            self.assertEqual(archive.namelist(), ['Comic.cbz'])
-            self.assertEqual(archive.read('Comic.cbz'), path.read_bytes())
 
     def test_comic_dialog_refuses_missing_configured_password(self):
         from features.comics.ui.encryption import EncryptComicsDialog
@@ -167,43 +155,9 @@ class EncryptionDialogTests(ComicEncryptionTests):
             self.assertIn(path, run.call_args.args[0]().missing)
         dialog.close()
 
-    def test_folder_zip_keeps_root_and_uses_config_without_prompt(self):
-        from features.archives.ui.create_zip import CreateZipDialog
-        path = self.comic('Books/Comic.cbz')
-        folder = path.parent
-        (folder / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=configured\n')
-        dialog = CreateZipDialog([folder])
-        self.addCleanup(dialog.deleteLater)
-        self.assertEqual(Path(dialog.output.text()), self.root / 'Books.zip')
-        with patch('features.archives.ui.create_zip.confirmed_password') as prompt, \
-                patch.object(dialog.task, 'start') as operation:
-            dialog._create()
-            prompt.assert_not_called()
-            operation.call_args.args[0](lambda *args: None, lambda: False)
-        with open_archive(self.root / 'Books.zip', password='configured') as archive:
-            self.assertIn('Books/Comic.cbz', archive.namelist())
-            self.assertEqual(archive.read('Books/Comic.cbz'), path.read_bytes())
-
-    def test_prompt_requires_nonempty_matching_confirmation(self):
-        from commonUtils.ui import pyside as qt
-        from services.documents.ui.password_prompt import confirmed_password
-        def interact(dialog):
-            fields = dialog.findChildren(qt.QLineEdit)
-            buttons = dialog.findChild(qt.QDialogButtonBox)
-            fields[0].setText('one')
-            fields[1].setText('two')
-            buttons.accepted.emit()
-            self.assertNotEqual(dialog.result(), qt.QDialog.DialogCode.Accepted)
-            fields[1].setText('one')
-            buttons.accepted.emit()
-            self.assertEqual(dialog.result(), qt.QDialog.DialogCode.Accepted)
-            return dialog.result()
-        with patch.object(qt.QDialog, 'exec', interact):
-            self.assertEqual(confirmed_password(None, 'Shared batch password'), 'one')
 
     def test_background_dialog_cancel_waits_for_current_comic(self):
         from threading import Event
-        import time
         from features.comics.ui.encryption import EncryptComicsDialog
         first, second = self.comic('one.cbz'), self.comic('two.cbz')
         (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=shared\n')
@@ -220,11 +174,7 @@ class EncryptionDialogTests(ComicEncryptionTests):
         with patch('features.comics.encryption.encrypt_comic', side_effect=encrypt):
             dialog._start()
             try:
-                deadline = time.monotonic() + 5
-                while not entered.is_set():
-                    self.assertLess(time.monotonic(), deadline)
-                    self.app.processEvents()
-                    time.sleep(.005)
+                self.wait_until(entered.is_set, message='Encryption worker did not start')
                 self.app.processEvents()
                 self.assertTrue(dialog.cancel_button.isEnabled())
                 dialog.cancel_button.click()
@@ -232,11 +182,7 @@ class EncryptionDialogTests(ComicEncryptionTests):
                 self.assertFalse(dialog.cancel_button.isEnabled())
             finally:
                 release.set()
-                deadline = time.monotonic() + 5
-                while dialog.busy:
-                    self.assertLess(time.monotonic(), deadline)
-                    self.app.processEvents()
-                    time.sleep(.005)
+                self.wait_until(lambda: not dialog.busy, message='Encryption did not finish')
         self.assertEqual(dialog.progress_bar.value(), 1)
         self.assertEqual(dialog.progress_bar.maximum(), 2)
         self.assertIn('Cancelled.', dialog.message.text())

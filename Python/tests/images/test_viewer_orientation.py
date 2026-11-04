@@ -52,6 +52,9 @@ class ViewerOrientationTests(unittest.TestCase):
                     preview = qt.QImage.fromData(image_thumbnail(data, (30, 50)))
                     width, height = preview.width(), preview.height()
                     self.assertGreater(width, 0)
+                    self.assertGreater(height, 0)
+                    self.assertLessEqual(width, 30)
+                    self.assertLessEqual(height, 50)
                     self.assertAlmostEqual(width / height, row['size'][0] / row['size'][1], delta=.06)
                     points = ((2, 2), (width - 3, 2), (2, height - 3), (width - 3, height - 3))
                     for point, expected in zip(points, row['corners']):

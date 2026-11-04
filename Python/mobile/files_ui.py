@@ -518,7 +518,7 @@ class FilesUI:
         return await self.browse_local_during_transfer(self.file_location.value)
 
     def populate_file_browser(self, rows, password='', *, location=None):
-        from .browser_preview import callbacks
+        from .browser_preview import callbacks, DIRECT_IMAGE_SUFFIXES
         client = self.cloud_client
         # Visible local image rows can load bounded thumbnails. Archive covers
         # and virtual/cloud content stay outside automatic folder previews.
@@ -526,14 +526,20 @@ class FilesUI:
         from commonUtils.filesystem.image_previews import local_provider_image, MAX_IMAGE_BYTES
         provider = self.file_provider
         def local_thumbnail(row, size, cancelled):
-            if not row['directory'] and local_provider_image(provider, row['path']):
+            try:
+                if row['directory'] or not local_provider_image(provider, row['path']):
+                    return b''
                 if provider.entry(row['path']).get('size', 0) > MAX_IMAGE_BYTES:
                     return b''
-                if getattr(client, 'supports_streaming', False):
+                if (getattr(client, 'supports_streaming', False)
+                        and Path(row['path']).suffix.lower() in DIRECT_IMAGE_SUFFIXES):
                     return thumbnail(row, size, cancelled)
                 from commonUtils.filesystem.image_previews import local_native_image
                 return local_native_image(provider, row['path'], cancelled)
-            return b''
+            except (OSError, ValueError):
+                # Missing/unreadable files and native decoder rejection all use
+                # the same generic icon. Cancellation still propagates.
+                return b''
         self.file_browser.thumbnail = local_thumbnail if isinstance(provider, LocalFiles) else None
         if location is None:
             self.file_browser.history.clear()

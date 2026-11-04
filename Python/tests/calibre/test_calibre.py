@@ -20,7 +20,7 @@ from features.calibre.export import build_export_plan, execute_export_plan
 from commonUtils.runtime.platform import OS
 
 
-class CalibreExportTests(QtTestCase):
+class CalibreExportTests(unittest.TestCase):
     def test_cancel_before_copy_keeps_obsolete_exports(self):
         from commonUtils.runtime.operations import OperationCancelled
         self.book()
@@ -222,7 +222,7 @@ class CalibreExportTests(QtTestCase):
         echo.assert_not_called()
 
 
-class CalibreLaunchTests(QtTestCase):
+class CalibreLaunchTests(unittest.TestCase):
     def test_windows_launch_uses_bundled_executable_without_a_shell(self):
         root = Path('/bundled software')
         with patch.object(launching, 'get_os', return_value=OS.WIN), patch.object(

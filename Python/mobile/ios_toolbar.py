@@ -291,9 +291,15 @@ def sync_screen(app, view, destination):
         if button.parent is not None:
             button.parent.remove(button)
         button.app, button.window = app, app.main_window
-    mount_actions(controller, view, buttons, overflow=getattr(view, '_ios_toolbar_overflow', True))
-    if leading or hasattr(view, '_ios_toolbar_leading'):
-        mount_leading(controller, leading, replaces_back=getattr(view, '_ios_toolbar_replaces_back', False))
+    replaces_back = getattr(view, '_ios_toolbar_replaces_back', False)
+    flexible = bool(leading) and not replaces_back and all(
+        getattr(button, 'control_icon', None) not in ('close', 'back') for button in leading)
+    # Optional drawer/search commands share the existing supplemental budget.
+    # Completion/Close/Back remain direct targets even in a short side rail.
+    mount_actions(controller, view, buttons, overflow=getattr(view, '_ios_toolbar_overflow', True),
+                  supplemental=leading if flexible else None)
+    if not flexible and (leading or hasattr(view, '_ios_toolbar_leading')):
+        mount_leading(controller, leading, replaces_back=replaces_back)
     for widget in getattr(view, '_ios_toolbar_hidden', ()):
         if widget.parent is not None:
             widget.parent.remove(widget)

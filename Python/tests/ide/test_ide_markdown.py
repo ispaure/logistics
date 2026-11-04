@@ -3,7 +3,6 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-import time
 from pathlib import Path
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
@@ -19,11 +18,8 @@ class MarkdownTabTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def wait(self, workspace):
-        deadline = time.monotonic() + 5
-        while workspace.worker or workspace.queue:
-            self.app.processEvents()
-            self.assertLess(time.monotonic(), deadline)
-            time.sleep(.001)
+        self.wait_until(lambda: not workspace.worker and not workspace.queue,
+                        message='Markdown workspace worker did not finish')
 
     def test_formatted_edits_share_save_conflict_and_survive_view_destruction(self):
         with self.temporary_directory() as directory:
@@ -31,7 +27,7 @@ class MarkdownTabTests(QtTestCase):
             path.write_bytes(b'# Guide\r\n\r\nOriginal\r\n')
             code = path.with_name('code.py')
             code.write_text('value = 1\n')
-            workspace = ProjectWorkspace(Project('test', directory))
+            workspace = ProjectWorkspace(Project('test', directory, autosave='off'))
             self.wait(workspace)
             workspace.open_path(code)
             workspace.open_path(path)
@@ -78,7 +74,7 @@ class MarkdownTabTests(QtTestCase):
             path, linked, destination = root / 'a.MARKDOWN', root / 'b.md', root / 'saved.md'
             path.write_text('# First\n\n[Other](b.md)\n')
             linked.write_text('# Other\n')
-            workspace = ProjectWorkspace(Project('test', directory))
+            workspace = ProjectWorkspace(Project('test', directory, autosave='off'))
             self.wait(workspace)
             workspace.open_path(path)
             self.wait(workspace)
@@ -113,7 +109,7 @@ class MarkdownTabTests(QtTestCase):
             origin, target = root / 'origin.md', root / 'target.md'
             origin.write_text('# Origin\n\n[Target](target.md#details)\n')
             target.write_text('# Target\n\n## Details\n\nText\n')
-            workspace = ProjectWorkspace(Project('test', directory))
+            workspace = ProjectWorkspace(Project('test', directory, autosave='off'))
             self.wait(workspace)
             workspace.open_path(origin)
             self.wait(workspace)

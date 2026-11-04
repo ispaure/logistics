@@ -10,6 +10,12 @@ import sys
 
 def focused_command(python, pattern, manager):
     """Route explicit diagnostic patterns; complete platform gates stay unchanged."""
+    if pattern.startswith('notebooks:'):
+        selected = pattern.removeprefix('notebooks:')
+        if not selected or not selected.endswith('.py') or any(value in selected for value in ('/', '\\', '..')):
+            raise ValueError('Notebook focus requires a test filename pattern.')
+        return (python, 'Python/tests/run_regressions.py', 'Python/tests/notebooks',
+                '--pattern', selected, '--isolate-modules')
     if pattern.startswith('manager:'):
         selected = pattern.removeprefix('manager:')
         if not selected or any(value in selected for value in ('/', '\\', '..')):

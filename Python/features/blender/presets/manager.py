@@ -35,12 +35,14 @@ class BlenderManager:
 
     def _contained(self, root, *parts):
         path = root.joinpath(*parts)
-        if (not path.resolve().is_relative_to(root.resolve())
-                or not path.resolve().is_relative_to(self.root.resolve()) or path.is_symlink()):
+        resolved = path.resolve()
+        if (not resolved.is_relative_to(root.resolve())
+                or not resolved.is_relative_to(self.root.resolve()) or path.is_symlink()):
             raise ValueError('Managed Blender paths must stay inside their Logistics folder')
         # Reject symlinked intermediate directories too, including version folders.
+        boundary = root.parent
         for parent in path.parents:
-            if parent == root.parent:
+            if parent == boundary:
                 break
             if parent.is_symlink():
                 raise ValueError('Managed Blender directories cannot be symlinks')

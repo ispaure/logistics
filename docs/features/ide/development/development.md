@@ -29,3 +29,39 @@ with a visible error and prevents saving over the original. Duplicate open IDs
 remain deduplicated and stale string IDs remain filtered as before. The schema
 version, project fields and JSON layout are unchanged. `test_ide.py` covers
 malformed structures, partial admission, conflicting writers and round trips.
+
+## Test ownership and execution
+
+`Python/tests/ide/` keeps project persistence, shared-buffer lifetimes, Markdown
+integration, navigation, tree presentation and confined drag coverage. Pure
+`search_files` masks, exclusions, regex and live-buffer cases live in commonUtils'
+`tests/browser/test_search.py`; the IDE Find in Files tests retain real worker,
+preview, cancellation, project exclusions and unsaved-buffer navigation checks. The unused
+`analysis.search_project` predecessor has been removed; Find in Files uses the
+shared search owner and Go to File retains `analysis.project_files`.
+
+Run the daily selection with `python3 dev.py test desktop 'test_ide*.py' --profile daily`.
+The default full profile additionally runs the 1,000-line theme-switch case and
+48 synthetic plus 24 QTest side-drop matrix. Daily tests retain both side-drop
+receivers/directions, QTest input, merge/split, cancellation and group-cap checks.
+Non-autosave fixtures explicitly disable autosave; dedicated autosave/change-marker
+coverage remains in `Python/tests/editing/test_editor_changes.py`. The IDE owner
+selection includes that file: `python3 dev.py test-owner ide --profile daily`.
+Run the relocated shared cases with `python3 dev.py test shared test_search.py`.
+
+Find in Files checks reject nonempty stale results both while a newer request
+is pending and after closing; a superseded preview cannot replace the newly
+selected file. Gesture checks preserve unsaved text, cursor and
+undo through both synthetic and QTest input; the group-cap case also verifies
+that a rejected drop has no target or preview.
+
+Browser discovery checks need native filesystem notification access even with
+`QT_QPA_PLATFORM=offscreen`. A restricted macOS sandbox can populate the initial
+rows but miss later file creations. Run the isolated suite with notification
+access before treating that timeout as an application regression; keep the real
+automatic-update assertion. Failure diagnostics include the expected and actual
+rows and active filter. Git status tests explicitly refresh staging changes but
+retain an automatic timer-driven check when a modified file becomes clean.
+
+These host checks validate Qt integration and document state, not native window
+manager behavior or visual appearance on each supported desktop platform.

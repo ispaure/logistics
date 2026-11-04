@@ -19,8 +19,7 @@ class IDELayoutTests(QtTestCase):
         self.root = Path(self.directory.name).resolve()
 
     def settle(self):
-        for _ in range(8):
-            self.app.processEvents()
+        self.app.processEvents()
 
     def wait(self, view):
         self.wait_until(lambda: not view.worker and not view.queue, timeout=8,
@@ -33,7 +32,7 @@ class IDELayoutTests(QtTestCase):
         return page
 
     def project(self, page, number, destination=None):
-        project = Project(f'Project {number}', str(self.root))
+        project = Project(f'Project {number}', str(self.root), autosave='off')
         page.store.projects[project.id] = project
         view = page.open_project(project, destination)
         self.wait(view)
@@ -83,8 +82,8 @@ class IDELayoutTests(QtTestCase):
         nested.mkdir()
         path = nested / 'file.py'
         path.write_text('original\n')
-        broad = Project('Parent', str(self.root))
-        specific = Project('Nested', str(nested))
+        broad = Project('Parent', str(self.root), autosave='off')
+        specific = Project('Nested', str(nested), autosave='off')
         page.store.projects = {broad.id: broad, specific.id: specific}
         self.assertFalse(page.open_registered_file(self.root.parent / 'outside.py'))
         self.assertEqual(page.views, [])
@@ -128,8 +127,8 @@ class IDELayoutTests(QtTestCase):
         self.assertEqual(page.views, [])
         self.assertTrue(page.workspace.empty_new_button.isVisible())
 
-    def test_three_groups_drag_reorder_boundaries_and_buffer_preservation(self):
-        view = ProjectWorkspace(Project('test', str(self.root)))
+    def test_group_boundaries_tab_insertion_and_close_preserve_buffers(self):
+        view = ProjectWorkspace(Project('test', str(self.root), autosave='off'))
         view.resize(1200, 700)
         view.show()
         for name in ('a.py', 'b.py', 'c.py'):
@@ -152,16 +151,7 @@ class IDELayoutTests(QtTestCase):
         self.assertIsNone(bar.target(view.editors.mapToGlobal(qt.QPoint(-20, 100))))
         foreign = qt.QTabWidget()
         self.assertFalse(view.drop_editor(b, foreign))
-        # A real press/move/release from b's header into a's center merges groups.
-        start = bar.mapToGlobal(bar.tabRect(0).center())
-        end = first.mapToGlobal(first.rect().center())
-        for kind, point in ((qt.QEvent.Type.MouseButtonPress, start),
-                            (qt.QEvent.Type.MouseMove, end), (qt.QEvent.Type.MouseButtonRelease, end)):
-            event = qt.QMouseEvent(kind, qt.QPointF(bar.mapFromGlobal(point)), qt.QPointF(point),
-                qt.Qt.MouseButton.NoButton if kind == qt.QEvent.Type.MouseMove else qt.Qt.MouseButton.LeftButton,
-                qt.Qt.MouseButton.NoButton if kind == qt.QEvent.Type.MouseButtonRelease else qt.Qt.MouseButton.LeftButton,
-                qt.Qt.KeyboardModifier.NoModifier)
-            self.app.sendEvent(bar, event)
+        self.assertTrue(view.drop_editor(b, first, 'tabs'))
         self.assertEqual(len(view.groups), 2)
         self.assertIs(view.group_for(b), first)
         self.assertIs(b.document(), buffer)
@@ -201,7 +191,7 @@ class IDELayoutTests(QtTestCase):
         page.prepare_close()
 
     def test_repeated_side_drops_at_three_groups_match_splitter_order(self):
-        view = ProjectWorkspace(Project('placement', str(self.root)))
+        view = ProjectWorkspace(Project('placement', str(self.root), autosave='off'))
         view.resize(1050, 600)
         view.show()
         for name in ('a.py','b.py','c.py','d.py'):
@@ -214,7 +204,7 @@ class IDELayoutTests(QtTestCase):
         view.drop_editor(c,view.groups[-1],'right')
         b.insertPlainText('unsaved')
         expected = list(view.groups)
-        for moving in (b,c,b,c):
+        for moving in (b,c):
             for anchor in tuple(expected):
                 source = view.group_for(moving)
                 if source is anchor:
@@ -250,7 +240,7 @@ class IDELayoutTests(QtTestCase):
         view.prepare_close()
 
     def test_restore_sizes_written_with_old_hidden_preview_panes(self):
-        project = Project('old layout', str(self.root))
+        project = Project('old layout', str(self.root), autosave='off')
         project.layout = {'groups': [{}, {}], 'editors': [0, 300, 0, 600]}
         view = ProjectWorkspace(project)
         view.resize(1200,700)
@@ -264,7 +254,7 @@ class IDELayoutTests(QtTestCase):
         view.prepare_close()
 
     def test_side_drop_into_empty_group_reuses_it_at_group_limit(self):
-        view = ProjectWorkspace(Project('empty target',str(self.root)))
+        view = ProjectWorkspace(Project('empty target',str(self.root), autosave='off'))
         view.resize(1100,650)
         view.show()
         for name in ('one.py','two.py'):

@@ -298,17 +298,23 @@ class BlenderPage(qt.QWidget):
             self._open(Path(self.table.item(row, 5).text()).parent)
 
     def _rebuild_cards(self):
+        if self.settings_mode:
+            self.launch_cards = []
+            return
         while self.cards.count():
             item = self.cards.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         self.launch_cards = []
         for release in self.releases:
-            for name in self.manager.presets(release):
+            names = self.manager.presets(release)
+            if not names:
+                continue
+            ready = self.manager.ready(release)
+            for name in names:
                 row = qt.QWidget()
                 horizontal = qt.QHBoxLayout(row)
                 horizontal.setContentsMargins(0, 0, 0, 0)
-                ready = self.manager.ready(release)
                 card = LaunchCard(f'Blender {release.version} · {name}',
                                   'Click to launch' if ready else 'Click to install and launch', 'blender')
                 card.clicked.connect(lambda checked=False, r=release, n=name: self._launch_card(r, n))

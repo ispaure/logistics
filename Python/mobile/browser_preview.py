@@ -6,6 +6,9 @@ from contextlib import closing
 from commonUtils.runtime.resources.content import ProviderContent
 
 
+DIRECT_IMAGE_SUFFIXES = frozenset({'.png', '.jpg', '.jpeg', '.webp'})
+
+
 def callbacks(provider, client, password=''):
     def source(row, cancelled):
         return ProviderContent(provider, row['path'], password=password, cancelled=cancelled)
@@ -24,7 +27,7 @@ def callbacks(provider, client, password=''):
             return native_thumbnail(row['path'], size, member=member, password=password, cancelled=cancelled)
         if not getattr(client, 'supports_streaming', False):
             return b''
-        if suffix in {'.png', '.jpg', '.jpeg', '.webp'}:
+        if suffix in DIRECT_IMAGE_SUFFIXES:
             with provider.open(row['path']) as stream:
                 data = client.request('file_thumbnail', fd=stream.fileno(), width=size[0], height=size[1])
         else:

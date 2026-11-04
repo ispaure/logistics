@@ -7,6 +7,7 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import unittest
 from unittest.mock import patch
 
 from commonUtils.configuration.layered import register_settings
@@ -14,18 +15,17 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.blender import register
 from features.blender.installation.releases import (
-    initialize_release_settings, load_releases, release_config_paths, version_from_path,
+    initialize_release_settings, release_config_paths,
 )
+from features.blender.addons.library import AddonLibrary
+from features.blender.presets.manager import BlenderManager
 from features.blender.settings import BlenderReleaseSettings
 from features.settings import migration_ledger
 
 
-class BlenderReleaseSettingsTests(QtTestCase):
-    def setUp(self):
-        super().setUp()
-        self.app = qt.QApplication.instance() or qt.QApplication([])
-        temporary = TemporaryDirectory(); self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+class _ReleaseStoreFixture:
+    def configure_stores(self, root):
+        self.root = Path(root)
         self.directory = self.root / 'blender'; self.directory.mkdir()
         self.stores = {}
         for source in release_config_paths():
@@ -37,18 +37,26 @@ class BlenderReleaseSettingsTests(QtTestCase):
                 self.stores[path] = register_settings(path, self.root / 'configuration' / 'blender' / path.name)
             return self.stores[path]
         self.store = store
-        for target in ('features.settings.settings_store', 'features.blender.settings.settings_store'):
-            mock = patch(target, side_effect=store); mock.start(); self.addCleanup(mock.stop)
-        self.panel = BlenderReleaseSettings(scope='personal', directory=self.directory)
-        self.addCleanup(self.panel.deleteLater)
+        self.enterContext(patch('features.settings.settings_store', side_effect=store))
 
-    def test_version_files_load_the_same_platform_packages(self):
-        self.assertEqual([version_from_path(p) for p in release_config_paths(self.directory)], ['5.2.2', '4.5.1'])
-        self.assertEqual([b.version for b in load_releases(self.directory, platform='windows-x64')], ['5.2.2', '4.5.1'])
-        self.assertEqual([b.version for b in load_releases(self.directory, platform='macos-x64')], ['4.5.1'])
-        self.assertEqual(load_releases(self.directory, platform='linux-arm64'), [])
+
+class BlenderReleaseSettingsTests(_ReleaseStoreFixture, QtTestCase):
+    def setUp(self):
+        super().setUp()
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+        temporary = self.temporary_directory()
+        self.configure_stores(temporary.name)
+        self.enterContext(patch('features.blender.settings.settings_store', side_effect=self.store))
+        self.manager = BlenderManager(self.root / 'managed')
+        for target, options in (
+                ('features.blender.ui.page.get_manager', {'return_value': self.manager}),
+                ('features.blender.ui.page.AddonLibrary', {'side_effect': lambda manager: AddonLibrary(
+                    manager, provided_root=self.root / 'provided')})):
+            mocked = patch(target, **options)
+            mocked.start(); self.addCleanup(mocked.stop)
 
     def test_selector_layout_keeps_pending_edits_per_version_and_platform(self):
+        self.panel = BlenderReleaseSettings(scope='personal', directory=self.directory)
         self.panel.resize(1000, 700); self.panel.show(); self.app.processEvents()
         latest = self.panel.editor
         self.assertFalse(latest.sections.tabBar().isHidden())
@@ -72,6 +80,7 @@ class BlenderReleaseSettingsTests(QtTestCase):
         latest.pending.clear()
 
     def test_save_validates_release_and_preserves_sparse_matching_overrides(self):
+        self.panel = BlenderReleaseSettings(scope='personal', directory=self.directory)
         editor = self.panel.editor
         identity = ('windows-x64', 'url_str')
         original = editor.fields[identity].text()
@@ -93,9 +102,9 @@ class BlenderReleaseSettingsTests(QtTestCase):
         from desktop.pages.settings import FeatureSettingsPanel
         entries = [RegisteredContribution('blender', 'Blender', entry) for entry in register().settings]
         state = FeatureState('blender', 'Blender', True, True, (), ())
-        with patch('features.application.registry.get_settings', return_value=entries):
+        with patch('features.application.registry.get_settings', return_value=entries), \
+                patch('features.application.registry.get_feature_states', return_value=[state]):
             panel = FeatureSettingsPanel(state, scope='personal')
-            self.addCleanup(panel.deleteLater)
             personal = panel.custom['blender_release_overrides']
             default = panel.custom['blender_release_defaults']
             from features.blender.settings import BlenderSettings
@@ -103,11 +112,20 @@ class BlenderReleaseSettingsTests(QtTestCase):
             self.assertIsInstance(personal.versions, BlenderReleaseSettings)
             self.assertEqual(personal.scope, 'personal')
             self.assertEqual(default.scope, 'application')
+            self.assertIs(personal.presets.manager, self.manager)
+            self.assertEqual(personal.presets.library.provided_root, self.root / 'provided')
             self.assertEqual(panel.configs, {})
             self.assertIs(personal.parent(), panel.bodies['personal'])
             panel.set_scope('application')
             self.assertIs(default.parent(), panel.bodies['application'])
             self.assertTrue(personal.isHidden())
+
+
+class BlenderReleaseMigrationTests(_ReleaseStoreFixture, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        temporary = self.enterContext(TemporaryDirectory())
+        self.configure_stores(temporary)
 
     def test_legacy_overrides_migrate_once_without_overwriting_new_values(self):
         legacy = self.store(self.directory / 'config.ini')
