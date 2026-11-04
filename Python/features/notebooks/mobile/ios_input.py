@@ -6,6 +6,7 @@ The UIKit recognizer is Pencil-only and permits simultaneous native gestures.
 import json
 import math
 from weakref import ref
+from commonUtils.ui.native.text_size import native_backend
 
 _hover_target = None
 
@@ -73,7 +74,7 @@ class PencilHover:
 
 def attach(web):
     """Return an owned hover observer only when UIKit exposes it on an iPad."""
-    if not type(web._impl).__module__.startswith('toga_iOS.'):
+    if not native_backend(web).startswith('toga_iOS.'):
         return None
     from rubicon.objc import ObjCClass
     if int(ObjCClass('UIDevice').currentDevice.userInterfaceIdiom) != 1:
@@ -83,3 +84,202 @@ def attach(web):
     except NameError:
         return None
     return PencilHover(web, recognizer)
+
+
+_contact_trace_class = None
+
+
+def _contact_class():
+    """A passive recognizer observes UIKit delivery before WK sees the contact."""
+    from rubicon.objc import ObjCClass, objc_method, objc_property, send_super, objc_id
+    global _contact_trace_class
+    if _contact_trace_class is None:
+        class LogisticsNotebookPencilTrace(ObjCClass('UIGestureRecognizer')):
+            trace_owner = objc_property(object, weak=True)
+
+            @objc_method
+            def canPreventGestureRecognizer_(self, other) -> bool:
+                return False
+
+            @objc_method
+            def canBePreventedByGestureRecognizer_(self, other) -> bool:
+                return False
+
+            @objc_method
+            def touchesBegan_withEvent_(self, touches, event) -> None:
+                owner = self.trace_owner
+                if owner is not None:
+                    owner.record('begin', int(touches.count))
+                send_super(__class__, self, 'touchesBegan:withEvent:', touches, event,
+                           restype=None, argtypes=[objc_id, objc_id])
+
+            @objc_method
+            def touchesEnded_withEvent_(self, touches, event) -> None:
+                owner = self.trace_owner
+                if owner is not None:
+                    owner.record('end', int(touches.count))
+                send_super(__class__, self, 'touchesEnded:withEvent:', touches, event,
+                           restype=None, argtypes=[objc_id, objc_id])
+                self.state = 5  # Failed: observe only, never recognize/intercept ink.
+
+            @objc_method
+            def touchesCancelled_withEvent_(self, touches, event) -> None:
+                owner = self.trace_owner
+                if owner is not None:
+                    owner.record('cancel', int(touches.count))
+                send_super(__class__, self, 'touchesCancelled:withEvent:', touches, event,
+                           restype=None, argtypes=[objc_id, objc_id])
+                self.state = 5
+        _contact_trace_class = LogisticsNotebookPencilTrace
+    return _contact_trace_class
+
+
+class PencilInputTrace:
+    """Native/DOM paired counters, rate limited into the ordinary process log."""
+    def __init__(self, web, loop, output):
+        from rubicon.objc import ns_from_py
+        import time
+        self.web, self.native, self.loop = web, web._impl.native, loop
+        self.output = output
+        self.dom = self.dom_native_counts = None
+        self.clock = time.monotonic
+        self.counts, self.recent = {}, []
+        self.closed, self.pending, self.timer = False, None, None
+        self.dirty = False
+        self.query = None
+        self.last_report = float('-inf')
+        self.gesture = _contact_class().alloc().initWithTarget(None, action=None)
+        self.gesture.trace_owner = self
+        self.gesture.allowedTouchTypes = ns_from_py([2])
+        self.gesture.cancelsTouchesInView = False
+        self.gesture.delaysTouchesBegan = False
+        self.gesture.delaysTouchesEnded = False
+        self.native.addGestureRecognizer(self.gesture)
+
+    def record(self, kind, count):
+        if self.closed:
+            return
+        try:
+            count = max(0, min(8, int(count)))
+            self.counts[kind] = self.counts.get(kind, 0) + count
+            self.recent.append(dict(kind=kind,count=count))
+            self.recent = self.recent[-24:]
+            self.dirty = True
+            now = self.clock()
+            if self.pending is None and now-self.last_report >= 3:
+                self.flush()
+            if self.timer is None:
+                self.timer = self.loop.call_later(3,self.flush)
+        except Exception:
+            pass  # Diagnostic observers cannot replace native input dispatch.
+
+    def flush(self):
+        if self.timer is not None:
+            self.timer.cancel()
+            self.timer = None
+        if self.closed or not self.dirty:
+            return
+        try:
+            self.dirty = False
+            self.last_report = self.clock()
+            print('LOGISTICS_NOTEBOOK_NATIVE_INPUT='+json.dumps(self.snapshot()),flush=True)
+            self.loop.call_soon(self.write_report)
+            if self.pending is None and (self.query is None or self.query.done()):
+                self.pending = self.loop.create_task(self.report())
+        except Exception:
+            pass
+
+    def write_report(self):
+        try:
+            from commonUtils.persistence import atomic_write_json
+            value = dict(schema=1,diagnostic_only=True,native=self.snapshot(),dom=self.dom,
+                         native_at_dom_query=self.dom_native_counts,
+                         pair_stable=self.dom_native_counts is not None and self.dom_native_counts==self.counts,
+                         closed=self.closed)
+            if len(json.dumps(value).encode('utf-8')) <= 16384:
+                atomic_write_json(self.output,value)
+        except Exception:
+            pass
+
+    def snapshot(self):
+        return dict(counts=dict(self.counts),recent=list(self.recent),diagnostic_only=True)
+
+    async def report(self):
+        import asyncio
+        query = None
+        try:
+            if self.closed:
+                return
+            native_at_query = dict(self.counts)
+            query = self.query = asyncio.ensure_future(self.web.evaluate_javascript(
+                'JSON.stringify(window.logisticsInputTrace?window.logisticsInputTrace():null)'))
+            done, _ = await asyncio.wait((query,),timeout=2)
+            if done and not self.closed:
+                self.dom = _safe_dom_trace(json.loads(query.result()))
+                self.dom_native_counts = native_at_query
+                self.write_report()
+                print('LOGISTICS_NOTEBOOK_INPUT='+json.dumps(dict(native=self.snapshot(),dom=self.dom)),flush=True)
+        except Exception:
+            pass
+        finally:
+            if query is not None and not query.done():
+                # Native completion may still arrive: consume it without cancelling
+                # Toga's JavaScriptResult or retaining this observer in a callback.
+                query.add_done_callback(_consume_trace_result)
+            if self.pending is asyncio.current_task():
+                self.pending = None
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        if self.timer is not None:
+            self.timer.cancel()
+            self.timer = None
+        try:
+            print('LOGISTICS_NOTEBOOK_NATIVE_INPUT_FINAL='+json.dumps(self.snapshot()),flush=True)
+        except Exception:
+            pass
+        self.write_report()
+        self.gesture.trace_owner = None
+        self.native.removeGestureRecognizer(self.gesture)
+        if self.pending is not None:
+            self.pending.cancel()
+            self.pending = None
+        self.web = self.native = self.query = None
+
+
+def _consume_trace_result(future):
+    try:
+        future.result()
+    except BaseException:
+        pass
+
+
+def attach_diagnostics(web, loop, output):
+    from commonUtils.ui.native.text_size import native_backend
+    if not native_backend(web).startswith('toga_iOS.'):
+        return None
+    return PencilInputTrace(web,loop,output)
+
+
+def _safe_dom_trace(value):
+    """Only fixed diagnostic fields may enter the ordinary support receipt."""
+    if not isinstance(value,dict):
+        return None
+    kinds = {'delivered-pointerdown','delivered-pointerup','delivered-pointercancel',
+             'delivered-lostpointercapture','reject-palm','reject-native-duplicate',
+             'reject-active','reject-locked-or-busy','accepted-down','cancelled-contact',
+             'completed-contact','stroke-ack-deferred','stroke-ack-applied'}
+    types = {'pen','touch','mouse','host'}
+    keys = {kind+':'+pointer for kind in kinds for pointer in types}
+    counts = {key:min(1000000,max(0,count)) for key,count in value.get('counts',{}).items()
+              if key in keys and type(count) is int}
+    recent = []
+    for row in value.get('recent',[])[-24:]:
+        if not isinstance(row,dict) or row.get('kind') not in kinds or row.get('type') not in types:
+            continue
+        recent.append(dict(kind=row['kind'],type=row['type'],
+                           **{key:row.get(key) is True for key in ('trusted','active','busy','ink')},
+                           queued=min(64,max(0,row['queued'])) if type(row.get('queued')) is int else 0))
+    return dict(counts=counts,recent=recent)

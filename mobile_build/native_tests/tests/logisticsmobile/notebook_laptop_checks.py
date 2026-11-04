@@ -25,7 +25,10 @@ LAPTOP_CHECKS = r"""JSON.stringify((() => {
   const paper = $('paperWrap').getBoundingClientRect();
   check(paper.top >= viewport.top - 1 && paper.bottom <= viewport.bottom + 1, 'Fitted paper leaves lower screen');
   const zoom = $('zoomControls').getBoundingClientRect();
-  check(paper.bottom <= zoom.top, 'Fitted paper is covered by the bottom zoom controls');
+  if (!$('zoomControls').hidden) {
+    check(zoom.top >= viewport.top && zoom.bottom <= viewport.bottom, 'Transient zoom controls leave the lower viewport');
+    check(getComputedStyle($('zoomControls')).position === 'fixed', 'Zoom feedback must not resize the drawing viewport');
+  }
   const originalSend=send, actions=[];
   send=action=>actions.push(action);
   try {

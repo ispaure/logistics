@@ -14,9 +14,14 @@ from .ink import InkPage
 
 class Repository:
     @serialize_mutation
-    def delete(self, key):
+    def delete(self, key, *, expected=None):
         """Remove this ordinary recovery identity after source deletion."""
         import shutil
+        if expected is not None:
+            manifest = self.root / identifier(key) / 'state.json'
+            revision = sha256(manifest.read_bytes()).hexdigest()
+            if self.revisions.get(expected, {}).get(key) != revision:
+                raise ValueError('This notebook changed in another window. Reopen its draft before discarding.')
         try:
             shutil.rmtree(self.root / identifier(key))
         except FileNotFoundError:

@@ -24,6 +24,18 @@ from features.video.buffering import BufferingPolicy, MemoryRanges
 
 
 class VideoSessionTests(unittest.TestCase):
+    def test_classic_pip_default_and_explicit_subtitle_mode_round_trip(self):
+        self.assertFalse(PlaybackSettings.from_dict({}).pip_subtitles)
+        with TemporaryDirectory() as root:
+            store = SettingsStore(root)
+            for enabled in (True, False):
+                values = asdict(PlaybackSettings(pip_subtitles=enabled))
+                store.save(values)
+                self.assertEqual(SettingsStore(root).load().pip_subtitles, enabled)
+        for invalid in (1, 0, 'true', None):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                PlaybackSettings.from_dict({'pip_subtitles': invalid})
+
     def test_time_entry_rejects_invalid_segments(self):
         for text, expected in [
             ("12:34", 754000),

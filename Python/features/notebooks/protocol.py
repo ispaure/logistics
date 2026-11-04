@@ -39,6 +39,8 @@ def validate_action(action):
     }.get(op, {})
     if any(type(action.get(key)) is not kind for key, kind in required.items()):
         raise ValueError('Invalid ' + op + ' command fields.')
+    if op == 'paste-strokes' and 'single_use' in action and type(action['single_use']) is not bool:
+        raise ValueError('Invalid single-use paste choice.')
     if op == 'unlock-pdf' and len(action['password']) > 1024:
         raise ValueError('Password is too long.')
     if op == 'erase' and 'points' in action:

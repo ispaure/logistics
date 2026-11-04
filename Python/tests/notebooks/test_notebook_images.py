@@ -26,12 +26,12 @@ class NotebookImageTests(unittest.TestCase):
         assets = Path(__file__).resolve().parents[2] / 'features/notebooks/assets'
         driver = r"""
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const controls=new Map(),events=[];
+const controls=new Map(),events=[],listeners=[];
 const node=()=>({value:'',style:{},classList:{add(){},remove(){},toggle(){}},
   setAttribute(){},append(){},set innerHTML(value){}});
 const control=id=>{if(!controls.has(id))controls.set(id,node());return controls.get(id)};
 const s={console,events,$:control,document:{body:node(),createElement:node},
-  canvas:{style:{},getBoundingClientRect:()=>({left:0,top:0,width:1404,height:1872})},
+  canvas:{style:{},addEventListener:(kind,handler)=>listeners.push({kind,handler}),getBoundingClientRect:()=>({left:0,top:0,width:1404,height:1872})},
   state:{width:1404,height:1872,index:0,count:1,strokes:[],native_pen:false},
   mode:'ink',active:null,last:null,start:null,points:[],pan:null,selected:new Set(),
   touchContacts:new Map(),penContactActive:false,continuousInk:true,frameBatchedInk:false,
@@ -43,7 +43,7 @@ const s={console,events,$:control,document:{body:node(),createElement:node},
   cancelTouchZoom(){},flushPreview(){if(s.points.length)events.push('paint')},
   cancelPreview(){},draw(){events.push('draw')},render(){events.push('render')},
   strokeExpandsPaper:()=>false};
-s.window=s;vm.createContext(s);
+s.performance={now:()=>1000};s.window=s;vm.createContext(s);
 vm.runInContext(fs.readFileSync(process.argv[1]+'/input.js','utf8'),s);
 vm.runInContext(fs.readFileSync(process.argv[1]+'/queue.js','utf8')
   .replaceAll('__MAX_COMMAND__','100000').replaceAll('__SEND_COMMAND__',"events.push('send')"),s);
@@ -65,6 +65,9 @@ assert.equal(s.state.strokes.length,1);assert.equal(s.state.strokes[0].id,'S');
 assert.equal(events.filter(value=>value==='paint').length,painted);
 assert.ok(!events.includes('draw')&&!events.includes('render'),events);
 assert.equal(s.queue.length,0);assert.equal(s.busy,false);
+assert.equal(s.logisticsInputTrace().counts['accepted-down:pen'],1);
+assert.equal(s.logisticsInputTrace().counts['stroke-ack-applied:host'],2);
+assert.ok(listeners.every(row=>typeof row.handler==='function'));
 console.log(JSON.stringify({passed:true,bare_command_does_not_paint:true,pen_paints_before_ack:true}));
 """
         result = subprocess.run(['node', '-e', driver, str(assets)], capture_output=True,

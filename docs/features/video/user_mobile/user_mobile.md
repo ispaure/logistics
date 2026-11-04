@@ -77,7 +77,9 @@ sidecars are admitted, each limited to 8 MiB. Subtitles stay in provider streams
 
 For ordinary Local files and mobile LocalCrypt with saved credentials, the
 **More playback options** menu offers **Picture in picture** and **Cast…**. Casting uses VLC's discovered
-receivers (Chromecast); AirPlay video routing is not implemented. Receiver discovery
+receivers (Chromecast); AirPlay video routing is not implemented. iOS defaults
+to classic PiP. **Playback → Subtitle PiP (reopen video)** selects subtitle
+composition on iOS 17.4 or later; reopen the video to apply the choice. Receiver discovery
 may take a few seconds: reopen Cast to refresh the list. Both actions recheck
 credential policy. They are unavailable with session-only credentials.
 

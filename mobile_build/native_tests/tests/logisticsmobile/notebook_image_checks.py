@@ -7,6 +7,14 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 
 HELPERS = r'''window.imageQA = {
+  captureMode(enabled) {
+    if ((mode === 'capture') === enabled) return;
+    if (document.body.classList.contains('notebook-mobile')) window.notebookNativeAction('view');
+    const button=$('capture');
+    if (!button.getClientRects().length) throw Error('Ordinary Capture action is not visible');
+    button.click();
+    if ((mode === 'capture') !== enabled) throw Error('Ordinary Capture action did not change mode');
+  },
   event(p, type='touch') {
     const r=canvas.getBoundingClientRect();
     return {pointerId:731,pointerType:type,nativePen:true,
@@ -42,9 +50,10 @@ def signature(book):
 
 
 class ImageWorkflow:
-    def __init__(self, evaluate, editor, capture):
+    def __init__(self, evaluate, editor, capture, progress=None):
         self.evaluate, self.editor, self.capture = evaluate, editor, capture
         self.cases = []
+        self.progress = progress
 
     async def js(self, expression):
         # A JSON result has the same shape in Qt, Android WebView and WKWebView.
@@ -53,7 +62,18 @@ class ImageWorkflow:
 
     async def wait(self, expression, message):
         for _ in range(400):
-            if await self.js('return Boolean(' + expression + ')'):
+            snapshot = await self.js('const ready=Boolean(' + expression + r""");
+                return {ready,documentReady:document.readyState,
+                    hasIdle:typeof window.notebookIdle==='function',
+                    busy:typeof busy==='undefined'?null:busy,
+                    queued:typeof queue==='undefined'?null:queue.length,
+                    active:typeof active==='undefined'?null:active,
+                    passwordLocked:typeof state==='undefined'?null:!!state.password_required,
+                    imageCount:typeof state==='undefined'?null:state.images?.length};
+            """)
+            if self.progress is not None:
+                self.progress(dict(check=message, attempt=_, **snapshot))
+            if snapshot['ready']:
                 return
             await asyncio.sleep(.05)
         raise AssertionError(message + ': ' + str(await self.js("return {status:document.getElementById('status')?.textContent,ready:document.readyState,errors:window.imageQAErrors}")))
@@ -85,7 +105,7 @@ class ImageWorkflow:
         assert len(self.editor().notebook.page(0).images) == 1
         await self.evaluate("(()=>{window.imageQAOriginalBackground=$('pdfBackground').src;const c=document.createElement('canvas');c.width=100;c.height=50;const g=c.getContext('2d');g.fillStyle='#e64c26';g.fillRect(0,0,100,50);$('pdfBackground').src=c.toDataURL();return true})()")
         await self.wait("$('pdfBackground').complete && $('pdfBackground').naturalWidth===100", 'Wide background did not decode')
-        await self.action("if(mode!=='capture')$('capture').click();$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
+        await self.action("imageQA.captureMode(true);$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
         await self.evaluate("window.qaClip=null;imageQA.clipPixels().then(p=>window.qaClip=p);true")
         await self.wait('window.qaClip!==null', 'Wide-background capture did not decode')
         letterbox=await self.js('return window.qaClip.pixels[0]')
@@ -93,7 +113,7 @@ class ImageWorkflow:
         await self.evaluate("$('pdfBackground').src=window.imageQAOriginalBackground;true")
         await self.wait("$('pdfBackground').complete && $('pdfBackground').naturalWidth!==100", 'PDF background restore did not decode')
         self.cases.append('capture preserves displayed background aspect ratio and letterboxing')
-        await self.action("if(mode!=='capture')$('capture').click();$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
+        await self.action("imageQA.captureMode(true);$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
         await self.evaluate("window.qaClip=null;imageQA.clipPixels().then(p=>window.qaClip=p);true")
         await self.wait('window.qaClip!==null', 'Clipboard PNG did not decode')
         clip = await self.js('return window.qaClip')
@@ -140,7 +160,7 @@ class ImageWorkflow:
         picture = next(picture for picture in ink.images if picture.id == selected)
         # Stroke acknowledgements preserve ink already painted by real input.
         # Sending a bare command skips that painting and cannot prove overlap.
-        await self.action("$('capture').click();$('tool').value='17';$('tool').dispatchEvent(new Event('change'));$('color').value='0';$('color').dispatchEvent(new Event('change'));$('width').value='3';$('width').dispatchEvent(new Event('change'))")
+        await self.action("imageQA.captureMode(false);$('tool').value='17';$('tool').dispatchEvent(new Event('change'));$('color').value='0';$('color').dispatchEvent(new Event('change'));$('width').value='3';$('width').dispatchEvent(new Event('change'))")
         assert await self.js("return mode==='ink' && $('tool').value==='17' && $('color').value==='0' && $('width').value==='3'")
         await self.action('imageQA.gesture('+json.dumps([[center[0]-30,center[1]],[center[0]+30,center[1]]])+",'pen')")
         added = [stroke for stroke in self.editor().notebook.page(0).strokes
@@ -149,7 +169,7 @@ class ImageWorkflow:
         assert (added[0].tool, added[0].color, added[0].layer) == (17, 0, picture.layer), added[0].payload()
         above = await self.js('return imageQA.pixel('+json.dumps(center)+')')
         assert max(above[:3]) < 80 and above[3] == 255, above
-        await self.action("$('capture').click();imageSelection="+json.dumps(selected)+";imageRender()")
+        await self.action("imageQA.captureMode(true);imageSelection="+json.dumps(selected)+";imageRender()")
         assert await self.js('return mode==="capture" && selectedPicture()?.id==='+json.dumps(selected))
         for direction in ('back','forward','front','backward','front'):
             await self.action("imageSelection="+json.dumps(selected)+";$('imageArrange').value="+json.dumps(direction)+";$('imageArrange').onchange()")
@@ -183,6 +203,49 @@ class ImageWorkflow:
 
 
 IMAGE_FIXTURE_SHA256 = '35589f44738aa9281fe494e0cfbcef15ac9f5827610ac85ab904e5863bb9984e'
+
+
+
+def verify_native_image_view(panel, provider):
+    """Resolve supported native subclasses and retain the actual privacy boundary."""
+    from commonUtils.ui.native.text_size import native_backend
+    from commonUtils.ui.native.keyboard import native_value
+    from commonUtils.ui.native.private_webview import PrivateWebView
+    web = panel.web
+    backend = native_backend(web)
+    assert backend.startswith(('toga_iOS.', 'toga_android.')), backend
+    assert not panel.closed and web in panel.view.children and web._impl.interface is web
+    resource = panel.document.resource
+    assert resource.path == 'images.rmdoc' and not resource.closed
+    assert resource.provider.root == provider.root
+    assert resource.policy.persistent == (not provider.private)
+    if provider.private:
+        assert isinstance(web, PrivateWebView) and web.private_configured and not web.private_closed
+        assert resource.provider.client is provider.client and resource.provider.remote == provider.remote
+        assert resource.provider.identity == provider.identity and not resource.provider.closed
+        assert panel.document.recovery is None
+    else:
+        assert not isinstance(web, PrivateWebView)
+    native = web._impl.native
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        assert native.isKindOfClass_(ObjCClass('WKWebView'))
+        assert native_value(native.window) is not None and not native.isHidden()
+        bounds = native_value(native.bounds)
+        assert bounds.size.width > 0 and bounds.size.height > 0
+        if provider.private:
+            assert not bool(native.configuration.websiteDataStore.isPersistent())
+    else:
+        from android.webkit import WebView as NativeWebView, WebSettings
+        assert isinstance(native, NativeWebView)
+        assert native.isAttachedToWindow() and native.isShown()
+        assert native.getWidth() > 0 and native.getHeight() > 0
+        if provider.private:
+            settings = native.getSettings()
+            assert settings.getCacheMode() == WebSettings.LOAD_NO_CACHE
+            assert not settings.getDomStorageEnabled() and not settings.getAllowFileAccess()
+            assert not settings.getAllowContentAccess()
+    return backend
 
 
 def _cleanup_image_run(app, run):
@@ -353,15 +416,19 @@ async def exercise_notebook_images(app, *, output=None):
             provider.create_file('images.rmdoc',BytesIO(original))
             assert await open_notebook(app,resource=DocumentResource(provider,'images.rmdoc',max_bytes=MAX_ARCHIVE))
             panel=app.notebook_panel;remember(panel)
-            backend=type(panel.web._impl).__module__
-            assert backend.startswith(('toga_iOS.','toga_android.')),backend
             async def evaluate(code):
                 return await panel.web.evaluate_javascript(code)
             async def capture(phase):
                 await capture_window(app,output/(label+'-'+phase+'.png'))
                 encoded=await evaluate("canvas.toDataURL('image/png')")
                 (output/(label+'-'+phase+'-canvas.png')).write_bytes(base64.b64decode(encoded.split(',',1)[1]))
-            workflow=ImageWorkflow(evaluate,lambda:panel.editor,capture)
+            def readiness(snapshot):
+                report['wait_state'] = dict(snapshot, phase=report['phase'],
+                    panel_closed=panel.closed, canvas_ready=getattr(panel,'_canvas_ready',False),
+                    private_closed=getattr(panel.web,'private_closed',None))
+            workflow=ImageWorkflow(evaluate,lambda:panel.editor,capture,progress=readiness)
+            await workflow.idle()
+            backend=verify_native_image_view(panel,provider)
             report['phase']=label+':capture-transform-arrange'
             await workflow.run()
             expected=signature(panel.editor.notebook)
@@ -382,8 +449,10 @@ async def exercise_notebook_images(app, *, output=None):
             report['phase']=label+':reopen'
             assert await open_notebook(app,resource=DocumentResource(provider,'images.rmdoc',max_bytes=MAX_ARCHIVE))
             panel=app.notebook_panel;remember(panel)
-            reopened=ImageWorkflow(evaluate,lambda:panel.editor,capture)
-            await reopened.idle();await evaluate(HELPERS);await reopened.unlock()
+            reopened=ImageWorkflow(evaluate,lambda:panel.editor,capture,progress=readiness)
+            await reopened.idle()
+            assert verify_native_image_view(panel,provider)==backend
+            await evaluate(HELPERS);await reopened.unlock()
             assert signature(panel.editor.notebook)==expected
             await capture('reopened')
             report['providers'].append(dict(provider=label,backend=backend,cases=workflow.cases,

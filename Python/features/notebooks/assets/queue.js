@@ -43,6 +43,7 @@ window.notebookUpdate = function(next, error) {
 };
 // Mobile acknowledges durable strokes without resending/replaying the whole page.
 window.notebookStrokeUpdate = function(stroke, status) {
+  if(typeof inputTrace==='function')inputTrace(active!==null?'stroke-ack-deferred':'stroke-ack-applied');
   if (active !== null) {
     deferredUpdate = () => window.notebookStrokeUpdate(stroke, status);
     return
