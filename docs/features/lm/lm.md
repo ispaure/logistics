@@ -1,4 +1,4 @@
-# Lm documentation
+# LM documentation
 
 Choose a guide for the task you want to complete.
 
