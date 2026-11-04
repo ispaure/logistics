@@ -1,8 +1,7 @@
 # Minecraft documentation
 
-Choose a guide for the task you want to complete.
+Discover and launch local Minecraft servers from desktop Workspaces.
 
-## Further reading
-
-- [Minecraft Feature](development/development.md)
-- [Manage Minecraft servers](user/user.md)
+- [Desktop user guide](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Developer guide](development/development.md)

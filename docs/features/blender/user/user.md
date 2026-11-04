@@ -1,5 +1,7 @@
 # Blender installations and presets
 
+This manager is available on desktop; see [mobile availability](../user_mobile/user_mobile.md).
+
 Open **Blender** from the navigation rail. If it is hidden, enable Blender under
 **Settings → Features**. Logistics ships only the manager and its release catalog;
 Blender is downloaded on the first launch of a configuration that needs it.
@@ -28,10 +30,10 @@ extracting it. Progress and cancellation are shown at the bottom of the page. Su
 installation deletes the downloaded package; failure or cancellation discards
 temporary staging. Existing installation folders are never silently overwritten.
 
-The catalog includes Blender **4.5.1** and **5.2.2**, the stable release verified
-on October 12, 2026. Windows x64/ARM64 and macOS Apple Silicon have both versions;
-Intel Macs have 4.5.1. Linux x64 has both versions. These releases have no official
-Linux ARM64 package, and 5.2.2 has no Intel Mac package. The manager shows only
+The bundled catalog defines Blender **4.5.1** and **5.2.2**; it is a pinned
+installation catalog. Windows x64/ARM64 and macOS Apple Silicon have both
+versions; Intel Macs have 4.5.1. Linux x64 has both versions. The catalog has no
+Linux ARM64 entry and no Intel Mac entry for 5.2.2. The manager shows only
 packages for your OS/architecture. Blender's own OS and hardware requirements
 still apply; a matching package does not guarantee compatibility with older systems.
 
@@ -292,11 +294,13 @@ changes wait until an online update succeeds. First-time installation still need
 internet access.
 
 Blue Hole's Main/Beta/Alpha selection follows the Blender version being launched.
-Blender **4.5.1** uses `blender-4.5.1/main`, `/beta` or `/alpha`; Blender **5.2.2**
-uses `blender-5.2.2/main`, `/beta` or `/alpha`, matching your selected channel.
+For example, when both families exist remotely, Blender **4.5.1** selects
+`blender-4.5.1/main`, `/beta` or `/alpha`, while **5.2.2** selects the matching
+`blender-5.2.2` channel.
 The installed row shows the full resolved branch and commit. Selection uses the
 newest available baseline at or below that Blender version, so older Blender
 versions do not receive branches intended for newer baselines.
 
-The 5.2.2 branches start from the 4.5.1 alpha code. They are available for testing;
-full 5.2.2 compatibility, including themes and Deluxe keymaps, remains in progress.
+Branch availability is checked remotely at launch. Declared addon compatibility
+and a successful download do not establish runtime acceptance of themes, Deluxe
+keymaps or operators in Blender 5.2.2; that acceptance remains incomplete.
