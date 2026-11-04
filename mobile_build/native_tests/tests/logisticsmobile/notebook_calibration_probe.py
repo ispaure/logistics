@@ -105,6 +105,7 @@ class NotebookCalibrationProbe(NotebookProbe):
                 result['gesture_fixture'] = dict(geometry=geometry, native_width=native.getWidth(),
                     native_height=native.getHeight(), starts_on_canvas=hit, tool=tool)
                 assert hit, result['gesture_fixture']
+                assert 0 < x < x + distance < native.getWidth() and 0 < y < native.getHeight(), result['gesture_fixture']
                 before = len(panel.editor.notebook.page(0).strokes)
                 start = SystemClock.uptimeMillis()
                 pressures = (.1, .25, .5, .75, 1, 1)
