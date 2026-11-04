@@ -22,9 +22,13 @@ class NotebookAndroidShellTests(unittest.TestCase):
             native = work / 'payload/features/notebooks/mobile/android'
             native.mkdir(parents=True)
             (native / 'NotebookInput.java').write_text('synthetic source')
+            shared = work / 'payload/commonUtils/ui/native/android/io/github/ispaure/commonutils'
+            shared.mkdir(parents=True)
+            (shared / 'ImageCanvasView.java').write_text('synthetic shared source')
             classes = work / 'build/classes'
             classes.mkdir(parents=True)
             (classes / 'NotebookInput.class').write_bytes(b'synthetic class')
+            (classes / 'ImageCanvasView$PageListener.class').write_bytes(b'synthetic tap listener')
             apk = work / 'built.apk'
             with ZipFile(apk, 'w') as archive:
                 archive.writestr('classes.dex', b'synthetic DEX')
@@ -43,6 +47,18 @@ class NotebookAndroidShellTests(unittest.TestCase):
                 self.assertIn('NotebookInput.java', receipt['native_source_hashes'])
                 self.assertEqual(receipt['compiled_payload'], tools.compiled_payload(saved))
                 self.assertTrue(receipt['read_only'])
+                self.assertIn('build/classes/ImageCanvasView$PageListener.class', receipt['native_class_hashes'])
+                self.assertIn('commonUtils/io/github/ispaure/commonutils/ImageCanvasView.java', receipt['native_source_hashes'])
+                # The same manager-owned package can retain a link-specific immutable receipt.
+                apk.write_bytes(saved.read_bytes())
+                tools.retain_palm_package(work, output, name='links')
+                link_package = output / 'notebook-links.apk'
+                try:
+                    link_receipt = json.loads((output / 'android-shell.json').read_text())
+                    self.assertEqual(link_receipt['apk'], str(link_package))
+                    self.assertEqual(link_receipt['sha256'], digest)
+                finally:
+                    link_package.chmod(0o644)
             finally:
                 saved.chmod(0o644)
 
