@@ -414,6 +414,17 @@ preserved.
 
 ## Hosted Android graphics diagnostics
 
+The Android native workflow builds its test APK and validates the UI in separate
+jobs, so emulator image installation and AVD startup have a fresh runner without
+the build job's Go or Gradle caches. The handoff contains only the test APK,
+Briefcase metadata and source manifest. Validation checks the APK's embedded
+source manifest, native-test membership, clean source status and both repository
+HEADs before running with `--no-update`;
+it does not compile another application. A disk check requires at least 12 GiB
+free before image installation and fails explicitly when that reserve is absent.
+Both the build and UI jobs must succeed for native validation or reusable release
+evidence. Shared SDKs and unrelated caches are preserved.
+
 Hosted native UI validation uses the emulator's current `-gpu software` backend
 selection instead of the deprecated `swiftshader_indirect` path. Android's
 [graphics acceleration guide](https://developer.android.com/studio/run/emulator-acceleration)

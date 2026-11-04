@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import signal
 import shutil
 import subprocess
@@ -335,10 +336,10 @@ def _run_once(target, device, *, local=False, require_independent_windows=False,
     if no_update:
         if target == 'ios':
             verify_prebuilt_ios(local=local)
-        elif target == 'android' and local:
-            verify_prebuilt_android()
+        elif target == 'android':
+            verify_prebuilt_android(local=local)
         else:
-            raise ValueError('Android cached test reuse requires explicit exact local source verification.')
+            raise ValueError('Unsupported cached native test target.')
     command = [sys.executable, '-u', '-m', 'briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if no_update:
@@ -436,9 +437,16 @@ def _run_once(target, device, *, local=False, require_independent_windows=False,
     return report
 
 
-def verify_prebuilt_android():
+def verify_prebuilt_android(*, local=False):
     apk = Path('build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk')
     expected = json.loads(Path('payload/source.json').read_text())
+    if not local:
+        root = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()
+        shared = subprocess.check_output(['git', '-C', str(REPO / 'Python/commonUtils'), 'rev-parse', 'HEAD'], text=True).strip()
+        if (expected.get('dirty') is not False or expected.get('logistics_commit') != root
+                or expected.get('commonUtils_commit') != shared
+                or not re.fullmatch('[0-9a-f]{64}', str(expected.get('source_sha256', '')))):
+            raise ValueError('Shared Android test application came from a different source.')
     with zipfile.ZipFile(apk) as archive:
         with zipfile.ZipFile(io.BytesIO(archive.read('assets/chaquopy/app.imy'))) as application:
             actual = json.loads(application.read('mobile/source.json'))

@@ -55,7 +55,11 @@ class NavigationContrastTests(unittest.TestCase):
                 adapter.rail = rail
         adapter.set_mode = set_mode
         host = NS(adapter=adapter, window=self.window, state=NS(destination='documents'),
-                  root=NS(_impl=NS(get_theme_color=lambda role: argb('#ffffff' if role == 4 else '#000000'))))
+                  root=NS(content=[NS(enabled=True), NS(enabled=False)],
+                          _impl=NS(get_theme_color=lambda role: argb('#ffffff' if role == 4 else '#000000'))))
+        menu_items = {id(bar): [Mock(), Mock()] for bar in (bottom, rail)}
+        for bar in (bottom, rail):
+            bar.getMenu().getItem.side_effect = menu_items[id(bar)].__getitem__
         modules = {'android': NS(R=NS(attr=NS(state_checked=1, textColorPrimary=2, colorAccent=3))),
                    'android.view': NS(Gravity=NS(TOP=48)),
                    'android.content.res': NS(ColorStateList=Colors),
@@ -82,7 +86,12 @@ class NavigationContrastTests(unittest.TestCase):
                 self.assertEqual(tint.states, [[1], []])
                 self.assertEqual(tint.colors, [argb('#ffffff'), argb('#000000')])
                 self.assertEqual(host.state.destination, 'documents')
-                rail.getMenu.assert_not_called()  # Tint the existing artwork, preserving its alpha.
+                # Rotation also synchronizes disabled destinations. Tint the
+                # existing artwork rather than replacing its alpha-bearing icons.
+                for item, enabled in zip(menu_items[id(rail)], (True, False)):
+                    item.setEnabled.assert_called_with(enabled)
+                    item.setVisible.assert_called_with(enabled)
+                    item.setIcon.assert_not_called()
                 self.create_rail.assert_called_once_with(host)
                 adapter.set_mode('bottom')
                 set_eink_enabled(False)
@@ -107,7 +116,8 @@ class NavigationContrastTests(unittest.TestCase):
             adapter.impl.native_navigationview = rail
         adapter.set_mode = set_mode
         self.window.app._document_tabs_hidden = True
-        host = NS(adapter=adapter, window=self.window)
+        host = NS(adapter=adapter, window=self.window,
+                  root=NS(content=[NS(enabled=True), NS(enabled=False)]))
         with patch.dict('sys.modules', {'android.view': NS(Gravity=NS(TOP=48))}), patch(
                 'mobile.appearance.refresh_android_navigation'):
             install_android_navigation_appearance(host)

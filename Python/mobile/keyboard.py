@@ -50,6 +50,20 @@ def dismiss_picker_keyboard(picker, field=None):
         picker.app.main_window._impl.native.endEditing(True)
 
 
+def reset_picker_keyboard_insets(picker):
+    """Restore only the overlap reserved by the picker, preserving native insets."""
+    for name in ('name_form', 'picker_form'):
+        form = getattr(picker, name, None)
+        overlap = getattr(form, '_keyboard_overlap', 0)
+        if not overlap:
+            continue
+        scroll = form._impl.native
+        insets = scroll.contentInset
+        insets.bottom = max(0, insets.bottom - overlap)
+        scroll.contentInset = insets
+        form._keyboard_overlap = 0
+
+
 def reveal_picker_input(picker):
     """Keep the current UIKit first responder inside the resized picker viewport."""
     editing_name = picker.name_panel is not None and picker.save_as_name._impl.native.isFirstResponder
@@ -65,7 +79,37 @@ def reveal_picker_input(picker):
     # before scrolling, so its content size cannot clamp away the needed offset.
     form.content.refresh()
     scroll.layoutIfNeeded()
-    scroll.scrollRectToVisible(focused.convertRect(focused.bounds, toView=scroll), animated=False)
+    rect = focused.convertRect(focused.bounds, toView=scroll)
+    adapter = picker.app.native_host.adapter
+    frame = adapter.keyboard_frame
+    overlap = 0
+    if adapter.keyboard_visible and frame is not None:
+        window = picker.app.main_window._impl.native
+        keyboard = window.convertRect(frame, fromCoordinateSpace=window.screen.coordinateSpace)
+        viewport = scroll.convertRect(scroll.bounds, toView=window)
+        # The form can retain its full native height during rotation. A field
+        # inside those bounds can still be behind the docked keyboard; UIKit's
+        # ordinary scrollRectToVisible then considers it already visible.
+        docked = keyboard.origin.y + keyboard.size.height >= window.bounds.size.height - 1
+        intersects = (keyboard.origin.x < viewport.origin.x + viewport.size.width
+                      and keyboard.origin.x + keyboard.size.width > viewport.origin.x)
+        if docked and intersects:
+            overlap = min(viewport.size.height,
+                          max(0, viewport.origin.y + viewport.size.height - keyboard.origin.y))
+    insets = scroll.contentInset
+    insets.bottom = max(0, insets.bottom - getattr(form, '_keyboard_overlap', 0)) + overlap
+    scroll.contentInset = insets
+    form._keyboard_overlap = overlap
+    scroll.scrollRectToVisible(rect, animated=False)
+    if overlap:
+        # UIKit can account for contentInset itself. Inspect the result rather
+        # than enlarging the requested rect and potentially scrolling twice.
+        actual = focused.convertRect(focused.bounds, toView=window)
+        remaining = actual.origin.y + actual.size.height - keyboard.origin.y
+        if remaining > 0:
+            offset = scroll.contentOffset
+            offset.y += remaining
+            scroll.setContentOffset(offset, animated=False)
 
 
 def picker_keyboard_visible(app, adapter):

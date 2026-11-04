@@ -46,7 +46,20 @@ async def exercise_mirrors(app, comic_key):
             assert not await app.open_picker_folder(app.folder_picker_selected)
             app.show_locations()
             app.folder_source_buttons['Local'].on_press()
-            await app.folder_buttons['Browse during pull'].on_press()
+            await app.folder_buttons['All files'].on_press()
+            browser = app.file_browser
+            await browser.activate_entry(next(item for item in browser.entries if item.label == 'Local'))
+            await browser.activate_entry(next(item for item in browser.entries if item.label == 'Browse during pull'))
+            assert app.file_path == 'Browse during pull'
+            assert any(item.label == 'Local note.txt' for item in browser.entries)
+            assert app.transfer_controller()._transfer_cancel is cancel and not cancel.is_set()
+            await app.parent_file_folder()
+            await app.parent_file_folder()
+            assert app.file_storage.value == 'Shared files'
+            await app.parent_file_folder()
+            assert not app.routes.screens['files']
+            # Direct folder entry retains its root-to-Workspaces Back behavior.
+            await app.browse_hub_folder('Browse during pull')
             assert app.file_path == 'Browse during pull'
             assert app.transfer_controller()._transfer_cancel is cancel
             assert await app.browser_file_location(('Local files', 'Browse during pull'))
