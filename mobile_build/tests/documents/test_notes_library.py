@@ -193,6 +193,20 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertFalse(owner.breadcrumbs.children)
         self.run_async(exercise())
 
+    def test_provider_root_stays_reachable_in_full_breadcrumb_path(self):
+        from mobile.obsidian import open_vault
+        async def exercise():
+            owner = await open_vault(self.app, LocalFiles(self.vault), '', 'documents')
+            self.assertTrue(await owner.open_note('Projects/Plan.MD'))
+            owner.reflow(320)
+            links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_folder')]
+            self.assertEqual([child.breadcrumb_folder for child in links], ['', 'Projects'])
+            self.assertEqual(links[0].text, owner.library_title)
+            await links[0].on_press()
+            self.assertTrue(owner.sidebar.sidebar_open)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_images_pdf_and_unknown_files_replace_article_without_leaving_library(self):
         from mobile.obsidian import open_vault
         from mobile_build.tests.support.pdf import PDF, PNG, native_pdf
