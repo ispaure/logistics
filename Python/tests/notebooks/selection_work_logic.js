@@ -170,6 +170,20 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
     assert.equal(commands.length,before,'Inactive clipboard modes must not paste');
     sandbox.mode='select';
   }
+  // Repeated point work is bounded across the entire gesture; an earlier
+  // accepted stroke must not survive if a later stroke exhausts the budget.
+  sandbox.state.strokes=[stroke('first',[[120,120]]),stroke('complex',Array.from({length:100},()=>[120,120]))];
+  sandbox.selected=new Set();
+  run('selectionPrepareSaved=selectionPrepare;selectionPreparationCalls=0;selectionPrepare=path=>{if(Array.isArray(path))selectionPreparationCalls++;const index=selectionPrepareSaved(path);index.limit=35;return index}');
+  lasso();
+  assert.equal(sandbox.selected.size,0,'Work abort must clear the whole selection, including earlier accepted strokes');
+  assert.equal(run('selectionPreparationCalls'),1,'Lasso polygon is prepared once for all page strokes');
+  assert.match(controls.get('status').textContent,/complex/);
+  run('selectionPrepare=selectionPrepareSaved');
+  sandbox.state.strokes=original;
+  sandbox.selected=new Set(['A']);run('selectionRender()');
+  sandbox.state.page_id='new-stable-page';run('selectionRender()');
+  assert.equal(sandbox.selected.size,0,'A new stable page ID clears selection even if its index is unchanged');
   const beforeLocked=commands.length;
   for(const field of ['read_only','password_required']) {
     sandbox.state[field]=true;
@@ -184,7 +198,7 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
     uniform_scale: true, fine_rotation: true, cancelled_preview_restored: true,
     native_pen_finish: true, clipboard_actions: true, cross_page_repeat_paste: true,
     locked_pages: true, select_over_pdf_links: !!linksSource, offpage_fine_rotation: true,
-    host_selection_normalization: true, dual_clipboard_shortcuts: !!imagesSource};
+    host_selection_normalization: true, whole_selection_work_abort: true, stable_page_identity: true, dual_clipboard_shortcuts: !!imagesSource};
 }
 module.exports = {checkSelectionGestures};
 if (require.main === module) {
