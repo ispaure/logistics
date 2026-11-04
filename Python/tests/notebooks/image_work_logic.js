@@ -9,7 +9,7 @@ export default function(source, vm, assert, inputSource = '') {
   const canvas = {...node(),width:1404,height:1872,getBoundingClientRect(){return {left:0,top:0,width:1404,height:1872}},setPointerCapture(){},getContext(){return context},toDataURL(){return 'data:image/png;base64,synthetic'},onpointerdown(){},onpointermove(){},onpointerup(){},onpointercancel(){}};
   for(const id of ['viewport','erase','select','tool','status','layer','pdfBackground']) controls.set(id,node());
   controls.get('layer').value='L';
-  controls.get('pdfBackground').complete=true;controls.get('pdfBackground').naturalWidth=1404;
+  controls.get('pdfBackground').complete=true;controls.get('pdfBackground').naturalWidth=1404;controls.get('pdfBackground').naturalHeight=1872;
   const document={elementFromPoint(){return canvas},body:node(),querySelector(){return node()},createElement(tag){return tag==='canvas'?{...canvas}:node()},addEventListener(type,handler){listeners.set(type,handler)}};
   const sandbox={document,console,Map,Set,Image:class{constructor(){this.complete=true;this.naturalWidth=16}},ctx:context,canvas,
     state:{page_id:'page-A',width:1404,height:1872,index:0,strokes:[],images:[],layers:[['L','Layer',true]],scene_order:[]},
@@ -45,10 +45,13 @@ export default function(source, vm, assert, inputSource = '') {
   run('imageRender(); captureCutout([[0,0],[400,0],[200,400]])');
   assert.ok(paint.some(p=>p[0]==='clip'),'Capture clips the polygon');
   assert.deepEqual(paint.filter(p=>p[0]==='stroke').map(p=>p[1]),['A','B']);
+  controls.get('pdfBackground').naturalWidth=1000;controls.get('pdfBackground').naturalHeight=500;run('captureCutout([[0,0],[400,0],[200,400]])');
+  const bgPaint=paint.filter(p=>p[0]==='image' && p[1]===controls.get('pdfBackground')).at(-1);assert.deepEqual(bgPaint.slice(2),[0,585,1404,702],'Capture background must match CSS object-fit contain');
+  controls.get('pdfBackground').naturalWidth=1404;controls.get('pdfBackground').naturalHeight=1872;
   controls.get('newCutout').onclick();canvas.onpointerdown(event(150,150));assert.equal(run('imageGesture'),null,'Explicit lasso can start inside an image');canvas.onpointercancel(event(150,150));
   canvas.onpointerdown(event(150,150));canvas.onpointerup(event(150,150));controls.get('cutImage').onclick();assert.equal(commands.at(-1).op,'delete-image','Cut commits source deletion');assert.deepEqual(JSON.parse(JSON.stringify(run('imageClipboard.sourceCorners'))),picture.corners);
   const before=commands.length;canvas.onpointerdown(event(50,50));canvas.onpointermove(event(60,60));canvas.onpointercancel(event(60,60));assert.equal(commands.length,before,'Cancelled gesture does not commit');
   sandbox.state.password_required=true;run('imageRender()');canvas.onpointerdown(event(150,150));assert.equal(sandbox.active,null,'Locked page rejects capture');
   assert.equal(controls.get('viewport').style.visibility,'hidden');
-  return {passed:true, finger_move:true,rotate:true,arrange:true,repeat_paste_across_pages:true,lasso_clips:true,mixed_scene:true,cancel:true,password_gate:true,cross_page_origin:true,rotated_scaled_copy:true,image_cut:true,select_mode_paste_isolation:true};
+  return {passed:true,background_proportions:true, finger_move:true,rotate:true,arrange:true,repeat_paste_across_pages:true,lasso_clips:true,mixed_scene:true,cancel:true,password_gate:true,cross_page_origin:true,rotated_scaled_copy:true,image_cut:true,select_mode_paste_isolation:true};
 };
