@@ -29,6 +29,11 @@ reset of every native selection would lose meaningful state. Composite rows use
 share their parent contrast. High contrast maps selected foreground roles to
 white; ordinary themes retain semantic icon colors and photo previews.
 
+Starting a selected cloud download retires the completed destination-picker
+route before presenting transfer progress. Android Back and the iOS Back control
+therefore return to the retained source folder, preserving its viewport.
+`test_remote_downloads.py` covers the route handoff and retained source panel.
+
 `workspace_navigation.WorkspaceNavigation` owns destination routes, open/closed
 drawer state, retained drawer references and paired-session selection.
 `WorkspaceFrame` mounts and restores existing widgets for compact, split and
