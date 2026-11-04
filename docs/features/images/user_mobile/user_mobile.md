@@ -12,7 +12,11 @@ in the reader controls.
 The row below the title uses the browser's storage icons and caption style,
 including LocalCrypt/unlocked, session-only and **(Read-Only)** state. Images
 are read-only and use the shared 8 MiB, 8192-pixel-axis and 16-megapixel limits.
-Cloud and Home Server documents remain read-only; copy them locally to edit.
+Animated WebP is rejected. The mobile image viewer does not provide the desktop
+WebP batch compressor or JPG EXIF comment editor. Copying a remote image locally
+does not add editing controls to this viewer.
+
+Burst camera is an iOS-only workflow; Android has no equivalent camera entry.
 
 ## Burst camera on iPhone
 

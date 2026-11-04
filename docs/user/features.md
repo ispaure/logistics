@@ -5,12 +5,16 @@ controls and workflows; its development branch explains implementation.
 Workspaces, navigation and general file browsing remain in the
 [Logistics guide](files-and-documents.md).
 
+Mobile links describe supported subsets; they do not imply all desktop tools or
+formats are available on mobile. See each guide for platform and validation limits.
+
 | Feature | Mobile help |
 | --- | --- |
 | [Archive manager](../features/archives/user/user.md) | Desktop only |
 | [Aviation Tools](../features/aviation_tools/user/user.md) | Desktop only |
+| [Bulk Rename](../features/bulk_rename/user/user.md) | Desktop only |
 | [Blender installations and presets](../features/blender/user/user.md) | Desktop only |
-| [Books & Comics](../features/books/user/user.md) | [Mobile guide](../features/books/user_mobile/user_mobile.md) |
+| [Books](../features/books/user/user.md) | [Mobile guide](../features/books/user_mobile/user_mobile.md) |
 | [Open and export Calibre libraries](../features/calibre/user/user.md) | Desktop only |
 | [Read and manage comics](../features/comics/user/user.md) | [Mobile guide](../features/comics/user_mobile/user_mobile.md) |
 | [Browse Dropbox folders and clean conflicts](../features/dropbox/user/user.md) | Desktop only |
@@ -19,8 +23,11 @@ Workspaces, navigation and general file browsing remain in the
 | [Open a mounted remote folder](../features/fuse/user/user.md) | Desktop only |
 | [Git](../features/git/user/user.md) | Desktop only |
 | [Using IDE](../features/ide/user/user.md) | Desktop only |
-| [Compress images and edit JPG comments](../features/images/user/user.md) | Desktop only |
+| [View images, compress and edit JPG comments](../features/images/user/user.md) | [Mobile viewer and iPhone camera](../features/images/user_mobile/user_mobile.md) |
 | [Open configured service shortcuts](../features/links/user/user.md) | Desktop only |
+| [Notes Library](../features/notes_library/user/user.md) | [Mobile guide](../features/notes_library/user_mobile/user_mobile.md) |
+| [PDF Reader](../features/pdf/user/user.md) | [Mobile guide](../features/pdf/user_mobile/user_mobile.md) |
+| [Video Player](../features/video/user/user.md) | [Mobile guide](../features/video/user_mobile/user_mobile.md) |
 | [Notebooks](../features/notebooks/user/user.md) | [Mobile guide](../features/notebooks/user_mobile/user_mobile.md) |
 | [LM Chat](../features/lm/user/user.md) | [Mobile guide](../features/lm/user_mobile/user_mobile.md) |
 | [Rename MKA chapters from a CSV](../features/media/user/user.md) | Desktop only |

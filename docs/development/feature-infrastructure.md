@@ -16,17 +16,20 @@ optional tools:
 | `discovery.py` | Direct package enumeration and isolated import failures |
 | `settings.py` | Application and feature configuration registration/store composition |
 | `preferences.py` | Feature preference paths, loading and migration |
-| `code_font.py` | Application policy for binding code view fonts |
 
 
 Public registry imports remain compatible. The implementation owners under
-`features/runtime/` are infrastructure, so discovery must not treat that package
-as an optional feature. New feature behavior belongs in its own package; the
+`features/runtime/` are infrastructure, rather than a user-facing optional tool.
+Discovery enumerates direct packages with `__init__.py`; keep infrastructure free
+of user-facing feature registration hooks. New feature behavior belongs in its own package; the
 registry coordinates the runtime owners rather than absorbing feature workflows.
 
 Use lightweight `__init__.py` registration, portable named domain modules,
-desktop `ui/`, optional `mobile/`, a `docs/docs.md` wiki with `development/development.md`,
-`user/user.md` and, where supported, `user_mobile/user_mobile.md`. Existing packages migrate incrementally; do not create
+desktop `ui/` and optional `mobile/`. Logistics feature guides belong under
+`docs/features/<owner>/`, with a same-named feature landing and audience landings
+`development/development.md`, `user/user.md` and, where supported,
+`user_mobile/user_mobile.md`. Package READMEs and `user_docs/index.md` are short
+compatibility links to that wiki. Existing packages migrate incrementally; do not create
 empty layers or duplicate Core UI/Bulk Rename packages to match a template.
 
 Start feature-infrastructure validation with `Python/tests/application/test_feature_registry.py`,
