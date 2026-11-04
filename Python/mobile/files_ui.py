@@ -245,6 +245,7 @@ class FilesUI:
             [('New folder…', lambda: self.show_file_actions(operation='new')),
              ('Rename…', lambda: self.show_file_actions(operation='rename')),
              ('Move…', lambda: self.show_file_actions(operation='move')),
+             ('Copy', self.copy_file),
              ('Pin current folder', self.locations_controller().pin_local_folder),
              ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
@@ -363,10 +364,25 @@ class FilesUI:
             commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
                          ('Rename…', lambda: self.show_file_actions(operation='rename')),
                          ('Move…', lambda: self.show_file_actions(operation='move')),
+                         *([('Copy', self.copy_file)] if self.can_copy_file() else []),
                          ('Details', self.show_file_details), ('Delete…', self.delete_file)]
         if isinstance(self.file_provider, LocalFiles) and (not self.file_provider.private or getattr(self.file_provider, 'supports_metadata_collections', False)):
             commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
         return commands + [('Archive password…', lambda: self.show_file_actions(operation='password'))]
+
+    def can_copy_file(self):
+        from services.documents.storage import document_writable
+        return self.file_provider is not None and document_writable(self.file_provider)
+
+    async def copy_file(self, widget=None, **kwargs):
+        from .file_operations import FileOperationRequest
+        if not self.can_copy_file():
+            return
+        def capture():
+            provider, path = self.selected_file()
+            return FileOperationRequest('copy', provider, path)
+        if await self.file_operations().run(capture):
+            await self.browse_files()
 
     def show_file_details(self, widget=None, **kwargs):
         info = self.file_browser.info
