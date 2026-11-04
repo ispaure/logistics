@@ -64,3 +64,18 @@ Unchanged videos keep their existing stream. Focused regressions verify those
 lifetimes and read replacement bytes through the new playback URL. Existing
 LocalCrypt media and mobile library checks cover integration with the shared
 desktop/mobile callback.
+
+## Reusing Markdown references
+
+Document-owned raster bytes are reused across mobile reading and formatted
+editing, with provider access and revision checks before reuse and bounded RAM.
+Replacement bytes refresh automatically; removed references stop being requested
+by the new render, and closing the document clears retained media. Library link
+resolutions retain their directory dependencies: changed names invalidate the
+result, including a newly created nearer target. Providers without reliable
+local directory stamps continue using live resolution. Desktop mode switches
+already reuse their prepared resource map and unchanged formatted document.
+
+The media regressions cover repeated renders, replacement/deletion, link
+precedence changes, revocation, cancellation and video stream retirement. Mobile
+Notes Library mode regressions cover the existing navigation/authoring flow.

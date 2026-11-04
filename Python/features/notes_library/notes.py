@@ -106,6 +106,7 @@ class NotesLibrary:
             raise ValueError('Notes Library requires a local copy. Download or sync this folder first.')
         self.provider, self.root = provider, provider.relative(root)
         self._link_folders = {}
+        self._resolved_links = {}
         self._link_lock = RLock()
         self._links_closed = False
         self._media = {}
@@ -118,6 +119,7 @@ class NotesLibrary:
         with self._link_lock:
             self._links_closed = True
             self._link_folders.clear()
+            self._resolved_links.clear()
             media, self._media = self._media, {}
         if self._owns_connection_index:
             self.connection_index.close()
@@ -338,6 +340,15 @@ class NotesLibrary:
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
         with operation(self.provider, cancelled):
+            cacheable = callable(getattr(self.provider, 'transfer_location', None)) and not callable(getattr(self.provider, 'find_note_paths', None))
+            key = current, target
+            with self._link_lock:
+                cached = self._resolved_links.get(key)
+            if cached is not None:
+                result, dependencies = cached
+                if all(self._link_listing(folder, cancelled) is rows for folder, rows in dependencies.items()):
+                    self.entry(result[0])  # Validate provider access even on a cache hit.
+                    return result
             listings = {}
             count = 0
             def listing(folder):
@@ -354,6 +365,8 @@ class NotesLibrary:
             def exists(candidate):
                 check_cancelled(cancelled)
                 try:
+                    if cacheable:
+                        listing(posixpath.dirname(candidate))
                     return not self.entry(candidate)['directory']
                 except (FileNotFoundError, NotADirectoryError):
                     return False
@@ -380,5 +393,14 @@ class NotesLibrary:
                             matches.append(child)
                 return matches
 
-            return resolve_link(current, target, root=self.root, contained=self.contained,
-                                exists=exists, suffix_matches=suffix_matches, cancelled=cancelled)
+            result = resolve_link(current, target, root=self.root, contained=self.contained,
+                                  exists=exists, suffix_matches=suffix_matches, cancelled=cancelled)
+            # Providers with indexed lookup own its invalidation; do not cache
+            # those results without directory dependencies from the lookup.
+            if listings and cacheable:
+                with self._link_lock:
+                    check_cancelled(cancelled)
+                    if len(self._resolved_links) >= 128:
+                        self._resolved_links.clear()
+                    self._resolved_links[key] = result, listings
+            return result
