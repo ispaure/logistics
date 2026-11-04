@@ -41,6 +41,10 @@ def diagnostics(entry_point):
             'feedback-speech-complete.png', 'feedback-speech-failure.png')
     if entry_point.endswith('.folder_feedback_probe'):
         return NATIVE_DIAGNOSTICS + ('folder-feedback-startup.json', 'folder-feedback-tasks.txt')
+    if entry_point.endswith('.lockscreen_probe'):
+        return tuple('lock-' + name + '.png' for name in
+            [*(f'{i}-{pose}{suffix}' for i, pose in enumerate(('portrait', 'landscape-left', 'landscape-right', 'portrait'))
+               for suffix in ('', '-keyboard')), 'unlock-keyboard'])
     if entry_point.endswith('.links_images_voices_probe'):
         return NATIVE_DIAGNOSTICS + ('feedback-progress.json',) + tuple(
             'feedback-' + name + '.png' for name in ('15-outgoing', '15-loading', '15-backlinks',
@@ -66,6 +70,18 @@ def diagnostics(entry_point):
             f'creation-{panel}-{pose}.png' for panel in ('formats', 'name', 'change-format', 'locations', 'location', 'folders')
             for pose in ('portrait', 'landscape-left', 'landscape-right'))
     return NATIVE_DIAGNOSTICS + (SYNC_SCREENSHOTS if entry_point.endswith('.sync_status_probe') else ())
+
+
+def lockscreen_capture_name(raw):
+    """Missing adb marker files are startup/polling state, not JSON requests."""
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return None
+    name = value.get('name') if isinstance(value, dict) else None
+    if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9-]+', name):
+        raise ValueError('Unexpected lock-screen screenshot name')
+    return name
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -233,7 +249,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
     cache = console = console_stream = None
     try:
         client.boot(device)
-        if entry_point.endswith('.document_creation_probe'):
+        if entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
             # Dismiss only the fresh QA simulator's first-use keyboard lesson.
             client.invoke('spawn', device, 'defaults', 'write', 'com.apple.keyboard.preferences',
                           'DidShowContinuousPathIntroduction', '-bool', 'true')
@@ -339,6 +355,15 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 client.invoke('io', device, 'screenshot', str(output / 'duo-keyboard-screen.png'))
                 keyboard_capture.unlink()
                 (cache / 'viewer-layout/keyboard-capture-done').touch()
+            request = cache / 'lockscreen-capture.json'
+            if entry_point.endswith('.lockscreen_probe') and request.exists():
+                capture_name = lockscreen_capture_name(request.read_bytes())
+                if capture_name is None:
+                    time.sleep(.1)
+                    continue
+                client.invoke('io', device, 'screenshot', str(output / ('screen-' + capture_name + '.png')))
+                request.unlink()
+                (cache / 'lockscreen-capture-done').touch()
             report = cache / result_name
             if entry_point.endswith('.document_creation_probe'):
                 request = cache / 'document-creation-evidence/keyboard-request.json'
@@ -351,6 +376,9 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                     request.with_name('keyboard-done').touch()
             if report.exists():
                 result = json.loads(report.read_text())
+                if entry_point.endswith('.lockscreen_probe') and result.get('phase') not in ('complete', 'failed'):
+                    time.sleep(.2)
+                    continue
                 (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
                 client.invoke('io', device, 'screenshot', str(output / 'ios-final.png'))
                 if not result['success']:
@@ -486,7 +514,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         else:
             record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
-        if device is None and entry_point.endswith('.document_creation_probe'):
+        if device is None and entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
             emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
         if tablet:
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '1600x2400')
@@ -494,7 +522,14 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         if device is None and entry_point.endswith('.sync_status_probe'):
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '640x1136')
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
-        emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=90)
+        if device is None and entry_point.endswith('.lockscreen_probe'):
+            # A fresh Pixel Launcher's first-boot ANR can steal the QA window's
+            # input focus. Stop only that unrelated launcher on our disposable
+            # emulator before installing the foreground form; retain app errors.
+            emulator.invoke('-s', serial, 'shell', 'am', 'force-stop', 'com.google.android.apps.nexuslauncher')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'size', '720x1600')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
+        emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=300)
         if device is not None:
             # Boox's launcher can auto-freeze a newly installed QA identity.
             # Only this disposable package is enabled, then removed in finally.
@@ -503,10 +538,10 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         if device is None and entry_point.endswith('.chat_notes_feedback_probe'):
             prepare_chat_notes_emulator(emulator, serial, output)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
+        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.lockscreen_probe', '.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
-            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
+            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe', '.lockscreen_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -514,6 +549,15 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                     emulator.invoke('-s', serial, 'shell', 'wm', 'user-rotation', 'lock',
                                     {b'landscape-left': '1', b'landscape-right': '3', b'portrait': '0'}[pose])
                     last_orientation = pose
+            if entry_point.endswith('.lockscreen_probe'):
+                request = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/lockscreen-capture.json'], env=env, capture_output=True, timeout=15)
+                capture_name = lockscreen_capture_name(request.stdout) if request.returncode == 0 else None
+                if capture_name is not None:
+                    screen = subprocess.check_output([str(emulator.adb), '-s', serial, 'exec-out', 'screencap', '-p'], env=env, timeout=15)
+                    (output / ('screen-' + capture_name + '.png')).write_bytes(screen)
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/lockscreen-capture.json')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/lockscreen-capture-done')
             if memory_probe:
                 progress = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/notebook-memory-progress.json'], env=env, capture_output=True, timeout=15)
@@ -563,6 +607,9 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                     result = json.loads(value.stdout)
                 except json.JSONDecodeError:
                     time.sleep(.1)
+                    continue
+                if entry_point.endswith('.lockscreen_probe') and result.get('phase') not in ('complete', 'failed'):
+                    time.sleep(.2)
                     continue
                 (output / 'android-result.json').write_text(json.dumps(result, indent=2))
                 if not result['success']:
