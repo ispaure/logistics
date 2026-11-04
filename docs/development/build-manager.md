@@ -132,8 +132,10 @@ They do not substitute for the local platform backends' native acceptance.
 `python dev.py lint` covers Logistics-owned source. Desktop plans run the installed
 manager's tests through `python -m build_manager.contracts`.
 
-Profiles, counters and source workspaces stay under ignored
-`mobile_build/.tools/build-manager/`; result plans/logs/reports stay under ignored
+Counters and source workspaces stay under ignored
+`mobile_build/.tools/build-manager/`. The standalone manager supplies its private
+checkout-specific profile; direct tools default to the legacy profile there unless
+`LOGISTICS_MANAGER_PROFILE` selects another file. Result plans/logs/reports stay under ignored
 `test-results/build-manager/`. Keep keys and personal configuration out of source
 and captured artifacts. Existing in-place deployment guards and final upload
 confirmation remain in the owning deployment helpers.
@@ -244,17 +246,19 @@ owned path with a recovery error rather than deleting its evidence.
 `vm.fedora_container_host` selects rootless Podman in that existing Ubuntu guest;
 it is an alternative to the default separate Fedora guest, never an automatic
 fallback. The normal guest account needs rootless Podman/user namespace support.
-The Fedora 43 definition is `Python/tests/platform/fedora43.Containerfile`.
+The current definition is `Python/tests/platform/fedora.Containerfile`;
+`test-environments.json` selects the Fedora image (currently Fedora 44).
 The adapter hashes the definition, prepares/reuses the matching labelled image,
 records the actual image ID/architecture, then executes by that immutable ID.
 It records Fedora's own OS release separately from the Ubuntu host kernel.
 Cold image preparation uses public package downloads; normal cached tests run
 locally, but cold setup is not claimed to be air-gapped.
 
-The full real Fedora43 aarch64/Python3.12.2 container run passed the same shared,
+A historical Fedora 43 aarch64/Python 3.12.2 container run passed the same shared,
 application, compression and manager plan plus release-tooling tests. Together
-with the existing complete Ubuntu run and its focused corrections this establishes
-both required Linux distributions on this Mac's current ARM VM environment.
+with the historical Ubuntu run, this records the earlier ARM VM environment;
+it does not establish current Fedora 44 acceptance. Fedora is the only current
+Linux desktop gate, and Ubuntu is container infrastructure.
 Container tests run as the normal UID with default Podman security and the browser
 sandbox enabled; no privileged/unconfined flags, kernel protection changes or
 root Qt fallback are used. Actual second-project container success and cancellation
@@ -566,7 +570,7 @@ A normal-user symlink probe establishes this capability; the complete platform
 suite must still pass. Existing personal or held guests must not be substituted.
 
 The Fedora desktop suite also needs the OS libraries declared by the project's
-`Python/tests/platform/fedora43.Containerfile`, including NSS, NSPR and GTK3 for
+`Python/tests/platform/fedora.Containerfile`, including NSS, NSPR and GTK3 for
 Qt WebEngine. Provision those project prerequisites through the authorized
 dedicated-guest setup channel; do not grant the normal test account passwordless
 sudo or disable browser sandboxing. The manager's generic readiness check alone

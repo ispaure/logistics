@@ -301,8 +301,10 @@ Uploads default to off. Enrollment was confirmed approved on 2026-10-14. A retai
 local record confirms build `202610145` uploaded and was assigned to Friends with
 beta review submitted. This is historical evidence, not a live Apple review status;
 check App Store Connect before releasing again. A new Mac still needs account,
-signing and API setup, and each release needs committed sources and any required
-encryption compliance answers.
+signing and API setup. Local tester preparation captures the intended application
+and commonUtils files, including working edits, and requires matching native/runtime
+validation. GitHub publication requires committed source and a clean checkout.
+Complete any required encryption compliance answers for the selected build.
 The guide includes prepared beta description, testing instructions and review notes.
 Future explicit uploads are configured to assign their processed build to the
 external **Friends** group, submit beta review when needed and enable tester
