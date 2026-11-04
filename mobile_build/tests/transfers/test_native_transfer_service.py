@@ -310,6 +310,160 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(surface.dispose)
         return surface, handler
 
+    async def test_failed_render_rebuilds_once_then_keeps_native_transfer_controls(self):
+        surface, handler = self.surface()
+        surface.update(dict(mode='progress', phase='transfer', busy=True, files=2, source='Local/private', destination='Cloud:'))
+        original, token = surface.web, surface.token
+        surface.recover_rendering()
+        self.assertIsNot(surface.web, original)
+        self.assertNotEqual(surface.token, token)
+        self.assertIsNone(original.parent)
+        self.assertEqual(surface.model['files'], 2)
+        surface.recover_rendering()
+        fallback = surface.native_fallback
+        self.assertIsNone(surface.web)
+        self.assertIn('Files: 2', fallback.metrics.text)
+        self.assertEqual(surface.delivered_revision, surface.revision)
+        self.assertIsNone(surface.pending)
+        await fallback.buttons.children[0].on_press()
+        handler.assert_awaited_with('stop', dict(revision=str(surface.revision)))
+        surface.recover_rendering()
+        self.assertEqual(surface.recovery_count, 2)
+        surface.update(dict(mode='progress', phase='complete', files=3))
+        self.assertIn('Files: 3', fallback.metrics.text)
+        self.assertEqual([button.text for button in fallback.buttons.children], ['Continue browsing'])
+
+    async def test_native_review_keeps_confirmation_and_stale_revision_guards(self):
+        surface, handler = self.surface()
+        surface.update(dict(mode='review', can_confirm=True, complete=True,
+            rows=(('delete', 'private/file.txt'),), counts=dict(delete=1)))
+        surface.recover_rendering()
+        surface.recover_rendering()
+        fallback = surface.native_fallback
+        approve = next(button for button in fallback.buttons.children if button.text.startswith('Approve'))
+        self.assertIn('private/file.txt', fallback.rows.children[0].text)
+        self.assertIn('no undo', fallback.metrics.text)
+        surface.update(dict(surface.model, notice='Files changed', can_confirm=False))
+        await approve.on_press()
+        handler.assert_not_awaited()
+        self.assertFalse(next(button for button in fallback.buttons.children if button.text.startswith('Approve')).enabled)
+
+    async def test_native_recovery_still_revokes_and_clears_private_labels(self):
+        surface, handler = self.surface()
+        surface.update(dict(mode='progress', busy=True, source='Secret:', active_files=(dict(name='private.txt'),)))
+        surface.recover_rendering()
+        surface.recover_rendering()
+        fallback = surface.native_fallback
+        row = fallback.rows.children[0]
+        stop = fallback.buttons.children[0]
+        surface.revoke()
+        self.assertEqual(row.text, '')
+        self.assertEqual(fallback.paths.text, '')
+        self.assertIsNone(fallback.surface)
+        await stop.on_press()
+        handler.assert_not_awaited()
+
+    async def test_late_load_callback_cannot_mark_replacement_ready(self):
+        surface, _ = self.surface()
+        original = surface.web
+        from unittest.mock import AsyncMock
+        gate = asyncio.Event()
+        async def evaluate(script):
+            await gate.wait()
+            return True
+        original.evaluate_javascript = AsyncMock(side_effect=evaluate)
+        task = asyncio.create_task(surface.loaded(original))
+        await asyncio.sleep(0)
+        surface.recover_rendering()
+        gate.set()
+        await task
+        self.assertFalse(surface.ready)
+
+    async def test_hung_javascript_returns_to_bounded_render_recovery(self):
+        surface, _ = self.surface()
+        from unittest.mock import AsyncMock
+        async def evaluate(script):
+            await asyncio.Event().wait()
+        surface.web.evaluate_javascript = AsyncMock(side_effect=evaluate)
+        surface.ready = True
+        with patch('features.rclone.transfers.mobile.surface.JAVASCRIPT_TIMEOUT', .01):
+            surface.update(dict(mode='progress', phase='scan'))
+            await asyncio.wait_for(surface.send_task, .5)
+        self.assertFalse(surface.ready)
+        self.assertEqual(surface.pending, surface.model)
+
+    async def test_watchdog_recovery_is_bounded_and_disposal_stops_it(self):
+        surface, _ = self.surface()
+        surface.update(dict(mode='progress'))
+        surface.last_progress = 0
+        clock = 0
+        async def tick(seconds):
+            nonlocal clock
+            clock += 20
+            if clock == 60:
+                surface.dispose()
+        with patch('features.rclone.transfers.mobile.surface.monotonic', lambda: clock), patch(
+                'features.rclone.transfers.mobile.surface.asyncio.sleep', tick):
+            await surface.watch_rendering()
+        self.assertEqual(surface.recovery_count, 2)
+        self.assertTrue(surface.closed)
+
+    async def test_hidden_surface_does_not_recover_and_pending_native_model_resumes(self):
+        visible = True
+        surface, _ = self.surface(visible=lambda: visible)
+        surface.update(dict(mode='progress', files=1))
+        surface.recover_rendering()
+        surface.recover_rendering()
+        visible = False
+        surface.update(dict(mode='progress', files=2))
+        self.assertIn('Files: 1', surface.native_fallback.metrics.text)
+        visible = True
+        surface.update(dict(mode='progress', files=2))
+        self.assertIn('Files: 2', surface.native_fallback.metrics.text)
+
+    async def test_hidden_unloaded_surface_has_no_recovery_deadline(self):
+        surface, _ = self.surface(visible=lambda: False)
+        surface.update(dict(mode='progress'))
+        surface.last_progress = 0
+        clock = 0
+        async def tick(seconds):
+            nonlocal clock
+            clock += 20
+            if clock == 60:
+                surface.dispose()
+        with patch('features.rclone.transfers.mobile.surface.monotonic', lambda: clock), patch(
+                'features.rclone.transfers.mobile.surface.asyncio.sleep', tick):
+            await surface.watch_rendering()
+        self.assertEqual(surface.recovery_count, 0)
+
+    async def test_renderer_creation_failure_uses_native_controls(self):
+        surface, _ = self.surface()
+        surface.update(dict(mode='progress', busy=True))
+        with patch.object(surface, 'create_web', side_effect=RuntimeError('Renderer unavailable')):
+            surface.recover_rendering()
+        self.assertEqual(surface.recovery_count, 2)
+        self.assertIsNotNone(surface.native_fallback)
+        self.assertTrue(surface.ready)
+
+    async def test_idle_renderer_health_failure_also_recovers(self):
+        from unittest.mock import AsyncMock
+        surface, _ = self.surface()
+        surface.update(dict(mode='progress'))
+        surface.ready, surface.pending = True, None
+        surface.last_progress = surface.last_health = 0
+        health = surface.web.evaluate_javascript = AsyncMock(return_value=False)
+        clock = 0
+        async def tick(seconds):
+            nonlocal clock
+            clock += 20
+            if clock == 80:
+                surface.dispose()
+        with patch('features.rclone.transfers.mobile.surface.monotonic', lambda: clock), patch(
+                'features.rclone.transfers.mobile.surface.asyncio.sleep', tick):
+            await surface.watch_rendering()
+        health.assert_awaited_once_with('!!window.Transfer')
+        self.assertEqual(surface.recovery_count, 2)
+
     async def test_identical_models_and_hidden_surfaces_do_not_schedule_native_redraws(self):
         surface, _ = self.surface(visible=lambda: False)
         surface.ready = True

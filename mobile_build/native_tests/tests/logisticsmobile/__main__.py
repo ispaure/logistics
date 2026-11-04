@@ -82,6 +82,10 @@ async def exercise(app):
         from .rotation_checks import exercise_rotation
         ui_review.update(await measure(app, 'rotation', exercise_rotation(app)))
         passed.append('native_rotation_safe_areas')
+        from .transfer_recovery_probe import exercise_recovery
+        recovery = await measure(app, 'transfer-renderer-recovery', exercise_recovery(app))
+        assert recovery['success'], recovery.get('error', recovery)
+        passed.append('native_transfer_renderer_recovery')
         success = passed == list(CASES)
         error = ''
     except Exception:
