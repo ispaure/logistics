@@ -1,8 +1,7 @@
 # Blender documentation
 
-Choose a guide for the task you want to complete.
+Manage desktop Blender installations, isolated presets and addon selections.
 
-## Further reading
-
-- [Blender feature](development/development.md)
-- [Blender installations and presets](user/user.md)
+- [Desktop user guide](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Developer guide](development/development.md)
