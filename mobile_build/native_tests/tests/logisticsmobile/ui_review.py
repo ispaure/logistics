@@ -239,8 +239,8 @@ async def exercise_ui_review(app):
             assert all(button.enabled for button in app.folder_source_buttons.values())
             assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']
-        assert folder.text == 'Browse All Files'
-        # Browse All Files is a text action below the hierarchy. Folder glyphs
+        assert folder.text == 'Shared Files'
+        # Shared Files is a text action below the hierarchy. Folder glyphs
         # belong to actual folder rows; verify one before tapping the root action.
         folder_row = app.folder_buttons['UI Review']
         indicator = next(child for child in folder_row.parent.children
@@ -258,7 +258,7 @@ async def exercise_ui_review(app):
         assert app.files_view in app.body.children
         assert app.file_storage.value == app.local_browser_root() and app.file_path == ''
         assert app.file_browser.search.value == ''
-        # Browse All Files contains ordinary shared/device files. Managed
+        # Shared Files contains ordinary shared/device files. Managed
         # collections are selected through Workspaces, rather than duplicated
         # as mutable root entries in that provider.
         if app.file_storage.value != 'Local files':
@@ -359,9 +359,9 @@ async def exercise_ui_review(app):
     assert app.provider_sessions().active.crypt_text.value == '# Meeting notes\n\nEdited while testing.\n'
     app.private_sessions.close(owner.session.id, discard=True)
     app.show_transfers()
-    from .web_checks import wait_for_text
+    from .web_checks import wait_for_transfer_surface
     assert app.transfer_view.model['mode'] == 'progress'
-    await wait_for_text(app.transfer_view.web, 'Transfer details', absent='Choose a remote to pull')
+    transfer_renderer = await wait_for_transfer_surface(app.transfer_view)
     assert app.cloud_remote not in app.cloud_view.children
     await capture('transfers')
     async def appearance_mode(dark):

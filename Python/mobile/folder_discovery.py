@@ -38,7 +38,7 @@ class FolderDiscovery:
         self.cache_stamp = None
         # Never show a previous connection's names while its replacement loads.
         return {'All files': dict(source='Local', kind='shared-local', value='',
-                                  name='Browse All Files', copies=[], browser_root=True)}
+                                  name='Shared Files', copies=[], browser_root=True)}
 
     def request(self):
         """Share one task; requests arriving during a scan coalesce into a rescan."""

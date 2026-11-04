@@ -351,7 +351,7 @@ class FolderHubTests(unittest.TestCase):
                 local = app.private_root / 'LocalFiles' / 'New folder'
                 local.mkdir(parents=True)
                 self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
-                self.assertIn('New folder', app.folder_buttons)
+                self.assertNotIn('New folder', app.folder_buttons)
                 local.rmdir()
                 self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
                 self.assertNotIn('New folder', app.folder_buttons)
@@ -532,7 +532,7 @@ class FolderHubTests(unittest.TestCase):
 
                 self.assertNotIn('Local-Comics', app.folder_buttons)
                 app.change_folder_source('Local')
-                self.assertIn('Local-Comics', app.folder_buttons)
+                self.assertNotIn('Local-Comics', app.folder_buttons)
                 self.assertFalse(any('/' in name or 'Actual subfolder' in name
                                      for name in app.folder_picker_choices))
             finally:
@@ -600,7 +600,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(app.folder_source, 'Local')
                 self.assertEqual(list(app.folder_local_header.children), [app.folder_local_tabs])
                 self.assertFalse(app.folder_picker_header.children)
-                self.assertIn('Comics', app.folder_buttons)
+                self.assertNotIn('Comics', app.folder_buttons)
                 app.change_folder_source('rclone')
                 self.assertFalse(app.folder_local_header.children)
                 self.assertEqual(list(app.folder_picker_header.children), [app.folder_credential_row])
@@ -636,7 +636,7 @@ class FolderHubTests(unittest.TestCase):
                 app.show_locations()
                 self.assertNotIn('Added later', app.folder_buttons)
                 app.change_folder_source('Local')
-                self.assertIn('Added later', app.folder_buttons)
+                self.assertNotIn('Added later', app.folder_buttons)
                 app.change_folder_source('rclone')
                 self.assertFalse(app.routes.screens['files'])
                 self.assertIn('Comics', app.folder_picker_choices)
@@ -652,7 +652,8 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(set(app.folder_buttons), {'Loaded drive'})
                 app.folder_credential.value = 'All'
                 app.change_folder_source('Local')
-                app.loop.run_until_complete(app.folder_buttons['Comics'].on_press())
+                app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
+                app.loop.run_until_complete(app.browser_file_location(('Local files', 'Comics')))
                 self.assertEqual(app.routes.screens['files'][-1][0], 'browser')
                 self.assertEqual(app.file_path, 'Comics')
                 self.assertEqual(app.file_provider.root, app.private_root / 'LocalFiles')

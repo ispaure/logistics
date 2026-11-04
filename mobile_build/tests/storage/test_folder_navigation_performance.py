@@ -67,7 +67,7 @@ class FolderNavigationTests(unittest.TestCase):
         (app.private_root / 'LocalFiles' / 'New folder').mkdir(parents=True)
         app.change_folder_source('rclone')
         app.change_folder_source('Local')
-        self.assertIn('New folder', app.folder_buttons)
+        self.assertNotIn('New folder', app.folder_buttons)
         app.remember_credential_association('Personal.zip', ['Secret'], session_only=True)
         retained = patch.object(app, 'retained_credential_associations', return_value=[
             dict(zip='Personal.zip', remotes=['Secret'], crypt_remotes=['Secret'])])
@@ -130,20 +130,15 @@ class FolderNavigationTests(unittest.TestCase):
         for name in ('Team-Books', 'Team-Notes'):
             (base / name).mkdir(parents=True, exist_ok=True)
         app.show_locations()
-        books, notes = app.folder_buttons['Team-Books'], app.folder_buttons['Team-Notes']
+        received, shared = app.folder_buttons['Received Files'], app.folder_buttons['All files']
         self.assertFalse(app.folder_tree_buttons)
-        (base / 'Team-Comics').mkdir()
-        app.update_folder_list(app.folder_choices())
-        self.assertIs(app.folder_buttons['Team-Books'], books)
-        self.assertIs(app.folder_buttons['Team-Notes'], notes)
-        self.assertFalse(app.folder_tree_buttons)
-        (base / 'Team-Comics').rmdir()
-        app.update_folder_list(app.folder_choices())
-        self.assertNotIn('Team-Comics', app.folder_buttons)
-        self.assertIs(app.folder_buttons['Team-Books'], books)
-        self.assertIs(app.folder_buttons['Team-Notes'], notes)
-        self.assertEqual(books.text, 'Team-Books')
-        self.assertEqual(notes.text, 'Team-Notes')
+        for add in (True, False):
+            folder = base / 'Team-Comics'
+            folder.mkdir() if add else folder.rmdir()
+            app.update_folder_list(app.folder_choices())
+            self.assertEqual(set(app.folder_buttons), {'Received Files', 'All files'})
+            self.assertIs(app.folder_buttons['Received Files'], received)
+            self.assertIs(app.folder_buttons['All files'], shared)
 
     def test_collection_snapshot_matches_rows_with_constant_location_checks(self):
         with TemporaryDirectory() as root:
