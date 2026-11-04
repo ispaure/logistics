@@ -1,5 +1,7 @@
 # Download configured channels and playlists
 
+This workflow uses the desktop application. See the [mobile support boundary](../user_mobile/user_mobile.md).
+
 The YouTube Downloader folder action appears when its `remoteConfig.ini` identifies
 a directory of download settings.
 

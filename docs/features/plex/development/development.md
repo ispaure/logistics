@@ -110,3 +110,10 @@ types remain explicitly unsupported instead of returning misleading empty result
 with external commands mocked. It covers extraction failures, traversal, failed
 replacement/rollback, missing metadata, duplicate matching and dialog startup.
 It does not operate on an installed Plex server.
+
+## Desktop and mobile ownership
+
+The feature registers desktop folder workflows through `ui_contributions.py`
+and opens its Qt dialog lazily. It has no feature-owned `mobile_sources.json`
+or mobile management adapter. Do not expose the desktop dialog as an implemented
+Android/iOS workflow. See the [mobile support boundary](../user_mobile/user_mobile.md).
