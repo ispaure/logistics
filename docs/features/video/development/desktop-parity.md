@@ -5,6 +5,18 @@ iOS control changes. This is an implementation plan, not a claim of tested parit
 Use the [original acceptance contract](video-player.md) and
 [playback audit](playback-audit.md) for the existing storage and playback rules.
 
+## Current reading guide
+
+The comparison and sequence below preserve the November 1 planning baseline;
+“Desktop today” in that table describes the pre-implementation state. They are
+not the current capability inventory. Current desktop playback uses macOS libmpv
+colour output with a VLC compatibility path; Windows/Linux use VLC SDR output.
+See the [current desktop guide](../user/user.md) and
+[implementation owners](development.md#macos-hdr-and-tone-mapping).
+Windows/Linux HDR implementation and verification remain pending, and physical
+macOS HDR brightness remains unverified. Existing native/host results do not
+establish those acceptance gates or real receiver and OS lock behavior.
+
 ## Outcome and scope
 
 Bring desktop video to the mobile feature level with mouse, keyboard and optional

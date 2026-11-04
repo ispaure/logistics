@@ -8,9 +8,11 @@ Duo, and an anchored sheet on iPad. System bars are removed after the fade so sa
 do not move visible controls. Reduce Motion uses an immediate transition.
 
 Choose **Playback** in the iOS navigation controls or Duo's lower fold deck.
-On Android choose **More playback options → Playback…**. The menu includes exact
-time entry, Start over, speed, picture size, subtitles, folder navigation, mute
-and control locking. See the [shared control guide](../user/controls.md) for time
+On Android choose **More playback options → Playback…**. Playback options include
+exact time entry, Start over, speed, subtitles,
+folder navigation, mute and control locking. iOS picture sizing uses the separate
+Fit/Fill button; Android also offers picture sizing through its playback tools.
+See the [shared control guide](../user/controls.md) for time
 formats, queue ordering, automatic next-episode behavior and encrypted cloud
 resume. Mobile remembers progress approximately every five seconds and on closing
 or backgrounding when access remains available. Reopening resumes automatically;
@@ -47,12 +49,16 @@ mapped approximately from bytes, not measured presentation timestamps. Local
 sources are available without a network fetch. No cache amount guarantees
 uninterrupted playback on a slow connection.
 
-Manual Pause holds the visible frame and position immediately while the decoder
-finishes its asynchronous pause command. Resume starts from the held position.
-The temporary frame stays in memory and is removed on resume, closing or privacy
-concealment. iOS uses a render-server snapshot; Android uses a TextureView snapshot.
-A snapshot unavailable during renderer startup cannot provide that visual hold.
-PiP/casting use their system/receiver presentation and need separate timing checks.
+Manual Pause updates playback intent and the held position while the decoder
+acknowledges its asynchronous pause command. Android uses a volatile TextureView
+snapshot for an immediate visual hold. On iOS, the native sample-buffer video
+layer remains visible and VLC holds its picture; a few queued frames may finish
+before Pause is acknowledged. Other iOS renderer fallbacks retain the volatile
+snapshot hold. Snapshots stay in memory and are removed on resume, closing or
+privacy concealment. A snapshot unavailable during renderer startup cannot
+provide that hold. PiP/casting use their system/receiver presentation and need
+separate timing checks. See the [iOS HDR pause investigation](../development/hdr-play-pause.md)
+for the presentation-path change and its remaining visual acceptance.
 
 The new tools have SDK compilation and host checks. Physical Duo touch, keyboard,
 fold and pause timing still need acceptance; those checks are separate from the

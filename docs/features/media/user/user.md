@@ -11,8 +11,11 @@ Rename chapter audio files in one folder using their chapter titles from a CSV.
 
 ## Prepare the folder
 
+This rename dialog is available on desktop; see the [mobile boundary](../user_mobile/user_mobile.md).
+
 Keep exactly one CSV alongside top-level files named like `Chapter_01.mka`.
-The CSV has chapter number in the first column and chapter name in the second:
+The CSV has no header row. Row 1 describes chapter 1, row 2 describes chapter 2,
+and so on. Put the chapter number in the first column and chapter name in the second:
 
 ```text
 1,Introduction
@@ -25,6 +28,10 @@ The CSV has chapter number in the first column and chapter name in the second:
 2. Select the chapter folder.
 3. Choose **Review names** and check the current/new name table.
 4. Choose **Apply reviewed names** and read the result.
+
+For example, `Chapter_01.mka` with the first example row becomes
+`1 - Introduction.mka`. Double quotes are removed from titles and surrounding
+whitespace is trimmed; other invalid filename characters cause validation to fail.
 
 Every MKA must have a matching valid row and a nonempty title. Existing destination
 names stop the plan. All planned names are validated before renaming starts; the
