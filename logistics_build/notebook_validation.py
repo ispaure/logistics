@@ -1,6 +1,7 @@
 """Shared native notebook selection for the manager's desktop guest adapters."""
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -39,6 +40,20 @@ def command(args, python, output, *, windows=False):
 
 
 @contextmanager
+def download_certificates():
+    """Use the project's pinned roots when portable Python has no CA bundle."""
+    import certifi
+    previous = os.environ.get('SSL_CERT_FILE')
+    if previous is None:
+        os.environ['SSL_CERT_FILE'] = certifi.where()
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop('SSL_CERT_FILE', None)
+
+
+@contextmanager
 def guest_go():
     """Keep a verified portable compiler inside the existing leased cache policy."""
     from logistics_build.build_retention import compiler_cache, scratch
@@ -60,7 +75,7 @@ def guest_go():
         if not receipt.is_file() or json.loads(receipt.read_text()) != {'sha256': digest} or not go.is_file():
             if destination.exists():
                 raise ValueError('Portable Go cache is incomplete; preserve it for inspection.')
-            with scratch() as work:
+            with scratch() as work, download_certificates():
                 archive = provision(DownloadSpec('Notebook Go', '1.26.10', 'https://go.dev/dl/' + name + suffix,
                                                  digest, digest), work / ('go' + suffix))
                 if system == 'windows':
