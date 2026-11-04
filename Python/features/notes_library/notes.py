@@ -185,7 +185,10 @@ class NotesLibrary:
     def folders(self, path, *, cancelled=lambda: False):
         path = self.contained(path)
         with operation(self.provider, cancelled):
-            rows = self.provider.list(path, cancelled=cancelled)
+            # Browsing, calendar and link inventories use names/types/sizes;
+            # document admission obtains its own fresh revision through entry().
+            listing = getattr(self.provider, 'list_names', None) or self.provider.list
+            rows = listing(path, cancelled=cancelled)
         if len(rows) > 10000:
             raise ValueError('Folder exceeds the 10,000-entry limit.')
         return self.visible_rows(rows)
