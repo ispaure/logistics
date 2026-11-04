@@ -25,10 +25,12 @@ function strokeExpandsPaper(stroke) {
 function templateControls() {
   const panel = $('templateControls');
   if (!panel || $('pageTemplate')) return;
-  panel.innerHTML = '<label>Page template <select id="pageTemplate" aria-label="Page template"></select></label>' +
+  panel.innerHTML = '<strong>Current page template</strong><p id="templateDescription" class="hint"></p><label>Page template <select id="pageTemplate" aria-label="Page template"></select></label>' +
     '<label>Template format <select id="templateFormat" aria-label="Template format"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
     '<label><input id="templateVisible" type="checkbox"> Show template</label>' +
-    '<label>Paper view <select id="paperView" aria-label="Paper view"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>';
+    '<label>Paper view <select id="paperView" aria-label="Paper view"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
+    '<p id="templateCompatibility" class="hint"></p>' +
+    '<p id="templateExportHint" class="hint" hidden>Save keeps editable template settings. Export Copy uses fixed PDF backgrounds for reMarkable; handwriting stays editable.</p>';
   const apply = () => {
     if (active !== null || busy) { render(); return }
     send({op: 'template', name: $('pageTemplate').value,
@@ -52,6 +54,10 @@ function templateControls() {
 }
 
 function paperBounds() {
+  if (state.pdf_paper) {
+    const b = state.pdf_paper;
+    return {x: Math.max(0, b.x), y: 0, width: Math.min(state.width, b.width), height: b.height}
+  }
   if (paperView !== 'move' || !state.template_editable) return {x: 0, y: 0, width: state.width, height: state.height};
   const box = state.move_paper || {x: 291.5, y: 0, width: 821, height: 1460};
   let left = box.x, right = box.x + box.width, bottom = box.height;
@@ -68,6 +74,8 @@ function render() {
   templateControls();
   if ($('pageTemplate')) {
     const name = state.template_name || state.template || 'Blank';
+    $('templateCompatibility').textContent = state.template_notice || '';
+    $('templateDescription').textContent = state.template_description || '';
     const catalog = new Map(Object.entries(state.templates || {Blank: 'Blank'}));
     if (!catalog.has(name)) catalog.set(name, name + ' (preserved)');
     options('pageTemplate', [...catalog].map(([value, label]) => [label, value]));
@@ -78,6 +86,7 @@ function render() {
     $('pageTemplate').disabled = state.read_only || !state.template_editable;
     $('templateFormat').disabled = disabled || !name.startsWith('Logistics ');
     $('templateVisible').disabled = disabled;
+    $('templateExportHint').hidden = !state.template_editable || !(name.startsWith('Logistics ') || (name !== 'Blank' && !$('templateVisible').checked));
   }
   const background = $('pdfBackground');
   background.hidden = !state.background;
@@ -140,8 +149,9 @@ function resize() {
   wrap.style.margin = paperView === 'move' ? '0 auto auto' : 'auto';
   layers.style.left = (-bounds.x * scale) + 'px';
   layers.style.width = (state.width * scale) + 'px';
-  for (const [key, value] of Object.entries({left: -bounds.x * scale, top: 0,
-    width: state.width * scale, height: state.height * scale})) background.style[key] = value + 'px';
+  const imageBounds = state.pdf_paper || {x: 0, width: state.width, height: state.height};
+  for (const [key, value] of Object.entries({left: (imageBounds.x - bounds.x) * scale, top: 0,
+    width: imageBounds.width * scale, height: imageBounds.height * scale})) background.style[key] = value + 'px';
   let ratio = Math.min(devicePixelRatio || 1, 2);
   let backingScale = Math.min(scale * ratio, Math.sqrt(canvasPixelLimit / (state.width * state.height))),
     width = Math.max(1, Math.floor(state.width * backingScale)),

@@ -36,6 +36,7 @@
     "recovery.py",
     "protocol.py",
     "templates.py",
+    "remarkable_export.py",
     "previews.py",
     "assets/base.css",
     "assets/boot.js",

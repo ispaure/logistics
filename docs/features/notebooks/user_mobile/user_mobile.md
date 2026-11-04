@@ -159,6 +159,16 @@ grids, dots, restaurant reviews, meeting notes and daily plans. Edits use the sa
 Save, recovery and Undo/Redo behavior as desktop. New pages inherit the template.
 PDF-backed documents retain their embedded PDF background.
 
+Use **Export .rmdoc** for a copy to import into reMarkable. Custom layouts and
+hidden backgrounds are carried as fixed vector PDF pages, beneath editable
+native ink. **Save / Save As** keeps the original Logistics template settings.
+The exported copy's backgrounds cannot be changed with reMarkable's template
+picker; keep the original notebook for later template changes.
+
+Structured forms export with distinct Pro and Move PDF page sizes, extending
+the page box when necessary to retain handwriting beyond the form’s edges.
+Repeating paper keeps a shared canvas.
+
 Phones start in **Paper Pro Move** paper view (large tablets start in Pro): the same ink coordinates, centered
 and aligned to the top, with the visible area expanded for writing beyond the
 Move edges. Choose **Paper Pro** in Layers to reveal and write in the surrounding
@@ -179,3 +189,7 @@ you work in that editor.
 ## Paper Pro preview
 
 A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Toggle it in **Settings → Features → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
+
+Logistics draws its own template previews and custom layouts. Native lined options
+are labeled reMarkable compatible; Logistics is not affiliated with or endorsed
+by reMarkable. Native exports reference the tablet’s installed lined backgrounds.

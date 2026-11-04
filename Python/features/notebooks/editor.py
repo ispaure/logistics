@@ -14,6 +14,7 @@ class Editor:
         self.undo = []
         self.redo = []
         self._background = (None, None)
+        self._pdf_geometry = (None, None)
 
     def background(self):
         book = self.notebook
@@ -34,6 +35,39 @@ class Editor:
                 pdf.close()
             self._background = (key, image)
         return self._background[1]
+
+    def pdf_bounds(self):
+        """Recognize our physical-size exports without changing older PDF views."""
+        book = self.notebook
+        if book.content.get('fileType') != 'pdf':
+            return None
+        index = book.pages[self.index].record.get('redir', {}).get('value', -1)
+        if index < 0:
+            return None
+        data = book.members[book.id + '.pdf']
+        key = (data, index)
+        if self._pdf_geometry[0] != key:
+            from io import BytesIO
+            import math
+            from pypdf import PdfReader
+            from .remarkable_export import PDF_SCALE
+            reader = PdfReader(BytesIO(data))
+            if not reader.metadata or reader.metadata.get('/LogisticsNativeUnits') != '226':
+                self._pdf_geometry = (key, None)
+                return None
+            page = reader.pages[index]
+            width = float(page.cropbox.width) * page.user_unit / PDF_SCALE
+            height = float(page.cropbox.height) * page.user_unit / PDF_SCALE
+            if page.rotation % 180:
+                width, height = height, width
+            if any(not math.isfinite(v) or not 0 < v <= 1_000_000 for v in (width, height)):
+                raise ValueError('Invalid or oversized PDF page dimensions.')
+            self._pdf_geometry = (key, dict(x=(WIDTH - width) / 2, y=0, width=width, height=height))
+        return self._pdf_geometry[1]
+
+    def page_height(self):
+        bounds = self.pdf_bounds()
+        return max(HEIGHT, bounds['height']) if bounds else HEIGHT
 
     def snapshot(self):
         book = self.notebook
@@ -78,7 +112,7 @@ class Editor:
             ink = book.page(self.index)
             if op == 'stroke':
                 ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
-                        action.get('width', 2), action.get('layer'))
+                        action.get('width', 2), action.get('layer'), page_height=self.page_height())
             elif op == 'add-layer':
                 ink.add_layer(action['name'])
             elif op == 'layer-visible':
@@ -97,13 +131,15 @@ class Editor:
                     if stroke.id in action['ids']:
                         moved = deepcopy(stroke)
                         moved.points = [[x + dx, y + dy, p, w] for x, y, p, w in stroke.points]
-                        if any(not 0 <= x <= WIDTH or not 0 <= y <= HEIGHT for x, y, p, w in moved.points):
+                        if any(not 0 <= x <= WIDTH or not 0 <= y <= self.page_height() for x, y, p, w in moved.points):
                             raise ValueError('Keep moved strokes inside the page.')
                         ink.strokes[index] = moved
             elif op == 'erase':
                 if ink.warning:
                     raise ValueError(ink.warning)
                 if 'points' in action:
+                    if any(p[1] > self.page_height() for p in action['points']):
+                        raise ValueError('Eraser is outside the page.')
                     from .eraser import erase
                     ink.strokes = erase(ink.strokes, ink.layers, action['points'],
                                         action['radius'], action.get('kind') == 'whole')
@@ -145,19 +181,19 @@ class Editor:
         self.redo.clear()
 
     def state(self):
-        from .templates import CATALOG, settings, background, view_bounds, template_name, available
+        from .templates import CATALOG, settings, background, view_bounds, template_name, available, TEMPLATE_NOTICE, description
         ink = self.notebook.page(self.index)
         page = self.notebook.pages[self.index]
         paper = settings(self.notebook, page)
         pdf = self.notebook.content.get('fileType') == 'pdf'
         template_available = available(self.notebook, page)
         return dict(name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
-                    width=WIDTH, height=HEIGHT, tools=TOOLS, colors=COLORS,
+                    width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS, shaders=SHADERS, widths=WIDTHS,
                     strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),
-                    templates=CATALOG, template_settings=paper, template_editable=not pdf,
+                    templates=CATALOG, template_notice=TEMPLATE_NOTICE, template_description=description(page.template), template_settings=paper, template_editable=not pdf,
                     template_available=template_available,
                     move_paper=view_bounds([], True),
                     background=self.background() if pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,

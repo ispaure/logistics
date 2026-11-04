@@ -119,3 +119,9 @@ The application composition layer owns its implementation and disables persisten
 indexing; the feature supplies only library-rooted folder snapshots and callbacks.
 The move/cancel regression checks that the injected factory is used and that no
 local or resource index callback remains attached.
+
+The folder projection borrows the library provider without acquiring a browser
+lease on it. Retiring a temporary destination browser must not close the active
+library's encrypted resource view. A regression exercises Move and Cancel with a
+provider that closes on its last lease release, then verifies that the note is
+still readable and that library disposal closes its owned provider.
