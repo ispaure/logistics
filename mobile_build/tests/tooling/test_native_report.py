@@ -23,6 +23,70 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativePreflightTests(unittest.TestCase):
+    def test_absent_lease_cleanup_is_noop_without_installed_manager(self):
+        import builtins
+        original=builtins.__import__
+        def no_manager(name,*args,**kwargs):
+            if name=='build_manager' or name.startswith('build_manager.'):
+                raise ModuleNotFoundError('synthetic missing manager SDK')
+            return original(name,*args,**kwargs)
+        with TemporaryDirectory() as directory, patch('builtins.__import__',side_effect=no_manager):
+            lease=Path(directory)/'never-created.json'
+            self.assertIsNone(ui_tools.cleanup_owned_ios_device(lease))
+            self.assertFalse(lease.exists())
+
+    def test_existing_lease_with_missing_manager_fails_closed_without_changing_receipt(self):
+        import builtins
+        original=builtins.__import__
+        def no_manager(name,*args,**kwargs):
+            if name=='build_manager' or name.startswith('build_manager.'):
+                raise ModuleNotFoundError('synthetic missing manager SDK')
+            return original(name,*args,**kwargs)
+        with TemporaryDirectory() as directory:
+            lease=Path(directory)/'existing.json'
+            lease.write_text(json.dumps(dict(name='Logistics Native Gate fixture',device='owned-device')))
+            before=lease.read_bytes()
+            with patch('builtins.__import__',side_effect=no_manager),self.assertRaises(ModuleNotFoundError):
+                ui_tools.cleanup_owned_ios_device(lease)
+            self.assertEqual(lease.read_bytes(),before)
+
+    def test_boot_timeout_command_classification_preserves_inventory_and_unknown(self):
+        for action,stage in (('boot','boot'),('bootstatus','bootstatus'),('list','inventory'),('unexpected','unknown')):
+            command=['xcrun','simctl',action,'fixture-device']
+            error=subprocess.TimeoutExpired(command,60)
+            proof=ui_tools.boot_timeout_details(error,ui_tools.time.monotonic(),dict(device='fixture-device'),Path('lease'))
+            self.assertEqual(proof['stage'],stage);self.assertEqual(proof['command'],command)
+        command='xcrun simctl list devices --json'
+        proof=ui_tools.boot_timeout_details(subprocess.TimeoutExpired(command,60),ui_tools.time.monotonic(),dict(device='fixture-device'),Path('lease'))
+        self.assertEqual(proof['stage'],'inventory');self.assertEqual(proof['command'],command)
+
+    def test_boot_timeout_diagnostics_never_reread_lease_or_mask_primary_write_failure(self):
+        for fail_write in (False,True):
+            with self.subTest(fail_write=fail_write),TemporaryDirectory() as directory:
+                lease=Path(directory)/'lease.json';evidence=lease.with_name('ios-native-ui-boot-timeout.json')
+                client=Mock();client.devices.return_value={'devices':{'com.apple.CoreSimulator.SimRuntime.iOS-27-1':[
+                    dict(udid='profile',name='iPhone Duo',state='Shutdown',isAvailable=True,
+                         deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPhone-Duo')]}}
+                client.create.return_value='known-owned'
+                timeout=subprocess.TimeoutExpired(['xcrun','simctl','list','devices','--json'],60)
+                client.boot.side_effect=timeout
+                original_read,original_write=Path.read_text,Path.write_text
+                def read(path,*args,**kwargs):
+                    if path==lease:raise AssertionError('Lease must remain the known in-memory record')
+                    return original_read(path,*args,**kwargs)
+                def write(path,*args,**kwargs):
+                    if fail_write and path==evidence:raise OSError('synthetic diagnostic write failure')
+                    return original_write(path,*args,**kwargs)
+                with patch.object(Path,'read_text',read),patch.object(Path,'write_text',write):
+                    with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                        ui_tools.owned_ios_device(lease,client=client,sdk='27.1',duo=True)
+                self.assertIs(caught.exception,timeout)
+                if not fail_write:
+                    proof=json.loads(evidence.read_text())
+                    self.assertEqual(proof['stage'],'inventory')
+                    self.assertEqual(proof['lease_record']['device'],'known-owned')
+                self.assertTrue(lease.exists());client.remove.assert_not_called()
+
     def test_android_stall_does_not_inspect_local_or_physical_devices(self):
         with TemporaryDirectory() as directory, patch.dict(ui_tools.os.environ, {}, clear=True), \
                 patch.object(ui_tools.subprocess, 'run') as run:
@@ -232,7 +296,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             self.assertEqual(device, 'fresh-owned-device')
             client.create.assert_called_once_with(record['name'], current['deviceTypeIdentifier'],
                 'com.apple.CoreSimulator.SimRuntime.iOS-27-0')
-            client.boot.assert_called_once_with(device)
+            client.boot.assert_called_once_with(device, name=record['name'])
             with self.assertRaisesRegex(ValueError, 'previous owned'):
                 ui_tools.owned_ios_device(lease, client=client, sdk='27.1')
             ui_tools.cleanup_owned_ios_device(lease, client=client)
@@ -274,6 +338,11 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             self.assertEqual(evidence['stdout'], 'Waiting on Data Migration')
             self.assertEqual(evidence['stderr'], '')
             self.assertEqual(evidence['timeout'], 180)
+            self.assertEqual(evidence['command'], ['xcrun', 'simctl', 'bootstatus'])
+            self.assertEqual(evidence['stage'], 'bootstatus')
+            self.assertGreaterEqual(evidence['elapsed_seconds'], 0)
+            self.assertEqual(evidence['lease_record'], json.loads(lease.read_text()))
+            client.boot.assert_called_once_with('owned-timeout', name=evidence['lease_record']['name'])
             client.matching.return_value = None
             ui_tools.cleanup_owned_ios_device(lease, client=client)
             self.assertTrue(json.loads(lease.read_text())['removed'])
