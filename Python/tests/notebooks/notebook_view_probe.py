@@ -18,7 +18,7 @@ from features.notebooks.mobile.surface import mobile_editor_html
 from features.notebooks.notebook import Notebook
 from features.notebooks.ui.workspace import NotebookWorkspace
 from logistics_build.build_retention import scratch
-from tests.notebooks.webengine_driver import javascript, wait_until
+from tests.notebooks.webengine_driver import composited_image, javascript, wait_until
 from mobile.palette import css_variables
 
 
@@ -184,13 +184,14 @@ def main(output):
                     return JSON.stringify(canvas.getBoundingClientRect().toJSON())
                 })()""".replace('TOOL', str(tool)).replace('BACKGROUND', json.dumps(background))))
                 crop = qt.QRect(round(bounds['left']) + 10, round(bounds['top']) + 30, 260, 110)
-                QTest.qWait(100)
-                before = view.grab(crop).toImage()
-                js(view, 'commitDraft(' + str(tool) + ')')
-                QTest.qWait(100)
-                after = view.grab(crop).toImage()
                 label = f'{name}-{tool}-' + ('white' if background == 'white' else 'background')
+                before = composited_image(view, crop)
                 before.save(str(output / (label + '-preview.png')))
+                pixels = bytes(before.constBits())
+                assert sum(pixels[i:i + 4] != pixels[:4] for i in range(0, len(pixels), 4)) > 100, \
+                    ('The blend fixture was not visible in the native capture', label)
+                js(view, 'commitDraft(' + str(tool) + ')')
+                after = composited_image(view, crop)
                 after.save(str(output / (label + '-committed.png')))
                 differences = [abs(a - b) for a, b in zip(before.constBits(), after.constBits())]
                 # The mobile bitmap budget requires fractional resampling: GPU
@@ -200,6 +201,7 @@ def main(output):
                 assert difference <= 8 and mean < .01, (label, difference, mean)
         js(view, "points=[];$('paperWrap').style.removeProperty('background-color');draw();setZoom('page')")
         js(view, 'paperView=' + json.dumps(original_view) + ";$('paperView').value=paperView;resize()")
+        js(view, "document.getElementById('qaCompositorFence')?.remove()")
 
     # Inspect actual computed styles; CSS formatting and filter constants may evolve.
     state = Editor(Notebook.new('Preview filter')).state()
