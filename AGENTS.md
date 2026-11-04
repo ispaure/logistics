@@ -71,6 +71,14 @@ Work on the current development branch by default. Create a separate branch only
 when there is a concrete reason, such as isolating concurrent work or a risky
 experiment; do not create `codex/*` branches automatically.
 
+When `git config --get logistics.releaseWorktree` names a checkout, reserve it
+for the release-coordination chat. Other AI tasks must use the checkout named by
+`git config --get logistics.developmentWorktree` or their own isolated worktree;
+never switch the reserved checkout's branch. Use the owning build manager's
+per-checkout workspaces and disposable test devices. Do not share virtual
+environments or mutable build outputs between checkouts, and leave physical
+device deployment to the release coordinator while the reservation is active.
+
 ## Build and test storage lifecycle
 
 Use the external `build_manager` package through `logistics_build/build_project.py` and
