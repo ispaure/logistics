@@ -28,8 +28,9 @@ BUNDLE = 'io.github.ispaure.logisticsnotebookqa'
 
 
 class LoadObserver:
-    def __init__(self, order):
+    def __init__(self, order, *, apk=None):
         self.order = order
+        self.apk = apk
         self.previous = None
         self.samples = []
         self.stable = 0
@@ -100,10 +101,24 @@ class LoadObserver:
             if not record.get('token'):
                 raise ValueError('Controlled benchmarks require an owned disposable emulator')
             emulator.verify(record)
+            if self.apk is not None:
+                retained = output.parent / 'notes-performance.apk'
+                if not retained.exists():
+                    shutil.copyfile(self.apk, retained)
+                    retained.chmod(0o444)
+                digest = hashlib.sha256(self.apk.read_bytes()).hexdigest()
+                if hashlib.sha256(retained.read_bytes()).hexdigest() != digest:
+                    raise ValueError('Retained benchmark APK differs from the current build')
+                classes = self.apk.parents[3] / 'intermediates/javac/debug/compileDebugJavaWithJavac/classes'
+                native = {str(path.relative_to(classes)): hashlib.sha256(path.read_bytes()).hexdigest()
+                          for pattern in ('**/FileListView*.class', '**/ViewDrawProbe*.class', '**/Boox*.class')
+                          for path in classes.glob(pattern)}
+                (output.parent / 'artifact.json').write_text(json.dumps(dict(apk=str(retained),
+                    sha256=digest, native_class_hashes=native, read_only=True), indent=2))
             serial = record['serial']
-            emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'global', 'airplane_mode_on', '1')
-            emulator.invoke('-s', serial, 'shell', 'am', 'broadcast', '-a', 'android.intent.action.AIRPLANE_MODE',
-                             '--ez', 'state', 'true')
+            emulator.invoke('-s', serial, 'shell', 'cmd', 'connectivity', 'airplane-mode', 'enable')
+            if emulator.invoke('-s', serial, 'shell', 'cmd', 'connectivity', 'airplane-mode').strip() != 'enabled':
+                raise RuntimeError('Owned benchmark emulator did not enter airplane mode')
             emulator.invoke('-s', serial, 'shell', 'svc', 'wifi', 'disable')
             emulator.invoke('-s', serial, 'shell', 'svc', 'data', 'disable')
             for key in ('window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'):
@@ -242,7 +257,8 @@ def main():
                     wait_isolation(args.isolation_timeout)
                     run_output = output / f'run-{index + 1}'
                     run_output.mkdir()
-                    observer = LoadObserver(['legacy', 'recycled'] if index % 2 == 0 else ['recycled', 'legacy'])
+                    observer = LoadObserver(['legacy', 'recycled'] if index % 2 == 0 else ['recycled', 'legacy'],
+                        apk=project / 'app/build/outputs/apk/debug/app-debug.apk')
                     arguments = dict(bundle=BUNDLE, entry_point='tests.logisticsmobile.notes_rows_performance_probe',
                         result_name='notes-rows-performance-result.json', reuse_project=True,
                         observe=observer, probe_timeout=1800)
