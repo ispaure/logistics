@@ -792,3 +792,21 @@ The report distinguishes native engine availability from the controlled missing-
 fallback assertion. This does not replace physical audio or accessibility testing.
 The runner records source fingerprints and evidence before removing its owned
 devices; do not select a physical `--device` for this acceptance pass.
+
+## Native copy and panel interaction acceptance
+
+The managed `document_storage_tools ios|android --probe notes-drawers` probe
+checks swipes from the New/Open cards and verifies that a native Open-card tap
+still works. It dispatches through the native view hierarchy, exercises the outer
+edges of the 48-point Notes Library and file-browser menu controls, and checks
+that adjacent filenames do not open. File and folder copies use synthetic local
+and LocalCrypt storage, preserve contents and default to sibling ` - Copy` names;
+repeated library copies verify numbered conflicts. Workspaces Copy is selected
+through the native menu. Cloud/server copy behavior is outside this probe.
+
+The probe also checks portrait/landscape transitions. iOS coordinate input covers
+open-document swipes, file/folder holds and note actions. Breadcrumb hit testing
+uses the visible intersection with its horizontal scroll viewport; the secondary
+toolbar must remain attached and visible. Discovery and startup readiness are
+awaited before interactions. Evidence is saved before owned QA apps and temporary
+devices are removed; this acceptance pass does not target personal devices.
