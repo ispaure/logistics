@@ -35,16 +35,18 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 def diagnostics(entry_point):
     if entry_point.endswith('.notes_rows_performance_probe'):
         return NATIVE_DIAGNOSTICS + ('notes-performance-progress.json', 'notes-performance-window.json')
-    if entry_point.endswith('.chat_notes_feedback_probe'):
-        return tuple(dict.fromkeys((*diagnostics('.chat_settings_probe'),
-            *diagnostics('.notes_search_probe'), 'chat-settings-result.json', 'notes-search-result.json')))
     if entry_point.endswith('.speech_playback_probe'):
         return NATIVE_DIAGNOSTICS + ('feedback-progress.json', 'speech-initialization.jsonl',
             'feedback-speech-complete.png', 'feedback-speech-failure.png')
     if entry_point.endswith('.android_header_probe'):
         return NATIVE_DIAGNOSTICS + ('android-header-startup.json',)
+    if entry_point.endswith('.notes_markdown_feedback_probe'):
+        return NATIVE_DIAGNOSTICS + ('notes-markdown-progress.json', 'notes-markdown-tasks.json', 'notes-markdown-startup.log')
     if entry_point.endswith('.folder_feedback_probe'):
         return NATIVE_DIAGNOSTICS + ('folder-feedback-startup.json', 'folder-feedback-tasks.txt')
+    if entry_point.endswith('.chat_notes_feedback_probe'):
+        return tuple(dict.fromkeys((*diagnostics('.chat_settings_probe'),
+            *diagnostics('.notes_search_probe'), 'chat-settings-result.json', 'notes-search-result.json')))
     if entry_point.endswith('.lockscreen_probe'):
         return tuple('lock-' + name + '.png' for name in
             [*(f'{i}-{pose}{suffix}' for i, pose in enumerate(('portrait', 'landscape-left', 'landscape-right', 'portrait'))
@@ -54,8 +56,6 @@ def diagnostics(entry_point):
             'feedback-' + name + '.png' for name in ('15-outgoing', '15-loading', '15-backlinks',
             '15-landscape-left', '15-portrait', '16-list', '16-tiles', '16-information',
             '16-landscape-left', '17-settings', 'failure'))
-    if entry_point.endswith('.notes_markdown_feedback_probe'):
-        return NATIVE_DIAGNOSTICS + ('notes-markdown-progress.json', 'notes-markdown-tasks.json', 'notes-markdown-startup.log')
     if entry_point.endswith('.notes_search_probe'):
         return NATIVE_DIAGNOSTICS + tuple(f'notes-search-{pose}-{scope}.png'
             for pose in ('portrait', 'landscape-left') for scope in ('names', 'documents'))
@@ -459,6 +459,7 @@ def cleanup_ios_probe(client, device, name, bundle, output, *, installed=False,
         (output / 'ios-cleanup.json').write_text(json.dumps(dict(device=device,
             removed=client.matching(device, name) is None, app_cleanup_errors=errors)))
 
+
 def prepare_chat_notes_emulator(emulator, serial, output):
     """Keep unrelated Bluetooth first-boot crashes outside these UI scenarios."""
     emulator.invoke('-s', serial, 'shell', 'svc', 'bluetooth', 'disable')
@@ -620,7 +621,7 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                     (directory / (name + '.png')).write_bytes(screen)
                     emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/header-capture.json')
                     emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/header-capture-done')
-            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe', '.lockscreen_probe'))):
+            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.lockscreen_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -831,6 +832,8 @@ def main():
     parser.add_argument('--increase-contrast', action='store_true')
     parser.add_argument('--android-tablet', action='store_true', help='Use a tablet viewport on the disposable Android emulator.')
     args = parser.parse_args()
+    if args.ios_runtime and args.platform != 'ios':
+        parser.error('--ios-runtime requires iOS.')
     if args.probe == 'android-header' and args.platform != 'android':
         parser.error('The android-header probe requires Android.')
     if args.android_tablet and (args.platform != 'android' or args.device):
@@ -950,21 +953,21 @@ def main():
         if args.probe == 'workspace-move':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.workspace_move_probe', result_name='workspace-move-result.json')
+        if args.probe == 'notes-markdown-feedback':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.notes_markdown_feedback_probe', result_name='notes-markdown-feedback-result.json')
         if args.probe == 'speech-playback':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.speech_playback_probe', result_name='speech-playback-result.json')
         if args.probe == 'links-images-voices':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.links_images_voices_probe', result_name='links-images-voices-result.json')
-        if args.probe == 'folder-feedback':
-            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
-                entry_point='tests.logisticsmobile.folder_feedback_probe', result_name='folder-feedback-result.json')
         if args.probe == 'notes-folders':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.notes_folders_probe', result_name='notes-folders-result.json')
-        if args.probe == 'notes-markdown-feedback':
+        if args.probe == 'folder-feedback':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
-                entry_point='tests.logisticsmobile.notes_markdown_feedback_probe', result_name='notes-markdown-feedback-result.json')
+                entry_point='tests.logisticsmobile.folder_feedback_probe', result_name='folder-feedback-result.json')
         if args.probe == 'control-center':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.control_center_probe', result_name='control-center-result.json')
