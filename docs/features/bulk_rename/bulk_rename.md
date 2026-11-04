@@ -6,3 +6,5 @@ Choose a guide for the task you want to complete.
 
 - [Bulk rename integration](development/development.md)
 - [Rename a batch of files](user/user.md)
+
+- [Mobile availability](user_mobile/user_mobile.md)
