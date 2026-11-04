@@ -3,6 +3,7 @@
 Uses synthetic notebooks and manager scratch; saves only concise evidence outside it.
 """
 import argparse
+import base64
 import hashlib
 import json
 from pathlib import Path
@@ -16,6 +17,7 @@ from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice
 from PySide6.QtTest import QTest
 from logistics_build.build_retention import scratch
+from tests.notebooks.webengine_driver import javascript, wait_until
 from features.notebooks.notebook import Notebook
 from features.notebooks.storage import NotebookDocument
 from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
@@ -72,24 +74,18 @@ class Probe:
             browser=self.js('({visibility:document.visibilityState,focused:document.hasFocus(),dpr:devicePixelRatio,canvas:[canvas.width,canvas.height],context:ctx.getContextAttributes()})')))
 
     def wait(self, predicate, label, timeout=15):
-        start = time.monotonic()
-        while not predicate():
-            if time.monotonic() - start > timeout:
-                raise AssertionError('Timed out: ' + label)
-            QTest.qWait(5)
+        wait_until(predicate, label, timeout)
 
     def js(self, expression):
-        values = []
-        self.panel.web.page().runJavaScript('JSON.stringify((()=>{try{return {ok:true,value:(' + expression
-            + ')}}catch(error){return {ok:false,error:String(error)}}})())', values.append)
-        self.wait(lambda: bool(values), 'JavaScript callback')
-        result = json.loads(values[0])
+        result = json.loads(javascript(self.panel.web, 'JSON.stringify((()=>{try{return {ok:true,value:(' + expression
+            + ')}}catch(error){return {ok:false,error:String(error)}}})())'))
         assert result['ok'], result
         return result.get('value')
 
-    def idle(self, timeout=15):
+    def idle(self, timeout=15, *, layout=True):
         self.wait(lambda: not self.panel.busy and self.js('!busy&&!queue.length&&active===null'), 'bridge idle', timeout=timeout)
-        QTest.qWait(35)  # Let progress-widget layout and resize observers settle.
+        if layout:
+            QTest.qWait(35)  # Qt/WebEngine layout can outlive browser frame callbacks.
 
     def action(self, op, **fields):
         self.panel.request_command(dict(op=op, **fields))
@@ -147,7 +143,7 @@ def source_hashes():
                          'assets/queue.js', 'assets/desktop.js', 'ui/workspace.py')}
 
 
-def main(output):
+def main(output, *, latency_mode='enforce'):
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
     report = dict(status='running', platform=platform.platform(), source_hashes=source_hashes(), checks={}, timings_ms={})
@@ -302,13 +298,24 @@ def main(output):
             print('Save, failure, retry, cancel and retarget passed', flush=True)
 
             probe.panel.request_ui('zoom', '1')
+            probe.wait(lambda: probe.js("$('zoom').value") == '1', 'baseline zoom')
             probe.idle()
+            # Zoom redraws native-decoded model ink. Compare that canonical raster
+            # on both sides; live-preview parity has its own brush pixel checks.
+            probe.js('(()=>{draw();return true})()')
             raster = probe.raster()
+            zoom_baseline = probe.js('({pixels:canvas.toDataURL(),width:canvas.width,height:canvas.height})')
             for zoom in ['fit', '1', '1.5', '2', 'page']:
                 probe.panel.request_ui('zoom', zoom)
                 probe.wait(lambda: probe.js("$('zoom').value") == zoom, 'zoom ' + zoom)
             probe.panel.request_ui('zoom', '1')
+            probe.wait(lambda: probe.js("$('zoom').value") == '1', 'restored zoom')
             probe.idle()
+            if probe.raster() != raster:
+                zoom_actual = probe.js('({pixels:canvas.toDataURL(),width:canvas.width,height:canvas.height})')
+                for name, value in [('before', zoom_baseline), ('after', zoom_actual)]:
+                    (output / ('zoom-' + name + '.png')).write_bytes(base64.b64decode(value.pop('pixels').split(',', 1)[1]))
+                report['zoom_raster'] = dict(before=zoom_baseline, after=zoom_actual)
             assert probe.raster() == raster
             probe.panel.request_ui('zoom', 'page')
             probe.idle()
@@ -437,7 +444,11 @@ def main(output):
             print('Large-page rendering and mid-stroke acknowledgements passed: ' + repr(metrics), flush=True)
             probe.window.grab().save(str(output / 'desktop-stress.png'))
             assert report['source_hashes'] == source_hashes(), 'Sources changed during acceptance; rerun required'
-            assert paced['max_frame_gap'] < 80, ('Paced drawing stalled', paced)
+            report['latency'] = dict(mode=latency_mode, limit_ms=80,
+                                     passed=paced['max_frame_gap'] < 80,
+                                     max_frame_gap_ms=paced['max_frame_gap'])
+            if latency_mode == 'enforce':
+                assert report['latency']['passed'], ('Paced drawing stalled', paced)
             report['status'] = 'passed'
         except Exception as error:
             report.update(status='failed', error=repr(error))
@@ -453,4 +464,7 @@ def main(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
-    main(parser.parse_args().output)
+    parser.add_argument('--latency-mode', choices=('enforce', 'diagnostic'), default='enforce',
+                        help='Enforce the 80 ms guard on controlled hosts; diagnostic records it without failing functional acceptance.')
+    args = parser.parse_args()
+    main(args.output, latency_mode=args.latency_mode)

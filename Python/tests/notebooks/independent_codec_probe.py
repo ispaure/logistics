@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from logistics_build.build_retention import scratch
+from logistics_build.build_retention import compiler_cache, scratch
 from features.notebooks.notebook import Notebook
 from features.notebooks.ink import TOOLS
 from features.notebooks.editor import Editor
@@ -15,18 +15,23 @@ from features.notebooks.editor import Editor
 def main(output, go, archives=()):
     output = Path(output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    with scratch() as workspace:
+    with compiler_cache('notebook-codec') as cache, scratch() as workspace:
         (workspace/'go.mod').write_text('module logistics-ink-proof\n\ngo 1.26.0\n\nrequire github.com/go-go-golems/remarquee v0.0.14\n')
         shutil.copyfile(Path(__file__).with_name('independent_scene_check.go'),workspace/'main.go')
-        env = dict(os.environ,GOMODCACHE=str(workspace/'modules'),GOCACHE=str(workspace/'cache'),
+        env = dict(os.environ,GOMODCACHE=str(cache/'modules'),GOCACHE=str(cache/'build'),
                    GOPATH=str(workspace/'go'),GOTOOLCHAIN='local',GOFLAGS='-mod=mod -modcacherw')
+        checker = workspace / ('scene-check.exe' if os.name == 'nt' else 'scene-check')
+        built = subprocess.run([str(Path(go).resolve()), 'build', '-o', str(checker), '.'],
+                               cwd=workspace, env=env, text=True, capture_output=True, timeout=600)
+        if built.returncode:
+            raise RuntimeError(built.stderr[-4000:])
         book=Notebook.new('Synthetic native brush proof')
         for tool in TOOLS.values():
             book.page(0).add([[120,160,.2],[180,210,.5],[240,160,.8]],tool=tool,color=6,width=3)
         book.add_page()
         book.page(1).add([[100,100,.6],[400,100,.6]],tool=17,width=2)
         archive=workspace/'proof.rmdoc';archive.write_bytes(book.to_bytes())
-        command=[str(Path(go).resolve()),'run','.',str(archive)]
+        command=[str(checker),str(archive)]
         first=subprocess.run(command,cwd=workspace,env=env,text=True,capture_output=True,timeout=600)
         if first.returncode:
             raise RuntimeError(first.stderr[-4000:])
@@ -46,7 +51,7 @@ def main(output, go, archives=()):
         for path in archives:
             path = Path(path).resolve()
             expected = Notebook.read(path.read_bytes())
-            checked = subprocess.run([str(Path(go).resolve()), 'run', '.', str(path)],
+            checked = subprocess.run([str(checker), str(path)],
                 cwd=workspace, env=env, text=True, capture_output=True, timeout=120)
             if checked.returncode:
                 raise RuntimeError(checked.stderr[-4000:])
