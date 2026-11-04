@@ -350,7 +350,8 @@ def prepare_shared(data):
         developer, _ = ios.choose(ios.installed()); env = dict(os.environ, DEVELOPER_DIR=developer)
         exported = workspace / 'device-export'
         ios.run(['xcodebuild', '-exportArchive', '-archivePath', str(Path(state['workspace']) / 'Logistics.xcarchive'),
-            '-exportOptionsPlist', str(options), '-exportPath', str(exported)], env=env,
+            '-exportOptionsPlist', str(options), '-exportPath', str(exported),
+            *ios_provisioning_args(data['source'], ios)], env=env,
             log=workspace / 'logs/device-export.log')
         ipas = list(exported.glob('*.ipa'))
         if len(ipas) != 1:raise ValueError('Expected one provisioned device export.')
