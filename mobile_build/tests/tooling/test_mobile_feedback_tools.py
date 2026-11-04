@@ -1,5 +1,6 @@
 """QA acceptance cannot install a main/release APK or target a physical device."""
 from commonUtils.testing.stages import TestStage
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -11,6 +12,21 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class MobileFeedbackToolsTests(unittest.TestCase):
+    def test_ios_runtime_on_android_is_rejected_before_qa_staging(self):
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / 'evidence'
+            argv = ['document_storage_tools', 'android', '--ios-runtime',
+                    'com.apple.CoreSimulator.SimRuntime.iOS-27-1', '--output', str(output)]
+            with patch.object(tools.sys, 'argv', argv), \
+                    patch.object(tools.sys, 'stderr', new_callable=StringIO) as error_output, \
+                    patch.object(tools, 'stage') as stage:
+                with self.assertRaises(SystemExit) as error:
+                    tools.main()
+                self.assertEqual(error.exception.code, 2)
+                self.assertIn('--ios-runtime requires iOS', error_output.getvalue())
+                stage.assert_not_called()
+                self.assertFalse(output.exists())
+
     def test_wrong_package_and_non_debug_apks_are_rejected_before_device_creation(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
