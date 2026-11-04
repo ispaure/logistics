@@ -18,6 +18,7 @@ from unittest.mock import Mock, patch
 REPO = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('mobile_ui_tools', REPO / 'mobile_build/validation/ui_tools.py')
 ui_tools = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = ui_tools
 spec.loader.exec_module(ui_tools)
 
 
