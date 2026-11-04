@@ -108,3 +108,43 @@ Exact textured rendering, speed/tilt response, native calligraphy nib behavior,
 other tablets/firmware and physical pen-to-pixel behavior remain unverified.
 No repeat of the supplied worksheet is needed to use these measurements. The
 remaining interoperability procedure is [hardware acceptance](hardware-acceptance.md).
+
+## App graphite appearance
+
+Pencil and Mechanical Pencil use original procedural graphite materials in
+`assets/drawing.js`. The Pencil material combines fine tooth with clustered
+paper gaps and a softer body. Mechanical Pencil keeps a denser lead with sparse
+fine pits. A deterministic, seamless paper field replaces the former repeating
+eight-unit lattice. Texture coordinates stay anchored to native page units and
+are shared by completed strokes and incremental draft recoloring.
+
+This is editor presentation. Native point arrays, pressure/width calibration,
+scene thickness scales, brush IDs and portable exports retain the same values.
+Export converts templates to vector PDF backgrounds independently of the Canvas
+renderer. Stored handwriting remains editable native geometry; the bounded
+Canvas backing is its on-screen compositor.
+
+Two 128-by-128 alpha masks are reused across colors, and a 24-entry material
+cache bounds colored tiles. Selected styles are prepared on tool, color and
+grayscale changes before the next pen contact. Active-contact events do not
+trigger this prewarming. Live drawing continues to update only the new segment's
+mask bounds; pen-up composites the accumulated ink bounds without replaying the
+stroke. The existing Boox Ballpoint/Fineliner direct-preview eligibility and
+complete-stroke handoff are unchanged. Pencil tools keep the shared incremental
+Canvas path; this change does not add a vendor SDK brush mode.
+
+The original synthetic graphite fixture checks visual distinction, stable
+redraws, history-density independence, zoom, hue/grayscale, live/committed
+agreement and native/export member invariance. Its timings describe the tested
+browser, rather than physical Boox pen latency. No tablet textures, proprietary
+brush code or private handwriting are included in the implementation or tests.
+
+On November 4, 2026, private Qt 6.12 browser checks passed for desktop, mobile
+and the iOS scheduling presentation, followed by the existing nine-brush
+regression checks. The tested source and fixture hashes were captured. Native
+scene and portable-export members stayed byte-identical with identical export
+clock inputs. UI prewarming left the first preview with no new texture allocation
+or upload; a move after 2,000 points processed only its two-point tail. Pen-up
+replayed no geometry and retained identical pixels. The private environment,
+source/SDK snapshots and caches were removed afterward. This does not establish
+physical tablet responsiveness or reproduce firmware texture algorithms.
