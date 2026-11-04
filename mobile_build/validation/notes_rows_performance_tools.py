@@ -1,5 +1,6 @@
 """Controlled paired Notes row benchmarks on manager-owned disposable Android devices."""
 import argparse
+import hashlib
 from datetime import datetime, timezone
 import json
 import math
@@ -178,6 +179,14 @@ def main():
     root = Path(__file__).resolve().parents[2]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
+    host_sources = {}
+    for name in ('notes_rows_performance_tools.py', 'android_perf_load.py', 'document_storage_tools.py'):
+        path = Path(__file__).with_name(name)
+        committed = subprocess.check_output(['git', '-C', str(root), 'show',
+            'HEAD:mobile_build/validation/' + name])
+        host_sources[name] = dict(working_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                                  committed_sha256=hashlib.sha256(committed).hexdigest())
+    (output / 'host-source-hashes.json').write_text(json.dumps(host_sources, indent=2))
     options, _ = manager_settings.settings(root / 'mobile_build')
     results = []
     workspace = None
@@ -209,18 +218,25 @@ def main():
                     run_output = output / f'run-{index + 1}'
                     run_output.mkdir()
                     observer = LoadObserver(['legacy', 'recycled'] if index % 2 == 0 else ['recycled', 'legacy'])
-                    result = runner.run_android(workspace, payload, run_output, env, options, bundle=BUNDLE,
-                        entry_point='tests.logisticsmobile.notes_rows_performance_probe',
+                    arguments = dict(bundle=BUNDLE, entry_point='tests.logisticsmobile.notes_rows_performance_probe',
                         result_name='notes-rows-performance-result.json', reuse_project=True,
                         observe=observer, probe_timeout=1800)
+                    if index == 0:
+                        result = runner.run_android(workspace, payload, run_output, env, options, **arguments)
+                    else:
+                        result = runner.exercise_android_app(project / 'app/build/outputs/apk/debug/app-debug.apk',
+                            workspace, run_output, env, options, **arguments)
                     verify_native_diagnostics(run_output / 'android-logcat.txt')
                     assert json.loads((run_output / 'android-cleanup.json').read_text())['removed']
                     assert all(observer.decisions[x['nonce']]['accepted'] for x in result['measurements'])
                     results.append(result)
                     print('Controlled Notes row run completed: ' + str(index + 1), flush=True)
+                apk_hashes = {json.loads((output / f'run-{i + 1}/android-apk.json').read_text())['sha256']
+                              for i in range(args.runs)}
+                assert len(apk_hashes) == 1, 'Paired devices did not execute identical APK bytes'
                 summary = compare(results)
                 (output / 'summary.json').write_text(json.dumps(dict(success=True, source=manifest,
-                    runs=args.runs, comparison=summary), indent=2))
+                    runs=args.runs, apk_sha256=next(iter(apk_hashes)), comparison=summary), indent=2))
                 remove_tree(payload, ownership_files=())
     finally:
         (output / 'workspace-cleanup.json').write_text(json.dumps(dict(workspace=str(workspace),
