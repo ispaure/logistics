@@ -369,6 +369,56 @@ class ResumeLockTests(unittest.TestCase):
             self.assertEqual(browser.epoch, epoch)
             self.assertEqual([row.title for row in browser.native_list.data], ['Photos', 'Documents', 'Books'])
 
+    def test_notes_drawers_are_detached_before_password_resume(self):
+        import toga
+        from mobile.notes_drawers import NotesDrawers
+        for side in ('files', 'links'):
+            with self.subTest(side=side):
+                drawer = NotesDrawers(toga.Box(), toga.Box(), toga.Box(), app=self.app)
+                drawer.show(side)
+                overlay = drawer.overlay
+                self.assertIsNotNone(overlay)
+                popup, native = Mock(), Mock()
+                overlay.popup = popup
+                overlay.container = SimpleNamespace(native=native, content=object())
+                self.privacy.conceal()
+                popup.dismiss.assert_called_once()
+                native.removeFromSuperview.assert_called_once()
+                self.assertIsNone(drawer.overlay)
+                self.assertIsNone(drawer.side)
+                self.assertIsNone(overlay.panel.overlay)
+                self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+                self.privacy.reveal()
+                drawer.show(side)
+                self.assertIsNone(drawer.overlay)
+                self.unlock('wrong')
+                drawer.show(side)
+                self.assertIsNone(drawer.overlay)
+                self.unlock('session-password')
+                drawer.show(side)
+                self.assertIsNotNone(drawer.overlay)
+                drawer.dispose()
+
+    def test_lock_removes_a_panel_already_animating_closed(self):
+        import toga
+        from mobile.notes_drawers import NotesDrawers
+        drawer = NotesDrawers(toga.Box(), toga.Box(), toga.Box(), app=self.app)
+        drawer.show_links()
+        overlay = drawer.overlay
+        popup = Mock()
+        overlay.popup = popup
+        with patch('mobile.notes_motion.slide_out', return_value=60):
+            drawer.show_detail()
+        self.assertEqual(len(drawer.retiring), 1)
+        popup.dismiss.assert_not_called()
+        self.gate.lock()
+        self.privacy.refresh()
+        popup.dismiss.assert_called_once()
+        self.assertIsNone(overlay.popup)
+        self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+        drawer.dispose()
+        self.assertEqual(drawer.retiring, [])
+
     def test_resume_never_restores_navigation_until_password_verified(self):
         self.privacy.conceal()
         self.assertIs(self.app.main_window.content, self.privacy.lock_view)

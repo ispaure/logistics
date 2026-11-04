@@ -64,6 +64,10 @@ class NotesDrawers:
         self.show('links')
 
     def show(self, side):
+        privacy = getattr(self.app, 'screen_privacy', None)
+        if privacy is not None and privacy.sensitive() and (
+                privacy.inactive or privacy.interrupted or privacy.captured or privacy.resume_locked):
+            return
         if side == 'files' and self.expanded:
             self.show_detail()
             return
