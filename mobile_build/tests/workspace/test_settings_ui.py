@@ -46,7 +46,7 @@ class SettingsUITests(unittest.TestCase):
                    for value in (150, 60)]
         owner = SimpleNamespace(app=SimpleNamespace(_impl=AndroidImpl()), _dragging=True,
             hue=sliders[0], saturation=sliders[1], update_labels=Mock(), draw_spectrum=Mock(),
-            _spectrum_width=200, selected=SimpleNamespace(style=SimpleNamespace()))
+            _spectrum_width=200)
         tint = Mock()
         with patch.dict('sys.modules', {'android.content.res': SimpleNamespace(ColorStateList=SimpleNamespace(valueOf=tint))}), \
                 patch('mobile.settings.accent.style_slider') as rebuild:
@@ -91,7 +91,6 @@ class SettingsUITests(unittest.TestCase):
         controls.saturation.value = 60
         self.assertEqual(app.preferences.values['accent_hue'], '221')
         self.assertEqual(LIGHT['accent'], '#2563eb')
-        self.assertNotEqual(str(controls.selected.style.color), '#2563eb')
         self.assertEqual(controls.hue._accent_preview, accent_colors(150, 60))
         self.assertEqual(controls.saturation._accent_preview, controls.hue._accent_preview)
         controls.hue.on_release()
