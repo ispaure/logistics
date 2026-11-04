@@ -264,6 +264,10 @@ class PDFReaderTests(QtTestCase):
         self.assertEqual(search.data, b'')
 
     def test_desktop_search_navigates_wraps_and_clears(self):
+        # Measure asynchronous search/navigation, not pypdf's cold import under
+        # PySide's module-inspection hook (especially costly on emulated Fedora).
+        from pypdf import PdfReader
+        self.assertTrue(callable(PdfReader))
         from features.pdf.ui.reader import PDFWindow
         window = PDFWindow('search.pdf', pdf_bytes())
         self.addCleanup(window.close)
@@ -273,19 +277,9 @@ class PDFReaderTests(QtTestCase):
         self.assertFalse(window.search.isHidden())
         self.assertTrue(window.find_button.isChecked())
         search = window.search
-        def wait_for_search():
-            try:
-                self.wait_until(lambda: search.future is None, message=lambda: repr(dict(
-                    worker_done=search.future.done() if search.future is not None else True,
-                    worker_running=search.future.running() if search.future is not None else False,
-                    polling=search.timer.isActive(), visible=window.isVisible())))
-            except AssertionError:
-                import faulthandler
-                faulthandler.dump_traceback()
-                raise
         search.input.setText('needle')
         search.find(1)
-        wait_for_search()
+        self.wait_until(lambda: search.future is None)
         self.assertIn('Match 1 of 3', search.status.text())
         search.find(-1)
         self.assertEqual(window.index, 2)
@@ -294,7 +288,7 @@ class PDFReaderTests(QtTestCase):
         self.assertEqual(window.index, 0)
         search.input.setText('missing')
         search.find(1)
-        wait_for_search()
+        self.wait_until(lambda: search.future is None)
         self.assertIn('No matches', search.status.text())
         search.input.clear()
         self.assertFalse(search.controller.results.matches)

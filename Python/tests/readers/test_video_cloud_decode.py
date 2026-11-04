@@ -75,7 +75,7 @@ class CloudVideoDecodeTests(QtTestCase):
                     def decoded():
                         return (frames and player.media is not None and player.media.get_stats(stats)
                                 and stats.decoded_audio > 0)
-                    player.errorOccurred.connect(lambda error, message, errors=errors: errors.append(message))
+                    player.errorOccurred.connect(lambda errors=errors, player=player: errors.append(str(player.native.get_state())))
                     player.setSource(qt.QUrl(transport.url))
                     player.play()
                     checkpoint('playing requested')
