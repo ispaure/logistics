@@ -33,9 +33,10 @@ history and existing save/discard/cancel transition. Explicit `new_tab=True`
 opens/focuses a separate document. Files without a Markdown/source/notebook
 adapter use a memory-only `FilePreview` in the same library pane; images and
 PDF pages use existing image validation and PDF backends. Other formats display
-metadata without loading arbitrary binary data. Video previews retain a revocable
-`VideoContent`/`VideoTransport` range stream, with desktop Play/Pause and seek
-controls or a mobile HTML video element. Neither starts decoding until Play.
+metadata without loading arbitrary binary data. Selecting a video file hands off
+to the full platform Video Player while retaining the library document. Markdown video embeds retain a revocable
+`VideoContent`/`VideoTransport` range stream with inline playback controls; they
+start paused and do not preload the whole video.
 Markdown image and video embeds use the same authoritative lookup as file links:
 current folder, library root, then a unique suffix match across the library.
 Conventional attachment folders do not bypass ambiguity checks. LocalCrypt uses its
@@ -156,7 +157,8 @@ device. This does not certify physical-device gestures or every tablet layout.
 `notes.document_kind` and `DOCUMENTS` define filename-only routing for Markdown,
 source text and notebook files. Provider listing and content search share this
 supported-type boundary; hidden configuration stays excluded. Explicit links may
-resolve to any supported document, while extensionless note links still mean `.md`.
+resolve to any supported document. Extensionless links first probe exact files
+in the current folder and library root before trying the `.md` note suffix.
 Connection scans index supported file paths but read bodies only from Markdown.
 
 Desktop `ui/library_text.py` embeds the shared `CodeEdit`, `SyntaxHighlighter` and
@@ -287,8 +289,11 @@ deferred. Unchanged folders still reuse their richer listings. Providers without
 physical directory location keep uncached lookup. No note bodies or persistent
 plaintext index are added. Close and credential revocation retire the cache;
 late workers cannot repopulate it. Mobile Notes Library navigation history and
-scroll positions also remain in memory and clear on disposal; the library's
-transient workspace session does not enter persistent Recent history.
+scroll positions remain in memory and clear on disposal. The library's transient
+workspace session does not enter persistent Recent history, but individual file
+references use the host's existing Recent/privacy policy through
+`mobile.obsidian.remember_note`. Session-Only references remain in memory while
+the library is loaded and retire on close or lock.
 The native `notes_audit_probe` checks direct/cold/warm lookups and actual WebView
 publication with synthetic ordinary and LocalCrypt libraries; its LocalCrypt
 checks also reject plaintext workspace/Recent note names and verify lock cleanup.
@@ -308,10 +313,10 @@ byte baseline.
 ## Notes Library ownership
 
 The mobile library panel owns top-aligned Files, Search and Calendar tabs.
-Files and Search reuse one retained scroll/list owner, mounted only in the
-selected panel. Files ignores a retained query; Search alone projects results
-and owns its query and two scope buttons. Leaving Search cancels its pending
-scan; returning restarts the retained query. Calendar remains independently
+Files and both search scopes retain separate scroll/list owners, with only the
+selected panel mounted. Files ignores retained queries; each search scope owns
+its query, results and pagination. Leaving Search cancels pending work; returning
+restores completed results or resumes an unfinished query. Calendar remains independently
 cancellable. A centered command row below the tabs owns New document, New folder
 and Collapse all folders, outside the scrolling area. The Files tab is the root
 drop target; the library identity/status footer and redundant library menu are removed.
@@ -358,8 +363,8 @@ standalone read-only document. Local viewers enable editing by default.
 `PageStorage` publishes local saves on a worker through `ResourceTextSession`,
 checks original bytes and revisions, and retains drafts on failure. Navigation
 and closing resolve unsaved changes before retiring the current note.
-`test_notes_library_desktop.py` exercises real rclone LocalCrypt and
-crypt-remote rejection, nested local note reads and revocation. Mobile's
+`test_notes_library_integration.py` exercises real rclone LocalCrypt and
+crypt-remote rejection; desktop library tests cover nested reads and revocation. Mobile's
 `test_notes_library.py` covers both encrypted sources with the host native bridge
 when `LOGISTICS_MOBILE_BRIDGE` points to its shared library, using only synthetic
 credentials and an in-memory remote. Mobile resolves the same location scopes in
@@ -412,8 +417,9 @@ through the WebView navigation handler. The shared toolbar audit also covers the
 failed credential-unlock form. Expanded external-app Live Activities still need
 physical-device verification; simulator screenshots do not reproduce that activity.
 
-Mobile libraries publish separate Close and page-history controls to the native
-toolbar. The **×** calls `NotesHost.close_session` through the host's session-close
+Mobile libraries keep Close separate from the page-history controls. Close
+belongs to the title/navigation presentation; history remains in the content
+row beside the breadcrumb. The **×** calls `NotesHost.close_session` through the host's session-close
 workflow, retiring the library even when page history or compact browsing is
 active. The visible **‹ / ›** controls only navigate note history; they stay
 disabled at its ends. The documentation reader uses the same controls, with
@@ -452,7 +458,8 @@ and Markdown editor workflow suites. Host checks do not replace native device QA
 
 Note links resolve on the opening worker through `NotesLibrary.link`: first the
 current folder, then the library root, then a unique matching path suffix across
-visible subfolders. Extensionless links receive `.md`. Explicit `./` and `../`
+visible subfolders. Extensionless links prefer an exact current-folder or
+library-root filename before adding `.md`. Explicit `./` and `../`
 links keep relative semantics; hidden configuration and paths outside the library
 remain excluded. Lookup is cancellable and limited to 10,000 listed entries,
 with no persistent index. Local directory-name listings may be reused in bounded
@@ -472,7 +479,8 @@ independently cancellable workers, generation-checked snapshots and paged search
 results. Closing waits for all workers before releasing the provider. Folder landing notes and
 session reading positions are retained independently of the viewer's history.
 Existing Markdown opens in reading mode on both platforms; new Markdown starts
-editing. Desktop drag/drop and mobile move forms remain platform-specific controls.
+editing. Desktop drag/drop, mobile native icon drags and mobile move forms use their
+platform controls over the shared mutation policy.
 
 Mobile `library_tools.py` adds heading navigation, properties and raw YAML forms;
 `library_document.py` hosts commonUtils' `EditorSearch` over its native Source
@@ -828,3 +836,31 @@ uses the visible intersection with its horizontal scroll viewport; the secondary
 toolbar must remain attached and visible. Discovery and startup readiness are
 awaited before interactions. Evidence is saved before owned QA apps and temporary
 devices are removed; this acceptance pass does not target personal devices.
+
+## Review and acceptance scope
+
+The November 4, 2026 documentation audit reviewed committed model, desktop and
+mobile source and the focused test contracts below. It ran static documentation
+checks only; it did not rerun Qt, native probes, builds or device acceptance.
+The native probe descriptions above identify reusable checks and historical
+scope, rather than a new passing result for the current checkout.
+
+- `Python/tests/application/test_notes_library_hosting.py`: destination identity,
+  detached/reopened sessions, feature disabling and provider leases.
+- `Python/tests/editing/test_notes_library_desktop.py` and
+  `test_notes_library_tabs.py`: file actions, active-document replacement,
+  independent drafts/history, split groups and tab-local connections.
+- `Python/tests/editing/test_notes_library_connections.py`,
+  `test_notes_library_navigation.py` and `test_notes_library_folders.py`:
+  connection reuse, path/history mutations and name-only folder discovery.
+- `mobile_build/tests/documents/test_notes_library.py` and `test_obsidian.py`:
+  discovery, containment, private limits, failed/late publication, media lifetime,
+  retained title ordering and content-row actions on Apple platforms.
+- `mobile_build/tests/editing/test_notes_library_modes.py` and
+  `test_notes_library_panels.py`: search scopes, calendar, save-before-move,
+  guarded callbacks and drawer/form return behavior.
+
+Android recycled-tree work is still an active implementation and acceptance task
+at this review. This guide describes the committed library behavior; it does not
+claim that the pending row implementation has passed native gesture, scrolling
+or device acceptance. Keep that evidence separate from earlier panel probes.

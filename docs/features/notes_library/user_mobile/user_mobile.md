@@ -50,16 +50,17 @@ library; switching files asks about unsaved changes.
 
 Folders with a same-named `Folder/Folder.md` page have underlined names in Files;
 tap the name to open that page, or use the arrow to expand the folder.
-A compact folder breadcrumb appears below the title for every open file type,
-including images and PDFs. Narrow document panes show the containing folder;
-wider panes show ancestors as space permits. Tap a folder to open its same-named
-page, or browse that folder when it has no page. The filename appears once, in
-the title; hold the title to see its full location.
+A horizontally scrollable folder breadcrumb appears below the title for every
+open file type, including images and PDFs. It retains every ancestor, including
+the library root, and initially shows the end of a long path. Swipe horizontally
+to reach earlier folders. Tap a folder to open its same-named page, or browse
+that folder when it has no page. The filename appears in the title; hold the
+title to see its full location.
 
-On iPhone and iPad, previous/next note, edit/view and Note actions use the native
-toolbar. Duo can move those actions into its side bar and overflow. Files and
-Links stay beside the document title. On Android, note controls stay together
-above their document pane, including when Files is visible alongside it.
+On iPhone, iPad and Android, previous/next note, edit/view and Note actions stay
+in the content row below the title, beside the breadcrumb. On Apple platforms,
+Files and Links stay beside the document title, including Duo layouts. In wide
+layouts, note controls follow the document pane when Files is visible alongside it.
 
 
 ## Notes Library and Documentation Library
