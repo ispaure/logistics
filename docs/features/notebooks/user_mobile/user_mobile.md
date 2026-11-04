@@ -147,9 +147,23 @@ Cancelling preserves the local notebook. Transfer and tablet import are separate
 operations; export does not connect to a reMarkable account or tablet.
 
 The [desktop guide's compatibility limits](../user/user.md#current-compatibility-limits)
-also apply here. The initial canvas previews native ink, not page templates or
-unsupported page objects. Physical Boox and reMarkable checks are still required;
+also apply here. Supported page templates appear beneath native ink; unsupported
+template references and page objects remain preserved. Physical Boox and reMarkable checks are still required;
 a simulator cannot certify writing latency, palm rejection or tablet editability.
+
+## Page templates
+
+Open **Layers** to select the current page's template, Paper Pro or Paper Pro Move
+template format, and background visibility. The catalog includes lined paper,
+grids, dots, restaurant reviews, meeting notes and daily plans. Edits use the same
+Save, recovery and Undo/Redo behavior as desktop. New pages inherit the template.
+PDF-backed documents retain their embedded PDF background.
+
+Phones start in **Paper Pro Move** paper view (large tablets start in Pro): the same ink coordinates, centered
+and aligned to the top, with the visible area expanded for writing beyond the
+Move edges. Choose **Paper Pro** in Layers to reveal and write in the surrounding
+margins. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes)
+for line counts, saved-format versus viewing choices and reMarkable compatibility.
 
 ## Eraser types and sizes
 

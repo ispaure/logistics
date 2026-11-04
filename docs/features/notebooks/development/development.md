@@ -66,8 +66,8 @@ platform PDF backend and a single-page editor cache. The image sits below the
 transparent ink canvases so erasing ink preserves the PDF. Legacy redirection
 maps and modern page-record redirects follow reorder/duplicate/delete and
 recovery. Blank inserted pages have redirect -1. Cross-notebook PDF-page copies
-are refused to avoid losing their source background. Overview thumbnails remain
-ink-only.
+are refused to avoid losing their source background. Overview thumbnails include
+supported notebook templates; PDF backgrounds remain omitted.
 
 The PDF reader's **Duplicate as .rmdoc to annotate** action publishes through
 `DocumentResource` with no expected destination revision, retaining provider
@@ -117,6 +117,53 @@ portable `packaging` runtime. Vendoring avoids rmscene's obsolete packaging<24
 metadata conflicting with Briefcase's packaging>=24.2 build requirement.
 See [rmscene upstream](https://github.com/ricklupton/rmscene) and the
 [archive schema reference](https://github.com/go-go-golems/remarquee/blob/main/pkg/rmdoc/content.go).
+
+## Page template model and views
+
+`templates.py` owns the original vector catalog, user-confirmed lined counts
+(21 large, 25 native medium, 41 small), an additional 31-rule medium, saved page
+format/visibility and shared crop bounds. Stock names remain native `.pagedata`
+and `cPages.pages[].template` references; no PDF or ink strokes are synthesized.
+Custom layouts include original `.template` JSON artwork in the archive.
+Their format and Logistics-only visibility live in an owned page sidecar, so
+recovery, duplication and page transfer retain them. Cross-notebook copies also
+carry their referenced vector asset. Unknown imported templates stay opaque.
+
+Template edits mark structure dirty even when page IDs do not change. Export
+must therefore serialize page references on every structural change, rather than
+only a reordered page list. Failed checkpoints restore the prior page metadata
+and assets. PDF-backed notebooks reject template replacement.
+
+Desktop and mobile share the selector, background image, crop and pointer mapping.
+The background sits below the transparent ink group, so erasing never removes
+rules. Overview previews compose the same original vector artwork below ink.
+The scene remains 1404 × 1872; Move crops an 821 × 1460 top-centered area and
+unions it with stroke extents, including hidden layers and stroke widths. The
+browser keeps the full canvas coordinate rectangle behind the clipped wrapper.
+The Android native overlay clips to that wrapper as well as the viewport.
+View selection is local to the canvas session and never modifies ink or storage.
+Interior stroke acknowledgements retain incremental painting; only changed crop
+extents replay the page. The responsive initial view uses Move below 700 CSS
+pixels on the shorter mobile viewport dimension; users can switch either view.
+
+`test_notebooks.py` covers template-only legacy/modern serialization, unchanged
+native ink, undo/redo, recovery, inherited templates, transfers and rollback.
+`notebook_template_probe.py` checks all templates and both formats in real Qt
+WebEngine desktop/mobile presentations, including image loading and pointer
+mapping across Pro/Move view changes. Run with the desktop interpreter,
+`PYTHONPATH=Python:.`, and `--output test-results/notebook-templates`.
+This does not certify firmware discovery of custom embedded template assets,
+tablet view geometry or physical stylus behavior. No global tablet template
+registry is changed. Native template-name references are distinct from the
+PDF-backed route described above.
+
+References: reMarkable's [template guide](https://support.remarkable.com/articles/Knowledge/Templates)
+describes per-notebook page backgrounds and PDF limitations; BOOX's
+[handwritten notes guide](https://booxsupport.zendesk.com/hc/en-us/articles/8569373888788-Handwritten-Notes)
+informs the template-in-page workflow. The native stock names are corroborated
+by the firmware-derived [Paper Pro catalog](https://github.com/delize/remarkable-daily-journal/blob/main/docs/templates/rmpp.md).
+The original custom assets use the vector node schema illustrated in this
+[native template example](https://github.com/Martes-Delta-Co/Remarkable-Mobile-Prototyping-Templates/blob/main/templates/universal/uxtpl_android_four_col.template).
 
 ## Paper Pro / Move brush settings
 
