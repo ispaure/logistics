@@ -615,6 +615,9 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                         with self.subTest(target=target, transport=transport, marker=marker):
                             report = self.report()
                             report.update(target=target, backend='toga_iOS.app' if target == 'ios' else 'toga_android.app')
+                            def revision(args, **kwargs):
+                                key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
+                                return report['source'][key]
                             def launch(command, *, stdout, **kwargs):
                                 if transport == 'stdout':
                                     stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
@@ -622,8 +625,8 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                                 stdout.flush()
                                 return SimpleNamespace(wait=lambda **kwargs: 0)
                             with patch.object(ui_tools.subprocess, 'Popen', side_effect=launch), \
-                                    patch.object(ui_tools, 'simulator_report', return_value=report), \
-                                    patch.object(ui_tools, 'verify_report', return_value=report):
+                                    patch.object(ui_tools.subprocess, 'check_output', side_effect=revision), \
+                                    patch.object(ui_tools, 'simulator_report', return_value=report):
                                 with self.assertRaisesRegex(ValueError, 'Unhandled native app error'):
                                     ui_tools.run(target, 'device')
             finally:
