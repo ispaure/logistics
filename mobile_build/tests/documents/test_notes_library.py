@@ -355,7 +355,7 @@ class NotesLibraryTests(unittest.TestCase):
         (self.vault / 'Destination').mkdir()
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
-            self.assertIn(owner.panel_tabs['Files'], owner.panel_tabs.values())
+            self.assertFalse(hasattr(owner, 'root_drop_button'))
             await owner.open_note('Vault/Home.md')
             owner.sidebar.show_sidebar()
             from mobile.favourites import catalog, reference
