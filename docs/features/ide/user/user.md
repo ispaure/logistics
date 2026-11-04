@@ -1,5 +1,8 @@
 # Using IDE
 
+IDE is a desktop workspace. It is not available in the Android or iOS app; see
+[mobile support](../user_mobile/user_mobile.md).
+
 Enable **IDE** in Settings → Features, then select its code icon in the navigation
 rail, immediately before Git when both are enabled. IDE does not require Text
 Editor, Git or any reader feature to be enabled.
@@ -215,16 +218,18 @@ lines, its edited lines stay blue and the surplus removed lines get a red bounda
 
 In the project side panel, Git filenames are **blue for modified**, **green for
 new/untracked or added**, **purple for renamed**, and **orange for conflicts**.
-Folders reflect changes inside them; red indicates deletions. Deleted files
+Folders keep their normal foreground when their children change. Deleted files
 disappear from the filesystem tree, but remain listed in the Git workspace.
 Hover over a colored name to see whether its changes are staged, unstaged or
 untracked. Colors refresh within a few seconds after saves, staging or external
 changes, using the configured Git executable. Staged files retain their status
-color until committed. Ignored and unchanged files keep the normal text color.
+color until committed. Git-ignored files and folders appear olive with an
+**Ignored** tooltip; that status also applies to descendants of ignored folders.
+Unchanged paths keep the normal text color.
 Unsaved edits show an asterisk on the editor tab and color the filename immediately, including in
 non-Git projects; their tooltip says **Unsaved changes**. Saving a non-Git file
 returns its name to the normal color. Dirty Git submodules report their individual
-modified/new files as well as their folder status.
+modified/new files; the submodule folder keeps its normal foreground.
 
 Colors use blue-green additions and orange-red deletions. Tree filenames stay
 plain and keep their regular file-type icons; changes use filename color alone.
