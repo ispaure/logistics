@@ -33,8 +33,8 @@ class LibraryPanels:
             if child not in (self.search, self.search_mode):
                 self.files_content.add(child)
         self.rows_scroll = self.files_content.children[0]
-        search_rows = toga.Box(style=Pack(direction=COLUMN))
-        search_scroll = toga.ScrollContainer(content=search_rows, horizontal=False, style=Pack(flex=1))
+        search_rows = self.new_panel_rows()
+        search_scroll = self.panel_rows_view(search_rows)
         self._row_panel = 'Files'
         self._row_panels = {
             'Files': dict(rows=self.rows, scroll=self.rows_scroll, _row_cache={}, shown=50,
@@ -43,9 +43,9 @@ class LibraryPanels:
                            _rows_message=None, _more_rows=None),
         }
         self._search_scope = 'Search in File Names'
-        document_rows = toga.Box(style=Pack(direction=COLUMN))
+        document_rows = self.new_panel_rows()
         self._row_panels['Search within Documents'] = dict(rows=document_rows,
-            scroll=toga.ScrollContainer(content=document_rows, horizontal=False, style=Pack(flex=1)),
+            scroll=self.panel_rows_view(document_rows),
             _row_cache={}, shown=50, _rows_message=None, _more_rows=None)
         self.search_query = None
         self._search_interfaces = {
@@ -170,7 +170,10 @@ class LibraryPanels:
                     if hasattr(button, 'vault_path'):
                         self.release_file_hold(button)
             state['_row_cache'].clear()
-            state['rows'].clear()
+            if getattr(state['rows'], 'recycled', False):
+                state['rows'].dispose()
+            else:
+                state['rows'].clear()
             state['_rows_message'] = state['_more_rows'] = None
         self._row_cache = {}
         for field in ('_rows_message', '_more_rows'):
@@ -367,6 +370,9 @@ class LibraryPanels:
                 self.render_calendar()
 
     def update_tree_selection(self):
+        if getattr(self.rows, 'recycled', False):
+            self.rows.select_path()
+            return
         # Opening changes only selection. Keep the detached native file rows
         # instead of rebuilding up to fifty buttons on the opening path.
         for row in self.rows.children:

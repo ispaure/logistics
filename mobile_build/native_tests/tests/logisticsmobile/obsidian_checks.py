@@ -7,13 +7,13 @@ import asyncio
 from io import BytesIO
 from services.documents.locations import collection_path, CollectionFiles
 from .fixtures import capture_window
+from .notes_tree_helpers import row_paths
 
 
 async def wait_for_tree(owner, expected):
     """Native rows are committed in batches to keep the main loop responsive."""
     for _ in range(600):
-        actual = {child.vault_path for row in owner.rows.children for child in row.children
-                  if hasattr(child, 'vault_path')}
+        actual = row_paths(owner)
         task = getattr(owner, 'tree_task', None)
         if actual == expected and (task is None or task.done()):
             return
