@@ -65,6 +65,7 @@
     "mobile/remote_downloads.py",
     "transfers/presentation.py",
     "transfers/mobile/surface.py",
+    "transfers/mobile/native_fallback.py",
     "transfers/assets/surface.html",
     "transfers/assets/surface.css",
     "transfers/assets/surface.js"
