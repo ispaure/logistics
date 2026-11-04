@@ -6,9 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from zipfile import ZipFile
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from tests.books_fixture import make_book, isolate_appearance
@@ -86,8 +84,7 @@ class ReaderTests(QtTestCase):
         standalone_host = patch.object(self.app, "_commonutils_document_host", None, create=True)
         standalone_host.start()
         self.addCleanup(standalone_host.stop)
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.folder = Path(self.temp.name)
         self.appearance_stores = isolate_appearance(self, self.folder)
         self.path = make_book(self.folder / 'book.epub')
@@ -168,33 +165,16 @@ class ReaderTests(QtTestCase):
         self.assertEqual(self.page.query.cursorPosition(), 2)
 
 
-    def test_book_progress_knob_is_visible_above_track_and_minor_markers_are_shorter(self):
-        from features.books.ui.progress import BookProgress
-        track = BookProgress(); track.resize(212, 20)
-        palette = track.palette()
-        palette.setColor(qt.QPalette.ColorRole.Window, qt.QColor('white'))
-        palette.setColor(qt.QPalette.ColorRole.Highlight, qt.QColor('#2266ee'))
-        track.setPalette(palette); track.setAutoFillBackground(True)
-        track.setEnabled(True); track.fraction = .5
-        image = track.grab().toImage()
-        self.assertEqual(image.pixelColor(106, 6), qt.QColor('#2266ee'))
-        self.assertEqual(track._marker_height(1), 10)
-        self.assertLess(track._marker_height(2), track._marker_height(1))
-        track.deleteLater()
-
     def test_book_track_has_nested_markers_and_click_seeks_to_another_chapter(self):
         from PySide6.QtTest import QTest
         track = self.page.book_progress
-        for _ in range(20):
-            if track.pages.complete:
-                break
-            QTest.qWait(50)
-        self.assertTrue(track.pages.complete)
+        self.wait_until(lambda: not self.page._loading and track.pages.complete)
         self.assertEqual([marker[1] for marker in track.markers], [0, 1, 0])
         self.assertGreater(track.markers[1][0], track.markers[0][0])
         QTest.mouseClick(track, qt.Qt.MouseButton.LeftButton,
                          pos=qt.QPoint(track.width() - 6, 12))
-        self.app.processEvents()
+        self.wait_until(lambda: self.page._current == 1 and not self.page._loading
+                        and track.pages.complete and track.fraction > track.boundaries[1])
         self.assertEqual(self.page._current, 1)
         self.assertGreater(track.fraction, track.boundaries[1])
 
@@ -545,3 +525,20 @@ class ReaderTests(QtTestCase):
         self.assertTrue(window._close_pending)
         self.wait_idle(window.reader)
         self.assertTrue(destroyed or not window.isVisible())
+
+
+class BookProgressWidgetTests(QtTestCase):
+    def test_book_progress_knob_is_visible_above_track_and_minor_markers_are_shorter(self):
+        from features.books.ui.progress import BookProgress
+        track = BookProgress()
+        self.addCleanup(track.deleteLater)
+        track.resize(212, 20)
+        palette = track.palette()
+        palette.setColor(qt.QPalette.ColorRole.Window, qt.QColor('white'))
+        palette.setColor(qt.QPalette.ColorRole.Highlight, qt.QColor('#2266ee'))
+        track.setPalette(palette); track.setAutoFillBackground(True)
+        track.setEnabled(True); track.fraction = .5
+        image = track.grab().toImage()
+        self.assertEqual(image.pixelColor(106, 6), qt.QColor('#2266ee'))
+        self.assertEqual(track._marker_height(1), 10)
+        self.assertLess(track._marker_height(2), track._marker_height(1))
