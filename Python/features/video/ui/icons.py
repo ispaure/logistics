@@ -1,6 +1,4 @@
 """Video-specific line glyphs using the shared palette-aware icon renderer."""
-from math import cos, sin, pi
-
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.icons import set_painted_icon
 from commonUtils.ui.readers.reader_chrome import ReaderIcon
@@ -35,26 +33,31 @@ class VideoIcon(ReaderIcon):
             font.setPixelSize(9)
             painter.setFont(font)
             painter.drawText(qt.QRectF(4, 5, 16, 15), qt.Qt.AlignmentFlag.AlignCenter, '10')
-        elif self.name == 'star':
-            points = [qt.QPointF(12 + (10 if i % 2 == 0 else 4.5) * cos(i * pi / 5 - pi / 2),
-                                12 + (10 if i % 2 == 0 else 4.5) * sin(i * pi / 5 - pi / 2)) for i in range(10)]
-            painter.drawPolygon(points)
+        elif self.name == 'heart':
+            path = qt.QPainterPath(qt.QPointF(12, 21))
+            path.cubicTo(9, 18, 2, 13, 2, 8)
+            path.cubicTo(2, 2, 9, 1, 12, 7)
+            path.cubicTo(15, 1, 22, 2, 22, 8)
+            path.cubicTo(22, 13, 15, 18, 12, 21)
+            painter.drawPath(path)
         elif self.name == 'folder':
             painter.drawPolygon([qt.QPointF(3, 6), qt.QPointF(9, 6), qt.QPointF(11, 8),
                                  qt.QPointF(21, 8), qt.QPointF(21, 19), qt.QPointF(3, 19)])
-        elif self.name in ('floating', 'cast'):
+        elif self.name == 'cast':
             painter.drawRoundedRect(qt.QRectF(3, 4, 18, 15), 2, 2)
-            if self.name == 'floating':
-                painter.drawRoundedRect(qt.QRectF(12, 11, 7, 6), 1, 1)
-            else:
-                painter.drawLine(qt.QLineF(9, 22, 15, 22))
-                painter.drawLine(qt.QLineF(12, 19, 12, 22))
+            painter.drawLine(qt.QLineF(9, 22, 15, 22))
+            painter.drawLine(qt.QLineF(12, 19, 12, 22))
         elif self.name == 'captions':
             painter.drawRoundedRect(qt.QRectF(3, 5, 18, 14), 2, 2)
             for x in (6, 13):
                 painter.drawPolyline([qt.QPointF(x + 4, 9), qt.QPointF(x, 9),
                                       qt.QPointF(x, 15), qt.QPointF(x + 4, 15)])
-        elif self.name in ('chapters', 'queue'):
+        elif self.name == 'queue':
+            painter.drawPolygon([qt.QPointF(3, 6), qt.QPointF(9, 6), qt.QPointF(11, 8),
+                                 qt.QPointF(21, 8), qt.QPointF(21, 19), qt.QPointF(3, 19)])
+            painter.drawLine(qt.QLineF(7, 12, 17, 12))
+            painter.drawLine(qt.QLineF(7, 15, 17, 15))
+        elif self.name == 'chapters':
             for y in (6, 12, 18):
                 painter.drawLine(qt.QLineF(9, y, 21, y))
                 painter.drawEllipse(qt.QRectF(3, y - 1, 2, 2))

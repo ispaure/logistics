@@ -4,9 +4,85 @@ from time import monotonic
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer
+from commonUtils.ui.readers.reader_chrome import ReaderFullscreen
+
+
+class VideoFullscreen(ReaderFullscreen):
+    """Temporarily lift the player out of its document pane, preserving its slot."""
+    def __init__(self, owner, action):
+        self._active = self._leaving = False
+        super().__init__(owner, action)
+        owner.installEventFilter(self)
+
+    def window(self):
+        return self.owner
+
+    def toggle(self):
+        if self.owner.isFullScreen():
+            self.leave()
+            return
+        self._parent = self.owner.parentWidget()
+        self._flags = self.owner.windowFlags()
+        self._geometry = self.owner.saveGeometry()
+        self._index = self._parent.layout().indexOf(self.owner) if self._parent is not None else -1
+        if self._parent is not None:
+            self._parent.layout().removeWidget(self.owner)
+            self.owner.setParent(None, qt.Qt.WindowType.Window)
+        self._active = True
+        super().toggle()
+        self.owner.fullscreen_layout(True)
+        self.owner.show_controls()
+
+    def leave(self):
+        if not self._active or self._leaving:
+            return
+        self._leaving = True
+        super().leave()
+        self.owner.fullscreen_layout(False)
+        parent = getattr(self, '_parent', None)
+        if parent is not None:
+            self.owner.setParent(parent, self._flags)
+            parent.layout().insertWidget(self._index, self.owner)
+        else:
+            self.owner.restoreGeometry(self._geometry)
+        self.owner.show()
+        self._active = self._leaving = False
+        self.sync()
+
+    def eventFilter(self, watched, event):
+        result = super().eventFilter(watched, event)
+        if (event.type() == qt.QEvent.Type.WindowStateChange and self._active
+                and not self._leaving and not self.owner.isFullScreen()):
+            qt.QTimer.singleShot(0, self.leave)
+        return result
+
+    def sync(self):
+        super().sync()
+        if hasattr(self.owner, 'fullscreen_button'):
+            self.owner.fullscreen_button.setAccessibleName(self.action.text())
 
 
 class PlaybackPresentation:
+    def fullscreen_layout(self, active):
+        # In fullscreen the picture owns the entire viewport. Controls overlay
+        # it while visible and hide without leaving a reserved black gutter.
+        if active:
+            outer = self.header.parentWidget().layout()
+            outer.removeWidget(self.header)
+            outer.removeWidget(self.dock)
+            self.overlay.layout().insertWidget(0, self.header)
+            self.overlay.layout().addWidget(self.dock)
+            self.close_settings()
+        else:
+            self.overlay.layout().removeWidget(self.header)
+            self.overlay.layout().removeWidget(self.dock)
+            body = self.middle.parentWidget()
+            body.layout().insertWidget(0, self.header)
+            body.layout().addWidget(self.dock)
+        self.header.show()
+        self.chrome.show()
+        self.reflow_chrome()
+
     def build_presentation(self):
         self.requested_play = False
         self.network_hold = False
@@ -220,6 +296,6 @@ class PlaybackPresentation:
         self.watch_timer.stop()
         self.hide_timer.stop()
         self.network_waits.clear()
-        self.identity.clear()
+        self.fullscreen.leave()
         self.wait_indicator.hide()
         qt.QApplication.instance().removeEventFilter(self)

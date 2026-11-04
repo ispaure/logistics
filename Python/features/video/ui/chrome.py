@@ -1,8 +1,7 @@
 """Docked video chrome: header, bounded picture, adjacent settings and control deck."""
-from pathlib import Path
-
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.readers.reader_chrome import ReaderFullscreen, ReaderLabel, reader_button
+from commonUtils.ui.readers.reader_chrome import ReaderLabel, reader_button
+from .presentation import VideoFullscreen
 from .controls import CachedSlider
 from .icons import video_button
 
@@ -20,37 +19,17 @@ class DockedChrome:
         self.header_layout = qt.QHBoxLayout(self.header)
         self.header_layout.setContentsMargins(12, 8, 12, 8)
         self.header_layout.setSpacing(4)
-        identity = qt.QWidget()
-        identity.setMinimumWidth(0)
-        identity.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
-        title = qt.QVBoxLayout(identity)
-        title.setContentsMargins(0, 0, 0, 0)
-        title.setSpacing(0)
-        self.identity = ReaderLabel(Path(self.content.path).name)
-        self.identity.setAccessibleName('Video filename')
-        font = self.identity.font()
-        font.setBold(True)
-        self.identity.setFont(font)
-        from services.documents.storage import document_sources
-        private = any(getattr(source, 'private', False) for source in document_sources(self.content.provider))
-        source = 'Cloud file' if self.content.remote else 'Local encrypted file' if private else 'Local file'
-        self.source_label = ReaderLabel(source, muted=True)
-        self.source_label.setAccessibleName('Video source')
-        title.addWidget(self.identity)
-        title.addWidget(self.source_label)
-        self.header_layout.addWidget(identity, 1)
-        self.favourite_button = self.button('Favourite file', 'star', self.favourite_file)
+        self.header_layout.addStretch(1)
+        self.favourite_button = self.button('Favourite file', 'heart', self.favourite_file)
         self.folder_button = self.button('Show in folder', 'folder', self.show_in_folder)
-        self.floating = self.button('Floating window', 'floating', self.toggle_floating)
-        self.floating.setCheckable(True)
-        self.header_buttons = [self.favourite_button, self.folder_button, self.floating]
+        self.header_buttons = [self.favourite_button, self.folder_button]
         if self.backend.capabilities.receivers:
             self.cast_button = self.button('Cast…', 'cast', self.show_receivers)
             self.header_buttons.append(self.cast_button)
         restricted = self.content.restricted or self.process_contexts
         for button in self.header_buttons:
             self.header_layout.addWidget(button)
-        for button in (self.floating, getattr(self, 'cast_button', None)):
+        for button in (getattr(self, 'cast_button', None),):
             if button is not None:
                 button.setEnabled(not restricted)
                 if restricted:
@@ -94,7 +73,7 @@ class DockedChrome:
         self.middle_layout.addWidget(self.settings_pane)
         outer.addWidget(self.middle, 1)
 
-        # Retain the deck/header allocations during full-screen hiding and lock.
+        # Retain windowed allocations while controls are locked.
         self.dock = qt.QWidget()
         deck = qt.QStackedLayout(self.dock)
         deck.setStackingMode(qt.QStackedLayout.StackingMode.StackAll)
@@ -156,7 +135,7 @@ class DockedChrome:
         self.tools_button = self.button('Playback tools', 'more', self.show_tools)
         self.fullscreen_action = qt.QAction('Full screen', self)
         self.fullscreen_action.setCheckable(True)
-        self.fullscreen = ReaderFullscreen(self, self.fullscreen_action)
+        self.fullscreen = VideoFullscreen(self, self.fullscreen_action)
         self.fullscreen_action.triggered.connect(self.toggle_fullscreen)
         self.fullscreen_button = reader_button(self, 'Full screen', action=self.fullscreen_action, icon='fullscreen')
         self.fullscreen_button.setMinimumSize(36, 36)
@@ -178,6 +157,7 @@ class DockedChrome:
         feedback.addWidget(self.undo_button)
         self.cache_label = qt.QLabel('Cache ≈' if self.content.remote else 'Local file')
         self.cache_label.setToolTip('Approximate cached byte ranges mapped to time.' if self.content.remote else 'Available locally.')
+        self.cache_label.setVisible(self.content.remote)
         feedback.addWidget(self.cache_label)
         layout.addLayout(feedback)
         # Loading/error feedback lives in the deck, never over the picture.
@@ -193,7 +173,7 @@ class DockedChrome:
         deck.addWidget(self.unlock_container)
         self.unlock_container.hide()
         outer.addWidget(self.dock)
-        for widget in (self.chrome, self.header, self.identity):
+        for widget in (self.chrome, self.header):
             policy = widget.sizePolicy()
             policy.setRetainSizeWhenHidden(True)
             widget.setSizePolicy(policy)
