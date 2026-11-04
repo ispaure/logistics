@@ -60,6 +60,11 @@ class Probe(LogisticsMobile):
         native = controls.template._impl.native
         if backend.startswith('toga_iOS.'):
             assert native.window is not None and native.bounds.size.height > 0
+            description = controls.description._impl.native
+            size_label = controls.format_label._impl.native
+            desc_frame = description.convertRect_toView_(description.bounds, controls._impl.native)
+            size_frame = size_label.convertRect_toView_(size_label.bounds, controls._impl.native)
+            assert desc_frame.origin.y + desc_frame.size.height <= size_frame.origin.y + 1, 'Template description overlaps size label'
         else:
             assert native.isShown() and native.getWidth() > 0 and native.getHeight() > 0
         await capture_window(self, self.evidence / (title + '-creation.png'))
@@ -84,6 +89,8 @@ class Probe(LogisticsMobile):
         replacement = self.notebook_panel
         assert replacement is not panel
         await self.idle(replacement)
+        await replacement.web.evaluate_javascript('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))')
+        await asyncio.sleep(.3)
         assert [p.template for p in replacement.editor.notebook.pages] == [p.template for p in original.pages]
         return replacement, original
 

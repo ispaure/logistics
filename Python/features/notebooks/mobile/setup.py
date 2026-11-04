@@ -17,8 +17,9 @@ class NotebookTemplateChoices(toga.Box):
         self.paper_format = toga.Selection(items=list(FORMATS.values()), style=Pack(height=48))
         self.description = FittedLabel('', style=Pack(margin_top=8))
         self.notice = FittedLabel(TEMPLATE_NOTICE, style=Pack(font_size=12, margin_top=8))
+        self.format_label = toga.Label('Template size', style=Pack(margin_top=8))
         self.add(toga.Label('First page template'), self.template, self.description,
-                 toga.Label('Template size', style=Pack(margin_top=8)), self.paper_format,
+                 self.format_label, self.paper_format,
                  self.notice)
         self.template.on_change = self.update_choice
         self.paper_format.on_change = self.update_choice
@@ -60,6 +61,13 @@ class NotebookTemplateChoices(toga.Box):
         self._width = width
         for label in (self.description, self.notice):
             fit_text(label, max(120, width - 40))
+            if type(label._impl).__module__.startswith('toga_iOS.'):
+                # UIKit's retained label can keep its previous intrinsic height
+                # after a template change adds wrapped lines. Reserve the actual
+                # measured text height before laying out the next form row.
+                rendered = getattr(label, '_settings_rendered_text', label.text)
+                label.style.height = int(float(label._impl.native.font.lineHeight)
+                                         * len(rendered.split('\n')) + 2)
 
 
 async def choose_new_notebook(app, *, name='Notebook'):
