@@ -111,11 +111,13 @@ UI thread; links follow the existing document navigation/save/history path.
 Desktop places a horizontally scrollable rich-text path beside history. Mobile
 keeps the filename in its title and places the complete folder breadcrumb between
 history and edit/actions on the next row. Both preserve every ancestor and start
-at the end of an overflowing path. `mobile/breadcrumbs.py` removes Toga's default
+at the end of an overflowing path. `features/notes_library/mobile/breadcrumbs.py` removes Toga's default
 100-unit scroll-container minimum, allowing a 320-point row to retain its right
 controls. It defers initial scrolling until native viewport/content measurements
 agree with the current layout; retries are bounded and cancelled for obsolete
 paths or disposal. Once positioned, ordinary user scrolling is left alone.
+Android breadcrumb buttons use the measured typeface and explicit spacing rather
+than native button insets, so their labels remain intact inside the scrollable path.
 Folder breadcrumbs open a landing page when present, otherwise reveal the folder
 in Files. Files retains its separate rule that only landing-page names are
 underlined. Closing or locking the library clears the displayed path.
@@ -134,6 +136,15 @@ native note history and edit/view handlers, live action menus, header hit tests,
 long titles and portrait/landscape rotation. `--family all` includes iPhone,
 iPad and the Duo closed/open/partial postures with the reviewed `--duoctl`
 helper. It uses isolated QA applications and disposable simulators.
+
+`python -m mobile_build.validation.document_storage_tools android --probe android-header`
+checks Notes and Settings → Help together on a disposable 360-dp phone viewport;
+add `--android-tablet` for the tablet allocation. The Notes checks use native taps
+for history, edit/view, Actions and ancestor navigation, swipe the breadcrumb back
+to its root, reject native label ellipses, and measure the title's actual control
+gutters through portrait/landscape/portrait. Host screenshots include the rendered
+WebView and popup menus. The selected Android image comes from the shared test
+environment settings.
 
 Focused validation covers folder-note underlines, folder browsing, narrow/wide
 ancestry, file-type transitions and history in desktop/mobile host suites. Native

@@ -14,6 +14,21 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class DocumentationHeaderProbe(NotesDrawersProbe):
+    async def capture_header(self, path):
+        if self.apple_probe:
+            return await capture_window(self, path)
+        # Host screencap includes accelerated WebViews and popup windows.
+        # PixelCopy callbacks can stall on cold software-rendered guests.
+        output = Path(self.paths.cache)
+        (output / 'header-capture.json').write_text(json.dumps(dict(name=path.stem)))
+        for _ in range(600):
+            done = output / 'header-capture-done'
+            if done.exists():
+                done.unlink()
+                return
+            await asyncio.sleep(.1)
+        raise AssertionError('Native header screenshot driver did not reply')
+
     async def probe(self):
         output = Path(self.paths.cache)
         evidence = output / 'viewer-layout'
@@ -33,8 +48,19 @@ class DocumentationHeaderProbe(NotesDrawersProbe):
             for orientation in ('portrait', 'landscape-left', 'portrait'):
                 # The tablet driver acknowledges this request before native rotation.
                 (output / 'creation-orientation').write_text(orientation)
-                await rotate(self, orientation, settle=.7)
+                # Cold software-rendered Android guests can take longer than
+                # the ordinary rotation budget to draw their system bars.
+                await rotate(self, orientation, settle=.7, timeout=None if self.apple_probe else 45)
                 self.adaptive.render()
+                # Native WebViews can still be loading after the surrounding
+                # toolbar is measured, especially on a cold Android guest.
+                for _ in range(200):
+                    if await owner.web.evaluate_javascript(
+                            'Boolean(document.querySelector("h1"))'):
+                        break
+                    await asyncio.sleep(.1)
+                else:
+                    raise AssertionError('Help article did not render before layout capture')
                 await asyncio.sleep(.5)
                 assert owner.commands.parent is (owner.article if owner.wide else owner.view)
                 assert owner.back_button.parent is owner.commands
@@ -46,7 +72,7 @@ class DocumentationHeaderProbe(NotesDrawersProbe):
                     label = self.native_host.adapter._reader_action_bar_title
                     title_width = float(label.getWidth()) / label.getResources().getDisplayMetrics().density
                 assert title_width >= 140, ('Title squeezed by controls', title_width)
-                await capture_window(self, evidence / ('help-article-' + orientation + '.png'))
+                await self.capture_header(evidence / ('help-article-' + orientation + '.png'))
                 owner.show_browse()
                 await asyncio.sleep(.4)
                 title = owner.rows.children[0].children[-1]._impl.native
@@ -55,7 +81,7 @@ class DocumentationHeaderProbe(NotesDrawersProbe):
                 else:
                     row_width = float(title.getWidth()) / title.getResources().getDisplayMetrics().density
                 assert row_width >= 140, ('Tree title squeezed', row_width)
-                await capture_window(self, evidence / ('help-tree-' + orientation + '.png'))
+                await self.capture_header(evidence / ('help-tree-' + orientation + '.png'))
                 owner.sidebar.show_detail()
                 owner.reading = True
                 report['samples'].append(dict(orientation=orientation, title_width=title_width,

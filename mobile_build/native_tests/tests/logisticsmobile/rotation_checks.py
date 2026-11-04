@@ -60,7 +60,7 @@ def pose_snapshot(app):
 
 
 
-async def rotate(app, orientation, *, settle=ROTATION_SETTLE):
+async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
     from .timings import section, measure
     rotation = NativeRotation(app.main_window,
                               activity=app._impl.native if sys.platform != 'ios' else None)
@@ -71,7 +71,8 @@ async def rotate(app, orientation, *, settle=ROTATION_SETTLE):
         rotation.request(orientation, on_rejected=rejected)
     with section(app, 'rotation-acknowledgement', orientation=orientation):
         from commonUtils.testing.settings import ROTATION_TIMEOUT
-        await wait_until(lambda: rotation.acknowledged(orientation), timeout=ROTATION_TIMEOUT,
+        await wait_until(lambda: rotation.acknowledged(orientation),
+                         timeout=ROTATION_TIMEOUT if timeout is None else timeout,
                          message='Native rotation did not complete: ' + orientation)
     await measure(app, 'rotation-post-ack-settle', asyncio.sleep(settle), orientation=orientation)
 
