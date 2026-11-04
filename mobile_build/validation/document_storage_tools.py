@@ -516,7 +516,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     finally:
         try:
             if record is not None:
-                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe', '.documentation_header_probe')):
+                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe', '.notes_markdown_feedback_probe', '.documentation_header_probe')):
                     import io
                     import tarfile
                     archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
@@ -594,7 +594,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-markdown-feedback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -700,6 +700,9 @@ def main():
         if args.probe == 'workspace-move':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.workspace_move_probe', result_name='workspace-move-result.json')
+        if args.probe == 'notes-markdown-feedback':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.notes_markdown_feedback_probe', result_name='notes-markdown-feedback-result.json')
         if args.probe == 'control-center':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.control_center_probe', result_name='control-center-result.json')
