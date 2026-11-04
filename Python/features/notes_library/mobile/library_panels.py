@@ -1,4 +1,4 @@
-"""Files, Search and Calendar panels with a pinned library footer."""
+"""Files, Search and Calendar panels with compact commands below the tabs."""
 import asyncio
 import calendar
 import posixpath
@@ -27,12 +27,6 @@ class LibraryPanels:
         self.file_command_busy = False
         self.daily_opening = False
         children = list(self.tree.children)
-        metadata = children[1]
-        metadata.style.font_size = CAPTION_FONT
-        metadata.style.font_style = 'italic'
-        metadata.style.margin_bottom = 0
-        self.host.presentation.surface(metadata, radius=0, background='transparent', foreground='muted',
-                                       outlined=False, eink_outlined=False)
         self.files_content = toga.Box(children=[], style=Pack(direction=COLUMN, flex=1))
         for child in children[2:]:
             self.tree.remove(child)
@@ -81,13 +75,8 @@ class LibraryPanels:
         self.panel_body = toga.Box(children=[self.files_content], style=Pack(direction=COLUMN, flex=1))
         self.panel_body.style.margin_left = self.panel_body.style.margin_right = 8
         self.panel_body.style.margin_top = 8
-        self.panel_actions = toga.Box(style=Pack(direction=ROW, gap=4))
-        self.panel_footer = toga.Box(children=[self.panel_actions],
-            style=Pack(direction=COLUMN, margin_left=8, margin_right=8, margin_bottom=8))
-        self.panel_identity = toga.Box(children=[metadata], style=Pack(direction=ROW, align_items='center'))
-        self.panel_footer.add(self.panel_identity)
-        self.panel_metadata = metadata
-        self.tree.add(tabs, self.panel_body, self.panel_footer)
+        self.panel_actions = toga.Box(style=Pack(direction=ROW, gap=4, justify_content='center'))
+        self.tree.add(tabs, self.panel_actions, self.panel_body)
         self.search_mode.items = ['Search within Documents', 'Search in File Names']
         self.search_mode.value = 'Search in File Names'
         self.sync_search_scope()
@@ -151,13 +140,6 @@ class LibraryPanels:
                 button = presentation.icon_button(icon, label, on_press=callback)
                 presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
                 self.panel_actions.add(button)
-        self.panel_actions.add(toga.Box(style=Pack(flex=1)))
-        self.panel_menu_button = presentation.icon_button('more', 'Library actions')
-        presentation.surface(self.panel_menu_button, radius=0, background='transparent', foreground='muted', outlined=False)
-        self.panel_actions.add(self.panel_menu_button)
-        self.panel_menu = self.host.commands(self.panel_menu_button,
-            [('Browse library root', self.browse_library_root), ('All documents', self.host.show_documents)],
-            self.browse_library_root)
 
     async def browse_library_root(self, widget=None, **kwargs):
         if not self.valid():
@@ -183,10 +165,6 @@ class LibraryPanels:
             self.panel_body.add(selected)
         for key, button in self.panel_tabs.items():
             self.style_panel_tab(key, key == name)
-        if name == 'Files' and self.panel_actions.parent is None:
-            self.panel_footer.insert(0, self.panel_actions)
-        elif name != 'Files' and self.panel_actions.parent is not None:
-            self.panel_footer.remove(self.panel_actions)
         if name != 'Search':
             self.search_generation += 1
             if self.search_task is not None:
@@ -553,11 +531,6 @@ class LibraryPanels:
             self.file_command_busy = False
 
     def dispose_panels(self):
-        if hasattr(self, 'panel_menu'):
-            self.panel_menu.dispose()
-        if hasattr(self, 'root_drop_button'):
-            self.root_drop_button.text = 'Notes Library'
-            self.root_drop_button.enabled = False
         self.clear_file_action()
         self.calendar_generation += 1
         if self.calendar_task is not None:

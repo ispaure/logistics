@@ -92,8 +92,18 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.note_controls = qt.QWidget()
         note_controls = qt.QHBoxLayout(self.note_controls)
         note_controls.setContentsMargins(0, 0, 0, 0)
-        self.new_note_button = qt.QPushButton('New Document')
-        self.new_folder_button = qt.QPushButton('New folder')
+        from commonUtils.ui.appearance.icons import set_painted_icon
+        from .library_icons import ActionArtwork
+        self.new_note_button = qt.QToolButton()
+        self.new_folder_button = qt.QToolButton()
+        self.collapse_button = qt.QToolButton()
+        for button, icon, label in ((self.new_note_button, 'edit', 'New document'),
+                                    (self.new_folder_button, 'folder_add', 'New folder'),
+                                    (self.collapse_button, 'collapse', 'Collapse all folders')):
+            set_painted_icon(button, ActionArtwork, icon)
+            button.setAccessibleName(label)
+            button.setToolTip(label)
+        self.collapse_button.clicked.connect(self.tree.collapseAll)
         self.rename_button = qt.QPushButton('Rename / Move…')
         self.file_actions_button = qt.QToolButton()
         self.file_actions_button.setText('…')
@@ -103,8 +113,10 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.new_note_button.clicked.connect(self.new_note)
         self.new_folder_button.clicked.connect(lambda: self.new_entry(folder=True))
         self.rename_button.clicked.connect(self.rename_entry)
-        for button in (self.new_note_button, self.new_folder_button, self.rename_button, self.file_actions_button):
+        note_controls.addStretch()
+        for button in (self.new_note_button, self.new_folder_button, self.collapse_button, self.rename_button, self.file_actions_button):
             note_controls.addWidget(button)
+        note_controls.addStretch()
         self.note_controls.setVisible(not remote)
         side.addWidget(self.note_controls)
         side.addWidget(self.tree)
