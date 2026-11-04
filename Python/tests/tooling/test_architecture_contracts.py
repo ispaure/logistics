@@ -11,6 +11,31 @@ from Scripts.architecture import ROOT, check, feature_edges, portable_sources, r
 
 
 class ArchitectureTests(unittest.TestCase):
+    def test_mobile_feature_adapters_do_not_import_application_host(self):
+        for owner in ('rclone', 'lm', 'text_editor', 'notes_library'):
+            for path in (ROOT / 'Python/features' / owner).rglob('*.py'):
+                if 'mobile' not in path.relative_to(ROOT / 'Python/features').parts:
+                    continue
+                with self.subTest(source=path.relative_to(ROOT)):
+                    found = references(path, ROOT / 'Python')
+                    self.assertFalse(any(name == 'mobile' or name.startswith('mobile.')
+                                         for name in found), str(path))
+
+    def test_mobile_host_imports_and_deferred_references_are_architecture_edges(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / 'Python/features/rclone/localcrypt/mobile'
+            folder.mkdir(parents=True)
+            path = folder / 'adapter.py'
+            for source, host in (
+                    ('import mobile\n', 'mobile'),
+                    ('from mobile import runtime\n', 'mobile'),
+                    ('def load():\n    import mobile.runtime\n', 'mobile.runtime'),
+                    ("HOST = 'mobile.runtime:Host'\n", 'mobile.runtime')):
+                with self.subTest(source=source):
+                    path.write_text(source)
+                    self.assertIn((path.relative_to(root).as_posix(), host), feature_edges(root)[0])
+
     def test_packaged_asset_names_do_not_hide_real_module_references(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
