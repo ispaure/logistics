@@ -179,7 +179,7 @@ function selectionMove(e) {
   } else {
     const r=canvas.getBoundingClientRect();last=[(e.clientX-r.left)/r.width*state.width,(e.clientY-r.top)/r.height*state.height,.5];
     if(g.kind==='move') {g.dx=last[0]-start[0];g.dy=last[1]-start[1]}
-    if(g.kind==='scale')g.scale=Math.max(.05,Math.min(20,Math.hypot(last[0]-g.cx,last[1]-g.cy)/Math.max(1,Math.hypot(start[0]-g.cx,start[1]-g.cy))));
+    if(g.kind==='scale')g.scale=Math.max(.05,Math.min(20,Math.hypot(last[0]-g.cx,last[1]-g.cy)/Math.max(1e-6,Math.hypot(start[0]-g.cx,start[1]-g.cy))));
     if(g.kind==='rotate') {
       // Angular motion naturally gets finer as the pointer moves farther from
       // the centre. Integrate wrapped deltas to avoid a jump across +/- pi.
