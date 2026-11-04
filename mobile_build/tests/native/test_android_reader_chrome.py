@@ -64,7 +64,7 @@ class AndroidReaderChromeTests(unittest.TestCase):
             _native_reader_title=lambda: 'Document.md', _native_reader_toolbar=widget(),
             _workspace_frame=self.frame)
         frame_class = Mock(side_effect=Native)
-        frame_class.LayoutParams.side_effect = lambda *args: NS()
+        frame_class.LayoutParams.side_effect = lambda *args: NS(setMarginStart=Mock(), setMarginEnd=Mock())
         linear_class = Mock(side_effect=Native)
         linear_class.LayoutParams.side_effect = lambda *args: NS()
         modules = {
@@ -76,6 +76,20 @@ class AndroidReaderChromeTests(unittest.TestCase):
         }
         self.enterContext(patch.dict('sys.modules', modules))
         self.detach = self.enterContext(patch('mobile.workspace_navigation.detach'))
+
+    def test_title_gutters_follow_layout_direction(self):
+        from commonUtils.ui.native.bars import android_bar
+        leading, trailing = [widget(), widget()], [widget()]
+        # Inspect the native mounting parameters rather than emulating Android's
+        # resolution of logical margins in left-to-right/right-to-left layouts.
+        import sys
+        frame = sys.modules['android.widget'].FrameLayout
+        allocations = []
+        frame.LayoutParams.side_effect = lambda *args: allocations.append(
+            NS(setMarginStart=Mock(), setMarginEnd=Mock())) or allocations[-1]
+        android_bar(self.app._impl.native, leading, trailing)
+        allocations[0].setMarginStart.assert_called_once_with(96)
+        allocations[0].setMarginEnd.assert_called_once_with(48)
 
     def test_notes_title_has_a_hold_target_and_all_actions_fit_or_scroll(self):
         from mobile.android_reader_chrome import fit_document_title
