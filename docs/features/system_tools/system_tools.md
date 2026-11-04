@@ -6,3 +6,5 @@ Choose a guide for the task you want to complete.
 
 - [System Tools Feature](development/development.md)
 - [Run system maintenance actions](user/user.md)
+
+- [Mobile availability](user_mobile/user_mobile.md)
