@@ -244,11 +244,12 @@ def main(output):
                 view = owner
                 view.setHtml(mobile_editor_html(Editor(Notebook.new('Notebook appearance and zoom')).state(),
                                                'logistics-notebook://view-probe/', console_bridge=True))
+            name = 'desktop' if desktop else 'mobile'
+            report = dict(presentation=name)
             try:
                 owner.resize(1200, 900)
                 owner.show()
                 wait(lambda: js(view, "!!document.getElementById('zoomLevel')"))
-                name = 'desktop' if desktop else 'mobile'
                 check_blend_commit(view, name)
                 for dark in (False, True):
                     mode = 'dark' if dark else 'light'
@@ -261,16 +262,33 @@ def main(output):
                         owner.resize(width, height)
                         QTest.qWait(150)
                         report = json.loads(js(view, CHECKS))
+                        report.update(presentation=name, mode=mode, width=width, height=height)
                         assert report['success'], report
                         expected_surface = configured_colors(dark).surface if desktop else (
                             '#2d3035' if dark else '#fafbfc')
                         assert report['chrome'] == 'rgb' + str(qt.QColor(expected_surface).getRgb()[:3]), report
                         assert contrast_ratio(argb(report['error_color']), argb(expected_surface)) >= 4.5, report
                         # A real viewport resize during a pen stroke waits for cancellation/pen-up.
-                        paper_width = js(view, "setZoom('page');active=700;canvas.getBoundingClientRect().width")
-                        owner.resize(width - 40, height - 100)
-                        QTest.qWait(150)
-                        assert js(view, 'viewportResizePending&&canvas.getBoundingClientRect().width') == paper_width
+                        original_size = owner.size()
+                        resize_state = """JSON.stringify({pending:viewportResizePending,active,scheduled:resizeFrame!==null,
+                            paper:canvas.getBoundingClientRect().width,
+                            viewport:[$('viewport').clientWidth,$('viewport').clientHeight],
+                            inner:[innerWidth,innerHeight]})"""
+                        js(view, "setZoom('page');active=700")
+                        before_resize = json.loads(js(view, resize_state))
+                        paper_width = before_resize['paper']
+                        # Native window managers can clamp the requested layout size.
+                        # Shrink the actual window, and observe browser resize delivery
+                        # plus its deferred frame instead of assuming a 150 ms delay.
+                        owner.resize(original_size.width() - 40, original_size.height() - 100)
+                        def deferred_resize():
+                            current = json.loads(js(view, resize_state))
+                            report['deferred_resize'] = dict(before=before_resize, after=current,
+                                owner_before=[original_size.width(), original_size.height()],
+                                owner_after=[owner.width(), owner.height()])
+                            return current['pending'] and current['inner'] != before_resize['inner']
+                        wait(deferred_resize, 'browser resize deferred during pen input')
+                        assert report['deferred_resize']['after']['paper'] == paper_width, report
                         clears = js(view, """(()=>{
                             const clear=ctx.clearRect;let count=0;
                             ctx.clearRect=function(...args){count++;return clear.apply(this,args)};
@@ -280,8 +298,10 @@ def main(output):
                         assert clears == 1, ('Cancellation with a pending viewport resize replayed the page', clears)
 
                         assert js(view, '!viewportResizePending&&canvas.getBoundingClientRect().width') != paper_width
-                        owner.resize(width, height)
-                        QTest.qWait(150)
+                        owner.resize(original_size)
+                        wait(lambda: js(view, 'resizeFrame===null&&!viewportResizePending&&JSON.stringify([innerWidth,innerHeight])')
+                             == json.dumps(before_resize['inner'], separators=(',', ':')),
+                             'browser viewport restored after pen cancellation')
                         if desktop:
                             data = json.loads(js(view, "JSON.stringify({scale:canvas.getBoundingClientRect().width/state.width,box:$('viewport').getBoundingClientRect().toJSON()})"))
                             box = data['box']
@@ -297,7 +317,6 @@ def main(output):
                             assert view.zoomFactor() == 1
                             report['native_qt_pinch'] = True
                             js(view, "setZoom('page')")
-                        report.update(presentation=name, mode=mode, width=width, height=height)
                         reports.append(report)
                         # Capture expanded drawing controls as well as the white page.
                         js(view, "$('erase').click()" if desktop else "$('brushToggle').click()")
@@ -305,6 +324,11 @@ def main(output):
                         view.grab().save(str(output / f'{name}-{mode}-{width}x{height}.png'))
                         js(view, "$('closeEraser').click()" if desktop else
                            "$('mobileSheet').querySelector('.sheet-heading button').click()")
+            except Exception as error:
+                report['error'] = repr(error)
+                view.grab().save(str(output / (name + '-failure.png')))
+                (output / 'view-checks.json').write_text(json.dumps(reports + [report], indent=2) + '\n')
+                raise
             finally:
                 if desktop:
                     owner.dispose()
