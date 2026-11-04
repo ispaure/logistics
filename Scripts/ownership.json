@@ -361,7 +361,8 @@
       "guide": "docs/features/youtube_downloader/development/development.md",
       "tests": {
         "desktop": [
-          "test_youtube_downloader*.py"
+          "test_youtube_downloader*.py",
+          "test_youtube_worker_ui.py"
         ]
       }
     },
