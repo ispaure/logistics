@@ -13,6 +13,8 @@ class Editor:
         self.index = 0
         self.undo = []
         self.redo = []
+        self._stroke_clipboard = []
+        self._selection_ids = []
         self._background = (None, None)
         self._unlocked_pdf = None
         self._pdf_geometry = (None, None)
@@ -141,6 +143,12 @@ class Editor:
     def apply(self, action):
         op = validate_action(action)
         book = self.notebook
+        self._selection_ids = []
+        if op == 'copy-strokes':
+            ink = book.page(self.index)
+            self._stroke_clipboard = deepcopy(self.selected_strokes(ink, action['ids']))
+            self._selection_ids = [s.id for s in self._stroke_clipboard]
+            return
         if op == 'unlock-pdf':
             self.pdf_data(action['password'])
             return
@@ -163,9 +171,40 @@ class Editor:
                 source.pop()
                 target.append(previous)
             return
+        selection_indexes = []
+        clipboard = self._stroke_clipboard
         try:
             ink = book.page(self.index)
-            if op == 'stroke':
+            if op == 'cut-strokes':
+                if ink.warning:
+                    raise ValueError(ink.warning)
+                clipboard = deepcopy(self.selected_strokes(ink, action['ids']))
+                ids = {s.id for s in clipboard}
+                ink.strokes = [s for s in ink.strokes if s.id not in ids]
+                ink.order = [key for key in ink.order if key not in ids]
+                if ink.images:
+                    ink.ordering_dirty = True
+            elif op == 'paste-strokes':
+                from uuid import uuid4
+                from .ink import MAX_PAGE_POINTS
+                if ink.warning:
+                    raise ValueError(ink.warning)
+                visible = [key for key, _, shown in ink.layers if shown]
+                if not visible or not self._stroke_clipboard:
+                    raise ValueError('Copy strokes and choose a visible ink layer first.')
+                copies = deepcopy(self._stroke_clipboard)
+                if sum(len(s.points) for s in [*ink.strokes, *copies]) > MAX_PAGE_POINTS:
+                    raise ValueError('Too many points on this page.')
+                for stroke in copies:
+                    if any(not 0 <= x <= WIDTH or not 0 <= y <= self.page_height() for x, y, _, _ in stroke.points):
+                        raise ValueError('Keep pasted strokes inside the page.')
+                    stroke.id, stroke.layer = uuid4().hex, visible[-1]
+                selection_indexes = list(range(len(ink.strokes), len(ink.strokes) + len(copies)))
+                ink.strokes = [*ink.strokes, *copies]
+                ink.order = [*ink.order, *(s.id for s in copies)]
+                if ink.images:
+                    ink.ordering_dirty = True
+            elif op == 'stroke':
                 ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
                         action.get('width', 2), action.get('layer'), page_height=self.page_height())
             elif op == 'paste-image':
@@ -214,15 +253,28 @@ class Editor:
                 if ink.warning:
                     raise ValueError(ink.warning)
                 import math
+                self.selected_strokes(ink, action['ids'])
+                selected_ids = set(action['ids'])
                 dx, dy = action['dx'], action['dy']
-                if any(type(v) not in (float, int) or not math.isfinite(v) for v in (dx, dy)):
-                    raise ValueError('Invalid stroke movement.')
+                scale, angle = action.get('scale', 1), action.get('angle', 0)
+                cx, cy = action.get('cx', 0), action.get('cy', 0)
+                cosine, sine = math.cos(angle), math.sin(angle)
                 for index, stroke in enumerate(ink.strokes):
-                    if stroke.id in action['ids']:
+                    if stroke.id in selected_ids:
+                        selection_indexes.append(index)
+                        if (dx, dy, scale, angle) == (0, 0, 1, 0):
+                            continue
                         moved = deepcopy(stroke)
-                        moved.points = [[x + dx, y + dy, p, w] for x, y, p, w in stroke.points]
-                        if any(not 0 <= x <= WIDTH or not 0 <= y <= self.page_height() for x, y, p, w in moved.points):
-                            raise ValueError('Keep moved strokes inside the page.')
+                        moved.points = [[cx + scale * ((x-cx)*cosine - (y-cy)*sine) + dx,
+                                         cy + scale * ((x-cx)*sine + (y-cy)*cosine) + dy,
+                                         p, w * scale] for x, y, p, w in stroke.points]
+                        moved.scale *= scale
+                        if not math.isfinite(moved.scale) or moved.scale <= 0:
+                            raise ValueError('Invalid native stroke scale.')
+                        if any(not 0 <= x <= WIDTH or not 0 <= y <= self.page_height()
+                               or not math.isfinite(w) or not 0 <= w <= 65535 / 4
+                               for x, y, p, w in moved.points):
+                            raise ValueError('Keep transformed strokes inside the page and supported width range.')
                         ink.strokes[index] = moved
             elif op == 'erase':
                 old_ids = {s.id for s in ink.strokes}
@@ -276,9 +328,22 @@ class Editor:
         except Exception:
             self.restore(previous)
             raise
+        self._stroke_clipboard = clipboard
+        self._selection_ids = [book.page(self.index).strokes[i].id for i in selection_indexes]
         self.undo.append(previous)
         del self.undo[:-50]
         self.redo.clear()
+
+    @staticmethod
+    def selected_strokes(ink, ids):
+        shown = {key for key, _, visible in ink.layers if visible}
+        wanted = set(ids)
+        chosen = [s for s in ink.strokes if s.id in wanted and s.layer in shown]
+        if not wanted or {s.id for s in chosen} != wanted:
+            raise ValueError('Select visible strokes first.')
+        # Follow scene order when copied ink overlaps images or other strokes.
+        order = {key: i for i, key in enumerate(ink.order)}
+        return sorted(chosen, key=lambda s: order.get(s.id, len(order)))
 
     def state(self):
         from .templates import CATALOG, settings, background, view_bounds, template_name, available, TEMPLATE_NOTICE, description
@@ -291,7 +356,7 @@ class Editor:
             if pdf else description(page.template, artwork_available=template_available))
         from .images import image_payloads
         locked = self.notebook.content.get('fileType') == 'pdf' and self.pdf_data() is None
-        return dict(links=self.page_links() if pdf and not locked else [], password_required=locked, images=image_payloads(self.notebook, self.index),
+        return dict(stroke_clipboard=bool(self._stroke_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=image_payloads(self.notebook, self.index),
                     scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,

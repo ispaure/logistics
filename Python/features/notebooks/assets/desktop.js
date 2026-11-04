@@ -106,10 +106,11 @@ function syncChrome() {
     $(id).classList.toggle('active', mode === id);
     $(id).setAttribute('aria-pressed', String(mode === id))
   }
-  $('toolHint').textContent = mode === 'erase' ? (eraserKind === 'whole' ? 'Erase whole strokes' : 'Erase parts of strokes') : mode === 'select' ? 'Select one stroke, then drag' : $('tool').selectedOptions[0]?.textContent || 'Choose your instrument';
+  $('toolHint').textContent = mode === 'erase' ? (eraserKind === 'whole' ? 'Erase whole strokes' : 'Erase parts of strokes') : mode === 'select' ? 'Lasso strokes; drag the box or its handles' : $('tool').selectedOptions[0]?.textContent || 'Choose your instrument';
   canvas.style.cursor = mode === 'select' ? 'move' : mode === 'erase' ? 'cell' : 'crosshair';
 }
 $('ink').onclick = () => {
+  if (active !== null) return;
   mode = 'ink';
   selected.clear();
   draw();

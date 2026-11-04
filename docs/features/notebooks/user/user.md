@@ -32,8 +32,16 @@ in Settings. The paper and PDF backgrounds stay white; ink colors are unchanged.
 Colors appear directly in the toolbar; the toolbar wraps when the window narrows. Hover an
 icon for its name. Pick a brush directly with keys `1`–`9`, or click its icon;
 use `B` for Draw, `E` for Eraser settings and `V` for Select and Move.
-Single-key drawing shortcuts leave text fields alone. Select and Move picks the
-topmost stroke at the pointer, then moves it by dragging. On narrow windows the
+Single-key drawing shortcuts leave text fields alone. Select and Move draws a
+dashed lasso with the mouse, pen or finger. Only fully enclosed strokes on visible
+layers are selected; partly enclosed strokes are omitted. Drag inside the resulting
+box to move the selection. Its four square corner handles scale uniformly; the
+circle above its top edge rotates. Moving farther from the centre gives finer
+rotation control. **Copy**, **Cut** and **Delete** appear below the box.
+**Paste strokes** pastes into the current page at the original page position,
+regardless of zoom or scroll. This private stroke clipboard lasts until the editor
+closes and is separate from Capture's image clipboard. Undo/Redo covers edits;
+Copy does not change the page. On narrow windows the
 toolbar wraps while the page keeps the full content width.
 
 Use **File → Save** (`Ctrl`/`⌘ S`) and **Save As…** (`Ctrl`/`⌘ Shift S`) to save.
@@ -136,8 +144,7 @@ EPUB-backed archives remain unsupported.
 
 The page surface uses 1404 × 1872 notebook units. Supported templates render beneath
 the ink; unrecognized template references remain preserved with an artwork notice.
-Stroke selection currently moves one stroke;
-there is no multi-stroke lasso, OCR, cloud sync or exact brush
+There is no OCR, cloud sync or exact brush
 texture simulation. Archives are limited to 32 MiB compressed, 128 MiB expanded,
 4096 members and 1000 pages. Very long strokes or densely populated pages can
 reach editing limits; rejected edits keep the previous saved content. Error
