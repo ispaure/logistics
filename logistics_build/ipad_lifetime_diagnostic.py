@@ -20,7 +20,11 @@ BASE_FINGERPRINT = '6d81d272c85f97334b43a0aaa3d745ad808631b4f0ef22aadae6679c9196
 BUNDLE = 'io.github.ispaure.logisticsmobile'
 MODEL = 'com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-16GB'
 RUNTIME = 'com.apple.CoreSimulator.SimRuntime.iOS-27-0'
-MAX_ALLOCATOR = 2 * 1024 ** 3
+MAX_ALLOCATOR = 8 * 1024 ** 3
+MIN_SCRATCH_FREE = 12 * 1024 ** 3
+MAX_TRUNCATED_CAPTURE = 64 * 1024 ** 2
+MAX_GROWTH_SAMPLES = 1024
+MIN_DISK_RESERVE = 512 * 1024 ** 2
 MAX_TRACE = 64 * 1024 ** 2
 
 
@@ -137,11 +141,54 @@ def allocator_size(directory):
 
 
 class AllocatorFiles:
-    """Own bounded read-only inode handles, including logs unlinked at exit."""
-    def __init__(self):
-        self.files = {}
+    """Bounded read-only inode handles, durable growth and honest partial capture."""
+    def __init__(self, growth_path=None, *, scratch_path=None, clock=time.monotonic):
+        self.files, self.samples, self.pending_files = {}, [], []
+        self.growth_path, self.clock = growth_path, clock
+        self.started = clock()
+        self.scratch_path, self.directory = scratch_path, None
+        self.latest = None
+        self.stop_reason = None
+
+    @staticmethod
+    def metadata(info, name):
+        blocks = getattr(info, 'st_blocks', None)
+        return dict(original_name=name, device=info.st_dev, inode=info.st_ino,
+                    logical_bytes=info.st_size, st_blocks=blocks,
+                    allocated_bytes=blocks * 512 if blocks is not None else None)
+
+    def persist_sample(self, pending=None):
+        if pending is not None:
+            self.pending_files = [dict(row, unopened=True) for row in pending]
+        pending = self.pending_files
+        files = [self.metadata(os.fstat(descriptor), name) for descriptor, name in self.files.values()]
+        files.extend(pending)
+        logical = sum(row['logical_bytes'] for row in files)
+        allocated = (sum(row['allocated_bytes'] for row in files)
+                     if all(row['allocated_bytes'] is not None for row in files) else None)
+        now = self.clock()
+        scratch = self.scratch_path or self.directory
+        output = Path(self.growth_path).parent if self.growth_path is not None else self.directory
+        scratch_free = shutil.disk_usage(scratch).free
+        output_free = shutil.disk_usage(output).free
+        sample = dict(scratch_free_bytes=scratch_free, output_free_bytes=output_free,
+                      disk_reserve_bytes=MIN_DISK_RESERVE, captured_ns=time.time_ns(), monotonic_s=now, elapsed_s=now - self.started,
+                      logical_bytes=logical, allocated_bytes=allocated,
+                      st_blocks=sum(row['st_blocks'] for row in files)
+                      if all(row['st_blocks'] is not None for row in files) else None,
+                      file_count=len(files), file_count_is_lower_bound=bool(pending),
+                      open_fds=len(self.files))
+        self.latest = dict(sample, files=files)
+        self.samples.append(sample)
+        self.samples = self.samples[-MAX_GROWTH_SAMPLES:]
+        if self.growth_path is not None:
+            save(self.growth_path, dict(schema=1, diagnostic_only=True, logical_budget=MAX_ALLOCATOR,
+                 max_samples=MAX_GROWTH_SAMPLES, samples=self.samples, latest=self.latest,
+                 note='st_size is logical file length; st_blocks*512 measures allocated filesystem bytes, not RAM.'))
+        return logical
 
     def observe(self, directory):
+        self.directory = Path(directory)
         for path in directory.rglob('*'):
             if path.is_symlink():
                 raise ValueError('Allocator evidence must not contain links.')
@@ -152,38 +199,79 @@ class AllocatorFiles:
             if key in self.files:
                 continue
             if len(self.files) >= 128:
-                raise ValueError('Too many allocator evidence files.')
+                self.persist_sample([self.metadata(info, path.relative_to(directory).as_posix())])
+                self.stop_reason = 'allocator-fd-limit'
+                raise ValueError('Too many allocator evidence files; sample includes at least 129 files.')
             descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
             opened = os.fstat(descriptor)
             if (opened.st_dev, opened.st_ino) != key:
                 os.close(descriptor)
                 raise ValueError('Allocator evidence changed while opening.')
             self.files[key] = (descriptor, path.relative_to(directory).as_posix())
-        size = sum(os.fstat(descriptor).st_size for descriptor, _ in self.files.values())
-        if size > MAX_ALLOCATOR:
-            raise ValueError('Allocator evidence exceeded its 2 GiB budget.')
-        return size
+        # Persist first: even the sample that rejects the run remains evidence.
+        logical = self.persist_sample()
+        if min(self.latest['scratch_free_bytes'], self.latest['output_free_bytes']) < MIN_DISK_RESERVE:
+            self.stop_reason = 'disk-reserve'
+            raise ValueError('Diagnostic disk reserve fell below 512 MiB; retained rejecting growth sample.')
+        if logical > MAX_ALLOCATOR:
+            self.stop_reason = 'allocator-logical-budget'
+            raise ValueError('Allocator evidence exceeded its 8 GiB logical budget.')
+        return logical
 
     def capture(self, output):
-        if sum(os.fstat(descriptor).st_size for descriptor, _ in self.files.values()) > MAX_ALLOCATOR:
-            raise ValueError('Retained allocator evidence exceeds its capture budget.')
         output.mkdir(parents=True, exist_ok=True)
+        logical = self.persist_sample()
+        free = shutil.disk_usage(output).free
+        reason = self.stop_reason
+        if logical > MAX_ALLOCATOR:
+            reason = reason or 'allocator-logical-budget'
+        if free < logical + MAX_TRUNCATED_CAPTURE:
+            reason = reason or 'insufficient-free-space-for-complete-copy'
+        if not self.files:
+            reason = reason or 'no-allocator-files-observed'
+        partial = reason is not None
+        remaining_budget = min(MAX_TRUNCATED_CAPTURE, max(0, free - 1024 * 1024)) if partial else logical
         records = []
         for index, ((device, inode), (descriptor, name)) in enumerate(self.files.items()):
-            target = output / ('inode-' + str(index))
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            size = os.fstat(descriptor).st_size
-            with target.open('wb') as stream:
-                remaining = size
-                while remaining:
-                    block = os.read(descriptor, min(1024 * 1024, remaining))
-                    if not block:
-                        raise ValueError('Allocator evidence ended before its recorded size.')
-                    stream.write(block)
-                    remaining -= len(block)
-            records.append(dict(original_name=name, device=device, inode=inode, bytes=size,
-                                retained_file=target.name, sha256=digest(target)))
+            info = os.fstat(descriptor)
+            size = info.st_size
+            amount = min(size, remaining_budget)
+            remaining_budget -= amount
+            truncated = amount < size
+            target = output / ('inode-' + str(index) + ('.TRUNCATED' if truncated else '')) if amount else None
+            if target is not None:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                with target.open('wb') as stream:
+                    remaining = amount
+                    while remaining:
+                        block = os.read(descriptor, min(1024 * 1024, remaining))
+                        if not block:
+                            raise ValueError('Allocator evidence ended before its recorded size.')
+                        stream.write(block)
+                        remaining -= len(block)
+            after = os.fstat(descriptor)
+            changed = after.st_size != size or after.st_mtime_ns != info.st_mtime_ns
+            truncated = truncated or changed
+            if changed and target is not None and not target.name.endswith('.TRUNCATED'):
+                renamed = target.with_name(target.name + '.TRUNCATED')
+                target.rename(renamed)
+                target = renamed
+            records.append(dict(self.metadata(info, name), bytes=size, captured_bytes=amount,
+                source_logical_bytes_after=after.st_size, source_changed_during_capture=changed,
+                truncated=truncated, complete=not truncated, retained_file=target.name if target else None,
+                sha256=digest(target) if target else None))
+        if not reason and any(row['truncated'] for row in records):
+            reason = 'allocator-grew-during-capture'
         save(output / 'index.json', records)
+        save(output / 'capture-metadata.json', dict(schema=1, diagnostic_only=True,
+            complete=not partial and all(row['complete'] for row in records),
+            history_incomplete=partial or any(row['truncated'] for row in records), reason=reason,
+            source_logical_bytes=logical, source_allocated_bytes=self.latest['allocated_bytes'],
+            captured_bytes=sum(row['captured_bytes'] for row in records), capture_free_bytes=free,
+            prefix_budget=MAX_TRUNCATED_CAPTURE if partial else None, logical_budget=MAX_ALLOCATOR,
+            atomic_allocator_snapshot=False,
+            unopened_files=self.pending_files,
+            completeness_scope='Observed file lengths copied; live in-place writes cannot be proven absent.'))
         return records
 
     def close(self):
@@ -249,6 +337,8 @@ def summary(receipt):
                 original_suite_success=actual.get('success'), completed_cases=len(actual.get('cases', [])),
                 expected_cases=len(actual.get('expected_cases', [])), original_error=actual.get('error'),
                 capture_errors=receipt.get('capture_errors', []), cleanup=receipt.get('cleanup'),
+                allocator_history_complete=(receipt.get('allocator_capture') or {}).get('complete'),
+                allocator_capture_reason=(receipt.get('allocator_capture') or {}).get('reason'),
                 release_acceptance=False)
 
 
@@ -307,6 +397,9 @@ def finish(cache, output, client, device, name, pid, started, receipt, allocator
     # Ordering is the contract: capture first, teardown second, persist outcome.
     try:
         receipt['capture_errors'] = collect(cache, output, client, device, pid, started, allocator_files)
+        metadata = output / 'retained-allocator-inodes/capture-metadata.json'
+        if metadata.exists():
+            receipt['allocator_capture'] = json.loads(metadata.read_text())
     except BaseException as error:
         receipt['capture_errors'] = [type(error).__name__]
     finally:
@@ -327,6 +420,18 @@ def finish(cache, output, client, device, name, pid, started, receipt, allocator
         save(output / 'diagnostic-summary.json', summary(receipt))
         print(json.dumps(summary(receipt)), flush=True)
 
+
+
+
+def require_scratch_space(workspace, output, receipt):
+    metadata = dict(checked_ns=time.time_ns(), filesystem_path=str(workspace),
+                    free_bytes=shutil.disk_usage(workspace).free, minimum_free_bytes=MIN_SCRATCH_FREE)
+    receipt['disk_preflight'] = metadata
+    save(output / 'disk-preflight.json', metadata)
+    save(output / 'diagnostic-receipt.json', receipt)
+    if metadata['free_bytes'] < MIN_SCRATCH_FREE:
+        raise RuntimeError('Diagnostic scratch filesystem requires at least 12 GiB free before preparation.')
+    return metadata
 
 
 def verify_source_run(run_info):
@@ -358,6 +463,7 @@ def run(args):
                    original_workflow=run_info['path'], original_workflow_id=run_info.get('workflow_id'))
     device = None
     with scratch(root) as work:
+        require_scratch_space(work, output, receipt)
         archive, = args.artifact.glob('**/Logistics-ios-simulator.zip')
         safe_archive(archive, work / 'extracted')
         command(['ditto', '-x', '-k', str(archive), str(work / 'extracted')], root, 90)
@@ -385,7 +491,7 @@ def run(args):
             command(['codesign', '--force', '--sign', '-', str(target)], root, 45)
         receipt.update(diagnostic_binary_sha256=digest(app / 'Logistics Mobile'), dylib_sha256=digest(dylib))
         cache = None
-        allocator_files = AllocatorFiles()
+        allocator_files = AllocatorFiles(output / 'allocator-growth.json', scratch_path=work)
         name = 'Build Manager diagnostic iPad ' + uuid4().hex
         started, pid = time.time(), None
         try:
@@ -414,8 +520,6 @@ def run(args):
                                hook_installed=trace_installed(trace, pid))
                 if trace.stat().st_size > MAX_TRACE:
                     raise RuntimeError('Native trace exceeded its global 64 MiB diagnostic budget.')
-                if current > MAX_ALLOCATOR:
-                    raise RuntimeError('Diagnostic allocator evidence exceeded its 2 GiB budget.')
                 if time.monotonic() > initial_deadline and (not receipt['hook_installed'] or not observed_growth):
                     raise RuntimeError('Native hook or actual allocator history was not established.')
                 result = cache / 'logistics-native-ui-result.json'
@@ -430,6 +534,13 @@ def run(args):
             else:
                 raise RuntimeError('Original complete native suite exceeded its diagnostic deadline.')
         except BaseException as error:
+            if allocator_files.latest is not None:
+                receipt.update(allocator_bytes=allocator_files.latest['logical_bytes'],
+                    allocator_allocated_bytes=allocator_files.latest['allocated_bytes'],
+                    allocator_file_count=allocator_files.latest['file_count'],
+                    scratch_free_bytes=allocator_files.latest['scratch_free_bytes'],
+                    output_free_bytes=allocator_files.latest['output_free_bytes'],
+                    allocator_stop_reason=allocator_files.stop_reason)
             receipt.update(status='diagnostic-error', error=type(error).__name__ + ': ' + str(error))
             raise
         finally:
