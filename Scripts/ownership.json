@@ -383,6 +383,7 @@
           "test_feature_runtime.py",
           "test_feature_group_transactions.py",
           "test_architecture_contracts.py",
+          "test_portable_imports.py",
           "test_document_architecture.py"
         ]
       }
