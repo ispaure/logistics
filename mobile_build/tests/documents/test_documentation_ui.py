@@ -221,8 +221,8 @@ class DocumentationTests(unittest.TestCase):
                 self.assertTrue(owner.close_button.enabled)
                 self.assertIs(owner.view._reader_close_button, owner.close_button)
                 self.assertEqual(owner.close_button.control_icon, 'close')
-                self.assertEqual(owner.view._native_reader_buttons()[:2],
-                                 [owner.back_button, owner.forward_button])
+                self.assertEqual(owner.view._native_reader_buttons(), [])
+                self.assertEqual(owner.commands.children[:2], [owner.back_button, owner.forward_button])
                 owner.follow_link(owner.web, 'next.md')
                 owner.follow_link(owner.web, 'last.md')
                 self.assertTrue(owner.back_button.enabled)
@@ -245,6 +245,26 @@ class DocumentationTests(unittest.TestCase):
                 self.assertIs(self.app.body, origin)
                 self.assertEqual(owner.path, third)
 
+    def test_help_commands_follow_responsive_article_and_keep_title_space(self):
+        from mobile.documentation_ui import show_documentation
+        root = Path(self.temporary.name).resolve() / 'header-docs'
+        root.mkdir()
+        (root / 'header-docs.md').write_text('# A documentation title that needs room')
+        owner = show_documentation(self.app, root)
+        for width in (320, 390, 600, 740, 834, 1024, 1400, 390):
+            with self.subTest(width=width):
+                owner.reflow(width)
+                parent = owner.article if owner.wide else owner.view
+                self.assertIs(owner.commands.parent, parent)
+                self.assertIs(owner.view._document_title_parent, parent)
+                self.assertEqual(owner.view._native_reader_buttons(), [])
+                self.assertEqual(owner.commands.children[:2], [owner.back_button, owner.forward_button])
+                self.assertIs(owner.speech.button.parent, owner.commands)
+                self.assertIs(owner.reader_actions_button.parent, owner.commands)
+                owner.show_browse()
+                owner.toggle_browse()
+                self.assertIs(owner.commands.parent, parent)
+
     def test_documentation_speaker_opens_current_page_and_stops_on_navigation(self):
         import json
         from unittest.mock import AsyncMock
@@ -256,8 +276,8 @@ class DocumentationTests(unittest.TestCase):
         first.write_text('# Home\n\nRead this page.')
         second.write_text('# Next\n\nAnother page.')
         owner = show_documentation(self.app, root, first)
-        self.assertEqual(list(owner.navigation.children)[-4:],
-            [owner.back_button, owner.forward_button, owner.up_button, owner.speech.button])
+        self.assertEqual(owner.commands.children[:2], [owner.back_button, owner.forward_button])
+        self.assertIs(owner.speech.button.parent, owner.commands)
         self.assertEqual(owner.speech.button.control_icon, 'speaker')
 
         async def exercise():
