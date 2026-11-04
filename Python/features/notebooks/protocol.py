@@ -8,7 +8,7 @@ import json
 import math
 
 MODEL_COMMANDS = frozenset({
-    'paste-image', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
+    'copy-strokes', 'cut-strokes', 'paste-strokes', 'paste-image', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
     'page', 'stroke', 'add-layer', 'layer-visible', 'transform', 'erase',
     'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo', 'template',
 })
@@ -25,6 +25,7 @@ def validate_action(action):
     if op not in MODEL_COMMANDS | HOST_COMMANDS:
         raise ValueError('Unknown notebook command.')
     required = {
+        'copy-strokes': {'ids': list}, 'cut-strokes': {'ids': list},
         'paste-image': {'src': str, 'corners': list},
         'image-transform': {'id': str, 'corners': list}, 'delete-image': {'id': str},
         'arrange-image': {'id': str, 'direction': str},
@@ -49,7 +50,7 @@ def validate_action(action):
                        or any(type(v) not in (int, float) or not math.isfinite(v) for v in p)
                        or not 0 <= p[0] <= 1404 or not 0 <= p[1] <= 1_000_000 or not 0 <= p[2] <= 1 for p in path)):
             raise ValueError('Invalid eraser path or size.')
-    elif op in {'erase', 'transform'}:
+    elif op in {'erase', 'transform', 'copy-strokes', 'cut-strokes'}:
         ids = action['ids']
         if len(ids) > 100_000 or any(not isinstance(value, str) for value in ids):
             raise ValueError('Invalid stroke selection.')
@@ -57,6 +58,12 @@ def validate_action(action):
         if any(type(action.get(key)) not in (int, float) or not math.isfinite(action[key])
                for key in ('dx', 'dy')):
             raise ValueError('Invalid stroke movement.')
+        for key, default in (('scale', 1), ('angle', 0), ('cx', 0), ('cy', 0)):
+            value = action.get(key, default)
+            if type(value) not in (int, float) or not math.isfinite(value):
+                raise ValueError('Invalid stroke transform.')
+        if not .05 <= action.get('scale', 1) <= 20:
+            raise ValueError('Invalid stroke scale.')
     return op
 
 
