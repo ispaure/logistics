@@ -8,14 +8,18 @@ final class BooxBallpoint {
     private int submissions;
 
     static float width(float pressure, float base) {
-        double value = base * (.35 + .65 * Math.pow(Math.max(0, Math.min(1, pressure)), 1.2));
+        return width(pressure, base, .34f, 3.875f);
+    }
+
+    static float width(float pressure, float base, float factor, float exponent) {
+        double value = base * (1 - factor + factor * Math.pow(Math.max(0, Math.min(1, pressure)), exponent));
         return Math.max(.25f, (float) (Math.floor(value * 4 + .5) / 4));
     }
 
     int submissions() { return submissions; }
 
-    void point(TouchHelper helper, float pressure, float base, float pageScale) {
-        float diameter = width(pressure, base) * pageScale;
+    void point(TouchHelper helper, float pressure, float base, float pageScale, float factor, float exponent) {
+        float diameter = width(pressure, base, factor, exponent) * pageScale;
         // The driver still draws positions directly from the digitizer. Only
         // change the width when the canonical quarter-unit width changes.
         if (diameter != previous) {

@@ -39,7 +39,8 @@ fits the lower screen; use Zoom above it for closer work. Drawing does not dismi
 the tools. Unfolding restores the floating toolbar and the previous zoom.
 
 Tap the current brush icon to open **Writing tools**: choose an instrument card,
-then a **Thin**, **Medium** or **Thick** stroke sample, then an ink color.
+then a **Thin**, **Medium** or **Thick** stroke sample (Highlighter has one
+**Fixed** width), then an ink color.
 Brushes and available colors each use a three-column grid. The panel
 shows Ballpoint, Fineliner, Highlighter in its first brush row; Pencil,
 Mechanical pencil, Calligraphy in the second; and Marker, Shader, Paintbrush

@@ -2,7 +2,6 @@
 
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 from pathlib import Path
@@ -13,6 +12,8 @@ from .notebook_input_checks import INPUT_CHECKS
 from .notebook_chrome_checks import CHROME_CHECKS
 from .web_checks import wait_for_text
 from .fixtures import capture_window
+
+TEST_STAGE = TestStage.REGRESSION
 
 
 class NotebookInputProbe(NotebookProbe):
@@ -187,7 +188,9 @@ class NotebookInputProbe(NotebookProbe):
                     reopened = Notebook.read(panel.editor.notebook.to_bytes())
                     after = reopened.page(0).strokes[-1]
                     assert [p[3] for p in stroke.points] == [p[3] for p in after.points]
-                    expected = [float(jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').ballpointWidth(p[2], 2.)) for p in stroke.points]
+                    from features.notebooks.brushes import BRUSHES
+                    base = BRUSHES[15]['widths'][1]
+                    expected = [float(jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').ballpointWidth(p[2], base)) for p in stroke.points]
                     assert [p[3] for p in stroke.points] == expected, (stroke.points, expected)
                     assert abs(stroke.points[0][2] - .1) < .01 and abs(stroke.points[-1][2] - 1) < .01
                     status = json.loads(panel.pen_input.nativeStatus())

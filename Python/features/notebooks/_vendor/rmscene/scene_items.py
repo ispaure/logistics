@@ -84,6 +84,10 @@ class PenColor(enum.IntEnum):
     MAGENTA = 12
 
     YELLOW_2 = 13
+    # Observed native Highlighter colors on Paper Pro OS 3.29.0.153.
+    HIGHLIGHTER_BLUE = 14
+    HIGHLIGHTER_ORANGE = 15
+    HIGHLIGHTER_GRAY = 16
 
 
 @enum.unique
