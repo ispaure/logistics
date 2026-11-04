@@ -437,7 +437,7 @@ class EditorPicker:
             if any(extension == 'rmdoc' for _, extension in self.creation_choices):
                 from features.notebooks.mobile.setup import NotebookTemplateChoices
                 def selected(template, paper_format):
-                    if self.operation is operation and not self.cloud_busy:
+                    if self.operation is operation and self._work is None:
                         operation.notebook_template, operation.notebook_format = template, paper_format
                 self.notebook_templates = NotebookTemplateChoices(selected)
                 self.sync_notebook_templates()
@@ -1181,6 +1181,8 @@ class EditorPicker:
         data, creation = operation.data, operation.creation
         try:
             notebook = self.creating_notebook()
+            if creation is not None and notebook and self.notebook_templates is not None:
+                operation.notebook_template, operation.notebook_format = self.notebook_templates.selection()
             extensions = self.picker_extensions()
             target = self.destination_filename()
             self.save_as_name.value = target

@@ -187,13 +187,16 @@ class Editor:
         paper = settings(self.notebook, page)
         pdf = self.notebook.content.get('fileType') == 'pdf'
         template_available = available(self.notebook, page)
+        template_description = ('This document has fixed PDF backgrounds. Notebook template changes are unavailable.'
+            if pdf else description(page.template, artwork_available=template_available))
         return dict(name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS, shaders=SHADERS, widths=WIDTHS,
                     strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),
-                    templates=CATALOG, template_notice=TEMPLATE_NOTICE, template_description=description(page.template), template_settings=paper, template_editable=not pdf,
+                    templates=CATALOG, template_notice=TEMPLATE_NOTICE, template_description=template_description,
+                    template_settings=paper, template_editable=not pdf,
                     template_available=template_available,
                     move_paper=view_bounds([], True),
                     background=self.background() if pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,

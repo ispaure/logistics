@@ -33,6 +33,9 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.chat_notes_feedback_probe'):
+        return tuple(dict.fromkeys((*diagnostics('.chat_settings_probe'),
+            *diagnostics('.notes_search_probe'), 'chat-settings-result.json', 'notes-search-result.json')))
     if entry_point.endswith('.speech_playback_probe'):
         return NATIVE_DIAGNOSTICS + ('feedback-progress.json', 'speech-initialization.jsonl',
             'feedback-speech-complete.png', 'feedback-speech-failure.png')
@@ -424,6 +427,22 @@ def cleanup_ios_probe(client, device, name, bundle, output, *, installed=False,
         (output / 'ios-cleanup.json').write_text(json.dumps(dict(device=device,
             removed=client.matching(device, name) is None, app_cleanup_errors=errors)))
 
+def prepare_chat_notes_emulator(emulator, serial, output):
+    """Keep unrelated Bluetooth first-boot crashes outside these UI scenarios."""
+    emulator.invoke('-s', serial, 'shell', 'svc', 'bluetooth', 'disable')
+    deadline = time.monotonic() + 10
+    while emulator.invoke('-s', serial, 'shell', 'settings', 'get', 'global', 'bluetooth_on') != '0':
+        if time.monotonic() >= deadline:
+            raise RuntimeError('The disposable Chat/Notes emulator could not disable Bluetooth.')
+        time.sleep(.2)
+    windows = emulator.invoke('-s', serial, 'shell', 'dumpsys', 'window', 'windows')
+    dismissed = any('mCurrentFocus' in line and 'bluetooth' in line.lower() for line in windows.splitlines())
+    if dismissed:
+        emulator.invoke('-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    (output / 'android-environment.json').write_text(json.dumps(dict(
+        bluetooth_disabled=True, bluetooth_dialog_dismissed=dismissed), indent=2))
+
+
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
                 result_name='document-storage-result.json', device=None, tablet=False, reuse_project=False):
@@ -520,11 +539,13 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
             # Only this disposable package is enabled, then removed in finally.
             time.sleep(2)
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
+        if device is None and entry_point.endswith('.chat_notes_feedback_probe'):
+            prepare_chat_notes_emulator(emulator, serial, output)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
         deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
-            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe'))):
+            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -652,7 +673,7 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                 if report_data.returncode == 0 and report_data.stdout:
                     try:
                         json.loads(report_data.stdout)
-                    except ValueError:
+                    except (ValueError, UnicodeDecodeError):
                         (output / 'android-result-read-error.txt').write_bytes(report_data.stdout)
                     else:
                         (output / 'android-result.json').write_bytes(report_data.stdout)
@@ -690,6 +711,9 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                     evidence = emulator.workspace / name
                     if evidence.is_file():
                         shutil.copyfile(evidence, output / ('android-' + name))
+                completed_lease = emulator.workspace / 'removed-lease.json'
+                if completed_lease.is_file():
+                    shutil.copyfile(completed_lease, output / 'android-emulator-lease.json')
                 (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
 
 
@@ -700,7 +724,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -801,6 +825,9 @@ def main():
         if args.probe == 'notes-search':
             creation_profile = dict(entry_point='tests.logisticsmobile.notes_search_probe',
                                     result_name='notes-search-result.json')
+        if args.probe == 'chat-notes-feedback':
+            creation_profile = dict(entry_point='tests.logisticsmobile.chat_notes_feedback_probe',
+                                    result_name='chat-notes-feedback-result.json')
         if args.probe == 'chat-settings':
             creation_profile = dict(entry_point='tests.logisticsmobile.chat_settings_probe',
                                     result_name='chat-settings-result.json')
