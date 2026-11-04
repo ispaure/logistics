@@ -198,6 +198,10 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   }
   sandbox.penTouchBlocked=()=>true;
   canvas.onpointerdown(event(100,100));assert.equal(sandbox.active,null,'Palm rejection still blocks touch selection');
+  sandbox.state.strokes=[stroke('tiny',[[700,700,.5]])];sandbox.selected=new Set(['tiny']);run('selectionRender()');
+  const tinyCorner=plain(run('selectionHandles(selectionBounds())[0]')),beforeTiny=commands.length;
+  canvas.onpointerdown(event(...tinyCorner,'mouse'));canvas.onpointerup(event(...tinyCorner,'mouse'));
+  assert.equal(commands.length,beforeTiny,'Tapping a sub-unit dot corner must not shrink it');
   return {passed: true, full_containment: true, painted_radius: true, concave_segments: true,
     hidden_layers: true, finger_pen_mouse: true, finger_ink_disabled: true,
     uniform_scale: true, fine_rotation: true, cancelled_preview_restored: true,
