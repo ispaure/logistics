@@ -4,7 +4,6 @@ import android.app.AlertDialog;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.net.Uri;
-import android.os.SystemClock;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -23,17 +22,13 @@ final class PlaybackControls {
     JSONObject settings = new JSONObject();
     JSONArray queue = new JSONArray();
     boolean locked, cacheApproximate;
-    private final Button unlock, undo;
+    private final Button unlock;
     private final CacheStrip cache;
-    private long undoPosition, undoUntil;
 
     PlaybackControls(VideoPlayer owner, View tapSurface) {
         this.owner = owner;
         cache = new CacheStrip();
         owner.controls.addView(cache, new android.widget.LinearLayout.LayoutParams(-1, owner.dp(3)));
-        undo = new Button(owner.activity); undo.setText("Undo seek");
-        undo.setOnClickListener(v -> undo());
-        owner.controls.addView(undo); undo.setVisibility(View.GONE);
         unlock = new Button(owner.activity); unlock.setText("Unlock controls");
         FrameLayout.LayoutParams frame = new FrameLayout.LayoutParams(-2, owner.dp(48), Gravity.BOTTOM | Gravity.END);
         frame.setMargins(16, 16, 16, 32);
@@ -140,31 +135,30 @@ final class PlaybackControls {
     }
     void show() {
         if (!owner.allowed(false) || locked) return;
-        choose("Playback", new String[] {"Go to time…", "Start over", "Undo seek", "Speed…", "Picture size…",
+        choose("Playback", new String[] {"Go to time…", "Start over", "Speed…", "Picture size…",
             "Subtitles and audio…", "Current folder…", "Previous episode", "Next episode",
             (settings.optBoolean("autoplay_next") ? "✓ " : "") + "Play next automatically", "Mute / unmute", "Lock controls", "Show in folder", "Favourite file"}, index -> {
             switch (index) {
                 case 0: prompt("Seconds, MM:SS or HH:MM:SS", "", "seek"); break;
                 case 1: owner.seekTo(0); break;
-                case 2: undo(); break;
-                case 3:
+                case 2:
                     double[] rates = {.5, .75, 1, 1.25, 1.5, 1.75, 2};
                     String[] labels = {"0.5×", "0.75×", "1×", "1.25×", "1.5×", "1.75×", "2×"};
                     choose("Speed · pitch preserved", labels, i -> setting("rate", rates[i])); break;
-                case 4: choose("Picture size", new String[] {"Fit", "Fill (crop edges)", "Original size"},
+                case 3: choose("Picture size", new String[] {"Fit", "Fill (crop edges)", "Original size"},
                     i -> setting("aspect", new String[] {"fit", "fill", "original"}[i])); break;
-                case 5: subtitles(); break;
-                case 6:
+                case 4: subtitles(); break;
+                case 5:
                     String[] names = new String[queue.length()];
                     for (int i=0; i<names.length; i++) names[i] = queue.optJSONObject(i).optString("name");
                     choose("Current folder", names, i -> emit("queue", queue.optJSONObject(i).optString("path"))); break;
-                case 7: emit("previous", ""); break;
-                case 8: emit("next", ""); break;
-                case 9: setting("autoplay_next", !settings.optBoolean("autoplay_next")); break;
-                case 10: mute(); break;
-                case 11: lock(true); break;
-                case 12: emit("showInFolder", ""); break;
-                case 13: emit("favourite", ""); break;
+                case 6: emit("previous", ""); break;
+                case 7: emit("next", ""); break;
+                case 8: setting("autoplay_next", !settings.optBoolean("autoplay_next")); break;
+                case 9: mute(); break;
+                case 10: lock(true); break;
+                case 11: emit("showInFolder", ""); break;
+                case 12: emit("favourite", ""); break;
             }
         });
     }
@@ -190,18 +184,6 @@ final class PlaybackControls {
                 emit(row.optBoolean("directory") ? "subtitleBrowse" : "subtitleAttach", row.optString("path"));
             });
         } catch (Exception error) { owner.status("Could not list subtitle files."); }
-    }
-    void rememberSeek(long target) {
-        if (Math.abs(target - owner.position()) >= 10000) {
-            undoPosition = owner.position(); undoUntil = SystemClock.elapsedRealtime() + 8000;
-            undo.setVisibility(View.VISIBLE);
-            owner.handler.postDelayed(() -> { if (SystemClock.elapsedRealtime() >= undoUntil) undo.setVisibility(View.GONE); }, 8100);
-        }
-    }
-    void undo() {
-        if (SystemClock.elapsedRealtime() <= undoUntil) {
-            long position = undoPosition; undoUntil = 0; owner.seekTo(position); undoUntil = 0; undo.setVisibility(View.GONE);
-        }
     }
     void lock(boolean value) {
         if (!owner.allowed(false)) return;

@@ -183,6 +183,38 @@
         exit(0);
     }
 }
+- (void)checkPipControls {
+    [self.video pause];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        __block int calls = 0;
+        int64_t before = [self.video positionMilliseconds];
+        [self.video seekBy:10000 completion:^{ calls++; }];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            int64_t forward = [self.video positionMilliseconds];
+            if (calls != 1 || llabs(forward - before - 10000) > 500) { [self finish:@"PiP forward seek or completion failed"]; return; }
+            [self.video seekBy:-10000 completion:^{ calls++; }];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                if (calls != 2 || llabs([self.video positionMilliseconds] - before) > 500) { [self finish:@"PiP backward seek or completion failed"]; return; }
+                [self.video seekBy:-60000 completion:^{ calls++; }];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    if (calls != 3 || [self.video positionMilliseconds] != 0) { [self finish:@"PiP start boundary was not clamped"]; return; }
+                    [self.video seekBy:-10000 completion:^{ calls++; }];
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (calls != 4) { [self finish:@"PiP no-op seek did not complete"]; return; }
+                        self.video.controlsLocked = YES;
+                        if ([self.video isMediaSeekable]) { [self finish:@"PiP ignored control lock"]; return; }
+                        for (UIView *view in self.video.controls.arrangedSubviews)
+                            if ([view isKindOfClass:UIButton.class] && [[(UIButton *)view currentTitle] isEqualToString:@"Undo seek"]) {
+                                [self finish:@"Mobile exposed Undo seek"]; return;
+                            }
+                        [self.samples addObject:@{@"pipDelegateForwardBackwardBoundaryAndLock": @YES, @"completionCalls": @(calls)}];
+                        [self finish:nil];
+                    });
+                });
+            });
+        });
+    });
+}
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options { return YES; }
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
     self.samples = [NSMutableArray array];
@@ -220,6 +252,10 @@
         [self.video startByUser];
         self.started = NSProcessInfo.processInfo.systemUptime;
         self.sampler = [NSTimer scheduledTimerWithTimeInterval:1.0/60 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
+        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipControls"] boolValue]) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self checkPipControls]; });
+            return;
+        }
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue] ||
             [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue]) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
@@ -234,6 +270,7 @@
     if (!self.firstVideoClock && v.player.media.statistics.displayedPictures > 0 && v.player.time.value.longLongValue > 0)
         self.firstVideoClock = v.player.time.value.longLongValue;
     if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPauseTransitions"] boolValue] ||
+        [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipControls"] boolValue] ||
         [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAHDRProbe"] boolValue]) return;
     CGFloat opacity = ((CALayer *)v.controlsScroll.layer.presentationLayer).opacity;
     CGFloat barOpacity = ((CALayer *)v.navigationController.navigationBar.layer.presentationLayer).opacity;

@@ -3,6 +3,9 @@ package io.github.ispaure.logistics.video;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.PictureInPictureParams;
+import android.app.PendingIntent;
+import android.app.RemoteAction;
+import android.graphics.drawable.Icon;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -91,6 +94,8 @@ public final class VideoPlayer {
         }
     };
     final Handler handler = new Handler(Looper.getMainLooper());
+    private int pipActionState = -1;
+    private final String pipAction = "io.github.ispaure.logistics.video.PIP." + java.util.UUID.randomUUID();
     String pendingSubtitleURL;
     private final JSONArray subtitles;
     private final ArrayList<RendererDiscoverer> discoverers = new ArrayList<>();
@@ -364,6 +369,9 @@ public final class VideoPlayer {
         installMedia();
         activity.registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
         activity.registerReceiver(noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+        if (Build.VERSION.SDK_INT >= 33)
+            activity.registerReceiver(pipControls, new IntentFilter(pipAction), Context.RECEIVER_NOT_EXPORTED);
+        else activity.registerReceiver(pipControls, new IntentFilter(pipAction));
         audio.registerAudioDeviceCallback(deviceCallback, handler);
         handler.post(tick);
     }
@@ -614,7 +622,6 @@ public final class VideoPlayer {
 
     public void seekTo(long target) {
         if (tools != null && tools.locked) return;
-        if (tools != null && allowed(false)) tools.rememberSeek(target);
         if (!allowed(false) || !player.isSeekable()) return;
         target = Math.max(0, target);
         if (player.getLength() > 0) target = Math.min(target, player.getLength() - 1);
@@ -751,6 +758,7 @@ public final class VideoPlayer {
             seek.setContentDescription("Video position: " + timeLabel.getText());
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
             if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
+            if (pip) updatePipActions();
             if (!allowed(false)) pause();
             handler.postDelayed(this, 500);
         }
@@ -813,10 +821,51 @@ public final class VideoPlayer {
         openDialog.show();
     }
 
+    private final BroadcastReceiver pipControls = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (!pipAction.equals(intent.getAction()) || !allowed(true)) return;
+            int action = intent.getIntExtra("control", 0);
+            if (action == -1) seekTo(position() - 10000);
+            else if (action == 1) seekTo(position() + 10000);
+            else togglePlayback();
+            updatePipActions();
+        }
+    };
+
+    private RemoteAction pipControl(int action, int icon, String label) {
+        Intent intent = new Intent(pipAction).setPackage(activity.getPackageName()).putExtra("control", action);
+        PendingIntent pending = PendingIntent.getBroadcast(activity, action + 1, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return new RemoteAction(Icon.createWithResource(activity, icon), label, label, pending);
+    }
+
+    private PictureInPictureParams pipParams() {
+        java.util.List<RemoteAction> actions = new ArrayList<>();
+        RemoteAction back = pipControl(-1, android.R.drawable.ic_media_rew, "Back 10 seconds");
+        RemoteAction forward = pipControl(1, android.R.drawable.ic_media_ff, "Forward 10 seconds");
+        back.setEnabled(player.isSeekable() && !tools.locked);
+        forward.setEnabled(player.isSeekable() && !tools.locked);
+        actions.add(back);
+        RemoteAction playback = pipControl(0, player.isPlaying() ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
+            player.isPlaying() ? "Pause" : "Play");
+        playback.setEnabled(!tools.locked);
+        actions.add(playback);
+        actions.add(forward);
+        return new PictureInPictureParams.Builder().setActions(actions).build();
+    }
+
+    private void updatePipActions() {
+        if (Build.VERSION.SDK_INT < 26 || !activity.isInPictureInPictureMode() || done) return;
+        int state = (player.isPlaying() ? 1 : 0) | (player.isSeekable() ? 2 : 0) | (tools.locked ? 4 : 0);
+        if (state == pipActionState) return;
+        pipActionState = state;
+        activity.setPictureInPictureParams(pipParams());
+    }
+
     private void pip() {
         if (!allowed(true)) return;
         if (Build.VERSION.SDK_INT >= 26 && activity.getPackageManager().hasSystemFeature("android.software.picture_in_picture")) {
-            activity.enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+            activity.enterPictureInPictureMode(pipParams());
         } else status("Picture in picture is unavailable on this device.");
     }
 
@@ -978,6 +1027,7 @@ public final class VideoPlayer {
         handler.removeCallbacks(tick);
         activity.unregisterReceiver(screenOff);
         activity.unregisterReceiver(noisy);
+        activity.unregisterReceiver(pipControls);
         audio.unregisterAudioDeviceCallback(deviceCallback);
         if (Build.VERSION.SDK_INT >= 29 && previousCapturePolicy != -1 &&
                 audio.getAllowedCapturePolicy() == AudioAttributes.ALLOW_CAPTURE_BY_NONE) {

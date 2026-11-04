@@ -104,10 +104,8 @@
 @property(nonatomic) int64_t lastPosition;
 @property(nonatomic, copy) NSString *optionsJSON, *queueJSON, *pictureGeometry;
 @property(nonatomic, copy) void (^command)(NSString *, NSString *);
-@property(nonatomic) int64_t undoMilliseconds;
-@property(nonatomic) NSTimeInterval undoUntil;
 @property(nonatomic) BOOL controlsLocked, cacheApproximate;
-@property(nonatomic, strong) UIButton *unlockButton, *undoSeekButton;
+@property(nonatomic, strong) UIButton *unlockButton;
 @property(nonatomic, strong) UIView *cacheStrip, *pauseSnapshot;
 @property(nonatomic, copy) NSString *languageSignature;
 @property(nonatomic) CGSize lastVideoSize;
@@ -696,8 +694,6 @@
 }
 - (void)seekToMilliseconds:(int64_t)target {
     if (self.controlsLocked || ![self canPlay:NO] || !self.player.isSeekable) return;
-    int64_t previous = [self positionMilliseconds];
-    if (llabs(target - previous) >= 10000) { self.undoMilliseconds = previous; self.undoUntil = NSProcessInfo.processInfo.systemUptime + 8; self.undoSeekButton.hidden = NO; }
     int64_t duration = self.player.media.length.value.longLongValue;
     target = MAX(0, target);
     if (duration > 0) target = MIN(target, MAX(0, duration - 1));
@@ -985,7 +981,6 @@
         [self.view setNeedsLayout];
     }
     [self applyPictureSize];
-    if (NSProcessInfo.processInfo.systemUptime > self.undoUntil) self.undoSeekButton.hidden = YES;
     if (self.controlsLocked) [self.view bringSubviewToFront:self.unlockButton];
     [self updateScreenAwake];
     int64_t position = [self positionMilliseconds];
@@ -1239,12 +1234,17 @@
 - (CGRect)bounds { return self.movie.bounds; }
 - (void)play { if ([self canPlay:YES]) [self startByUser]; }
 - (void)seekBy:(int64_t)offset completion:(dispatch_block_t)completion {
-    if ([self canPlay:YES]) [self.player jumpWithOffset:(int)offset completion:completion];
-    else if (completion) completion();
+    // Use the same bounded millisecond seek as the on-screen controls. VLC's
+    // relative helper uses a 32-bit clock and may never complete a boundary
+    // seek, leaving the system's PiP skip controls waiting indefinitely.
+    if ([self canPlay:YES]) [self skipMilliseconds:offset];
+    [self.pipController invalidatePlaybackState];
+    // Always release the system request, including denied/nonseekable seeks.
+    if (completion) dispatch_async(dispatch_get_main_queue(), completion);
 }
 - (int64_t)mediaLength { return self.player.media.length.value.longLongValue; }
 - (int64_t)mediaTime { return [self positionMilliseconds]; }
-- (BOOL)isMediaSeekable { return self.player.isSeekable; }
+- (BOOL)isMediaSeekable { return !self.controlsLocked && [self canPlay:YES] && self.player.isSeekable; }
 - (BOOL)isMediaPlaying { return self.player.isPlaying; }
 - (void)retireWithCompletion:(dispatch_block_t)completion {
     NSAssert(NSThread.isMainThread, @"Retire video on the UI thread");

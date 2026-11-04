@@ -20,7 +20,7 @@ from logistics_build.build_retention import scratch
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False):
+def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False, pip_controls=False):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -39,7 +39,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         source.write_text('#import ' + json.dumps(str(controller)) + '\n' + geometry + fixture.read_text())
         sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
         command = ['xcrun', 'clang', '-fobjc-arc', '-fmodules', '-fmodules-cache-path=' + str(workspace / 'modules'),
-                   '-target', 'arm64-apple-ios17.0-simulator', '-isysroot', sdk, '-F', str(framework.parent),
+                   '-target', 'arm64-apple-ios17.0-simulator', '-isysroot', sdk, '-I', str(ROOT / 'Python/mobile/ios'), '-F', str(framework.parent),
                    '-framework', 'UIKit', '-framework', 'AVFoundation', '-framework', 'CallKit', '-framework', 'VLCKit',
                    '-Wl,-rpath,@executable_path/Frameworks', str(source), '-o', str(app / 'VideoChromeQA')]
         result = subprocess.run(command, text=True, capture_output=True)
@@ -68,7 +68,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 'yuv420p10le', 'smpte2084', 'bt2020'), 'HDR fixture lost its depth or color tags'
         (app / 'Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier=bundle,
             CFBundleName='Video Chrome QA', QAOrientation=orientation, QAHDR=hdr, QAResume=resume, QAFold=fold,
-            QAURL=url or '', QADuration=duration, QAUnknownDuration=unknown_duration, QAStreamProbe=bool(url), QAPauseTransitions=pause_transitions,
+            QAURL=url or '', QADuration=duration, QAUnknownDuration=unknown_duration, QAStreamProbe=bool(url), QAPauseTransitions=pause_transitions, QAPipControls=pip_controls,
             NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True),
             CFBundleExecutable='VideoChromeQA', CFBundleVersion='1',
             CFBundleShortVersionString='1.0', CFBundlePackageType='APPL', MinimumOSVersion='17.0',
@@ -123,11 +123,12 @@ def main():
     parser.add_argument('--model', choices=('iPhone Duo', 'iPhone', 'iPad'), default='iPhone Duo')
     parser.add_argument('--orientation', choices=('portrait', 'landscape'), default='portrait')
     parser.add_argument('--hdr', action='store_true', help='Decode 10-bit BT.2020 PQ HEVC and inspect the native HDR layer.')
+    parser.add_argument('--pip-controls', action='store_true', help='Check live PiP delegate skips, boundaries and lock; no system PiP window.')
     parser.add_argument('--pause-transitions', action='store_true', help='Run native Play/Pause/Resume checks in both HDR modes without chrome timing checks.')
     parser.add_argument('--resume', type=int, default=0, help='Resume milliseconds in the 30-second fixture.')
     parser.add_argument('--fold', action='store_true', help='Exercise a synthetic horizontal division and lower control deck.')
     args = parser.parse_args()
-    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions)
+    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions, pip_controls=args.pip_controls)
 
 
 if __name__ == '__main__':
