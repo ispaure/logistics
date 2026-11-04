@@ -234,3 +234,14 @@ screen-off/resume, plus explicitly injected output/SSID and iOS lock events.
 Both owned QA devices were removed. These focused results supplement the full
 release gates; they do not establish physical Bluetooth, casting, Mirroring,
 Continuity calls or acoustic zero-leakage guarantees.
+
+## Mobile resume form layout
+
+The resume form uses the entire available height as a vertical scroll viewport.
+An unpainted body insets the rounded card from the viewport; the card is capped
+at 560 logical pixels and adapts to narrow windows. Credential names and status
+messages wrap using the shared settings text fitter. Layout subscriptions refit
+on window changes, and the iOS replacement root retains its safe-area callback.
+Host regression tests cover compact/wide bounds, long labels, root restoration,
+safe-area forwarding and password verification. Native keyboard/rotation and
+corner appearance still require device acceptance.
