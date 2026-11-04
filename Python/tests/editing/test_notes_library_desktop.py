@@ -31,6 +31,50 @@ class PrivateFiles(RemoteFiles):
 
 
 class NotesLibraryDesktopTests(QtTestCase):
+    def test_move_dialog_browses_library_folders_and_rename_keeps_parent(self):
+        from commonUtils.ui.resources.picker import ResourcePicker
+        from time import monotonic
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Vault/Destination').mkdir(parents=True)
+            (root / 'Vault/Home.md').write_text('# Home')
+            window = NotesLibraryWindow(lambda: LocalFiles(root), 'Vault', root='Vault')
+            window.show()
+            self.addCleanup(lambda: window.close() if __import__('shiboken6').isValid(window) else None)
+            self.wait_until(lambda: not window.progress.busy)
+            with patch.object(qt.QInputDialog, 'getText', return_value=('Renamed.md', True)) as prompt:
+                window.rename_path('Vault/Home.md')
+            self.assertEqual(prompt.call_args.kwargs['text'], 'Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertTrue((root / 'Vault/Renamed.md').exists())
+            def choose(locations, **options):
+                dialog = ResourcePicker(locations, **options)
+                deadline = monotonic() + 5
+                navigated = False
+                def tick():
+                    nonlocal navigated
+                    if monotonic() > deadline:
+                        dialog.reject()
+                        return
+                    if dialog.browser and not dialog.browser.busy and not dialog.operation.busy:
+                        if not navigated:
+                            navigated = True
+                            dialog.browser.navigate(dialog.provider.root / 'Destination')
+                        else:
+                            dialog.choose()
+                            return
+                    qt.QTimer.singleShot(10, tick)
+                qt.QTimer.singleShot(10, tick)
+                dialog.exec()
+                self.assertIsNotNone(dialog.choice, dialog.notice.text())
+                dialog.deleteLater()
+                return dialog.choice
+            with patch('commonUtils.ui.resources.picker.choose_resource', side_effect=choose):
+                window.move_path('Vault/Renamed.md')
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual((root / 'Vault/Destination/Renamed.md').read_text(), '# Home')
+            self.assertFalse((root / 'Vault/Renamed.md').exists())
+
     def test_nested_images_and_videos_use_navigation_resolution_and_reject_ambiguity(self):
         from features.notes_library.notes import NotesLibrary
         from commonUtils.tests.formats.test_gif_headers import GIF

@@ -259,14 +259,14 @@ class NotesLibraryPanelTests(unittest.TestCase):
                     await asyncio.sleep(0)
                     second = asyncio.create_task(owner.file_actions('Vault/Projects/Plan.MD'))
                     await asyncio.sleep(0)
-                    answers[1].set_result('move')
+                    answers[1].set_result('rename')
                     await second
                     form = owner.file_action_view
                     answers[0].set_result(stale_result)
                     await first
                 self.assertIs(owner.file_action_view, form)
                 self.assertEqual(owner.selected_path, 'Vault/Projects/Plan.MD')
-                self.assertEqual(form.content.children[2].value, 'Projects/Plan.MD')
+                self.assertEqual(form.content.children[2].value, 'Plan.MD')
                 owner.return_from_file_action()
         self.run_async(exercise())
 
@@ -284,7 +284,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 form = old_view.content if isinstance(old_view, toga.ScrollContainer) else old_view
                 next(child for child in form.children if isinstance(child, toga.TextInput)).value = 'Stale.md'
                 submit = next(child for child in form.children if isinstance(child, toga.Button)
-                              and child.text in ('Move', 'Copy'))
+                              and child.text in ('Rename', 'Copy'))
                 cancel = next(child for child in form.children if isinstance(child, toga.Button)
                               and child.text == 'Cancel')
                 owner.manage_entry(folder=True)

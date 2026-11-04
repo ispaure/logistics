@@ -90,3 +90,24 @@ Cancel during worker preparation. Drafts survive cancellation; late worker
 results cannot replace a newer view. Desktop already retains the unchanged rich
 editor and RAM resources when switching modes, avoiding this preparation step.
 Host regressions exercise slow preparation, cancellation and superseding views.
+
+## Separate Rename and Move
+
+Desktop and mobile now expose separate Rename and Move actions. Rename accepts
+one name and uses the existing provider move workflow. Move keeps that name and
+browses existing folders through the hosts’ existing browser controls, backed by
+a shared library-rooted folder projection. The projection hides files, hidden
+configuration, the source folder and its descendants. Picker cancellation and
+superseded callbacks preserve the source, draft, current document and drawer.
+Collision checks and history updates remain owned by the existing move workflow.
+
+The Workspaces scheduled-picker callback crash was fixed concurrently in the
+mobile action-menu owner; its destination-workflow regressions pass. Notes uses
+the same browser controls with library-local selection and move publication.
+Focused mobile mode/panel checks cover browsed moves and cancellation. Desktop
+checks exercise the real folder dialog, rename, provider media, encrypted storage
+and move workflows. These are host checks, not physical Android/iOS validation.
+
+Two final review passes checked items 3–5: the first traced reference lifetimes,
+loading/cancellation and separate action entry points; the second checked
+provider boundaries, stale callbacks, resource cleanup, platform scope and tests.
