@@ -3,6 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 from time import monotonic
+import sys
 import traceback
 
 from commonUtils.testing.stages import TestStage
@@ -28,7 +29,7 @@ class FolderFeedbackProbe(DocumentWorkspaceProbe):
     def sample_startup(self, *, schedule=True):
         sample = dict(elapsed=monotonic() - self._startup_started,
                       starting=getattr(self, '_startup_in_progress', True),
-                      phase=self._feedback_phase, cases=self._feedback_report.get('cases', []))
+                      phase=self._feedback_phase, cases=list(self._feedback_report.get('cases', [])))
         navigation = getattr(self, 'navigation', None)
         if navigation is not None and type(self._impl).__module__.startswith('toga_android.'):
             def geometry(view):
@@ -44,7 +45,9 @@ class FolderFeedbackProbe(DocumentWorkspaceProbe):
                 sample['cover_finished'] = cover.future.done()
         self._startup_samples = [*self._startup_samples[-59:], sample]
         cache = Path(self.paths.cache)
-        (cache / 'folder-feedback-startup.json').write_text(json.dumps(self._startup_samples, indent=2))
+        pending = cache / 'folder-feedback-startup.json.tmp'
+        pending.write_text(json.dumps(self._startup_samples, indent=2))
+        pending.replace(cache / 'folder-feedback-startup.json')
         if not self._probe_complete:
             stacks = []
             for task in asyncio.all_tasks(self.loop):
@@ -55,6 +58,9 @@ class FolderFeedbackProbe(DocumentWorkspaceProbe):
                     if frame is not None:
                         stacks.extend(traceback.format_stack(frame))
                     pending = getattr(pending, 'cr_await', None) or getattr(pending, 'gi_yieldfrom', None)
+            for identity, frame in sys._current_frames().items():
+                stacks.append('Thread ' + str(identity))
+                stacks.extend(traceback.format_stack(frame))
             (cache / 'folder-feedback-tasks.txt').write_text('\n'.join(stacks))
             if schedule:
                 self.loop.call_later(2, self.sample_startup)
