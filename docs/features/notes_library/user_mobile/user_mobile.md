@@ -89,7 +89,10 @@ Malformed drawings and failed saves retain the current document.
 
 The first mobile header row contains Close, the left-pane button, the filename,
 and the right-pane button. Note history, edit/view and the actions menu are on a
-second row, hidden during folder browsing. Single-line wiki headings such as
+second row, hidden during folder browsing. Back and Forward sit on the left;
+edit/view and the actions menu sit on the right. The folder breadcrumb fills the
+space between them. It initially shows the end of the path; swipe horizontally
+to reach and open any earlier folder, including the library root. Single-line wiki headings such as
 `# [[Tech]]` and wiki aliases are editable in formatted mode and keep their syntax.
 Other protected constructs remain available in Source editing.
 
@@ -133,9 +136,9 @@ Horizontal tables, selected text and zoomed pages retain their ordinary gestures
 Floating Files and Links panels dim the content behind them and block its controls until the
 panel closes. Tap the dimmed area to dismiss either panel; there is no panel X.
 The library drawer uses the full usable screen height. Its tabs stay at the top;
-the library name and storage/editability caption stay at the bottom. Files has
-a compact footer for New document, New folder, Collapse all folders and Library
-actions. Tap the library name to browse its root; it also accepts file drops.
+a centered row directly below them contains New document, New folder and
+Collapse all folders. The panel has no library identity/status footer or redundant
+library actions menu. The Files tab accepts drops to the library root.
 File rows keep the existing font size and touch height.
 
 The left panel has **Files**, **Search** and **Calendar** tabs. Files uses the
@@ -155,7 +158,8 @@ and 100-folder-level limit; a failed scan does not offer creation.
 In Files, hold a file or folder name for the same **Move / rename…**, **Copy…**,
 or **Delete…** options as its **…** button,
 as supported by the location. Destinations stay inside this library and must have
-existing parent folders. Copy and move refuse existing names; delete asks for
+existing parent folders. Copy defaults beside the source as “Filename - Copy”, retaining the extension,
+and numbers repeated copies “(2)”, “(3)”, and so on. Custom copy paths and moves refuse existing names; delete asks for
 confirmation and permanently removes the selected item and its contents. Links
 are not rewritten. Cancelling the action menu or its move/copy form returns to
 the pane that opened it. Android Back does the same, keeping the open document
@@ -200,5 +204,5 @@ navigation visibility; destination tabs can remain hidden while a document is op
 
 Each Notes Library file/folder row has **…** actions for Move / rename, Copy and
 Delete when supported by its storage. Hold and drag its icon onto a folder
-to move it, or onto the library name in the footer to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
+to move it, or onto the Files tab to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
 confirmation and existing copy/move destinations are preserved.

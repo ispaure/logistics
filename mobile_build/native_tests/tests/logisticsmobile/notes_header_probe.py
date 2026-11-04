@@ -38,7 +38,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await self.check_note_actions(owner, report)
                 assert await owner.open_note('3D Character Art/3D Character Art.md')
                 await asyncio.sleep(.5)
-                assert owner.secondary.parent is None
+                assert owner.secondary.parent is not None
+                assert owner.breadcrumb_scroll.parent is owner.secondary
                 window = self.main_window._impl.native
                 for button in (owner.menu, owner.links_button, *owner.breadcrumbs.children):
                     if not hasattr(button, 'on_press') or not button.enabled:
@@ -64,8 +65,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 assert list(owner.panel_tabs) == ['Files', 'Search', 'Calendar']
                 assert owner.search.parent is owner.search_content
                 assert owner.rows_scroll.parent is owner.files_content
-                assert owner.panel_actions.parent is owner.panel_footer
-                assert owner.root_drop_button.parent is owner.panel_identity
+                assert owner.tree.children[1:3] == [owner.panel_actions, owner.panel_body]
+                assert len(owner.panel_actions.children) == 3
                 if not owner.sidebar.expanded:
                     overlay = owner.sidebar.overlay
                     assert overlay.edge_panel
@@ -81,7 +82,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await asyncio.sleep(.3)
                 assert owner.search_rows
                 assert owner.rows_scroll.parent is owner.search_content
-                assert owner.panel_actions.parent is None
+                assert owner.panel_actions.parent is owner.tree
                 await capture_window(self, evidence / ('sidebar-search-' + orientation + '.png'))
                 owner.select_panel_tab('Calendar')
                 await owner.calendar_task
