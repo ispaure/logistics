@@ -105,10 +105,13 @@ class SettingsUITests(unittest.TestCase):
         self.assertEqual(app.settings_status.text, 'Disk full')
         controls.reset()
         self.assertEqual(LIGHT['accent'], '#2563eb')
+        self.assertEqual(app.settings_status.text, '')
         self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 221)
         # Accessibility and keyboard adjustments do not emit touch release.
         controls.hue.value = 90
         self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 90)
+        app.settings_navigation.choose('App')
+        self.assertEqual(app.settings_status.text, '')
 
     def test_android_notice_asset_is_read_offline_and_closed(self):
         from mobile.settings.licenses import show_licenses
