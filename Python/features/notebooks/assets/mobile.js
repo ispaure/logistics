@@ -43,6 +43,7 @@ renderEraserChoices();
   header.className = 'mobile-head';
   if (state.native_close) command('library').hidden = true;
   let more = makeButton('more', 'Notebook actions', e => sheet.hidden ? openSheet('document', e.currentTarget) : closeSheet());
+  more.hidden = !!state.native_actions;
   header.append(iconButton(command('library'), 'close', 'Close document'), more);
   let dock = document.createElement('nav');
   dock.className = 'mobile-dock';
@@ -464,6 +465,22 @@ renderEraserChoices();
     if (menu) documentDropdown.activate();
     else (floating ? grid.querySelector('[aria-pressed=true]') || grid.firstElementChild : closer).focus()
   }
+
+  // Native toolbar actions enter the same queue as canvas controls, preserving
+  // pending ink and the normal save/delete/close guards.
+  window.notebookNativeAction = name => {
+    if (active !== null) return;
+    if (Object.hasOwn(panels, name)) {
+      openSheet(name, more);
+    } else if (name === 'hide-tools') {
+      closeSheet(false);
+      setToolsHidden(true);
+    } else if (['save', 'save-as', 'export', 'show-in-folder', 'document-location',
+                'add-page', 'library', 'delete-file'].includes(name)) {
+      closeSheet(false);
+      send({op: name});
+    }
+  };
 
   function closeSheet(restoreFocus = true) {
     cancelTitleHold();
