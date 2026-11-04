@@ -120,6 +120,21 @@ Migration cases use a plain unittest fixture; only widget cases pay for Qt
 window ownership and teardown. Repeated catalog-refresh coverage verifies that
 unchanged ZIP metadata is reused while newly added packages are still discovered.
 
+Path containment resolves each candidate once per check, without caching across
+operations, and still rejects intermediate symlinks. Settings-mode refreshes build
+the preset list without constructing hidden launch cards. Launch-mode cards check
+installation readiness once per populated version, rather than once per preset.
+Regressions cover parent symlinks introduced after validation, hidden card
+construction and readiness-call counts.
+
+For performance comparisons, freeze both application and commonUtils sources,
+keep the same test inventory, interpreter and offscreen backend, and warm each
+variant before interleaving runs. Record child CPU time as well as elapsed time
+and host load: process startup, Qt imports and scheduling contention can dominate
+the small fixture workloads. Use profiles and operation counts to distinguish
+local improvements from a claim about total suite speed. Do not suppress Qt
+worker retirement or garbage collection to make timings appear faster.
+
 Real OS-specific extraction and Blender startup should also be exercised on each
 supported desktop platform. Fixture ZIP/TAR/DMG tests do not substitute for Windows,
 Linux and Intel macOS runtime validation.

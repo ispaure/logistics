@@ -3,7 +3,7 @@ import posixpath
 import os
 from pathlib import PurePosixPath
 from threading import RLock
-from services.documents.storage import DocumentResource
+from services.documents.storage import DocumentResource, document_remote
 from services.documents.access import can_write
 
 MARKDOWN = {'.md', '.markdown'}
@@ -135,7 +135,7 @@ class NotesLibrary:
         from commonUtils.runtime.operations import check_cancelled
         check_cancelled(lambda: self._links_closed or cancelled())
         locate = getattr(self.provider, 'transfer_location', None)
-        if not callable(locate):
+        if document_remote(self.provider) or not callable(locate):
             return self.provider.list(folder, cancelled=cancelled)
 
         def revision():
@@ -346,12 +346,13 @@ class NotesLibrary:
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
         with operation(self.provider, cancelled):
-            cacheable = (os.name != 'nt' and not getattr(self.provider, 'remote_storage', False)
+            check_cancelled(cancelled)
+            cacheable = (os.name != 'nt' and not document_remote(self.provider)
                          and callable(getattr(self.provider, 'transfer_location', None))
                          and not callable(getattr(self.provider, 'find_note_paths', None)))
             key = current, target
             with self._link_lock:
-                cached = self._resolved_links.get(key)
+                cached = self._resolved_links.get(key) if cacheable else None
             if cached is not None:
                 result, dependencies = cached
                 try:

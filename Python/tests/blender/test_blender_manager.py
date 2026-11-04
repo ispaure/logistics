@@ -234,6 +234,17 @@ class BlenderManagerTests(unittest.TestCase):
             self.manager.duplicate_preset(self.release, 'Default', 'Cancelled', cancelled=lambda: True)
         self.assertEqual(self.manager.presets(self.release), ['Default'])
 
+    def test_path_validation_rechecks_parent_symlinks_between_calls(self):
+        original = self.manager.create_preset(self.release, 'Art')
+        self.assertEqual(self.manager.preset(self.release, 'Art'), original)
+        relocated = self.manager.preferences / 'relocated'
+        original.parent.rename(relocated)
+        original.parent.symlink_to(relocated, target_is_directory=True)
+        # Even an internal link is forbidden; prior successful validation must
+        # not cache a directory's identity across operations.
+        with self.assertRaisesRegex(ValueError, 'cannot be symlinks'):
+            self.manager.preset(self.release, 'Art')
+
     def test_launch_environment_overrides_only_child_and_all_resource_paths(self):
         self.manager.create_preset(self.release, 'Default')
         destination = self._mark_installed()
