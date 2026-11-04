@@ -1644,3 +1644,37 @@ and accepted exit retire the registry. Keyboard/reset guards and the final
 coalesced reader wakeup remain in `resize_workspace`. Preference switch save
 failures share the settings form transaction helper, retaining caller-owned
 side effects/status messages and restoring handlers without firing a retry.
+
+## Isolated iPad native-lifetime investigation
+
+The `codex/ipad43a-view-lifetimes` experiment is diagnostic only. Its manual
+`mobile-build.yml` mode `ipad_view_lifetime_diagnostic=true` runs the original
+43a application's complete 35-case native sequence on one disposable iPad/iOS 27.0.
+`diagnostic_source_run` identifies that original run's `logistics-native-ios`
+artifact; the helper rejects a different source, native executable or fixture.
+The diagnostic branch supplies only an entry wrapper and a separately compiled,
+ad-hoc signed native observer. It does not build or modify production source.
+
+The observer records UIView dealloc ENTER/CLASS/EXIT with bounded C writes and
+calls the original implementation once. It does not retain views or call Python
+from native destruction. Unmatched entries identify candidates for correlation
+with the crashing thread; they are not themselves proof of invalid ownership.
+The wrapper preserves the original cases, order, assertions and waits, adding
+only view/controller/transition snapshots around ordinary navigation.
+
+Use only `MallocStackLoggingNoCompact=1` and a precreated private
+`MallocStackLoggingDirectory`. Do not combine it with `MallocStackLogging=1`
+(which selects different logging behavior) or NSZombieEnabled (which changes
+object destruction). Native hook initialization and actual growing allocator
+files must be observed. The collector holds read-only allocator-file descriptors
+so process-exit unlink cannot erase them, captures existing app reports, IPS and
+simulator logs before SDK teardown, and never relaunches the application.
+
+After reviewing the exact published diagnostic commit and inputs, the existing
+public manager GitHub client can dispatch `mobile-build.yml` with that ref,
+expected commit, `target=ios`, the diagnostic flag and original source-run ID.
+Use its returned run identity; do not automatically redispatch an uncertain
+request. Artifacts use `ipad-view-lifetime-diagnostic-*` names and explicitly set
+`diagnostic_only`; ordinary native acceptance jobs/gates are skipped in this mode.
+No diagnostic result establishes release acceptance. A non-reproduction does not
+exclude a fault that depends on earlier suite state or instrumentation timing.
