@@ -37,6 +37,7 @@ class NotebookMenus:
             action = zoom.addAction(label)
             action.triggered.connect(lambda checked=False, value=value: self.ui('zoom', value))
         self.zoom_menu = zoom
+        self.add('Page', 'template', 'Page Template…', lambda: self.ui('template'))
         self.add('Page', 'pages-overview', 'Pages Overview…', lambda: self.ui('pagesOverview'))
         self.menus['Page'].addSeparator()
         for key, label, shortcut in [('prev', 'Previous Page', 'Alt+Left'), ('next', 'Next Page', 'Alt+Right'),
@@ -78,6 +79,7 @@ class NotebookMenus:
             action.setEnabled(ready if action.data() else not self.panel.busy)
         self.zoom_menu.setEnabled(ready)
         if state is not None:
+            self.actions['template'].setEnabled(ready and state.get('template_editable', False))
             for key, enabled in [('undo', state['undo']), ('redo', state['redo']),
                                  ('prev', state['index'] > 0), ('next', state['index'] + 1 < state['count']),
                                  ('move-earlier', state['index'] > 0), ('move-later', state['index'] + 1 < state['count']),

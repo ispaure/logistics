@@ -39,6 +39,11 @@ def main(output):
             try:
                 wait(lambda: js(view, "typeof paperView!=='undefined'&&!!$('pageTemplate')&&!!$('zoomLevel')"))
                 name = 'desktop' if desktop else 'mobile'
+                if desktop:
+                    assert js(view, "window.notebookUI('template');$('layerOptions').open&&document.activeElement===$('pageTemplate')"), 'Desktop Page Template entry'
+                else:
+                    assert js(view, "$('pageTemplateButton').click();$('mobileSheet').dataset.panel==='layers'&&!$('mobileSheet').hidden"), 'Mobile Page Template entry'
+                assert js(view, "$('templateCompatibility').textContent.includes('not affiliated with or endorsed by reMarkable')"), 'Compatibility notice'
                 # Exercise the actual HTML control and pass its queued action
                 # through the same model/acknowledgement contract as both hosts.
                 for template in CATALOG:

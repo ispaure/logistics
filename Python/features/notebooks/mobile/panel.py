@@ -70,7 +70,20 @@ class NotebookPanel:
         self.view.add(toga.ScrollContainer(content=box, horizontal=False, style=Pack(flex=1)))
 
     async def new(self, widget=None, **kwargs):
-        return await self.load(Notebook.new)
+        if self.busy or self.closed or not self.app.active_host:
+            return False
+        from .setup import choose_new_notebook
+        generation = getattr(self.app, 'navigation_generation', None)
+        self.busy = True
+        try:
+            book = await choose_new_notebook(self.app)
+        finally:
+            self.busy = False
+        if generation != getattr(self.app, 'navigation_generation', None):
+            return False
+        if book is None or self.closed or not self.app.active_host:
+            return False
+        return await self.load(lambda: book)
 
     async def load(self, read, key=None, *, mount=True):
         if self.busy or self.closed or not self.app.active_host:

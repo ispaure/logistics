@@ -25,6 +25,7 @@
     "mobile/android/io/github/ispaure/logistics/notebooks/BooxBallpoint.java",
     "mobile/android/io/github/ispaure/logistics/notebooks/NotebookInput.java",
     "mobile/panel.py",
+    "mobile/setup.py",
     "mobile/surface.py",
     "mobile/documents.py",
     "notebook.py",
