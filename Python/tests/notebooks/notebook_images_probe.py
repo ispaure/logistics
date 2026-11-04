@@ -78,7 +78,7 @@ def main(output, rclone=None):
                     saved_sha256=sha256(saved).hexdigest(),password_reprompt=True,pdf_ciphertext_preserved=True,
                     recovery_checked=repository is not None,reopened=True))
                 workspace.dispose();workspace.close();workspace.deleteLater();workspace=None
-                app.processEvents()
+                app.sendPostedEvents(None,qt.QEvent.Type.DeferredDelete);app.processEvents()
             report['success']=True
     except Exception:
         report['error']=traceback.format_exc()
@@ -91,7 +91,7 @@ def main(output, rclone=None):
         raise
     finally:
         if workspace is not None:
-            workspace.dispose();workspace.close();workspace.deleteLater();app.processEvents()
+            workspace.dispose();workspace.close();workspace.deleteLater();app.sendPostedEvents(None,qt.QEvent.Type.DeferredDelete);app.processEvents()
         (output/'desktop-images-result.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(dict(success=True,providers=[p['provider'] for p in report['providers']])))
 
