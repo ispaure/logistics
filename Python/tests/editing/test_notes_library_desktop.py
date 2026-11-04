@@ -288,6 +288,21 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertTrue(window.search_notice.isHidden())
             self.assertEqual(window.files_stack.geometry().bottom(), files.contentsRect().bottom())
 
+    def test_breadcrumb_viewport_tracks_larger_fonts(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'A note with a long title.md').write_text('# Note')
+            window = self.open_library(root)
+            window.open_note('A note with a long title.md')
+            self.wait_until(lambda: not window.progress.busy)
+            font = window.breadcrumbs.font()
+            font.setPointSize(32)
+            window.breadcrumbs.setFont(font)
+            self.app.processEvents()
+            self.assertGreaterEqual(window.breadcrumb_viewport.viewport().height(),
+                                    window.breadcrumbs.height())
+            window.close()
+
     def test_breadcrumbs_link_only_folder_notes_and_follow_every_document_kind(self):
         from features.notes_library.notes import fit_breadcrumbs
         with self.temporary_directory() as directory:
