@@ -9,14 +9,24 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from logistics_build.validation_plans import desktop_checks, inventory
 
 
 class ValidationPlanTests(unittest.TestCase):
     def test_desktop_plan_preserves_existing_commands_and_budgets(self):
-        posix = desktop_checks('Darwin', Path('reports'))
-        windows = desktop_checks('Windows', Path('reports'))
+        import json
+        root = Path(__file__).resolve().parents[3]
+        declared = json.loads((root / 'build-tests.json').read_text())['suites']
+        suites = [dict(row, timeout=row.get('timeout', 1800),
+                       directory=(row.get('owner', '') + '/' + row['directory']).lstrip('/'))
+                  for row in declared if 'desktop' in row['groups']]
+        # Pin verification belongs to the manager manifest contracts and preflight.
+        # This case owns command construction, platform differences and budgets.
+        with patch('build_manager.test_manifest.discover', return_value=suites):
+            posix = desktop_checks('Darwin', Path('reports'))
+            windows = desktop_checks('Windows', Path('reports'))
         self.assertEqual([p[0] for p in posix], ['test-structure', 'commonutils.smoke', 'logistics.smoke',
                          'commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
         self.assertEqual([p[2] for p in posix], [120, 1800, 1800, 1800, 1800, 600, 600])

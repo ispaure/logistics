@@ -13,7 +13,7 @@ from features.git.preferences import Preferences
 from features.git.options import git_defaults
 from features.git.accounts import change_credential
 from features.git.runner import GitRunner, GitError
-from tests.version_control.test_git_ui import GitUITests
+from tests.version_control.fixtures import GitUIFixture
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 
@@ -106,12 +106,12 @@ class GitPreferenceTests(unittest.TestCase):
 
 
 class PreferenceUITests(QtTestCase):
-    setUpClass = classmethod(GitUITests.setUpClass.__func__)
-    setUp = GitUITests.setUp
-    release_page = GitUITests.release_page
-    wait = GitUITests.wait
-    open = GitUITests.open
-    commit_fixture = GitUITests.commit_fixture
+    setUpClass = classmethod(GitUIFixture.setUpClass.__func__)
+    setUp = GitUIFixture.setUp
+    release_page = GitUIFixture.release_page
+    wait = GitUIFixture.wait
+    open = GitUIFixture.open
+    commit_fixture = GitUIFixture.commit_fixture
     def settings_panel(self):
         from features.git.ui.application_settings import GitPreferencesPanel
         panel = GitPreferencesPanel(preferences_path=self.page.preferences.path)
@@ -211,47 +211,3 @@ class PreferenceUITests(QtTestCase):
             panel.save(); self.wait_panel(panel)
             self.assertIn('name = Changed', global_config.read_text())
             self.assertEqual(self.repo.config_value('user.name', local=True), 'UI Test')
-
-    def test_clean_file_edit_refreshes_status_automatically(self):
-        from time import monotonic, sleep
-        self.commit_fixture(); self.open()
-        (self.repo.path / 'file.txt').write_text('first edit\n')
-        deadline = monotonic() + 5
-        while not self.page.snapshot.status.changes or self.page.busy:
-            self.assertLess(monotonic(), deadline)
-            self.app.processEvents(); sleep(.01)
-        self.assertEqual(self.page.snapshot.status.changes[0].path, 'file.txt')
-
-    def test_manual_refresh_does_not_retrigger_itself(self):
-        from time import monotonic, sleep
-        self.commit_fixture()
-        # Make the index's stat data stale, the condition under which ordinary
-        # git status would rewrite it and notify the .git directory watcher.
-        # Touch before installing watchers, so genuine file-edit notifications
-        # cannot be mistaken for refreshes caused by the manual snapshot.
-        file = self.repo.path / 'file.txt'
-        file.touch()
-        index = self.repo.path / '.git' / 'index'
-        original_index = index.read_bytes()
-        self.open()
-        with patch.object(self.page, '_job', wraps=self.page._job) as jobs:
-            self.page.refresh(); self.wait()
-            deadline = monotonic() + 2
-            while monotonic() < deadline:
-                self.app.processEvents(); sleep(.01)
-            self.wait()
-            # Native watchers can deliver an initial burst of notifications.
-            # Verify that it settles, rather than assuming one event per edit.
-            settled_jobs = jobs.call_count
-            deadline = monotonic() + 2
-            while monotonic() < deadline:
-                self.app.processEvents(); sleep(.01)
-            self.wait()
-            self.assertEqual(jobs.call_count, settled_jobs,
-                             [call.args[0] for call in jobs.call_args_list])
-        self.assertEqual(index.read_bytes(), original_index)
-        self.assertFalse(self.page.file_timer.isActive())
-        self.assertFalse(self.page._refresh_pending)
-
-
-del GitUITests

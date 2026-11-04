@@ -1,7 +1,7 @@
 """Execution profiles preserve independent diagnostics and explicit unrun coverage."""
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
-TEST_STAGE = TestStage.SMOKE
+TEST_STAGE = TestStage.REGRESSION
 
 import json
 import os
@@ -29,6 +29,7 @@ class TestExecutionPolicyTests(unittest.TestCase):
                                  '--report', str(report), *args], capture_output=True, text=True, timeout=30)
         return result, json.loads(report.read_text())
 
+    @stage(TestStage.SMOKE)
     def test_fast_mode_stops_after_smoke_and_diagnostic_mode_continues(self):
         for mode in ('fast', 'diagnostic'):
             with self.subTest(mode=mode), TemporaryDirectory() as directory:
@@ -68,6 +69,7 @@ class TestExecutionPolicyTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(len(json.loads(result.stdout)), 2)
 
+    @stage(TestStage.SMOKE)
     def test_unclassified_file_blocks_every_test_before_any_process_starts(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -221,6 +223,7 @@ class Derived(Base): pass
                     manifest.write_text(json.dumps(dict(schema=1, roots=[dict(row, **{field: value})])))
                     inventory(root)
 
+    @stage(TestStage.SMOKE)
     def test_successful_process_exit_without_case_evidence_is_a_failure(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
