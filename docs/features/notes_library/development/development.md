@@ -567,6 +567,9 @@ folder expansion. Each expansion must publish all 45 rows together and must not
 open document bodies. Startup bounds, active phases and task stacks are retained
 in ignored test evidence. Its acceptance deadline is bounded at ten minutes;
 manager-owned disposable devices and QA packages are removed by the runner.
+Fixture creation runs in one worker before measurement. Acceptance uses the
+lightweight phase counters; detailed Python call profiling is opt-in through the
+probe class because it also instruments native bridge and event-loop calls.
 
 ## Scoped desktop library tabs
 

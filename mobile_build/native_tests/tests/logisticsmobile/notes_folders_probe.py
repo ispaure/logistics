@@ -20,6 +20,7 @@ TEST_STAGE = TestStage.EXTENDED
 
 class NotesFoldersProbe(DocumentWorkspaceProbe):
     result_name = 'notes-folders-result.json'
+    profile_folders = False
 
     async def run_checks(self, app, report):
         fixture = json.loads(Path(__file__).with_name('localcrypt_fixture.json').read_text())
@@ -30,15 +31,19 @@ class NotesFoldersProbe(DocumentWorkspaceProbe):
             root = app.private_root / ('FolderCrypt' if private else 'FolderLocal')
             root.mkdir(exist_ok=True)
             provider = CryptFiles(root, app.cloud_client, 'Secret') if private else LocalFiles(root)
-            provider.mkdir('Library')
-            provider.mkdir('Library/Folder')
-            for index in range(40):
-                await asyncio.to_thread(provider.create_file, f'Library/Folder/Note {index:02}.md',
-                                        BytesIO(b'# Folder timing fixture'))
-            for index in range(4):
-                path = f'Library/Folder/Child {index}'
-                provider.mkdir(path)
-                await asyncio.to_thread(provider.create_file, path + f'/Child {index}.md', BytesIO(b'# Landing'))
+            def populate():
+                # Fixture setup is outside measurement. Keep file I/O together
+                # in one worker rather than scheduling a native UI turn per file.
+                provider.mkdir('Library')
+                provider.mkdir('Library/Folder')
+                for index in range(40):
+                    provider.create_file(f'Library/Folder/Note {index:02}.md',
+                                         BytesIO(b'# Folder timing fixture'))
+                for index in range(4):
+                    path = f'Library/Folder/Child {index}'
+                    provider.mkdir(path)
+                    provider.create_file(path + f'/Child {index}.md', BytesIO(b'# Landing'))
+            await asyncio.to_thread(populate)
             owner = await open_vault(app, provider, 'Library', 'documents')
             owner.sidebar.show_sidebar()
             await self.settle(owner)
@@ -81,22 +86,30 @@ class NotesFoldersProbe(DocumentWorkspaceProbe):
                     if painter.pending.get() is None:
                         timings['surface_paints'] += 1
                     return paint(impl, style)
-                profile = cProfile.Profile()
+                # Python profiling also instruments Chaquopy/native bridge
+                # calls and the event loop. Acceptance timings stay unprofiled;
+                # diagnostic subclasses can opt into the detailed call profile.
+                profile = cProfile.Profile() if getattr(self, 'profile_folders', False) else None
+                timings['profiled'] = profile is not None
                 with patch.object(owner.library, 'folders', measured('list_seconds', owner.library.folders)), \
                      patch.object(owner.library, 'folder_pages', measured('landing_seconds', owner.library.folder_pages)), \
                      patch.object(owner, 'tree_updates', tree_updates), patch.object(owner.rows, 'add', publish), \
                      patch.object(painter, 'paint', paint_surface), \
                      patch.object(provider, 'open', side_effect=AssertionError('Folder expansion read document content')):
                     start = perf_counter()
-                    profile.enable()
+                    if profile is not None:
+                        profile.enable()
                     await owner.toggle_folder('Library/Folder')
                     await self.settle(owner)
-                    profile.disable()
+                    if profile is not None:
+                        profile.disable()
                     timings['total_seconds'] = perf_counter() - start
-                stats = pstats.Stats(profile)
-                timings['profile'] = [dict(file=key[0], line=key[1], function=key[2], calls=value[1],
-                                           own=value[2], cumulative=value[3])
-                    for key, value in sorted(stats.stats.items(), key=lambda item: -item[1][3])[:25]]
+                timings['profile'] = []
+                if profile is not None:
+                    stats = pstats.Stats(profile)
+                    timings['profile'] = [dict(file=key[0], line=key[1], function=key[2], calls=value[1],
+                                               own=value[2], cumulative=value[3])
+                        for key, value in sorted(stats.stats.items(), key=lambda item: -item[1][3])[:25]]
                 assert len(owner.rows.children) == 45, len(owner.rows.children)
                 assert timings['publications'] == [45], timings['publications']
                 report['folders'].append(timings)
