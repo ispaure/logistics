@@ -247,6 +247,46 @@ class NotesDrawerTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_android_empty_state_observes_scroll_surface_and_releases_it(self):
+        from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
+        native = Mock()
+        detail = SimpleNamespace(_impl=type('AndroidBox', (), {'__module__': 'toga_android.widgets.box'})())
+        owner = type('Owner', (), {})()
+        owner.__dict__.update(detail=detail, opening_surface=SimpleNamespace(_impl=SimpleNamespace(native=native)),
+                              opening_gestures=[], side=None, retiring=[], open_swipe=Mock(return_value=True))
+        with patch.dict(sys.modules, {
+            'android.view': SimpleNamespace(View=SimpleNamespace(OnTouchListener=object)),
+            'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+        }):
+            install_opening_swipes(owner)
+        listener = native.setOnTouchListener.call_args.args[0]
+        native.getContext().getResources().getDisplayMetrics.return_value.density = 2
+        def touch(action, x, y=0, time=0):
+            event = Mock()
+            event.getActionMasked.return_value = action
+            event.getRawX.return_value, event.getRawY.return_value = x, y
+            event.getEventTime.return_value = time
+            return listener.onTouch(native, event)
+        for distance, direction in ((150, 1), (-150, -1)):
+            self.assertFalse(touch(0, 0))
+            self.assertTrue(touch(1, distance, time=100))
+            owner.open_swipe.assert_called_with(direction)
+        owner.open_swipe.reset_mock()
+        touch(0, 0)
+        touch(2, 5, 80, 50)
+        self.assertFalse(touch(1, 150, 80, 100))
+        touch(0, 0)
+        touch(5, 0)
+        self.assertFalse(touch(1, 150, time=100))
+        touch(0, 0)
+        self.assertFalse(touch(1, 2, time=100))
+        touch(0, 0)
+        self.assertFalse(touch(1, 150, time=900))
+        owner.open_swipe.assert_not_called()
+        clear_opening_swipes(owner)
+        native.setOnTouchListener.assert_called_with(None)
+        self.assertEqual(owner.opening_gestures, [])
+
     def test_android_popup_observes_child_touches_and_releases_its_listener(self):
         from mobile.notes_drawers import NotesDrawers
         owner = NotesDrawers.__new__(NotesDrawers)

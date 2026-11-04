@@ -290,6 +290,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         # both actions reachable when there is insufficient room to center them.
         self.welcome = toga.ScrollContainer(content=welcome_body, horizontal=False,
                                              style=Pack(flex=1))
+        self.sidebar.opening_surface = self.welcome
         self.welcome_content = toga.Box(style=Pack(direction=COLUMN, width=280))
         welcome_body.add(self.welcome_content)
         self.open_card = toga.Button('Open Document', on_press=lambda widget: self.sidebar.show_sidebar(), style=Pack(height=48, margin_top=20))

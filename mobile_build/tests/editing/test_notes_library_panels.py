@@ -503,6 +503,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
     def test_row_menus_reserve_a_full_target_separate_from_filename_and_disclosure(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertIs(owner.sidebar.opening_surface, owner.welcome)
             rows = list(owner.rows.children)
             for row in rows:
                 button = next((child for child in row.children if hasattr(child, 'vault_path')), None)

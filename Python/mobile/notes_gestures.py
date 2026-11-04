@@ -89,7 +89,10 @@ def install_opening_swipes(owner):
                 elif action in (3, 5):
                     self.start = None
                 return False
-        native = owner.detail._impl.native
+        # ScrollContainer consumes empty-state touches before its parent Box
+        # sees them. Observe that scroll surface; document WebViews retain
+        # their own selection/scroll-aware JavaScript recognizer.
+        native = getattr(owner, 'opening_surface', owner.detail)._impl.native
         native.setClickable(True)
         listener = Touch()
         native.setOnTouchListener(listener)
