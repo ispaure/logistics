@@ -99,3 +99,21 @@ an isolated native QA app, rotates between portrait and landscape, measures titl
 and tree-label widths, and saves article/tree screenshots before owned cleanup.
 The `--family all` option covers iPhone, iPad and closed/open/partial iPhone Duo;
 Android phone and `--android-tablet` runs use disposable emulators.
+
+The November 3 native Help matrix passed three orientation samples each on
+an iPhone, iPad, and closed/open/partial iPhone Duo. App-window article and tree
+captures were visually reviewed. The title measured 246/322 points in iPhone
+portrait/landscape, 604/668 on iPad, 226/438 on closed Duo and 513/439 on
+open/partial Duo. The partial Duo's final whole-display capture was black;
+its app-window captures and native geometry checks succeeded. These are
+simulator layout checks, not physical-device or full-app release certification.
+
+Android phone and tablet APK builds succeeded, but both disposable emulators
+timed out during startup before the app launched. Their cleanup receipts confirm
+removal. Native Android visual acceptance remains pending; host checks cover
+both allocations and the shared Android control-gutter calculation.
+
+Notes toolbar/breadcrumb checks, the desktop folder-navigation/scroll check,
+17 Help host tests and 16 shared/native-bar host tests pass. A broader 33-case
+Notes host run has two failures in video embed/media retirement, outside this
+layout change, and one skipped test. It is not a passing full Notes suite.
