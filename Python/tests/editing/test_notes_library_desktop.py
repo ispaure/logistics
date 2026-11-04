@@ -502,6 +502,13 @@ class NotesLibraryDesktopTests(QtTestCase):
             root = Path(directory)
             (root / 'Home.md').write_text('# Home')
             window = self.open_library(root)
+            for button in (window.new_note_button, window.new_folder_button, window.collapse_button):
+                self.assertFalse(button.icon().isNull())
+                self.assertTrue(button.accessibleName())
+                self.assertEqual(button.text(), '')
+            window.tree.topLevelItem(0).setExpanded(True)
+            window.collapse_button.click()
+            self.assertFalse(window.tree.topLevelItem(0).isExpanded())
             self.assertTrue(window.menu.isHidden())
             window.show_sidebar(False)
             self.assertFalse(window.panel_tabs.isHidden())
