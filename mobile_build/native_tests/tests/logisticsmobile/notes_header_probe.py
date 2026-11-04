@@ -91,7 +91,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 assert owner.search.parent is owner.search_content
                 assert owner.rows_scroll.parent is owner.files_content
                 assert owner.tree.children[1:3] == [owner.panel_actions, owner.panel_body]
-                assert len(owner.panel_actions.children) == 3
+                assert sum(hasattr(child, 'on_press') for child in owner.panel_actions.children) == 3
                 if not owner.sidebar.expanded:
                     overlay = owner.sidebar.overlay
                     assert overlay.edge_panel

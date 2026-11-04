@@ -5,6 +5,7 @@ import sys
 from collections.abc import Mapping
 
 import toga
+from toga.platform import get_current_platform
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from services.build_version import BuildVersion, installed_build
@@ -28,6 +29,6 @@ def build_information(version, path=None):
         if version:
             identity = BuildVersion(version, identity.revision, identity.committed_at, identity.modified)
         snapshot = ''
-    platform = {'ios': 'iOS / iPadOS', 'android': 'Android'}.get(sys.platform, sys.platform)
+    platform = {'iOS': 'iOS / iPadOS', 'android': 'Android'}.get(get_current_platform(), sys.platform)
     return '\n'.join(filter(None, (identity.label, 'Platform: ' + platform,
                                    'Source: ' + snapshot[:12] if snapshot else '')))
