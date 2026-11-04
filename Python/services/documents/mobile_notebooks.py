@@ -179,6 +179,12 @@ def close_notebook(app, key, choice, *, leaving_reader=False):
             return False
         if choice != 'discard' and panel.document.recovery is None:
             return False
+        if choice == 'discard':
+            try:
+                panel.document.discard()
+            except (OSError, ValueError, KeyError) as error:
+                panel.status.text = 'Could not discard; edits retained: ' + str(error)
+                return False
     app.workspace.close(key, guard=lambda session: True)
     panels(app).pop(key, None)
     if panel is not None:
