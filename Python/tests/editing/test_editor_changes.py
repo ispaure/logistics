@@ -34,8 +34,9 @@ class BaselineTests(unittest.TestCase):
                     patch('features.git.runner.shutil.which', side_effect=lambda name: executable if name == executable else None):
                 snapshot = read_text_file(path)
                 changes, label = compare(snapshot, snapshot.text)
-            self.assertEqual(changes[0].kind, 'modify')
             self.assertIn('Git index', label)
+            self.assertTrue(changes, label)
+            self.assertEqual(changes[0].kind, 'modify')
 
     def test_unregistered_repo_index_refresh_and_missing_git_fallback(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -48,9 +49,23 @@ class BaselineTests(unittest.TestCase):
             git('add', 'file.txt')
             path.write_text('edited\n')
             snapshot = read_text_file(path)
-            changes, label = compare(snapshot, snapshot.text)
-            self.assertEqual(changes[0].kind, 'modify')
+            from itertools import cycle
+            from commonUtils.integrations.wrappers.cmdShellWrapper import capture
+            enter = capture.ProcessSupervisor.__enter__
+            def completed_before_poll(supervisor):
+                result = enter(supervisor)
+                supervisor.child.wait(timeout=10)
+                return result
+            # Each Git read has finished, but its supervisor resumes beyond the
+            # three-second budget. This must still use Git, not silently fall
+            # back to the unchanged saved-file snapshot and produce no diff.
+            clock = cycle((0, 4))
+            with patch.object(capture.ProcessSupervisor, '__enter__', completed_before_poll), \
+                    patch.object(capture, 'monotonic', side_effect=lambda: next(clock)):
+                changes, label = compare(snapshot, snapshot.text)
             self.assertIn('Git index', label)
+            self.assertTrue(changes, label)
+            self.assertEqual(changes[0].kind, 'modify')
             git('add', 'file.txt')
             self.assertFalse(compare(snapshot, snapshot.text)[0])
             with patch('features.git.editor_baseline.index_baseline', side_effect=OSError('missing')):
@@ -58,6 +73,8 @@ class BaselineTests(unittest.TestCase):
             new = root / 'new.txt'
             new.write_text('new\n')
             changes, label = compare(read_text_file(new), 'new\n')
+            self.assertIn('Git index', label)
+            self.assertTrue(changes, label)
             self.assertEqual(changes[0].kind, 'add')
 
     def test_worktree_discovery_and_index_are_local_to_file(self):
