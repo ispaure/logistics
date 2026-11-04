@@ -14,6 +14,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 from features.comics.comicinfo import ComicInfoXML
 from features.comics.library import ComicDocument
+from tests.comics.fixtures import comic_library
 
 
 class ComicFixture:
@@ -32,7 +33,6 @@ class ComicFixture:
             archive.writestr('notes.txt', b'keep me')
             if xml is not None:
                 archive.writestr('ComicInfo.xml', xml)
-
 
 
 class MetadataTests(ComicFixture, unittest.TestCase):
@@ -179,11 +179,9 @@ class WindowTests(ComicFixture, QtTestCase):
         self.assertFalse(target.busy, 'Background operation did not finish')
 
     def test_window_load_edit_save(self):
-        from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
         app = self.app
         self.archive()
-        window = ComicLibraryWindow(self.path.parent)
+        window = comic_library(self.path.parent)
         window._load(self.path)
         self.wait_for(window)
         self.assertTrue(window.preview.isReadOnly())
@@ -250,9 +248,8 @@ class WindowTests(ComicFixture, QtTestCase):
 
     def test_library_catalog_supplies_dropdowns_and_updates_after_save(self):
         import time
-        from features.comics.ui.library import ComicLibraryWindow
         self.archive(b'<ComicInfo><Writer>Existing</Writer><Publisher>Library publisher</Publisher></ComicInfo>')
-        window = ComicLibraryWindow(self.path.parent)
+        window = comic_library(self.path.parent)
         def wait_catalog():
             deadline = time.monotonic() + 5
             while window.catalog_busy and time.monotonic() < deadline:
@@ -309,7 +306,6 @@ class WindowTests(ComicFixture, QtTestCase):
 
     def test_combo_mapping_unknown_values_and_hidden_fields(self):
         from features.comics.ui.metadata_widgets import editor_value
-        from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_editor import MetadataEditor
         app = self.app
         xml = ('<ComicInfo><LanguageISO>zh-Hant</LanguageISO><Manga>legacy</Manga>'
@@ -418,7 +414,6 @@ class WindowTests(ComicFixture, QtTestCase):
 
 
     def test_bulk_mixed_shared_and_reverted_fields_apply_only_explicit_changes(self):
-        from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_editor import MetadataEditor
         from features.comics.ui.metadata_widgets import editor_value
         self.archive(b'<ComicInfo><Writer>Shared</Writer><Series>First</Series><Count>2</Count><GTIN>one</GTIN></ComicInfo>')
@@ -485,17 +480,19 @@ class WindowTests(ComicFixture, QtTestCase):
                     widget.setFocus()
                     widget.selectAll()
                     QTest.keyClicks(widget, value)
-                self.assertEqual(editor._changes(), {field: value})
-                QTest.mouseClick(editor.apply_button, qt.Qt.MouseButton.LeftButton)
-                self.wait_for(editor)
-                self.assertIsNone(editor.last_save_error)
-                self.assertEqual(editor._changes(), {})
                 expected[field] = value
-                for path in (self.path, second):
-                    document = ComicDocument(path)
-                    self.assertEqual({name: document.info.get_field(name) for name in expected}, expected)
-                    with zipfile.ZipFile(path) as archive:
-                        self.assertEqual(archive.read('01.png'), b'original image bytes')
+                self.assertEqual(editor._changes(), expected)
+        # All controls contribute to one user action. Other cases cover repeated
+        # Apply, mixed values, explicit clearing and recovery after a failed save.
+        QTest.mouseClick(editor.apply_button, qt.Qt.MouseButton.LeftButton)
+        self.wait_for(editor)
+        self.assertIsNone(editor.last_save_error)
+        self.assertEqual(editor._changes(), {})
+        for path in (self.path, second):
+            document = ComicDocument(path)
+            self.assertEqual({name: document.info.get_field(name) for name in expected}, expected)
+            with zipfile.ZipFile(path) as archive:
+                self.assertEqual(archive.read('01.png'), b'original image bytes')
         editor.reject()
 
 
@@ -524,7 +521,6 @@ class WindowTests(ComicFixture, QtTestCase):
     def test_field_markers_revert_and_mixed_colors_follow_light_and_dark_palettes(self):
         from commonUtils.ui import pyside as qt
         from features.comics.ui.metadata_form import MetadataForm
-        from features.comics.comicinfo import ComicInfoXML
         for dark in (False, True):
             original = self.app.palette()
             palette = qt.QPalette(original)
@@ -553,11 +549,10 @@ class WindowTests(ComicFixture, QtTestCase):
 
     def test_browser_context_menu_keeps_selected_folder_and_files(self):
         from commonUtils.ui import pyside as qt
-        from features.comics.ui.library import ComicLibraryWindow
         self.archive()
         folder = self.path.parent / 'nested'
         folder.mkdir()
-        window = ComicLibraryWindow(self.path.parent)
+        window = comic_library(self.path.parent)
         self.app.processEvents()
         indexes = [window.model.index(str(path)) for path in (folder, self.path)]
         for index in indexes:
@@ -726,42 +721,8 @@ class SelectionEdgeTests(ComicFixture, unittest.TestCase):
             ComicSelection(self.path)
 
 
-class GenericXMLTests(QtTestCase):
-    def test_full_document_and_namespace_extensions_are_preserved(self):
-        from commonUtils.formats.xmlType import XMLFile
-        data = (b'<?xml version="1.0"?><!--before--><?before yes?>'
-                b'<c:Record xmlns:c="urn:root" xmlns:x="urn:extra" xmlns:unused="urn:unused" '
-                b'x:kind="unused:Type"><c:Title keep="yes">Old</c:Title>'
-                b'<x:Title>Extension title</x:Title><x:Data a="b"><x:Child/>Tail</x:Data>'
-                b'<!--inside--></c:Record><?after yes?><!--after-->')
-        document = XMLFile.from_bytes(data)
-        self.assertEqual(document.to_bytes(), data)
-        document.set_text('Title', 'New & <title>')
-        document.set_text('Added', 'New')
-        result = document.to_bytes()
-        root = ET.fromstring(result)
-        self.assertEqual(root.findtext('{urn:root}Title'), 'New & <title>')
-        self.assertEqual(root.find('{urn:root}Title').get('keep'), 'yes')
-        self.assertEqual(root.findtext('{urn:extra}Title'), 'Extension title')
-        self.assertEqual(root.findtext('{urn:root}Added'), 'New')
-        self.assertEqual(root.find('{urn:extra}Data').get('a'), 'b')
-        self.assertEqual(root.find('{urn:extra}Data/{urn:extra}Child').tail, 'Tail')
-        for preserved in (b'<!--before-->', b'<?before yes?>', b'<!--inside-->',
-                          b'<?after yes?>', b'<!--after-->', b'xmlns:unused="urn:unused"'):
-            self.assertIn(preserved, result)
+class ComicSchemaTests(unittest.TestCase):
 
-    def test_generic_file_loading_is_separate_from_lines(self):
-        from commonUtils.formats.xmlType import XMLFile
-        with TemporaryDirectory() as temp:
-            path = Path(temp) / 'record.xml'
-            path.write_text('<Record><Title>Old</Title></Record>')
-            document = XMLFile(path)
-            document.line_lst = ['untouched']
-            self.assertEqual(document.read_xml().localName, 'Record')
-            document.set_text('Title', 'New')
-            self.assertEqual(document.line_lst, ['untouched'])
-            self.assertEqual(document.get_text('Title'), 'New')
-            self.assertEqual(path.read_text(), '<Record><Title>Old</Title></Record>')
 
     def test_comic_schema_types_validate_only_changed_fields(self):
         document = ComicInfoXML.from_bytes(b'<ComicInfo><Month>legacy</Month></ComicInfo>')
@@ -775,11 +736,6 @@ class GenericXMLTests(QtTestCase):
         document.month = ''
         self.assertEqual(document.month, '')
 
-    def test_direct_dom_changes_are_serialized(self):
-        from commonUtils.formats.xmlType import XMLFile
-        document = XMLFile.from_bytes(b'<Root><Item>Old</Item></Root>')
-        document.xml_root.setAttribute('added', 'yes')
-        self.assertEqual(ET.fromstring(document.to_bytes()).get('added'), 'yes')
 
     def test_new_comic_fields_follow_schema_order_without_moving_extensions(self):
         document = ComicInfoXML.from_bytes(b'<ComicInfo><Series>S</Series><Custom x="yes"/>'

@@ -8,9 +8,7 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from io import BytesIO
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import time
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
@@ -19,6 +17,7 @@ from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages, load_preview
 from features.comics.reading import comic_siblings, visible_pages
 from features.comics.ui.reader import ComicReaderWindow, read_previous
+from tests.comics.fixtures import encoded_page
 
 
 class SpreadTests(QtTestCase):
@@ -37,34 +36,22 @@ class SpreadTests(QtTestCase):
 
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
 
-    def archive(self, name, colors=('red', 'green', 'blue', 'yellow', 'orange'), rtl=False, pages_xml=''):
+    def archive(self, name, colors=('red', 'green', 'blue', 'yellow', 'orange'), rtl=False,
+                pages_xml='', size=(80, 120)):
         path = self.root / name
         with zipfile.ZipFile(path, 'w') as archive:
             archive.writestr('ComicInfo.xml', f'<ComicInfo><Manga>{"YesAndRightToLeft" if rtl else "No"}</Manga>{pages_xml}</ComicInfo>')
             for i, color in enumerate(colors):
-                image = Image.new('RGB', (800, 1200), color)
-                stream = BytesIO()
-                image.save(stream, format='PNG')
-                archive.writestr(f'{i + 1}.png', stream.getvalue())
+                archive.writestr(f'{i + 1}.png', encoded_page(color, size))
         return path
 
     def wait(self, reader):
-        deadline = time.monotonic() + 8
-        quiet_since = None
-        while time.monotonic() < deadline:
-            self.app.processEvents()
-            if reader.busy or any(window.busy for window in reader.metadata_windows):
-                quiet_since = None
-            elif quiet_since is None:
-                quiet_since = time.monotonic()
-            elif time.monotonic() - quiet_since >= .1:
-                return
-            time.sleep(.01)
-        self.fail('Reader did not finish its background work')
+        self.wait_until(lambda: not (reader.busy or reader.page_cache.busy
+                        or any(window.busy for window in reader.metadata_windows)),
+                        timeout=8, message='Reader did not finish its background work')
 
     def reader(self, path, wide=True):
         reader = ComicReaderWindow(ComicPages(path))
@@ -245,6 +232,8 @@ class SpreadTests(QtTestCase):
         manga = editor.editors['Manga']
         manga.setCurrentIndex(manga.findData('YesAndRightToLeft'))
         editor._save()
+        self.wait_until(lambda: reader.pages.right_to_left,
+                        message='Reader did not reload the saved reading direction')
         self.wait(reader)
         self.assertEqual(saved, [path])
         self.assertTrue(reader.pages.right_to_left)
@@ -253,25 +242,13 @@ class SpreadTests(QtTestCase):
         editor.reject()
 
     def test_preview_preserves_enough_pixels_for_retina_display(self):
-        path = self.archive('retina.cbz')
+        path = self.archive('retina.cbz', colors=('red',), size=(800, 1200))
         _, cover, _ = load_preview(path)
         with Image.open(BytesIO(cover)) as image:
             self.assertEqual(image.size, (800, 1200))
 
     def wait_cache(self, reader):
-        deadline = time.monotonic() + 5
-        while reader.page_cache.busy:
-            self.assertLess(time.monotonic(), deadline)
-            self.app.processEvents()
-            time.sleep(.005)
-        self.app.processEvents()
-
-    def wait_shown(self, reader, page):
-        deadline = time.monotonic() + 3
-        while reader.shown_page != page and time.monotonic() < deadline:
-            self.app.processEvents()
-            time.sleep(.005)
-        self.assertEqual(reader.shown_page, page)
+        self.wait_until(lambda: not reader.page_cache.busy)
 
     def test_holding_arrows_uses_steady_timer_and_stops_on_release_for_both_directions(self):
         from PySide6.QtTest import QTest
@@ -280,6 +257,11 @@ class SpreadTests(QtTestCase):
             reader = self.reader(self.archive(f'held-{rtl}.cbz', colors=('red',) * 12, rtl=rtl), wide=False)
             reader.set_mode('single')
             self.wait_cache(reader)
+            self.assertEqual(reader.keys.timer.interval(), PAGE_TURN_INTERVAL_MS)
+            self.assertEqual(reader.keys.timer.timerType(), qt.Qt.TimerType.PreciseTimer)
+            # Dispatch repeat ticks explicitly while checking OS auto-repeat.
+            # Workstation load must not turn another page between assertions.
+            reader.keys.timer.setInterval(60_000)
             forward = qt.Qt.Key.Key_Left if rtl else qt.Qt.Key.Key_Right
             backward = qt.Qt.Key.Key_Right if rtl else qt.Qt.Key.Key_Left
             QTest.keyPress(reader.canvas, forward)
@@ -292,17 +274,41 @@ class SpreadTests(QtTestCase):
             self.app.sendEvent(reader.canvas, qt.QKeyEvent(qt.QEvent.Type.KeyRelease, forward,
                               qt.Qt.KeyboardModifier.NoModifier, '', True))
             self.assertTrue(reader.keys.timer.isActive())
-            self.assertEqual(reader.keys.timer.interval(), PAGE_TURN_INTERVAL_MS)
-            self.wait_shown(reader, 2)
+            reader.keys.timer.timeout.emit()
             QTest.keyRelease(reader.canvas, forward)
-            self.assertFalse(reader.keys.timer.isActive())
-            QTest.qWait(PAGE_TURN_INTERVAL_MS + 50)
+            self.wait(reader)
             self.assertEqual(reader.shown_page, 2)
+            self.assertFalse(reader.keys.timer.isActive())
             QTest.keyPress(reader.canvas, backward)
             self.assertEqual(reader.shown_page, 1)
-            self.wait_shown(reader, 0)
+            reader.keys.timer.timeout.emit()
             QTest.keyRelease(reader.canvas, backward)
+            self.wait(reader)
+            self.assertEqual(reader.shown_page, 0)
             reader.close(); self.wait(reader)
+
+    def test_hold_timer_dispatches_and_release_stops_ticks(self):
+        from PySide6.QtTest import QTest
+        from features.comics.ui.reader_keys import PAGE_TURN_INTERVAL_MS
+        reader = self.reader(self.archive('timer.cbz'), wide=False)
+        self.wait_cache(reader)
+        ticks = []
+        def release_on_tick():
+            ticks.append(reader.page)
+            QTest.keyRelease(reader.canvas, qt.Qt.Key.Key_Right)
+        reader.keys.timer.timeout.connect(release_on_tick)
+        QTest.keyPress(reader.canvas, qt.Qt.Key.Key_Right)
+        try:
+            self.wait_until(lambda: bool(ticks), message='Hold timer did not dispatch')
+            self.wait(reader)
+            self.assertEqual(ticks, [2])
+            self.assertEqual(reader.shown_page, 2)
+            self.assertFalse(reader.keys.timer.isActive())
+            QTest.qWait(PAGE_TURN_INTERVAL_MS + 50)
+            self.assertEqual(ticks, [2])
+            self.assertEqual(reader.shown_page, 2)
+        finally:
+            QTest.keyRelease(reader.canvas, qt.Qt.Key.Key_Right)
 
     def test_holding_page_button_and_boundary_never_automatically_opens_next_comic(self):
         from PySide6.QtTest import QTest
@@ -311,15 +317,18 @@ class SpreadTests(QtTestCase):
         self.archive('2-held.cbz')
         reader = self.reader(path, wide=False)
         reader.set_mode('single'); self.wait_cache(reader)
+        self.assertEqual(reader.keys.timer.interval(), PAGE_TURN_INTERVAL_MS)
+        reader.keys.timer.setInterval(60_000)
         QTest.mousePress(reader.next_button, qt.Qt.MouseButton.LeftButton)
         self.assertEqual(reader.shown_page, 1)
-        self.assertEqual(reader.keys.timer.interval(), PAGE_TURN_INTERVAL_MS)
-        self.wait_shown(reader, 2)
+        reader.keys.timer.timeout.emit()
         QTest.mouseRelease(reader.next_button, qt.Qt.MouseButton.LeftButton)
+        self.wait(reader)
+        self.assertEqual(reader.shown_page, 2)
         self.assertFalse(reader.keys.timer.isActive())
         reader.go(4); self.wait(reader)
         QTest.keyPress(reader.canvas, qt.Qt.Key.Key_Right)
-        QTest.qWait(PAGE_TURN_INTERVAL_MS * 2 + 50)
+        reader.keys.timer.timeout.emit()
         self.assertEqual(reader.pages.path, path)
         self.assertFalse(reader.keys.timer.isActive())
         QTest.keyRelease(reader.canvas, qt.Qt.Key.Key_Right)
@@ -329,21 +338,27 @@ class SpreadTests(QtTestCase):
         from PySide6.QtTest import QTest
         from features.comics.ui import reader as module
         reader = self.reader(self.archive('slow.cbz'), wide=False)
-        release = Event()
+        entered, release = Event(), Event()
         original = module.read_candidates
         def delayed(pages, index):
-            release.wait(5)
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError('Test did not release the page load')
             return original(pages, index)
         with patch.object(reader.page_cache, 'lookup', return_value=None), patch.object(module, 'read_candidates', delayed):
-            QTest.keyPress(reader.canvas, qt.Qt.Key.Key_Right)
             try:
-                QTest.qWait(1000)
+                reader.keys.timer.setInterval(60_000)
+                QTest.keyPress(reader.canvas, qt.Qt.Key.Key_Right)
+                self.wait_until(entered.is_set, message='Slow page load did not start')
+                for _ in range(4):
+                    reader.keys.timer.timeout.emit()
                 self.assertTrue(reader.busy)
                 self.assertEqual(reader.shown_page, 0)
                 self.assertEqual(reader.page, 1)
                 self.assertIsNone(reader.pending_page)
                 QTest.keyRelease(reader.canvas, qt.Qt.Key.Key_Right)
             finally:
+                QTest.keyRelease(reader.canvas, qt.Qt.Key.Key_Right)
                 release.set()
                 self.wait(reader)
         self.assertEqual(reader.shown_page, 1)
