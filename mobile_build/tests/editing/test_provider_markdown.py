@@ -29,6 +29,34 @@ class ProviderMarkdownTests(unittest.TestCase):
         self.assertIs(workflow.footer.parent, owner.crypt_view)
         self.assertNotEqual(workflow.footer.style.height, 0)
 
+    def test_preparing_editor_cancel_keeps_draft_and_rejects_late_result(self):
+        from services.documents.authoring.markdown_editor import prepare_editor
+        workflow = self.owner._provider_markdown
+        before = workflow.source.value
+        entered, release = Event(), Event()
+        def slow(*args, **kwargs):
+            entered.set()
+            if not release.wait(3):
+                raise RuntimeError('Preparation not released')
+            return prepare_editor(*args, **kwargs)
+        async def exercise():
+            workflow.toggle_preview()
+            task = workflow.pending
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 2))
+                panel = workflow.content.children[0]
+                self.assertEqual(panel.children[0].text, 'Preparing for editing…')
+                panel.children[1].on_press()
+                self.assertIsNone(workflow.preparing_formatted)
+                self.assertEqual(workflow.source.value, before)
+            finally:
+                release.set()
+                await asyncio.gather(task, return_exceptions=True)
+            self.assertIsNone(workflow.formatted)
+            self.assertIn(workflow.preview, workflow.content.children)
+        with patch('services.documents.authoring.provider_markdown.prepare_editor', side_effect=slow):
+            self.app.loop.run_until_complete(exercise())
+
     def test_remote_markdown_opens_rendered_and_rejects_edit_and_save(self):
         remote = LocalFiles(self.files)
         remote.remote_storage = True

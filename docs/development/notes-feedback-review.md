@@ -79,3 +79,14 @@ already reuse their prepared resource map and unchanged formatted document.
 The media regressions cover repeated renders, replacement/deletion, link
 precedence changes, revocation, cancellation and video stream retirement. Mobile
 Notes Library mode regressions cover the existing navigation/authoring flow.
+
+## Editor preparation feedback
+
+Mobile Notes Library retains the published reader beneath its existing loading
+panel while preparing an editor. The panel says “Preparing for editing…” and
+Cancel restores the reader and invalidates the pending publication. Regular
+provider Markdown and switching back to formatted library editing also expose
+Cancel during worker preparation. Drafts survive cancellation; late worker
+results cannot replace a newer view. Desktop already retains the unchanged rich
+editor and RAM resources when switching modes, avoiding this preparation step.
+Host regressions exercise slow preparation, cancellation and superseding views.
