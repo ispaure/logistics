@@ -59,8 +59,10 @@ See [Mobile settings](settings/settings.md#settings-and-build-information).
 
 ## Current feature support
 
-Android and iOS have the same prototype scope. “Implemented” describes code in
-the native app; real-device interaction testing is still required.
+The table describes implemented mobile adapters, not a certification of every
+device or provider. Availability also depends on Settings → Features. Android
+storage selection and iPad multiwindow have separate platform restrictions in
+the linked guides; real-device permissions and assistive input need device validation.
 
 | Logistics capability | Mobile status |
 | --- | --- |
@@ -80,7 +82,9 @@ the native app; real-device interaction testing is still required.
 | Bulk rename, IDE and Git/Perforce UI | Not ported |
 | LM chat | Native text conversations, configured server/model, streaming/cancel, private history and Markdown export |
 | rclone remote files | Credential ZIP import, direct remote previews, existing offline copies/export, LocalCrypt encrypted offline reading/editing, local folder management and Save As; encrypted saved or session-only credentials |
-| Media/image tools, archives and other desktop integrations | Not ported |
+| Images and camera | Native image viewing; Burst camera on supported devices. See [Image Tools](../features/images/user_mobile/user_mobile.md). |
+| Video | Native player for Local, LocalCrypt and remote/crypt sources; supported containers depend on playback backend. See [Video Player](../features/video/user_mobile/user_mobile.md). |
+| Desktop archive tools and other desktop integrations | Not generally ported; reader support for comic archives is separate. |
 
 ## Preferences and storage
 
