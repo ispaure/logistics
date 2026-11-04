@@ -12,6 +12,17 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class DockedVideoTests(QtTestCase):
+    def test_chapters_folder_and_favourites_have_distinct_glyphs(self):
+        from features.video.ui.icons import video_icon
+        images = []
+        for name in ('chapters', 'queue', 'heart'):
+            button = qt.QToolButton()
+            video_icon(button, name)
+            images.append(button.icon().pixmap(24, 24).toImage())
+            button.deleteLater()
+        self.assertNotEqual(images[0], images[1])
+        self.assertNotEqual(images[1], images[2])
+
     def make_player(self, root, *, backend_factory=None):
         from features.video.ui.player import VideoWindow
         from features.video.ui.vlc_backend import VLCPlayback
@@ -24,6 +35,9 @@ class DockedVideoTests(QtTestCase):
         if hasattr(window.player, 'native'):
             window.player.native.audio_output_set('adummy')
         window.audio.setMuted(True)
+        if qt.QApplication.platformName() != 'offscreen':
+            window.setAttribute(qt.Qt.WidgetAttribute.WA_ShowWithoutActivating)
+            window.setWindowFlag(qt.Qt.WindowType.WindowDoesNotAcceptFocus)
         window.show()
         self.addCleanup(window.close)
         return window
@@ -41,7 +55,6 @@ class DockedVideoTests(QtTestCase):
             window.toggle_play()
             self.wait_until(lambda: window.have_frame and window.player.position() > 100)
             window.pause_requested()
-            window.identity.setText('A very long video filename with language and release metadata ' * 5 + '.mkv')
             window.status.setText('Read failed. Check your connection and press Play to retry. ' * 8)
             window.audio_tracks.addItem('A very long audio track name ' * 10, 0)
             window.subtitle_tracks.addItem('A very long subtitle track name ' * 10, -1)
@@ -183,7 +196,6 @@ class DockedVideoTests(QtTestCase):
     def test_favourite_and_panel_settings_use_existing_services(self):
         from desktop.document_catalog import catalog
         from logistics_build.build_retention import scratch
-        from services.documents.video_settings import SettingsStore
         with scratch() as root, patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'state'), patch(
                 'desktop.document_catalog.cache_directory', return_value=root / 'state'):
             window = self.make_player(root)
@@ -195,7 +207,7 @@ class DockedVideoTests(QtTestCase):
             speed.setCurrentIndex(index)
             speed.activated.emit(index)
             self.assertEqual(window.settings.rate, 1.5)
-            self.assertEqual(SettingsStore(root / 'state' / 'Video').load().rate, 1.5)
+            self.assertEqual(window.settings_store.load().rate, 1.5)
             self.assertEqual(window.speed_button.text(), '1.5×')
             window.show_settings('queue')
             auto = window.settings_scroll.widget().findChild(qt.QCheckBox)
@@ -209,3 +221,41 @@ class DockedVideoTests(QtTestCase):
                 entry.returnPressed.emit()
                 seek.assert_called_once_with(62500)
             window.close()
+
+    def test_fullscreen_isolates_picture_and_restores_document_slot(self):
+        from logistics_build.build_retention import scratch
+        from desktop.documents import DocumentPane
+        with scratch() as root:
+            window = self.make_player(root)
+            pane = DocumentPane(window)
+            pane.resize(1000, 720)
+            pane.show()
+            qt.QApplication.processEvents()
+            slot = pane.layout().indexOf(window)
+            self.assertFalse(pane.storage_location.actions_button.isVisible())
+            self.assertFalse(hasattr(window, 'identity'))
+            self.assertFalse(hasattr(window, 'floating'))
+            window.toggle_fullscreen()
+            qt.QApplication.processEvents()
+            self.assertIsNone(window.parentWidget())
+            self.assertTrue(window.isFullScreen())
+            self.assertEqual(self.bounds(window.stage, window), window.centralWidget().geometry())
+            before = self.bounds(window.stage, window)
+            window.requested_play = window.have_frame = True
+            window.hide_controls()
+            qt.QApplication.processEvents()
+            self.assertEqual(self.bounds(window.stage, window), before)
+            window.escape_playback()
+            qt.QApplication.processEvents()
+            self.assertIs(window.parentWidget(), pane)
+            self.assertEqual(pane.layout().indexOf(window), slot)
+            self.assertFalse(window.fullscreen_action.isChecked())
+            window.toggle_fullscreen()
+            qt.QApplication.processEvents()
+            window.showNormal()  # Native window-manager exit, outside our action.
+            self.wait_until(lambda: window.parentWidget() is pane)
+            self.assertEqual(pane.layout().indexOf(window), slot)
+            self.assertFalse(window.fullscreen_action.isChecked())
+            window.close()
+            pane.close()
+            pane.deleteLater()

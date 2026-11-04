@@ -1,7 +1,8 @@
 # Video Player development
 
 See the [desktop parity implementation brief](desktop-parity.md) for the current
-mobile-to-desktop gap analysis and delivery sequence, excluding HDR.
+mobile-to-desktop gap analysis and delivery sequence. The fullscreen changes
+below supersede that brief's earlier floating-window scope.
 
 ## Desktop parity implementation
 
@@ -37,7 +38,7 @@ existing codec matrix, rendered SRT/VTT/ASS/SSA cues, a rendered font-size chang
 native chapters, offsets, overlay geometry, Pause/readiness ordering and browser
 lease handoff. Existing Qt, range, resume and privacy regressions remain required.
 Host checks do not establish physical audible sync, receiver playback or native
-sleep/lock timing on every OS. HDR output work remains excluded.
+sleep/lock timing on every OS.
 
 Playback-speed acceptance measures the actual media clock at 2× and 0.5× while
 playing and 1.5× after a paused change, rather than trusting the selected setting.
@@ -59,7 +60,11 @@ and controlled-stall fixtures still require FFmpeg and use disposable workspaces
 sizes and below it at narrow sizes. Short narrow windows replace the secondary
 icon row with a settings-category selector while a pane is open. The footer's
 minimum height protects transport controls from vertical compression. Header and
-footer retain their allocations while fullscreen chrome is hidden or locked.
+footer retain their allocations while windowed controls are locked. Fullscreen
+temporarily lifts the player out of its document pane, overlays header/footer
+controls on a viewport-sized picture, and restores the original layout slot on
+exit. Native fullscreen exits also restore the pane. The filename/source repeat
+and floating mode were removed; workspace tab detachment provides separate windows.
 `ui/icons.py` supplies feature-owned line glyphs through commonUtils' existing
 palette-aware icon renderer. Favourites use `desktop.document_catalog`, including
 its credential-aware persistence. Casting discovery uses the same settings pane;
@@ -77,6 +82,23 @@ decoder, while its controls and resource lifetime remain covered on every host.
 These host checks do not establish physical display,
 receiver or native mobile presentation quality. Desktop HDR output remains
 unavailable because the current surface receives SDR memory frames.
+
+## Desktop HDR investigation
+
+The desktop callback negotiates RV32 and copies decoded pictures to an 8-bit
+`QImage`; this loses the high-bit-depth source and display metadata needed for
+native HDR and limits HDR-to-SDR conversion quality. A native VLC display
+experiment used the existing retained transport and avoided those callbacks.
+Cocoa checks showed SDR video and controls in fullscreen, but initial windowed
+PQ/HLG pixel checks repeatedly failed despite advancing decoder statistics.
+Fullscreen transitions could reveal the HDR test patterns. Software decoding,
+alternate macOS output modules and view rebinding did not produce reliable
+windowed acceptance. The experiment was not enabled or retained in production.
+
+HDR output and better tone mapping remain open work. A replacement output path
+must verify visible pixels in initial windowed playback, docking, fullscreen,
+Pause, captions and credential concealment, with PQ/HLG inputs and physical
+HDR/SDR display acceptance. Decoder readiness alone is insufficient.
 
 ## Mobile HDR output
 

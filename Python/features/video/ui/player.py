@@ -460,39 +460,6 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
     def toggle_fullscreen(self):
         self.fullscreen.toggle()
 
-    def toggle_floating(self):
-        try:
-            from services.desktop_video_access import require_external
-            require_external(self.content)
-        except (OSError, ValueError, PermissionError) as error:
-            self.floating.setChecked(bool(self.window().windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint))
-            self.status.setText(str(error))
-            return
-        from commonUtils.ui.document_host import current_document_host
-        host = current_document_host()
-        record = host.records.get(self) if host is not None else None
-        if record is not None and not record['detached']:
-            dock = record['dock']
-            if dock.workspace.detach_dock(dock) is None:
-                self.floating.setChecked(False)
-                self.status.setText('Detach this document before using floating playback.')
-                return
-        window = self.window()
-        floating = not bool(window.windowFlags() & qt.Qt.WindowType.WindowStaysOnTopHint)
-        if floating:
-            self.floating_geometry = window.saveGeometry()
-        window.setWindowFlag(qt.Qt.WindowType.WindowStaysOnTopHint, floating)
-        self.floating.setChecked(floating)
-        label = 'Return to document size' if floating else 'Floating window'
-        self.floating.setText(label)
-        self.floating.setToolTip(label)
-        self.floating.setAccessibleName(label)
-        if floating:
-            window.resize(560, 420)
-        elif getattr(self, 'floating_geometry', None) is not None:
-            window.restoreGeometry(self.floating_geometry)
-        window.show()
-
     def show_receivers(self):
         if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
             return
@@ -545,7 +512,6 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             except (OSError, ValueError, PermissionError):
                 self.player.pause()
             self.status.setText('Resume unavailable: ' + str(error))
-        self.floating.setEnabled(not (self.content.restricted or self.process_contexts))
         self.idle.emit()
 
     def retire_private_content(self):

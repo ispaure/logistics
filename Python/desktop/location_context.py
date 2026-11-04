@@ -210,9 +210,11 @@ class DocumentLocationRow(qt.QWidget):
         self.actions_button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
         menu = qt.QMenu(self.actions_button)
         from desktop.document_catalog import favourite
-        menu.addAction('Favourite file', lambda: favourite(self.document))
+        if not hasattr(window, 'favourite_button'):
+            menu.addAction('Favourite file', lambda: favourite(self.document))
         self.actions_button.setMenu(menu)
         row.addWidget(self.actions_button)
+        self.actions_button.setVisible(bool(menu.actions()))
         self.refresh()
 
     def refresh(self):

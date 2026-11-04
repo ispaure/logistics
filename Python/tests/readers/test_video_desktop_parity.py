@@ -149,7 +149,6 @@ class DesktopVideoParityTests(QtTestCase):
                 qt.QApplication.processEvents()
                 before = window.video_viewport.geometry()
                 window.chrome.hide()
-                window.identity.hide()
                 qt.QApplication.processEvents()
                 self.assertEqual(window.video_viewport.geometry(), before)
                 window.show_controls()
