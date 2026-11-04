@@ -1,5 +1,6 @@
 ARG FEDORA_IMAGE=fedora:44
 FROM ${FEDORA_IMAGE}
+RUN set -eux; command -v timeout; timeout --version; dnf --version; timeout --kill-after=10s 10s true
 # Shared by hosted CI and the manager's local rootless Fedora container.
 RUN timeout --kill-after=10s 180s dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
 RUN timeout --kill-after=10s 600s dnf install -y git python3-pip mesa-libEGL mesa-libGL libxkbcommon dbus-libs \
