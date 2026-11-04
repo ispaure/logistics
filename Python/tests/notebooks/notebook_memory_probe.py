@@ -14,7 +14,7 @@ from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.storage import NotebookDocument
 from Python.tests.notebooks.notebook_desktop_stress_probe import Probe
 from mobile_build.native_tests.tests.logisticsmobile.notebook_memory_checks import INSTALL, ink_signature, recovery_history_stats
-from tests.notebooks.process_memory import process_tree_memory
+from tests.notebooks.process_memory import process_tree_memory, record_sample, finish_report
 
 
 def peak_rss_bytes():
@@ -53,12 +53,7 @@ def main(output, *, max_process_tree_mib=None, max_remount_growth_mib=None):
     def memory_sample():
         sample = process_tree_memory()
         renderer = int(probe.panel.web.page().renderProcessPid())
-        assert renderer > 0 and renderer in {row['pid'] for row in sample['processes']}, \
-            ('Live WebEngine renderer missing from memory sample', renderer, sample)
-        sample['renderer_pid'] = renderer
-        if max_process_tree_mib is not None:
-            assert sample['rss_bytes'] <= max_process_tree_mib * 1024 ** 2, sample
-        return sample
+        return record_sample(report, sample, renderer, max_process_tree_mib)
     with scratch() as root:
         probe = Probe(root)
         try:
@@ -153,10 +148,12 @@ def main(output, *, max_process_tree_mib=None, max_remount_growth_mib=None):
                           undo_redo_steps=36, undo_redo_ink_and_raster_identical=True,
                           history=history,
                           remount_growth_bytes=report['remounts'][-1]['rss_bytes'] - report['remounts'][0]['rss_bytes'])
+        except BaseException as error:
+            report['error'] = repr(error)
+            raise
         finally:
-            probe.close()
-            app.processEvents()
-            (output / 'desktop-memory-result.json').write_text(json.dumps(report, indent=2))
+            finish_report(output / 'desktop-memory-result.json', report,
+                          lambda: (probe.close(), app.processEvents()))
 
 
 if __name__ == '__main__':

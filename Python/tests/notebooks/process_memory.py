@@ -1,7 +1,30 @@
 """Current RSS for a probe and its descendants, including WebEngine processes."""
 import os
+import json
 import platform
 import subprocess
+
+
+def record_sample(report, sample, renderer_pid, limit_mib=None):
+    """Retain the failing counters before enforcing a renderer or memory bound."""
+    sample = dict(sample, renderer_pid=renderer_pid)
+    report.setdefault('process_tree_samples', []).append(sample)
+    assert renderer_pid > 0 and renderer_pid in {row['pid'] for row in sample['processes']}, \
+        ('Live WebEngine renderer missing from memory sample', renderer_pid, sample)
+    if limit_mib is not None:
+        assert sample['rss_bytes'] <= limit_mib * 1024 ** 2, sample
+    return sample
+
+
+def finish_report(path, report, retire):
+    """A failed native teardown must still leave a failed evidence report."""
+    try:
+        retire()
+    except BaseException as error:
+        report.update(success=False, teardown_error=repr(error))
+        raise
+    finally:
+        path.write_text(json.dumps(report, indent=2))
 
 
 def tree_memory(rows, root):
