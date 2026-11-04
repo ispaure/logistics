@@ -39,6 +39,8 @@ def diagnostics(entry_point):
     if entry_point.endswith('.speech_playback_probe'):
         return NATIVE_DIAGNOSTICS + ('feedback-progress.json', 'speech-initialization.jsonl',
             'feedback-speech-complete.png', 'feedback-speech-failure.png')
+    if entry_point.endswith('.android_header_probe'):
+        return NATIVE_DIAGNOSTICS + ('android-header-startup.json',)
     if entry_point.endswith('.folder_feedback_probe'):
         return NATIVE_DIAGNOSTICS + ('folder-feedback-startup.json', 'folder-feedback-tasks.txt')
     if entry_point.endswith('.lockscreen_probe'):
@@ -514,6 +516,9 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         else:
             record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
+        if device is None and not tablet and entry_point.endswith('.android_header_probe'):
+            emulator.invoke('-s', serial, 'shell', 'wm', 'size', '720x1600')
+            emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
         if device is None and entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
             emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
         if tablet:
@@ -538,10 +543,30 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         if device is None and entry_point.endswith('.chat_notes_feedback_probe'):
             prepare_chat_notes_emulator(emulator, serial, output)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.lockscreen_probe', '.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
+        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.lockscreen_probe', '.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe', '.documentation_header_probe', '.android_header_probe')) else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
-            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe', '.lockscreen_probe'))):
+            if entry_point.endswith(('.documentation_header_probe', '.android_header_probe')):
+                capture = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/header-capture.json'], env=env, capture_output=True, timeout=15)
+                try:
+                    request = json.loads(capture.stdout) if capture.returncode == 0 else {}
+                except (ValueError, UnicodeError):
+                    request = {}  # Retry a marker observed during its write.
+                name = request.get('name') if isinstance(request, dict) else None
+                if name is not None:
+                    if not isinstance(name, str) or not re.fullmatch(r'(?:help|notes)-[a-z-]+', name):
+                        raise ValueError('Unexpected header screenshot name')
+                    screen = subprocess.check_output([str(emulator.adb), '-s', serial,
+                        'exec-out', 'screencap', '-p'], env=env, timeout=45)
+                    if not screen.startswith(b'\x89PNG'):
+                        raise RuntimeError('Android header screenshot was not a PNG')
+                    directory = output / 'cache/viewer-layout'
+                    directory.mkdir(parents=True, exist_ok=True)
+                    (directory / (name + '.png')).write_bytes(screen)
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/header-capture.json')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/header-capture-done')
+            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe', '.lockscreen_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -641,15 +666,22 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     finally:
         try:
             if record is not None:
-                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe', '.notes_markdown_feedback_probe', '.documentation_header_probe')):
+                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe', '.notes_markdown_feedback_probe', '.documentation_header_probe', '.android_header_probe')):
                     import io
                     import tarfile
                     archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                         'run-as', bundle, 'tar', '-cf', '-', 'cache/viewer-layout'],
                         env=env, capture_output=True, timeout=45)
                     if archive.returncode == 0:
-                        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as evidence:
-                            evidence.extractall(output, filter='data')
+                        try:
+                            with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as evidence:
+                                evidence.extractall(output, filter='data')
+                        except (tarfile.TarError, EOFError):
+                            # A startup failure can leave no evidence directory;
+                            # Android's shell may still return status zero. Keep
+                            # the original run failure and continue cleanup.
+                            (output / 'android-evidence-archive-error.txt').write_text(
+                                archive.stdout[:4096].decode(errors='replace'))
                 if raw_ink or hands_on:
                     for name in ('baseline.png', 'raw-final.png', 'comparison.rmdoc', 'stage.json', 'observations.json'):
                         artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
@@ -728,7 +760,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-runtime', help='Explicit installed CoreSimulator runtime identifier for a disposable iOS probe.')
@@ -738,6 +770,8 @@ def main():
     parser.add_argument('--increase-contrast', action='store_true')
     parser.add_argument('--android-tablet', action='store_true', help='Use a tablet viewport on the disposable Android emulator.')
     args = parser.parse_args()
+    if args.probe == 'android-header' and args.platform != 'android':
+        parser.error('The android-header probe requires Android.')
     if args.android_tablet and (args.platform != 'android' or args.device):
         parser.error('--android-tablet requires the disposable Android emulator.')
     if args.pose and (args.platform != 'ios' or args.family != 'iPhone Duo'):
@@ -774,6 +808,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'android-header':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.android_header_probe', result_name='android-header-result.json')
         if args.probe == 'documentation-header':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.documentation_header_probe', result_name='documentation-header-result.json')
