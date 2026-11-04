@@ -170,7 +170,8 @@ class ManagerDeviceTests(unittest.TestCase):
         self.assertEqual([row.effect for row in plan.phases], ['build','inspect','deploy','inspect','deploy'])
         ready = [row for row in plan.phases if row.effect == 'inspect']
         installs = [row for row in plan.phases if row.effect == 'deploy']
-        self.assertEqual([row.retry_exit_codes for row in ready], [(75,), (75,)])
+        self.assertEqual([row.retry_exit_codes for row in ready], [(), ()])
+        self.assertEqual([row.timeout for row in ready], [90, 90])
         for check, install in zip(ready, installs):
             self.assertEqual(check.dependencies, ('prepare-device-app',))
             self.assertEqual(install.dependencies, ('prepare-device-app', check.id))
