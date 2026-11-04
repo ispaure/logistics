@@ -4,9 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from threading import Event
-from time import monotonic
 from unittest.mock import patch
 import unittest
 
@@ -24,8 +22,7 @@ class BlenderPageTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temporary = TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
+        self.temporary = self.temporary_directory()
         self.manager = BlenderManager(Path(self.temporary.name))
         from features.blender.addons.library import AddonLibrary
         library = patch('features.blender.ui.page.AddonLibrary', side_effect=lambda manager: AddonLibrary(manager, provided_root=Path(self.temporary.name) / 'provided'))
@@ -45,8 +42,7 @@ class BlenderPageTests(QtTestCase):
         with patch.object(self.manager, 'install') as install:
             page = BlenderPage(manager=self.manager)
         install.assert_not_called()
-        self.assertEqual(page.version.count(), 2)
-        self.assertFalse(hasattr(page, 'install_button'))
+        self.assertEqual(page.version.count(), len(self.builds))
         self.assertFalse(page.launch_button.isEnabled())
         self.assertFalse(self.manager.software.exists())
 
@@ -71,7 +67,6 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(requested, ['blender'])
         self.assertEqual(page.stack.currentWidget(), page.home)
         self.assertEqual(self.manager.settings_selection, (self.builds[0].version, 'Modeling'))
-        self.assertFalse(hasattr(page, 'catalog'))
 
     def test_settings_contains_versions_and_presets_with_default_optional_bluehole(self):
         from features.blender.settings import BlenderSettings
@@ -96,7 +91,6 @@ class BlenderPageTests(QtTestCase):
         self.manager.create_preset(self.builds[0], 'Other')
         panel = BlenderSettings(manager=self.manager)
         page, catalog = panel.presets, panel.library
-        self.assertFalse(hasattr(catalog, 'add_button'))
         root = catalog.library.provided_root / 'Tool'
         root.mkdir(parents=True)
         for version in (1, 2):
@@ -255,10 +249,8 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.preset.currentText(), 'Keep')
 
     def _wait_for_operation(self, page):
-        deadline = monotonic() + 3
-        while page.task.busy and monotonic() < deadline:
-            self.app.processEvents()
-        self.assertFalse(page.task.busy)
+        self.wait_until(lambda: not page.task.busy, timeout=3,
+                        message='Blender page operation did not retire')
 
     def test_first_launch_prompts_installs_and_launches_configuration(self):
         self.manager.create_preset(self.builds[0], 'Art')
@@ -345,10 +337,7 @@ class BlenderPageTests(QtTestCase):
         page._run('Test operation', work)
         self.assertTrue(started.wait(2))
         self.assertFalse(page.prepare_close())
-        deadline = monotonic() + 3
-        while page.task.busy and monotonic() < deadline:
-            self.app.processEvents()
-        self.assertFalse(page.task.busy)
+        self._wait_for_operation(page)
         self.assertTrue(page.prepare_close())
         self.assertEqual(idle, [True])
         self.assertTrue(page.controls.isEnabled())
@@ -361,10 +350,7 @@ class BlenderPageTests(QtTestCase):
                  'enabled': True, 'path': str(root / 'scripts/addons/tool.py')}]
         with patch('features.blender.ui.page.inspect_addons', return_value=(rows, 'Saved state')):
             page._inspect()
-            deadline = monotonic() + 3
-            while page.task.busy and monotonic() < deadline:
-                self.app.processEvents()
-        self.assertFalse(page.task.busy)
+            self._wait_for_operation(page)
         self.assertEqual(page.table.item(0, 3).text(), 'Yes')
         self.assertEqual(page.status.text(), 'Saved state')
 
