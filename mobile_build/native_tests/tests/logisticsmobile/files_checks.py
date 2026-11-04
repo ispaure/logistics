@@ -2,11 +2,40 @@
 
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
+
+TEST_STAGE = TestStage.REGRESSION
 
 
 async def exercise_files(app, passed):
+    from unittest.mock import AsyncMock, patch
+    from services.documents.locations import collection_path
+    # Use the real native bridge and selected-item download handoff. Back must
+    # never uncover the picker after clear() emptied and disabled its controls.
+    await app.browser_cloud_location(('Fixture', 'logistics-native-check'))
+    app.show_cloud()
+    source = app.routes.body('files')
+    row = next(row for row in app.cloud_rows.values() if row['path'].endswith('fixture.txt'))
+    await app.download_remote_item(row)
+    picker = app.editor_picker()
+    shared = picker.editor_storage_roots['Shared files']
+    assert not shared.include_collections
+    assert not any(row['name'] in ('Local', 'Received Files') for row in shared.list())
+    picker.save_as_name.value = 'selected-download.txt'
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+        assert await picker.complete_destination(), app.cloud_status.value
+    assert (collection_path(app.private_root) / 'selected-download.txt').read_bytes() == b'Native rclone fixture\n'
+    assert app.routes.back()
+    assert app.routes.body('files') is source
+    assert app.cloud_path == 'logistics-native-check'
+    assert not app.cloud_busy and not app.transfer_busy
+    app.routes.return_to('home')
+    app.routes.return_to('files')
+    assert app.routes.body('files') is source
+    assert 'text-destination' not in [screen[0] for screen in app.routes.screens['files']]
+    app.show_locations()
+    assert all(button.enabled for button in app.folder_source_buttons.values())
+    assert await app.show_files(local_root=True)
     await app.browser_cloud_location(('Fixture', ''))
     app.cloud_entries.value = next(key for key, row in app.cloud_rows.items() if row['path'] == 'logistics-native-check')
     from .review_checks import approve_transfer
