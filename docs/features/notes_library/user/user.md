@@ -101,6 +101,10 @@ Unsaved changes are checked before switching notes or closing. Choosing Save
 continues navigation after a successful save. Notes are
 limited to 16 MiB. Hidden configuration is excluded and links stay inside the library.
 
+Notes Library does not load Obsidian plugins or provide full Dataview compatibility.
+For launching the external application, use the separate
+[Obsidian desktop integration](../../obsidian/user/user.md).
+
 Links such as `[[Tech]]` can open `Tech.md` in a subfolder. The current folder
 and library root take priority; otherwise the app looks for a unique match across
 subfolders when you follow the link. If several notes match, use an explicit path
