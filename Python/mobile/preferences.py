@@ -10,7 +10,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 
 from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
 
-DEFAULTS = {'notes_library_migrated': 'true', 'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
+DEFAULTS = {'notebook_paper_preview': 'true', 'notes_library_migrated': 'true', 'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'accent_hue': '221', 'accent_saturation': '83',
             'workspace_local_group': 'Others', 'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
             'markdown_justify': 'false',
@@ -86,6 +86,8 @@ class Preferences:
             raise ValueError('Invalid trusted Wi-Fi session preference.')
         if values['session_speech_when_locked'] not in {'true', 'false'}:
             raise ValueError('Invalid session speech lock-screen preference.')
+        if values['notebook_paper_preview'] not in {'true', 'false'}:
+            raise ValueError('Invalid notebook preview preference.')
         if values['seasonal_snow'] not in {'true', 'false'}:
             raise ValueError('Invalid seasonal snow preference.')
         if values['android_eink'] not in {'true', 'false'}:
