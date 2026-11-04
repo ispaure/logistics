@@ -9,6 +9,7 @@ Provides image-processing and image-metadata workflows for Logistics.
 
 ## Responsibilities
 
+- Open bounded read-only image documents across local, private and remote providers.
 - Represent image files and inspect image dimensions/color characteristics.
 - Batch compress supported image formats to WEBP.
 - Apply JPG EXIF metadata through the reusable commonUtils piexif wrapper.
@@ -18,6 +19,8 @@ Provides image-processing and image-metadata workflows for Logistics.
 
 - `processing.py` contains `ImageFile` and image-compression behavior.
 - `actions.py` exposes user-facing image and EXIF operations.
+- `document.py`, `ui/viewer.py` and `mobile/navigation.py` own image documents
+  and same-folder navigation; these readers are separate from batch encoding.
 
 ## Shared Usage
 
@@ -85,7 +88,11 @@ native device performance or large-photo memory/latency limits.
 
 ## Portable image validation
 
-`validation.py` validates bounded PNG/JPEG/WebP dimensions before native decoding. Books, Comics and provider readers share it without loading Qt, Toga or image-processing tools. The existing 8 MiB, 8192-pixel-axis and 16-megapixel limits are unchanged.
+`validation.py` validates bounded PNG/JPEG/WebP dimensions before native decoding.
+Books, Comics and provider readers share it without loading Qt, Toga or
+image-processing tools. It rejects animated WebP and enforces 8 MiB,
+8192 pixels per axis and 16 million pixels per image. The standalone desktop viewer shares these limits; desktop
+batch encoding uses its separate supported-format and resize policy.
 
 ## Image document sessions
 
@@ -112,7 +119,7 @@ using host backends. Native device appearance is not covered by these tests.
 
 ## Mobile source manifest
 
-`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+`Python/features/images/mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
 
 ## iPhone burst camera
 
@@ -146,8 +153,8 @@ Four focused Home/build/packaged-startup checks passed. Both device and arm64
 simulator builds succeeded. The isolated `burst_camera_probe.py` verified native
 Home presentation, camera-unavailable UI, shutter guards, dismissal, a synthetic
 image saved through PhotoKit, successful-save original cleanup, and retention plus
-burst stop after a forced Photos save failure. Local results/screenshots are in
-`mobile_build/logs/burst-camera-result.json`, `burst-home.png`, and `burst-camera.png`.
+burst stop after a forced Photos save failure. Raw results and screenshots are
+retained outside this wiki.
 The signed app installed and launched in place over Wi-Fi on the paired iPhone
 15 Pro Max. Sensor capture, physical shutter latency and comparison with Apple's
 Camera image quality still require the on-device trial; simulator evidence does
@@ -224,3 +231,13 @@ The Logistics image file type and remote/private browser previews use the same
 desktop orientation owner before returning PNG pixels to the existing RAM cache.
 The representative fixtures check dimensions and four asymmetric corner colors
 for all eight orientations in JPEG, WebP and PNG, including preview output.
+
+## Documentation audit scope
+
+The November 4, 2026 audit reviewed source and test definitions for the viewer,
+folder compression, EXIF comments, mobile navigation and camera boundary. Only
+static Markdown/link and diff checks ran during the release hold. Earlier camera
+verification remains historical; this audit adds no native capture, physical lens,
+quality or performance acceptance. Mobile image viewing is read-only on iOS and
+Android; compression and EXIF comment actions remain desktop workflows, and the
+burst-camera entry is iOS-only.

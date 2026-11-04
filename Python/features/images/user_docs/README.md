@@ -1,3 +1,3 @@
-# Compress images and edit JPG comments
+# View and process images
 
-Documentation has moved to the [Compress images and edit JPG comments guide](../../../../docs/features/images/user/user.md).
+Documentation has moved to the [View and process images guide](../../../../docs/features/images/user/user.md).

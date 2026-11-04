@@ -38,7 +38,9 @@ return it; switching sidebar destinations retains the open views.
   and preserves a previously maximized window.
 - **Navigate → Go to page…** (Ctrl+G, Command+G on macOS) jumps directly to a page.
   The footer shows the current page/spread and a slider for quick seeking.
-- Use Previous/Next File for neighboring CBZs. Reading direction follows comic
+- Use Previous/Next File for neighboring local CBZs. Desktop private/provider
+  readers currently open only the selected comic, so their neighboring-file
+  controls are unavailable. Reading direction follows comic
   metadata; the page-layout button or **View → Page layout** lets you choose
   Automatic, Single page or Two pages. Menu page turns follow the same spread
   boundaries as the buttons and keyboard. Paired pages touch without an added
