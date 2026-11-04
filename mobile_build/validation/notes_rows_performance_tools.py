@@ -175,10 +175,14 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--runs', type=int, default=3)
     parser.add_argument('--isolation-timeout', type=int, default=1800)
+    parser.add_argument('--source-revision', default='HEAD',
+                        help='Committed source revision to freeze; working-tree changes are excluded.')
     args = parser.parse_args()
     if not 1 <= args.runs <= 6 or not 1 <= args.isolation_timeout <= 3600:
         parser.error('Use 1–6 runs and a bounded isolation timeout up to 3600 seconds')
     root = Path(__file__).resolve().parents[2]
+    commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', '--verify',
+                                     args.source_revision + '^{commit}'], text=True).strip()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     host_sources = {}
@@ -197,7 +201,6 @@ def main():
             wait_isolation(args.isolation_timeout)
             with scratch(root) as workspace:
                 source = workspace / 'source'
-                commit = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
                 materialize(root, source, commit)
                 payload = workspace / 'payload'
                 manifest = stage(source, payload)
