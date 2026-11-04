@@ -11,6 +11,9 @@ TEST_STAGE = TestStage.EXTENDED
 class NotesRowsFunctionalProbe(NotesRowsPerformanceProbe):
     result_name = 'notes-rows-functional-result.json'
 
+    def native_row_count(self, owner):
+        return int(owner.rows.native_list._impl.native.getCount())
+
     async def measure(self, owner, storage, variant, cold, report):
         assert variant == 'recycled'
         folder = 'Library/Folder'
@@ -32,7 +35,7 @@ class NotesRowsFunctionalProbe(NotesRowsPerformanceProbe):
             await self.settle(owner)
         assert publications == [45], publications
         assert len(owner.rows.children) == 45
-        assert int(owner.rows.native_list._impl.native.getCount()) == 45
+        assert self.native_row_count(owner) == 45
         report['cases'].append(f'recycled_folder_{storage}_{"cold" if cold else "repeated"}')
 
     async def run_checks(self, app, report):
