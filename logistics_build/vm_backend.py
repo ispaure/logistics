@@ -118,7 +118,7 @@ def _run_attempt(args):
                                        protections='default Podman; normal UID; browser sandbox retained')
             prepare_image = """import hashlib,json,pathlib,subprocess,sys
 root=pathlib.Path(sys.argv[1]); command=json.loads(sys.argv[2]); image=sys.argv[3]
-definition=root/'source/Python/tests/platform/fedora43.Containerfile'
+definition=root/'source/Python/tests/platform/fedora.Containerfile'
 settings=json.loads((root/'source/test-environments.json').read_text());base=settings['fedora_image']
 sha=hashlib.sha256(definition.read_bytes()+base.encode()).hexdigest()
 probe=subprocess.run(command+['image','inspect',image],capture_output=True,text=True)

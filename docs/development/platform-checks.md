@@ -1,7 +1,7 @@
 # Cross-platform archive checks
 
 `.github/workflows/archive-platform-checks.yml` runs on macOS, Windows and an
-official Fedora 43 container hosted on Ubuntu. Fedora is the only Linux test
+official Fedora container selected by `test-environments.json` hosted on Ubuntu. Fedora is the only Linux test
 distribution; Ubuntu is infrastructure for the container and static/mobile tooling. It checks the same committed
 commonUtils submodule that Logistics uses. Jobs continue independently on failure.
 Each job runs all commonUtils tests, all Logistics tests and a full historical
@@ -70,6 +70,23 @@ on Windows.
 Fixtures close SQLite connections explicitly and use legal native filenames and
 paths. Tests that execute a POSIX shell or require POSIX executable permission
 bits run only on POSIX hosts; archive and password checks run on every platform.
+
+## Fedora environment preparation
+
+Hosted CI and local rootless VM validation share
+`Python/tests/platform/fedora.Containerfile`, including the native dependency list
+and pinned bootstrap uv. Hosted builds cache image layers through GitHub Actions
+and check for base-image updates; source and dependency-lock changes still run
+inside a fresh disposable test container. The image cache is preparation only,
+never passing test evidence. Local image reuse includes the Containerfile and
+configured Fedora image in its definition hash.
+
+`Python/tests/platform/fedora.sh` runs only inside that prepared CI image.
+Interpreter, manager and dependency setup have separate deadlines and elapsed-time
+rows in `test-results/fedora-setup.log`. Platform validation and release-tooling
+checks both run even when the first suite fails; either failure fails the job.
+The Fedora job has a 150-minute outer budget for image preparation, setup, the
+90-minute platform deadline, release-tooling checks and report upload.
 
 ## Stalled tests
 

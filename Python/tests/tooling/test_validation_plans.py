@@ -4,6 +4,10 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
+import os
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
 import unittest
 
 from logistics_build.validation_plans import desktop_checks, inventory
@@ -73,10 +77,88 @@ class ValidationPlanTests(unittest.TestCase):
             self.assertIn('fedora', rows[name]['platforms'])
             self.assertNotIn('ubuntu', rows[name]['platforms'])
         workflow = (root / '.github/workflows/archive-platform-checks.yml').read_text()
-        desktop = workflow.split('  desktop:\n', 1)[1].split('  fedora43:\n', 1)[0]
+        desktop = workflow.split('  desktop:\n', 1)[1].split('  fedora:\n', 1)[0]
         self.assertNotIn('ubuntu-latest', desktop)
         self.assertIn("inputs.target != 'linux'", desktop)
-        self.assertIn("inputs.target == 'linux'", workflow.split('  fedora43:\n', 1)[1])
-        fedora = (root / 'Python/tests/platform/fedora43.sh').read_text()
-        self.assertIn('Python/tests/run_platform_checks.py --install', fedora)
+        self.assertIn("inputs.target == 'linux'", workflow.split('  fedora:\n', 1)[1])
+        fedora = (root / 'Python/tests/platform/fedora.sh').read_text()
+        self.assertIn('Python/tests/run_platform_checks.py --install --prepare-only', fedora)
         self.assertIn('unittest discover -s .github/scripts', fedora)
+
+
+@unittest.skipUnless(os.name == 'posix', 'Fedora launcher requires a POSIX shell')
+class FedoraLauncherTests(unittest.TestCase):
+    def run_launcher(self, failure):
+        script = Path(__file__).resolve().parents[1] / 'platform/fedora.sh'
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = root / 'bin'
+            tools.mkdir()
+            interpreter = tools / 'fixture-python'
+            interpreter.write_text("#!" + sys.executable + "\n" + r'''import os
+from pathlib import Path
+import sys
+args = ' '.join(sys.argv[1:])
+if sys.argv[1] == '-c':
+    print('/fixture/certifi.pem')
+else:
+    with Path(os.environ['FIXTURE_LOG']).open('a') as stream:
+        stream.write(args + '\n')
+    if '--prepare-only' in args:
+        step = 'dependencies'
+    elif 'run_platform_checks.py' in args:
+        step = 'platform'
+        assert os.environ['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] == '1'
+        assert os.environ['SSL_CERT_FILE'] == '/fixture/certifi.pem'
+    elif 'unittest' in args:
+        step = 'release-tooling'
+    else:
+        step = 'manager'
+    sys.exit(7 if os.environ['FIXTURE_FAILURE'] == step else 0)
+''')
+            uv = tools / 'uv'
+            uv.write_text("#!" + sys.executable + "\n" + r'''import os
+from pathlib import Path
+import shutil
+import sys
+venv = Path(sys.argv[-1])
+(venv / 'bin').mkdir(parents=True)
+shutil.copyfile(os.environ['FIXTURE_PYTHON'], venv / 'bin/python')
+(venv / 'bin/python').chmod(0o755)
+''')
+            (tools / 'timeout').write_text('#!/bin/sh\nshift 2\nexec "$@"\n')
+            (tools / 'git').write_text('#!/bin/sh\nexit 0\n')
+            for tool in tools.iterdir():
+                tool.chmod(0o755)
+            env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+                       TMPDIR=str(root), FIXTURE_LOG=str(root / 'calls'),
+                       FIXTURE_PYTHON=str(interpreter), FIXTURE_FAILURE=failure)
+            result = subprocess.run(['bash', str(script)], cwd=root, env=env,
+                                    capture_output=True, text=True, timeout=15)
+            calls = (root / 'calls').read_text()
+            self.assertFalse(list(root.glob('logistics-platform.*')), 'Temporary environment leaked')
+            timing = (root / 'test-results/fedora-setup.log').read_text()
+            return result, calls, timing
+
+    def test_platform_failure_still_runs_release_tooling_and_retains_failure(self):
+        result, calls, timing = self.run_launcher('platform')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('unittest discover', calls)
+        self.assertIn('platform finished', timing)
+        self.assertIn('(exit 7)', timing)
+
+    def test_release_tooling_failure_fails_launcher(self):
+        result, calls, _ = self.run_launcher('release-tooling')
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('run_platform_checks.py', calls)
+
+    def test_setup_failure_stops_before_validation_and_cleans_environment(self):
+        result, calls, _ = self.run_launcher('dependencies')
+        self.assertEqual(result.returncode, 7, result.stdout + result.stderr)
+        self.assertNotIn('unittest discover', calls)
+        self.assertEqual(calls.count('run_platform_checks.py'), 1)
+
+    def test_successful_preparation_and_both_suites_pass(self):
+        result, _, timing = self.run_launcher('')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('release-tooling finished', timing)
