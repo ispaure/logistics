@@ -148,6 +148,7 @@ class NotebookPanel:
     def state(self):
         state = document_state(self.editor, self.document)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
+        state['native_actions'] = hasattr(self, 'native_actions')
         state['native_pen'] = self.pen_input is not None
         state['frame_batched_ink'] = sys.platform == 'ios'
         return state
@@ -446,6 +447,9 @@ class NotebookPanel:
 
     def dispose(self):
         self.closed = True
+        native_actions = getattr(self, 'native_actions', None)
+        if native_actions is not None:
+            native_actions.dispose()
         self.retire_canvas()
         if self.document is not None:
             self.document.close()
