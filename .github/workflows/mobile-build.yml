@@ -110,10 +110,6 @@ jobs:
     timeout-minutes: 60
     env:
       GRADLE_OPTS: -Dorg.gradle.daemon=false
-      # These caches belong only to this disposable job. Release them after
-      # native compilation so the emulator image can fit alongside the APK.
-      GOCACHE: ${{ runner.temp }}/logistics-android-go-cache
-      GOMODCACHE: ${{ runner.temp }}/logistics-android-go-modules
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -131,6 +127,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Initialize owned Android Go caches
+        run: |
+          # Resolve runner paths inside the running job, before Go setup.
+          echo "GOCACHE=$RUNNER_TEMP/logistics-android-go-cache" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=$RUNNER_TEMP/logistics-android-go-modules" >> "$GITHUB_ENV"
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: '1.26.9'
