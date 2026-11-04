@@ -1,4 +1,4 @@
-# Ide documentation
+# IDE documentation
 
 Choose a guide for the task you want to complete.
 
@@ -6,3 +6,4 @@ Choose a guide for the task you want to complete.
 
 - [Project IDE](development/development.md)
 - [Using IDE](user/user.md)
+- [Mobile support](user_mobile/user_mobile.md)
