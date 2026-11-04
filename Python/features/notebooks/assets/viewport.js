@@ -39,6 +39,8 @@ function templateControls() {
   for (const id of ['pageTemplate', 'templateFormat', 'templateVisible']) $(id).onchange = apply;
   $('templateFormat').onchange = () => {
     if (active !== null || busy) { render(); return }
+    defaultViewportZoom = false;
+    resetViewportPosition = true;
     paperView = $('templateFormat').value;
     $('paperView').value = paperView;
     apply()
@@ -46,14 +48,19 @@ function templateControls() {
   $('paperView').value = paperView;
   $('paperView').onchange = () => {
     if (active !== null) { $('paperView').value = paperView; return }
+    defaultViewportZoom = false;
+    resetViewportPosition = true;
     paperView = $('paperView').value;
     resize();
-    $('viewport').scrollTop = 0;
-    $('viewport').scrollLeft = 0
   }
 }
 
 function paperBounds() {
+  // Automatic phone framing magnifies the centered Move-width region without
+  // cropping the rest of the native page. Stroke-dependent crop edges cannot
+  // then clamp scrolling before that region reaches the viewport center.
+  if (defaultViewportZoom && mobileViewport() && paperView === 'move')
+    return {x: 0, y: 0, width: state.width, height: state.height};
   if (state.pdf_paper) {
     const b = state.pdf_paper;
     return {x: Math.max(0, b.x), y: 0, width: Math.min(state.width, b.width), height: b.height}
@@ -116,20 +123,22 @@ function render() {
     op: 'page',
     index: state.index + 1
   });
-  resize();
   if (render.pageIndex !== state.index) {
-    $('viewport').scrollTop = 0;
-    $('viewport').scrollLeft = 0;
+    resetViewportZoom(false);
     render.pageIndex = state.index
   }
+  resize();
 }
 
 function resize() {
+  const previousZoom = prepareViewportZoom();
   let viewport = $('viewport'),
     style = getComputedStyle(viewport);
   const bounds = paperBounds();
   displayedPaperBounds = bounds;
-  let fit = Math.max(.1, (viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / bounds.width);
+  const fitWidth = defaultViewportZoom && mobileViewport() && paperView === 'move' ?
+    (state.move_paper || {width: 821}).width : bounds.width;
+  let fit = Math.max(.1, (viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / fitWidth);
   let zoom = $('zoom').value,
     scale;
   if (zoom === 'page') {
@@ -140,7 +149,7 @@ function resize() {
       available -= notice.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0)
     }
     scale = Math.min(Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / bounds.width, Math.max(1, available) / bounds.height, 1);
-  } else scale = zoom === 'fit' ? Math.min(fit, 1) : Number(zoom);
+  } else scale = zoom === 'fit' ? Math.min(fit, mobileViewport() ? maxZoom : 1) : Number(zoom);
   canvas.style.width = (state.width * scale) + 'px';
   canvas.style.height = (state.height * scale) + 'px';
   const wrap = $('paperWrap'), layers = $('inkLayers'), background = $('pdfBackground');
@@ -165,6 +174,7 @@ function resize() {
     sizeDraft()
   }
   if (typeof updateZoomChrome === 'function') updateZoomChrome();
+  finishViewportZoom(previousZoom);
   draw()
 }
 
