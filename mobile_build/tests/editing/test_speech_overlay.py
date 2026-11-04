@@ -72,6 +72,28 @@ class SpeechOverlayTests(unittest.TestCase):
                 panel.dispose()
         self.run_async(exercise())
 
+    def test_unavailable_saved_voice_plays_system_default_even_without_language_match(self):
+        from commonUtils.ui.native.speech import NativeSpeech
+        from features.books.mobile.speech_view import ReadAloudPanel
+        class Voices(Engine):
+            voices = {'en-US · English': None}
+            default_voice = 'en-US · English'
+            voice_for_language = NativeSpeech.voice_for_language
+        self.app.preferences.save(speech_voice='Removed German voice')
+        async def source():
+            return SimpleNamespace(text='Ein deutsches Buch.', language='de'), 0, None
+        async def exercise():
+            panel = ReadAloudPanel(loop=self.app.loop, source=source, on_range=lambda *args: None,
+                close=lambda *args: None, engine=Voices(self.app.loop), app=self.app)
+            try:
+                await panel.ready_task
+                self.assertTrue(panel.missing_saved_voice)
+                await panel.play()
+                self.assertEqual(panel.engine.calls[-1][1], 'en-US · English')
+            finally:
+                panel.dispose()
+        self.run_async(exercise())
+
     def test_overlay_preserves_document_children_and_uses_saved_voice(self):
         from mobile.markdown_speech import MarkdownSpeech
         class Voices(Engine):
@@ -233,6 +255,22 @@ class SpeechOverlayTests(unittest.TestCase):
         with patch('features.books.mobile.media_controls.native_media', Media):
             self.run_async(exercise())
 
+    def test_voice_discovery_failure_closes_engine_and_keeps_default_selectable(self):
+        from mobile.settings.speech import speech_voice_setting
+        class Unavailable(Engine):
+            ready, error = False, 'Install an offline system voice.'
+        engine = Unavailable(self.app.loop)
+        with patch('commonUtils.ui.native.speech.NativeSpeech', return_value=engine) as factory:
+            box = speech_voice_setting(self.app)
+            task = self.app.speech_voice_load_task
+            self.assertIs(box._settings_on_open(), task)
+            self.run_async(task)
+            factory.assert_called_once()
+        self.assertTrue(engine.closed)
+        self.assertEqual(self.app.speech_voice_choice.value, 'System default')
+        self.assertEqual(box.children[-1].text, engine.error)
+        self.assertTrue(box.children[2].enabled)
+
     def test_settings_load_and_persist_voice_then_release_engine(self):
         from mobile.preferences import Preferences
         from mobile.settings.speech import speech_voice_setting
@@ -241,9 +279,8 @@ class SpeechOverlayTests(unittest.TestCase):
         engine = Voices(self.app.loop)
         with patch('commonUtils.ui.native.speech.NativeSpeech', return_value=engine):
             box = speech_voice_setting(self.app)
-            button = box.children[2]
-            button.on_press()
-            self.run_async(asyncio.sleep(.01))
+            self.assertEqual(box.children[2].text, 'Refresh voices')
+            self.run_async(self.app.speech_voice_load_task)
         self.assertTrue(engine.closed)
         self.app.speech_voice_choice.value = 'Another voice'
         self.assertEqual(Preferences(self.app.private_root).values['speech_voice'], 'Another voice')

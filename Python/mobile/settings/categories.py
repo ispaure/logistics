@@ -97,7 +97,9 @@ class SettingsCategories:
     def speech(self):
         app = self.app
         box = self.category('Read aloud')
-        box.add(speech_voice_setting(app))
+        voices = speech_voice_setting(app)
+        box.add(voices)
+        box._settings_on_open = voices._settings_on_open
         return box
 
     def privacy(self):
