@@ -564,15 +564,22 @@ validate physical paths before inspecting them. No additional plaintext index is
 persisted. Focused provider tests check real encrypted landing-note detection and
 that a folder page batch never reads document content.
 
-Android publishes lightweight tree records to the host's existing recycled file
-list. Java creates and binds a viewport-sized cell pool, including disclosure,
+Android and iOS publish lightweight tree records to the host's existing recycled
+file list. Java and UIKit create and bind viewport cells, including disclosure,
 landing-note glyph/underline, actions and local opaque-token drags. Expansion no
 longer constructs Toga buttons, boxes, images or gesture proxies per entry. Files
 and both Search scopes retain separate lists; selection does not activate a row,
 and replaced/hidden sources cannot dispatch actions. Retirement scrubs native
 rows and ends pending drags.
 
-The retained Toga presentation, including iOS, batches each row's surface paints
+UIKit uses the existing reusable `UITableView` cells with optional tree metadata,
+native disclosure/action buttons, attributed landing labels and local drag/drop
+delegates. It validates current row identity and consumer visibility before
+dispatch, and scrubs bound cells even when their table is detached. Native iOS
+performance/interaction acceptance for this extension is pending; host checks do
+not establish UIKit latency.
+
+The retained Toga fallback/benchmark presentation batches each row's surface paints
 and yields after eight steps or eight milliseconds. It builds controls offscreen
 and publishes one batch. Desktop retains its Qt tree; both paths share the
 names-only provider improvement.
@@ -662,6 +669,25 @@ context actions, viewport scrolling/reuse and private-title retirement passed.
 The synthetic drag checks source authorization and cancellation; it does not
 certify a physical drag/drop gesture. Device and scratch cleanup completed.
 
+
+### Desktop row investigation
+
+Desktop uses lazy `QTreeWidgetItem` records and a shared painted delegate, without
+Toga controls or a QWidget per entry. Expanding an already loaded folder retains
+its children; collapsing does not destroy and reconstruct them. Cached entry
+artwork is reused. No corresponding per-entry widget bottleneck was found, so
+the desktop renderer was retained.
+
+`Python/tests/editing/test_notes_library_row_rendering.py` checks cold/repeated
+expansion with 40 notes and four landing folders on local storage and real desktop
+LocalCrypt. It rejects document-body reads, verifies no item/index widgets and
+checks retained item identities without provider relisting. On November 4, 2026,
+source `c215ef75` passed: row construction took 5 ms local / 0.7 ms LocalCrypt;
+first viewport paint after cold expansion took 23 ms / 211 ms, and repeated paint
+about 0.3 ms. These timings came from Qt's offscreen plugin under concurrent
+system load, not a controlled Cocoa display benchmark. Synthetic provider data
+uses the build manager's scratch lifecycle; QtTestCase retires owned windows and
+workers. No desktop production change was needed for this finding.
 
 ## Scoped desktop library tabs
 
