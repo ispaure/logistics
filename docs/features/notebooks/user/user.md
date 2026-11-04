@@ -152,12 +152,24 @@ its left, right or bottom edges. Pro reveals the surrounding paper. Select Pro
 to write in those extra margins. Paper view is a session display choice, separate
 from the saved template format; changing it does not edit the notebook.
 
-Stock lined templates remain native template-name references, rather than PDFs
-or ink layers. Logistics layouts include original vector `.template` artwork in
-the archive. Their appearance and per-page format/visibility are supported in
-Logistics on all platforms. ReMarkable firmware discovery of these embedded custom
-assets and matching tablet view behavior have not been certified; a successful
-Logistics export does not prove custom backgrounds will appear on the tablet.
+**Save / Save As** retains the original notebook with editable per-page template
+settings and vector artwork. For reMarkable, use **Export Copy…** (mobile:
+**Export .rmdoc**). The exported copy embeds custom backgrounds as vector PDF
+pages inside the `.rmdoc`; handwriting stays separate as editable native ink.
+Restaurant review, Meeting notes and Daily planner use distinct Pro and Move
+PDF page sizes. Repeating paper keeps a shared canvas. The export extends a
+form’s page box if needed to retain handwriting beyond its nominal edges.
+Hidden backgrounds also stay hidden in that copy. Stock-only lined notebooks
+with visible backgrounds retain native template references instead of a PDF.
+
+The original Logistics notebook stays unchanged. Custom-template export copies
+are PDF-backed documents, so their backgrounds are fixed when reopened in either
+app; reMarkable's notebook template picker cannot replace them. Keep the original
+to change presets, format or visibility later. Export refuses unavailable artwork
+instead of silently replacing it with blank paper; select a supported template
+or hide that background first. Existing PDF-backed notebooks export their original
+PDF without rebuilding it. Physical tablet geometry and stylus behavior remain
+separate acceptance checks.
 
 ## Eraser types and sizes
 
