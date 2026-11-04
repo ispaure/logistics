@@ -113,13 +113,13 @@ def setup(root, suite, interpreter, *, dry_run=False):
         # Additive installation preserves native build tools in an existing environment.
         commands.append([uv, 'pip', 'install', '--python', str(python), '--require-hashes',
                          '-r', str(root / 'mobile_build/requirements-host.txt')])
-    from logistics_build.tooling_bootstrap import environment_sync
+    from logistics_build.tooling_bootstrap import environment_sync, run_command
     try:
         with nullcontext() if dry_run else environment_sync(root):
             for command in commands:
                 print(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command), flush=True)
                 if not dry_run:
-                    result = subprocess.run(command, cwd=root, env=environment)
+                    result = run_command(command, cwd=root, env=environment)
                     if result.returncode:
                         raise _SetupFailed(result.returncode)
     except _SetupFailed as error:
