@@ -30,6 +30,11 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         self.fault_log = enable_native_fault_log(self.paths.cache)
         faulthandler.dump_traceback_later(25, repeat=True, file=self.fault_log)
         self.checkpoint('startup')
+        import logging
+        self.startup_log = logging.FileHandler(Path(self.paths.cache) / 'notes-markdown-startup.log')
+        self.startup_logger = logging.getLogger('mobile.startup')
+        self.startup_logger.addHandler(self.startup_log)
+        self.startup_logger.setLevel(logging.DEBUG)
         super().startup()
         self.checkpoint('startup_returned')
         cache, loop = Path(self.paths.cache), self.loop
@@ -66,6 +71,8 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
             import faulthandler
             faulthandler.cancel_dump_traceback_later()
             self.diagnostics_stop.set()
+            self.startup_logger.removeHandler(self.startup_log)
+            self.startup_log.close()
 
     async def until(self, predicate, message):
         for _ in range(200):
