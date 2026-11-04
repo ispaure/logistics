@@ -152,6 +152,7 @@ SHARED_REQUIRED_MODULES = (
     'ui/native/recycled_list.py',
     'ui/native/recycled_list_android.py',
     'ui/native/recycled_list_ios.py',
+    'ui/native/recycled_tree_ios.py',
     'ui/native/routes.py',
     'ui/native/sliders.py',
     'ui/native/speech.py',

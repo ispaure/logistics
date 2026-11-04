@@ -255,7 +255,7 @@ def notes_host(app):
         return browser
 
     def tree_rows(owner):
-        if not type(app._impl).__module__.startswith('toga_android.'):
+        if not type(app._impl).__module__.startswith(('toga_android.', 'toga_iOS.')):
             return None
         from features.notes_library.mobile.tree_rows import NativeTreeRows
         from ..recycled_file_list import RecycledFileList

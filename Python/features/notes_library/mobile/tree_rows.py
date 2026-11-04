@@ -44,6 +44,15 @@ class NativeTreeRows:
         if sidebar is None or not (sidebar.expanded or sidebar.side == 'files'):
             return False
         native = getattr(self.native_list._impl, 'native', None)
+        if self.native_list.factory.DetailedList.__module__.startswith('toga_iOS.'):
+            if native is None or native.window is None:
+                return False
+            while native is not None:
+                if native.isHidden() or float(native.alpha) <= 0:
+                    return False
+                parent = native.superview
+                native = parent() if callable(parent) else parent
+            return True
         return native is None or (native.isAttachedToWindow() and native.isShown())
 
     def current(self, row):
