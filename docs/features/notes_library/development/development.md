@@ -571,6 +571,13 @@ Fixture creation runs in one worker before measurement. Acceptance uses the
 lightweight phase counters; detailed Python call profiling is opt-in through the
 probe class because it also instruments native bridge and event-loop calls.
 
+November 4, 2026 acceptance passed the same clean source snapshot on three fresh
+Android API 36 ARM64 emulators using SwiftShader: six root/nested encrypted moves
+and twelve local/LocalCrypt expansions. Every expansion published 45 rows in one
+batch without body reads, and startup completed on all three devices. Native row
+construction dominated listing; host contention produced widely variable timings.
+All QA apps, AVDs and the owned scratch build workspace were removed afterward.
+
 ## Scoped desktop library tabs
 
 `ui/library_workspace.py` hosts independent document-only Notes Library owners
