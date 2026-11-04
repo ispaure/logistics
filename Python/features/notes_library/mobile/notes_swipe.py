@@ -14,7 +14,8 @@ def document_swipes(base):
         let t=e.touches[0], el=e.target;
         while(el && el!==document.body){
           if(el.scrollWidth>el.clientWidth+2 || el.isContentEditable ||
-             /^(INPUT|TEXTAREA|SELECT|BUTTON|AUDIO|VIDEO)$/.test(el.tagName))return;
+             /^(TABLE|INPUT|TEXTAREA|SELECT|BUTTON|AUDIO|VIDEO)$/.test(el.tagName) ||
+             (el.classList && el.classList.contains('table-scroll')))return;
           el=el.parentElement;
         }
         start={x:t.clientX,y:t.clientY,time:Date.now()};

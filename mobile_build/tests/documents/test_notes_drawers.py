@@ -32,10 +32,12 @@ class NotesDrawerTests(unittest.TestCase):
             self.assertIsNone(owner.path)
             self.assertTrue(owner.sidebar.open_swipe(1))
             self.assertEqual(owner.sidebar.side, 'files')
+            self.assertTrue(owner.sidebar.overlay.edge_panel)
             owner.sidebar.show_detail()
             self.assertTrue(owner.sidebar.open_swipe(-1))
             await asyncio.sleep(0)
             self.assertEqual(owner.sidebar.side, 'links')
+            self.assertTrue(owner.sidebar.overlay.edge_panel)
             await owner.show_links(toggle=False)
             self.assertEqual(owner.sidebar.side, 'links')
             await owner.show_links()
@@ -110,6 +112,7 @@ class NotesDrawerTests(unittest.TestCase):
             for width in (320, 390, 900, 1366):
                 owner = await open_vault(self.app, self.provider, 'Vault', 'files')
                 owner.reflow(width)
+                self.assertEqual(owner.sidebar.sidebar.style.width, owner.sidebar.links.style.width)
                 self.assertIsNone(owner.sidebar.side)
                 owner.open_card.on_press()
                 wide = width >= 864  # Library reserves a 24-unit inset.
@@ -256,6 +259,50 @@ class NotesDrawerTests(unittest.TestCase):
             self.assertEqual(owner.back_action(), owner.sidebar.show_detail)
             owner.dispose()
         self.run_async(exercise())
+
+    def test_ios_window_swipes_defer_web_content_to_document_handler(self):
+        from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
+        class NSObject:
+            def __init_subclass__(cls, **kwargs):
+                super().__init_subclass__()
+            @classmethod
+            def alloc(cls):
+                return cls()
+            def init(self):
+                return self
+        web = SimpleNamespace(
+            isKindOfClass=lambda name: name == 'WKWebView',
+            respondsToSelector=lambda name: False, superview=None)
+        child = SimpleNamespace(
+            isKindOfClass=lambda name: False,
+            respondsToSelector=lambda name: False, superview=web)
+        plain = SimpleNamespace(
+            isKindOfClass=lambda name: False,
+            respondsToSelector=lambda name: False, superview=None)
+        native = SimpleNamespace(window=object(), hidden=False,
+            bounds=SimpleNamespace(size=SimpleNamespace(width=390, height=700)))
+        class Owner:
+            pass
+        owner = Owner()
+        owner.detail = SimpleNamespace(_impl=type('Impl', (), {
+            '__module__':'toga_iOS.widgets.box', 'native':native})())
+        owner.opening_gestures, owner.retiring, owner.side = [], [], None
+        gesture_class, window = Mock(), Mock()
+        owner.app = SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
+        modules = {'rubicon.objc': SimpleNamespace(
+            ObjCClass=lambda name: NSObject if name == 'NSObject' else
+                gesture_class if name == 'UISwipeGestureRecognizer' else name,
+            ObjCProtocol=lambda name: name, SEL=lambda name: name, objc_method=lambda method: method)}
+        with patch.dict('sys.modules', modules), patch('mobile.notes_gestures._apple_target', None):
+            install_opening_swipes(owner)
+            for _, gesture, delegate in owner.opening_gestures:
+                touch = SimpleNamespace(view=child,
+                    locationInView=lambda view: SimpleNamespace(x=100, y=100))
+                self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
+                touch.view = plain
+                self.assertTrue(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
+            clear_opening_swipes(owner)
+        self.assertEqual(window.removeGestureRecognizer.call_count, 2)
 
     def test_android_empty_swipes_chain_and_restore_toga_inner_scroll_listener(self):
         from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
@@ -431,6 +478,13 @@ assert.equal(swipe(40), '');
 assert.equal(swipe(90, {dy:60}), '');
 assert.equal(swipe(90, {duration:900}), '');
 assert.equal(swipe(90, {target:{...normal, scrollWidth:400}}), '');
+for (const dx of [-90, 90]) {
+  const table = {...normal, tagName:'TABLE'};
+  const cell = {...normal, tagName:'TD', parentElement:table};
+  assert.equal(swipe(dx, {target:cell}), '');
+  const wrapper = {...normal, classList:{contains:name=>name==='table-scroll'}};
+  assert.equal(swipe(dx, {target:wrapper}), '');
+}
 assert.equal(swipe(90, {target:{...normal, isContentEditable:true}}), '');
 assert.equal(swipe(90, {target:{...normal, tagName:'INPUT'}}), '');
 assert.equal(swipe(90, {target:{...normal, tagName:'VIDEO'}}), '');
