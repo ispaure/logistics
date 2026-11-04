@@ -527,7 +527,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             self.assertEqual((logs / 'ios-native-ui-error.txt').read_text(), error.read_text())
             self.assertNotIn('iphone', (logs / 'ios-native-ui-error.txt').read_text())
 
-    def test_diagnostics_use_the_failed_device_and_capture_before_relaunch(self):
+    def test_diagnostics_use_failed_owned_device_without_relaunch(self):
         import os
         from unittest.mock import patch
         with TemporaryDirectory() as directory:
@@ -537,6 +537,8 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                 Path('logs').mkdir()
                 Path('logs/ios-native-ui-device.json').write_text(json.dumps(dict(
                     device='failed-ipad', started_ns=123)))
+                Path('logs/ios-native-ui-owned.json').write_text(json.dumps(dict(
+                    device='failed-ipad', name='Logistics Native Gate unit')))
                 events = []
                 def capture(device, started, **kwargs):
                     events.append(('capture', device, started))
@@ -550,7 +552,8 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                     ui_tools.ios_diagnostics()
                 self.assertEqual(events[0], ('capture', 'failed-ipad', 123))
                 self.assertEqual(events[1][1][3], 'failed-ipad')
-                self.assertIn('failed-ipad', events[2][1])
+                self.assertFalse(any('launch' in command for kind, command, *rest in events if kind == 'command'))
+                self.assertFalse(Path('logs/ios-launch.result').exists())
             finally:
                 os.chdir(previous)
 
@@ -562,11 +565,12 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             os.chdir(directory)
             try:
                 Path('logs').mkdir()
-                Path('logs/ios-native-ui-owned.json').write_text(json.dumps(dict(device='boot-stalled')))
+                Path('logs/ios-native-ui-owned.json').write_text(json.dumps(dict(device='boot-stalled', name='Logistics Native Gate unit')))
+                Path('logs/ios-native-ui-device.json').write_text(json.dumps(dict(device='boot-stalled', started_ns=123)))
                 commands = []
                 def run(command, **kwargs):
                     commands.append(command)
-                    if 'spawn' in command or 'launch' in command:
+                    if 'spawn' in command or 'get_app_container' in command:
                         raise subprocess.TimeoutExpired(command, 60)
                     if command[0] == 'ps':
                         return SimpleNamespace(stdout='123 1 S 0 2048 Simulator\n', stderr='')
@@ -576,10 +580,12 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                         patch.object(ui_tools.Path, 'home', return_value=Path(directory)):
                     ui_tools.ios_diagnostics()
                 self.assertIn('timed out', Path('logs/ios-system.log').read_text())
-                self.assertIn('timed out', Path('logs/ios-launch.result').read_text())
+                self.assertFalse(Path('logs/ios-launch.result').exists())
+                self.assertFalse(any('launch' in command for command in commands))
                 for name in ('host-memory.txt', 'host-vm.txt', 'host-webkit-processes.txt'):
                     self.assertTrue((Path('logs') / name).read_text())
                 self.assertEqual(commands[0][3], 'boot-stalled')
+                self.assertEqual(json.loads(Path('logs/ios-cache-capture.json').read_text())['status'], 'unavailable')
             finally:
                 os.chdir(previous)
 
