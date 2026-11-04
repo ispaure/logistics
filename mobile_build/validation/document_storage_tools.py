@@ -33,6 +33,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.notes_markdown_feedback_probe'):
+        return NATIVE_DIAGNOSTICS + ('notes-markdown-progress.json', 'notes-markdown-tasks.json')
     if entry_point.endswith('.notes_search_probe'):
         return NATIVE_DIAGNOSTICS + tuple(f'notes-search-{pose}-{scope}.png'
             for pose in ('portrait', 'landscape-left') for scope in ('names', 'documents'))

@@ -148,7 +148,7 @@ From the repository root:
 python3 dev.py test desktop 'test_git*.py'
 ```
 
-For shell/registration changes, also run `test_main_window.py`,
+For shell/registration changes, also run `test_main_window_navigation.py`, `test_document_hosting.py`,
 `test_feature_registry.py`, `test_feature_preferences.py` and `test_settings_page.py`
 through the same desktop entry point. It selects the test environment, isolates
 each file and saves timing reports.

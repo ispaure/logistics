@@ -5,7 +5,7 @@
 | Change | Owner and focused tests |
 | --- | --- |
 | Model, containment, links and mutations | `Python/features/notes_library/notes.py`, `notes_links.py`, `library_files.py`; desktop/mobile Notes Library suites |
-| Desktop session destination | `ui/page.py`, `desktop/documents.py`, `desktop/sidebar.py`; `test_main_window.py` |
+| Desktop session destination | `ui/page.py`, `desktop/documents.py`, `desktop/sidebar.py`; `test_notes_library_hosting.py` |
 | Desktop documents and groups | `ui/notes_library.py`, `ui/document.py`, `ui/library_workspace.py`; `test_notes_library_desktop.py`, `test_notes_library_tabs.py` |
 | In-library file previews | `services/documents/file_preview.py`, `ui/file_preview.py`, `mobile/file_preview.py`; desktop tabs and mobile Notes Library suites, native Notes Library probe |
 | Mobile library | `mobile/notes_library.py`, library panels/tools/editors; mobile Notes Library and Markdown library workflow suites |
@@ -695,6 +695,25 @@ resources, connections and operation footer; the workspace selects the active
 projection. `ui/library_connections.py` owns the document Links panel independently
 of library navigation. Desktop library and scoped-tab regressions cover the split,
 including private leases, shortcuts, footer selection and worker retirement.
+Document panes retain the outer library label for root breadcrumbs; scoped-tab
+tests assert that label as well as document identity.
+
+## Test scope and DataView execution
+
+`Python/tests/editing/test_notes_library_desktop.py` retains daily mounting,
+navigation, source-preservation and video-routing checks without starting real
+playback. `test_notes_library_integration.py` keeps real Qt/VLC decoder and
+encrypted-provider journeys at `EXTENDED`; full runs still include them.
+Mobile editing tests retain their independent native-adapter and session coverage.
+
+Desktop DataView uses a disposable, off-the-record Chromium page. The viewless
+computation page is marked visible while it performs document work, avoiding
+background worker-message throttling between provider reads. It is hidden and
+destroyed on completion or cancellation; no browser widget is displayed. Qt
+documents this visibility state separately from a connected view's visibility in
+the [QWebEnginePage API](https://doc.qt.io/qt-6/qwebenginepage.html#visible-prop).
+DataView regressions exercise actual scripts/provider reads and profile retirement;
+the shared Qt fixture also fails unhandled callback exceptions.
 
 ## Document preparation and publication
 

@@ -19,10 +19,11 @@ class NativeMediaTrack(ctypes.Structure):
 
 
 def instance_for(vlc, scale=1.0):
-    instance = vlc.Instance('--quiet', '--ignore-config', '--no-media-library',
+    from services.video_runtime import decoder_instance
+    instance = decoder_instance(vlc, ('--quiet', '--ignore-config', '--no-media-library',
         '--no-metadata-network-access', '--no-lua', '--no-video-title-show',
         '--no-snapshot-preview', '--audio-filter=scaletempo', '--avcodec-hw=any',
-        f'--freetype-rel-fontsize={round(16 / scale)}')
+        f'--freetype-rel-fontsize={round(16 / scale)}'))
     if instance is None:
         raise RuntimeError('The LibVLC runtime could not initialize its plugins.')
     return instance

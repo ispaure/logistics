@@ -36,3 +36,19 @@ class ConflictTests(unittest.TestCase):
             self.assertEqual([item.path for item in result.completed], [copy.resolve()])
             self.assertFalse(copy.exists())
             self.assertEqual(original.read_bytes(), b'original')
+
+    def test_original_changed_after_review_preserves_both_files(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = root / 'note.txt'
+            copy = root / 'note (user conflicted copy 2026).txt'
+            original.write_bytes(b'original')
+            copy.write_bytes(b'original')
+            review = review_conflicts(root)
+            self.assertTrue(review[0].identical)
+            original.write_bytes(b'edited after review')
+            result = delete_reviewed_conflicts(review)
+            self.assertEqual(len(result.failed), 1)
+            self.assertEqual(len(result.completed), 0)
+            self.assertEqual(original.read_bytes(), b'edited after review')
+            self.assertEqual(copy.read_bytes(), b'original')

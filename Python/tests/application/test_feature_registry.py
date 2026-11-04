@@ -4,7 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.SMOKE
 
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, patch
 import unittest
 
@@ -278,3 +278,13 @@ class FeatureRegistryTests(unittest.TestCase):
                 with self.assertRaises(TypeError):
                     registry.get_available_features()
         initialize.assert_not_called()
+
+    def test_feature_file_registration_precedes_all_initializers(self):
+        from features.application import registry
+        events = []
+        features = [SimpleNamespace(__name__='early', initialize=lambda: events.append('initialize early')),
+                    SimpleNamespace(__name__='later', register_file_types=lambda: events.append('register later'),
+                                    initialize=lambda: events.append('initialize later'))]
+        with patch.object(registry, '_log_unavailable_features'), patch.object(registry, 'get_available_features', return_value=features):
+            registry.initialize_features()
+        self.assertEqual(events, ['register later', 'initialize early', 'initialize later'])

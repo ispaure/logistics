@@ -247,6 +247,29 @@ class NotesDrawerTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_android_empty_swipes_chain_and_restore_toga_inner_scroll_listener(self):
+        from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
+        vertical, horizontal, previous = Mock(), Mock(), Mock()
+        previous.onTouch.return_value = True
+        detail = SimpleNamespace(_impl=type('AndroidBox', (), {'__module__': 'toga_android.widgets.box'})())
+        owner = type('Owner', (), {})()
+        owner.__dict__.update(detail=detail, opening_surface=SimpleNamespace(_impl=SimpleNamespace(
+            native=vertical, hScrollView=horizontal, hScrollListener=previous)),
+            opening_gestures=[], side=None, retiring=[], open_swipe=Mock(return_value=True))
+        with patch.dict(sys.modules, {
+            'android.view': SimpleNamespace(View=SimpleNamespace(OnTouchListener=object)),
+            'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+        }):
+            install_opening_swipes(owner)
+        vertical.setOnTouchListener.assert_not_called()
+        listener = horizontal.setOnTouchListener.call_args.args[0]
+        event = Mock()
+        event.getActionMasked.return_value = 0
+        self.assertTrue(listener.onTouch(horizontal, event))
+        previous.onTouch.assert_called_once_with(horizontal, event)
+        clear_opening_swipes(owner)
+        horizontal.setOnTouchListener.assert_called_with(previous)
+
     def test_android_empty_state_observes_scroll_surface_and_releases_it(self):
         from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
         native = Mock()

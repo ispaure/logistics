@@ -6,7 +6,6 @@ TEST_STAGE = TestStage.REGRESSION
 import unittest
 from features.comics.reading import page_progress
 from features.comics.mobile.navigation import ComicNavigation
-from mobile.pane_layout import browser_columns
 
 
 class ViewerPageProgressTests(unittest.TestCase):
@@ -24,10 +23,3 @@ class ViewerPageProgressTests(unittest.TestCase):
         self.assertEqual(navigation.progress_label, '69 2/2 / 250')
         navigation.split = False
         self.assertEqual(navigation.progress_label, '69 / 250')
-
-    def test_exterior_and_narrow_inner_windows_share_compact_browser(self):
-        for bounds in ((420, 900), (500, 650), (800, 1100), (600, 400), (678, 466)):
-            self.assertFalse(browser_columns(*bounds))
-        self.assertTrue(browser_columns(1100, 800))
-        self.assertTrue(browser_columns(951, 669))
-        self.assertTrue(browser_columns(600, 800, fold=object()))

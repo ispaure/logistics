@@ -61,15 +61,18 @@ class CodeFontTests(QtTestCase):
                 window = EditorWindow(history_path=root / 'recent.json', preferences_path=path)
                 review = DiffDialog(compare_text('old', 'new'))
                 bind_code_views(review)
+                review_editors = [*review.editors, review.unified]
                 for widget in (ide, preview, window, review):
                     self.addCleanup(widget.deleteLater)
                 text = window.current.editor
                 self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [9] * 3)
+                self.assertEqual([e.font().pointSize() for e in review_editors], [9] * 3)
                 ide.set_font_size(17)
                 self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [17] * 3)
-                self.assertTrue(all(e.font().pointSize() == 17 for e in review.findChildren(qt.QPlainTextEdit)))
+                self.assertEqual([e.font().pointSize() for e in review_editors], [17] * 3)
                 window.reset_preferences()
                 self.assertEqual([e.font().pointSize() for e in (ide, text, preview.editor)], [9] * 3)
+                self.assertEqual([e.font().pointSize() for e in review_editors], [9] * 3)
                 window._preference_timer.stop()
                 window.close()
 

@@ -1,6 +1,6 @@
 """End-to-end confined gestures, including native capture changing receivers."""
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 import os
@@ -33,7 +33,7 @@ class IDEDragTests(QtTestCase):
         self.settle()
 
     def settle(self):
-        for _ in range(6): self.app.processEvents()
+        self.app.processEvents()
 
     def wait(self):
         self.wait_until(lambda: not self.view.worker and not self.view.queue, timeout=8,
@@ -52,7 +52,7 @@ class IDEDragTests(QtTestCase):
         self.app.sendEvent(receiver, event)
         self.settle()
 
-    def gesture(self, doc, target, placement, receiver='source', cancel=False):
+    def gesture(self, doc, target, placement, receiver='source', cancel=False, allowed=True):
         bar = self.view.group_for(doc).tabBar()
         start = bar.mapToGlobal(bar.tabRect(bar.group.indexOf(doc)).center())
         x = 6 if placement == 'left' else target.width()-7 if placement == 'right' else target.width()//2
@@ -60,36 +60,51 @@ class IDEDragTests(QtTestCase):
         end = target.mapToGlobal(qt.QPoint(x, y))
         self.mouse(bar, qt.QEvent.Type.MouseButtonPress, start)
         sink = bar if receiver == 'source' else target.currentWidget()
-        self.mouse(sink, qt.QEvent.Type.MouseMove, end)
-        candidate = bar.target(end)
-        self.assertTrue(bar.dragging)
-        self.assertEqual(bar.preview.isVisible(), candidate is not None)
-        if candidate:
-            self.assertIs(candidate[0], target)
-            self.assertEqual(candidate[1], 'tabs' if placement in ('tabs', 'header') else placement)
-        if cancel:
-            self.app.sendEvent(sink, qt.QKeyEvent(qt.QEvent.Type.KeyPress, qt.Qt.Key.Key_Escape,
-                                               qt.Qt.KeyboardModifier.NoModifier))
-        self.mouse(sink, qt.QEvent.Type.MouseButtonRelease, end)
+        try:
+            self.mouse(sink, qt.QEvent.Type.MouseMove, end)
+            candidate = bar.target(end)
+            self.assertTrue(bar.dragging)
+            self.assertEqual(bar.preview.isVisible(), candidate is not None)
+            if allowed:
+                self.assertIsNotNone(candidate)
+                self.assertIs(candidate[0], target)
+                self.assertEqual(candidate[1], 'tabs' if placement in ('tabs', 'header') else placement)
+            else:
+                self.assertIsNone(candidate)
+            if cancel:
+                self.app.sendEvent(sink, qt.QKeyEvent(qt.QEvent.Type.KeyPress, qt.Qt.Key.Key_Escape,
+                                                   qt.Qt.KeyboardModifier.NoModifier))
+        finally:
+            self.mouse(sink, qt.QEvent.Type.MouseButtonRelease, end)
         if isValid(bar):
             self.assertFalse(bar.dragging)
             self.assertFalse(bar.preview.isVisible())
 
     def assert_order(self, expected):
+        self.wait_until(lambda: sorted(expected, key=lambda g: g.x()) == expected,
+                        message='Editor geometry did not reach splitter order')
         self.assertEqual([self.view.editors.widget(i) for i in range(self.view.editors.count())], expected)
         self.assertEqual(self.view.groups, expected)
         self.assertEqual(sorted(expected, key=lambda g: g.x()), expected)
 
     def test_repeated_two_single_file_side_drops_preserve_buffer_and_layout(self):
+        self.check_side_drops((1200,), ('right', 'left'))
+
+    @stage(TestStage.EXTENDED)
+    def test_side_drop_width_and_repetition_matrix(self):
+        self.check_side_drops((1200, 760, 1450), ('right', 'left', 'right', 'left'))
+        self.check_qtest_drops((1200, 760), repetitions=3)
+
+    def check_side_drops(self, widths, sides):
         self.left.insertPlainText('unsaved ')
         document = self.left.document()
         content = self.left.toPlainText()
         cursor = self.left.textCursor().position()
-        for width in (1200, 760, 1450):
+        for width in widths:
             self.view.resize(width, 700); self.settle()
             for receiver in ('source', 'destination'):
                 for moving, anchor in ((self.left, self.right), (self.right, self.left)):
-                    for side in ('right', 'left', 'right', 'left'):
+                    for side in sides:
                         with self.subTest(width=width, receiver=receiver, moving=moving.path.name, side=side):
                             source = self.view.group_for(moving)
                             target = self.view.group_for(anchor)
@@ -119,23 +134,39 @@ class IDEDragTests(QtTestCase):
                     self.assert_order([self.view.group_for(self.left), self.view.group_for(self.right)])
 
     def test_qtest_press_move_release_repeatedly_reorders_two_columns(self):
+        self.check_qtest_drops((1200,), repetitions=1)
+
+    def check_qtest_drops(self, widths, repetitions):
         from PySide6.QtTest import QTest
-        for width in (1200, 760):
+        self.left.insertPlainText('unsaved ')
+        document = self.left.document()
+        content = self.left.toPlainText()
+        cursor = self.left.textCursor().position()
+        for width in widths:
             self.view.resize(width, 700); self.settle()
-            for _ in range(3):
+            for _ in range(repetitions):
                 for moving, anchor in ((self.left, self.right), (self.right, self.left)):
                     for side in ('left', 'right'):
                         source, target = self.view.group_for(moving), self.view.group_for(anchor)
                         bar = source.tabBar()
                         end = target.mapToGlobal(qt.QPoint(8 if side == 'left' else target.width()-9, 150))
                         QTest.mousePress(bar, qt.Qt.MouseButton.LeftButton, pos=bar.tabRect(0).center())
-                        QTest.mouseMove(bar, bar.mapFromGlobal(end)); QTest.qWait(10)
-                        self.assertTrue(bar.preview.isVisible())
-                        self.assertEqual(bar.target(end)[1], side)
-                        QTest.mouseRelease(bar, qt.Qt.MouseButton.LeftButton, pos=bar.mapFromGlobal(end))
+                        try:
+                            QTest.mouseMove(bar, bar.mapFromGlobal(end))
+                            self.wait_until(bar.preview.isVisible, message='Drag preview did not appear')
+                            self.assertEqual(bar.target(end)[1], side)
+                        finally:
+                            QTest.mouseRelease(bar, qt.Qt.MouseButton.LeftButton, pos=bar.mapFromGlobal(end))
                         self.settle()
                         self.assert_order([source, target] if side == 'left' else [target, source])
                         self.assertFalse(bar.dragging)
+                        self.assertIs(self.left.document(), document)
+                        self.assertEqual(self.left.toPlainText(), content)
+                        self.assertEqual(self.left.textCursor().position(), cursor)
+                        self.assertTrue(document.isModified())
+        self.assertEqual(self.left.path.read_text(), 'left.py\n')
+        self.left.undo()
+        self.assertEqual(self.left.toPlainText(), 'left.py\n')
 
     def test_cancel_outside_and_group_cap_do_not_move_files(self):
         original = list(self.view.groups)
@@ -157,7 +188,7 @@ class IDEDragTests(QtTestCase):
         self.assertEqual(len(self.view.groups), 3)
         expected = list(self.view.groups)
         # A multi-file source would need a fourth column: neither preview nor move.
-        self.gesture(self.left, self.view.group_for(self.right), 'left', 'destination')
+        self.gesture(self.left, self.view.group_for(self.right), 'left', 'destination', allowed=False)
         self.assert_order(expected)
         # Single-file columns can still be repositioned at the cap.
         source, target = self.view.group_for(third), self.view.group_for(self.right)

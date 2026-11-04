@@ -68,6 +68,9 @@ class ArchiveSession(qt.QObject):
                 self._retry = request, password
                 qt.QTimer.singleShot(0, self, self._retry_job)
                 return
+            # Dismissing the unlock prompt is a user cancellation, rather than
+            # a failed operation/notification carrying the initial password error.
+            result, error = None, ''
         self.completed.emit(request.kind, request.path, result, error)
         self.state_changed.emit()
         self.idle.emit()

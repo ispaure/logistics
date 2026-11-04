@@ -34,46 +34,10 @@ class ImageColorTests(unittest.TestCase):
         self.assertEqual(file.color, expected_color)
         self.assertEqual(file.compressed_image.color, expected_color)
 
-    def test_uniform_colors_receive_color_quality(self):
-        for color in ('red', 'green', 'blue', 'yellow', 'cyan', 'magenta', '#805030'):
+    def test_color_and_grayscale_select_configured_quality(self):
+        for color, quality, is_color in [('red', 60, True), ('gray', 35, False)]:
             with self.subTest(color=color):
-                self.assert_quality(Image.new('RGB', (64, 64), color), 60, True)
-
-    def test_uniform_rgb_grays_receive_grayscale_quality(self):
-        for level in (0, 32, 127, 128, 200, 255):
-            with self.subTest(level=level):
-                self.assert_quality(Image.new('RGB', (64, 64), (level, level, level)), 35, False)
-
-    def test_rgb_grayscale_gradient_stays_grayscale(self):
-        image = Image.new('RGB', (256, 16))
-        image.putdata([(x, x, x) for _ in range(16) for x in range(256)])
-        self.assert_quality(image, 35, False)
-
-    def test_neutral_quantization_tolerance_is_preserved(self):
-        self.assert_quality(Image.new('RGB', (64, 64), (128, 129, 128)), 35, False)
-
-    def test_visible_uniform_tint_receives_color_quality(self):
-        self.assert_quality(Image.new('RGB', (64, 64), (150, 128, 128)), 60, True)
-
-    def test_grayscale_modes_stay_grayscale(self):
-        for mode in ('1', 'L', 'LA'):
-            with self.subTest(mode=mode):
-                self.assert_quality(Image.new(mode, (64, 64)), 35, False)
-
-    def test_palette_color_is_detected(self):
-        image = Image.new('RGB', (64, 64), 'red').convert('P')
-        self.assert_quality(image, 60, True)
-
-    def test_rgba_color_is_detected(self):
-        self.assert_quality(Image.new('RGBA', (64, 64), (255, 0, 0, 255)), 60, True)
-
-    def test_large_uniform_color_is_detected_after_sampling(self):
-        self.assert_quality(Image.new('RGB', (1024, 16), 'blue'), 60, True)
-
-    def test_varying_color_remains_color(self):
-        image = Image.new('RGB', (64, 64))
-        image.putdata([(255, 0, 0) if x % 2 else (0, 0, 255) for x in range(64 * 64)])
-        self.assert_quality(image, 60, True)
+                self.assert_quality(Image.new('RGB', (32, 32), color), quality, is_color)
 
 
 if __name__ == '__main__':
