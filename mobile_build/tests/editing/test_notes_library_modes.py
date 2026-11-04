@@ -341,6 +341,24 @@ class NotesLibraryModeTests(unittest.TestCase):
             self.assertTrue(owner.provider.closed)
         self.run_async(exercise())
 
+    def test_move_picker_cancel_and_folder_exclusion_preserve_source(self):
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            picker = await owner.move_picker('Vault/Projects')
+            browser = picker._folder_browser
+            paths = [entry.payload['path'] for entry in browser.entries]
+            self.assertNotIn('Projects', paths)
+            with self.assertRaises(ValueError):
+                browser.search_provider.relative('../outside')
+            cancel = next(child for child in picker.children if isinstance(child, toga.Button) and child.text == 'Cancel')
+            cancel.on_press()
+            self.assertIsNone(owner.file_action_view)
+            self.assertTrue((self.vault / 'Projects/Plan.MD').exists())
+            await browser.on_open_folder({'path': 'Projects'})
+            self.assertIsNone(owner.file_action_view)
+        self.run_async(exercise())
+
     def test_create_folder_and_move_note_update_history_and_names(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
@@ -372,8 +390,16 @@ class NotesLibraryModeTests(unittest.TestCase):
             await owner.search_task
             owner.manage_entry(move=True)
             form = self.app.body
-            find(form, toga.TextInput).value = 'New folder/Renamed.md'
+            find(form, toga.TextInput).value = 'Renamed.md'
             await find(form, toga.Button).on_press()
+            self.assertEqual(owner.path, 'Vault/Renamed.md')
+            picker = await owner.move_picker(owner.path)
+            browser = picker._folder_browser
+            self.assertTrue(browser.entries)
+            self.assertTrue(all(entry.container for entry in browser.entries))
+            await browser.on_open_folder({'path': 'New folder'})
+            move = next(child for child in picker.children if isinstance(child, toga.Button) and child.text == 'Move here')
+            await move.on_press()
             await owner.search_task
             self.assertEqual([row['path'] for row in owner.search_rows], ['Vault/New folder/Renamed.md'])
             self.assertEqual(owner.path, 'Vault/New folder/Renamed.md')

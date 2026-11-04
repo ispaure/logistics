@@ -74,8 +74,9 @@ opens folders directly without a Notes Library prompt or menu choice. Notes
 Library keeps actual filenames in its sidebar.
 
 In writable libraries, **••• → New folder…** creates a folder beside the selected
-note or inside the selected folder. **Rename / move selected…** accepts a new
-path inside the library, with existing folders. These actions also work on
+note or inside the selected folder. **Rename selected…** changes the name in its current folder.
+**Move selected…** opens a folder picker within this library; browse to the
+destination and choose **Move here**. The filename stays the same. These actions also work on
 selected folders. Moves preserve navigation history and do not overwrite existing
 entries. Links in other notes are not rewritten.
 
@@ -155,7 +156,7 @@ daily notes. Refresh daily notes after files are changed outside the library.
 Calendar reads filenames only and keeps its index in memory, with a 10,000-entry
 and 100-folder-level limit; a failed scan does not offer creation.
 
-In Files, hold a file or folder name for the same **Move / rename…**, **Copy…**,
+In Files, hold a file or folder name for the same **Rename…**, **Move…**, **Copy…**,
 or **Delete…** options as its **…** button,
 as supported by the location. Destinations stay inside this library and must have
 existing parent folders. Copy defaults beside the source as “Filename - Copy”, retaining the extension,
@@ -202,7 +203,7 @@ On iOS, opening the keyboard preserves the document’s native title and actions
 while resizing the writing area. Keyboard dismissal restores the previous
 navigation visibility; destination tabs can remain hidden while a document is open.
 
-Each Notes Library file/folder row has **…** actions for Move / rename, Copy and
+Each Notes Library file/folder row has **…** actions for Rename, Move, Copy and
 Delete when supported by its storage. Hold and drag its icon onto a folder
 to move it, or onto the Files tab to move it to the top level. Folder actions apply to the folder and its contents; deletion asks for
 confirmation and existing copy/move destinations are preserved.

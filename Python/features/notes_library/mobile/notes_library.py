@@ -451,7 +451,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             actions.append(("New document…", self.new_note))
             actions.append(("New folder…", lambda: self.manage_entry(folder=True)))
         if self.selected_path is not None and self.library.supports('rename'):
-            actions.append(("Rename / move selected…", lambda: self.manage_entry(move=True)))
+            actions.extend([("Rename selected…", lambda: self.manage_entry(move=True)),
+                            ("Move selected…", self.move_selected)])
         if self.embedded is not None:
             if self.library.writable and getattr(self.embedded, 'kind', None) != 'file':
                 actions.append(('Save', self.embedded.save))
@@ -1163,11 +1164,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         source = self.selected_path if move else None
         if move and source is None:
             return False
-        title = 'Rename or move' if move else 'New folder'
-        initial = PurePosixPath(source).relative_to(self.root or '.').as_posix() if move else ''
+        title = 'Rename' if move else 'New folder'
+        initial = PurePosixPath(source).name if move else ''
         name = toga.TextInput(value=initial, style=Pack(height=48))
         status = toga.Label('Links are not rewritten.' if move else '')
-        submit_button = toga.Button('Move' if move else 'Create folder', style=Pack(height=48))
+        submit_button = toga.Button('Rename' if move else 'Create folder', style=Pack(height=48))
         cancel = toga.Button('Cancel', on_press=lambda widget: self.return_from_file_action(view=action_view), style=Pack(height=48))
         parent = self.selected_parent()
         async def submit(widget=None, **kwargs):
@@ -1176,10 +1177,14 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if move:
                 submit_button.enabled = cancel.enabled = False
                 try:
-                    if await self.move_entry_to(source, posixpath.join(self.root, name.value)):
+                    from ..library_files import renamed_path
+                    target = renamed_path(source, name.value)
+                    if await self.move_entry_to(source, target):
                         self.return_from_file_action(view=action_view)
                     else:
                         status.text = self.notice.text
+                except ValueError as error:
+                    status.text = str(error)
                 finally:
                     submit_button.enabled = cancel.enabled = True
                 return
@@ -1209,7 +1214,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 submit_button.enabled = cancel.enabled = True
         submit_button.on_press = submit
         form = toga.Box(children=[toga.Label(title, style=Pack(font_size=20)),
-            toga.Label('Path inside Notes Library (existing folders)' if move else 'Folder name'),
+            toga.Label('Name' if move else 'Folder name'),
             name, status, submit_button, cancel], style=Pack(direction=COLUMN, margin=16))
         action_view = toga.ScrollContainer(content=form, horizontal=False, style=Pack(flex=1))
         return self.show_file_action(action_view,
