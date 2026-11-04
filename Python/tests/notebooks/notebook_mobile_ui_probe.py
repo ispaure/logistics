@@ -26,7 +26,7 @@ from features.notebooks.previews import page_previews
 from mobile.palette import EINK_CSS
 
 
-def main(output, *, palm_only=False, laptop_only=False):
+def main(output, *, palm_only=False, laptop_only=False, native_only=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
@@ -73,9 +73,39 @@ def main(output, *, palm_only=False, laptop_only=False):
 
         loaded = []
         view.loadFinished.connect(loaded.append)
-        view.setHtml(mobile_editor_html(editor.state(), bridge.url, console_bridge=True))
+        initial_state = editor.state()
+        initial_state['native_actions'] = native_only
+        view.setHtml(mobile_editor_html(initial_state, bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
+        if native_only:
+            assert js("document.querySelector('[aria-label=\"Notebook actions\"]').hidden")
+            js("window.notebookNativeAction('pages')")
+            wait(lambda: js("document.querySelectorAll('.page-previews button').length === 1"))
+            assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'pages'")
+            js("window.notebookNativeAction('layers')")
+            assert js("$('mobileSheet').dataset.panel === 'layers' && !$('layer').hidden")
+            js("window.notebookNativeAction('view')")
+            assert js("$('mobileSheet').dataset.panel === 'view'")
+            js("window.notebookNativeAction('add-page')")
+            wait(lambda: len(editor.notebook.pages) == 2)
+            wait(lambda: js('!busy'))
+            js("active=42;window.notebookNativeAction('add-page');active=null")
+            QTest.qWait(100)
+            assert len(editor.notebook.pages) == 2
+            js("window.notebookNativeAction('hide-tools')")
+            assert js("document.body.classList.contains('tools-hidden')")
+            js("window.notebookNativeAction('pages')")
+            wait(lambda: js("document.querySelectorAll('.page-previews button').length === 2"))
+            assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'pages'")
+            QTest.qWait(150)
+            view.grab().save(str(output / 'native-pages.png'))
+            (output / 'native-result.json').write_text(json.dumps(dict(success=True,
+                thumbnails=True, layers=True, view=True, queued_add_page=True, pen_contact_guard=True)))
+            view.close()
+            view.deleteLater()
+            qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            return
         if laptop_only:
             from mobile_build.native_tests.tests.logisticsmobile.notebook_laptop_checks import LAPTOP_CHECKS
             reports = []
@@ -340,5 +370,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--palm-only', action='store_true', help='Only check canvas selection and extra-contact handling.')
     parser.add_argument('--laptop-only', action='store_true', help='Check split tools, drawing coordinates and unfold restoration.')
+    parser.add_argument('--native-only', action='store_true', help='Check native toolbar routing to canvas panels and commands.')
     args = parser.parse_args()
-    main(args.output, palm_only=args.palm_only, laptop_only=args.laptop_only)
+    main(args.output, palm_only=args.palm_only, laptop_only=args.laptop_only, native_only=args.native_only)
