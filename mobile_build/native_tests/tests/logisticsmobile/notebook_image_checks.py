@@ -135,8 +135,22 @@ class ImageWorkflow:
         await self.capture('transformed')
         selected = await self.js('return imageQA.current().id')
         center = await self.js('return imageQA.center()')
-        await self.send(dict(op='stroke',tool=17,width=3,color=0,points=[[center[0]-30,center[1],1],[center[0]+30,center[1],1]]))
-        above = await self.js('return imageQA.pixel(imageQA.center())')
+        ink = self.editor().notebook.page(0)
+        original_strokes = {stroke.id for stroke in ink.strokes}
+        picture = next(picture for picture in ink.images if picture.id == selected)
+        # Stroke acknowledgements preserve ink already painted by real input.
+        # Sending a bare command skips that painting and cannot prove overlap.
+        await self.action("$('capture').click();$('tool').value='17';$('tool').dispatchEvent(new Event('change'));$('color').value='0';$('color').dispatchEvent(new Event('change'));$('width').value='3';$('width').dispatchEvent(new Event('change'))")
+        assert await self.js("return mode==='ink' && $('tool').value==='17' && $('color').value==='0' && $('width').value==='3'")
+        await self.action('imageQA.gesture('+json.dumps([[center[0]-30,center[1]],[center[0]+30,center[1]]])+",'pen')")
+        added = [stroke for stroke in self.editor().notebook.page(0).strokes
+                 if stroke.id not in original_strokes]
+        assert len(added) == 1, [stroke.payload() for stroke in added]
+        assert (added[0].tool, added[0].color, added[0].layer) == (17, 0, picture.layer), added[0].payload()
+        above = await self.js('return imageQA.pixel('+json.dumps(center)+')')
+        assert max(above[:3]) < 80 and above[3] == 255, above
+        await self.action("$('capture').click();imageSelection="+json.dumps(selected)+";imageRender()")
+        assert await self.js('return mode==="capture" && selectedPicture()?.id==='+json.dumps(selected))
         for direction in ('back','forward','front','backward','front'):
             await self.action("imageSelection="+json.dumps(selected)+";$('imageArrange').value="+json.dumps(direction)+";$('imageArrange').onchange()")
             ink=self.editor().notebook.page(0)

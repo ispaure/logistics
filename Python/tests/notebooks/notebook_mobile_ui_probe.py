@@ -19,14 +19,75 @@ from features.notebooks.editor import Editor
 from features.notebooks.recovery import Repository
 from logistics_build.build_retention import scratch
 from tests.notebooks.webengine_driver import javascript, wait_until
-from mobile_build.native_tests.tests.logisticsmobile.notebook_pointer_checks import POINTER_CHECKS
+from mobile_build.native_tests.tests.logisticsmobile.notebook_pointer_checks import (
+    POINTER_CHECKS, POINTER_READY, POINTER_FINGER_CHECKS, POINTER_CLEANUP,
+    pointer_report as decode_pointer_report,
+)
 from mobile_build.native_tests.tests.logisticsmobile.notebook_chrome_checks import CHROME_CHECKS
 from mobile_build.native_tests.tests.logisticsmobile.notebook_input_checks import INPUT_CHECKS
 from features.notebooks.previews import page_previews
 from mobile.palette import EINK_CSS
 
 
-def main(output, *, palm_only=False, laptop_only=False, native_only=False):
+def check_pointer_input(js):
+    """Use the shared two-phase fixture and wait for the real release guard."""
+    failure, owned = None, True
+    try:
+        initial = decode_pointer_report(js(POINTER_CHECKS))
+        assert initial.get('release_grace_blocked') is True, initial
+        wait_until(lambda: decode_pointer_report(js(POINTER_READY)).get('blocked') is False,
+                   'notebook pen-release grace to expire', timeout=3)
+        return decode_pointer_report(js(POINTER_FINGER_CHECKS))
+    except BaseException as error:
+        failure = error
+        owned = getattr(error, 'pointer_fixture_owned', True)
+        raise
+    finally:
+        try:
+            if owned:
+                js(POINTER_CLEANUP)
+        except BaseException as cleanup_error:
+            if failure is None:
+                raise
+            failure.add_note('Pointer fixture cleanup also failed: ' + repr(cleanup_error))
+
+
+def check_toolbar_layout(view, js, wait, output):
+    """Keep real controls large and reachable in narrow embedded WebViews."""
+    reports = []
+    for width, height in [(320, 640), (375, 812), (382, 595), (390, 844)]:
+        view.resize(width, height)
+        wait(lambda: js('innerWidth') == width)
+        dimensions = json.loads(js("""JSON.stringify((()=>{
+            const dock=document.querySelector('.mobile-dock'),header=document.querySelector('header');
+            dock.scrollLeft=0;
+            return {width:innerWidth,overflow:document.body.scrollWidth>innerWidth,
+                header:header.getBoundingClientRect().toJSON(),
+                buttons:[...document.querySelectorAll('.mobile-tools button')].map(b=>({
+                    label:b.getAttribute('aria-label'),rect:b.getBoundingClientRect().toJSON()}))};
+        })())"""))
+        assert not dimensions['overflow'], dimensions
+        assert 0 <= dimensions['header']['left'] and dimensions['header']['right'] <= width, dimensions
+        assert len(dimensions['buttons']) == 6, dimensions
+        assert all(row['rect']['width'] >= 44 and row['rect']['height'] >= 44
+                   for row in dimensions['buttons']), dimensions
+        reachable = json.loads(js("""JSON.stringify([...document.querySelectorAll('.mobile-tools button')].map(b=>{
+            b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+            const dock=document.querySelector('.mobile-dock'),r=b.getBoundingClientRect(),d=dock.getBoundingClientRect();
+            return {width:innerWidth,label:b.getAttribute('aria-label'),rect:r.toJSON(),dock:d.toJSON(),
+                scrollLeft:dock.scrollLeft,scrollWidth:dock.scrollWidth,clientWidth:dock.clientWidth,
+                fullyVisible:r.left>=d.left&&r.right<=d.right,
+                hit:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.closest('button')===b};
+        }))"""))
+        assert all(row['fullyVisible'] and row['hit'] for row in reachable), dict(width=width, initial=dimensions, reachable=reachable)
+        assert not js('document.body.scrollWidth>innerWidth')
+        dimensions['reachable'] = reachable
+        reports.append(dimensions)
+        view.grab().save(str(output / f'toolbar-{width}.png'))
+    return reports
+
+
+def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolbar_only=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
@@ -78,6 +139,19 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False):
         view.setHtml(mobile_editor_html(initial_state, bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
+        toolbar_reports = []
+        if toolbar_only:
+            try:
+                toolbar_reports = check_toolbar_layout(view, js, wait, output)
+                (output / 'toolbar-result.json').write_text(json.dumps(
+                    dict(success=True, layouts=toolbar_reports), indent=2))
+            finally:
+                view.close()
+                view.deleteLater()
+                qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            return
+        if not (native_only or laptop_only or palm_only):
+            toolbar_reports = check_toolbar_layout(view, js, wait, output)
         if native_only:
             assert js("document.querySelector('[aria-label=\"Notebook actions\"]').hidden")
             js("window.notebookNativeAction('pages')")
@@ -152,7 +226,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False):
         js("probeTitlePointer('pointerup')")
         js(menu)
         if palm_only:
-            pointer = json.loads(js(POINTER_CHECKS))
+            pointer = check_pointer_input(js)
             (output / 'palm-result.json').write_text(json.dumps(dict(success=True,
                 page_selection_blocked=True, extra_contact_consumed=True, text_fields_editable=True,
                 pointer=pointer)))
@@ -184,7 +258,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False):
                     assert {key: config[key] for key in expected} == expected, config
                     native_previews.append(dict(tool=tool, color=color, grayscale=grayscale, enabled=config['enabled']))
         js("$('tool').value='17';$('tool').onchange();$('color').value='0';$('grayscale').checked=false;document.dispatchEvent(new Event('change'))")
-        pointer_report = json.loads(js(POINTER_CHECKS))
+        pointer_report = check_pointer_input(js)
         assert pointer_report['palm_motion_ignored']
         input_report = json.loads(js(INPUT_CHECKS))
         assert js('document.querySelectorAll(".brush-card").length') == len(editor.state()['tools'])
@@ -352,7 +426,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False):
         js("document.querySelector('#mobileNotice button').click()")
         assert js("document.getElementById('mobileNotice').hidden")
         js("document.getElementById('restoreTools').click()")
-        (output / 'mobile-ui.json').write_text(json.dumps(dict(status='passed', sizes=reports,
+        (output / 'mobile-ui.json').write_text(json.dumps(dict(status='passed', sizes=reports, toolbar=toolbar_reports,
             brush=12, color=6, real_mouse_input=True, undo=True, redo=True,
             focus_mode=True, view_preserved=True, full_viewport=True, error_visible=True,
             absent_fold_preserves_picker=True,
@@ -371,5 +445,6 @@ if __name__ == '__main__':
     parser.add_argument('--palm-only', action='store_true', help='Only check canvas selection and extra-contact handling.')
     parser.add_argument('--laptop-only', action='store_true', help='Check split tools, drawing coordinates and unfold restoration.')
     parser.add_argument('--native-only', action='store_true', help='Check native toolbar routing to canvas panels and commands.')
+    parser.add_argument('--toolbar-only', action='store_true', help='Check actual narrow toolbar targets and scroll reachability only.')
     args = parser.parse_args()
-    main(args.output, palm_only=args.palm_only, laptop_only=args.laptop_only, native_only=args.native_only)
+    main(args.output, palm_only=args.palm_only, laptop_only=args.laptop_only, native_only=args.native_only, toolbar_only=args.toolbar_only)
