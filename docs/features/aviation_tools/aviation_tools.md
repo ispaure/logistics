@@ -1,8 +1,7 @@
 # Aviation Tools documentation
 
-Choose a guide for the task you want to complete.
+Calculate distances, headings and aircraft performance with the supplied reference data.
 
-## Further reading
-
-- [Aviation Tools](development/development.md)
-- [Aviation Tools](user/user.md)
+- [Desktop usage](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Implementation and validation scope](development/development.md)
