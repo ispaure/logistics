@@ -298,7 +298,8 @@ class NotesLibraryDesktopTests(QtTestCase):
             font = window.breadcrumbs.font()
             font.setPointSize(32)
             window.breadcrumbs.setFont(font)
-            self.app.processEvents()
+            self.wait_until(lambda: window.breadcrumb_viewport.viewport().height() >= window.breadcrumbs.height(),
+                            message='Breadcrumb viewport did not resize for the larger font')
             self.assertGreaterEqual(window.breadcrumb_viewport.viewport().height(),
                                     window.breadcrumbs.height())
             window.close()
