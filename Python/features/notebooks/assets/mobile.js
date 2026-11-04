@@ -72,7 +72,7 @@ renderEraserChoices();
   tools.append(iconButton(control('capture'), 'select', 'Capture cutouts and arrange images', 'Capture'));
   for (let [id, label] of [
       ['erase', 'Erase'],
-      ['select', 'Move'],
+      ['select', 'Select'],
       ['undo', 'Undo'],
       ['redo', 'Redo']
     ]) tools.append(iconButton(control(id), id, id === 'select' ? 'Select / move' : label, label));

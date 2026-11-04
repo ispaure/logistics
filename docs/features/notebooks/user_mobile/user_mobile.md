@@ -153,6 +153,14 @@ unused status strip is reclaimed across the app; Android still reserves actual
 camera cutouts, navigation and keyboard space.
 
 Use **Undo**, **Redo**, **Erase**, and **Select / move** to edit.
+In **Select / move**, draw a dashed lasso with your finger or pen, even when
+**Draw with finger** is off. Only fully enclosed visible strokes are selected.
+Drag inside the selection box to move it; drag a square corner to scale uniformly
+or the upper circle to rotate. Moving farther from the centre makes rotation
+finer. **Copy**, **Cut** and **Delete** appear below the box. **Paste strokes**
+pastes into the current page at the original page position, independently of zoom
+or scroll. The private stroke clipboard lasts until this editor closes; it is
+separate from Capture's image clipboard. Cancelled gestures do not save edits.
 Open **Notebook actions → Pages Overview** for selectable ink thumbnails, the
 page count, previous/next arrows, **Go to page**, and commands to add, duplicate,
 delete, reorder or copy the current page to
