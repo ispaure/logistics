@@ -343,6 +343,50 @@ class NotesLibraryModeTests(unittest.TestCase):
             self.assertTrue(owner.provider.closed)
         self.run_async(exercise())
 
+    def test_move_and_cancel_keep_the_library_provider_open(self):
+        import toga
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.runtime.resources.lifetime import ResourceLeases
+        class Leased(LocalFiles):
+            def __init__(self, root):
+                super().__init__(root)
+                self.closed = False
+                self.leases = ResourceLeases(validate=self.check, close=self.close)
+            def check(self):
+                if self.closed:
+                    raise ValueError('Closed library provider')
+            def entry(self, path):
+                self.check()
+                return super().entry(path)
+            def reopen(self):
+                self.check()
+                return Leased(self.root)
+            def acquire(self):
+                return self.leases.acquire()
+            def close(self):
+                self.closed = True
+        async def exercise():
+            owner = await open_vault(self.app, Leased(self.root), 'Vault', 'files')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            picker = await owner.move_picker(owner.path)
+            browser = picker._folder_browser
+            await browser.on_open_folder({'path': 'Projects'})
+            move = next(child for child in picker.children if isinstance(child, toga.Button) and child.text == 'Move here')
+            await move.on_press()
+            await browser.close()
+            self.assertFalse(owner.provider.closed)
+            self.assertTrue(await owner.open_note('Vault/Projects/Home.md'))
+            picker = await owner.move_picker(owner.path)
+            browser = picker._folder_browser
+            cancel = next(child for child in picker.children if isinstance(child, toga.Button) and child.text == 'Cancel')
+            cancel.on_press()
+            await browser.close()
+            self.assertFalse(owner.provider.closed)
+            self.assertTrue(owner.library.read(owner.path))
+            owner.dispose()
+            self.assertTrue(owner.provider.closed)
+        self.run_async(exercise())
+
     def test_move_picker_cancel_and_folder_exclusion_preserve_source(self):
         import toga
         from dataclasses import replace

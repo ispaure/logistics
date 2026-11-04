@@ -520,8 +520,8 @@ class FilesUI:
     def populate_file_browser(self, rows, password='', *, location=None):
         from .browser_preview import callbacks, DIRECT_IMAGE_SUFFIXES
         client = self.cloud_client
-        # Visible local image rows can load bounded thumbnails. Archive covers
-        # and private/virtual/cloud content stay outside automatic folder previews.
+        # Only ordinary local image rows load bounded thumbnails automatically.
+        # Private or virtual content and archive covers require explicit previews.
         thumbnail, self.file_browser.details = callbacks(self.file_provider, client, password)
         from commonUtils.filesystem.image_previews import local_provider_image, MAX_IMAGE_BYTES
         provider = self.file_provider
