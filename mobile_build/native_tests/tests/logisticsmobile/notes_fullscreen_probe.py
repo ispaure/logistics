@@ -14,6 +14,7 @@ from mobile.obsidian import open_vault
 from . import start_native_check
 from .rotation_checks import rotate, pose_snapshot
 from .fixtures import capture_window
+from .notes_tree_helpers import activate_entry, landing_row, row_paths
 
 
 class NotesFullscreenProbe(LogisticsMobile):
@@ -37,13 +38,11 @@ class NotesFullscreenProbe(LogisticsMobile):
             owner = await open_vault(self, LocalFiles(root), '', 'files')
             assert owner.sidebar.side == 'files'
             assert owner.sidebar.overlay is not None
-            folder = next(row for row in owner.rows.children if row.children[-1].vault_path == 'Projects')
-            assert folder.children[1].browser_entry_kind == 'folder_document'
-            await folder.children[-1].on_press()
+            assert landing_row(owner, 'Projects')
+            await activate_entry(owner, 'Projects')
             assert owner.path == 'Projects/Projects.md'
-            folder = next(row for row in owner.rows.children if row.children[-1].vault_path == 'Projects')
-            await folder.children[2].on_press()
-            assert any(row.children[-1].vault_path == 'Projects/Projects.md' for row in owner.rows.children)
+            await activate_entry(owner, 'Projects', expand=True)
+            assert 'Projects/Projects.md' in row_paths(owner)
             report['folder_page_visible_and_opened'] = True
             await owner.open_note('Welcome.md')
             owner.follow_link(owner.web, owner.base + '?target=Projects%2FProjects.md')
