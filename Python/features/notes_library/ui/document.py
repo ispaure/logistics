@@ -40,6 +40,7 @@ class NotesBreadcrumbs(qt.QLabel):
     def __init__(self, owner):
         super().__init__()
         self.owner, self.entries, self.folders = owner, [], []
+        self._path = None
         self.setMinimumWidth(0)
         self.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
         self.setTextFormat(qt.Qt.TextFormat.RichText)
@@ -48,13 +49,29 @@ class NotesBreadcrumbs(qt.QLabel):
         self.linkActivated.connect(self.activate)
 
     def activate(self, index):
-        target = self.entries[int(index)][1]
+        try:
+            index = int(index)
+        except (TypeError, ValueError):
+            return
+        if not 0 <= index < len(self.entries):
+            return
+        target = self.entries[index][1]
         if target:
             self.owner.open_note(target)
-        elif int(index) < len(self.folders):
-            self.owner.reveal_folder(self.folders[int(index)])
+        elif index < len(self.folders):
+            self.owner.reveal_folder(self.folders[index])
+
+    def clear_path(self):
+        self._path = None
+        self.entries.clear()
+        self.folders.clear()
+        self.setToolTip('')
+        self.setAccessibleName('')
+        self.render_path()
 
     def show_path(self, path):
+        changed = path != self._path
+        self._path = path
         folders = breadcrumb_folders(self.owner.library.root, path)
         if self.owner.library.root not in folders:
             folders.insert(0, self.owner.library.root)
@@ -65,6 +82,13 @@ class NotesBreadcrumbs(qt.QLabel):
         self.setToolTip(' / '.join(label for label, _ in self.entries))
         self.setAccessibleName(self.toolTip())
         self.render_path()
+        viewport = getattr(self.owner, 'breadcrumb_viewport', None)
+        if changed and viewport is not None:
+            # Equal-width paths do not emit rangeChanged. A new document must
+            # still reveal its end, while refreshes of the same path preserve
+            # the user's manual scroll position.
+            bar = viewport.horizontalScrollBar()
+            bar.setValue(bar.maximum())
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -547,10 +571,7 @@ class DocumentPresentation:
 
     def clear_document(self):
         self.viewer.status.clear()
-        self.breadcrumbs.entries = []
-        self.breadcrumbs.clear()
-        self.breadcrumbs.setToolTip('')
-        self.breadcrumbs.setAccessibleName('')
+        self.breadcrumbs.clear_path()
         if getattr(self, 'file_preview', None) is not None:
             self.file_preview.clear()
         self.viewer.browser.inline_videos.clear()
