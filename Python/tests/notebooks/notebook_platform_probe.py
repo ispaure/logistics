@@ -19,6 +19,7 @@ PROBES = {
     'templates': ('notebook_template_probe.py', 240, True),
     'mobile-ui': ('notebook_mobile_ui_probe.py', 240, True),
     'mobile-laptop': ('notebook_mobile_ui_probe.py', 240, True),
+    'images-passwords': ('notebook_images_probe.py', 120, True),
     'pdf-annotation': ('pdf_annotation_probe.py', 240, True),
     'encrypted-storage': ('notebook_storage_probe.py', 240, False),
     # Acceptance already runs the killed-writer recovery probe.
