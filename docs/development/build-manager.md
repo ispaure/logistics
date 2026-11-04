@@ -24,6 +24,15 @@ host field appears only in that mode; switching modes preserves stored values.
 
 ## Implemented operations and extension points
 
+Local mobile validation, build and tester-preparation plans inspect required host
+tools before host regressions or native preparation. Native app builds require pinned Briefcase, pip and Go;
+interpreter-only runtime plans require pip. Failures name normal mobile setup or
+the pinned Go/PATH requirement. Inspection never installs tools, downloads a Go
+toolchain or enables telemetry. Desktop, host-only and GitHub plans do not gain
+a local Go prerequisite. Existing source-structure and cleanup dependencies remain.
+Explicit Debug-device recipes assembled separately by the device owner are outside
+this early gate. Retained artifact exports likewise gain no Go requirement here.
+
 The manager integrates the existing physical-device, TestFlight and Firebase
 commands. Local TestFlight/Firebase preparation captures verified artifact
 metadata and stops before upload. GitHub operations validate a published branch
