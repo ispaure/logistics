@@ -4,6 +4,10 @@ The remaining physical procedure is [notebook hardware acceptance](hardware-acce
 Measured brush corrections are recorded in [Paper Pro calibration](brush-calibration.md).
 Responsive paper defaults, zoom and proximity guards are described in
 [viewport and pen input](viewport-input.md).
+New ink's bounded point reduction and imported-stroke preservation are described
+in [saved stroke sampling](stroke-sampling.md).
+Native lasso controls and clipboard contracts are described in
+[stroke selection](stroke-selection.md).
 
 ## Current implementation and acceptance boundary
 
@@ -1623,3 +1627,9 @@ run only in Capture mode so the stroke Select clipboard can own its shortcuts.
 Session PDF-unlock caching compares exact encrypted contents, since structural
 recovery publication replaces unchanged member byte objects. Changed PDF bytes
 still invalidate the cached decrypted rendering and require their own password.
+
+## Internal page links
+
+PDF-backed notebooks expose internal link rectangles through `Editor.page_links`, caching only the current PDF page’s parsed annotations in memory. Targets are remapped through current `redir` values after insertion, movement, copying or deletion, without adding ink history or changing the embedded PDF. `assets/links.js`, loaded after image/capture handlers, reserves completed finger taps on mobile and Command-click (macOS) or Ctrl-click (Windows/Linux) mouse gestures on desktop. Pen input remains with the drawing engine. Movement, hold, cancellation, second contacts and pen proximity reject link activation; a swipe beginning on a link can still turn the page. Navigation acknowledgement starts a three-second Undo page jump overlay; errors and later page changes retire it.
+
+`link_gesture_logic.js` checks production handlers in V8 without platform claims. `notebook_links_probe.py` is the reusable real-WebEngine synthetic gesture/timer probe. Its first launch for this change failed at Chromium’s sandbox bootstrap before gesture execution; browser/native acceptance remains open, including the changed shared ImageCanvas Android Java input.

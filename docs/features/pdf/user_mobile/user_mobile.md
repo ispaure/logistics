@@ -100,3 +100,8 @@ or use the system's screen sharing controls; the current PDF page or spread is
 shown without the app's controls. Output clears when you leave the reader or the
 app becomes inactive. Protected-session gates also blank the output, including
 while another protected document is retained in the app.
+
+
+## Internal page links
+
+Tap an internal PDF link with a finger to open its destination page. Swipes, pinches and holds keep their existing gestures. **Undo page jump** appears below the page for three seconds; tap it to return.

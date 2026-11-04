@@ -23,7 +23,7 @@ def compiled_payload(apk):
                 if name.endswith('.dex') or name.startswith('lib/')}
 
 
-def retain_palm_package(work, output):
+def retain_palm_package(work, output, *, name='palm'):
     """Keep the new QA package and provenance before disposable build cleanup."""
     manifest = output / 'android-apk.json'
     if not manifest.exists():
@@ -32,15 +32,18 @@ def retain_palm_package(work, output):
     original = Path(built['apk'])
     if sha256(original.read_bytes()).hexdigest() != built['sha256']:
         raise ValueError('Built palm QA package changed before evidence capture')
-    target = output / 'notebook-palm.apk'
+    target = output / f'notebook-{name}.apk'
     shutil.copyfile(original, target)
     target.chmod(0o444)
-    names = {'NotebookInput', 'BooxBallpoint', 'BooxInk', 'BooxRefresh'}
+    names = {'NotebookInput', 'BooxBallpoint', 'BooxInk', 'BooxRefresh', 'ImageCanvasView'}
     classes = {str(path.relative_to(work)): sha256(path.read_bytes()).hexdigest()
-               for path in (work / 'build').rglob('*.class') if path.stem in names}
+               for path in (work / 'build').rglob('*.class') if path.stem.split('$')[0] in names}
     native = work / 'payload/features/notebooks/mobile/android'
     sources = {str(path.relative_to(native)): sha256(path.read_bytes()).hexdigest()
                for path in native.rglob('*.java')}
+    shared = work / 'payload/commonUtils/ui/native/android'
+    sources.update({'commonUtils/' + str(path.relative_to(shared)): sha256(path.read_bytes()).hexdigest()
+                    for path in shared.rglob('*.java')})
     (output / 'android-shell.json').write_text(json.dumps(dict(
         apk=str(target), sha256=built['sha256'], source=json.loads((output / 'source.json').read_text()),
         native_class_hashes=classes, native_source_hashes=sources,
@@ -94,8 +97,9 @@ def main():
     parser.add_argument('--revision', default='HEAD', help='Committed Logistics revision; excludes concurrent working edits')
     parser.add_argument('--ios-shell-receipt', type=Path, help='Verified simulator shell receipt; iOS never compiles implicitly')
     parser.add_argument('--android-shell-receipt', type=Path, help='Copy/repackage a verified QA APK instead of compiling')
-    parser.add_argument('--probe', choices=('templates', 'calibration', 'palm'), default='templates')
-    parser.add_argument('--ios-family', choices=('iPhone', 'iPad'), default='iPhone')
+    parser.add_argument('--probe', choices=('templates', 'calibration', 'palm', 'links'), default='templates')
+    parser.add_argument('--ios-family', choices=('iPhone', 'iPad', 'iPhone Duo'), default='iPhone')
+    parser.add_argument('--duoctl', type=Path, help='Reviewed simulator-only touch helper for iOS link acceptance')
     args = parser.parse_args()
     if args.platform == 'ios' and args.ios_shell_receipt is None:
         parser.error('iOS requires --ios-shell-receipt (copy-only simulator shell)')
@@ -103,6 +107,8 @@ def main():
         parser.error('Calibration requires Android and an explicit source-verified QA shell receipt')
     if args.probe == 'palm' and args.platform == 'ios' and args.ios_family != 'iPad':
         parser.error('Pencil hover observer acceptance requires --ios-family iPad')
+    if args.probe == 'links' and args.platform == 'ios' and (args.ios_family != 'iPhone Duo' or args.duoctl is None):
+        parser.error('iOS link acceptance requires --ios-family \'iPhone Duo\' and --duoctl for genuine simulator touches')
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     root = Path(__file__).resolve().parents[2]
@@ -133,14 +139,22 @@ def main():
         elif args.probe == 'palm':
             profile.update(entry_point='tests.logisticsmobile.notebook_palm_probe',
                            result_name='notebook-palm-result.json')
+        if args.probe == 'links':
+            profile.update(entry_point='tests.logisticsmobile.notebook_link_probe',
+                           result_name='notebook-link-result.json')
         try:
             if args.platform == 'ios':
                 receipt = json.loads(args.ios_shell_receipt.read_text())
+                if args.probe == 'links':
+                    from mobile_build.validation.drawer_privacy_tools import verify_shell
+                    verified = verify_shell(receipt, captured['logistics_commit'])
+                    verified['scope'] = 'PDF/notebook link simulator acceptance; no physical device input'
+                    (output / 'verified-ios-shell.json').write_text(json.dumps(verified, indent=2))
                 source_app = Path(receipt['app'])
                 if not source_app.is_dir():
                     raise ValueError('Verified simulator shell no longer exists')
                 (output / 'compiled-shell.json').write_text(json.dumps(receipt, indent=2))
-                driver.run_ios(work, payload, output, env, family=args.ios_family, source_app=source_app, **profile)
+                driver.run_ios(work, payload, output, env, family=args.ios_family, source_app=source_app, duoctl=args.duoctl, **profile)
             else:
                 if args.android_shell_receipt is not None:
                     (work / 'repack').mkdir()
@@ -151,8 +165,8 @@ def main():
                 else:
                     driver.run_android(work, payload, output, env, options, **profile)
         finally:
-            if args.platform == 'android' and args.probe == 'palm' and args.android_shell_receipt is None:
-                retain_palm_package(work, output)
+            if args.platform == 'android' and args.probe in ('palm', 'links') and args.android_shell_receipt is None:
+                retain_palm_package(work, output, name=args.probe)
             report_path = output / (args.platform + '-result.json')
             if report_path.exists():
                 report = json.loads(report_path.read_text())
