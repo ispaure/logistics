@@ -412,6 +412,20 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                         lambda: client.invoke('terminate', device, bundle))
                     (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
                 return result
+            # A failed simctl launch cannot later produce an app result. Keep
+            # result handling first: an app may finish before console teardown.
+            # Exit0 can mean a detached console and is not itself acceptance.
+            exit_code = console.poll()
+            if exit_code not in (None, 0):
+                failure = dict(stage='simctl-launch-before-result', exit_code=exit_code,
+                               device=device, bundle=bundle, console_log='ios-console.log')
+                try:
+                    (output / 'ios-launch-failure.json').write_text(json.dumps(failure, indent=2))
+                except OSError:
+                    pass  # Optional evidence must not replace the launch error.
+                raise RuntimeError('simctl launch console exited with status '
+                                   + str(exit_code) + ' before the probe result; see '
+                                   + str(output / 'ios-console.log'))
             time.sleep(.3)
         raise TimeoutError('iOS focused QA probe timed out')
     finally:
