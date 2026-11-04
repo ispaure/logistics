@@ -298,3 +298,28 @@ class ManagerSuiteTests(unittest.TestCase):
                         self.assertEqual(clients.return_value.remove.call_args_list[0].args,
                                          ('previous-owned-uuid','Build Manager previous-owned-token'))
                         self.assertFalse(lease.exists())
+
+    def test_ios_boot_timeout_captures_known_lease_before_strict_cleanup(self):
+        from logistics_build import ios_backend
+        with TemporaryDirectory() as directory:
+            root=Path(directory);(root/'mobile_build').mkdir()
+            (root/'.manager-source.json').write_text(json.dumps({'source':{'commit':'fixed'}}))
+            result,lease=root/'result.json',root/'lease.json'
+            timeout=subprocess.TimeoutExpired(['xcrun','simctl','bootstatus','owned-fixture-device','-b'],60,output=b'Boot phase',stderr=b'boot stderr')
+            with patch.object(ios_backend,'AppleSimulators') as clients, \
+                    patch('mobile_build.validation.ui_tools.run') as launch:
+                client=clients.return_value;client.create.return_value='owned-fixture-device'
+                client.boot.side_effect=timeout
+                with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                    ios_backend.test(root,result,'duo','fixture-model','fixture-runtime',lease)
+                self.assertIs(caught.exception,timeout)
+                name=client.create.call_args.args[0]
+                client.boot.assert_called_once_with('owned-fixture-device',name=name)
+                client.remove.assert_called_once_with('owned-fixture-device',name)
+                launch.assert_not_called()
+            data=json.loads(result.read_text());proof=data['boot_timeout']
+            self.assertEqual(proof['stage'],'bootstatus');self.assertEqual(proof['command'],timeout.cmd)
+            self.assertEqual(proof['lease_record']['name'],name)
+            self.assertEqual(proof['lease_record']['device'],'owned-fixture-device')
+            self.assertGreaterEqual(proof['elapsed_seconds'],0)
+            self.assertTrue(data['owned_simulator_removed']);self.assertFalse(lease.exists())
