@@ -5,10 +5,12 @@ import argparse
 import faulthandler
 import importlib.abc
 import json
+import os
 from pathlib import Path
 import platform
 import re
 import sys
+import tempfile
 import unittest
 
 PREFIX = 'LOGISTICS_MOBILE_RESULT='
@@ -119,10 +121,31 @@ def verify_source(source, target, local_sha256=''):
         raise RuntimeError('Mobile evidence requires a clean staged source manifest.')
 
 
+def publish_result(report, result_file=None):
+    """Retain the actual completed report before best-effort process stdout."""
+    serialized = json.dumps(report, sort_keys=True)
+    if result_file is not None:
+        path = Path(result_file)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                             prefix='.' + path.name + '-', delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(serialized + '\n')
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+    print(PREFIX + serialized, flush=True)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=('host', 'android', 'ios'), required=True)
     parser.add_argument('--local-source-sha256', default='', help='Explicit local-only exact staged fingerprint; never hosted release evidence')
+    parser.add_argument('--result-file', type=Path, help='Atomically retain the actual completed report before stdout')
     args = parser.parse_args(argv)
     if args.target != 'host' and sys.platform != args.target:
         parser.error('Expected an actual ' + args.target + ' interpreter; got ' + sys.platform)
@@ -166,7 +189,7 @@ def main(argv=None):
                       source=source, native_picker_tested=False)
         if args.local_source_sha256:
             report['local_source_sha256'] = args.local_source_sha256
-        print(PREFIX + json.dumps(report, sort_keys=True), flush=True)
+        publish_result(report, args.result_file)
         return 0 if report['success'] else 1
     finally:
         if args.target == 'host':
