@@ -25,7 +25,11 @@ memoryProbe.zoom=value=>{
 memoryProbe.stroke=(tool,width)=>{
   if(busy||active!==null)throw Error('Stroke started while busy');
   $('tool').value=String(tool);$('tool').onchange();
-  $('width').value=String(width);
+  // Exercise the sole native size for fixed-width brushes, not an empty select.
+  const widths=[...$('width').options];
+  const chosen=widths.find(option=>option.value===String(width))||(brushFor(tool).fixed_width&&widths[0]);
+  if(!chosen)throw Error('The selected brush does not offer the requested width');
+  $('width').value=chosen.value;
   $('color').value=$('color').options[Math.min(3,$('color').options.length-1)].value;
   let r=canvas.getBoundingClientRect(),v=$('viewport').getBoundingClientRect();
   let left=Math.max(r.left,v.left)+20,top=Math.max(r.top,v.top)+100;

@@ -79,10 +79,13 @@ def main(output, *, max_process_tree_mib=None, max_remount_growth_mib=None):
                     assert probe.js('memoryProbe.writes') == writes
                     assert ink_signature(probe.panel.editor.notebook) == signature
                     for ordinal, tool in enumerate(tools):
+                        before_stroke = probe.count()
                         probe.js(f'memoryProbe.stroke({tool},{ordinal % 3 + 1})')
                         probe.wait(lambda: probe.js('memoryProbe.done'), 'timed pen samples')
                         assert probe.js('memoryProbe.error') is None
                         probe.idle(layout=False)
+                        assert probe.count() == before_stroke + 1, dict(tool=tool, expected=before_stroke + 1,
+                            actual=probe.count(), browser=probe.js("({width:$('width').value,status:$('status').textContent})"))
                     surface = probe.js('memoryProbe.surface()')
                     assert surface['width'] * surface['height'] <= 16 * 1024 * 1024
                     report['surfaces'].append(dict(zoom=zoom, page=index + 1, **surface))
