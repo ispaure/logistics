@@ -13,6 +13,21 @@ from mobile.navigation import DESTINATIONS, DESTINATION_ICON_NAMES, install_dest
 
 
 class NavigationArtworkTests(unittest.TestCase):
+    def test_feature_visibility_applies_to_both_android_bars_without_removing_items(self):
+        from mobile.navigation import sync_android_destination_visibility
+        bottom, rail = Mock(), Mock()
+        host = NS(adapter=NS(bottom=bottom, rail=rail),
+                  root=NS(content=[NS(enabled=key != 'chat') for key in DESTINATIONS]))
+        sync_android_destination_visibility(host)
+        for bar in (bottom, rail):
+            self.assertEqual(bar.getMenu().getItem.call_count, 5)
+            self.assertEqual([call.args[0] for call in bar.getMenu().getItem().setVisible.call_args_list],
+                             [True, True, True, False, True])
+        host.root.content[3].enabled = True
+        sync_android_destination_visibility(host)
+        for bar in (bottom, rail):
+            bar.getMenu().getItem().setVisible.assert_called_with(True)
+
     def test_all_destinations_use_desktop_artwork_with_independent_tint_state(self):
         bottom, rail, resources = Mock(), Mock(), Mock()
         bitmaps = [Mock() for _ in DESTINATIONS]

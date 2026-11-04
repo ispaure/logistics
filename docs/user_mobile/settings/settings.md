@@ -41,7 +41,7 @@ an existing installation. **Enable all features** restores that selection.
 Choices save immediately on this device and survive restarting the app. Turning
 a feature off hides its launchers, creation types, recent documents and related
 settings. Opening a file for a disabled feature offers an **Enable** action.
-The Chat tab stays available with an enable screen when LM Chat is off.
+The Chat tab is hidden when LM Chat is off and returns when it is enabled.
 Files, saved settings and conversations are kept. Enabling the feature brings
 its documents back into the lists. Disabling rclone leaves ordinary
 local browsing, document creation and editing available.

@@ -329,6 +329,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         from .navigation import install_destination_icons, install_apple_selection
         install_destination_icons(self.native_host)
         install_apple_selection(self)
+        from .navigation import sync_feature_destinations
+        sync_feature_destinations(self)
         self.routes.install()
         self.refresh_native_theme()
         self.adaptive.install()
@@ -394,6 +396,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         return True
 
     def select_destination(self, destination):
+        if destination == 'chat' and not self.feature_enabled('lm'):
+            return False
         if not self.checkpoint(save_workspace=False):
             return False
         origin = self.native_host.state.destination
