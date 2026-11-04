@@ -33,6 +33,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.mobile_feedback_probe'):
+        return NATIVE_DIAGNOSTICS + tuple(f'feedback-{name}.png' for name in ('notes-portrait', 'notes-landscape-left', 'help', 'more', 'about-loading', 'about-ready', 'licenses'))
     if entry_point.endswith('.documents_hub_probe'):
         return NATIVE_DIAGNOSTICS + tuple(f'documents-hub-{orientation}-{panel}.png'
             for orientation in ('portrait', 'landscape-left')
@@ -114,8 +116,14 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
     if source_app is None:
         project = workspace / 'build/logisticsmobile/ios/xcode'
         template = REPO / 'mobile_build/build/logisticsmobile/ios/xcode'
-        shutil.copytree(template, project, ignore=lambda directory, names:
-            [name for name in names if name == '__pycache__' or (Path(directory) == template and name == 'build')])
+        if template.is_dir():
+            shutil.copytree(template, project, ignore=lambda directory, names:
+                [name for name in names if name == '__pycache__' or (Path(directory) == template and name == 'build')])
+        else:
+            from mobile_build.deployment.deployment_paths import prepare_workspace
+            prepare_workspace(SOURCE / 'mobile_build')
+            command([sys.executable, '-m', 'briefcase', 'create', 'iOS', '--no-input'],
+                    output / 'ios-create.log', cwd=workspace, env=env)
         ios(project)
         copy_payload(payload, project / 'LogisticsMobile/app', entry_point=entry_point)
         for path in [project / 'Logistics Mobile.xcodeproj/project.pbxproj',
@@ -375,8 +383,14 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe', '.notebook_load_probe'))
     project = workspace / 'build/logisticsmobile/android/gradle'
-    shutil.copytree(REPO / 'mobile_build/build/logisticsmobile/android/gradle', project,
-                    ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
+    template = REPO / 'mobile_build/build/logisticsmobile/android/gradle'
+    if template.is_dir():
+        shutil.copytree(template, project, ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
+    else:
+        from mobile_build.deployment.deployment_paths import prepare_workspace
+        prepare_workspace(SOURCE / 'mobile_build')
+        command([sys.executable, '-m', 'briefcase', 'create', 'android', '--no-input'],
+                output / 'android-create.log', cwd=workspace, env=env)
     android()
     copy_payload(payload, project / 'app/src/main/python', entry_point=entry_point)
     gradle = project / 'app/build.gradle'
@@ -387,7 +401,6 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         with gradle.open('a') as stream:
             stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(REPO / 'mobile_build/native_tests/android/notebooks')) + ')\n')
     raw_ink = entry_point.endswith('.boox_raw_ink_probe')
-    hands_on = entry_point.endswith('.boox_preview_probe')
     if raw_ink:
         with gradle.open('a') as stream:
             stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(REPO / 'mobile_build/native_tests/android/boox_raw')) + ')\n')
@@ -396,7 +409,36 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         with (project / 'gradle.properties').open('a') as stream:
             stream.write('\nandroid.enableJetifier=true\n')
     command([project / 'gradlew', *([] if raw_ink else ['--offline']), '--no-daemon', 'assembleDebug'], output / 'android-build.log', cwd=project, env=env)
-    emulator = AndroidEmulator(options['tools.android_sdk'], workspace / 'emulator', environment=env)
+    return exercise_android_app(project / 'app/build/outputs/apk/debug/app-debug.apk',
+        workspace, output, env, options, bundle=bundle, entry_point=entry_point,
+        result_name=result_name, device=device, tablet=tablet)
+
+
+def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
+        entry_point='tests.logisticsmobile.document_storage_probe',
+        result_name='document-storage-result.json', device=None, tablet=False, startup_timeout=240, install_timeout=180):
+    """Run a verified QA APK on an owned device, independently of its build phase."""
+    from hashlib import file_digest
+    from mobile_build.deployment.android_deploy import build_tools
+    if bundle not in QA_BUNDLES:
+        raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    output.mkdir(parents=True, exist_ok=True)
+    metadata = subprocess.check_output([str(build_tools(env) / 'aapt2'), 'dump', 'badging', str(apk)],
+                                      env=env, text=True, timeout=30)
+    identity = re.search(r"package: name='([^']+)'", metadata)
+    if identity is None or identity[1] != bundle or 'application-debuggable' not in metadata.splitlines():
+        raise ValueError('The APK must be a Debug build of the selected isolated QA package.')
+    with Path(apk).open('rb') as stream:
+        digest = file_digest(stream, 'sha256').hexdigest()
+    (output / 'android-apk.json').write_text(json.dumps(dict(apk=str(apk),
+        sha256=digest, bundle=bundle, startup_timeout=startup_timeout, install_timeout=install_timeout)))
+    memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe', '.notebook_load_probe'))
+    raw_ink = entry_point.endswith('.boox_raw_ink_probe')
+    hands_on = entry_point.endswith('.boox_preview_probe')
+    kwargs = dict(environment=env)
+    if startup_timeout != 240:
+        kwargs['startup_timeout'] = startup_timeout
+    emulator = AndroidEmulator(options['tools.android_sdk'], workspace / 'emulator', **kwargs)
     record = None
     try:
         if device is not None:
@@ -414,7 +456,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         if device is None and entry_point.endswith('.sync_status_probe'):
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '640x1136')
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
-        emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=90)
+        emulator.invoke('-s', serial, 'install', str(apk), timeout=install_timeout)
         if device is not None:
             # Boox's launcher can auto-freeze a newly installed QA identity.
             # Only this disposable package is enabled, then removed in finally.
@@ -550,11 +592,17 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 report_data = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                     'run-as', bundle, 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
                 if report_data.returncode == 0 and report_data.stdout:
-                    (output / 'android-result.json').write_bytes(report_data.stdout)
+                    try:
+                        json.loads(report_data.stdout)
+                    except ValueError:
+                        (output / 'android-result-read-error.txt').write_bytes(report_data.stdout)
+                    else:
+                        (output / 'android-result.json').write_bytes(report_data.stdout)
                 for name in diagnostics(entry_point):
                     artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                         'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
-                    if artifact.returncode == 0 and (not name.endswith('.png') or artifact.stdout.startswith(b'\x89PNG')):
+                    if (artifact.returncode == 0 and not artifact.stdout.startswith((b'cat:', b'run-as:'))
+                            and (not name.endswith('.png') or artifact.stdout.startswith(b'\x89PNG'))):
                         (output / name).write_bytes(artifact.stdout)
                 (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
                 try:
@@ -574,6 +622,10 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             finally:
                 # An app install/uninstall error must not bypass owned-device cleanup.
                 emulator.cleanup()
+                for name in ('emulator.log', 'removed-lease.json'):
+                    evidence = emulator.workspace / name
+                    if evidence.is_file():
+                        shutil.copyfile(evidence, output / ('android-' + name))
                 (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
 
 
@@ -584,7 +636,8 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -597,6 +650,8 @@ def main():
         parser.error('--android-tablet requires the disposable Android emulator.')
     if args.pose and (args.platform != 'ios' or args.family != 'iPhone Duo'):
         parser.error('--pose requires an iOS iPhone Duo run')
+    if args.probe == 'mobile-feedback' and args.device:
+        parser.error('Mobile feedback acceptance uses disposable devices; omit --device.')
     if args.device and args.platform != 'android':
         parser.error('--device requires Android.')
     if args.probe == 'notebook-input' and args.platform != 'android':
@@ -616,12 +671,18 @@ def main():
     options, _ = manager_settings.settings(REPO / 'mobile_build')
     env = dict(os.environ, DEVELOPER_DIR=options['tools.xcode'], ANDROID_HOME=options['tools.android_sdk'],
                ANDROID_SDK_ROOT=options['tools.android_sdk'], JAVA_HOME=options['tools.java'])
-    env['PATH'] = str(REPO / 'mobile_build/.tools/go/bin') + os.pathsep + env['PATH']
+    env['PATH'] = os.pathsep.join((str(Path(sys.executable).parent),
+        str(REPO / 'mobile_build/.tools/go/bin'), env['PATH']))
     os.environ.update(env)
     with scratch(REPO) as workspace:
+        if args.retain_build:
+            (workspace / '.keep').touch()
+            (args.output / 'retained-build.json').write_text(json.dumps(dict(workspace=str(workspace))))
         os.environ['LOGISTICS_DEPLOY_WORKSPACE'] = str(workspace)
         env['LOGISTICS_DEPLOY_WORKSPACE'] = str(workspace)
         env['XDG_CACHE_HOME'] = str(workspace / 'probe-tools')
+        env['GOCACHE'] = str(workspace / 'go-cache')
+        os.environ['GOCACHE'] = env['GOCACHE']
         shutil.copyfile(SOURCE / 'mobile_build/pyproject.toml', workspace / 'pyproject.toml')
         payload = workspace / 'payload'
         manifest = stage(SOURCE, payload, allow_dirty=SOURCE == REPO)
@@ -629,6 +690,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'mobile-feedback':
+            creation_profile = dict(bundle=BUNDLE, entry_point='tests.logisticsmobile.mobile_feedback_probe',
+                                    result_name='mobile-feedback-result.json')
         if args.probe == 'notes-audit':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotesauditqa',
                 entry_point='tests.logisticsmobile.notes_audit_probe', result_name='notes-audit-result.json')

@@ -76,9 +76,9 @@ def cloud_fixtures(workspace, *, rclone=None):
     return root
 
 
-def prepare(apk, workspace, *, cloud=False, rclone=None, decode_only=False):
-    fixtures = codec_matrix(workspace / 'fixtures', duration=30) if not cloud else []
-    if not cloud:
+def prepare(apk, workspace, *, cloud=False, rclone=None, decode_only=False, probe=None):
+    fixtures = codec_matrix(workspace / 'fixtures', duration=30) if not cloud and probe is None else []
+    if not cloud and probe is None:
         fixtures += hdr_movies(workspace / 'fixtures')
     fixture_root = cloud_fixtures(workspace, rclone=rclone) if cloud else None
     with ZipFile(apk) as archive:
@@ -87,7 +87,7 @@ def prepare(apk, workspace, *, cloud=False, rclone=None, decode_only=False):
             raise ValueError('The supplied APK has no native Video Player. Choose a managed video-enabled build.')
     stage(ROOT, workspace / 'payload', allow_dirty=True)
     staged = workspace / 'payload'
-    module = 'video_cloud_probe' if cloud else 'video_probe' 
+    module = probe or ('video_cloud_probe' if cloud else 'video_probe')
     payload = BytesIO()
     with ZipFile(apk) as original:
         with ZipFile(BytesIO(original.read('assets/chaquopy/app.imy'))) as app, ZipFile(payload, 'w', ZIP_DEFLATED) as result:
