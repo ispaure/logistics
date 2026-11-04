@@ -43,9 +43,11 @@ class NotesRowsIOSProbe(NotesRowsPerformanceProbe):
         if cold:
             owner.folders.pop(folder, None)
         drawn = owner.host.loop.create_future()
-        witness = NotesDrawWitness.alloc().initWithFrame(CGRect((0, 0), (1, 1)))
+        native = owner.rows_scroll._impl.native
+        origin = native.bounds.origin
+        witness = NotesDrawWitness.alloc().initWithFrame(CGRect((origin.x, origin.y), (1, 1)))
         witness.opaque = False
-        owner.rows_scroll._impl.native.addSubview(witness)
+        native.addSubview(witness)
         sample = dict(storage=storage, variant=variant, cold=cold, buttons_created=0, publications=[])
         add, create = owner.rows.add, toga.Button.__init__
 
