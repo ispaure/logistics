@@ -9,9 +9,11 @@ remote and encrypted readers.
 
 ## Mobile development builds
 
-The independent native app has private EPUB and PNG/JPEG CBZ/ZIP reading,
-chapter/page progress and bookmarks. It has a smaller format/UI scope than this
-desktop guide. See the [mobile guide](../../../user_mobile/user_mobile.md)
+The native iOS/Android app reads CBZ/ZIP comics containing PNG, JPEG or static
+WebP pages, including protected imports and LocalCrypt copies. Comic controls
+provide page progress and page selection; EPUB chapter and bookmark controls
+belong to the separate Books reader. Comics have a smaller processing-tool scope
+than the desktop app. See the [mobile guide](../../../user_mobile/user_mobile.md)
 for imports, limits and current validation status.
 
 ## Native mobile library
@@ -45,6 +47,9 @@ same folder through Back, including after visiting reader tools.
 Mobile imports, provider-backed readers and ordinary browser covers ignore macOS
 resource-fork image entries and use the same natural page order. Unsupported
 image formats fail explicitly instead of silently disappearing from the comic.
+Each decoded page is limited to 8 MiB, 8192 pixels per axis and 16 megapixels;
+animated WebP is rejected. These are per-page limits, rather than a 256 MiB
+whole-archive limit for ordinary imports.
 
 Choose **Appearance → Comic page layout** in an imported reader, or **Appearance…**
 in a provider reader, for Single, Automatic or Two pages. Portrait page
@@ -210,19 +215,18 @@ trees must first have a managed LocalCrypt copy; this action does not recursivel
 rewrite a live remote tree. Unapplied forms are memory-only.
 
 On iPhone Duo, opening a comic keeps its current page as the right-hand page
-when a vertical interior division is available. Closing returns to that same
+when an active vertical interior division is available. Closing returns to that same
 anchor page. Advancing inside updates the anchor; a layout change alone never
 advances it. Manga retains its reading order while keeping the anchor physically
 on the right. This applies to imported and Local/LocalCrypt/remote comics.
 
-Partially folding leaves the system-reported fold and its interaction margins
-clear between pages. A single page, including wide artwork, fits within the
-right-hand region. With a horizontal fold, a single page fits above the fold
-while the page controls remain below it. Flat interior layouts retain the right-hand anchor and follow
-the page-layout preference. A wide page's selected half survives a layout round
-trip back to a narrow viewport. Ordinary zoomed resizing waits until fit size;
-a change of fold region can reflow immediately so the page is not left across
-the fold.
+Partially folding leaves the system-reported vertical fold and its interaction
+margins clear between paired pages. A lone page, including wide artwork, uses
+the full available canvas and can span a vertical fold. With a horizontal fold,
+a single page fits above the fold while the page controls remain below it. Flat
+interior layouts follow the saved page-layout preference. A wide page's selected
+half survives a layout round trip back to a narrow viewport. Ordinary zoomed
+resizing waits until fit size; a change of fold region can reflow immediately.
 
 ### iOS edge-to-edge reading
 
@@ -238,8 +242,9 @@ removed when the private reader is concealed or suspended.
 
 Fullscreen comics hide the system status indicators as well as app navigation.
 The image canvas uses the full window, including the former status-indicator strip.
-On a partially folded Duo, pages fit on either side of the system-reserved fold.
-Their available space accounts for asymmetric safe areas and the fold margins. Source aspect ratios and built-in page borders remain unchanged.
+On a partially folded Duo, paired pages fit on either side of the reserved
+vertical fold; a lone page uses the full canvas. A horizontal fold keeps the
+page above it. Available space accounts for safe areas and fold margins. Source aspect ratios and built-in page borders remain unchanged.
 Tap the page to restore controls and normal safe areas. Android retains its immersive
 system-bar behavior. Ordinary and private comics share this presentation.
 

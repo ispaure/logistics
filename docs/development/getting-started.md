@@ -19,9 +19,10 @@ python3 dev.py doctor
 On Windows use `py` in place of `python3`. The setup preview prints its intended
 command; setup then installs the locked desktop environment at root `.venv`.
 Doctor reads interpreter, package, submodule and optional-tool status without
-changing the environment or reading credentials. A missing optional native tool
-can keep doctor nonzero even when a portable change is ready to test; read the
-specific diagnostic. See [setup details](testing.md#set-up-a-checkout).
+changing the environment or reading credentials. It checks both desktop and mobile
+host environments; missing mobile host packages can therefore make it nonzero
+after desktop-only setup. Missing optional native tools are informational and do
+not affect its exit status. Read the specific diagnostic before choosing a check. See [setup details](testing.md#set-up-a-checkout).
 
 For an existing checkout, keep your current branch and preserve local edits.
 Initialize missing submodules only after checking for changes inside them.

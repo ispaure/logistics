@@ -20,10 +20,16 @@ source, encryption/session state and **(Read-Only)**. Session-only tabs keep the
 🕵️ marker without including the remote name in the title.
 
 The viewer accepts static PNG/JPEG/WebP images within the shared reader limits:
-8 MiB, 8192 pixels per axis and 16 megapixels. Remote and LocalCrypt image bytes
-stay in memory.
+8 MiB, 8192 pixels per axis and 16 megapixels. Animated WebP is rejected.
+These viewer limits are separate from the desktop batch encoder's supported
+formats and resize settings. Remote and LocalCrypt image bytes stay in memory.
+JPEG, WebP and PNG orientation metadata, including mirrored orientations, is
+applied when viewing without rewriting the source.
 
 ## Compress images
+
+The desktop batch tool accepts JPG/JPEG, PNG, WebP, BMP, TIFF and GIF inputs.
+The image viewer itself opens only PNG/JPEG/WebP.
 
 1. Right-click a folder in **File Browser → Batch Compress Images to WEBP…**.
 2. Select the target folder and whether to include subfolders.
@@ -45,8 +51,11 @@ profiles can cause a file to fail safely.
 ## Set JPG comments
 
 Choose **Debug → JPG EXIF - Set Comments…**, select your folder and enter the
-comment. Changes are validated and saved atomically. The first edit keeps the original
-as `<filename>.before-comments` beside the JPEG; retain it if you need to undo. WEBP conversion can stop after the current image; completed conversions remain.
+comment. This writes the Windows EXIF Comments field in JPG/JPEG files. Changes
+are validated and published atomically per file. The first changed edit keeps the
+original as `<filename>.before-comments` beside the JPEG; an existing backup is
+retained. Keep it if you need to undo. The batch is not a single transaction: an
+error can leave earlier files updated.
 
 For CBZ page compression, use [Comics](../../comics/user/user.md).
 
