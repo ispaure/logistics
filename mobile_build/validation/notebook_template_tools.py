@@ -3,14 +3,50 @@ import argparse
 import base64
 import json
 import importlib.util
+from hashlib import sha256
 import os
 from pathlib import Path
 import shutil
+import subprocess
 
 from logistics_build.build_retention import scratch
 from logistics_build.build_snapshots import materialize
 from mobile_build.deployment import manager_settings
 from mobile_build.tools import stage
+
+
+def android_shell(receipt_path, source, work, output, env):
+    """Restage only Python into an immutable, source-verified isolated QA APK."""
+    from mobile_build.deployment.android_deploy import build_tools
+    receipt = json.loads(receipt_path.read_text())
+    apk = Path(receipt['apk'])
+    if sha256(apk.read_bytes()).hexdigest() != receipt['sha256']:
+        raise ValueError('Android shell hash differs from its receipt')
+    compiled = receipt['source']
+    current = json.loads((output / 'source.json').read_text())
+    if compiled['dirty'] or compiled['commonUtils_dirty'] or compiled['commonUtils_commit'] != current['commonUtils_commit']:
+        raise ValueError('Android shell requires clean matching commonUtils source')
+    changed = subprocess.check_output(['git', '-C', str(source), 'diff', '--name-only',
+        compiled['logistics_commit'], 'HEAD', '--', 'Python'], text=True).splitlines()
+    if any('/android/' in name and Path(name).suffix in {'.java', '.kt', '.c', '.h'} for name in changed):
+        raise ValueError('Android compiled source changed since the shell build')
+    spec = importlib.util.spec_from_file_location('notebook_apk_restage', source / 'mobile_build/validation/video_probe_tools.py')
+    repack = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(repack)
+    # The existing repacker stages from its explicit source root and preserves
+    # compiled classes/libraries. Never mutate the source APK or its workspace.
+    repack.ROOT = source
+    unsigned = repack.prepare(apk, work / 'repack', probe='notebook_template_probe')
+    tools = build_tools(env)
+    key, aligned, signed = work / 'debug.jks', work / 'aligned.apk', work / 'notebook.apk'
+    subprocess.run(['keytool', '-genkeypair', '-keystore', str(key), '-storepass', 'android',
+        '-keypass', 'android', '-alias', 'androiddebugkey', '-dname', 'CN=Disposable Notebook QA',
+        '-keyalg', 'RSA', '-validity', '2'], env=env, check=True, capture_output=True)
+    subprocess.run([str(tools / 'zipalign'), '-f', '-P', '16', '4', str(unsigned), str(aligned)], env=env, check=True, capture_output=True)
+    subprocess.run([str(tools / 'apksigner'), 'sign', '--ks', str(key), '--ks-pass', 'pass:android',
+        '--out', str(signed), str(aligned)], env=env, check=True, capture_output=True)
+    (output / 'compiled-shell.json').write_text(json.dumps(receipt, indent=2))
+    return signed
 
 
 def main():
@@ -19,6 +55,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--revision', default='HEAD', help='Committed Logistics revision; excludes concurrent working edits')
     parser.add_argument('--ios-shell-receipt', type=Path, help='Verified simulator shell receipt; iOS never compiles implicitly')
+    parser.add_argument('--android-shell-receipt', type=Path, help='Copy/repackage a verified QA APK instead of compiling')
     args = parser.parse_args()
     if args.platform == 'ios' and args.ios_shell_receipt is None:
         parser.error('iOS requires --ios-shell-receipt (copy-only simulator shell)')
@@ -55,7 +92,13 @@ def main():
                 (output / 'compiled-shell.json').write_text(json.dumps(receipt, indent=2))
                 driver.run_ios(work, payload, output, env, family='iPhone', source_app=source_app, **profile)
             else:
-                driver.run_android(work, payload, output, env, options, **profile)
+                if args.android_shell_receipt is not None:
+                    (work / 'repack').mkdir()
+                    apk = android_shell(args.android_shell_receipt, source, work, output, env)
+                    driver.exercise_android_app(apk, work, output, env, options,
+                        startup_timeout=240, install_timeout=90, probe_timeout=180, **profile)
+                else:
+                    driver.run_android(work, payload, output, env, options, **profile)
         finally:
             report_path = output / (args.platform + '-result.json')
             if report_path.exists():
