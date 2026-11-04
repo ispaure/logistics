@@ -150,6 +150,67 @@ class VideoContracts(unittest.TestCase):
             with self.subTest(header=header), self.assertRaises(ValueError):
                 byte_range(header, 10)
 
+    def test_loopback_start_does_not_wait_for_reverse_dns(self):
+        from threading import Event, Thread
+        entered, release, completed = Event(), Event(), Event()
+        transports, errors = [], []
+        def resolve(address):
+            entered.set()
+            if not release.wait(5):
+                raise RuntimeError('Resolver fixture was not released')
+            return 'localhost', [], [address]
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'movie.mp4').write_bytes(b'movie')
+            content = VideoContent(LocalFiles(root), 'movie.mp4')
+            def start():
+                try:
+                    transports.append(VideoTransport(content))
+                except Exception as error:
+                    errors.append(error)
+                finally:
+                    completed.set()
+            worker = Thread(target=start)
+            try:
+                with patch('socket.gethostbyaddr', side_effect=resolve) as lookup:
+                    worker.start()
+                    try:
+                        self.assertTrue(completed.wait(2), 'Loopback startup waited for reverse DNS')
+                        self.assertFalse(entered.is_set())
+                        self.assertEqual(errors, [])
+                        lookup.assert_not_called()
+                    finally:
+                        release.set()
+                        worker.join(3)
+                    self.assertFalse(worker.is_alive())
+            finally:
+                for transport in transports:
+                    transport.close()
+                content.close()
+
+    def test_loopback_start_ignores_unavailable_or_raising_reverse_dns(self):
+        from socket import herror
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'movie.mp4').write_bytes(b'movie')
+            content = VideoContent(LocalFiles(root), 'movie.mp4')
+            try:
+                for error in (herror('No reverse DNS'), RuntimeError('Resolver unavailable')):
+                    with self.subTest(error=type(error).__name__), patch('socket.gethostbyaddr', side_effect=error) as lookup:
+                        transport = VideoTransport(content)
+                        try:
+                            self.assertEqual(transport.server.server_address[0], '127.0.0.1')
+                            self.assertEqual(transport.server.server_name, '127.0.0.1')
+                            self.assertEqual(transport.server.server_port, transport.server.server_address[1])
+                            lookup.assert_not_called()
+                        finally:
+                            transport.close()
+                            transport.close()
+                        self.assertFalse(transport.thread.is_alive())
+                        self.assertEqual(transport.server.socket.fileno(), -1)
+            finally:
+                content.close()
+
     def test_http_ranges_no_directory_access_and_revocation(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

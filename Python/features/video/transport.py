@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from queue import Queue, Empty, Full
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from commonUtils.runtime.operations import OperationCancelled
 from secrets import token_urlsafe
 from threading import Event, Thread, BoundedSemaphore
@@ -101,6 +102,14 @@ def read_ahead(stream, remaining, check, *, waiting=lambda active: None, stall_a
         worker.join()  # Never close a provider while its reader is still using it.
         while not pending.empty():
             pending.get_nowait()
+
+
+class _LoopbackHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer resolves a display hostname even for a literal loopback
+        # bind. Keep startup independent of the system reverse-DNS resolver.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class VideoTransport:
@@ -211,7 +220,7 @@ class VideoTransport:
                 finally:
                     transport.slots.release()
 
-        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.server = _LoopbackHTTPServer(('127.0.0.1', 0), Handler)
         # server_close joins handlers and their read-ahead workers before the
         # presentation owner releases the retained provider and privacy scope.
         self.server.daemon_threads = False
