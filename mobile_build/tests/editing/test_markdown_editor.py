@@ -388,6 +388,7 @@ class MarkdownEditorTests(unittest.TestCase):
             self.assertFalse(owner.private_dirty())
 
     def test_provider_preview_edit_source_resume_and_explicit_editor_open(self):
+        from asyncio import wait_for
         from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         self.app.show_cloud()
@@ -422,7 +423,7 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertTrue(run(self.app.open_crypt(copies=copies, key='Note.md', edit=True)))
         owner = self.app.private_sessions.active
         if owner._provider_markdown.pending is not None:
-            run(owner._provider_markdown.pending)
+            run(wait_for(owner._provider_markdown.pending, timeout=5))
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
         self.assertNotIn(owner.crypt_text, owner.crypt_content.children)
         self.assertNotIn(owner.crypt_preview if hasattr(owner, 'crypt_preview') else None, owner.crypt_content.children)
