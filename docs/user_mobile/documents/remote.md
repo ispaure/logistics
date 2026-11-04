@@ -1,6 +1,6 @@
 # Remote and offline files
 
-Configure remote connections from Settings → rclone / Remote connections. Browse a
+Configure remote connections from **Settings → Workspaces → rclone connections…**. Browse a
 connection from Workspaces or Remote files, then tap a supported document.
 
 ## Direct reading
@@ -26,7 +26,7 @@ folder. Review the proposed transfer before applying it. Existing offline copies
 remain readable and exportable when the remote is unavailable.
 
 A retained book/comic import, a managed folder and a temporary remote preview are
-different kinds of storage. Settings → Saved books & comics reports retained reader
+different kinds of storage. **Settings → Books & Comics → Saved books & comics…** reports retained reader
 imports; it does not count managed folders or previews held only in memory.
 
 [Back to documents](documents.md).
