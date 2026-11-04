@@ -31,6 +31,13 @@ def observe_window_occlusions(app, native):
             return
         adapter = app.native_host.adapter
         navigation = list(getattr(adapter, 'navigation', ()))
+        # UIKit can move a destination into More's navigation controller. Its
+        # live owner is not necessarily in the original controller array.
+        for destination in getattr(app.native_host, 'destinations', ()):
+            navigation.append(adapter.navigation_for(destination))
+        outer = getattr(adapter, 'outer_navigation', None)
+        if outer is not None:
+            navigation.append(outer)
         secondary = getattr(getattr(app, 'adaptive', None), 'secondary', None)
         if secondary is not None:
             navigation.append(secondary)
@@ -71,10 +78,11 @@ def control_top_clearance(regions, left, right, safe_top, *, target=44, gap=8):
 
 
 def reserve_bar_clearance(controller):
-    """Extend UIKit's inset only where the current bar meets a system region.
+    """Place bar controls around current system regions and destination tabs.
 
-    Recompute from the unmodified inset on every pose, including shrink. Keep
-    other owners' additional insets, native items and their target/actions.
+    Vertical bars share space with destination tabs: let UIKit compress those
+    tabs first instead of moving actions into them. Horizontal bars reserve only
+    a missing top inset. Keep other owners' insets and all live target/actions.
     """
     from .ios_reader_chrome import occlusion_geometry
     view, bar = controller.view, controller.navigationBar
@@ -82,9 +90,20 @@ def reserve_bar_clearance(controller):
     safe = max(0, float(view.safeAreaInsets.top) - previous)
     frame = bar.convertRect(bar.bounds, toView=view)
     left, right = float(frame.origin.x), float(frame.origin.x + frame.size.width)
-    top = control_top_clearance(occlusion_geometry(view), left, right, safe,
-                                target=float('inf') if frame.size.height > frame.size.width else 44)
-    extra = max(0, top - safe) if not bar.isHidden() else 0
+    content = getattr(controller, 'topViewController', None)
+    from .ios_toolbar import vertical_edge
+    # The adaptive bar's public frame can span the whole window, including
+    # the horizontal title area, while its buttons run down the side.
+    vertical = bool(vertical_edge(content)) if content is not None else frame.size.height > frame.size.width
+    if content is not None:
+        from rubicon.objc import SEL
+        item = content.navigationItem
+        if item.respondsToSelector(SEL('setVerticalBarCompressionBehavior:')):
+            behavior = 1 if vertical and not bar.isHidden() else 0
+            if int(item.verticalBarCompressionBehavior) != behavior:
+                item.verticalBarCompressionBehavior = behavior
+    top = control_top_clearance(occlusion_geometry(view), left, right, safe)
+    extra = max(0, top - safe) if not vertical and not bar.isHidden() else 0
     if abs(extra - previous) <= .5:
         return False
     from rubicon.objc import UIEdgeInsets

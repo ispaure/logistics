@@ -190,12 +190,13 @@
       "guide": "docs/features/lm/development/development.md",
       "tests": {
         "desktop": [
-          "test_lm*.py"
+          "test_lm*.py",
+          "test_mobile_chat.py"
         ],
         "mobile": [
-          "test_chat_ui.py",
           "test_chat*.py",
-          "test_deferred_chat.py"
+          "test_deferred_chat.py",
+          "test_on_device.py"
         ]
       },
       "mobile_manifest": "Python/features/lm/mobile_sources.json"
@@ -390,7 +391,10 @@
       "guide": "docs/development/ui-architecture.md",
       "tests": {
         "desktop": [
-          "test_main_window.py",
+          "test_main_window_navigation.py",
+          "test_document_hosting.py",
+          "test_notes_library_hosting.py",
+          "test_reader_host_integration.py",
           "test_document_workspace.py",
           "test_folder_controller.py",
           "test_folder_sources_ui.py"
@@ -546,8 +550,7 @@
         "desktop": [
           "test_notes_library*.py",
           "test_markdown_library_modes.py",
-          "test_text_editor_dataview.py",
-          "test_main_window.py"
+          "test_text_editor_dataview.py"
         ],
         "mobile": [
           "test_notes_library*.py",

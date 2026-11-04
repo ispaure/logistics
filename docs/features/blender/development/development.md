@@ -116,6 +116,9 @@ wait, without launching Blender or waiting for real timeout intervals.
 Background apply tests also verify kill-before-reap cleanup and temporary-log
 removal after cancellation or timeout. Extension compatibility checks include
 both sides of the inclusive minimum as well as the exclusive maximum.
+Migration cases use a plain unittest fixture; only widget cases pay for Qt
+window ownership and teardown. Repeated catalog-refresh coverage verifies that
+unchanged ZIP metadata is reused while newly added packages are still discovered.
 
 Real OS-specific extraction and Blender startup should also be exercised on each
 supported desktop platform. Fixture ZIP/TAR/DMG tests do not substitute for Windows,

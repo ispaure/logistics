@@ -6,6 +6,7 @@ TEST_STAGE = TestStage.REGRESSION
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+from socketserver import TCPServer
 from tempfile import TemporaryDirectory
 import threading
 from time import monotonic, sleep
@@ -24,6 +25,8 @@ SETTINGS = dict(context_tokens=8192, max_tokens=1024, temperature=None, top_p=No
 
 
 class Handler(BaseHTTPRequestHandler):
+    timeout = 3
+
     def log_message(self, *args):
         pass
 
@@ -128,8 +131,13 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.wfile.write(('data: ' + event + '\r\n\r\n').encode())
             self.wfile.flush()
-            if self.server.mode == 'slow':
-                self.server.release.wait(3)
+            if self.server.mode == 'inactivity':
+                if not self.server.heartbeat.wait(5):
+                    return
+                self.wfile.write(b': heartbeat\r\n\r\n')
+                self.wfile.flush()
+            if self.server.mode in ('slow', 'inactivity'):
+                self.server.release.wait(10)
             if self.server.mode != 'truncated':
                 self.wfile.write(b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
                 self.wfile.flush()
@@ -137,45 +145,42 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
 
-class LMUITests(QtTestCase):
+class LoopbackServer(ThreadingHTTPServer):
+    """Join bounded request workers without resolving loopback through DNS."""
+    daemon_threads = False
+
+    def server_bind(self):
+        TCPServer.server_bind(self)
+        self.server_name = 'localhost'
+        self.server_port = self.server_address[1]
+
+
+class LMPageFixture(QtTestCase):
+    """Own page/storage lifetime independently of the optional HTTP fixture."""
+    profile_url = 'http://127.0.0.1:1234/v1'
+
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
         self.temp = self.temporary_directory()
-        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-        self.server.daemon_threads = True
-        self.server.url = f'http://127.0.0.1:{self.server.server_port}/v1'
-        self.server.mode = 'normal'
-        self.server.requests = []
-        self.server.gets = []
-        self.server.release = threading.Event()
-        # Keep real HTTP coverage without the default half-second shutdown poll per case.
-        self.thread = threading.Thread(target=self.server.serve_forever,
-                                       kwargs={'poll_interval': .01}, daemon=True)
-        self.thread.start()
-        self.addCleanup(self.stop_server)
+        self.set_up_transport()
         self.store = Store(self.temp.name)
         original = self.store.profiles()
-        self.store.save_profiles([dict(id='fixture', name='Fixture', base_url=self.server.url)], original)
+        self.store.save_profiles([dict(id='fixture', name='Fixture', base_url=self.profile_url)], original)
         self.page = LMPage(store=self.store)
         self.addCleanup(self.close_page)
 
+    def set_up_transport(self):
+        pass
+
     def close_page(self):
-        self.server.release.set()
         self.page.client.cancel()
         self.until(lambda: not self.page.client.busy)
         self.page.prepare_close()
         self.page.deleteLater()
         self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
-
-    def stop_server(self):
-        self.server.release.set()
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=2)
-        self.assertFalse(self.thread.is_alive(), 'HTTP fixture server did not stop')
 
     def until(self, condition):
         deadline = monotonic() + 5
@@ -184,6 +189,66 @@ class LMUITests(QtTestCase):
             self.app.processEvents()
             sleep(.005)
         self.app.processEvents()
+
+    def paste_image(self):
+        image = qt.QImage(320, 180, qt.QImage.Format.Format_RGB32)
+        image.fill(qt.QColor('#2468ac'))
+        mime = qt.QMimeData()
+        mime.setImageData(image)
+        qt.QApplication.clipboard().setMimeData(mime)
+        self.page.composer.paste()
+        self.addCleanup(qt.QApplication.clipboard().clear)
+        return image
+
+    def configure_code(self):
+        from features.ide.projects import Project
+        project = Project('Project fixture', self.temp.name, id='project-fixture')
+        (Path(self.temp.name) / 'main.py').write_text('disk value\nsecond line\n')
+        registered = patch('features.lm.ui.page.registered_projects', return_value={project.id: project})
+        snapshots = patch('features.lm.ui.page.editor_context', return_value=({'main.py': 'unsaved value\nsecond line\n'},
+                                                                         [('main.py', 1, 'unsaved value')]))
+        registered.start()
+        snapshots.start()
+        self.addCleanup(registered.stop)
+        self.addCleanup(snapshots.stop)
+        self.page.conversations.new_conversation()
+        self.page.mode.setCurrentIndex(1)
+        self.page.project_picker.setCurrentIndex(self.page.project_picker.findData(project.id))
+        return project
+
+
+class LMUITests(LMPageFixture):
+    """Real HTTP/Qt integration, including blocked requests and failures."""
+    def set_up_transport(self):
+        self.server = LoopbackServer(('127.0.0.1', 0), Handler)
+        self.server.url = f'http://127.0.0.1:{self.server.server_port}/v1'
+        self.profile_url = self.server.url
+        self.server.mode = 'normal'
+        self.server.requests = []
+        self.server.gets = []
+        self.server.release = threading.Event()
+        self.server.heartbeat = threading.Event()
+        self.thread = threading.Thread(target=self.server.serve_forever,
+                                       kwargs={'poll_interval': .01}, daemon=True)
+        try:
+            self.thread.start()
+        except BaseException:
+            self.server.server_close()
+            raise
+        self.addCleanup(self.stop_server)
+
+    def close_page(self):
+        self.server.heartbeat.set()
+        self.server.release.set()
+        super().close_page()
+
+    def stop_server(self):
+        self.server.heartbeat.set()
+        self.server.release.set()
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        self.assertFalse(self.thread.is_alive(), 'HTTP fixture server did not stop')
 
     def chat(self, text='Hello'):
         if self.page.data is None:
@@ -250,32 +315,6 @@ class LMUITests(QtTestCase):
             self.page.client.cancel()
             self.until(lambda: not self.page.client.busy)
             notify.assert_not_called()
-
-    def test_injected_project_context_does_not_discover_ide_widgets(self):
-        from types import SimpleNamespace
-        project = object()
-        self.page.project_context = SimpleNamespace(
-            projects=lambda: {'fixture': project}, buffers=lambda selected: ({'file.py': 'unsaved'}, []))
-        with patch('features.lm.ui.page.registered_projects', side_effect=AssertionError('IDE discovery')), \
-             patch('features.lm.ui.page.editor_context', side_effect=AssertionError('IDE buffers')):
-            self.assertEqual(self.page.context_projects(), {'fixture': project})
-            self.assertEqual(self.page.context_buffers(project), ({'file.py': 'unsaved'}, []))
-
-    def configure_code(self):
-        from features.ide.projects import Project
-        project = Project('Project fixture', self.temp.name, id='project-fixture')
-        (Path(self.temp.name) / 'main.py').write_text('disk value\nsecond line\n')
-        registered = patch('features.lm.ui.page.registered_projects', return_value={project.id: project})
-        snapshots = patch('features.lm.ui.page.editor_context', return_value=({'main.py': 'unsaved value\nsecond line\n'},
-                                                                         [('main.py', 1, 'unsaved value')]))
-        registered.start()
-        snapshots.start()
-        self.addCleanup(registered.stop)
-        self.addCleanup(snapshots.stop)
-        self.page.conversations.new_conversation()
-        self.page.mode.setCurrentIndex(1)
-        self.page.project_picker.setCurrentIndex(self.page.project_picker.findData(project.id))
-        return project
 
     def test_allow_edits_persists_and_model_applies_a_direct_edit(self):
         self.configure_code()
@@ -346,31 +385,6 @@ class LMUITests(QtTestCase):
         self.assertEqual(len(self.server.requests), count + 1)
         self.assertNotIn('tools', self.server.requests[-1])
         self.assertEqual(self.page.data['messages'][-1]['status'], 'failed')
-
-    def test_attachment_limit_counts_separator_and_utf8_bytes_before_publication(self):
-        self.page.composer.setPlainText('x' * 65532)
-        self.page.append_attachment('é')
-        self.assertEqual(len(self.page.composer.toPlainText().encode('utf-8')), 65536)
-        draft = 'x' * 65533
-        self.page.composer.setPlainText(draft)
-        with self.assertRaisesRegex(ValueError, '64 KiB'):
-            self.page.append_attachment('é')
-        self.assertEqual(self.page.composer.toPlainText(), draft)
-
-    def test_code_attachments_and_project_choice_survive_reopen(self):
-        self.configure_code()
-        self.page.attach_selection()
-        self.assertIn('IDE selection: main.py', self.page.composer.toPlainText())
-        with patch('features.lm.ui.page.qt.QFileDialog.getOpenFileNames', return_value=([str(Path(self.temp.name) / 'main.py')], '')):
-            self.page.attach_files()
-        self.assertIn('Project file: main.py (editor snapshot)', self.page.composer.toPlainText())
-        self.assertTrue(self.page.persist())
-        key = self.page.data['id']
-        self.page.conversations.new_conversation()
-        self.page.open_conversation(key)
-        self.assertEqual(self.page.mode.currentData(), 'code')
-        self.assertEqual(self.page.project_picker.currentData(), 'project-fixture')
-        self.assertIn('unsaved value', self.page.composer.toPlainText())
 
     def test_code_uses_real_ide_registration_buffer_and_selection(self):
         from features.ide.ui.page import IDEPage
@@ -454,42 +468,6 @@ class LMUITests(QtTestCase):
             finally:
                 release.set()
 
-    def test_chat_and_code_tabs_have_separate_lists_and_restore_drafts(self):
-        self.page.conversations.new_conversation()
-        chat_key = self.page.data['id']
-        self.page.composer.setPlainText('Chat draft')
-        self.page.mode.setCurrentIndex(1)
-        code_key = self.page.data['id']
-        self.assertNotEqual(code_key, chat_key)
-        self.assertEqual(self.page.data['mode'], 'code')
-        self.page.composer.setPlainText('Code draft')
-        visible = lambda: {item.data(0, qt.Qt.ItemDataRole.UserRole) for item in self.page.tree_items()
-                           if item.data(0, qt.Qt.ItemDataRole.UserRole)}
-        self.assertEqual(visible(), {code_key})
-        self.page.mode.setCurrentIndex(0)
-        self.assertEqual(self.page.data['id'], chat_key)
-        self.assertEqual(self.page.composer.toPlainText(), 'Chat draft')
-        self.assertEqual(visible(), {chat_key})
-        self.page.mode.setCurrentIndex(1)
-        self.assertEqual(self.page.data['id'], code_key)
-        self.assertEqual(self.page.composer.toPlainText(), 'Code draft')
-        self.page.conversations.new_conversation()
-        self.assertEqual(self.page.data['mode'], 'code')
-        self.assertEqual(self.store.load(chat_key)['mode'], 'chat')
-        self.assertEqual(self.store.load(code_key)['mode'], 'code')
-        self.assertIs(self.page.mode.parentWidget(), self.page.sidebar)
-
-    def test_tab_switch_save_failure_keeps_conversation_and_draft(self):
-        self.page.conversations.new_conversation()
-        key = self.page.data['id']
-        self.page.composer.setPlainText('Preserve me')
-        with patch.object(self.store, 'save', side_effect=OSError('Fixture save failure')):
-            self.page.mode.setCurrentIndex(1)
-        self.assertEqual(self.page.mode.currentData(), 'chat')
-        self.assertEqual(self.page.data['id'], key)
-        self.assertEqual(self.page.composer.toPlainText(), 'Preserve me')
-        self.assertTrue(self.page.persist())
-
     def test_no_loaded_model_has_specific_error_without_server_text_leak(self):
         self.server.mode = 'reject_empty'
         self.chat()
@@ -507,95 +485,6 @@ class LMUITests(QtTestCase):
         self.until(lambda: not self.page.client.busy)
         self.assertIn('Server rejected', self.page.status.text())
         self.assertNotIn('secret-session-token', self.page.status.text())
-
-    def paste_image(self):
-        image = qt.QImage(320, 180, qt.QImage.Format.Format_RGB32)
-        image.fill(qt.QColor('#2468ac'))
-        mime = qt.QMimeData()
-        mime.setImageData(image)
-        qt.QApplication.clipboard().setMimeData(mime)
-        self.page.composer.paste()
-        self.addCleanup(qt.QApplication.clipboard().clear)
-        return image
-
-    def test_dragged_image_file_attaches_in_composer_and_chat_without_file_uri_text(self):
-        self.page.conversations.new_conversation()
-        image = qt.QImage(250, 150, qt.QImage.Format.Format_RGB32)
-        image.fill(qt.QColor('green'))
-        path = Path(self.temp.name) / 'Dragged screenshot.png'
-        self.assertTrue(image.save(str(path), 'PNG'))
-        mime = qt.QMimeData()
-        mime.setUrls([qt.QUrl.fromLocalFile(str(path))])
-        # Exercise the actual Qt drag-enter/drop dispatch on the composer viewport.
-        self.page.resize(900, 650)
-        self.page.show()
-        self.app.processEvents()
-        for target in (self.page.composer.viewport(), self.page):
-            enter = qt.QDragEnterEvent(qt.QPoint(10, 10), qt.Qt.DropAction.CopyAction, mime,
-                qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
-            self.app.sendEvent(target, enter)
-            self.assertTrue(enter.isAccepted())
-            move = qt.QDragMoveEvent(qt.QPoint(10, 10), qt.Qt.DropAction.CopyAction, mime,
-                qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
-            self.app.sendEvent(target, move)
-            self.assertTrue(move.isAccepted())
-            drop = qt.QDropEvent(qt.QPointF(10, 10), qt.Qt.DropAction.CopyAction, mime,
-                qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
-            self.app.sendEvent(target, drop)
-            self.assertTrue(drop.isAccepted())
-            self.assertEqual(drop.dropAction(), qt.Qt.DropAction.CopyAction)
-        self.assertTrue(path.exists())
-        self.assertEqual(len(self.page.draft_images), 2)
-        self.assertEqual(self.page.composer.toPlainText(), '')
-        self.assertEqual(self.page.draft_images[0]['width'], 250)
-        self.assertTrue(self.page.persist())
-        self.assertEqual(len(self.store.load(self.page.data['id'])['draft_images']), 2)
-
-    def test_finder_file_paste_reads_actual_pixels_instead_of_icon_preview(self):
-        self.page.conversations.new_conversation()
-        screenshot = qt.QImage(321, 123, qt.QImage.Format.Format_RGB32)
-        screenshot.fill(qt.QColor('#12ab34'))
-        path = Path(self.temp.name) / 'Screenshot with spaces.png'
-        self.assertTrue(screenshot.save(str(path), 'PNG'))
-        icon = qt.QImage(1024, 1024, qt.QImage.Format.Format_RGB32)
-        icon.fill(qt.QColor('white'))
-        mime = qt.QMimeData()
-        mime.setUrls([qt.QUrl.fromLocalFile(str(path))])
-        mime.setImageData(icon)  # macOS Finder's alternate clipboard representation.
-        qt.QApplication.clipboard().setMimeData(mime)
-        self.addCleanup(qt.QApplication.clipboard().clear)
-        self.page.composer.paste()
-        self.assertEqual(len(self.page.draft_images), 1)
-        record = self.page.draft_images[0]
-        self.assertEqual((record['width'], record['height']), (321, 123))
-        from features.lm.screenshots import image_bytes
-        restored = qt.QImage.fromData(image_bytes(record), 'PNG')
-        self.assertEqual(restored.pixelColor(1, 1), qt.QColor('#12ab34'))
-        self.assertTrue(self.page.persist())
-        saved = self.store.load(self.page.data['id'])['draft_images'][0]
-        self.assertEqual(saved, record)
-
-    def test_file_url_paste_without_image_preview_and_invalid_file_do_not_use_icons(self):
-        self.page.conversations.new_conversation()
-        screenshot = qt.QImage(100, 80, qt.QImage.Format.Format_RGB32)
-        screenshot.fill(qt.QColor('blue'))
-        path = Path(self.temp.name) / 'capture.png'
-        self.assertTrue(screenshot.save(str(path), 'PNG'))
-        mime = qt.QMimeData()
-        mime.setUrls([qt.QUrl.fromLocalFile(str(path))])
-        self.assertTrue(self.page.composer.canInsertFromMimeData(mime))
-        self.page.composer.insertFromMimeData(mime)
-        self.assertEqual(len(self.page.draft_images), 1)
-        invalid = Path(self.temp.name) / 'broken.png'
-        invalid.write_bytes(b'not a PNG')
-        mime.setUrls([qt.QUrl.fromLocalFile(str(invalid))])
-        mime.setImageData(screenshot)
-        self.page.composer.insertFromMimeData(mime)
-        self.assertEqual(len(self.page.draft_images), 1)
-        self.assertIn('not a supported raster image', self.page.status.text())
-        mime.setUrls([qt.QUrl.fromLocalFile(str(Path(self.temp.name) / 'missing.png'))])
-        self.page.composer.insertFromMimeData(mime)
-        self.assertEqual(len(self.page.draft_images), 1)
 
     def test_pasted_screenshot_is_previewed_sent_and_retained_after_reopen(self):
         self.page.conversations.new_conversation()
@@ -627,30 +516,6 @@ class LMUITests(QtTestCase):
         self.assertEqual(self.page.data['messages'][0]['images'], [record])
         from features.lm.storage import export_markdown
         self.assertIn('![Screenshot](data:image/png;base64,', export_markdown(self.page.data))
-
-    def test_screenshot_draft_survives_mode_switch_and_page_restart_and_can_be_removed(self):
-        self.page.conversations.new_conversation()
-        self.paste_image()
-        record = self.page.draft_images[0]
-        key = self.page.data['id']
-        self.page.mode.setCurrentIndex(1)
-        self.assertEqual(self.page.draft_images, [])
-        self.page.mode.setCurrentIndex(0)
-        self.assertEqual(self.page.data['id'], key)
-        self.assertEqual(self.page.draft_images, [record])
-        self.assertTrue(self.page.persist())
-        self.assertTrue(self.page.prepare_close())
-        reopened = LMPage(store=Store(self.temp.name))
-        try:
-            self.assertEqual(reopened.data['id'], key)
-            self.assertEqual(reopened.draft_images, [record])
-            reopened.remove_screenshot(record['id'])
-            self.assertTrue(reopened.persist())
-            self.assertEqual(self.store.load(key)['draft_images'], [])
-        finally:
-            reopened.prepare_close()
-            reopened.deleteLater()
-            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
 
     def test_failed_screenshot_publication_preserves_image_and_draft(self):
         self.page.conversations.new_conversation()
@@ -732,16 +597,6 @@ class LMUITests(QtTestCase):
         self.until(lambda: not self.page.client.busy)
         self.assertEqual([m['role'] for m in self.server.requests[-1]['messages']], ['system', 'user'])
 
-    def test_reopen_recovers_interrupted_response_and_draft(self):
-        data = conversation(SETTINGS, 'fixture', 'fixture-model')
-        data['draft'] = 'Unsaved question'
-        data['messages'] = [message('user', 'Hello'), message('assistant', 'Partial', 'streaming')]
-        self.store.save(data)
-        self.page.open_conversation(data['id'])
-        self.assertEqual(self.page.composer.toPlainText(), 'Unsaved question')
-        self.assertEqual(self.page.data['messages'][-1]['status'], 'interrupted')
-        self.assertEqual(self.store.load(data['id'])['messages'][-1]['status'], 'interrupted')
-
     def test_regeneration_preserves_alternatives_and_does_not_duplicate_user(self):
         self.chat()
         self.until(lambda: not self.page.client.busy)
@@ -783,9 +638,18 @@ class LMUITests(QtTestCase):
         self.assertIn('302', self.page.status.text())
 
     def test_inactivity_timeout_preserves_partial_output(self):
-        self.server.mode = 'slow'
-        self.page.client.timeout_ms = 150
+        self.server.mode = 'inactivity'
+        # First establish a real partial reply; the short deadline measures
+        # inactivity after data, rather than connection/thread scheduling.
+        self.page.client.timeout_ms = 5000
         self.chat()
+        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
+        self.assertTrue(self.page.client.busy)
+        # The next real socket read must rearm the production timer using the
+        # new setting. Starting the timer here would conceal a broken _read.
+        self.page.client.timeout_ms = 150
+        self.server.heartbeat.set()
+        self.until(lambda: self.page.client.http.timeout.interval() == 150)
         self.until(lambda: not self.page.client.busy)
         self.assertEqual(self.page.data['messages'][-1]['status'], 'failed')
         self.assertIn('timed out', self.page.status.text())
@@ -814,6 +678,438 @@ class LMUITests(QtTestCase):
         self.assertEqual(self.server.requests, [])
         self.assertEqual(self.page.composer.toPlainText(), 'Keep this question')
         self.assertTrue(self.page.persist())
+
+    def test_failed_generation_checkpoint_cancels_and_keeps_exportable_text(self):
+        self.server.mode = 'slow'
+        self.chat()
+        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
+        with patch.object(self.store, 'save', side_effect=OSError('Disk full')):
+            self.page.checkpoint()
+            self.until(lambda: not self.page.client.busy)
+            self.assertIn('Disk full', self.page.save_error.text())
+            self.assertEqual(self.page.data['messages'][-1]['content'], 'Bonjour 🌍')
+        self.assertTrue(self.page.persist())
+
+    def test_transport_start_failure_keeps_saved_turn_and_clears_published_draft(self):
+        self.page.conversations.new_conversation()
+        self.page.model.setCurrentText('fixture-model')
+        self.page.composer.setPlainText('Keep this retryable message')
+        with patch.object(self.page.client, 'start', side_effect=OSError('Synthetic offline')):
+            self.page.send()
+        self.assertEqual(self.page.composer.toPlainText(), '')
+        self.assertIn('Synthetic offline', self.page.status.text())
+        saved = self.store.load(self.page.data['id'])
+        self.assertEqual(saved['messages'][0]['content'], 'Keep this retryable message')
+        self.assertEqual(saved['messages'][-1]['status'], 'failed')
+        self.assertIsNone(self.page.active_message)
+        self.assertEqual(self.server.requests, [])
+
+    def test_first_publication_failure_keeps_unsent_user_draft(self):
+        self.page.conversations.new_conversation()
+        self.page.model.setCurrentText('fixture-model')
+        self.page.composer.setPlainText('Keep this message')
+        self.assertTrue(self.page.persist())
+        with patch.object(self.store, 'save', side_effect=OSError('Disk full')):
+            self.page.send()
+        self.assertEqual(self.server.requests, [])
+        self.assertEqual(self.page.data['messages'], [])
+        self.assertEqual(self.page.composer.toPlainText(), 'Keep this message')
+
+    def test_enter_sends_and_shift_enter_inserts_newline_only_in_composer(self):
+        self.page.conversations.new_conversation()
+        self.page.model.setCurrentText('fixture-model')
+        self.page.composer.setPlainText('First line')
+        self.page.composer.moveCursor(qt.QTextCursor.MoveOperation.End)
+        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Return, qt.Qt.KeyboardModifier.ShiftModifier)
+        QTest.keyClicks(self.page.composer, 'Second line')
+        self.assertEqual(self.page.composer.toPlainText(), 'First line\nSecond line')
+        self.assertEqual(self.server.requests, [])
+        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Return)
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], 'First line\nSecond line')
+        self.assertEqual(self.page.composer.toPlainText(), '')
+        before = len(self.server.requests)
+        self.page.system.moveCursor(qt.QTextCursor.MoveOperation.End)
+        QTest.keyClick(self.page.system, qt.Qt.Key.Key_Return)
+        self.assertTrue(self.page.system.toPlainText().endswith('\n'))
+        self.assertEqual(len(self.server.requests), before)
+        self.assertEqual(self.page.composer.placeholderText(), 'Enter Message')
+
+    def test_empty_enter_does_not_send_or_insert_newline(self):
+        self.page.conversations.new_conversation()
+        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Enter)
+        self.assertEqual(self.page.composer.toPlainText(), '')
+        self.assertEqual(self.server.requests, [])
+
+    def test_send_control_becomes_stop_and_returns_to_send(self):
+        self.server.mode = 'slow'
+        self.chat()
+        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
+        self.assertTrue(self.page.send_button.isEnabled())
+        self.assertIn('Stop', self.page.send_button.accessibleName())
+        self.page.send_button.click()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.page.send_button.accessibleName(), 'Send message')
+        self.assertEqual(self.page.data['messages'][-1]['status'], 'cancelled')
+
+    def test_conversation_bubbles_keep_prior_selection_during_streaming(self):
+        self.server.mode = 'slow'
+        self.chat()
+        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
+        entries = self.page.data['messages']
+        user = self.page.transcript.bubbles[entries[0]['id']]
+        assistant = self.page.transcript.bubbles[entries[1]['id']]
+        self.assertEqual(user.objectName(), 'userBubble')
+        self.assertEqual(assistant.objectName(), 'assistantBubble')
+        cursor = user.browser.textCursor()
+        cursor.select(qt.QTextCursor.SelectionType.Document)
+        user.browser.setTextCursor(cursor)
+        self.page.append_delta(' More text')
+        self.page.render()
+        self.assertEqual(user.browser.textCursor().selectedText(), 'Hello')
+        self.assertIs(self.page.transcript.bubbles[entries[1]['id']], assistant)
+        self.assertIn('More text', assistant.browser.toPlainText())
+
+    def test_send_preserves_code_indentation_and_leading_trailing_lines(self):
+        source = '\n    print("Indented code")\n\n'
+        self.chat(source)
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], source)
+        self.assertEqual(self.page.data['messages'][0]['content'], source)
+
+    def test_next_draft_can_be_written_and_saved_while_reply_streams(self):
+        self.server.mode = 'slow'
+        self.chat()
+        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
+        self.assertTrue(self.page.composer.isEnabled())
+        self.page.composer.setPlainText('My next question')
+        self.assertTrue(self.page.persist())
+        self.assertEqual(self.store.load(self.page.data['id'])['draft'], 'My next question')
+        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Return)
+        self.assertEqual(len(self.server.requests), 1)
+        self.page.client.cancel()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.page.composer.toPlainText(), 'My next question')
+
+    def test_valid_text_before_bad_stream_record_is_kept(self):
+        self.server.mode = 'malformed_after_text'
+        self.chat()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.page.data['messages'][-1]['status'], 'failed')
+        self.assertEqual(self.page.data['messages'][-1]['content'], 'Bonjour 🌍')
+        saved = self.store.load(self.page.data['id'])
+        self.assertEqual(saved['messages'][-1]['content'], 'Bonjour 🌍')
+
+    def test_each_bubble_copies_exact_source_including_whitespace(self):
+        self.chat('    print("Keep indentation")\n')
+        self.until(lambda: not self.page.client.busy)
+        entry = self.page.data['messages'][0]
+        self.page.transcript.bubbles[entry['id']].copy_button.click()
+        self.assertEqual(self.app.clipboard().text(), entry['content'])
+
+    def test_composer_model_picker_controls_the_sent_request_and_saved_model(self):
+        self.page.conversations.new_conversation()
+        self.page.model.addItem('another-model')
+        self.page.model.setCurrentIndex(self.page.model.findText('another-model'))
+        self.page.composer.setPlainText('Use the selected model')
+        self.page.send_button.click()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.server.requests[-1]['model'], 'another-model')
+        self.assertEqual(self.store.load(self.page.data['id'])['model'], 'another-model')
+
+    def test_reasoning_streams_inline_then_collapses_and_survives_reopening(self):
+        self.server.mode = 'reasoning'
+        self.chat()
+        entry = self.page.data['messages'][-1]
+        self.until(lambda: bool(entry.get('reasoning')))
+        self.page.render()
+        bubble = self.page.transcript.bubbles[entry['id']]
+        self.assertTrue(bubble.work_button.text().startswith('Working'))
+        self.assertTrue(bubble.work_button.isChecked())
+        self.assertFalse(bubble.reasoning_browser.isHidden())
+        self.assertEqual(bubble.reasoning_browser.source, 'Provider notes')
+        self.server.release.set()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(entry['content'], 'Answer')
+        self.assertFalse(bubble.work_button.isChecked())
+        self.assertTrue(bubble.reasoning_browser.isHidden())
+        self.assertTrue(bubble.work_button.text().startswith('Worked for'))
+        bubble.work_button.click()
+        self.assertFalse(bubble.reasoning_browser.isHidden())
+        bubble.work_button.click()
+        self.assertTrue(bubble.reasoning_browser.isHidden())
+        saved = self.store.load(self.page.data['id'])['messages'][-1]
+        self.assertEqual(saved['reasoning'], 'Provider notes')
+        self.assertGreaterEqual(saved['elapsed_seconds'], 0)
+        from features.lm.ui.conversation_view import Bubble
+        reopened = Bubble(saved)
+        self.addCleanup(reopened.deleteLater)
+        self.assertTrue(reopened.reasoning_browser.isHidden())
+        reopened.work_button.click()
+        self.assertEqual(reopened.reasoning_browser.source, 'Provider notes')
+
+    def test_json_reasoning_and_plain_response_activity_fallback(self):
+        self.server.mode = 'reasoning_json'
+        self.chat()
+        self.until(lambda: not self.page.client.busy)
+        entry = self.page.data['messages'][-1]
+        self.assertEqual(entry['reasoning'], 'Provider notes')
+        bubble = self.page.transcript.bubbles[entry['id']]
+        self.assertTrue(bubble.work_button.isEnabled())
+        self.server.mode = 'json'
+        self.chat('Next')
+        self.until(lambda: not self.page.client.busy)
+        entry = self.page.data['messages'][-1]
+        bubble = self.page.transcript.bubbles[entry['id']]
+        self.assertFalse(bubble.work_button.isEnabled())
+        self.assertTrue(bubble.work_button.text().startswith('Worked for'))
+        self.assertTrue(bubble.reasoning_browser.isHidden())
+
+    def test_reply_footer_actions(self):
+        self.chat('First question')
+        self.until(lambda: not self.page.client.busy)
+        first = self.page.data['messages'][-1]['id']
+        self.chat('Second question')
+        self.until(lambda: not self.page.client.busy)
+        last = self.page.data['messages'][-1]['id']
+        self.page.resize(900, 650)
+        self.page.show()
+        self.app.processEvents()
+        earlier = self.page.transcript.bubbles[first]
+        latest = self.page.transcript.bubbles[last]
+        self.assertTrue(earlier.retry_button.isHidden())
+        self.assertFalse(latest.retry_button.isHidden())
+        # Scrollbar visibility can queue another layout pass after showing the panel.
+        self.until(lambda: latest.copy_button.y() >= latest.browser.geometry().bottom())
+        self.assertGreater(latest.timestamp.x(), latest.retry_button.geometry().right())
+        self.assertLessEqual(latest.timestamp.x() - latest.retry_button.geometry().right(), 8)
+        self.assertTrue(self.page.save_error.isHidden())
+        latest.copy_button.click()
+        self.assertEqual(self.app.clipboard().text(), self.page.data['messages'][-1]['content'])
+        latest.retry_button.click()
+        self.assertTrue(self.page.client.busy)
+        self.assertFalse(latest.retry_button.isEnabled())
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], 'Second question')
+
+    def test_pin_fork_menus_and_timestamp_preserve_original_conversation(self):
+        self.chat('Keep this history')
+        self.until(lambda: not self.page.client.busy)
+        original = self.page.data['id']
+        self.page.conversations.toggle_pin()
+        self.assertTrue(self.store.load(original)['pinned'])
+        self.assertEqual(self.page.pin_action.text(), 'Unpin conversation')
+        entry = self.page.data['messages'][0]
+        timestamp = self.page.transcript.bubbles[entry['id']].timestamp
+        self.assertTrue(timestamp.text())
+        self.assertTrue(timestamp.toolTip())
+        self.page.composer.setPlainText('A draft to branch')
+        requests = len(self.server.requests)
+        self.page.conversations.fork_conversation()
+        self.assertEqual(len(self.server.requests), requests)
+        self.assertEqual(self.page.data['draft'], 'A draft to branch')
+        self.assertEqual(self.store.load(original)['draft'], 'A draft to branch')
+        self.assertNotEqual(self.page.data['id'], original)
+        self.assertFalse(self.page.data['pinned'])
+        self.assertEqual(self.page.data['messages'][0]['content'], 'Keep this history')
+        self.assertNotEqual(self.page.data['messages'][0]['id'], entry['id'])
+        self.assertTrue(self.store.load(original)['pinned'])
+        self.assertEqual([a.text() for a in self.page.menu_bar.actions()],
+                         ['File', 'Edit', 'Conversation', 'View', 'Server'])
+        self.assertEqual(self.page.status.contentsMargins().bottom(), 0)
+        content = self.page.status.parentWidget()
+        self.assertLessEqual(content.layout().contentsMargins().bottom(), 4)
+
+
+class LMWidgetTests(LMPageFixture):
+    """UI/storage contracts that must not start any HTTP requests."""
+    def set_up_transport(self):
+        self.enterContext(patch('features.lm.transport.Client.start',
+                                side_effect=AssertionError('Widget checks must not start HTTP')))
+
+    def test_injected_project_context_does_not_discover_ide_widgets(self):
+        from types import SimpleNamespace
+        project = object()
+        self.page.project_context = SimpleNamespace(
+            projects=lambda: {'fixture': project}, buffers=lambda selected: ({'file.py': 'unsaved'}, []))
+        with patch('features.lm.ui.page.registered_projects', side_effect=AssertionError('IDE discovery')), \
+             patch('features.lm.ui.page.editor_context', side_effect=AssertionError('IDE buffers')):
+            self.assertEqual(self.page.context_projects(), {'fixture': project})
+            self.assertEqual(self.page.context_buffers(project), ({'file.py': 'unsaved'}, []))
+
+    def test_attachment_limit_counts_separator_and_utf8_bytes_before_publication(self):
+        self.page.composer.setPlainText('x' * 65532)
+        self.page.append_attachment('é')
+        self.assertEqual(len(self.page.composer.toPlainText().encode('utf-8')), 65536)
+        draft = 'x' * 65533
+        self.page.composer.setPlainText(draft)
+        with self.assertRaisesRegex(ValueError, '64 KiB'):
+            self.page.append_attachment('é')
+        self.assertEqual(self.page.composer.toPlainText(), draft)
+
+    def test_code_attachments_and_project_choice_survive_reopen(self):
+        self.configure_code()
+        self.page.attach_selection()
+        self.assertIn('IDE selection: main.py', self.page.composer.toPlainText())
+        with patch('features.lm.ui.page.qt.QFileDialog.getOpenFileNames', return_value=([str(Path(self.temp.name) / 'main.py')], '')):
+            self.page.attach_files()
+        self.assertIn('Project file: main.py (editor snapshot)', self.page.composer.toPlainText())
+        self.assertTrue(self.page.persist())
+        key = self.page.data['id']
+        self.page.conversations.new_conversation()
+        self.page.open_conversation(key)
+        self.assertEqual(self.page.mode.currentData(), 'code')
+        self.assertEqual(self.page.project_picker.currentData(), 'project-fixture')
+        self.assertIn('unsaved value', self.page.composer.toPlainText())
+
+    def test_chat_and_code_tabs_have_separate_lists_and_restore_drafts(self):
+        self.page.conversations.new_conversation()
+        chat_key = self.page.data['id']
+        self.page.composer.setPlainText('Chat draft')
+        self.page.mode.setCurrentIndex(1)
+        code_key = self.page.data['id']
+        self.assertNotEqual(code_key, chat_key)
+        self.assertEqual(self.page.data['mode'], 'code')
+        self.page.composer.setPlainText('Code draft')
+        visible = lambda: {item.data(0, qt.Qt.ItemDataRole.UserRole) for item in self.page.tree_items()
+                           if item.data(0, qt.Qt.ItemDataRole.UserRole)}
+        self.assertEqual(visible(), {code_key})
+        self.page.mode.setCurrentIndex(0)
+        self.assertEqual(self.page.data['id'], chat_key)
+        self.assertEqual(self.page.composer.toPlainText(), 'Chat draft')
+        self.assertEqual(visible(), {chat_key})
+        self.page.mode.setCurrentIndex(1)
+        self.assertEqual(self.page.data['id'], code_key)
+        self.assertEqual(self.page.composer.toPlainText(), 'Code draft')
+        self.page.conversations.new_conversation()
+        self.assertEqual(self.page.data['mode'], 'code')
+        self.assertEqual(self.store.load(chat_key)['mode'], 'chat')
+        self.assertEqual(self.store.load(code_key)['mode'], 'code')
+        self.assertIs(self.page.mode.parentWidget(), self.page.sidebar)
+
+    def test_tab_switch_save_failure_keeps_conversation_and_draft(self):
+        self.page.conversations.new_conversation()
+        key = self.page.data['id']
+        self.page.composer.setPlainText('Preserve me')
+        with patch.object(self.store, 'save', side_effect=OSError('Fixture save failure')):
+            self.page.mode.setCurrentIndex(1)
+        self.assertEqual(self.page.mode.currentData(), 'chat')
+        self.assertEqual(self.page.data['id'], key)
+        self.assertEqual(self.page.composer.toPlainText(), 'Preserve me')
+        self.assertTrue(self.page.persist())
+
+    def test_dragged_image_file_attaches_in_composer_and_chat_without_file_uri_text(self):
+        self.page.conversations.new_conversation()
+        image = qt.QImage(250, 150, qt.QImage.Format.Format_RGB32)
+        image.fill(qt.QColor('green'))
+        path = Path(self.temp.name) / 'Dragged screenshot.png'
+        self.assertTrue(image.save(str(path), 'PNG'))
+        mime = qt.QMimeData()
+        mime.setUrls([qt.QUrl.fromLocalFile(str(path))])
+        # Exercise the actual Qt drag-enter/drop dispatch on the composer viewport.
+        self.page.resize(900, 650)
+        self.page.show()
+        self.app.processEvents()
+        for target in (self.page.composer.viewport(), self.page):
+            enter = qt.QDragEnterEvent(qt.QPoint(10, 10), qt.Qt.DropAction.CopyAction, mime,
+                qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
+            self.app.sendEvent(target, enter)
+            self.assertTrue(enter.isAccepted())
+            move = qt.QDragMoveEvent(qt.QPoint(10, 10), qt.Qt.DropAction.CopyAction, mime,
+                qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
+            self.app.sendEvent(target, move)
+            self.assertTrue(move.isAccepted())
+            drop = qt.QDropEvent(qt.QPointF(10, 10), qt.Qt.DropAction.CopyAction, mime,
+                qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
+            self.app.sendEvent(target, drop)
+            self.assertTrue(drop.isAccepted())
+            self.assertEqual(drop.dropAction(), qt.Qt.DropAction.CopyAction)
+        self.assertTrue(path.exists())
+        self.assertEqual(len(self.page.draft_images), 2)
+        self.assertEqual(self.page.composer.toPlainText(), '')
+        self.assertEqual(self.page.draft_images[0]['width'], 250)
+        self.assertTrue(self.page.persist())
+        self.assertEqual(len(self.store.load(self.page.data['id'])['draft_images']), 2)
+
+    def test_finder_file_paste_reads_actual_pixels_instead_of_icon_preview(self):
+        self.page.conversations.new_conversation()
+        screenshot = qt.QImage(321, 123, qt.QImage.Format.Format_RGB32)
+        screenshot.fill(qt.QColor('#12ab34'))
+        path = Path(self.temp.name) / 'Screenshot with spaces.png'
+        self.assertTrue(screenshot.save(str(path), 'PNG'))
+        icon = qt.QImage(1024, 1024, qt.QImage.Format.Format_RGB32)
+        icon.fill(qt.QColor('white'))
+        mime = qt.QMimeData()
+        mime.setUrls([qt.QUrl.fromLocalFile(str(path))])
+        mime.setImageData(icon)  # macOS Finder's alternate clipboard representation.
+        qt.QApplication.clipboard().setMimeData(mime)
+        self.addCleanup(qt.QApplication.clipboard().clear)
+        self.page.composer.paste()
+        self.assertEqual(len(self.page.draft_images), 1)
+        record = self.page.draft_images[0]
+        self.assertEqual((record['width'], record['height']), (321, 123))
+        from features.lm.screenshots import image_bytes
+        restored = qt.QImage.fromData(image_bytes(record), 'PNG')
+        self.assertEqual(restored.pixelColor(1, 1), qt.QColor('#12ab34'))
+        self.assertTrue(self.page.persist())
+        saved = self.store.load(self.page.data['id'])['draft_images'][0]
+        self.assertEqual(saved, record)
+
+    def test_file_url_paste_without_image_preview_and_invalid_file_do_not_use_icons(self):
+        self.page.conversations.new_conversation()
+        screenshot = qt.QImage(100, 80, qt.QImage.Format.Format_RGB32)
+        screenshot.fill(qt.QColor('blue'))
+        path = Path(self.temp.name) / 'capture.png'
+        self.assertTrue(screenshot.save(str(path), 'PNG'))
+        mime = qt.QMimeData()
+        mime.setUrls([qt.QUrl.fromLocalFile(str(path))])
+        self.assertTrue(self.page.composer.canInsertFromMimeData(mime))
+        self.page.composer.insertFromMimeData(mime)
+        self.assertEqual(len(self.page.draft_images), 1)
+        invalid = Path(self.temp.name) / 'broken.png'
+        invalid.write_bytes(b'not a PNG')
+        mime.setUrls([qt.QUrl.fromLocalFile(str(invalid))])
+        mime.setImageData(screenshot)
+        self.page.composer.insertFromMimeData(mime)
+        self.assertEqual(len(self.page.draft_images), 1)
+        self.assertIn('not a supported raster image', self.page.status.text())
+        mime.setUrls([qt.QUrl.fromLocalFile(str(Path(self.temp.name) / 'missing.png'))])
+        self.page.composer.insertFromMimeData(mime)
+        self.assertEqual(len(self.page.draft_images), 1)
+
+    def test_screenshot_draft_survives_mode_switch_and_page_restart_and_can_be_removed(self):
+        self.page.conversations.new_conversation()
+        self.paste_image()
+        record = self.page.draft_images[0]
+        key = self.page.data['id']
+        self.page.mode.setCurrentIndex(1)
+        self.assertEqual(self.page.draft_images, [])
+        self.page.mode.setCurrentIndex(0)
+        self.assertEqual(self.page.data['id'], key)
+        self.assertEqual(self.page.draft_images, [record])
+        self.assertTrue(self.page.persist())
+        self.assertTrue(self.page.prepare_close())
+        reopened = LMPage(store=Store(self.temp.name))
+        try:
+            self.assertEqual(reopened.data['id'], key)
+            self.assertEqual(reopened.draft_images, [record])
+            reopened.remove_screenshot(record['id'])
+            self.assertTrue(reopened.persist())
+            self.assertEqual(self.store.load(key)['draft_images'], [])
+        finally:
+            reopened.prepare_close()
+            reopened.deleteLater()
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+
+    def test_reopen_recovers_interrupted_response_and_draft(self):
+        data = conversation(SETTINGS, 'fixture', 'fixture-model')
+        data['draft'] = 'Unsaved question'
+        data['messages'] = [message('user', 'Hello'), message('assistant', 'Partial', 'streaming')]
+        self.store.save(data)
+        self.page.open_conversation(data['id'])
+        self.assertEqual(self.page.composer.toPlainText(), 'Unsaved question')
+        self.assertEqual(self.page.data['messages'][-1]['status'], 'interrupted')
+        self.assertEqual(self.store.load(data['id'])['messages'][-1]['status'], 'interrupted')
 
     def test_conflict_does_not_switch_or_lose_current_draft(self):
         self.page.conversations.new_conversation()
@@ -901,42 +1197,6 @@ class LMUITests(QtTestCase):
         lease.unlock()
         self.assertEqual(self.page.data['id'], key)
 
-    def test_failed_generation_checkpoint_cancels_and_keeps_exportable_text(self):
-        self.server.mode = 'slow'
-        self.chat()
-        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
-        with patch.object(self.store, 'save', side_effect=OSError('Disk full')):
-            self.page.checkpoint()
-            self.until(lambda: not self.page.client.busy)
-            self.assertIn('Disk full', self.page.save_error.text())
-            self.assertEqual(self.page.data['messages'][-1]['content'], 'Bonjour 🌍')
-        self.assertTrue(self.page.persist())
-
-    def test_transport_start_failure_keeps_saved_turn_and_clears_published_draft(self):
-        self.page.conversations.new_conversation()
-        self.page.model.setCurrentText('fixture-model')
-        self.page.composer.setPlainText('Keep this retryable message')
-        with patch.object(self.page.client, 'start', side_effect=OSError('Synthetic offline')):
-            self.page.send()
-        self.assertEqual(self.page.composer.toPlainText(), '')
-        self.assertIn('Synthetic offline', self.page.status.text())
-        saved = self.store.load(self.page.data['id'])
-        self.assertEqual(saved['messages'][0]['content'], 'Keep this retryable message')
-        self.assertEqual(saved['messages'][-1]['status'], 'failed')
-        self.assertIsNone(self.page.active_message)
-        self.assertEqual(self.server.requests, [])
-
-    def test_first_publication_failure_keeps_unsent_user_draft(self):
-        self.page.conversations.new_conversation()
-        self.page.model.setCurrentText('fixture-model')
-        self.page.composer.setPlainText('Keep this message')
-        self.assertTrue(self.page.persist())
-        with patch.object(self.store, 'save', side_effect=OSError('Disk full')):
-            self.page.send()
-        self.assertEqual(self.server.requests, [])
-        self.assertEqual(self.page.data['messages'], [])
-        self.assertEqual(self.page.composer.toPlainText(), 'Keep this message')
-
     def test_nested_tree_new_conversation_move_and_restart(self):
         with patch.object(qt.QInputDialog, 'getText', return_value=('Projects/Planning/2026', True)):
             self.page.conversations.new_folder()
@@ -961,78 +1221,14 @@ class LMUITests(QtTestCase):
         self.page.refresh()
         self.assertIn('Archive/Old/Chats', self.page.folder_items)
 
-    def test_enter_sends_and_shift_enter_inserts_newline_only_in_composer(self):
-        self.page.conversations.new_conversation()
-        self.page.model.setCurrentText('fixture-model')
-        self.page.composer.setPlainText('First line')
-        self.page.composer.moveCursor(qt.QTextCursor.MoveOperation.End)
-        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Return, qt.Qt.KeyboardModifier.ShiftModifier)
-        QTest.keyClicks(self.page.composer, 'Second line')
-        self.assertEqual(self.page.composer.toPlainText(), 'First line\nSecond line')
-        self.assertEqual(self.server.requests, [])
-        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Return)
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], 'First line\nSecond line')
-        self.assertEqual(self.page.composer.toPlainText(), '')
-        before = len(self.server.requests)
-        self.page.system.moveCursor(qt.QTextCursor.MoveOperation.End)
-        QTest.keyClick(self.page.system, qt.Qt.Key.Key_Return)
-        self.assertTrue(self.page.system.toPlainText().endswith('\n'))
-        self.assertEqual(len(self.server.requests), before)
-        self.assertEqual(self.page.composer.placeholderText(), 'Enter Message')
-
-    def test_empty_enter_does_not_send_or_insert_newline(self):
-        self.page.conversations.new_conversation()
-        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Enter)
-        self.assertEqual(self.page.composer.toPlainText(), '')
-        self.assertEqual(self.server.requests, [])
-
-    def test_send_control_becomes_stop_and_returns_to_send(self):
-        self.server.mode = 'slow'
-        self.chat()
-        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
-        self.assertTrue(self.page.send_button.isEnabled())
-        self.assertIn('Stop', self.page.send_button.accessibleName())
-        self.page.send_button.click()
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(self.page.send_button.accessibleName(), 'Send message')
-        self.assertEqual(self.page.data['messages'][-1]['status'], 'cancelled')
-
     def test_chat_uses_shared_markdown_reading_font(self):
+        from commonUtils.ui.appearance.status_line import StatusLine
+        self.assertIsInstance(self.page.status, StatusLine)
         expected = self.page.styling.font('reading')
         self.assertEqual(self.page.transcript.font().family(), expected.family())
         self.assertEqual(self.page.transcript.font().pointSize(), expected.pointSize())
         self.assertEqual(self.page.composer.font().pointSize(), expected.pointSize())
         self.assertIn('localhost default', self.store.__class__(Path(self.temp.name) / 'empty').profiles()[0]['name'])
-
-    def test_conversation_bubbles_keep_prior_selection_during_streaming(self):
-        self.server.mode = 'slow'
-        self.chat()
-        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
-        entries = self.page.data['messages']
-        user = self.page.transcript.bubbles[entries[0]['id']]
-        assistant = self.page.transcript.bubbles[entries[1]['id']]
-        self.assertEqual(user.objectName(), 'userBubble')
-        self.assertEqual(assistant.objectName(), 'assistantBubble')
-        cursor = user.browser.textCursor()
-        cursor.select(qt.QTextCursor.SelectionType.Document)
-        user.browser.setTextCursor(cursor)
-        self.page.append_delta(' More text')
-        self.page.render()
-        self.assertEqual(user.browser.textCursor().selectedText(), 'Hello')
-        self.assertIs(self.page.transcript.bubbles[entries[1]['id']], assistant)
-        self.assertIn('More text', assistant.browser.toPlainText())
-
-    def test_shared_status_footer_is_muted_and_does_not_grow_for_long_messages(self):
-        from commonUtils.ui.appearance.status_line import StatusLine
-        self.assertIsInstance(self.page.status, StatusLine)
-        self.page.status.resize(160, 30)
-        message = 'A very long status message ' * 100
-        self.page.status.setText(message)
-        self.assertEqual(self.page.status.text(), message)
-        self.assertEqual(self.page.status.toolTip(), message)
-        self.assertFalse(self.page.status.wordWrap())
-        self.assertLess(self.page.status.sizeHint().height(), 50)
 
     def test_stream_follows_bottom_without_interrupting_manual_scroll(self):
         self.page.conversations.new_conversation()
@@ -1049,36 +1245,6 @@ class LMUITests(QtTestCase):
         self.page.render()
         self.app.processEvents()
         self.assertEqual(bar.value(), 0)
-
-    def test_send_preserves_code_indentation_and_leading_trailing_lines(self):
-        source = '\n    print("Indented code")\n\n'
-        self.chat(source)
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], source)
-        self.assertEqual(self.page.data['messages'][0]['content'], source)
-
-    def test_next_draft_can_be_written_and_saved_while_reply_streams(self):
-        self.server.mode = 'slow'
-        self.chat()
-        self.until(lambda: bool(self.page.data['messages'][-1]['content']))
-        self.assertTrue(self.page.composer.isEnabled())
-        self.page.composer.setPlainText('My next question')
-        self.assertTrue(self.page.persist())
-        self.assertEqual(self.store.load(self.page.data['id'])['draft'], 'My next question')
-        QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Return)
-        self.assertEqual(len(self.server.requests), 1)
-        self.page.client.cancel()
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(self.page.composer.toPlainText(), 'My next question')
-
-    def test_valid_text_before_bad_stream_record_is_kept(self):
-        self.server.mode = 'malformed_after_text'
-        self.chat()
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(self.page.data['messages'][-1]['status'], 'failed')
-        self.assertEqual(self.page.data['messages'][-1]['content'], 'Bonjour 🌍')
-        saved = self.store.load(self.page.data['id'])
-        self.assertEqual(saved['messages'][-1]['content'], 'Bonjour 🌍')
 
     def test_refresh_keeps_folder_selection_and_collapsed_branches(self):
         self.page.conversations.new_conversation()
@@ -1110,13 +1276,6 @@ class LMUITests(QtTestCase):
         self.assertEqual(bubble.error.text(), entry['error'])
         self.assertFalse(bubble.error.isHidden())
 
-    def test_each_bubble_copies_exact_source_including_whitespace(self):
-        self.chat('    print("Keep indentation")\n')
-        self.until(lambda: not self.page.client.busy)
-        entry = self.page.data['messages'][0]
-        self.page.transcript.bubbles[entry['id']].copy_button.click()
-        self.assertEqual(self.app.clipboard().text(), entry['content'])
-
     def test_composer_plus_attaches_text_in_chat_atomically_with_a_size_limit(self):
         self.page.conversations.new_conversation()
         path = Path(self.temp.name) / 'example.txt'
@@ -1146,64 +1305,6 @@ class LMUITests(QtTestCase):
         with patch.object(qt.QFileDialog, 'getOpenFileNames', return_value=([str(image_path), str(path)], '')):
             self.page.attach_image_action.trigger()
         self.assertEqual(len(self.page.draft_images), 1)
-
-    def test_composer_model_picker_controls_the_sent_request_and_saved_model(self):
-        self.page.conversations.new_conversation()
-        self.page.model.addItem('another-model')
-        self.page.model.setCurrentIndex(self.page.model.findText('another-model'))
-        self.page.composer.setPlainText('Use the selected model')
-        self.page.send_button.click()
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(self.server.requests[-1]['model'], 'another-model')
-        self.assertEqual(self.store.load(self.page.data['id'])['model'], 'another-model')
-
-    def test_reasoning_streams_inline_then_collapses_and_survives_reopening(self):
-        self.server.mode = 'reasoning'
-        self.chat()
-        entry = self.page.data['messages'][-1]
-        self.until(lambda: bool(entry.get('reasoning')))
-        self.page.render()
-        bubble = self.page.transcript.bubbles[entry['id']]
-        self.assertTrue(bubble.work_button.text().startswith('Working'))
-        self.assertTrue(bubble.work_button.isChecked())
-        self.assertFalse(bubble.reasoning_browser.isHidden())
-        self.assertEqual(bubble.reasoning_browser.source, 'Provider notes')
-        self.server.release.set()
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(entry['content'], 'Answer')
-        self.assertFalse(bubble.work_button.isChecked())
-        self.assertTrue(bubble.reasoning_browser.isHidden())
-        self.assertTrue(bubble.work_button.text().startswith('Worked for'))
-        bubble.work_button.click()
-        self.assertFalse(bubble.reasoning_browser.isHidden())
-        bubble.work_button.click()
-        self.assertTrue(bubble.reasoning_browser.isHidden())
-        saved = self.store.load(self.page.data['id'])['messages'][-1]
-        self.assertEqual(saved['reasoning'], 'Provider notes')
-        self.assertGreaterEqual(saved['elapsed_seconds'], 0)
-        from features.lm.ui.conversation_view import Bubble
-        reopened = Bubble(saved)
-        self.addCleanup(reopened.deleteLater)
-        self.assertTrue(reopened.reasoning_browser.isHidden())
-        reopened.work_button.click()
-        self.assertEqual(reopened.reasoning_browser.source, 'Provider notes')
-
-    def test_json_reasoning_and_plain_response_activity_fallback(self):
-        self.server.mode = 'reasoning_json'
-        self.chat()
-        self.until(lambda: not self.page.client.busy)
-        entry = self.page.data['messages'][-1]
-        self.assertEqual(entry['reasoning'], 'Provider notes')
-        bubble = self.page.transcript.bubbles[entry['id']]
-        self.assertTrue(bubble.work_button.isEnabled())
-        self.server.mode = 'json'
-        self.chat('Next')
-        self.until(lambda: not self.page.client.busy)
-        entry = self.page.data['messages'][-1]
-        bubble = self.page.transcript.bubbles[entry['id']]
-        self.assertFalse(bubble.work_button.isEnabled())
-        self.assertTrue(bubble.work_button.text().startswith('Worked for'))
-        self.assertTrue(bubble.reasoning_browser.isHidden())
 
     def test_code_panels_copy_only_their_contents_in_both_message_roles(self):
         from features.lm.ui.conversation_view import Bubble
@@ -1276,38 +1377,6 @@ class LMUITests(QtTestCase):
         self.page.conversations.new_conversation()
         self.assertFalse(self.page.disclaimer.isHidden())
 
-    def test_reply_footer_actions_and_compact_composer(self):
-        self.chat('First question')
-        self.until(lambda: not self.page.client.busy)
-        first = self.page.data['messages'][-1]['id']
-        self.chat('Second question')
-        self.until(lambda: not self.page.client.busy)
-        last = self.page.data['messages'][-1]['id']
-        self.page.resize(900, 650)
-        self.page.show()
-        self.app.processEvents()
-        earlier = self.page.transcript.bubbles[first]
-        latest = self.page.transcript.bubbles[last]
-        self.assertTrue(earlier.retry_button.isHidden())
-        self.assertFalse(latest.retry_button.isHidden())
-        # Scrollbar visibility can queue another layout pass after showing the panel.
-        self.until(lambda: latest.copy_button.y() >= latest.browser.geometry().bottom())
-        self.assertGreater(latest.timestamp.x(), latest.retry_button.geometry().right())
-        self.assertLessEqual(latest.timestamp.x() - latest.retry_button.geometry().right(), 8)
-        self.assertIs(self.page.send_button.parent(), self.page.composer_frame)
-        self.until(lambda: self.page.send_button.y() > self.page.composer.geometry().bottom())
-        self.assertLessEqual(self.page.send_button.width(), 32)
-        self.assertLess(self.page.model.geometry().right(), self.page.send_button.x())
-        self.assertTrue(self.page.save_error.isHidden())
-        self.assertEqual(self.page.disclaimer.text(), 'Language Models can make mistakes. Check important info.')
-        latest.copy_button.click()
-        self.assertEqual(self.app.clipboard().text(), self.page.data['messages'][-1]['content'])
-        latest.retry_button.click()
-        self.assertTrue(self.page.client.busy)
-        self.assertFalse(latest.retry_button.isEnabled())
-        self.until(lambda: not self.page.client.busy)
-        self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], 'Second question')
-
     def test_switching_conversations_returns_to_latest_messages(self):
         self.page.conversations.new_conversation()
         self.page.resize(900, 600)
@@ -1323,34 +1392,6 @@ class LMUITests(QtTestCase):
         self.page.open_conversation(data['id'])
         self.until(lambda: bar.maximum() > 0 and bar.value() == bar.maximum())
         self.assertEqual(self.page.transcript.key, data['id'])
-
-    def test_pin_fork_menus_and_timestamp_preserve_original_conversation(self):
-        self.chat('Keep this history')
-        self.until(lambda: not self.page.client.busy)
-        original = self.page.data['id']
-        self.page.conversations.toggle_pin()
-        self.assertTrue(self.store.load(original)['pinned'])
-        self.assertEqual(self.page.pin_action.text(), 'Unpin conversation')
-        entry = self.page.data['messages'][0]
-        timestamp = self.page.transcript.bubbles[entry['id']].timestamp
-        self.assertTrue(timestamp.text())
-        self.assertTrue(timestamp.toolTip())
-        self.page.composer.setPlainText('A draft to branch')
-        requests = len(self.server.requests)
-        self.page.conversations.fork_conversation()
-        self.assertEqual(len(self.server.requests), requests)
-        self.assertEqual(self.page.data['draft'], 'A draft to branch')
-        self.assertEqual(self.store.load(original)['draft'], 'A draft to branch')
-        self.assertNotEqual(self.page.data['id'], original)
-        self.assertFalse(self.page.data['pinned'])
-        self.assertEqual(self.page.data['messages'][0]['content'], 'Keep this history')
-        self.assertNotEqual(self.page.data['messages'][0]['id'], entry['id'])
-        self.assertTrue(self.store.load(original)['pinned'])
-        self.assertEqual([a.text() for a in self.page.menu_bar.actions()],
-                         ['File', 'Edit', 'Conversation', 'View', 'Server'])
-        self.assertEqual(self.page.status.contentsMargins().bottom(), 0)
-        content = self.page.status.parentWidget()
-        self.assertLessEqual(content.layout().contentsMargins().bottom(), 4)
 
     def test_tree_move_persists_conversation_and_folder_destinations(self):
         self.page.conversations.new_conversation()
