@@ -44,8 +44,35 @@ for reference. Standalone launcher/config/environment files and the old fixed-si
 UI are superseded by Logistics. The duplicate commonUtils tree is superseded by
 the existing shared submodule; it is not merged into that submodule.
 
+## Source ownership and platform boundary
+
+- `Python/features/aviation_tools/__init__.py` registers the lazy desktop page.
+- `ui/page.py` owns the seven calculator forms, their result/error presentation,
+  retained modeless dialogs and read-only `DatasetBrowser`.
+- `mathUtils/flightUtils.py` owns coordinate validation, course normalization,
+  distance, wind and airspeed formulas; `weatherUtils.py` owns the temperature helpers.
+- `plane/planeUtils.py` selects registrations/models from the bundled directories.
+  `planeAirspeedCalibration.py` interpolates between flaps-matched chart points;
+  values outside the chart return no result and the UI presents an error.
+- `plane/planeCruisePerformance.py` chooses the nearest altitude, temperature and
+  RPM independently, then looks for a row with that combination. It first applies
+  the stored 2 °C per 1,000 ft lapse helper to the sea-level temperature at the
+  selected altitude. A missing combination returns no result and is reported by
+  the UI; it does not interpolate or synthesize a row.
+- `location/locationUtils.py` loads airport CSV rows and resolves codes without
+  case sensitivity. `resources.py` owns the package-relative data path.
+
+There is no mobile adapter or `mobile_sources.json` in this feature. It is absent
+from `mobile_build/tools.py`'s mobile source-owner list. Its PySide6 desktop page
+is not a mobile destination; see [mobile availability](../user_mobile/user_mobile.md).
+Retained dialog state lasts only as long as the desktop page instance.
+
 ## Validation
 
 `Python/tests/integrations/test_aviation_tools.py` covers feature discovery/tab retention,
 every migrated calculator, popup lifetime/input retention, input error recovery, reference outputs, all datasets
 and loading from an unrelated working directory.
+
+These test files describe executable regression scope; their presence is not
+evidence of current device or release acceptance. The documentation audit used
+source/test inspection and static checks only, with no Qt or device run.
