@@ -691,10 +691,16 @@ installing a desktop toolkit. See the [portable owner policy](architecture.md#po
 for selection and limits; the document smoke suite additionally exercises real
 format operations without desktop/image packages.
 
-Desktop aggregate deadlines come from `build-tests.json` on every platform.
-The platform launcher must not silently shorten the declared suite budget.
-Individual test-file deadlines and all required checks still apply; hosted job
-limits include room for the complete sequence of declared suites.
+Desktop suite deadlines start with `build-tests.json`. The Windows platform plan
+in `logistics_build/validation_plans.py` gives the full Logistics suite at least
+2,100 seconds and the complete SDK contract group 780 seconds. A measured Windows
+run exhausted 1,800 seconds with four extended modules remaining; the SDK group
+exhausted 600 seconds while entering its penultimate module. These bounded caps
+allow the complete inventories to finish; smoke budgets, other platform budgets
+and all required checks stay unchanged. A larger declared suite budget is never
+shortened. Logistics retains its 300-second per-file deadline; the SDK contracts
+have a finite group deadline rather than per-module deadlines. Hosted job limits
+include room for the complete sequence of declared suites.
 
 Native build prerequisites are prepared separately by explicit **Update project tooling…**
 (or `python -m build_manager.cli tooling --project NAME --update --confirm`) after
