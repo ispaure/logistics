@@ -56,7 +56,7 @@ canvas.onpointerdown = e => {
     beginPan(e);
     return
   }
-  if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke'))) || state.warning || state.read_only) return;
+  if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke'))) || state.warning || state.read_only || state.password_required) return;
   if (e.pointerType === 'pen') {
     notePenContact(true);
     pan = null;
@@ -115,6 +115,7 @@ canvas.onpointermove = e => {
 };
 
 function finish(e, cancelled = false) {
+  if (mode === 'capture') return finishImage(e, cancelled);
   if (pan && pan.id === e.pointerId) {
     let gesture = pan,
       dx = e.clientX - gesture.startX,
