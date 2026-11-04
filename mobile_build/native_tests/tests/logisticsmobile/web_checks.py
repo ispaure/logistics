@@ -64,7 +64,10 @@ def verify_native_transfer_fallback(surface):
         assert int(native.getVisibility()) == 0 and native.isShown(), 'Native transfer view is hidden'
         assert native.getWidth() > 0 and native.getHeight() > 0, 'Native transfer view has no layout'
         def text(widget):
-            return str(widget._impl.native.getText().toString())
+            value = widget._impl.native.getText()
+            # Chaquopy converts TextView String values to Python str; other
+            # CharSequence implementations retain their Java proxy.
+            return value if isinstance(value, str) else str(value.toString())
     else:
         raise AssertionError('Transfer fallback requires actual iOS or Android widgets')
     model = surface.model
