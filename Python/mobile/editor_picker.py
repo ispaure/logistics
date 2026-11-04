@@ -62,6 +62,8 @@ class PickerOperation:
     destination_action: object = None
     filename: str = ''
     mode: str = ''
+    notebook_template: str = 'Blank'
+    notebook_format: str = 'pro'
 
 
 @dataclass
@@ -127,6 +129,7 @@ class EditorPicker:
         self.name_panel = None
         self.location_panel = None
         self.creation_type = None
+        self.notebook_templates = None
         self._listed_provider = None
         self._listed_credentials = None
         from .protection import for_app
@@ -181,6 +184,9 @@ class EditorPicker:
             self.save_as_status.value = ''
 
         # Drop the retained private source only after its displayed labels clear.
+        if self.notebook_templates is not None:
+            self.notebook_templates.changed = lambda *args: None
+            self.notebook_templates = None
         self.operation = PickerOperation()
         from .protection import for_app
         for_app(self.app).changed()
@@ -334,6 +340,7 @@ class EditorPicker:
         self.name_panel = self.location_panel = None
         self.editor_picker_location = self._listed_provider = self._listed_credentials = None
         self.operation = operation
+        self.notebook_templates = None
         from .protection import for_app
         for_app(self.app).changed()
         ordinary = self.app.ordinary_file_roots(
@@ -427,6 +434,13 @@ class EditorPicker:
             self.name_view = toga.Box(children=[*name_fields, self.effective_name],
                 style=Pack(direction=COLUMN, margin=20))
             from .creation_layout import CreationFormats, CreationNameForm
+            if any(extension == 'rmdoc' for _, extension in self.creation_choices):
+                from features.notebooks.mobile.setup import NotebookTemplateChoices
+                def selected(template, paper_format):
+                    if self.operation is operation and not self.cloud_busy:
+                        operation.notebook_template, operation.notebook_format = template, paper_format
+                self.notebook_templates = NotebookTemplateChoices(selected)
+                self.sync_notebook_templates()
             self.creation_formats = CreationFormats(self)
             self.name_form = CreationNameForm(content=self.name_view, horizontal=False, style=Pack(flex=1))
             self.next_button = toga.Button('Next', on_press=self.choose_creation_location,
@@ -657,7 +671,18 @@ class EditorPicker:
         self.operation.filename = 'Untitled.' + extension
         self.save_as_name.value = change_creation_suffix(self.save_as_name.value, extension)
         self.creation_formats.update()
+        self.sync_notebook_templates()
         self.update_effective_name()
+
+    def sync_notebook_templates(self):
+        controls = self.notebook_templates
+        if controls is None:
+            return
+        enabled = dict(self.creation_choices)[self.creation_type.value] == 'rmdoc'
+        if enabled and controls.parent is None:
+            self.name_view.add(controls)
+        elif not enabled and controls.parent is self.name_view:
+            self.name_view.remove(controls)
 
     def creating_notebook(self):
         return (self.operation.creation is not None or self.operation.binary_owner is not None) and Path(self.operation.filename).suffix.lower() == '.rmdoc'
@@ -1167,7 +1192,8 @@ class EditorPicker:
             request = DestinationRequest.capture(provider, folder, target, data, extensions,
                 notebook=notebook, creating=creation is not None,
                 session_count=len(self.app.workspace.sessions), session_limit=MAX_SESSIONS, store=self.store,
-                source_document=source_document)
+                source_document=source_document, notebook_template=operation.notebook_template,
+                notebook_format=operation.notebook_format)
             if operation.binary_owner is not None:
                 from services.documents.storage import DocumentPolicy
                 source = operation.binary_owner.document.resource
