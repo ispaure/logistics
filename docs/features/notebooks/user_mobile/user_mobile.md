@@ -109,8 +109,10 @@ browser page selection and long-press callouts, including extra contacts during
 a stroke; text fields remain editable and the Select / move tool remains available.
 High magnification may soften
 the screen preview to keep memory use bounded; saved and exported ink keeps its
-full native geometry. Pressure depends on what the
-device supplies; Android forwards historical pen positions and pressure directly
+full native geometry. Pencil has softer, broken graphite grain in the app; Mechanical
+pencil has a denser, finer lead texture. This appearance is shared with desktop
+and leaves saved/exported stroke geometry and brush presets unchanged. Pressure
+depends on what the device supplies; Android forwards historical pen positions and pressure directly
 to the canvas, and iOS uses WebView pointer/coalesced samples. Ballpoint, Pencil,
 Marker, Paintbrush, Calligraphy and Shader vary with pressure. Fineliner,
 Mechanical pencil and Highlighter keep a constant width. Calligraphy uses a fixed
