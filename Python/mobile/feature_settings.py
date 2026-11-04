@@ -124,6 +124,10 @@ def disabled_view(app, name, *, destination=None):
 def require(app, name, *, destination=None, present=True):
     if enabled(app.preferences, name):
         return True
+    if name == 'lm' and destination == 'chat' and present:
+        # Explicit Chat commands must not try to select a hidden OptionItem.
+        origin = app.native_host.state.destination
+        destination = origin if origin != 'chat' else 'home'
     view = disabled_view(app, name, destination=destination)
     if present:
         app.show_view(view, destination=destination, route='feature-disabled:' + name, title=BY_NAME[name].label)
