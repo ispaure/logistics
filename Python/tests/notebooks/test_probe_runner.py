@@ -51,11 +51,17 @@ class NotebookProbeRunnerTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual({row['name'] for row in result['checks']},
                          {'drawing-save-stress', 'page-two-memory', 'menus-zoom', 'view-zoom',
-                          'brush-pixels', 'templates', 'mobile-ui', 'mobile-laptop', 'pdf-annotation',
+                          'brush-pixels', 'templates', 'mobile-ui', 'mobile-laptop', 'images-passwords', 'pdf-annotation',
                           'encrypted-storage', 'storage-acceptance', 'independent-codec'})
         for name, (_, _, renderer_sensitive) in runner.PROBES.items():
             self.assertEqual(sum(row['name'] == name for row in result['checks']),
                              3 if renderer_sensitive else 1, name)
+        image_commands = [(argv, options) for argv, options in self.commands
+                          if any(str(arg).endswith('notebook_images_probe.py') for arg in argv)]
+        self.assertEqual(len(image_commands), 3)
+        self.assertEqual({Path(argv[argv.index('--output') + 1]).parent.name
+                          for argv, _ in image_commands}, {'native', 'software', 'chromium-software'})
+        self.assertTrue(all(options['timeout'] == 120 for _, options in image_commands))
         codec, = [argv for argv, _ in self.commands if any(str(arg).endswith('independent_codec_probe.py') for arg in argv)]
         self.assertEqual(codec.count('--archive'), 2)
         memory = self.commands[1][0]
