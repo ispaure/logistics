@@ -417,6 +417,35 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(AssertionError, 'rows are stale'):
             verify_native_transfer_fallback(surface)
 
+    def test_ios_empty_notice_sentinel_is_decoded_without_accepting_stale_visible_notice(self):
+        surface = self.surface()
+        fallback = surface.native_fallback
+        surface.model.update(mode='review', operation='Push', notice='', can_confirm=True,
+            counts={}, rows=(), page=0, page_size=30, total=0)
+        fallback.metrics._impl.native.text = 'Add: 0 · Replace: 0 · Delete: 0 · Cleanup: 0\nno undo\nPage 1 · 0 matching changes'
+        fallback.rows = SimpleNamespace(children=[])
+        fallback.buttons.children = [SimpleNamespace(text='Previous changes', enabled=False),
+            SimpleNamespace(text='Next changes', enabled=False), SimpleNamespace(text='Approve Push', enabled=True),
+            SimpleNamespace(text='Cancel review', enabled=True)]
+        fallback.status._impl.native.text = '\u200b'
+        self.assertEqual(verify_native_transfer_fallback(surface)['mode'], 'review')
+        fallback.status._impl.native.text = 'Old visible notice'
+        with self.assertRaisesRegex(AssertionError, 'notice is stale'):
+            verify_native_transfer_fallback(surface)
+        surface.model['notice'] = 'Files changed'
+        fallback.status._impl.native.text = '\u200b'
+        with self.assertRaisesRegex(AssertionError, 'notice is stale'):
+            verify_native_transfer_fallback(surface)
+        # Ordinary whitespace and zero-width characters inside nonempty text
+        # are not normalized, so stale content cannot hide behind stripping.
+        for expected, actual in ((' ', ' '), ('A\u200bB', 'A\u200bB')):
+            surface.model['notice'] = expected
+            fallback.status._impl.native.text = actual
+            self.assertEqual(verify_native_transfer_fallback(surface)['mode'], 'review')
+        fallback.status._impl.native.text = 'AB'
+        with self.assertRaisesRegex(AssertionError, 'notice is stale'):
+            verify_native_transfer_fallback(surface)
+
     async def test_transfer_check_follows_current_webview_and_ignores_retired_result(self):
         surface = self.surface()
         surface.native_fallback = None
