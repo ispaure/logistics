@@ -6,10 +6,59 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace as State
 import unittest
+from unittest.mock import AsyncMock, patch
 from mobile_build.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review, save_transfer_settings, cancel_review, press_review
 
 
 class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_fallback_click_uses_revision_guard_and_restores_observer(self):
+        from features.rclone.transfers.mobile.surface import TransferSurface
+        handler = AsyncMock()
+        view = State(ready=True, closed=False, revision=1, delivered_revision=1, pending=None,
+            host=State(active_host=True), model=dict(can_confirm=True), handler=handler, web=None)
+        view.native_fallback = State(buttons=State(children=[]))
+        clicks = []
+        def button(revision):
+            async def press():
+                clicks.append(revision)
+                if len(clicks) == 1:
+                    view.revision = view.delivered_revision = 2
+                    view.native_fallback.buttons.children = [button(2)]
+                await TransferSurface.dispatch(view, 'approve', dict(revision=str(revision)))
+            return State(text='Approve Push', enabled=True, on_press=press)
+        view.native_fallback.buttons.children = [button(1)]
+        with patch('mobile_build.native_tests.tests.logisticsmobile.review_checks.verify_native_transfer_fallback') as verify:
+            await press_review(view, 'approve', timeout=1)
+        self.assertEqual(clicks, [1, 2])
+        handler.assert_awaited_once_with('approve', dict(revision='2'))
+        self.assertIs(view.handler, handler)
+        self.assertEqual(verify.call_count, 2)
+
+    async def test_native_button_without_guarded_acceptance_cannot_pass(self):
+        handler, press = AsyncMock(), AsyncMock()
+        view = State(ready=True, closed=False, revision=1, delivered_revision=1,
+            handler=handler, web=None, native_fallback=State(buttons=State(children=[
+                State(text='Proceed without full review…', enabled=True, on_press=press)])))
+        with patch('mobile_build.native_tests.tests.logisticsmobile.review_checks.verify_native_transfer_fallback'):
+            with self.assertRaisesRegex(AssertionError, 'not accepted: early'):
+                await press_review(view, 'early', timeout=.01)
+        press.assert_awaited_once()
+        handler.assert_not_awaited()
+        self.assertIs(view.handler, handler)
+
+    async def test_invalid_native_fallback_restores_observer_without_pressing(self):
+        handler, press = AsyncMock(), AsyncMock()
+        view = State(ready=True, closed=False, revision=1, delivered_revision=1,
+            handler=handler, web=None, native_fallback=State(buttons=State(children=[
+                State(text='Approve Push', enabled=True, on_press=press)])))
+        with patch('mobile_build.native_tests.tests.logisticsmobile.review_checks.verify_native_transfer_fallback',
+                side_effect=AssertionError('Native review rows are stale')):
+            with self.assertRaisesRegex(AssertionError, 'rows are stale'):
+                await press_review(view, 'approve', timeout=.01)
+        press.assert_not_awaited()
+        handler.assert_not_awaited()
+        self.assertIs(view.handler, handler)
+
     async def test_delayed_native_acceptance_does_not_issue_an_extra_click(self):
         from unittest.mock import AsyncMock
         from features.rclone.transfers.mobile.surface import TransferSurface
