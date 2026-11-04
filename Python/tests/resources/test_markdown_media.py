@@ -112,6 +112,26 @@ class MarkdownMediaTests(TestCase):
             self.assertEqual(opened.call_count, 2)
 
     def test_link_resolution_reused_until_directory_changes(self):
+        self.assert_link_resolution_cache()
+
+    def test_windows_link_cache_validates_names_when_directory_timestamps_stay_unchanged(self):
+        from types import SimpleNamespace
+        locate = self.provider.transfer_location
+        stamps = {}
+        def frozen_location(path, *, directory=False):
+            location = locate(path, directory=directory)
+            if not directory:
+                return location
+            stamps.setdefault(path, location.stat())
+            return SimpleNamespace(stat=lambda: stamps[path])
+        # Windows can defer directory timestamps across create/delete. Keep
+        # them fixed so only a fresh names inventory can invalidate the cache.
+        with patch('features.notes_library.notes.os', SimpleNamespace(name='nt')), \
+                patch.object(self.provider, 'transfer_location', side_effect=frozen_location), \
+                patch.object(self.provider, 'open', side_effect=AssertionError('Link validation read document content')):
+            self.assert_link_resolution_cache()
+
+    def assert_link_resolution_cache(self):
         from features.notes_library.notes import NotesLibrary
         from features.notes_library.link_policy import resolve_link
         (self.root / 'Home.md').write_text('[[Target]]')
@@ -128,6 +148,9 @@ class MarkdownMediaTests(TestCase):
             self.assertEqual(resolve.call_count, 2)
             (self.root / 'Target.md').unlink()
             self.assertEqual(library.link('Home.md', 'Target')[0], 'nested/Target.md')
+            self.assertEqual(resolve.call_count, 3)
+            self.assertEqual(library.link('Home.md', 'Target')[0], 'nested/Target.md')
+            self.assertEqual(resolve.call_count, 3)
             with self.assertRaises(ValueError):
                 library.link('Home.md', 'Removed')
 
