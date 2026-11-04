@@ -930,7 +930,11 @@ only when first selected (or when the initial wide layout displays App).
 Reflow fits only the sidebar and displayed category; hidden pages adopt the
 current width when revisited. Category highlights update only when their state
 changes, and Apple text fitting reuses a measurement label after checking the
-text/width/font cache. About's build-information lookup runs only on opening About.
+text/width/font cache. About appears immediately with a loading message above
+licenses; its build-information lookup runs in a worker only on opening About.
+This avoids blocking presentation on manifest reads or the checkout Git fallback.
+A fitted label reflows the result (or an unavailable message on failure). Help's
+About entry reuses the same retained page with its own Back route.
 It reads the packaged `mobile/source.json` to show the version, commit, local
 commit time, modified status, platform and source snapshot identifier offline.
 Reload preferences explicitly rebuilds category factories; ordinary visits reuse
