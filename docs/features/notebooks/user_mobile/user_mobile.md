@@ -189,3 +189,7 @@ you work in that editor.
 ## Paper Pro preview
 
 A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Toggle it in **Settings → Features → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
+
+Logistics draws its own template previews and custom layouts. Native lined options
+are labeled reMarkable compatible; Logistics is not affiliated with or endorsed
+by reMarkable. Native exports reference the tablet’s installed lined backgrounds.
