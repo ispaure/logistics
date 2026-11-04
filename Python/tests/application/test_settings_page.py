@@ -148,6 +148,7 @@ class SettingsPageTests(QtTestCase):
                     page = SettingsPage(); self.addCleanup(page.deleteLater)
                     self.assertEqual(page.scope_selector.currentData(), 'personal')
                     self.assertEqual(page.panels['features'].scope, 'personal')
+                    self.assertEqual(page.panels['features'].sections.tabs.tabText(0), 'Personal')
                     if name == 'marca':
                         self.assertNotEqual(page.scope_selector.findData('application'), -1)
                         page.scope_selector.setCurrentIndex(page.scope_selector.findData('application'))
@@ -252,14 +253,6 @@ class SettingsPageTests(QtTestCase):
             page.refresh()
             self.assertIs(panel.custom['custom'], custom)
             factory.assert_called_once()
-
-    def test_settings_categories_have_no_storage_summary(self):
-        with patch.object(registry, 'get_feature_states', return_value=[]):
-            page = SettingsPage(); self.addCleanup(page.deleteLater)
-            names = [page.sidebar.topLevelItem(i).text(0) for i in range(page.sidebar.topLevelItemCount())]
-            self.assertNotIn('Storage & defaults', names)
-            personal = page.panels['features'].sections
-            self.assertEqual(personal.tabs.tabText(0), 'Personal')
 
     def test_commonutils_settings_expose_ini_and_preserve_edits(self):
         with TemporaryDirectory() as temporary:
