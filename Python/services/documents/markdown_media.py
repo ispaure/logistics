@@ -1,5 +1,7 @@
 """Document-owned Markdown media; encrypted videos use revocable range streams."""
 import posixpath
+from io import BytesIO
+from collections import OrderedDict
 from pathlib import PurePosixPath
 from threading import RLock
 from urllib.parse import unquote, urlsplit
@@ -12,12 +14,33 @@ class MarkdownMedia:
                  max_image_bytes=16 * 1024 * 1024):
         self.provider, self.document, self.root = provider, provider.relative(document), root
         from types import SimpleNamespace
-        self.image_provider = SimpleNamespace(relative=provider.relative, open=provider.open, entry=entry) if entry else provider
+        self.image_provider = SimpleNamespace(relative=provider.relative, open=self._open_image, entry=entry or provider.entry)
         self.max_image_bytes = max_image_bytes
+        self.rasters = OrderedDict()
         self.images = folder_image_source(self.image_provider, document, root=root, resolve=resolve,
                                          max_total_bytes=max_image_bytes)
         self.videos, self.closed, self.lock = {}, False, RLock()
         self.resolve = resolve
+
+    def _open_image(self, path):
+        """Keep bounded attachment bytes across renders, validating access/revision."""
+        with self.lock:
+            if self.closed:
+                raise ValueError('Markdown media closed.')
+            before = self.image_provider.entry(path)
+            cached = self.rasters.pop(path, None)
+            if cached is not None and cached[0] == before:
+                self.rasters[path] = cached
+                return BytesIO(cached[1])
+            with self.provider.open(path) as stream:
+                data = stream.read(8 * 1024 * 1024 + 1)
+            if self.image_provider.entry(path) != before:
+                raise ValueError('Image changed while rendering Markdown.')
+            if len(data) <= min(8 * 1024 * 1024, self.max_image_bytes):
+                while self.rasters and sum(len(item[1]) for item in self.rasters.values()) + len(data) > self.max_image_bytes:
+                    self.rasters.popitem(last=False)
+                self.rasters[path] = before, data
+            return BytesIO(data)
 
     def render_source(self, *, resolve=None):
         """Each render gets a fresh raster budget; video leases stay document-owned."""
@@ -117,6 +140,7 @@ class MarkdownMedia:
         with self.lock:
             self.closed = True
             self.resolve = None
+            self.rasters.clear()
             videos, self.videos = self.videos, {}
         for content, transport in videos.values():
             try:

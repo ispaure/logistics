@@ -78,6 +78,42 @@ class MarkdownMediaTests(TestCase):
         self.assertTrue(transports[1].closed.is_set())
         self.assertTrue(transports[1].content.closed)
 
+    def test_rasters_reuse_bytes_but_refresh_after_changes_and_deletion(self):
+        from PIL import Image
+        image = self.root / 'pic.png'
+        Image.new('RGB', (2, 2), 'red').save(image)
+        with patch.object(self.provider, 'open', wraps=self.provider.open) as opened:
+            first = self.media.render_source()('pic.png')
+            self.assertEqual(self.media.render_source()('pic.png'), first)
+            self.assertEqual(opened.call_count, 1)
+            Image.new('RGB', (3, 3), 'blue').save(image)
+            self.assertNotEqual(self.media.render_source()('pic.png'), first)
+            self.assertEqual(opened.call_count, 2)
+            image.unlink()
+            self.assertIsNone(self.media.render_source()('pic.png'))
+        self.media.close()
+        self.assertFalse(self.media.rasters)
+
+    def test_link_resolution_reused_until_directory_changes(self):
+        from features.notes_library.notes import NotesLibrary
+        from features.notes_library.link_policy import resolve_link
+        (self.root / 'Home.md').write_text('[[Target]]')
+        (self.root / 'nested').mkdir()
+        (self.root / 'nested/Target.md').write_text('target')
+        library = NotesLibrary(self.provider)
+        self.addCleanup(library.close)
+        with patch('features.notes_library.link_policy.resolve_link', wraps=resolve_link) as resolve:
+            self.assertEqual(library.link('Home.md', 'Target')[0], 'nested/Target.md')
+            self.assertEqual(library.link('Home.md', 'Target')[0], 'nested/Target.md')
+            self.assertEqual(resolve.call_count, 1)
+            (self.root / 'Target.md').write_text('closer target')
+            self.assertEqual(library.link('Home.md', 'Target')[0], 'Target.md')
+            self.assertEqual(resolve.call_count, 2)
+            (self.root / 'Target.md').unlink()
+            self.assertEqual(library.link('Home.md', 'Target')[0], 'nested/Target.md')
+            with self.assertRaises(ValueError):
+                library.link('Home.md', 'Removed')
+
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
