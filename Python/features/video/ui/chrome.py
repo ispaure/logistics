@@ -56,6 +56,10 @@ class DockedChrome:
         self.video_viewport.setWidget(self.video)
         layers.addWidget(self.video_viewport)
         self.overlay = qt.QWidget()
+        if getattr(self.backend, 'colour_managed', False):
+            self.overlay.setAttribute(qt.Qt.WidgetAttribute.WA_NativeWindow)
+            self.overlay.setAttribute(qt.Qt.WidgetAttribute.WA_TranslucentBackground)
+            self.overlay.setAttribute(qt.Qt.WidgetAttribute.WA_NoSystemBackground)
         captions = qt.QVBoxLayout(self.overlay)
         captions.setContentsMargins(12, 12, 12, 12)
         captions.addStretch(1)

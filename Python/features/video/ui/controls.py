@@ -115,6 +115,9 @@ class PlaybackTools:
             elif key == 'subtitle_file':
                 updates['subtitle_track'] = None
             self.settings = self.settings_store.save(asdict(replace(self.settings, **updates)))
+            if key == 'renderer':
+                self.reopen_renderer(value)
+                return
             self.apply_settings()
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
