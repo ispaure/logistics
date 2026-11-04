@@ -1,40 +1,63 @@
 # Blue Hole consumer maintenance
 
-Blue Hole is a separate consumable Blender add-on. Its existing vendored
-commonUtils copy, packaging, environment mapping and Perforce build design stay
-intact. Logistics hosts configuration and launch workflows; Blue Hole owns add-on
-operation policy. Shared APIs remain documented in commonUtils' root wiki.
+This guide covers Logistics' Blue Hole integration. Blue Hole's addon internals,
+operators, export policy and its own vendored dependencies belong to that project.
+For the full launcher architecture, see [Blender development](development.md);
+for controls and recovery, see [Blender usage](../user/user.md).
 
-## Ordered operation checks
+## Configuration and remote resolution
 
-`blenderUtils/filterUtils.py` keeps `check_tests` as the established entry point.
-Its keyword switches still select lazy checks in this order: saved scene, scene
-layout, selection, source-control enablement/connection, source content, Unity
-Assets and Godot root. It exits at the first failed gate and shares one source-path
-lookup across the two source-content checks. No filesystem mutation or server
-submission is introduced.
+`Python/features/blender/addons/bluehole.py` owns channel validation, branch
+resolution, commit cache, installed-copy fallback, environment preservation and
+Deluxe stamping. `DEFAULT` enables Blue Hole with main and Deluxe off. Preset
+intent stores the channel separately from the installed branch/commit snapshot.
 
-Private diagnostic functions in the same module receive the operation title,
-silent flag and relevant paths explicitly. They no longer obscure the gate flow
-as nine nested closures. Popup flags and diagnostic text retain existing behavior;
-in particular silent scene failures and silent missing-path failures have different
-logging contracts. Exceptions raised by the configured diagnostic logger propagate.
+`resolve_branch()` reads a bounded, paginated branch catalog from the public
+`ispaure/BlueHole` repository. It selects the highest exact Blender baseline at
+or below the managed Blender version for the requested main/beta/alpha channel.
+Legacy unqualified channel branches remain a fallback when no matching qualified
+baseline exists. No compatible branch is an explicit failure.
 
-The initial regression tests exposed an existing undefined variable in the
-outside-source diagnostic. That repair is separate from the readability change:
-the branch now reports its intended message instead of raising `NameError`.
-Windows source membership remains case-insensitive; Unix comparisons retain their
-previous case-sensitive lexical path policy.
+`update()` rechecks the resolved branch head on each enabled launch, validates the
+40-character commit and downloads by that commit. Cache entries live below
+`addons/bluehole/<resolved-branch>/<commit>/addon.zip` in the manager root.
+The renamed 4.5.1 family may reuse an old channel cache for the same commit.
+Archive normalization keeps the stable `legacy:BlueHole` identity, with bounded
+archive size/member count and regular library metadata/safety validation.
+Browsing settings and saving intent do not call the remote update path.
 
-## Validation scope
+## Apply and recovery
 
-Eight preflight contracts run without Blender using the actual implementation and
-substituted Blender/preference dependencies. An old/new comparison covers 1,078
-profiles: every flag combination, silent modes and platform-specific failures.
-Outcomes, dependency order, diagnostic bytes and popup flags match the corrected
-baseline. All 41 Blue Hole adapter tests pass. No Perforce server is contacted.
+The regular addon apply transaction in `addons/library.py` owns resource backup,
+verified package snapshots, preference preparation, rollback and publication.
+Blue Hole is outside numeric shared-library selection. The installed snapshot
+records the actual branch, commit and version independently of requested intent.
 
-Exact vendor membership and bytes are checked with the existing copy verifier.
-The image encoding update additionally runs its eight public contracts against
-the actual vendor copy. These host checks do not establish Blender 5.2.2 add-on
-registration, operator UI or export behavior; those need the matching runtime.
+Only an `UpdateUnavailable` check/download failure admits installed-copy fallback.
+It requires recorded ownership, a present entrypoint and declared compatibility;
+a versioned branch newer than the managed Blender release is refused. Invalid
+packages, no compatible branch and cancellation do not become offline success.
+Fallback retains the installed snapshot and emits a warning; Deluxe stamping
+waits for a successful online resolution.
+
+On update, `envFiles/default` remains publisher-owned. Other existing environments
+are preserved; disabling keeps them under preset `addon-data/bluehole` so a later
+re-enable can restore them. These files follow preset copy/delete and rollback.
+Deluxe writes preset preferences and keymaps only when its payload digest changes,
+keeping the first pre-Deluxe preferences backup. Turning Deluxe off does not undo
+previously stamped files.
+
+## Validation limits
+
+`Python/tests/blender/test_blender_bluehole.py` supplies mocked remote branch and
+commit responses for version/channel routing, commit cache reuse, unsafe and
+incompatible archives, environment preservation and Deluxe boundaries.
+`test_blender_library.py` covers transactional updates, disable/re-enable,
+rollback and installed-copy fallback; `test_blender_page.py` covers requested
+versus installed state and the offline warning.
+
+These contracts do not prove current remote branch availability, Blender addon
+registration, operator UI, theme/keymap correctness or export behavior. Blender
+5.2.2 addon acceptance remains incomplete. This audit used source/test review and
+static documentation checks only; historical Blender runs in the developer guide
+retain their original platform and date limits.
