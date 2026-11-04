@@ -1,4 +1,4 @@
-# Compress images and edit JPG comments
+# View and process images
 
 [Open the user guide](../../../../docs/features/images/user/user.md).
 
