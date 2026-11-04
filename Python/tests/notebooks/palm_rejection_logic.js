@@ -16,6 +16,7 @@ function checkPalmRejection(source) {
   vm.createContext(context);
   vm.runInContext(source, context);
   const run = command => vm.runInContext(command, context);
+  const grace = run('penReleaseGrace');
   const check = (value, message) => {if (!value) throw Error(message)};
   const touch = () => ({pointerType: 'touch', prevented: false, stopped: false,
     preventDefault() {this.prevented = true}, stopImmediatePropagation() {this.stopped = true}});
@@ -35,14 +36,14 @@ function checkPalmRejection(source) {
   check(run('penTouchBlocked()'), 'Stationary detected hover expired without exit');
   context.window.logisticsPenProximity(true, -100, -100, 400, 700);
   check(run('penTouchBlocked()'), 'Hover exit skipped the grace period');
-  now += 351;
+  now += grace + 1;
   check(!run('penTouchBlocked()'), 'Pen over toolbar left finger input blocked');
 
   run('notePenContact(true)');
   now += 10000;
   check(run('penTouchBlocked()'), 'A long pen contact lost palm rejection');
   run('notePenContact(false)');
-  now += 349;
+  now += grace - 1;
   check(run('penTouchBlocked()'), 'Pen-up grace period ended too early');
   now += 2;
   check(!run('penTouchBlocked()'), 'Finger input did not recover after grace period');
@@ -50,7 +51,7 @@ function checkPalmRejection(source) {
   listeners.canvas.pointerenter({pointerType: 'pen'});
   check(run('penTouchBlocked()'), 'Browser Pencil/pen hover was not observed');
   listeners.canvas.pointerleave({pointerType: 'pen'});
-  now += 351;
+  now += grace + 1;
   check(!run('penTouchBlocked()'), 'Browser hover exit remained latched');
   listeners.canvas.pointerenter({pointerType: 'mouse'});
   check(!run('penTouchBlocked()'), 'A trackpad/mouse incorrectly triggered palm rejection');
