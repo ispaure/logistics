@@ -9,19 +9,18 @@ from io import BytesIO
 from commonUtils.runtime.operations import check_cancelled
 
 from .ink import WIDTH, HEIGHT
-from .templates import MOVE_WIDTH, MOVE_HEIGHT, available, geometry, settings, template_name
+from .templates import MOVE_WIDTH, MOVE_HEIGHT, FORM_TEMPLATES, available, geometry, settings, template_name
 
 
 # Native v6 scene units are 226 per inch; PDF uses 72 points per inch.
 # Keep ink untouched and convert the background, including its page box.
 PDF_SCALE = 72 / 226
-FORMS = {'Logistics Restaurant review', 'Logistics Meeting notes', 'Logistics Daily planner'}
 
 
 def page_size(book, index):
     page = book.pages[index]
     paper = settings(book, page)
-    move = paper['format'] == 'move' and template_name(page.template) in FORMS
+    move = paper['format'] == 'move' and template_name(page.template) in FORM_TEMPLATES
     width, height = (MOVE_WIDTH, MOVE_HEIGHT) if move else (WIDTH, HEIGHT)
     ink = book.page(index)
     if ink.warning:

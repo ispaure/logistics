@@ -181,7 +181,7 @@ class Editor:
         self.redo.clear()
 
     def state(self):
-        from .templates import CATALOG, settings, background, view_bounds, template_name, available
+        from .templates import CATALOG, settings, background, view_bounds, template_name, available, TEMPLATE_NOTICE, description
         ink = self.notebook.page(self.index)
         page = self.notebook.pages[self.index]
         paper = settings(self.notebook, page)
@@ -193,7 +193,7 @@ class Editor:
                     strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),
-                    templates=CATALOG, template_settings=paper, template_editable=not pdf,
+                    templates=CATALOG, template_notice=TEMPLATE_NOTICE, template_description=description(page.template), template_settings=paper, template_editable=not pdf,
                     template_available=template_available,
                     move_paper=view_bounds([], True),
                     background=self.background() if pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,

@@ -25,10 +25,11 @@ function strokeExpandsPaper(stroke) {
 function templateControls() {
   const panel = $('templateControls');
   if (!panel || $('pageTemplate')) return;
-  panel.innerHTML = '<label>Page template <select id="pageTemplate" aria-label="Page template"></select></label>' +
+  panel.innerHTML = '<strong>Current page template</strong><p id="templateDescription" class="hint"></p><label>Page template <select id="pageTemplate" aria-label="Page template"></select></label>' +
     '<label>Template format <select id="templateFormat" aria-label="Template format"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
     '<label><input id="templateVisible" type="checkbox"> Show template</label>' +
     '<label>Paper view <select id="paperView" aria-label="Paper view"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
+    '<p id="templateCompatibility" class="hint"></p>' +
     '<p id="templateExportHint" class="hint" hidden>Save keeps editable template settings. Export Copy uses fixed PDF backgrounds for reMarkable; handwriting stays editable.</p>';
   const apply = () => {
     if (active !== null || busy) { render(); return }
@@ -73,6 +74,8 @@ function render() {
   templateControls();
   if ($('pageTemplate')) {
     const name = state.template_name || state.template || 'Blank';
+    $('templateCompatibility').textContent = state.template_notice || '';
+    $('templateDescription').textContent = state.template_description || '';
     const catalog = new Map(Object.entries(state.templates || {Blank: 'Blank'}));
     if (!catalog.has(name)) catalog.set(name, name + ' (preserved)');
     options('pageTemplate', [...catalog].map(([value, label]) => [label, value]));
