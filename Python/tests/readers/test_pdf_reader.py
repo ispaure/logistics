@@ -265,9 +265,9 @@ class PDFReaderTests(QtTestCase):
 
     def test_desktop_search_navigates_wraps_and_clears(self):
         # Measure asynchronous search/navigation, not pypdf's cold import under
-        # PySide's module-inspection hook (especially costly on emulated Fedora).
-        from pypdf import PdfReader
-        self.assertTrue(callable(PdfReader))
+        # PySide's module-inspection hook on a fresh Fedora runtime.
+        from importlib import import_module
+        import_module('pypdf')
         from features.pdf.ui.reader import PDFWindow
         window = PDFWindow('search.pdf', pdf_bytes())
         self.addCleanup(window.close)
