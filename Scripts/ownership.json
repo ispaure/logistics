@@ -165,7 +165,8 @@
       "tests": {
         "desktop": [
           "test_feature_registry.py",
-          "test_image*.py"
+          "test_image*.py",
+          "test_viewer_orientation.py"
         ]
       },
       "mobile_manifest": "Python/features/images/mobile_sources.json"
