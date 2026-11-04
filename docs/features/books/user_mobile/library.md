@@ -92,7 +92,9 @@ other page formats are rejected rather than silently skipping pages.
 EPUB chapters and rendered HTML are limited to 2 MiB. Small PNG/JPEG/WebP illustrations
 (up to 256 KiB each, 1 MiB total) are embedded; unsupported/large illustrations
 show an omission label. Raw scripts, forms, embedded objects, source styles and
-external resources are removed. Chapter links are inert; use the chapter selector.
+external resources are removed. On iOS and Android, safe archive-local chapter
+and section links work inside the rich reader; external links remain blocked.
+Other backends use the chapter selector in the bounded text fallback.
 DRM, standalone encrypted EPUBs, CBR/RAR and fixed-layout SVG books are not supported.
 
 Imports hash bytes during their streamed copy. The checksum is verified on
@@ -107,18 +109,20 @@ records rather than overwriting another change.
 Imported EPUBs now provide nested contents/internal links, current-chapter search,
 page-turn navigation, fullscreen and passage-based resume/bookmarks. Android and iOS provider
 EPUBs share rich rendering, nested contents, internal links, highlighted search and
-appearance controls through a private browser view. Their positions and bookmarks
-remain session-only; other backends retain bounded native text passages. See the [Books guide](reading.md#native-mobile-reading)
-for pagination and persistence differences.
+appearance controls through a private browser view. Provider reading state uses
+the credential-bound policy described in the [reading guide](reading.md#native-mobile-reading);
+other backends retain bounded native text passages.
 
 Comic readers offer single/automatic/two-page layouts, manga-aware spreads and
-spread-aware turns. Imported comics also have first/last and neighboring-comic
-commands; folder-backed provider comics can open neighboring comics from their
-reader menu. See the [Comics guide](../../comics/user_mobile/reading.md#native-mobile-library).
+spread-aware turns. Use **Comic pages…** or the page slider for direct and
+first/last page selection. Neighboring-comic buttons are available when the reader
+has a sibling list. See the [Comics guide](../../comics/user_mobile/reading.md#native-mobile-library).
 
-The Books & Comics catalogue now includes imported copies. Reader menus edit
-metadata on ordinary imported EPUBs/comics; selecting comic rows opens explicit-field
-batch editing. These writes change the imported copy, preserve page/resources and
-leave the external source untouched. Existing provider metadata saves keep their
+Imported copies remain available through document sessions rather than a
+separate catalogue list. Reader menus edit metadata on ordinary imported
+EPUBs/comics. These writes change the imported copy, preserve pages/resources and
+leave the external source untouched. Folder comic batches start through
+**Files → Actions → Edit comics in this folder…**; the library has no imported-row
+selection interface. Existing provider metadata saves keep their
 own encrypted-publication policy. A recovery journal completes an imported
 archive/checksum-record publication interrupted after the archive was saved.
