@@ -46,6 +46,33 @@ class NotebookDocument:
         self.dirty = False
         self.changed(self)
 
+    def discard(self):
+        """Retire an explicit discard without leaving a resumable dirty draft."""
+        if not self.dirty or self.deletion_started:
+            return
+        if self.recovery is None:
+            self.dirty = False
+            return
+        if self.resource is None:
+            raise ValueError('The saved notebook is unavailable. Restore its source or use Save As before discarding.')
+        revision = self.resource.revision
+        try:
+            saved = Notebook.read(self.resource.read())
+            # Use this editor's observed recovery revision: never discard changes
+            # checkpointed by another window after this editor last wrote.
+            self.recovery.adopt(self.key, saved, self.book)
+            self.recovery.save(self.key, saved)
+            # If source-binding publication fails, the still-open draft must
+            # remain able to checkpoint again against the new recovery revision.
+            self.recovery.adopt(self.key, self.book, saved)
+            self.dirty = False
+            self.changed(self)
+        except Exception:
+            self.resource.revision = revision
+            self.dirty = True
+            raise
+        self.book = saved
+
     def delete(self):
         if not self.writable and not self.deletion_started:
             raise ValueError('This notebook is read-only.')
