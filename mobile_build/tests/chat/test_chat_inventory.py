@@ -1,6 +1,5 @@
 """Conversation lists cache summaries only and preserve cold-start selection."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -12,6 +11,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from features.lm.mobile.storage import ChatStore
+from mobile_build.tests.support.chat import create_chat_app
 
 
 class ChatInventoryTests(TestCase):
@@ -24,6 +24,18 @@ class ChatInventoryTests(TestCase):
         self.data['title'] = 'Existing conversation'
         self.data['draft'] = 'Content not needed by inventory'
         self.store.save(self.data)
+
+    def inventory_app(self):
+        # Seed the managed app's own root before its first visit. If draining
+        # fails, that fixture can retain its files independently of this case's
+        # synchronous storage fixture.
+        app = create_chat_app(self)
+        source = self.store.path(self.data['id'])
+        if source.exists():
+            destination = app.private_root / 'LM' / source.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read_bytes())
+        return app
 
     def test_summaries_exclude_content_and_skip_unchanged_record_reads(self):
         with patch.object(self.store, '_bytes', side_effect=AssertionError('No unchanged reads')):
@@ -43,12 +55,7 @@ class ChatInventoryTests(TestCase):
         self.assertEqual(self.store.cached_summaries()[0], [])
 
     def test_async_first_visit_selects_existing_conversation_without_creating_another(self):
-        from mobile.app import LogisticsMobile
-        LogisticsMobile.storage_root = self.root
-        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(close_loop, app.loop)
-        self.addCleanup(app.main_window.close)
+        app = self.inventory_app()
         async def exercise():
             app.show_chat()
             await app.chat_controller()._chat_inventory_task
@@ -60,12 +67,7 @@ class ChatInventoryTests(TestCase):
         app.loop.run_until_complete(exercise())
 
     def test_typing_before_inventory_finishes_preserves_the_new_draft(self):
-        from mobile.app import LogisticsMobile
-        LogisticsMobile.storage_root = self.root
-        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(close_loop, app.loop)
-        self.addCleanup(app.main_window.close)
+        app = self.inventory_app()
         async def exercise():
             app.show_chat()
             self.assertIsNone(app.chat_current)
@@ -82,14 +84,9 @@ class ChatInventoryTests(TestCase):
         app.loop.run_until_complete(exercise())
 
     def _verify_connect_during_discovery(self, existing):
-        from mobile.app import LogisticsMobile
         if not existing:
             self.store.path(self.data['id']).unlink()
-        LogisticsMobile.storage_root = self.root
-        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(close_loop, app.loop)
-        self.addCleanup(app.main_window.close)
+        app = self.inventory_app()
 
         async def exercise():
             app.show_chat()

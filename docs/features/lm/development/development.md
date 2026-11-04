@@ -176,15 +176,22 @@ their separate wrapped recovery message.
 Validation: `Python/tests/chat/test_lm_session.py` exercises replacement lease cleanup,
 recovery, publication rollback and retained partial output without chat widgets.
 `Python/tests/chat/test_lm.py` exercises schema/context/persistence/SSE;
-`test_lm_ui.py` uses a local HTTP fixture and real Qt event loop for streaming,
-timeouts, stop/close, failures, profiles and recovery. Real LM Studio and native
+`test_lm_ui.py` separates real HTTP/Qt integration (`LMUITests`) from UI/storage
+checks that reject HTTP starts (`LMWidgetTests`). It covers streaming, timeouts,
+stop/close, failures, profiles and recovery. Real LM Studio and native
 Windows/Linux behavior require separate smoke checks.
 
 Run the desktop integration checks with `python3 dev.py test desktop test_lm_ui.py`.
 They need localhost socket access but no model server or API key. Each case owns
-its HTTP server and shuts it down after retiring the page's requests. A short
-server polling interval avoids repeated teardown delays while preserving real
+its HTTP server when networking is needed and shuts it down after retiring the
+page's requests. A short server polling interval avoids repeated teardown delays while preserving real
 networking, cancellation and recovery checks.
+
+`python3 dev.py test-owner lm` includes `test_mobile_chat.py` for portable
+URL, transport, cancellation and storage contracts, plus the mobile inventory,
+transcript DOM, deferred-save, UI and on-device provider tests. The browser check additionally
+needs Node, Playwright and its Chromium installation; dummy-backend host passes
+do not establish native device behavior.
 
 ## Code mode and optional direct edits
 
