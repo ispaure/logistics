@@ -356,11 +356,19 @@ class LogisticsProject:
         phases = []
         for name, workflow in selected:
             receipt = workspace / 'remote' / (uuid4().hex + '.json')
-            command = (str(self.interpreter), '-m', 'logistics_build.build_project', 'github', '--operation-receipt', str(receipt), '--platform', target,
+            command = (str(self.interpreter), '-m', 'logistics_build.build_project', 'github-dispatch', '--operation-receipt', str(receipt), '--platform', target,
                        '--workflow', workflow, '--ref', ref, '--commit', source['logistics_commit'], '--root', str(self.root))
             if source.get('run_overrides', {}).get('testing.reuse_verified_results') == 'off':
                 command += ('--no-test-reuse',)
-            phases.append(Phase('github-' + name, command, str(self.root), timeout=14400, artifacts=(str(receipt),),effect='dispatch',kind='validation-dispatch'))
+            dispatch_id = 'github-' + name
+            phases.append(Phase(dispatch_id, command, str(self.root), timeout=600,
+                                artifacts=(str(receipt),), effect='dispatch', kind='validation-dispatch'))
+            observe = (*command[:3], 'github-observe', *command[4:])
+            observation = receipt.with_name(receipt.stem + '-observation.json')
+            observe += ('--observation-receipt', str(observation))
+            phases.append(Phase(dispatch_id + '-result', observe, str(self.root), timeout=14400,
+                                dependencies=(dispatch_id,), artifacts=(str(observation),),
+                                effect='test', kind='test'))
         return Plan('Logistics', operation, source, tuple(phases),
                     str(workspace), backend='GitHub', effect='dispatch')
 
@@ -690,12 +698,13 @@ def declare_resources(plan, target):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('verify', 'github', 'release'))
+    parser.add_argument('command', choices=('verify', 'github', 'github-dispatch', 'github-observe', 'release'))
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--platform', choices=LogisticsProject.platforms)
     parser.add_argument('--ref')
     parser.add_argument('--commit')
     parser.add_argument('--operation-receipt', type=Path)
+    parser.add_argument('--observation-receipt', type=Path)
     parser.add_argument('--workflow')
     parser.add_argument('--tag')
     parser.add_argument('--test-evidence-request', type=Path)
@@ -727,6 +736,8 @@ def main():
     cancelled = Event()
     for name in (signal.SIGINT, signal.SIGTERM):
         signal.signal(name, lambda *_: cancelled.set())
+    if args.command in ('github-dispatch', 'github-observe'):
+        return hosted_validation(client, values, args, cancelled)
     if args.command == 'github':
         inputs = {'target': args.platform}
         if args.no_test_reuse and args.workflow == 'archive-platform-checks.yml':
@@ -758,6 +769,66 @@ def main():
             print('Local evidence export unavailable or rejected; hosted checks independently verify any existing proof.', flush=True)
     return release_source(args.root, client, args.tag, args.commit, cancelled,
                           reuse_test_results=not args.no_test_reuse, published_commit=args.published_commit)
+
+
+def hosted_validation(client, values, args, cancelled):
+    """Separate irreversible acceptance from repeatable observation of that run."""
+    from build_manager.profiles import save_json
+    if args.operation_receipt is None or not args.ref or not args.workflow or not args.platform:
+        raise ValueError('Hosted validation requires its reviewed receipt, ref, workflow and platform.')
+    inputs = {'target': args.platform}
+    if args.no_test_reuse and args.workflow == 'archive-platform-checks.yml':
+        inputs['reuse_test_results'] = 'off'
+    expected = dict(repository=values['github.repository'], expected_commit=args.commit,
+                    workflow=args.workflow, ref=args.ref, platform=args.platform, inputs=inputs)
+    if not re.fullmatch('[0-9a-f]{40}', args.commit or ''):
+        raise ValueError('Hosted validation requires an exact reviewed source commit.')
+    receipt = args.operation_receipt
+    if receipt.is_symlink():
+        raise ValueError('Hosted acceptance receipt must not be linked.')
+    if args.command == 'github-dispatch':
+        # A pre-existing receipt is never permission to repeat a POST. Unknown
+        # acceptance must be reconciled by its owning operation journal.
+        if receipt.exists():
+            raise ValueError('Hosted acceptance receipt already exists; observe or review the original operation.')
+        operation = os.environ.get('BUILD_MANAGER_OPERATION_ID', '')
+        if not operation:
+            raise ValueError('Dispatch requires the owning manager operation identity.')
+        run = client.dispatch(args.workflow, args.ref, args.commit, inputs, confirmed=True)
+        if type(run) is not int or run <= 0:
+            raise ValueError('Dispatch acceptance has no run identity; review it without dispatching again.')
+        accepted = dict(schema=1, provider='github', run_id=run, status='queued',
+                        operation_id=operation, **expected)
+        save_json(receipt, accepted)
+        print(json.dumps(accepted), flush=True)
+        return 0
+    if not receipt.is_file() or receipt.stat().st_size > 1024 * 1024:
+        raise ValueError('Original hosted acceptance receipt is missing or invalid.')
+    accepted = json.loads(receipt.read_text())
+    if (not isinstance(accepted, dict) or accepted.get('schema') != 1
+            or accepted.get('provider') != 'github' or accepted.get('status') != 'queued'
+            or type(accepted.get('run_id')) is not int or accepted['run_id'] <= 0
+            or not isinstance(accepted.get('operation_id'), str) or not accepted['operation_id']
+            or any(accepted.get(key) != value for key, value in expected.items())):
+        raise ValueError('Hosted acceptance receipt differs from the reviewed operation.')
+    if (args.observation_receipt is None or args.observation_receipt.is_symlink()
+            or args.observation_receipt.resolve() == receipt.resolve()):
+        raise ValueError('Hosted observation requires a separate result receipt.')
+    run_id = accepted['run_id']
+    remote = client.request('GET', client.base + f'/actions/runs/{run_id}')
+    if (type(remote.get('id')) is not int or remote['id'] != run_id or remote.get('head_sha') != args.commit
+            or remote.get('event') != 'workflow_dispatch'
+            or remote.get('path', '').split('@')[0] != '.github/workflows/' + args.workflow
+            or remote.get('repository', {}).get('full_name') != values['github.repository']
+            or remote.get('head_branch') != re.sub(r'^refs/(heads|tags)/', '', args.ref)):
+        raise ValueError('Recorded hosted run differs from the reviewed source, workflow, repository or ref.')
+    result = client.wait(run_id, args.commit, timeout=13800, cancelled=cancelled,
+                         progress=lambda value: print(json.dumps(value), flush=True))
+    if result.get('status') != 'completed' or result.get('conclusion') != 'success':
+        raise RuntimeError('Recorded hosted validation did not pass.')
+    save_json(args.observation_receipt, dict(schema=1, provider='github', run_id=run_id,
+        operation_id=accepted['operation_id'], status='passed', **expected))
+    return 0
 
 
 def github_client(values, root):
