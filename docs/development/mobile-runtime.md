@@ -804,9 +804,10 @@ the saved connection identity before exposing content. Retained session-only ZIP
 still require their password. Background connection failure leaves Home usable.
 On Android, a native snapshot of the final loading frame covers the attached
 workspace while navigation and content receive their real viewport measurements.
-A pre-draw listener waits for positive, unchanged content bounds and no pending
-layout, with a workspace reflow between measured passes, before removing the
-cover. It blocks taps and hides unfinished descendants from accessibility;
+A pre-draw listener waits for positive, unchanged native root and content bounds,
+with a workspace reflow between measured passes, before removing the cover.
+Toga can keep requesting layout while applying rounded native measurements, so
+the layout-request flag does not block a stable measured workspace. It blocks taps and hides unfinished descendants from accessibility;
 readiness callbacks wait for the reveal. Cancellation and failures remove the
 snapshot and its listener. This handoff uses layout readiness rather than a
 fixed startup delay.
