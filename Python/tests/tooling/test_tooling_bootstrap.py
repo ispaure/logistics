@@ -221,7 +221,7 @@ class ToolingBootstrapTests(TestCase):
         repo = Path(tooling.__file__).resolve().parents[1]
         package = self.root / 'logistics_build'
         package.mkdir()
-        for name in ('manager_bridge.py', 'tooling_bootstrap.py'):
+        for name in ('manager_bridge.py', 'tooling_bootstrap.py', 'native_tooling.py', 'native_tooling.json'):
             shutil.copy2(repo / 'logistics_build' / name, package / name)
         for action, values in [('tooling_status', {}), ('tooling_update', {'confirmed': False})]:
             with self.subTest(action=action):
@@ -272,9 +272,11 @@ class ToolingBootstrapTests(TestCase):
             return ''
         with patch.object(tooling, 'run', side_effect=installer) as run, \
                 patch.object(tooling, 'verify_checkout') as verify, \
-                patch.object(tooling, 'status', return_value=dict(ready=True, status='ready')):
+                patch.object(tooling, 'status', return_value=dict(ready=True, status='ready')), \
+                patch.object(tooling, 'repair_native') as native:
             tooling.update(self.root, confirmed=True)
         calls = [call.args[0] for call in run.call_args_list if '-c' not in call.args[0]]
+        native.assert_called_once_with(self.root)
         self.assertEqual(len(calls), 2)
         self.assertEqual(calls[0], [tooling.environments(self.root)[0][2],
             self.root / 'logistics_build/install_build_manager.py', '--from-pin', checkout])
@@ -388,7 +390,7 @@ class ToolingBootstrapTests(TestCase):
         repo = Path(tooling.__file__).resolve().parents[1]
         package = self.root / 'logistics_build'
         package.mkdir()
-        for name in ('manager_bridge.py', 'tooling_bootstrap.py'):
+        for name in ('manager_bridge.py', 'tooling_bootstrap.py', 'native_tooling.py', 'native_tooling.json'):
             shutil.copy2(repo / 'logistics_build' / name, package / name)
         (package / 'build_project.py').write_text(
             'class LogisticsProject:\n'
@@ -554,3 +556,16 @@ class ToolingBootstrapTests(TestCase):
                           '+wrong Python/commonUtils' if args == ('submodule', 'status', '--recursive') else git(checkout, *args)):
             with self.assertRaises(ValueError):
                 tooling.verify_checkout(self.root, self.declared)
+
+    def test_cold_sdk_status_satisfies_public_manager_validator(self):
+        from build_manager.project_tooling import validate_status
+        self.target_environments()
+        def absent_sdk(root,name,folder,interpreter,declared):
+            with patch.object(tooling,'run',return_value=json.dumps(dict(prefix=str(folder),source_checkout=None))):
+                return tooling.inspect_environment(root,name,folder,interpreter,declared)
+        rows=[absent_sdk(self.root,*target,self.declared) for target in tooling.environments(self.root)]
+        with patch.object(tooling,'inspect_environment',side_effect=rows):
+            result=tooling.status(self.root)
+        self.assertEqual(validate_status(result)['status'],'needs_update')
+        self.assertFalse(result['ready'])
+        self.assertTrue(all(row['installed_revision']=='' and row['source_checkout']=='' for row in result['environments']))
