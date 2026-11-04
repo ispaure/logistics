@@ -72,6 +72,7 @@ def main():
     app = qt.QApplication.instance() or qt.QApplication([])
     reports = []
     with scratch() as workspace:
+        (args.output / 'workspace.json').write_text(json.dumps(dict(path=str(workspace), owned=True)))
         profile = QWebEngineProfile(app)
         profile.setCachePath(str(workspace / 'cache'))
         profile.setPersistentStoragePath(str(workspace / 'storage'))
