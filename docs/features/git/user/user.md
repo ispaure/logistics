@@ -1,8 +1,9 @@
 # Git
 
-Use Git to review and commit local work, inspect history, and exchange changes
-with remote repositories. Open **Git** from the navigation rail; enable it in
-**Settings → Features** if it is unavailable.
+Use Git on desktop to review and commit local work, inspect history, and exchange
+changes with remote repositories. Android and iOS do not provide this workspace;
+see [mobile availability](../user_mobile/user_mobile.md). Open **Git** from the
+navigation rail; enable it in **Settings → Features** if it is unavailable.
 
 Code previews and comparison/merge panes share a saved point size with Text
 Editor and IDE, defaulting to 9 points. Ctrl+wheel zoom in a code editor updates
@@ -347,3 +348,20 @@ the index. Click a marker to review/revert buffer lines or preview a saved Git
 hunk for staging. Staging uses the same regular-file, attribute and stale-patch
 checks as this page. Its patch preview can group nearby markers into one Git hunk;
 only the displayed hunk is staged. These editor actions do not auto-register repos.
+
+## Troubleshooting
+
+- **Git is unavailable:** enable the feature in desktop Settings, then check that
+  the selected executable is Git 2.40 or newer. A bare repository has no working
+  files to open in this workspace.
+- **Authentication fails:** inspect Operation log and configure the credential
+  helper or SSH agent outside the workspace. Git jobs cannot answer an unseen
+  terminal prompt. Use the Accounts page for supported helper setup.
+- **A hunk action is unavailable:** refresh the preview and check that it is a
+  complete, unfiltered patch for an eligible tracked text file. Use whole-file
+  staging for excluded change types.
+- **Files or upstream counts look stale:** Refresh reloads local state; Fetch
+  updates the remote references used for incoming/outgoing counts.
+- **Another instance changed Git preferences:** reopen the workspace/settings
+  before editing again. The save refuses stale JSON rather than replacing those
+  external changes; INI and JSON changes are separate writes.
