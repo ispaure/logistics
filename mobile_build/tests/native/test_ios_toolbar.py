@@ -21,6 +21,8 @@ class Button:
 
 class ToolbarTests(TestCase):
     def setUp(self):
+        color = patch('mobile.appearance.apple_color', return_value='accent')
+        color.start(); self.addCleanup(color.stop)
         self.items, self.groups = [], []
         def item_factory(*args, **kwargs):
             item = Mock(customView=None, style=0)
@@ -49,6 +51,9 @@ class ToolbarTests(TestCase):
         traits.respondsToSelector.return_value = True
         self.controller = NS(traitCollection=traits, navigationItem=Mock())
         self.owner = NS()
+
+    def test_prominent_confirmation_uses_chosen_accent(self):
+        self.assertEqual(bar_item(Button(None, 'Move here'), prominent=True).tintColor, 'accent')
 
     def test_supplemental_budget_tracks_system_region_without_window_resize(self):
         rect = NS(origin=NS(x=382, y=0), size=NS(width=84, height=678))
