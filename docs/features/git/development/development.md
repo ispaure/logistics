@@ -2,7 +2,7 @@
 
 For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
 
-An optional Logistics feature powered by the installed Git executable (2.40+).
+An optional desktop Logistics feature powered by the installed Git executable (2.40+).
 See the [user guide](../user/user.md) for the interface and authentication setup.
 
 ## Ownership
@@ -104,9 +104,9 @@ does not expose reset/clean.
 
 The declaration contributes `git.workspace` with the `git` navigation icon.
 The shell places the page using its contribution and page navigation properties;
-feature code does not insert controls into the rail. Workspace actions independently
-hosts rclone jobs. Keep exact ordering in the shell rather than treating a proposed
-future destination as part of this feature's contract.
+feature code does not insert controls into the rail. Keep exact ordering in the
+shell rather than treating a proposed future destination as part of this
+feature's contract.
 
 ## Workspace layout
 
@@ -139,6 +139,14 @@ to stage, unstage or discard one complete hunk. Special file changes use whole-f
 actions. The commit composer can push a successful commit to `origin` on the
 current branch; a failed push preserves that commit. Toolbar badges show changed
 files and upstream ahead/behind counts from the latest fetched state.
+
+## Mobile boundary
+
+`services/mobile_features.py` has no Git entry, and `mobile_build/tools.py` does
+not include `features/git` among its mobile source owners. Registration contributes
+the desktop Qt page and preferences; it does not define a portable mobile adapter.
+The backend's Qt-independent design alone does not establish mobile support.
+See [mobile availability](../user_mobile/user_mobile.md).
 
 ## Validation
 
@@ -315,3 +323,24 @@ INI and JSON writes remain separate operations; this is optimistic conflict
 detection, not a multi-file transaction or cross-process writer lock. The error
 asks the user to reopen the workspace rather than overwrite another instance.
 `test_git_preferences.py` covers competing instances and retained-view fanout.
+
+## Documentation audit scope
+
+The November 4, 2026 documentation audit compared the registration, mobile
+catalogue/source owners, runner, preferences, command requests, repository backend
+and UI owners with the regression sources. Test ownership includes:
+
+- `test_git_backend.py` and `test_git_merge.py`: repository mutations, path handling,
+  snapshots, backup verification and text merge application.
+- `test_git_commands.py`: captured repository/branch context and stale requests.
+- `test_git_preferences.py`: persistence conflicts, credential helper handling,
+  custom actions, preference fanout and discard backups.
+- `test_git_ui_*.py`, `test_git_repository_tabs.py`, `test_git_watchers.py` and
+  `test_git_menu_retirement.py`: presentation, editor routing, retained panes,
+  watching and shutdown/menu lifetime.
+
+These are test responsibilities, not a new passing execution report. During the
+release quiet hold this audit used source review and Markdown/link checks only;
+no Qt, build, simulator, emulator or device validation was launched. Desktop native
+menu/docking acceptance and real remote authentication still require appropriate
+runtime validation after relevant changes.

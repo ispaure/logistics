@@ -1,8 +1,7 @@
 # Git documentation
 
-Choose a guide for the task you want to complete.
+Review changes, manage commits and exchange work with remotes in the desktop Git workspace.
 
-## Further reading
-
-- [Git workspace](development/development.md)
-- [Git](user/user.md)
+- [Desktop user guide](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Developer guide](development/development.md)
