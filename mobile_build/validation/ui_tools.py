@@ -194,6 +194,8 @@ def record_ios_stall(path, row):
         if not process.stdout.strip().endswith('/Logistics Mobile.app/Logistics Mobile'):
             save('unexpected-executable')
             return
+        from mobile_build.validation.screen_time_rpc import capture
+        capture(path, record['executable'], pid)
         output = path.with_name('ios-webview-stall-' + str(pid) + '.sample.txt')
         if output.exists():
             return
