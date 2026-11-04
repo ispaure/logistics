@@ -139,6 +139,27 @@ class SetupCommandTests(unittest.TestCase):
 
 
 class DoctorCommandTests(unittest.TestCase):
+    def test_mobile_doctor_names_missing_build_tools_and_the_setup_remedy(self):
+        import io
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            python = root / 'python'; python.touch()
+            output = io.StringIO()
+            results = [SimpleNamespace(returncode=0, stdout='{"python":"3.12.2","missing":[]}'),
+                       SimpleNamespace(returncode=0, stdout='{"python":"3.12.2","missing":["briefcase","pip"]}')]
+            with patch.object(development, 'find_uv', return_value='uv'), \
+                    patch.object(development.subprocess, 'run', side_effect=results) as run, redirect_stdout(output):
+                self.assertEqual(development.doctor(root, lambda _: python), 1)
+            mobile_probe = run.call_args_list[1].args[0][-1]
+            self.assertIn('briefcase', mobile_probe)
+            self.assertIn('pip', mobile_probe)
+            mobile_line = next(line for line in output.getvalue().splitlines() if line.startswith('MISSING mobile:'))
+            self.assertIn('briefcase', mobile_line)
+            self.assertIn('pip', mobile_line)
+            self.assertIn('run python3 dev.py setup mobile', mobile_line)
+
     def test_broken_interpreters_report_failure_without_aborting_other_checks(self):
         import io
         import subprocess

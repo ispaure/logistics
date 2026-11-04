@@ -62,8 +62,13 @@ For repeatable setup, run `python3 dev.py setup desktop` or
 `python3 dev.py setup mobile` (use `py` on Windows). Both accept `--dry-run`.
 The desktop setup uses the existing uv lock and root `.venv`. Mobile setup creates
 `mobile_build/.venv` if absent and installs the hash-locked host test requirements
-additively, preserving any native build tools already present. It needs no native
-SDK. Setup needs uv and network access for uncached packages.
+additively, preserving any native build tools already present. This includes
+Briefcase (native build orchestration) and pip (the interpreter runtime installer),
+so a fresh seedless environment can invoke both without a later manual repair.
+These are host tools and are never copied into the application payload. Setup
+needs no native SDK; it needs uv and network access for uncached packages.
+`doctor` reports missing mobile host tools with the mobile setup command. Project
+tooling/manager readiness is separate from mobile host-tool, SDK and signing readiness.
 
 The equivalent desktop command installs the pinned environment and developer tools with uv. These commands
 explicitly target the root `.venv`, so activation is unnecessary. The desktop
