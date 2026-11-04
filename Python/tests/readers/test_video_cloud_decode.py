@@ -89,16 +89,17 @@ class CloudVideoDecodeTests(QtTestCase):
                     self.assertTrue(frames, 'No cloud video frames')
                     self.assertGreater(stats.decoded_audio, 0, 'No cloud audio samples')
                     checkpoint('decoded')
-                    player.pause()
                     frames.clear()
                     player.setPosition(1000)
                     self.assertTrue(player.native.is_seekable())
-                    # A setter updates Qt's logical position before the
-                    # demuxer finishes its HTTP seek. Verify the decoded
-                    # result before retiring this player and its provider.
+                    # The setter updates logical position before the demuxer
+                    # finishes its HTTP seek. Keep decoding until a new picture
+                    # arrives; AVI demuxers need playback to deliver that frame.
                     self.wait_until(lambda: (frames and frames[-1] >= 900000) or errors or transport_errors,
                         timeout=10, message=lambda: repr(dict(remote=remote, file=key, phase='seek',
                             frames=list(frames), errors=errors, transport=transport_errors)))
                     self.assertFalse(errors, errors)
                     self.assertFalse(transport_errors, transport_errors)
+                    player.pause()
+                    self.assertEqual(player.playbackState(), player.PlaybackState.PausedState)
                     checkpoint('seek decoded')
