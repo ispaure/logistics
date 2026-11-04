@@ -949,6 +949,9 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertEqual([row['path'] for row in window.search_rows], ['Nested/turtle red.md', 'Body.md'])
             self.assertNotIn('Nested', window.loaded)
             window.search_mode.setCurrentIndex(1)
+            self.assertEqual(window.search.text(), '')
+            window.search.setText('turtle red')
+            window.filter()
             self.wait_until(lambda: not window.aux.busy)
             self.assertEqual([row['path'] for row in window.search_rows], ['Nested/turtle red.md'])
             window.search.clear()
@@ -1507,3 +1510,77 @@ class NotesLibraryDesktopTests(QtTestCase):
                 direct = b'![[photo #1.png|500]]\n\n![Caption.jpg]\\(photo%20%231.png)\n\n![Reference][pic]\n\n[pic]: <photo #1.png>\n\n```\n![[absent.png]]\n```'
                 _, resources = prepare_markdown(LocalFiles(root), path, data=direct)
                 self.assertEqual(set(resources), {sibling.resolve()})
+
+    def test_search_scopes_retain_independent_controls_results_and_pagination(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Plan.md').write_text('Filename result')
+            (root / 'Body.md').write_text('Unique phrase in the body')
+            window = self.open_library(root)
+            window.search.setText('Unique phrase')
+            window.filter()
+            self.wait_until(lambda: not window.aux.busy)
+            documents_input, documents_tree = window.search, window.search_results
+            documents_item = documents_tree.topLevelItem(0)
+            documents_tree.setCurrentItem(documents_item)
+            window.search_shown = 150
+            window.search_mode.setCurrentIndex(1)
+            self.assertIsNot(window.search, documents_input)
+            self.assertIsNot(window.search_results, documents_tree)
+            self.assertEqual(window.search.text(), '')
+            names_input, names_tree = window.search, window.search_results
+            names_input.setText('Plan')
+            window.filter()
+            self.wait_until(lambda: not window.aux.busy)
+            window.search_shown = 100
+            names_item = names_tree.topLevelItem(0)
+            names_tree.setCurrentItem(names_item)
+            with patch.object(window, 'request_aux', side_effect=AssertionError('Completed scope rescanned')):
+                window.search_mode.setCurrentIndex(0)
+                self.assertIs(window.search, documents_input)
+                self.assertEqual(window.search.text(), 'Unique phrase')
+                self.assertIs(window.search_results.currentItem(), documents_item)
+                self.assertEqual(window.search_shown, 150)
+                window.search_mode.setCurrentIndex(1)
+                self.assertIs(window.search, names_input)
+                self.assertEqual(window.search.text(), 'Plan')
+                self.assertIs(window.search_results.currentItem(), names_item)
+                self.assertEqual(window.search_shown, 100)
+                window.filter_search_input(documents_input)
+            window.retire()
+            self.assertEqual(documents_input.text(), '')
+            self.assertEqual(names_input.text(), '')
+            self.assertEqual(documents_tree.topLevelItemCount(), 0)
+            self.assertEqual(names_tree.topLevelItemCount(), 0)
+            window.close()
+
+    def test_late_document_scope_cannot_overwrite_filename_results(self):
+        from threading import Event
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Plan.md').write_text('Filename result')
+            (root / 'Body.md').write_text('Unique phrase')
+            window = self.open_library(root)
+            started, release = Event(), Event()
+            original = window.library.read_text
+            def slow(*args, **kwargs):
+                started.set()
+                release.wait(5)
+                return original(*args, **kwargs)
+            try:
+                with patch.object(window.library, 'read_text', side_effect=slow):
+                    window.search.setText('Unique phrase')
+                    window.filter()
+                    self.wait_until(started.is_set)
+                    documents_input = window.search
+                    window.search_mode.setCurrentIndex(1)
+                    window.search.setText('Plan')
+                    window.filter()
+                    release.set()
+                    self.wait_until(lambda: not window.aux.busy and window.aux_pending is None)
+                    self.assertEqual(window.search.text(), 'Plan')
+                    self.assertEqual(documents_input.text(), 'Unique phrase')
+                    self.assertEqual([row['path'] for row in window.search_rows], ['Plan.md'])
+            finally:
+                release.set()
+                window.close()

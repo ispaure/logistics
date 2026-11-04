@@ -39,9 +39,23 @@ class LibraryPanels:
         self._row_panels = {
             'Files': dict(rows=self.rows, scroll=self.rows_scroll, _row_cache={}, shown=50,
                           _rows_message=None, _more_rows=None),
-            'Search': dict(rows=search_rows, scroll=search_scroll, _row_cache={}, shown=50,
+            'Search in File Names': dict(rows=search_rows, scroll=search_scroll, _row_cache={}, shown=50,
                            _rows_message=None, _more_rows=None),
         }
+        self._search_scope = 'Search in File Names'
+        document_rows = toga.Box(style=Pack(direction=COLUMN))
+        self._row_panels['Search within Documents'] = dict(rows=document_rows,
+            scroll=toga.ScrollContainer(content=document_rows, horizontal=False, style=Pack(flex=1)),
+            _row_cache={}, shown=50, _rows_message=None, _more_rows=None)
+        self.search_query = None
+        self._search_interfaces = {
+            'Search in File Names': dict(control=self.search, search_rows=[], search_status='',
+                search_paused=False, search_query=None),
+            'Search within Documents': dict(control=toga.TextInput(placeholder='Search in documents',
+                on_change=self.search_changed, style=Pack(height=48)), search_rows=[], search_status='',
+                search_paused=False, search_query=None),
+        }
+        self.search.placeholder = 'Search file names'
         self.search_scope = toga.Box(style=Pack(direction=ROW))
         self.search_scope_buttons = {}
         for label, value in (('In documents', 'Search within Documents'), ('File names', 'Search in File Names')):
@@ -79,7 +93,50 @@ class LibraryPanels:
         self.tree.add(tabs, self.panel_actions, self.panel_body)
         self.search_mode.items = ['Search within Documents', 'Search in File Names']
         self.search_mode.value = 'Search in File Names'
+        self.search_mode.on_change = self.search_scope_changed
         self.sync_search_scope()
+
+    def remember_search_interface(self):
+        state = self._search_interfaces[self._search_scope]
+        for field in ('search_rows', 'search_status', 'search_paused', 'search_query'):
+            state[field] = getattr(self, field)
+
+    def search_scope_changed(self, widget=None, **kwargs):
+        if not self.valid():
+            return
+        scope = self.search_mode.value
+        if scope == self._search_scope:
+            return
+        self.search_generation += 1
+        if self.search_task is not None:
+            if not self.search_task.done():
+                self.search_paused = True
+                self.search_task.cancel()
+            self.search_task = None
+        self.remember_search_interface()
+        self._search_scope = scope
+        state = self._search_interfaces[scope]
+        self.search = state['control']
+        for field in ('search_rows', 'search_status', 'search_paused', 'search_query'):
+            setattr(self, field, state[field])
+        if self.panel_tab == 'Search':
+            self.select_panel_rows(scope)
+        self.search_content.clear()
+        self.search_content.add(self.search, self.search_scope, self._row_panels[scope]['scroll'])
+        self.sync_search_scope()
+        if self.panel_tab == 'Search':
+            self.render_tree()
+            self.resume_search_interface()
+        self.sidebar.refresh_gestures()
+
+    def resume_search_interface(self):
+        if self.search_paused or self.search_query != (self.search.value or ''):
+            self.search_changed()
+
+    def invalidate_search_interfaces(self):
+        for state in self._search_interfaces.values():
+            state['search_query'] = None
+        self.search_query = None
 
     def remember_panel_rows(self):
         state = self._row_panels[self._row_panel]
@@ -156,7 +213,7 @@ class LibraryPanels:
         if not self.valid() or name not in self.panel_tabs:
             return
         if name in ('Files', 'Search'):
-            self.select_panel_rows(name)
+            self.select_panel_rows(self._search_scope if name == 'Search' else name)
         self.panel_tab = name
         selected = {'Files': self.files_content, 'Search': self.search_content,
                     'Calendar': self.calendar_scroll}[name]
@@ -181,7 +238,7 @@ class LibraryPanels:
                 self.calendar_task.cancel()
             self.render_tree()
             if name == 'Search':
-                self.search_changed()
+                self.resume_search_interface()
         self.sidebar.refresh_gestures()
 
     def refresh_calendar(self, widget=None, **kwargs):
@@ -610,6 +667,12 @@ class LibraryPanels:
             self.file_command_busy = False
 
     def dispose_panels(self):
+        self.search_mode.on_change = None
+        for state in self._search_interfaces.values():
+            state['control'].on_change = None
+            state['control'].value = ''
+            state['search_rows'].clear()
+            state['search_status'] = ''
         self.clear_file_action()
         self.calendar_generation += 1
         if self.calendar_task is not None:

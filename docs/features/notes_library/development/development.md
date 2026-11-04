@@ -14,6 +14,20 @@
 
 ## Destination and feature contract
 
+The mobile and desktop library panels retain an interface per search scope.
+Each owns its query control, result widgets, pagination and status; the existing
+provider scanner remains shared. Scope switches cancel pending work and advance
+its publication generation before restoring the target interface. Completed
+queries are retained, while library mutations and saves invalidate cached queries.
+Retirement clears both scopes, including hidden query controls. Mobile also keeps
+Files rows separate from both search scopes.
+
+The mobile `test_notes_library_modes.py` and `test_notes_library_panels.py` suites
+and desktop `test_notes_library_desktop.py` cover independent inputs and results,
+pagination, late callbacks, provider scope and retirement. The managed
+`document_storage_tools ios|android --probe notes-search` check exercises retained
+native inputs/results across scope changes and rotation using synthetic notes.
+
 Sidebar navigation reuses the current inner document owner, preserving its
 history and existing save/discard/cancel transition. Explicit `new_tab=True`
 opens/focuses a separate document. Files without a Markdown/source/notebook
