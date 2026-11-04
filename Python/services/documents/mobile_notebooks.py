@@ -434,6 +434,8 @@ async def notes_editor(app, library, path):
             return await super().perform(action, **options)
 
     class Embedded:
+        owns_document_swipes = True
+
         def __init__(self, panel):
             self.panel, self.view = panel, panel.view
         @property
