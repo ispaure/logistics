@@ -6,12 +6,14 @@ import traceback
 from unittest.mock import patch
 
 from commonUtils.testing.stages import TestStage
+from commonUtils.testing.waiting import wait_for_assertion
 from commonUtils.runtime.platform import get_os, OS
 from mobile.app import LogisticsMobile
 from features.lm.mobile.on_device import MODELS, platform_provider
 from . import start_native_check
 from .fixtures import capture_window
 from .rotation_checks import rotate
+from .settings import CONTROL_SETTLE_TIMEOUT
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -37,7 +39,11 @@ class ChatSettingsProbe(LogisticsMobile):
         from android.graphics import Rect
         from com.google.android.material import R as MaterialR
         rail = self.native_host.adapter.rail
-        assert rail.getWidth() - rail.getPaddingLeft() - rail.getPaddingRight() >= rail.getItemIconSize()
+        geometry = dict(width=int(rail.getWidth()), left=int(rail.getPaddingLeft()),
+                        right=int(rail.getPaddingRight()), icon_size=int(rail.getItemIconSize()),
+                        visibility=int(rail.getVisibility()), laid_out=bool(rail.isLaidOut()),
+                        layout_requested=bool(rail.isLayoutRequested()))
+        assert geometry['width'] - geometry['left'] - geometry['right'] >= geometry['icon_size'], geometry
         for index in range(rail.getMenu().size()):
             item = rail.getMenu().getItem(index)
             if not item.isVisible():
@@ -63,7 +69,7 @@ class ChatSettingsProbe(LogisticsMobile):
                 await self.rotate_probe(orientation)
                 self.resize_workspace()
                 await asyncio.sleep(.3)
-                self.check_rail_icons()
+                await wait_for_assertion(self.check_rail_icons, timeout=CONTROL_SETTLE_TIMEOUT)
                 assert self.routes.screens['settings'][-1][0] == 'chat-settings'
                 await capture_window(self, output / f'chat-settings-{orientation}-server.png')
                 owner.chat_manual_toggle.on_press()
