@@ -8,6 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def inventory(root=ROOT):
     entries = json.loads((root / 'Scripts/compatibility.json').read_text())['modules']
+    if not entries:
+        return
     paths = []
     for area in ('features', 'services', 'desktop', 'mobile'):
         for path in (root / 'Python' / area).rglob('*.py'):

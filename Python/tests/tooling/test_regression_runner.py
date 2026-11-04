@@ -57,6 +57,27 @@ class RegressionRunnerTests(unittest.TestCase):
             self.assertFalse(data['coverage_complete'])
             self.assertEqual(data['not_run'][0]['file'], 'test_stuck.py')
 
+    def test_file_timeout_preserves_already_completed_case_evidence(self):
+        with patch.object(sys, 'path', [str(RUNNER.parent), *sys.path]):
+            spec = importlib.util.spec_from_file_location('partial_timing_probe', RUNNER)
+            runner = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(runner)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_partial.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport time, unittest\n'
+                'class Cases(unittest.TestCase):\n'
+                ' def test_a_finished(self): pass\n'
+                ' def test_b_stalled(self): time.sleep(30)\n')
+            report = runner.TimingReport(root / 'result.json', root, 'test*.py', True)
+            with patch.object(runner, 'ISOLATED_FILE_TIMEOUT', 2):
+                self.assertEqual(runner.run_isolated(root, 'test*.py', 60, report=report), 1)
+            self.assertEqual([row['id'].split('.')[-1] for row in report.data['tests']], ['test_a_finished'])
+            self.assertEqual(report.data['tests'][0]['outcome'], 'passed')
+            self.assertEqual(report.data['modules'][0]['outcome'], 'timeout')
+            self.assertFalse(report.data['coverage_complete'])
+            self.assertTrue(any('test_b_stalled' in str(row) for row in report.data['not_run']))
+
     def test_selected_suite_takes_precedence_over_runner_directory(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
