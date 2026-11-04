@@ -1,5 +1,11 @@
 // Bounded content-free input diagnostics: no coordinates, labels or stroke data.
 const inputTraceCounts = Object.create(null), inputTraceRing = [];
+const inputTraceViewId = (()=>{
+  try {
+    const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
+    return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('');
+  } catch (_) { return null } // Unknown lifetime must never look like a stable ID.
+})();
 function inputTrace(kind, event) {
   try {
     const type = event?.pointerType || 'host', key = kind + ':' + type;
@@ -9,7 +15,7 @@ function inputTrace(kind, event) {
     if(inputTraceRing.length>96)inputTraceRing.shift();
   } catch (_) { /* Diagnostics must never change input dispatch. */ }
 }
-window.logisticsInputTrace = () => ({counts:{...inputTraceCounts},recent:inputTraceRing.slice(-24)});
+window.logisticsInputTrace = () => ({view_id:inputTraceViewId,counts:{...inputTraceCounts},recent:inputTraceRing.slice(-24)});
 for(const kind of ['pointerdown','pointerup','pointercancel','lostpointercapture'])
   canvas.addEventListener(kind,event=>inputTrace('delivered-'+kind,event),{capture:true,passive:true});
 

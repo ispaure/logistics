@@ -6,6 +6,7 @@ The UIKit recognizer is Pencil-only and permits simultaneous native gestures.
 import json
 import math
 from weakref import ref
+from uuid import uuid4
 from commonUtils.ui.native.text_size import native_backend
 
 _hover_target = None
@@ -146,6 +147,7 @@ class PencilInputTrace:
         import time
         self.web, self.native, self.loop = web, web._impl.native, loop
         self.output = output
+        self.observer_id = uuid4().hex
         self.dom = self.dom_native_counts = None
         self.clock = time.monotonic
         self.counts, self.recent = {}, []
@@ -230,7 +232,7 @@ class PencilInputTrace:
             pass
 
     def snapshot(self):
-        return dict(counts=dict(self.counts),recent=list(self.recent),diagnostic_only=True)
+        return dict(observer_id=self.observer_id,counts=dict(self.counts),recent=list(self.recent),diagnostic_only=True)
 
     async def report(self):
         import asyncio
@@ -326,4 +328,7 @@ def _safe_dom_trace(value):
         recent.append(dict(kind=row['kind'],type=row['type'],
                            **{key:row.get(key) is True for key in ('trusted','active','busy','ink')},
                            queued=min(64,max(0,row['queued'])) if type(row.get('queued')) is int else 0))
-    return dict(counts=counts,recent=recent)
+    token = value.get('view_id')
+    token = token if (isinstance(token,str) and len(token)==32
+                      and all(character in '0123456789abcdef' for character in token)) else None
+    return dict(view_id=token,counts=counts,recent=recent)
