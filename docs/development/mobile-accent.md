@@ -4,8 +4,8 @@
 
 Appearance provides a compact Accent color group above Seasonal snow on Android
 and iOS. Two native sliders expose the full hue spectrum (0–359°) and saturation
-(0–100%). A thin spectrum guide sits above Hue. A preview shows selected and ordinary tabs together. Values remain
-visible for precise adjustment and assistive technology. Reset to blue restores
+(0–100%). A thin spectrum guide sits above Hue. The sliders provide live color feedback. Values remain
+visible for precise adjustment and assistive technology. Reset to Default Accent Color restores
 the default blue. No brightness control is exposed. The same selected color is
 used for accent text and controls in light and dark appearance, without lightening
 it for text.
@@ -24,7 +24,7 @@ release event.
 There is one accent choice for the entire app. Each appearance resolves that
 choice once; tabs, controls and actions share the same resolved color, without
 regional overrides. Hue and Saturation filled tracks and thumbs preview that
-exact opaque color while dragging, matching the selected preview tab. Inactive
+exact opaque color while dragging. Inactive
 track segments remain neutral so the slider position stays clear.
 
 Accent roles color selected navigation tabs, tab indicators, settings commands,
