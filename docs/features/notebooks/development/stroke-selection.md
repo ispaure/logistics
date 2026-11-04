@@ -14,6 +14,11 @@ from the centre. Pointer capture allows transforms to continue beyond the paper;
 the backend rejects final geometry outside the page. Cancellation restores the
 original preview without issuing an edit. Lasso paths exceeding the bounded
 gesture buffer are rejected rather than selecting from a truncated polygon.
+Containment prepares one exact edge AABB index per lasso and caches interior-cell
+certificates. A cell is accepted only when no polygon boundary crosses it;
+this does not rasterize or approximate the selection. A shared work budget aborts
+the whole selection on pathological input, clearing any partly accumulated IDs.
+Visible-ID reconciliation uses sets rather than a nested scan of all strokes.
 
 `input.js` routes native pen-up and pinch/palm cancellation through
 `selectionFinish`; wrapping DOM pointer-up alone would miss those paths.
@@ -51,6 +56,12 @@ selection, input and link handlers in V8, including concave containment, painted
 width, all pointer types, off-page precision, cancellation and native pen routing.
 Its combined Capture/Select keyboard check requires Capture's mode-specific
 keyboard guard. A causal in-memory guard is not acceptance of the on-disk source.
+`selection_index_logic.js` compares the index to an exhaustive geometry oracle:
+16,508 deterministic checks cover concave and self-crossing contours, boundary
+epsilon, painted radius, stationary samples and degenerate outlines. An operation
+count fixture processes one million dense interior samples against 2,048 edges
+with 1,000,040 counted work units and one exact edge test. These are complexity
+checks, rather than measured device latency.
 
 Synthetic host and V8 checks do not establish physical pen latency, native mobile
 touch behavior or reMarkable interoperability. Browser presentation checks and
