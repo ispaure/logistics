@@ -536,6 +536,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.refresh_reader_actions()
 
     def search_changed(self, widget=None, **kwargs):
+        if widget is not None and widget is not self.search:
+            return
         self.sync_search_scope()
         if (getattr(self, 'panel_tab', 'Files') == 'Files' and widget is self.search
                 and search_terms(self.search.value or '')):
@@ -545,6 +547,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if tree_task is not None and not tree_task.done():
             tree_task.cancel()
         self.search_generation += 1
+        self.search_query = None
         if self.search_task is not None:
             self.search_task.cancel()
             self.search_task = None
@@ -562,6 +565,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         else:
             self.search_rows = []
             self.search_status = ''
+            self.search_query = ''
             self.shown = 50
             self.render_tree()
 
@@ -594,6 +598,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.search_rows = result.rows
             if finished:
                 self.search_status = "" if result.complete else "Some items could not be searched."
+                self.search_query = query
             self.render_tree()
 
         def project(result):
@@ -805,7 +810,10 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             yield
         if len(flattened) > self.shown:
             if not hasattr(self, '_more_rows'):
+                panel = self._row_panel
                 def more(widget=None, **kwargs):
+                    if self._row_panel != panel:
+                        return
                     self.shown += 50
                     self.render_tree()
                 self._more_rows = toga.Button('Show more notes', on_press=more, style=Pack(height=48))
@@ -907,6 +915,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
     def refresh_library_indexes(self):
         self.library.connection_index.invalidate()
+        self.invalidate_search_interfaces()
         if not self.valid():
             return
         if self.search.value:
@@ -1042,6 +1051,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 if not self.valid():
                     return
                 await self.load_folder(parent)
+                self.invalidate_search_interfaces()
                 if self.search.value:
                     self.search_changed()
                 self.present()
