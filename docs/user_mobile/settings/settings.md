@@ -395,6 +395,14 @@ Erasure runs before migration, document restoration or services load. A durable
 request retries interrupted erasure on the next launch; a Keychain error stops
 before deleting credential records. Unlock the device and reopen to retry.
 
+## About
+
+**Settings → Help → About** (also available directly under Settings) shows
+installed build information before open-source licenses.
+The page appears immediately with **Loading build information…** while the build
+identity loads. Licenses and Back remain available during loading. Build details
+use the installed payload and are available offline.
+
 ## Mobile documentation
 
 In the documentation sidebar, a folder with a same-named Markdown landing page
