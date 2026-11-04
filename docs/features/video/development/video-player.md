@@ -101,3 +101,18 @@ Correcting that requires caption composition in the native video output; changin
 track selection or the Logistics control overlay cannot put that view into PiP.
 See the upstream [Apple sample-buffer output](https://github.com/videolan/vlc/blob/master/modules/video_output/apple/VLCSampleBufferDisplay.m).
 Do not claim embedded, external or bitmap PiP captions are fixed by the seek work.
+
+## Desktop plugin lifetime
+
+The video runtime retains one idle LibVLC core until process exit. Each player
+and subtitle-scale replacement still gets its own configured instance; the core
+holds no media, providers or credentials. This prevents LibVLC from unloading its
+plugin bank after each player closes and scanning every plugin on the next open.
+Decoder/player disposal still releases streams and native player resources.
+
+A full 13-codec run exposed repeated plugin discovery during instance creation,
+rather than a decoder deadlock. Retaining the idle core reduced that matrix from
+about 292 seconds to 8–19 seconds on the validation Mac, without raising the
+runner's 300-second file limit. The complete parity file passed in 197 seconds.
+Speed checks wait for the post-seek decoded clock to settle before sampling;
+their rate tolerance is unchanged. Absolute timings depend on host load.
