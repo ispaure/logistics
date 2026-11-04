@@ -253,7 +253,9 @@ class EditorPickerTests(unittest.TestCase):
         # Hosted Duo failure: the 48pt field ends at229, keyboard starts204,
         # but the still272pt scroll viewport tells UIKit it is already visible.
         scroll = Mock()
-        scroll.contentInset = SimpleNamespace(bottom=7)
+        scroll.contentInset = SimpleNamespace(top=0, left=0, bottom=7, right=0)
+        scroll.adjustedContentInset = scroll.contentInset
+        scroll.contentSize = SimpleNamespace(width=570, height=230)
         scroll.bounds = rect(0, 0, 570, 272)
         scroll.convertRect.return_value = rect(96, 153, 570, 272)
         focused = Mock(isFirstResponder=True)
@@ -287,20 +289,22 @@ class EditorPickerTests(unittest.TestCase):
             for _ in range(2):
                 reveal_picker_input(picker)
                 self.assertEqual(scroll.contentInset.bottom, 228)
-                self.assertEqual(form._keyboard_overlap, 221)
+                self.assertEqual(form._keyboard_bottom_inset, 7)
                 self.assertEqual(scroll.contentOffset.y, 25)
                 self.assertEqual(181 + 48 - scroll.contentOffset.y, 204)
             self.assertEqual(scroll.setContentOffset.call_count, 0 if native_reveals else 1)
         # A settled safe-area layout already above the keyboard needs no
         # additional reservation; neither repeated reveal nor rotation adds up.
         scroll.convertRect.return_value = rect(96, 120, 570, 84)
+        scroll.bounds = rect(0, 0, 570, 84)
         reveal_picker_input(picker)
         self.assertEqual(scroll.contentInset.bottom, 7)
         scroll.convertRect.return_value = rect(96, 153, 570, 272)
+        scroll.bounds = rect(0, 0, 570, 272)
         reveal_picker_input(picker)
         reset_picker_keyboard_insets(picker)
         self.assertEqual(scroll.contentInset.bottom, 7)
-        self.assertEqual(form._keyboard_overlap, 0)
+        self.assertFalse(hasattr(form, '_keyboard_bottom_inset'))
         reset_picker_keyboard_insets(picker)
         self.assertEqual(scroll.contentInset.bottom, 7)
         # Floating keyboards do not reserve the whole form's bottom edge.
