@@ -12,6 +12,11 @@ TEST_STAGE = TestStage.EXTENDED
 
 
 class NotesLibraryIntegrationTests(QtTestCase):
+    def wait_for_provider(self, window):
+        # These workers run the real rclone transport, whose I/O budget is 30s.
+        # Keep functional waits separate from the short in-process UI budget.
+        self.wait_until(lambda: not window.progress.busy, timeout=30,
+                        message=lambda: 'Encrypted provider did not finish: ' + window.progress.message.text())
 
     def open_library(self, root):
         (root / '.obsidian').mkdir(exist_ok=True)
@@ -96,15 +101,15 @@ class NotesLibraryIntegrationTests(QtTestCase):
             window = NotesLibraryWindow(lambda: provider, 'Encrypted video')
             window.show()
             try:
-                self.wait_until(lambda: not window.progress.busy)
+                self.wait_for_provider(window)
                 window.open_note('note.md')
-                self.wait_until(lambda: not window.progress.busy)
+                self.wait_for_provider(window)
                 self.wait_until(lambda: bool(window.viewer.browser.inline_videos.cards))
                 embedded = next(iter(window.viewer.browser.inline_videos.cards.values()))
                 self.assertTrue(embedded.play.isVisible())
                 with patch('desktop.document_catalog.open_resource') as opened:
                     window.open_note('Clip.mp4', resolve_link=True)
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     opened.assert_called_once_with(provider, 'Media/Clip.mp4', window)
                 self.assertEqual(window.history[window.index], 'note.md')
                 self.assertFalse(embedded.player.isPlaying())
@@ -144,7 +149,7 @@ class NotesLibraryIntegrationTests(QtTestCase):
                         lambda: CryptResources(fixture.item, binary=binary))
                     window = NotesLibraryWindow(factory, 'Encrypted fixture', remote=remote)
                     window.show()
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     if remote:
                         self.assertIsNone(window.library)
                         self.assertIn('local copy', window.progress.message.text())
@@ -155,7 +160,7 @@ class NotesLibraryIntegrationTests(QtTestCase):
                     self.assertFalse(window.viewer.edit_button.isChecked())
                     self.assertIn('note.md', window.items)
                     window.open_note('note.md')
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     self.assertIn('Original note', window.viewer.browser.toPlainText(), window.viewer.status.text())
                     window.viewer.set_editing(True)
                     self.assertEqual(len(window.storage.resources), 1)
@@ -163,30 +168,30 @@ class NotesLibraryIntegrationTests(QtTestCase):
                     image = window.viewer.browser.document().resource(qt.QTextDocument.ResourceType.ImageResource, url)
                     self.assertFalse(image.isNull())
                     window.items['Nested'].setExpanded(True)
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     window.open_note('Nested/Next.md')
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     self.assertIn('Nested note', window.viewer.browser.toPlainText(), window.viewer.status.text())
                     window.viewer.follow_link(qt.QUrl('note.md'))
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     self.assertEqual(window.storage.path, (window.provider.root / 'note.md').resolve(), window.viewer.status.text())
                     window.viewer.follow_link(qt.QUrl('Tech.md'))
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     self.assertEqual(window.storage.path, (window.provider.root / 'Nested/Tech.md').resolve(), window.viewer.status.text())
                     window.back.click()
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     self.assertEqual(window.history[window.index], 'note.md')
                     window.forward.click()
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     self.assertEqual(window.history[window.index], 'Nested/Tech.md')
                     window.open_note('Nested/Next.md')
-                    self.wait_until(lambda: not window.progress.busy)
+                    self.wait_for_provider(window)
                     if not remote:
                         for mode in ('formatted', 'source'):
                             window.viewer.set_edit_mode(mode)
                             window.viewer.active_editor().insertPlainText('Edited ' + mode + '. ')
                             window.viewer.save_document()
-                            self.wait_until(lambda: not window.progress.busy)
+                            self.wait_for_provider(window)
                             self.assertFalse(window.viewer.is_modified, window.viewer.status.text())
                             self.assertIn(('Edited ' + mode).encode(), fixture.provider.read_bytes('Nested/Next.md'))
                     from shiboken6 import isValid
