@@ -108,3 +108,23 @@ Python from current source before using either entry point; old binaries cannot
 exercise new native interfaces. Physical tests are deferred at the user's request.
 Follow the [video hardware guide](../features/video/development/hardware-acceptance.md)
 for isolated app/device authorization, source freshness, evidence and cleanup.
+
+## Disposable read-aloud playback acceptance
+
+Run `python -m mobile_build.validation.document_storage_tools ios --probe speech-playback`
+with the owning mobile environment. `--ios-runtime` accepts an installed CoreSimulator
+runtime identifier; combine it with a supported `--family` when comparing OS versions.
+The lease records the exact selected runtime and model. Existing devices are only
+read to select a compatible model; the runner creates and removes its own simulator.
+
+The fixture opens Read aloud Settings, uses the production `NativeSpeech` adapter
+and read-aloud panel, restores a missing saved voice to the system default and
+requires native playback-start, word-progress and completion callbacks. An unavailable
+engine fails this strict probe. Its initialization trace records the production
+function's executed source lines, which distinguishes voice enumeration/default
+lookup stalls from synthesizer construction. Callback completion verifies native
+playback, not acoustic volume or physical speaker/Bluetooth behavior; physical
+acceptance remains with the release coordinator.
+
+Cleanup still removes the lease-owned simulator after app-termination/uninstall
+timeouts or evidence-copy failures. Ownership is checked before app cleanup actions.
