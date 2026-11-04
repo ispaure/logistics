@@ -37,7 +37,16 @@ def page_previews(book, start):
             paths.append(f'<path d="{geometry}" stroke="{color}" stroke-width="{width:.1f}" opacity="{opacity:.2f}"/>')
         svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {HEIGHT}">'
                '<rect width="100%" height="100%" fill="white"/>'
+               + template_artwork(book, book.pages[index]) +
                '<g fill="none" stroke-linecap="round" stroke-linejoin="round">' + ''.join(paths) + '</g></svg>')
         previews.append(dict(index=index, image='data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode(),
                              warning=ink.warning, template=book.pages[index].template))
     return previews
+
+
+def template_artwork(book, page):
+    from .templates import settings, svg
+    paper = settings(book, page)
+    if book.content.get('fileType') == 'pdf' or not paper['visible']:
+        return ''
+    return svg(page.template, paper['format'])

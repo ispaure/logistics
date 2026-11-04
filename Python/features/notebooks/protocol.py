@@ -9,7 +9,7 @@ import math
 
 MODEL_COMMANDS = frozenset({
     'page', 'stroke', 'add-layer', 'layer-visible', 'transform', 'erase',
-    'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo',
+    'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo', 'template',
 })
 HOST_COMMANDS = frozenset({
     'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'document-location', 'delete-file', 'page-previews',
@@ -24,6 +24,7 @@ def validate_action(action):
     if op not in MODEL_COMMANDS | HOST_COMMANDS:
         raise ValueError('Unknown notebook command.')
     required = {
+        'template': {'name': str, 'format': str, 'visible': bool},
         'page': {'index': int}, 'move-page': {'index': int},
         'page-previews': {'start': int},
         'stroke': {'points': list}, 'add-layer': {'name': str},

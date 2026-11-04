@@ -130,7 +130,7 @@ try{
   const bar=$('zoomControls').getBoundingClientRect();
   check(bar.width>0&&bar.left>=0&&bar.right<=innerWidth&&bar.bottom<=innerHeight,'Zoom controls outside viewport');
   if(document.body.classList.contains('notebook-mobile')){
-    const paper=canvas.getBoundingClientRect(),header=document.querySelector('header').getBoundingClientRect();
+    const paper=$('paperWrap').getBoundingClientRect(),header=document.querySelector('header').getBoundingClientRect();
     check(paper.top>=header.bottom&&paper.bottom<=bar.top,'Fit page is covered by the floating mobile controls');
     check([...$('zoomControls').querySelectorAll('button')].every(button=>{
       const r=button.getBoundingClientRect();return r.width>=44&&r.height>=44
@@ -174,6 +174,8 @@ def main(output):
 
     def check_blend_commit(view, name):
         """Compare actual browser-composited pixels, including translucent ink edges."""
+        original_view = js(view, 'paperView')
+        js(view, "paperView='pro';$('paperView').value=paperView;resize()")
         for tool in (18, 23):
             for background in ('white', '#f6e8cd'):
                 # Let the numeric zoom's scrollbar/layout resize finish before
@@ -208,6 +210,7 @@ def main(output):
                 difference, mean = max(differences), sum(differences) / len(differences)
                 assert difference <= 8 and mean < .01, (label, difference, mean)
         js(view, "points=[];$('paperWrap').style.removeProperty('background-color');draw();setZoom('page')")
+        js(view, 'paperView=' + json.dumps(original_view) + ";$('paperView').value=paperView;resize()")
 
     with scratch() as root:
         for desktop in (True, False):

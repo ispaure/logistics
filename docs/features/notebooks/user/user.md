@@ -45,9 +45,9 @@ Reopening a saved notebook starts a fresh undo history.
 
 The footer provides **Pages Overview**, page navigation, **Add Page** (`＋`) and zoom.
 Open **Pages Overview** in the footer or the **Page** menu to select a page by its
-numbered ink thumbnail. The current page is marked; **More pages** loads the next
+numbered thumbnail. The current page is marked; **More pages** loads the next
 batch of previews. Preserved templates and unsupported content may not appear in
-thumbnails. **Add Page**, including the action inside the overview, inserts a blank
+thumbnails. **Add Page**, including the action inside the overview, inherits the current template and inserts a new ink-free
 page immediately after the current page and opens it. Undo restores the previous
 page order and selection.
 **Fit page**
@@ -118,8 +118,9 @@ be duplicated and reordered within the notebook; copying their backgrounds to
 another notebook is unavailable. Page overview thumbnails show ink only.
 EPUB-backed archives remain unsupported.
 
-The page surface uses 1404 × 1872 notebook units. Existing templates are preserved
-but are not rendered behind the ink. Stroke selection currently moves one stroke;
+The page surface uses 1404 × 1872 notebook units. Supported templates render beneath
+the ink; unrecognized template references remain preserved with an artwork notice.
+Stroke selection currently moves one stroke;
 there is no multi-stroke lasso, OCR, cloud sync or exact brush
 texture simulation. Archives are limited to 32 MiB compressed, 128 MiB expanded,
 4096 members and 1000 pages. Very long strokes or densely populated pages can
@@ -131,6 +132,32 @@ A successfully encoded archive is not proof of editability on every tablet.
 Physical Boox pressure/palm behavior and reMarkable import/select/move/erase checks
 remain required before calling this fully tablet-verified. See the
 [development guide](../development/development.md) for the current evidence scope.
+
+## Page templates and paper sizes
+
+Open **Manage layers** in the desktop toolbar to choose the current page's
+template. Choose Blank, lined paper (large: 21 rules; small: 41), the native
+25-rule medium, or Logistics' more distinct 31-rule medium. Grid, Dots,
+Restaurant review, Meeting notes and Daily planner are also available.
+**Template format** selects Paper Pro or Paper Pro Move for Logistics layouts.
+**Show template** hides only the background in Logistics; it leaves writing intact.
+These are per-page edits with Undo/Redo, Save, recovery and page-copy support.
+New pages inherit the current template. Imported PDFs keep their source background
+and do not offer notebook template replacement.
+
+**Paper view** changes the visible writing area without moving or scaling ink.
+Desktop and large tablets start with Paper Pro; phones start with Paper Pro Move. Move shows a
+centered, top-aligned region of the same page, expanding to include writing beyond
+its left, right or bottom edges. Pro reveals the surrounding paper. Select Pro
+to write in those extra margins. Paper view is a session display choice, separate
+from the saved template format; changing it does not edit the notebook.
+
+Stock lined templates remain native template-name references, rather than PDFs
+or ink layers. Logistics layouts include original vector `.template` artwork in
+the archive. Their appearance and per-page format/visibility are supported in
+Logistics on all platforms. ReMarkable firmware discovery of these embedded custom
+assets and matching tablet view behavior have not been certified; a successful
+Logistics export does not prove custom backgrounds will appear on the tablet.
 
 ## Eraser types and sizes
 

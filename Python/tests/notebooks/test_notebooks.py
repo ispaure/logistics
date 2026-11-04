@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import json
+from copy import deepcopy
 import re
 from io import BytesIO
 from pathlib import Path
@@ -39,6 +40,90 @@ def archive(members):
 
 
 class NotebookTests(unittest.TestCase):
+    def test_lined_templates_use_confirmed_counts_and_separate_adjusted_medium(self):
+        from features.notebooks.templates import svg
+        from xml.etree import ElementTree as ET
+        for name, count in [('P Lines large', 21), ('P Lines medium', 25),
+                            ('P Lines small', 41), ('Logistics Lined medium', 31)]:
+            artwork = ET.fromstring(svg(name))
+            self.assertEqual(len(artwork.findall('.//{http://www.w3.org/2000/svg}path')), count)
+
+    def test_page_templates_survive_export_recovery_history_and_transfer(self):
+        from features.notebooks.templates import settings
+        self.draw()
+        original_ink = self.book.page(0).to_bytes()
+        self.editor.apply(dict(op='template', name='Logistics Restaurant review', format='move', visible=True))
+        first_id = self.book.pages[0].id
+        for book in (Notebook.read(self.book.to_bytes()), self.repo.open(self.key)):
+            self.assertEqual(book.pages[0].template, 'Logistics Restaurant review Move')
+            self.assertEqual(settings(book, book.pages[0]), dict(format='move', visible=True))
+            self.assertEqual(book.page(0).to_bytes(), original_ink)
+            self.assertIn('Logistics Restaurant review Move.template', book.members)
+        self.editor.apply(dict(op='add-page'))
+        self.assertEqual(self.book.pages[1].template, self.book.pages[0].template)
+        self.editor.apply(dict(op='template', name='P Lines large', format='pro', visible=False))
+        self.assertEqual(self.book.pages[0].id, first_id)
+        self.assertEqual(self.book.pages[0].template, 'Logistics Restaurant review Move')
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual(self.editor.state()['template_name'], 'Logistics Restaurant review')
+        self.editor.apply(dict(op='redo'))
+        self.assertFalse(self.editor.state()['template_settings']['visible'])
+        target = Notebook.new()
+        target.copy_page(self.book, 0)
+        copied = Notebook.read(target.to_bytes())
+        self.assertEqual(copied.pages[1].template, 'Logistics Restaurant review Move')
+        self.assertEqual(settings(copied, copied.pages[1])['format'], 'move')
+        self.assertIn('Logistics Restaurant review Move.template', copied.members)
+
+    def test_template_only_change_serializes_modern_page_reference(self):
+        self.book.content['cPages'] = dict(pages=[dict(id=self.book.pages[0].id,
+            idx=dict(timestamp='1:1', value='ba'), opaque={'keep': True})])
+        self.book.pages[0].record = deepcopy(self.book.content['cPages']['pages'][0])
+        self.editor.apply(dict(op='template', name='P Lines small', format='pro', visible=True))
+        restored = Notebook.read(self.book.to_bytes())
+        self.assertEqual(restored.pages[0].template, 'P Lines small')
+        self.assertTrue(restored.content['cPages']['pages'][0]['opaque']['keep'])
+        self.assertIn(b'P Lines small', restored.members[restored.id + '.pagedata'])
+
+    def test_template_copy_refuses_conflicting_artwork_without_changing_target(self):
+        self.editor.apply(dict(op='template', name='Logistics Daily planner', format='move', visible=True))
+        target = Notebook.new()
+        asset = self.book.pages[0].template + '.template'
+        target.members[asset] = b'original destination artwork'
+        members, pages = dict(target.members), list(target.pages)
+        with self.assertRaisesRegex(ValueError, 'different artwork'):
+            target.copy_page(self.book, 0)
+        self.assertEqual(target.members, members)
+        self.assertEqual(target.pages, pages)
+
+    def test_move_view_keeps_centered_top_origin_and_includes_edge_ink(self):
+        from features.notebooks.templates import view_bounds
+        empty = view_bounds([], True)
+        self.assertEqual(empty, dict(x=291.5, y=0, width=821, height=1460))
+        self.editor.apply(dict(op='stroke', points=[[30, 1800, .5], [1380, 1810, .5]]))
+        stroke = self.book.page(0).strokes[0]
+        points = deepcopy(stroke.points)
+        expanded = view_bounds([stroke], True)
+        self.assertLess(expanded['x'], 30)
+        self.assertGreater(expanded['x'] + expanded['width'], 1380)
+        self.assertGreater(expanded['height'], 1810)
+        self.assertEqual(view_bounds([stroke]), dict(x=0, y=0, width=1404, height=1872))
+        self.assertEqual(stroke.points, points)
+
+    def test_invalid_template_and_failed_checkpoint_leave_page_unchanged(self):
+        for action in [dict(op='template', name='unknown', format='pro', visible=True),
+                       dict(op='template', name='Blank', format='tablet', visible=True),
+                       dict(op='template', name='Blank', format='pro', visible=1)]:
+            with self.assertRaises(ValueError):
+                self.editor.apply(action)
+        original = self.book.to_bytes()
+        with patch.object(self.editor, 'checkpoint', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                self.editor.apply(dict(op='template', name='Logistics Daily planner', format='move', visible=True))
+        self.assertEqual(self.book.pages[0].template, 'Blank')
+        self.assertFalse(any(name.endswith('.template') for name in self.book.members))
+        self.assertEqual(Notebook.read(original).pages[0].template, 'Blank')
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

@@ -11,7 +11,74 @@ function options(id, values) {
   if ([...el.options].some(o => o.value === old)) el.value = old
 }
 
+let paperView = document.body.classList.contains('notebook-mobile') && Math.min(innerWidth, innerHeight) < 700 ? 'move' : 'pro';
+let displayedPaperBounds = null;
+function strokeExpandsPaper(stroke) {
+  if (paperView !== 'move' || !displayedPaperBounds || !state.template_editable) return false;
+  const b = displayedPaperBounds;
+  return stroke.points.some(p => {
+    const radius = Math.max(0, p[3] || 0) / 2 + 2;
+    return Math.max(0, p[0] - radius) < b.x || Math.min(state.width, p[0] + radius) > b.x + b.width ||
+      Math.min(state.height, p[1] + radius) > b.height
+  })
+}
+function templateControls() {
+  const panel = $('templateControls');
+  if (!panel || $('pageTemplate')) return;
+  panel.innerHTML = '<label>Page template <select id="pageTemplate" aria-label="Page template"></select></label>' +
+    '<label>Template format <select id="templateFormat" aria-label="Template format"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
+    '<label><input id="templateVisible" type="checkbox"> Show template</label>' +
+    '<label>Paper view <select id="paperView" aria-label="Paper view"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>';
+  const apply = () => {
+    if (active !== null || busy) { render(); return }
+    send({op: 'template', name: $('pageTemplate').value,
+      format: $('templateFormat').value, visible: $('templateVisible').checked})
+  };
+  for (const id of ['pageTemplate', 'templateFormat', 'templateVisible']) $(id).onchange = apply;
+  $('templateFormat').onchange = () => {
+    if (active !== null || busy) { render(); return }
+    paperView = $('templateFormat').value;
+    $('paperView').value = paperView;
+    apply()
+  };
+  $('paperView').value = paperView;
+  $('paperView').onchange = () => {
+    if (active !== null) { $('paperView').value = paperView; return }
+    paperView = $('paperView').value;
+    resize();
+    $('viewport').scrollTop = 0;
+    $('viewport').scrollLeft = 0
+  }
+}
+
+function paperBounds() {
+  if (paperView !== 'move' || !state.template_editable) return {x: 0, y: 0, width: state.width, height: state.height};
+  const box = state.move_paper || {x: 291.5, y: 0, width: 821, height: 1460};
+  let left = box.x, right = box.x + box.width, bottom = box.height;
+  for (const stroke of state.strokes) for (const p of stroke.points) {
+    const radius = Math.max(0, p[3] || 0) / 2 + 2;
+    left = Math.min(left, p[0] - radius); right = Math.max(right, p[0] + radius);
+    bottom = Math.max(bottom, p[1] + radius)
+  }
+  left = Math.max(0, left); right = Math.min(state.width, right);
+  return {x: left, y: 0, width: right - left, height: Math.min(state.height, bottom)}
+}
+
 function render() {
+  templateControls();
+  if ($('pageTemplate')) {
+    const name = state.template_name || state.template || 'Blank';
+    const catalog = {...(state.templates || {Blank: 'Blank'})};
+    if (!(name in catalog)) catalog[name] = name + ' (preserved)';
+    options('pageTemplate', Object.entries(catalog).map(([value, label]) => [label, value]));
+    $('pageTemplate').value = name;
+    $('templateFormat').value = name.startsWith('Logistics ') ? (state.template_settings?.format || 'pro') : paperView;
+    $('templateVisible').checked = state.template_settings?.visible !== false;
+    const disabled = state.read_only || !state.template_editable || !(name in (state.templates || {}));
+    $('pageTemplate').disabled = state.read_only || !state.template_editable;
+    $('templateFormat').disabled = disabled || !name.startsWith('Logistics ');
+    $('templateVisible').disabled = disabled;
+  }
   const background = $('pdfBackground');
   background.hidden = !state.background;
   if (state.background) {
@@ -21,7 +88,7 @@ function render() {
   if (document.activeElement !== $('notebookName')) $('notebookName').value = state.name;
   $('pageinfo').textContent = (state.index + 1) + ' / ' + state.count;
   $('warning').textContent = state.warning || '';
-  $('templateNotice').textContent = state.template && state.template !== 'Blank' ? 'Template ' + state.template + ' is preserved in export; this view shows ink only.' : '';
+  $('templateNotice').textContent = state.template && state.template !== 'Blank' && state.templates && !(state.template_name in state.templates) ? 'Template ' + state.template + ' is preserved; its artwork is unavailable here.' : '';
   $('undo').disabled = !state.undo;
   $('redo').disabled = !state.redo;
   $('prev').disabled = !state.index;
@@ -39,12 +106,19 @@ function render() {
     index: state.index + 1
   });
   resize();
+  if (render.pageIndex !== state.index) {
+    $('viewport').scrollTop = 0;
+    $('viewport').scrollLeft = 0;
+    render.pageIndex = state.index
+  }
 }
 
 function resize() {
   let viewport = $('viewport'),
     style = getComputedStyle(viewport);
-  let fit = Math.max(.1, (viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / state.width);
+  const bounds = paperBounds();
+  displayedPaperBounds = bounds;
+  let fit = Math.max(.1, (viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / bounds.width);
   let zoom = $('zoom').value,
     scale;
   if (zoom === 'page') {
@@ -54,10 +128,18 @@ function resize() {
         css = getComputedStyle(notice);
       available -= notice.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0)
     }
-    scale = Math.min(Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / state.width, Math.max(1, available) / state.height, 1);
+    scale = Math.min(Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / bounds.width, Math.max(1, available) / bounds.height, 1);
   } else scale = zoom === 'fit' ? Math.min(fit, 1) : Number(zoom);
   canvas.style.width = (state.width * scale) + 'px';
   canvas.style.height = (state.height * scale) + 'px';
+  const wrap = $('paperWrap'), layers = $('inkLayers'), background = $('pdfBackground');
+  wrap.style.width = (bounds.width * scale) + 'px';
+  wrap.style.height = (bounds.height * scale) + 'px';
+  wrap.style.margin = paperView === 'move' ? '0 auto auto' : 'auto';
+  layers.style.left = (-bounds.x * scale) + 'px';
+  layers.style.width = (state.width * scale) + 'px';
+  for (const [key, value] of Object.entries({left: -bounds.x * scale, top: 0,
+    width: state.width * scale, height: state.height * scale})) background.style[key] = value + 'px';
   let ratio = Math.min(devicePixelRatio || 1, 2);
   let backingScale = Math.min(scale * ratio, Math.sqrt(canvasPixelLimit / (state.width * state.height))),
     width = Math.max(1, Math.floor(state.width * backingScale)),
