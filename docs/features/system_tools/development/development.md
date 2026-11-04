@@ -43,3 +43,33 @@ return value reports terminal startup, not successful system modification.
 System Tools can modify operating-system configuration or run disk repairs.
 
 These actions should only be run deliberately on the intended platform.
+
+## Registration, settings and saved state
+
+`ui_contributions.py` declares destructive Debug actions and a Configuration
+settings contribution for `config.ini`. OS checks disable irrelevant actions;
+`actions.py` also rejects calls on the wrong platform. Windows drive settings
+are trimmed and uppercased before validation; arbitrary paths and command text
+are rejected before launching.
+
+On macOS, the first disable reads battery `sleep` from `pmset -g custom` and
+system-wide `SleepDisabled` from `pmset -g`. Both values must be available.
+`battery-power.json`, beside the feature preferences file, is written atomically
+before launching the terminal. Existing backups are reused, and restore leaves
+the backup in place. Thus restore means the first recorded values, not the most
+recent state before each disable. A missing backup or invalid nonnegative integer
+values blocks restore; a desktop Mac without battery settings blocks capture.
+The backup records intended recovery values, not proof that sudo succeeded.
+
+## Platform and validation scope
+
+These are Windows/macOS desktop actions. Linux has no enabled repair actions;
+Android/iOS have no System Tools mobile catalogue entry or UI. See
+[mobile availability](../user_mobile/user_mobile.md).
+
+`Python/tests/application/test_system_tools.py` checks command payload order,
+encoded elevated launch, normalized/invalid drives, launch failure, wrong-OS
+rejection, battery capture and restore commands using mocks. It does not prove
+successful operating-system repair or power behavior. This documentation audit
+reviewed source/tests and ran static checks only; no repair, terminal, device or
+GUI action was launched under the release quiet hold.

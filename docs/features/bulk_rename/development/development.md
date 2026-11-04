@@ -77,39 +77,16 @@ separately from footer layout. `_show_plan` keeps generation admission, signal a
 scroll guards, status and preview publication; `_project_plan_rows` only projects
 the admitted plan into retained rows while those guards are held.
 
-## Use the engine without Qt
+## Shared engine boundary
 
-```python
-from pathlib import Path
-from commonUtils.filesystem.rename import RenameRules, plan_renames, apply_renames, undo_renames
-
-rules = RenameRules(prefix='Photo_', number_mode='suffix', number_padding=3,
-                    extension_mode='lower')
-plan = plan_renames(Path('/path/to/photos').glob('*.JPG'), rules)
-for entry in plan.entries:
-    print(entry.source.name, '→', entry.target.name, entry.error)
-
-if plan.valid and plan.changes:
-    result = apply_renames(plan)
-    if result.success:
-        # Retain result as an optional in-memory undo receipt for the application.
-        undo_receipt = result
-    else:
-        print(result.error, result.recovery)
-```
-
-`plan_renames(..., case_sensitive=True)` permits distinct-case names for projects
-that explicitly target case-sensitive filesystems. The UI uses the conservative
-default. `apply_renames` and `undo_renames` accept `cancelled()` and
-`report(done, total, message)` callbacks; do not touch Qt widgets from workers.
-Invalid/stale plans raise before disk changes. Failures during a transaction return
-`RenameResult(error=..., recovery=...)`; successful results contain changed entries.
-`success`, `cancelled`, `error` and `recovery` distinguish all outcomes.
-
-Internals are separated into Qt-independent `renameUtils.py`, rule controls in
-`rules.py`, worker/UI coordination in `widget.py`, and public window/lifetime code
-in `__init__.py`. The shared engine is documented in
-[commonUtils](https://github.com/ispaure/commonUtils/blob/main/filesystem/rename/README.md). Filtered traversal lives in `commonUtils.filesystem.traversal`; transformations accept explicit `RenameMetadata` for folders and file dates without reading the filesystem.
+The Logistics widget imports planning, apply and undo from
+`commonUtils.filesystem.rename` and candidate traversal from
+`commonUtils.filesystem.traversal`. Shared engine APIs and transaction mechanics
+belong in commonUtils' own documentation; see the
+[commonUtils integration boundary](../../../development/commonutils-integration.md).
+Logistics owns rule controls in `rules.py`, worker/UI coordination in `widget.py`,
+preview rendering in `preview.py`, menus in `menus.py`, and host/window lifetime
+in `__init__.py`. There is no local `renameUtils.py` engine.
 
 ## Main-window hosting
 
@@ -125,3 +102,16 @@ available width. Packing uses group size hints; paired numeric fields and
 checkboxes reduce row count. Controls retain their identities and values during
 reflow. The browser/rules splitter initially gives the rules more vertical space;
 narrow windows keep a scroll area. Rename planning/apply behavior is unchanged.
+
+## Platform and validation scope
+
+This is a Qt desktop integration; it has no Android/iOS registration in
+`Python/services/mobile_features.py`. See [mobile availability](../user_mobile/user_mobile.md).
+
+`Python/tests/files/test_bulk_rename_ui.py` covers rule reflow, preset admission,
+preview generations and cancellation, selected-path scope, apply/undo, stale
+sources, tree reveal and cooperative close. `test_bulk_rename_host.py` covers
+retaining one hosted page and replacing its selection while preserving rules.
+These are test coverage descriptions, not a new GUI acceptance result. This
+documentation audit used source/test review and static checks only; desktop UI
+and filesystem transaction tests were not rerun under the release quiet hold.
