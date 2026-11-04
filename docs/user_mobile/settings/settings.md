@@ -2,7 +2,8 @@
 
 ## Categories and adaptive layout
 
-Settings opens a category list: **App**, **Features**, **Read aloud**, **Markdown**, **Text**,
+Settings opens a category list (feature-related categories appear when their
+features are enabled; **Camera** appears only on supported devices): **App**, **Features**, **Read aloud**, **Markdown**, **Text**,
 **EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Privacy & Security**, **Reset**, **Help**, and **About**.
 Both platforms include **Appearance** for Accent color and Seasonal snow; Android also offers
 High contrast / E Ink there. On a phone, tap
@@ -33,7 +34,7 @@ selection.
 ## Features
 
 Open **Settings → Features** to turn Text Editor, Notebooks, Books & Comics,
-PDF Reader, Image Tools, LM Chat, and rclone on or off. Names and the combined
+PDF Reader, Image Tools, Video Player, Notes Library, LM Chat, and rclone on or off. Names and the combined
 Books & Comics switch match desktop; each switch controls its feature group.
 All current features are on by default on iOS and Android, including when upgrading
 an existing installation. **Enable all features** restores that selection.
@@ -56,6 +57,27 @@ on Android too; Burst camera is available only on supported devices.
 **Settings → Help → Mobile documentation** always opens the built-in Markdown
 guide, even with every feature off. Its pages, links, search and history stay
 available independently of Text Editor.
+
+## Document restoration
+
+Under **Settings → App**, **Close saved documents on restart** closes documents
+without unsaved changes when the app restarts. It keeps files and recovery drafts.
+If **Restore last document** is also on, the last active document stays open.
+These controls manage open views; they do not erase the source files.
+
+## Screen privacy and platform limits
+
+Protected sessions use a resume lock when Logistics is backgrounded or interrupted.
+The trusted Wi-Fi exception below changes repeat authentication, not storage
+protection. Ordinary Local files and exported decrypted copies remain ordinary
+files; locking credentials does not encrypt them afterward.
+
+On Android, protected content enables the operating system's secure-window flag.
+On iOS, Logistics shields protected content during app-switcher/background
+transitions and detected screen recording or mirroring. **iOS cannot prevent
+still screenshots through public APIs.** Do not rely on the shield to prevent a
+screenshot while content is visible. Capture protection is scoped to protected
+content, rather than a blanket restriction on every screen in the app.
 
 ## Appearance and E Ink status
 
