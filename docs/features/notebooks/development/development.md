@@ -2,6 +2,8 @@
 
 The remaining physical procedure is [notebook hardware acceptance](hardware-acceptance.md).
 Measured brush corrections are recorded in [Paper Pro calibration](brush-calibration.md).
+Responsive paper defaults, zoom and proximity guards are described in
+[viewport and pen input](viewport-input.md).
 
 ## Current implementation and acceptance boundary
 
@@ -64,8 +66,9 @@ horizontal reserved region into normalized WebView coordinates. The mobile
 canvas keeps its existing controls and input engine: brush, view and layer panels
 move into the upper scrollable tool area, while the viewport begins below the
 reserved hinge band. Layout changes wait for the current pen contact to finish.
-Unfolding restores sheet ownership and the prior zoom; flat and vertical folds
-retain the ordinary presentation. Subscriptions and pending updates retire with
+Unfolding restores sheet ownership. Numeric zoom retains its scale and paper
+center through layout changes; the default view adapts to the available layout.
+Flat and vertical folds retain the ordinary presentation. Subscriptions and pending updates retire with
 the canvas, including protected notebooks.
 An initial or repeated absent-fold update is a no-op while the canvas is already
 flat, so delayed host geometry cannot dismiss an open brush picker.
