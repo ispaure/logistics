@@ -387,6 +387,34 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
             self.assertTrue(editor.dirty is False)
         self.run_async(exercise())
 
+    def test_cancel_editor_preparation_restores_published_reader(self):
+        import asyncio
+        from threading import Event
+        from features.notes_library.mobile.library_document import prepare_editor
+        async def exercise():
+            library = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await library.open_note('Vault/Home.md')
+            retained = list(library.article.children)
+            entered, release = Event(), Event()
+            def slow(*args, **kwargs):
+                entered.set()
+                if not release.wait(3):
+                    raise RuntimeError('Preparation not released')
+                return prepare_editor(*args, **kwargs)
+            with patch('features.notes_library.mobile.library_document.prepare_editor', side_effect=slow):
+                task = asyncio.create_task(library.open_editor())
+                try:
+                    self.assertTrue(await asyncio.to_thread(entered.wait, 2))
+                    self.assertEqual(library.page_loading.status.text, 'Preparing for editing…')
+                    library.page_loading.cancel()
+                    self.assertEqual(list(library.article.children), retained)
+                finally:
+                    release.set()
+                self.assertFalse(await task)
+            self.assertIsNone(library.embedded)
+            self.assertFalse(library.editing)
+        self.run_async(exercise())
+
     def test_edit_stays_in_library_and_saved_read_refreshes_the_note(self):
         async def exercise():
             library = await open_vault(self.app, self.provider, 'Vault', 'files')

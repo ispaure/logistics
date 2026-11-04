@@ -456,36 +456,44 @@ class LibraryDocuments:
         path = self.path
         self.epoch += 1
         epoch = self.epoch
-        await self.remember_position()
-        if not self.valid() or epoch != self.epoch or self.path != path:
-            return False
+        if hasattr(self, 'page_loading'):
+            self.page_loading.finish()
+        opening = self.page_loading = LibraryOpening(self)
+        opening.start(path)
+        opening.status.text = 'Preparing for editing…'
         try:
-            editor = await LibraryMarkdown.open(self, path)
-        except (OSError, ValueError, UnicodeError, OperationCancelled) as error:
-            if self.valid() and epoch == self.epoch:
-                if not isinstance(error, OperationCancelled):
-                    await self.document_error('Could not edit document', error)
-            return False
-        if not self.valid() or epoch != self.epoch or self.path != path:
-            editor.dispose()
-            return False
-        if editor.open_warning is not None:
+            await self.remember_position()
+            if not self.valid() or epoch != self.epoch or self.path != path:
+                return False
             try:
-                await self.document_error('Formatted editing unavailable', editor.open_warning)
-            except BaseException:
-                editor.dispose()
-                raise
+                editor = await LibraryMarkdown.open(self, path)
+            except (OSError, ValueError, UnicodeError, OperationCancelled) as error:
+                if self.valid() and epoch == self.epoch:
+                    if not isinstance(error, OperationCancelled):
+                        await self.document_error('Could not edit document', error)
+                return False
             if not self.valid() or epoch != self.epoch or self.path != path:
                 editor.dispose()
                 return False
-        self.cancel_data_views()
-        self.embedded, self.editing = editor, True
-        self.article.clear()
-        self.article.add(editor.view)
-        self.refresh_reader_actions()
-        self.refresh_chrome()
-        self.host.render()
-        return True
+            if editor.open_warning is not None:
+                try:
+                    await self.document_error('Formatted editing unavailable', editor.open_warning)
+                except BaseException:
+                    editor.dispose()
+                    raise
+                if not self.valid() or epoch != self.epoch or self.path != path:
+                    editor.dispose()
+                    return False
+            self.cancel_data_views()
+            self.embedded, self.editing = editor, True
+            self.article.clear()
+            self.article.add(editor.view)
+            self.refresh_reader_actions()
+            self.refresh_chrome()
+            self.host.render()
+            return True
+        finally:
+            opening.finish()
 
 
     async def open_text(self, path, *, remember=True):

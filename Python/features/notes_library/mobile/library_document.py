@@ -1,5 +1,7 @@
 """Embedded Markdown over the shared provider-backed library text draft."""
 import asyncio
+import toga
+from toga.style import Pack
 from .library_text import LibraryText
 from services.documents.authoring.markdown_editor import FormattedMarkdownInput, prepare_editor
 
@@ -40,11 +42,20 @@ class LibraryMarkdown(LibraryText):
         generation = self.mode_generation
         def current():
             return not self.closed and self.library.valid() and generation == self.mode_generation
+        panel = None
         try:
             await self.flush()
             if not current():
                 return False
             if formatted:
+                def cancel(widget=None, **kwargs):
+                    self.mode_generation += 1
+                    if panel in self.view.children:
+                        self.view.remove(panel)
+                panel = toga.Box(children=[toga.Label('Preparing for editing…'),
+                    toga.Button('Cancel', on_press=cancel, style=Pack(height=48))],
+                    style=Pack(direction='column'))
+                self.view.insert(0, panel)
                 text = self.text
                 prepared = await asyncio.to_thread(prepare_editor, text, **self.formatted.preparation_inputs())
                 if not current() or self.text != text:
@@ -63,6 +74,9 @@ class LibraryMarkdown(LibraryText):
             if current():
                 await self.library.document_error('Formatted editing unavailable', error)
             return False
+        finally:
+            if panel is not None and panel in self.view.children:
+                self.view.remove(panel)
 
     async def flush(self):
         if self.formatted.view in self.view.children:
