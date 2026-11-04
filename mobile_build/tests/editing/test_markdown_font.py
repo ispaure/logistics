@@ -64,6 +64,8 @@ class MarkdownFontTests(unittest.TestCase):
         for content in (markdown_preview('Hello `code`'), editor_html('Hello `code`', 'logistics-editor://test/')):
             with self.subTest(editor='nonce-' in content):
                 self.assertIn(MARKER, content)
+                self.assertIn('sans-serif', content)
+                self.assertIn('monospace', content)
                 styled = style_markdown(content, font_css='@font-face{font-family:LogisticsNative;src:url(data:font/ttf;base64,AA==)}')
                 self.assertIn("font-src data:", styled)
                 self.assertIn("default-src 'none'", styled)

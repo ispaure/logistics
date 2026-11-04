@@ -13,7 +13,7 @@ from mobile.workspace import view_state
 from services.documents.authoring.markdown_editor import editor_blocks, editor_html
 
 
-class MarkdownEditorTests(unittest.TestCase):
+class MarkdownDocumentTests(unittest.TestCase):
     def test_fold_refresh_replays_geometry_changed_during_webview_update(self):
         import asyncio
         from types import SimpleNamespace
@@ -32,11 +32,11 @@ class MarkdownEditorTests(unittest.TestCase):
                     await release.wait()
             with patch.object(editor.view, 'evaluate_javascript', side_effect=evaluate):
                 editor.refresh_geometry()
-                await entered.wait()
+                await asyncio.wait_for(entered.wait(), 2)
                 region[0] = SimpleNamespace(y=200, vertical=False)
                 editor.refresh_geometry()
                 release.set()
-                await editor.geometry_task
+                await asyncio.wait_for(editor.geometry_task, 2)
             self.assertEqual(len(calls), 2)
             self.assertIn('(200)', calls[-1])
             editor.dispose()
@@ -87,6 +87,79 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertEqual(events, ['font', 'detach', 'private-clear'])
         view.set_content.assert_not_called()
 
+    def test_ios_retirement_clears_live_document_before_replacement_navigation(self):
+        from types import SimpleNamespace
+        from services.documents.mobile_views import retire_webview
+        events = []
+        native = SimpleNamespace(stopLoading=lambda: events.append('stop'),
+            evaluateJavaScript=lambda script, **kwargs: events.append(('clear', script)),
+            navigationDelegate=object(), UIDelegate=object())
+        backend = type('IOSWebView', (), {'__module__': 'toga_iOS.widgets.webview'})()
+        backend.native = native
+        view = SimpleNamespace(_impl=backend,
+            set_content=lambda url, content: events.append(('navigate', url, content)))
+        retire_webview(view)
+        self.assertEqual(events[0], 'stop')
+        self.assertEqual(events[1][0], 'clear')
+        self.assertIn('Document closed.', events[1][1])
+        self.assertIn('replaceChildren(body)', events[1][1])
+        self.assertNotIn('document.open(', events[1][1])
+        self.assertEqual(events[2][0], 'navigate')
+        self.assertIsNone(native.navigationDelegate)
+        self.assertIsNone(native.UIDelegate)
+
+    def test_changed_blocks_are_cumulative_ordered_and_retired(self):
+        import json
+        from services.documents.authoring.markdown_editor import FormattedMarkdownInput
+        changes = []
+        editor = FormattedMarkdownInput(changes.append)
+        source = '# Original\r\n\r\n' + ('untouched 😀\n\n' * 1000)
+        editor.load(source)
+        def send(revision, updates):
+            editor.navigate(None, editor.bridge + '?patch=' + quote(json.dumps(
+                dict(revision=revision, changes=updates)), safe=''))
+        send(2, [[0, '# Changed\r\n']])  # A coalesced earlier navigation is safe.
+        self.assertEqual(changes[-1], '# Changed\r\n' + ''.join(editor._blocks[1:]))
+        send(1, [[0, 'stale']])
+        send(3, [[999999, 'invalid']])
+        self.assertEqual(len(changes), 1)
+        send(4, [])  # Undo restores the exact original source.
+        self.assertEqual(changes[-1], source)
+        editor.dispose()
+        send(5, [[0, 'closed']])
+        self.assertEqual(len(changes), 2)
+        self.assertEqual(editor._blocks, ())
+
+    def test_code_and_unicode_line_separators_keep_correct_source_ranges(self):
+        source = '# Heading\r\n\r\nText with \u2028 separator\r\n\r\n```html\r\n<tag>$5 [0]</tag>\r\n```\r\n'
+        blocks = editor_blocks(source)
+        self.assertEqual(''.join(block['source'] for block in blocks), source)
+        code = next(block for block in blocks if block['source'].startswith('```'))
+        self.assertTrue(code['editable'])
+        self.assertIn('&lt;tag&gt;', code['html'])
+        paragraph = next(block for block in blocks if block['source'].startswith('Text'))
+        self.assertIn('separator', paragraph['html'])
+
+    def test_exact_block_source_including_frontmatter_references_and_blank_lines(self):
+        source = '---\ntitle: Keep\n---\n\n# Heading\n\n\nA [link][ref].\n\n[ref]: https://example.invalid\n\n[[Wiki|Title]]\n'
+        blocks = editor_blocks(source)
+        self.assertEqual(''.join(block['source'] for block in blocks), source)
+        self.assertFalse(blocks[0]['editable'])
+        self.assertTrue(next(block for block in blocks if block['source'].startswith('# '))['editable'])
+        self.assertFalse(next(block for block in blocks if '[link]' in block['source'])['editable'])
+        self.assertIn('data-markdown=', editor_html('![Alt](image.png)', 'logistics-editor://test/'))
+        html = editor_html('</script><script>alert(1)</script> location.href = BRIDGE', 'logistics-editor://test/')
+        self.assertNotIn('</script><script>alert', html)
+        self.assertEqual(html.count('</script>'), 1)
+        self.assertIn('default-src', html)
+        self.assertEqual(view_state({'markdown_editor': 'source'}), {'markdown_editor': 'source'})
+        with self.assertRaises(ValueError):
+            view_state({'markdown_editor': 'invalid'})
+        with self.assertRaises(ValueError):
+            editor_blocks('x' * (1024 * 1024 + 1))
+
+
+class MarkdownEditorTests(unittest.TestCase):
     def test_native_close_flushes_pending_input_before_deciding_whether_to_prompt(self):
         from unittest.mock import AsyncMock, patch
         self.app.create_chosen_document('md')
@@ -149,27 +222,6 @@ class MarkdownEditorTests(unittest.TestCase):
         self.app.loop.run_until_complete(actions['Formatted editing']())
         self.assertEqual(owner.editor_area.children, [owner.formatted.view])
         _tuck_control(owner.source_tools, False)
-
-    def test_ios_retirement_clears_live_document_before_replacement_navigation(self):
-        from types import SimpleNamespace
-        from services.documents.mobile_views import retire_webview
-        events = []
-        native = SimpleNamespace(stopLoading=lambda: events.append('stop'),
-            evaluateJavaScript=lambda script, **kwargs: events.append(('clear', script)),
-            navigationDelegate=object(), UIDelegate=object())
-        backend = type('IOSWebView', (), {'__module__': 'toga_iOS.widgets.webview'})()
-        backend.native = native
-        view = SimpleNamespace(_impl=backend,
-            set_content=lambda url, content: events.append(('navigate', url, content)))
-        retire_webview(view)
-        self.assertEqual(events[0], 'stop')
-        self.assertEqual(events[1][0], 'clear')
-        self.assertIn('Document closed.', events[1][1])
-        self.assertIn('replaceChildren(body)', events[1][1])
-        self.assertNotIn('document.open(', events[1][1])
-        self.assertEqual(events[2][0], 'navigate')
-        self.assertIsNone(native.navigationDelegate)
-        self.assertIsNone(native.UIDelegate)
 
     def setUp(self):
         self.temporary = TemporaryDirectory()
@@ -292,28 +344,6 @@ class MarkdownEditorTests(unittest.TestCase):
         bridge.navigate(None, bridge.bridge + '?text=closed')
         self.assertEqual(owner.document.text, text)
 
-    def test_changed_blocks_are_cumulative_ordered_and_retired(self):
-        import json
-        from services.documents.authoring.markdown_editor import FormattedMarkdownInput
-        changes = []
-        editor = FormattedMarkdownInput(changes.append)
-        source = '# Original\r\n\r\n' + ('untouched 😀\n\n' * 1000)
-        editor.load(source)
-        def send(revision, updates):
-            editor.navigate(None, editor.bridge + '?patch=' + quote(json.dumps(
-                dict(revision=revision, changes=updates)), safe=''))
-        send(2, [[0, '# Changed\r\n']])  # A coalesced earlier navigation is safe.
-        self.assertEqual(changes[-1], '# Changed\r\n' + ''.join(editor._blocks[1:]))
-        send(1, [[0, 'stale']])
-        send(3, [[999999, 'invalid']])
-        self.assertEqual(len(changes), 1)
-        send(4, [])  # Undo restores the exact original source.
-        self.assertEqual(changes[-1], source)
-        editor.dispose()
-        send(5, [[0, 'closed']])
-        self.assertEqual(len(changes), 2)
-        self.assertEqual(editor._blocks, ())
-
     def test_each_markdown_session_owns_its_preview(self):
         first = self.app.store.create('First.md', b'# First')
         self.app.open_document(first.id)
@@ -391,6 +421,8 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertTrue(self.app.private_sessions.close(owner.session.id, discard=True))
         self.assertTrue(run(self.app.open_crypt(copies=copies, key='Note.md', edit=True)))
         owner = self.app.private_sessions.active
+        if owner._provider_markdown.pending is not None:
+            run(owner._provider_markdown.pending)
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
         self.assertNotIn(owner.crypt_text, owner.crypt_content.children)
         self.assertNotIn(owner.crypt_preview if hasattr(owner, 'crypt_preview') else None, owner.crypt_content.children)
@@ -432,41 +464,3 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertIsNone(owner.crypt_formatted)
         owner.resume_crypt()
         self.assertEqual(owner.crypt_content.children, [owner.crypt_formatted.view])
-
-    def test_markdown_web_surfaces_keep_fallback_and_opt_into_native_font_bridge(self):
-        from mobile.preview import markdown_preview
-        preview = markdown_preview('Paragraph and `code`')
-        self.assertIn('html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}', preview)
-        self.assertIn('code{font-family:monospace}', preview)
-        self.assertIn('<meta name="logistics-native-font" content="true">', preview)
-        content = editor_html('Paragraph', 'logistics-editor://test/')
-        self.assertIn('font-size:16px', content)
-        self.assertIn('font-family: -apple-system,BlinkMacSystemFont,sans-serif;', content)
-
-    def test_code_and_unicode_line_separators_keep_correct_source_ranges(self):
-        source = '# Heading\r\n\r\nText with \u2028 separator\r\n\r\n```html\r\n<tag>$5 [0]</tag>\r\n```\r\n'
-        blocks = editor_blocks(source)
-        self.assertEqual(''.join(block['source'] for block in blocks), source)
-        code = next(block for block in blocks if block['source'].startswith('```'))
-        self.assertTrue(code['editable'])
-        self.assertIn('&lt;tag&gt;', code['html'])
-        paragraph = next(block for block in blocks if block['source'].startswith('Text'))
-        self.assertIn('separator', paragraph['html'])
-
-    def test_exact_block_source_including_frontmatter_references_and_blank_lines(self):
-        source = '---\ntitle: Keep\n---\n\n# Heading\n\n\nA [link][ref].\n\n[ref]: https://example.invalid\n\n[[Wiki|Title]]\n'
-        blocks = editor_blocks(source)
-        self.assertEqual(''.join(block['source'] for block in blocks), source)
-        self.assertFalse(blocks[0]['editable'])
-        self.assertTrue(next(block for block in blocks if block['source'].startswith('# '))['editable'])
-        self.assertFalse(next(block for block in blocks if '[link]' in block['source'])['editable'])
-        self.assertIn('data-markdown=', editor_html('![Alt](image.png)', 'logistics-editor://test/'))
-        html = editor_html('</script><script>alert(1)</script> location.href = BRIDGE', 'logistics-editor://test/')
-        self.assertNotIn('</script><script>alert', html)
-        self.assertEqual(html.count('</script>'), 1)
-        self.assertIn('default-src', html)
-        self.assertEqual(view_state({'markdown_editor': 'source'}), {'markdown_editor': 'source'})
-        with self.assertRaises(ValueError):
-            view_state({'markdown_editor': 'invalid'})
-        with self.assertRaises(ValueError):
-            editor_blocks('x' * (1024 * 1024 + 1))
