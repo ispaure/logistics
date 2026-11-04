@@ -65,6 +65,8 @@ class NotebookInputProbe(NotebookProbe):
                 point_type = jclass('com.onyx.android.sdk.data.note.TouchPoint')
                 jclass('com.onyx.android.sdk.base.utils.ResManager').INSTANCE.init(app._impl.native.getApplicationContext())
                 curve = []
+                from features.notebooks.brushes import BRUSHES
+                ballpoint = BRUSHES[15]
                 for pressure in (.1, .25, .5, .75, 1.):
                     bitmap = bitmap_type.createBitmap(512, 128, bitmap_config.ARGB_8888)
                     paint = jclass('android.graphics.Paint')()
@@ -80,7 +82,8 @@ class NotebookInputProbe(NotebookProbe):
                         points.add(point)
                     wrapper.drawStroke(jclass('android.graphics.Canvas')(bitmap), paint, points, 40., float(native_preview['max_pressure']), False)
                     rows = [y_ for y_ in range(128) if (int(bitmap.getPixel(250, y_)) >> 24) & 255 >= 128]
-                    curve.append(dict(pressure=pressure, vendor_width=len(rows), canonical_width=40 * (.35 + .65 * pressure ** 1.2)))
+                    curve.append(dict(pressure=pressure, vendor_width=len(rows), canonical_width=40 * (
+                        1 - ballpoint['pressure'] + ballpoint['pressure'] * pressure ** ballpoint['exponent'])))
                     bitmap.recycle()
                 result['vendor_pressure_curve'] = curve
                 device = jclass('com.onyx.android.sdk.device.Device').currentDevice()

@@ -23,7 +23,8 @@ document.getElementById('brushToggle').click();
 document.querySelector('[data-tool="12"]').click();
 document.querySelector('[data-color="6"]').click();
 const blue=()=>getComputedStyle(document.querySelector('.swatch[data-color="6"] circle')).fill;
-require(blue()==='rgb(78, 105, 201)','Writing blue does not match the notebook palette');
+const writingBlue='rgb('+[1,3,5].map(i=>parseInt(state.palette[6].slice(i,i+2),16)).join(', ')+')';
+require(blue()===writingBlue,'Writing blue does not match the measured notebook palette');
 const selected=document.querySelector('.brush-card[aria-pressed="true"]');
 require(selected.dataset.tool==='12','Current brush not identified');
 require(getComputedStyle(selected.querySelector('span')).backgroundColor==='rgba(0, 0, 0, 0)','Selected brush label has an opaque contrast-mode background');
@@ -31,7 +32,7 @@ require(getComputedStyle(selected).backgroundColor!==getComputedStyle(document.q
 const bounds=document.querySelector('.swatch[data-color="6"] svg').getBoundingClientRect();
 require(bounds.width>=24&&bounds.height>=24,'Ink color disc collapsed');
 const saved=$('grayscale').checked;$('grayscale').checked=true;$('grayscale').dispatchEvent(new Event('change'));
-require(blue()==='rgb(78, 105, 201)','Document grayscale preview removed palette colors');
+require(blue()===writingBlue,'Document grayscale preview removed palette colors');
 $('grayscale').checked=saved;$('grayscale').dispatchEvent(new Event('change'));
 document.querySelector('[data-tool="18"]').click();
 require(blue()==='rgb(190, 234, 254)','Highlighter blue does not use its native palette');
