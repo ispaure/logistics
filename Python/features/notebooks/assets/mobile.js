@@ -379,19 +379,13 @@ renderEraserChoices();
   laptopTools.setAttribute('aria-label', 'Notebook drawing settings');
   laptopTools.hidden = true;
   document.body.append(laptopTools);
-  let fold = null, foldFrame = null, unfoldedZoom = null;
+  let fold = null, foldFrame = null;
   function applyFold() {
     foldFrame = null;
     // Never move the paper underneath a live pen contact.
     if (active !== null) { foldFrame = requestAnimationFrame(applyFold); return; }
     const enabled = !!fold;
-    if (enabled && unfoldedZoom === null) {
-      unfoldedZoom = control('zoom').value;
-      control('zoom').value = 'page';
-    } else if (!enabled && unfoldedZoom !== null) {
-      control('zoom').value = unfoldedZoom;
-      unfoldedZoom = null;
-    }
+    const zoomSnapshot = captureViewportZoom();
     closeSheet(false);
     if (eraserDialog.open) eraserDialog.close();
     document.body.classList.toggle('notebook-laptop', enabled);
@@ -407,7 +401,7 @@ renderEraserChoices();
       document.body.style.setProperty('--fold-top', (fold[0] * innerHeight) + 'px');
       document.body.style.setProperty('--fold-bottom', (fold[1] * innerHeight) + 'px');
     }
-    resize();
+    restoreViewportZoom(zoomSnapshot);
   }
   window.notebookFold = geometry => {
     const nextFold = Array.isArray(geometry) && geometry.length === 2 &&
