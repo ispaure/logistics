@@ -62,7 +62,7 @@ def doctor(root, interpreter):
     checks = [('commonUtils', (root / 'Python/commonUtils/__init__.py').is_file()),
               ('uv', bool(find_uv()))]
     for mobile, packages in ((False, ['PySide6', 'ruff']),
-                             (True, ['toga', 'markdown_it', 'pygments', 'pypdf'])):
+                             (True, ['toga', 'markdown_it', 'pygments', 'pypdf', 'briefcase', 'pip'])):
         name = 'mobile' if mobile else 'desktop'
         python = interpreter(mobile)
         if not python.is_file():
@@ -80,7 +80,8 @@ def doctor(root, interpreter):
         except (OSError, subprocess.TimeoutExpired, ValueError):
             info = None
         ready = info is not None and not info['missing']
-        print(f'{"OK" if ready else "MISSING"} {name}: {info if info else "interpreter check failed"}')
+        hint = '' if ready else f'; run python3 dev.py setup {name}'
+        print(f'{"OK" if ready else "MISSING"} {name}: {info if info else "interpreter check failed"}{hint}')
         checks.append((name, ready))
     for name, ready in checks[:2]:
         print(f'{"OK" if ready else "MISSING"} {name}')
