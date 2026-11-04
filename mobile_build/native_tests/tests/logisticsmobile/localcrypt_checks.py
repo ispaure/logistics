@@ -318,11 +318,13 @@ async def exercise_localcrypt(app, passed):
                     await asyncio.sleep(.2)
                     native = dialog._impl.native
                     if get_os() is OS.IOS:
+                        from .dialog_driver import presented_ios_dialog
+                        native = await presented_ios_dialog(dialog)
                         assert str(native.title) == 'Could not open document'
                         message = str(native.message)
                         assert native.presentingViewController is not None
-                        native.dismissViewControllerAnimated(False, completion=None)
-                        dialog._impl.response(None)
+                        from .dialog_driver import respond_ios_dialog
+                        await respond_ios_dialog(dialog, None)
                     else:
                         from java import jclass
                         assert native.isShowing()
@@ -441,9 +443,11 @@ async def exercise_localcrypt(app, passed):
             await asyncio.sleep(.2)
             native = dialog._impl.native
             if get_os() is OS.IOS:
+                from .dialog_driver import presented_ios_dialog
+                native = await presented_ios_dialog(dialog)
                 assert str(native.title) == 'Replace “saved-as.md”?' and native.presentingViewController is not None
-                native.dismissViewControllerAnimated(False, completion=None)
-                dialog._impl.response(False)
+                from .dialog_driver import respond_ios_dialog
+                await respond_ios_dialog(dialog, False)
             else:
                 assert native.isShowing()
                 native.getButton(-2).performClick()

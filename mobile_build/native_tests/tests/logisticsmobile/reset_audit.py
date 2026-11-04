@@ -140,8 +140,8 @@ class Audit(LogisticsMobile):
             index += 1
             await capture_window(self, output / (name + '-' + str(index) + '.png'))
             if get_os() is OS.IOS:
-                dialog._impl.native.dismissViewControllerAnimated(False, completion=None)
-                dialog._impl.response(True)
+                from .dialog_driver import respond_ios_dialog
+                await respond_ios_dialog(dialog, True)
             else:
                 dialog._impl.native.getButton(-1).performClick()
             return await task

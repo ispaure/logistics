@@ -83,8 +83,8 @@ class DocumentStorageProbe(LogisticsMobile):
                 native.getButton(-1 if answer else -2).performClick()
             else:
                 assert native.presentingViewController is not None
-                native.dismissViewControllerAnimated(False, completion=None)
-                dialog._impl.response(answer)
+                from .dialog_driver import respond_ios_dialog
+                await respond_ios_dialog(dialog, answer)
             reports.append(dict(title=getattr(dialog, 'title', 'confirmation'), accepted=answer))
             return await asyncio.wait_for(task, 10)
         self.main_window.dialog = answer_dialog

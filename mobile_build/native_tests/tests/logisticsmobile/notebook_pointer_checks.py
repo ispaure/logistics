@@ -215,7 +215,8 @@ async def exercise_document_actions(app):
             assert native is not None
             if type(app._impl).__module__.startswith('toga_iOS.'):
                 assert native.presentingViewController is not None
-                native.dismissViewControllerAnimated(False, completion=None)
+                from .dialog_driver import dismiss_ios_controller
+                await dismiss_ios_controller(native)
                 if not future.done():
                     future.set_result(choice)
             else:
