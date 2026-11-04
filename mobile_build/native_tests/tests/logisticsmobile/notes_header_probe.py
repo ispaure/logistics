@@ -15,6 +15,12 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class NotesHeaderProbe(NotesDrawersProbe):
+    def assert_breadcrumb_end(self, owner):
+        scroll = owner.breadcrumb_scroll
+        assert abs(scroll.horizontal_position - scroll.max_horizontal_position) <= 1, (
+            'Breadcrumb did not reveal the end after layout',
+            scroll.horizontal_position, scroll.max_horizontal_position)
+
     async def probe(self):
         from rubicon.objc import CGPoint
         output = Path(self.paths.cache)
@@ -41,6 +47,19 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 assert owner.secondary.parent is not None
                 assert owner.breadcrumb_scroll.parent is owner.secondary
                 window = self.main_window._impl.native
+                scroll = owner.breadcrumb_scroll
+                self.assert_breadcrumb_end(owner)
+                scroll.horizontal_position = 0
+                await asyncio.sleep(.35)
+                root_button = owner.breadcrumbs.children[0]._impl.native
+                root_point = root_button.convertPoint(
+                    CGPoint(root_button.bounds.size.width / 2, root_button.bounds.size.height / 2), toView=window)
+                hit = window.hitTest(root_point, withEvent=None)
+                while hit is not None and hit != root_button:
+                    hit = hit.superview
+                assert hit == root_button, 'Beginning of breadcrumb path is unreachable'
+                scroll.horizontal_position = scroll.max_horizontal_position
+                await asyncio.sleep(.35)
                 for button in (owner.menu, owner.links_button, *owner.breadcrumbs.children):
                     if not hasattr(button, 'on_press') or not button.enabled:
                         continue
@@ -49,7 +68,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                         viewport = owner.breadcrumb_scroll._impl.native
                         rect = native.convertRect(native.bounds, toView=viewport)
                         center = float(rect.origin.x + rect.size.width / 2)
-                        if not 0 <= center <= float(viewport.bounds.size.width):
+                        if not float(viewport.bounds.origin.x) <= center <= float(viewport.bounds.origin.x + viewport.bounds.size.width):
                             continue
                     point = native.convertPoint(CGPoint(native.bounds.size.width / 2,
                                                         native.bounds.size.height / 2), toView=window)

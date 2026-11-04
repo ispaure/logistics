@@ -345,7 +345,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         editable = not self.path or PurePosixPath(self.path).suffix.lower() in MARKDOWN
         if editable and self.library.writable and self.edit.parent is None:
             self.secondary.insert(3, self.edit)
-        elif not editable and self.edit.parent is self.secondary:
+        elif (not editable or not self.library.writable) and self.edit.parent is self.secondary:
             self.secondary.remove(self.edit)
         if getattr(self, '_edit_chrome', None) != self.editing:
             self._edit_chrome = self.editing

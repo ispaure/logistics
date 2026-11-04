@@ -78,7 +78,11 @@ class NotesBreadcrumbs(qt.QLabel):
             f'<a href="{i}" style="color:{color};text-decoration:{"underline" if page else "none"}">{escape(label)}</a>'
             if i < len(self.folders) else escape(label)
             for i, (label, page) in enumerate(self.entries)))
-        self.resize(self.sizeHint())
+        size = self.sizeHint()
+        self.resize(size)
+        viewport = getattr(self.owner, 'breadcrumb_viewport', None)
+        if viewport is not None:
+            viewport.setFixedHeight(max(28, size.height() + 4))
 
 
 class NotesStatusLine(StatusLine):
