@@ -108,18 +108,23 @@ Notes Library owns breadcrumb presentation for every embedded document kind.
 Ancestor landing pages use the same bounded provider probes as sidebar folders,
 including files opened before their ancestors are expanded. Probes run off the
 UI thread; links follow the existing document navigation/save/history path.
-Desktop places a shrinking rich-text path beside history. Mobile keeps the
-filename in its title and uses a folder-only breadcrumb below it. Document panes
-under 520 points show their containing folder; wider panes fit the ancestry.
+Desktop places a horizontally scrollable rich-text path beside history. Mobile
+keeps the filename in its title and places the complete folder breadcrumb between
+history and edit/actions on the next row. Both preserve every ancestor and start
+at the end of an overflowing path. `mobile/breadcrumbs.py` removes Toga's default
+100-unit scroll-container minimum, allowing a 320-point row to retain its right
+controls. It defers initial scrolling until native viewport/content measurements
+agree with the current layout; retries are bounded and cancelled for obsolete
+paths or disposal. Once positioned, ordinary user scrolling is left alone.
 Folder breadcrumbs open a landing page when present, otherwise reveal the folder
 in Files. Files retains its separate rule that only landing-page names are
 underlined. Closing or locking the library clears the displayed path.
 
-Apple note history, edit/view and Note actions are projected through
-`_native_reader_buttons` into the native toolbar, including Duo adaptation and
-overflow. The secondary content toolbar is detached on Apple. Files and Links
-remain in the title row. Android retains the secondary row inside the document
-pane, so expanding Files does not place note commands over the file list.
+Apple and Android keep note history, edit/view and Note actions in the content
+row beside breadcrumbs. Read-only libraries omit edit/view. Files and Links remain
+in the title row; Android's native title bar reserves only the actual control
+counts at its logical start/end. The content row follows the document pane, so
+expanding Files does not place note commands over the file list.
 The Apple content title reclaims the navigation strip only when the native bar
 is vertical. Horizontal bars retain their full safe inset so native actions
 cannot cover the title's Files and Links controls.
