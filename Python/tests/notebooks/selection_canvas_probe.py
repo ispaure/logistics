@@ -56,6 +56,12 @@ $('finger').checked=false;
 paperView='pro';setZoom('page');
 $('select').click();
 qaCheck(mode==='select','Select button did not activate selection');
+const oldRows=state.strokes,oldSelection=selected;
+try {
+ state.strokes=[{...oldRows[0],id:'qa-tiny',points:[[700,700,.5,.5]]}];selected=new Set(['qa-tiny']);draw();
+ const corner=selectionHandles(selectionBounds())[0];qaPointer('mouse',[corner,corner]);
+ qaCheck(queue.length===0,'A tiny-dot corner tap emitted a scale edit')
+} finally {state.strokes=oldRows;selected=oldSelection;draw()}
 return true;
 })()'''
 
