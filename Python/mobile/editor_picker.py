@@ -336,7 +336,8 @@ class EditorPicker:
         self.operation = operation
         from .protection import for_app
         for_app(self.app).changed()
-        ordinary = self.app.ordinary_file_roots()
+        ordinary = self.app.ordinary_file_roots(
+            include_collections=getattr(destination_action, 'kind', '') != 'download')
         self.editor_storage_roots = ({'All files': ordinary['Shared files'], 'Local': None,
             'Received Files': ordinary['Received Files']} if creation is not None else {'Local files': None})
         if destination_action is not None:
@@ -408,7 +409,8 @@ class EditorPicker:
         else:
             self.picker_destination = self.editor_browser.status_label('')
         self.picker_destination.style.flex = 0
-        self.picker_primary = toga.Button(primary, on_press=self.confirm_editor_file, style=Pack(height=48, flex=1))
+        from .appearance import action_button
+        self.picker_primary = action_button(toga.Button(primary, on_press=self.confirm_editor_file, style=Pack(height=48, flex=1)))
         self.picker_new_folder = toga.Button('New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48))
         self.new_folder_name = toga.TextInput(placeholder='New folder name', style=Pack(height=48, flex=0 if creation is not None else 1))
         from .keyboard import prepare_picker_input

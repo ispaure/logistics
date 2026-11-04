@@ -33,6 +33,8 @@ Starting a selected cloud download retires the completed destination-picker
 route before presenting transfer progress. Android Back and the iOS Back control
 therefore return to the retained source folder, preserving its viewport.
 `test_remote_downloads.py` covers the route handoff and retained source panel.
+The download picker's Shared files provider excludes managed collection rows;
+Local files and Received Files remain separate storage choices in its dropdown.
 
 `workspace_navigation.WorkspaceNavigation` owns destination routes, open/closed
 drawer state, retained drawer references and paired-session selection.
