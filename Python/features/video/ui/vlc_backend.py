@@ -183,7 +183,7 @@ class VLCPlayer(qt.QObject):
         with self._buffer_lock:
             self._picture_pending = False
         preview = (self._paused_preview_target is not None
-            and abs(self.native.get_time() - self._paused_preview_target) <= 1000) if not self.retired else False
+            and abs(self.native.get_time() - self._paused_preview_target) <= 200) if not self.retired else False
         current = generation[:2] == (self.generation, self.seek_generation)
         if (not self.retired and self.media is not None and current
                 and ((self._state == self.PlaybackState.PlayingState and generation[2]) or preview)):
@@ -560,7 +560,7 @@ class VLCPlayer(qt.QObject):
             self.durationChanged.emit(duration)
         position = max(0, self.native.get_time())
         if self._pending_seek is not None and state in (self.vlc.State.Playing, self.vlc.State.Paused):
-            if abs(position - self._pending_seek) <= 1000:
+            if self._seek_issued and abs(position - self._pending_seek) <= 200:
                 self._pending_seek = None
             elif not self._seek_issued:
                 self.native.set_time(self._pending_seek)

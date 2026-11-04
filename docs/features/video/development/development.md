@@ -6,8 +6,9 @@ below supersede that brief's earlier floating-window scope.
 
 ## Desktop parity implementation
 
-Desktop open actions now use `ui/vlc_backend.py`; `ui/backend.py` retains the Qt
-adapter and its audio-ownership regression. Providers, capability URLs, progress
+Desktop open actions use the factory in `ui/backend.py`: macOS prefers the
+colour renderer, other desktops use `ui/vlc_backend.py`. The Qt adapter and its
+audio-ownership regression remain available. Providers, capability URLs, progress
 and settings remain outside the decoder. `services/video_runtime.py` owns pinned
 VideoLAN NuGet archives for macOS/Windows, archive and payload verification,
 serialized installation and process-lifetime library handles. Linux uses its
@@ -91,8 +92,8 @@ platform-player dispatch. Layout and full-player integration use the production
 VLC backend; inline Qt frame decoding is checked when that host provides a Qt
 decoder, while its controls and resource lifetime remain covered on every host.
 These host checks do not establish physical display,
-receiver or native mobile presentation quality. Desktop HDR output remains
-unavailable because the current surface receives SDR memory frames.
+receiver or native mobile presentation quality. VLC compatibility output still
+receives 8-bit SDR memory frames; the macOS colour path below bypasses that limit.
 
 The widest and smallest panel matrices run in regression; intermediate sizes
 and the additional decoded-surface matrix run in extended. All combinations
@@ -768,3 +769,57 @@ The focused mobile video suite passed 29 tests; documentation checks passed five
 cases, and Ruff passed. All owned QA simulators were removed. These checks do not
 establish physical-hinge, touch/VoiceOver or on-device keyboard acceptance; the
 main installed app and its data were not changed.
+
+## macOS HDR and tone mapping
+
+`ui/mpv_backend.py` implements the existing player contract using libmpv 0.41.
+`ui/mpv_binding.py` serializes client commands and metadata reads on one worker;
+render callbacks only enqueue a Qt update. `ui/mpv_surface.py` owns a Cocoa
+OpenGL float surface, rather than copying RV32 frames into a QImage. The surface
+requests a 16-bit float framebuffer, Retina backing resolution and extended
+dynamic range. Native sibling overlays preserve the existing Qt controls.
+The render context is freed with its GL context current before the worker
+terminates the decoder. Stale source generations cannot restore a cleared frame.
+
+mpv converts source primaries to BT.709 and tone maps to a PQ target peak of
+203 × the current screen’s reported EDR headroom, using BT.2390 by default.
+`ui/extended_srgb.glsl` converts that absolute PQ luminance into extended sRGB,
+with 203 nits as reference white. The window uses extended sRGB, preserving
+ordinary Qt colours while allowing video values above white. An explicit SDR
+choice limits peak to 203 nits. A timer rechecks screen headroom, without
+reconfiguring unchanged output. Peak values must be integers; rejected colour
+options fail playback instead of silently using an old target. Paused output
+changes explicitly repaint after the worker applies the new options, even when
+Qt would coalesce ordinary updates. Each presented buffer reports its completed
+swap to mpv. Repeated paused windowed/fullscreen transitions verify that accepted
+output options also change the actual displayed pixels.
+
+`services/mpv_runtime.py` prepares the checksum-pinned IINA 1.5.0 universal
+runtime in the existing Software/video directory. It mounts the publisher image
+read-only, copies only native libraries and notices, and detaches in `finally`.
+A receipt verifies installed library hashes. Packaged Mach-O dependencies load
+before libmpv to avoid accidental Homebrew ABI substitution; system Swift remains
+system-owned. No IINA frontend or scripts run. The publisher image has no loose
+component notice inventory; retained provenance points to the upstream source
+and dependency recipes and includes the existing GPL reference texts.
+See [IINA dependency build scripts](https://github.com/iina/deps-buildscripts)
+and the [mpv rendering API](https://github.com/mpv-player/mpv/blob/v0.41.0/include/mpv/render.h).
+
+Renderer changes acquire a separate provider lease, retain position, Pause and
+fullscreen intent, then retire the old player. Casting reuses the existing VLC
+receiver path through that handoff. Paused VLC preparation keeps audio suppressed
+and admits a seek only after it was issued and reaches the target; an initial
+frame within one second must not prematurely satisfy the seek.
+
+`test_video_colour.py` covers preference compatibility, receipt tampering,
+universal dependency parsing and bounded native metadata. The extended native
+suite `test_video_colour_native.py` requires Cocoa and
+`LOGISTICS_TEST_MPV_LIBRARY` pointing at a verified prepared runtime. It generates
+PQ and HLG luminance fixtures inside build-manager scratch leases, checks
+monotonic distinct SDR levels, 16-bit output, HDR-range values, fullscreen,
+paused seeking, captions, lock clearing, stale-generation rejection, codec
+coverage, actual playback clocks, end-of-media replay and renderer handoff.
+Forced diagnostic headroom exercises the float range on an SDR screen; it does
+not establish physical HDR brightness, display calibration, Dolby Vision or
+HDR10+ dynamic metadata support. Windows/Linux HDR remains unimplemented.
+Raw images and samples belong under ignored test-results, outside this wiki.

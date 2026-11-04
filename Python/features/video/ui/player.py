@@ -79,6 +79,8 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
                 self.status.setText(self.progress.resume_notice)
             self.closing = False
             self.initialized = True
+            if getattr(self, '_renderer_warning', None):
+                self.status.setText(self._renderer_warning)
         except BaseException:
             self.chapter_cancelled.set()
             if self.sidecar_worker is not None:
@@ -460,6 +462,46 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
     def toggle_fullscreen(self):
         self.fullscreen.toggle()
 
+    def reopen_renderer(self, renderer, *, cast=False):
+        """Retain the same resource and playback intent while changing decoders."""
+        if not self.controls_allowed():
+            return
+        from commonUtils.runtime.resources.selection import ResourceChoice
+        from services.documents.ui.editors import retain
+        from .backend import desktop_playback
+        from .vlc_backend import VLCPlayback
+        playing, position, fullscreen = self.requested_play, self.player.position(), self.isFullScreen()
+        self.pause_requested()
+        self.checkpoint()
+        provider = self.content.provider
+        release = provider.acquire() if hasattr(provider, 'acquire') else lambda: None
+        choice = ResourceChoice(provider, self.content.path, release)
+        candidate = None
+        try:
+            candidate = VideoWindow(choice, backend_factory=VLCPlayback if renderer == 'compatibility' else desktop_playback)
+            candidate.startup_pending = False
+            candidate.player.setPosition(position)
+            if not playing:
+                candidate.player.pause()
+                if isinstance(candidate.backend, VLCPlayback):
+                    candidate.player.play(preserve_pause=True)
+            if fullscreen:
+                self.fullscreen.leave()
+            retain(candidate)
+            if fullscreen and not cast:
+                candidate.fullscreen.toggle()
+            if playing and not (candidate.resume_guard and candidate.resume_guard.blocked):
+                qt.QTimer.singleShot(0, candidate.toggle_play)
+            if cast:
+                qt.QTimer.singleShot(0, candidate.show_receivers)
+            self.close()
+        except (OSError, RuntimeError, ValueError) as error:
+            if candidate is not None:
+                candidate.close()
+            else:
+                choice.close()
+            self.status.setText(str(error))
+
     def show_receivers(self):
         if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
             return
@@ -581,8 +623,8 @@ def open_video_choice(choice, parent=None):
         from features.application import registry
         if not registry.is_feature_enabled('video'):
             raise ValueError('Enable Video Player in Settings → Features before opening a video.')
-        from .vlc_backend import VLCPlayback
-        return retain(VideoWindow(choice, backend_factory=VLCPlayback))
+        from .backend import desktop_playback
+        return retain(VideoWindow(choice, backend_factory=desktop_playback))
     except BaseException:
         choice.close()
         raise
