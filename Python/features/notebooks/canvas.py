@@ -42,7 +42,7 @@ const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
     # neither budget changes native ink geometry or exported document quality.
     setup = setup.replace('__CANVAS_PIXEL_LIMIT__', str((8 if mobile else 16) * 1024 * 1024))
     engine = setup + '\n'.join(asset(name) for name in (
-        'drawing.js', 'queue.js', 'viewport.js', 'palm.js', 'input.js', 'zoom.js', 'images.js', 'selection.js', 'links.js', 'boot.js'))
+        'drawing.js', 'queue.js', 'viewport.js', 'palm.js', 'input.js', 'zoom.js', 'images.js', 'selection.js', 'links.js', 'touch_navigation.js', 'boot.js'))
     engine = engine.replace('__MAX_COMMAND__', str(MAX_COMMAND)).replace(
         '__SEND_COMMAND__', 'console.info(command)' if console_bridge else 'location.href=command')
     # Substitute code first and user-controlled values last. Marker-like titles

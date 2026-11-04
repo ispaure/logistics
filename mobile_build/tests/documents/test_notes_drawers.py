@@ -45,6 +45,28 @@ class NotesDrawerTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_notebook_owns_swipes_but_pane_buttons_remain_available(self):
+        from features.notebooks.notebook import Notebook
+        (self.vault / 'Drawing.rmdoc').write_bytes(Notebook.new('Drawing').to_bytes())
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.reflow(390)
+            self.assertTrue(await owner.open_note('Vault/Drawing.rmdoc'))
+            self.assertTrue(owner.embedded.owns_document_swipes)
+            self.assertFalse(owner.sidebar.open_swipe(1))
+            self.assertFalse(owner.sidebar.open_swipe(-1))
+            self.assertIsNone(owner.sidebar.side)
+            owner.sidebar.toggle()
+            self.assertEqual(owner.sidebar.side, 'files')
+            owner.sidebar.show_detail()
+            owner.sidebar.show_links()
+            self.assertEqual(owner.sidebar.side, 'links')
+            owner.sidebar.show_detail()
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            self.assertTrue(owner.sidebar.open_swipe(1))
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_exit_keeps_overlay_until_motion_finishes_and_dispose_cancels_it(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
@@ -301,6 +323,9 @@ class NotesDrawerTests(unittest.TestCase):
                 self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
                 touch.view = plain
                 self.assertTrue(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
+                owner.opening_swipes_enabled = lambda: False
+                self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
+                owner.opening_swipes_enabled = lambda: True
             clear_opening_swipes(owner)
         self.assertEqual(window.removeGestureRecognizer.call_count, 2)
 
@@ -352,6 +377,11 @@ class NotesDrawerTests(unittest.TestCase):
             self.assertTrue(touch(1, distance, time=100))
             owner.open_swipe.assert_called_with(direction)
         owner.open_swipe.reset_mock()
+        owner.opening_swipes_enabled = lambda: False
+        touch(0, 0)
+        self.assertFalse(touch(1, 150, time=100))
+        owner.open_swipe.assert_not_called()
+        owner.opening_swipes_enabled = lambda: True
         touch(0, 0)
         touch(2, 5, 80, 50)
         self.assertFalse(touch(1, 150, 80, 100))
