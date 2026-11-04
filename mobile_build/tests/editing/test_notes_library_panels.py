@@ -12,6 +12,35 @@ from features.notes_library import library_files
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
+    def test_outgoing_tab_is_ready_while_backlinks_are_loading(self):
+        from features.notes_library.notes_links import connections
+        started, release = Event(), Event()
+        def slow(*args, **kwargs):
+            started.set()
+            release.wait(5)
+            return connections(*args, **kwargs)
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            await owner.open_note('Vault/Home.md')
+            try:
+                with patch('features.notes_library.notes_links.connections', side_effect=slow):
+                    task = self.app.loop.create_task(owner.show_links())
+                    while not started.is_set():
+                        await asyncio.sleep(.01)
+                    self.assertEqual(owner.links_tab, 'outgoing')
+                    self.assertIs(owner.links_scroll.content, owner.link_rows)
+                    self.assertTrue(owner.link_rows.children[0].text.startswith('Outgoing links ('))
+                    owner.select_links_tab('incoming')
+                    self.assertIs(owner.links_scroll.content, owner.backlink_rows)
+                    self.assertEqual(owner.backlink_rows.children[0].text, 'Finding backlinks…')
+                    release.set()
+                    await task
+                    self.assertTrue(owner.backlink_rows.children[0].text.startswith('Backlinks ('))
+            finally:
+                release.set()
+                owner.dispose()
+        self.run_async(exercise())
+
     def test_filename_search_default_and_tabs_retain_independent_rows(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
