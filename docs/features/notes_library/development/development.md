@@ -564,13 +564,18 @@ validate physical paths before inspecting them. No additional plaintext index is
 persisted. Focused provider tests check real encrypted landing-note detection and
 that a folder page batch never reads document content.
 
-Mobile row construction uses the host's existing surface-paint batch for each
-row, so provisional button, icon and selection styles paint only their final
-state. Rendering yields after eight steps or eight milliseconds of work, retaining
-cancellation without a timer round trip for every cached row. Controls are built
-offscreen and published in one batch; row reuse, holds and drag bindings retain
-their existing retirement rules. Desktop uses its existing Qt tree and shares
-the names-only provider improvement.
+Android publishes lightweight tree records to the host's existing recycled file
+list. Java creates and binds a viewport-sized cell pool, including disclosure,
+landing-note glyph/underline, actions and local opaque-token drags. Expansion no
+longer constructs Toga buttons, boxes, images or gesture proxies per entry. Files
+and both Search scopes retain separate lists; selection does not activate a row,
+and replaced/hidden sources cannot dispatch actions. Retirement scrubs native
+rows and ends pending drags.
+
+The retained Toga presentation, including iOS, batches each row's surface paints
+and yields after eight steps or eight milliseconds. It builds controls offscreen
+and publishes one batch. Desktop retains its Qt tree; both paths share the
+names-only provider improvement.
 
 The optional `notes-folders` native probe separates listing, landing-note probes,
 row work and publication for local and LocalCrypt folders on Android/iOS. Its
@@ -596,6 +601,33 @@ and twelve local/LocalCrypt expansions. Every expansion published 45 rows in one
 batch without body reads, and startup completed on all three devices. Native row
 construction dominated listing; host contention produced widely variable timings.
 All QA apps, AVDs and the owned scratch build workspace were removed afterward.
+
+These earlier native receipts cover the per-entry Android renderer; they do not
+validate the current recycled tree's latency.
+
+### Controlled Android row comparison
+
+After reserving an exclusive local Android test slot, run:
+
+```sh
+python -m mobile_build.validation.notes_rows_performance_tools --output test-results/notes-row-performance/controlled-1
+```
+
+The runner uses a clean source snapshot and the build manager's disposable devices
+and scratch lifecycle. Each APK compares the retained per-entry renderer against
+the recycled tree with the same 40-note/four-folder fixture. Device order
+alternates, and a native draw observer times the first frame after complete row
+publication. No Python call profiler runs in these timing windows.
+
+Each window requires five settled intervals: no other emulator, at least 85% host
+and 75% guest CPU idle, low guest I/O wait, available host/guest memory and no host
+swapouts. CPU, memory and emulator identity are sampled throughout; competing
+emulators, swapping or excess external host CPU reject the window. Rejected
+attempts remain in evidence. Targets are below one second cold and half a second
+repeated, plus at least fourfold median improvement. Native controls, recycling,
+body-read prohibition and private-row retirement are checked separately. These
+are acceptance targets; controlled-device results for this renderer are pending.
+
 
 ## Scoped desktop library tabs
 
