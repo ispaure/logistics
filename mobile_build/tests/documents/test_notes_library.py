@@ -193,6 +193,24 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertFalse(owner.breadcrumbs.children)
         self.run_async(exercise())
 
+    def test_read_only_library_keeps_breadcrumbs_without_edit_button(self):
+        from dataclasses import replace
+        from mobile.obsidian import open_vault
+        async def exercise():
+            with patch('features.notes_library.notes.can_write', return_value=False):
+                owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+                self.assertTrue(await owner.open_note('Vault/Home.md'))
+                for apple in (False, True):
+                    owner.host = replace(owner.host, apple=apple)
+                    for width in (320, 834, 390):
+                        owner.reflow(width)
+                        self.assertNotIn(owner.edit, owner.secondary.children)
+                        self.assertEqual(owner.secondary.children, [owner.back_button,
+                            owner.forward_button, owner.breadcrumb_scroll, owner.reader_actions_button])
+                self.assertIn('Read aloud…', [label for label, _ in owner.reader_actions.actions])
+                owner.dispose()
+        self.run_async(exercise())
+
     def test_provider_root_stays_reachable_in_full_breadcrumb_path(self):
         from mobile.obsidian import open_vault
         async def exercise():
