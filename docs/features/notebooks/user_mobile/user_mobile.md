@@ -127,7 +127,7 @@ Marker, Paintbrush, Calligraphy and Shader vary with pressure. Fineliner,
 Mechanical pencil and Highlighter keep a constant width. Calligraphy uses a fixed
 45-degree slanted nib; stroke direction changes its width independently of pen
 tilt. Finger drawing, panning and pinching are blocked while a pen is drawing or
-detected near the paper, and for 350 milliseconds after release. Proximity needs
+detected near the paper, and for 250 milliseconds after release. Proximity needs
 hardware/OS support; contact-based protection works without hover. Physical palm
 classification still depends on the device.
 

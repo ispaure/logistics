@@ -1,6 +1,6 @@
 // OS palm cancellation remains authoritative. This guard also keeps a resting
 // hand from starting a canvas gesture while a detected pen is nearby/in use.
-const penReleaseGrace = 350;
+const penReleaseGrace = 250;
 const penHoverSources = new Set();
 let penContactActive = false, penBlockedUntil = 0;
 function penTouchBlocked() {
