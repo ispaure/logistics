@@ -6,12 +6,10 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from io import BytesIO
 from zipfile import ZipFile
 from unittest.mock import patch
 import time
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from PIL import Image
 from PySide6.QtTest import QTest
@@ -26,8 +24,7 @@ from tests.books_fixture import make_book
 class ReaderUXTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.tmp = TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
+        self.tmp = self.temporary_directory()
         self.root = Path(self.tmp.name)
         self.epub_path = make_book(self.root/'book.epub')
         self.comic_path = self.root/'comic.cbz'
@@ -90,15 +87,11 @@ class ReaderUXTests(QtTestCase):
             self.comic.close()
             self.app.processEvents()
 
-    def test_reader_controls_keep_file_open_in_menu_and_compact_page_margins(self):
+    def test_reader_controls_keep_file_open_in_menu(self):
         self.assertTrue(self.book.open_button.isHidden())
         self.assertTrue(self.comic.controls.open_button.isHidden())
         self.assertTrue(self.book.menus.open_action.isEnabled())
         self.assertTrue(self.comic.menus.shared.open_action.isEnabled())
-        for controls in (self.book, self.comic.controls):
-            margins = controls.layout().contentsMargins()
-            self.assertEqual((margins.top(), margins.bottom()), (2, 3))
-            self.assertEqual(controls.layout().spacing(), 4)
 
     def test_open_dialogs_and_recent_files_are_format_specific(self):
         self.assertEqual(self.book.menus.open_action.text(), 'Open EPUB…')

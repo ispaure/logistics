@@ -1,5 +1,5 @@
 """Chapter offsets, metadata bounds and sparse movie reads."""
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager
@@ -59,6 +59,7 @@ class ChapterTests(unittest.TestCase):
         self.assertEqual(result, [Chapter(0,'Opening'),Chapter(60000,'First act'),Chapter(180000,'Chapter 3')])
         self.assertLess(self.read_bytes, 300)
 
+    @stage(TestStage.EXTENDED)
     def test_real_ffmpeg_chapters_in_mp4_and_matroska(self):
         from shutil import which
         if not which('ffmpeg'):
@@ -69,7 +70,7 @@ class ChapterTests(unittest.TestCase):
         from features.video.playback import VideoContent
         with scratch() as root:
             for container in ('mkv', 'mp4'):
-                path = chapter_movie(root, container)
+                path = chapter_movie(root, container, regenerate=True)
                 content = VideoContent(LocalFiles(root), path.name)
                 try:
                     self.assertEqual(read_chapters(content), [Chapter(0, 'Opening'), Chapter(6000, 'Second scene')])
