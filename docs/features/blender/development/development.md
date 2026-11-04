@@ -3,7 +3,9 @@
 The lazy `register()` declaration contributes a standalone Blender page and its
 release configuration. Opening/discovering the feature never downloads or launches
 Blender. No Blender binaries, packages or addon bundles are distribution assets.
-See the [user guide](../user/user.md) for controls and recovery.
+See the [user guide](../user/user.md) for controls and recovery. The manager is
+desktop-only: `services/mobile_features.py` registers neither Blender nor a mobile
+adapter. See [mobile availability](../user_mobile/user_mobile.md).
 
 ## Owners and contracts
 
@@ -71,9 +73,8 @@ See the [user guide](../user/user.md) for controls and recovery.
   addon selection through three private builders in that same module. Widget
   construction and signal connection order are retained; the page keeps operation
   and close ownership. `addons/ui/page.py` owns the read-only addon catalog. Registration
-  and personal settings import these owners lazily. Root `page.py` and
-  `library_page.py` remain compatibility imports. Backend managers, installation,
-  addon resolution and saved configuration paths are unchanged.
+  and personal settings import these owners lazily. Import these owning UI modules
+  directly; the former root `page.py` and `library_page.py` modules are absent.
 
 The library manages selected addon files and enabled preferences; unrelated
 addons can still be managed directly in Blender. Private addon credentials and
@@ -97,6 +98,10 @@ Blue Hole settings/installed state and regular catalog rows; only a successful
 current-preset refresh enables saving.
 
 ## Validation
+
+This documentation audit used source/test review and static Markdown checks only.
+The dated runtime results below are historical evidence, not new acceptance of
+the current checkout. No Blender, Qt, build or device run was performed.
 
 `Python/tests/blender/test_blender_manager.py` covers verified full-bundle installation,
 hash failures, cancellation, traversal/link rejection, DMG cleanup, locking,
@@ -312,11 +317,11 @@ incompatible installed copies cannot fall back. Cancellation and invalid downloa
 packages are not treated as network failures.
 
 Blue Hole channels resolve to `blender-<major.minor.patch>/<main|beta|alpha>`.
-The published families are `blender-4.5.1` and `blender-5.2.2`, each with all three
-channels. Resolution uses the managed release being launched: 4.5.1 selects its
-own family and 5.2.2 selects its own family. Regression tests cover all six choices
-through both branch resolution and update/cache handling. The 5.2.2 family starts
-from 4.5.1 alpha; availability does not imply completed Blender compatibility.
+Fixtures supply `blender-4.5.1` and `blender-5.2.2` families with all three
+channels. Resolution uses the managed release being launched; with those remote
+branches present, each release selects its own family. Regression tests cover all
+six choices through branch resolution and update/cache handling. These fixtures
+do not prove current remote branch availability or Blender 5.2.2 runtime acceptance.
 The resolver paginates GitHub branches, filters the requested channel and chooses
 the highest baseline at or below the exact Blender version. It then requests the
 URL-encoded branch endpoint and downloads by immutable commit. No compatible
@@ -365,4 +370,4 @@ preset path. The verifier completed, but Blender did not finish quitting within
 45 seconds, so the test process was killed and temporary presets were removed.
 This is macOS activation evidence; Windows runtime validation remains outstanding.
 
-- [Blue Hole consumer maintenance and validation](blue-hole-maintenance.md)
+- [Blue Hole consumer maintenance](blue-hole-maintenance.md)
