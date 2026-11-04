@@ -16,6 +16,43 @@ from commonUtils.ui.native_browser import NativeBrowser
 
 
 class NativeBrowserTests(unittest.TestCase):
+    def test_information_preview_reuses_thumbnail_and_rejects_late_selection(self):
+        from base64 import b64decode
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.filesystem.image_previews import local_native_image
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            provider = LocalFiles(directory)
+            data = b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=')
+            (provider.root / 'image.png').write_bytes(data)
+            (provider.root / 'note.md').write_text('Note')
+            browser = NativeBrowser(thumbnail=lambda row, size, cancelled:
+                local_native_image(provider, row['path'], cancelled))
+            async def check():
+                browser.set_entries(provider, '', provider.list())
+                image = next(row for row in browser.entries if row.label == 'image.png')
+                await browser.select(image)
+                for _ in range(100):
+                    if any(isinstance(child, toga.ImageView) for child in browser.info.children):
+                        break
+                    await asyncio.sleep(.01)
+                self.assertTrue(any(isinstance(child, toga.ImageView) for child in browser.info.children))
+                note = next(row for row in browser.entries if row.label == 'note.md')
+                await browser.select(note)
+                await asyncio.sleep(.02)
+                self.assertFalse(any(isinstance(child, toga.ImageView) for child in browser.info.children))
+                with patch('commonUtils.filesystem.network.is_network_location', return_value=True), \
+                        patch.object(provider, 'open', side_effect=AssertionError('Network image read')):
+                    self.assertEqual(local_native_image(provider, 'image.png'), b'')
+                await browser.close()
+            try:
+                app.loop.run_until_complete(check())
+            finally:
+                app.main_window.close()
+                close_loop(app.loop)
+
     def test_native_search_callback_recurses_without_running_loop_context(self):
         from services.documents.locations import CollectionFiles
         with TemporaryDirectory() as directory:
