@@ -166,6 +166,9 @@ def main(output, *, latency_mode='enforce'):
         probe = Probe(root)
         report['window_states'] = probe.window_states
         try:
+            report['input_batches'] = probe.js(Path(__file__).with_name('input_batch_probe.js').read_text())
+            assert report['input_batches']['passed'], report['input_batches']
+            report['checks']['coalesced_input_preserves_coordinates_with_one_bounds_read'] = True
             tools = probe.js('Object.values(state.tools)')
             for index, tool in enumerate(tools):
                 probe.js("(()=>{$('tool').value=" + str(tool) + ";$('tool').onchange();$('color').value='6';return true})()")
