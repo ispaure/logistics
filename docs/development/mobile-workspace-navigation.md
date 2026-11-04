@@ -218,8 +218,7 @@ reserved regions. Geometry and retained-owner contracts are covered by
 successfully listed Workspaces folder. A local workspace shortcut starts its
 stack at the selected folder: Back from that folder returns to the retained
 Workspaces overview, and subfolders return to their parent within that workspace.
-Browse All Files starts at the storage root and omits the dedicated Local and
-Received Files collections. Browser entry points capture provider and path before
+Shared Files starts at the storage root, including Local and Received Files. Browser entry points capture provider and path before
 their first listing, including LocalCrypt and mapped offline copies. Android Back
 and the toolbar return to Workspaces at that entry point, before considering older
 browser history. Search dismissal and child-folder history remain separate steps.
@@ -755,7 +754,7 @@ not establish native Duo fold-gesture support.
 
 The Local source retains separate Rclone and Others tree views. Classification
 uses each local copy's remote association, including mapped LocalCrypt copies;
-Others owns ordinary copies and Browse All Files. Mixed catalog entries keep
+Others owns only Received Files and Shared Files. Mixed catalog entries keep
 only the selected group's copies, while managed entries retain their remote
 actions. Others renders literal folder names; remote naming groups remain
 available in Rclone. Local → Rclone also shows the Credential filter, defaulting
@@ -1305,13 +1304,12 @@ feedback takes precedence over Cloud's setup action.
 On iOS, `storage_location.shared_documents_path` exposes the registered public
 Documents root separately from the managed Local directory. The app-owned
 `local_sources.SharedFiles` provider protects managed collection roots from
-mutations. Its `include_collections` listing option defaults to true for pickers;
-the main file browser passes false to omit Local and Received Files, including
-recursive root search. Android's `DeviceFiles` uses the same option without
+mutations. Its `include_collections` listing option defaults to true for pickers and
+the Shared Files browser, including recursive root search. Android's `DeviceFiles` uses the same option without
 exposing private app storage. This changes listings only, not filesystem exposure.
-Local lists imported folders and downloaded/synced copies individually, alongside
-shared subfolders. The root choice is marked `browser_root` and rendered as a
-**Browse All Files** folder button below the folder tree, using the same row
+Local → Rclone lists downloaded/synced copies individually. Local → Others
+shows only Received Files and Shared Files; ordinary folders stay inside the browser. The root choice is marked `browser_root` and rendered as a
+**Shared Files** folder button below the folder tree, using the same row
 surface, title metrics and folder icon as Received Files, without a workspace
 menu. Local and Cloud omit the lock-state legend; folder icons and accessible
 labels carry the lock state.

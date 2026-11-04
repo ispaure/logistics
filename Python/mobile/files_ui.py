@@ -135,7 +135,7 @@ class FilesUI:
         if (hasattr(self, 'files_view') and self.file_provider is not None
                 and not self.file_browser.closed):
             if local_read_available(self, private=True):
-                roots = {**self.ordinary_file_roots(include_collections=False), **self.existing_crypt_locations(), **self.linked_crypt_locations()}
+                roots = {**self.ordinary_file_roots(), **self.existing_crypt_locations(), **self.linked_crypt_locations()}
                 storage, destination = self.file_storage.value, self.file_destination.value
                 local_root = local_root or storage not in roots
                 self.file_changing_location = True
@@ -193,7 +193,7 @@ class FilesUI:
 
     def _build_file_browser(self, location):
         """Construct browser/command controls before route publication and first listing."""
-        self.file_roots = self.ordinary_file_roots(include_collections=False)
+        self.file_roots = self.ordinary_file_roots()
         if local_read_available(self, private=True):
             self.file_roots.update(self.existing_crypt_locations())
             self.file_roots.update(self.linked_crypt_locations())

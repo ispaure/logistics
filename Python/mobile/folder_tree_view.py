@@ -162,7 +162,7 @@ class FolderTreeView:
         for name, entry in visible.items():
             if entry.get('browser_root'):
                 path = (name,)
-                projected = folder_row_presentation('Browse All Files', entry, source,
+                projected = folder_row_presentation('Shared Files', entry, source,
                     loaded_remotes, crypt_remotes)
                 record = self._row_for(path, projected.title, name, projected, menu=False)
                 nodes[path] = record

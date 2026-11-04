@@ -52,11 +52,10 @@ does not run Obsidian plugins.
 button above it. The folder header has Back (‹), Search and an upper-right
 actions menu (circled ellipsis on iOS, vertical dots on Android). On iOS it opens
 Logistics’ shared Files directory, showing other files and folders saved there.
-**Browse All Files** omits **Local** and **Received Files**; use their dedicated
-Workspaces locations instead. Both folders remain visible in Apple’s Files app
+**Shared Files** opens the browse root, including **Local** and **Received Files**. Both folders remain visible in Apple’s Files app
 and in destination pickers. No files are moved or duplicated.
-Workspaces lists imported folders and downloaded/synced copies
-individually, opening each folder directly. **Browse All Files** appears underneath
+Workspaces lists downloaded/synced copies individually under Local → Rclone.
+Local → Others shows Received Files and Shared Files. **Shared Files** appears underneath
 the folder list and opens the shared directory on iOS.
 On Android, this browser may be empty when there are no other public files.
 When you open a local folder directly from Workspaces, Back from that folder
@@ -177,7 +176,7 @@ Credential labels omit `.zip` (including uppercase `.ZIP`). Duplicate labels use
 a number, such as **Personal (2)**. Loaded-package changes refresh a visible hub
 automatically, including changes made in another iPad window.
 **Local** lists imported folders, downloaded/synced copies and, on iOS, folders
-beside `Local` in the `Logisticks` shared directory. **Browse All Files** below the
+beside `Local` in the `Logisticks` shared directory. **Shared Files** below the
 list opens other public files, omitting the dedicated Local and Received Files
 locations on both platforms. Save pickers and Apple’s Files app still expose
 those locations. **Home Server** contains
