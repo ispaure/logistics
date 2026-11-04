@@ -97,13 +97,14 @@ class AndroidReaderChromeTests(unittest.TestCase):
                 patch.object(widgets, 'HorizontalScrollView', return_value=scroll, create=True):
             fit_document_title(root, NS(getParent=lambda: titles), 2, 5)
         layout = root.addOnLayoutChangeListener.call_args.args[0]
-        for width, start, end in [(320, 96, 176), (390, 96, 240), (800, 240, 240)]:
+        for width, start, end in [(320, 96, 176), (390, 96, 240), (800, 96, 240)]:
             layout.onLayoutChange(root, 0, 0, width, 48, 0, 0, 0, 0)
             margins = titles.getLayoutParams.return_value
             margins.setMarginStart.assert_called_with(start)
             margins.setMarginEnd.assert_called_with(end)
             self.assertEqual(scroll.getLayoutParams.return_value.width, min(end, 240))
             self.assertGreaterEqual(width - start - end, 48)
+        layout.onLayoutChange(root, 0, 0, 390, 48, 0, 0, 0, 0)
         scroll.addView.assert_called_once_with(actions, -2, -1)
 
     def test_dirty_clean_dirty_releases_retired_save_before_reuse(self):
