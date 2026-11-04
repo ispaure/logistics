@@ -34,3 +34,7 @@ See [Using Logistics](../../../user/user.md) for navigation and settings.
 
 
 PYC cleanup also enforces the system-folder protection in `Python/maintenance.ini`.
+
+## Platform availability
+
+This guide describes the desktop application. See [mobile availability](../user_mobile/user_mobile.md) for Android and iOS.

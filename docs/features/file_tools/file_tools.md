@@ -6,3 +6,5 @@ Choose a guide for the task you want to complete.
 
 - [File Tools Feature](development/development.md)
 - [Inspect paths and remove Python bytecode](user/user.md)
+
+- [Mobile availability](user_mobile/user_mobile.md)

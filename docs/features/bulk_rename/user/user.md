@@ -111,3 +111,7 @@ windows. Rule presets aligns with the top of the action group, clear of the
 floating settings icon in single-tool mode. The hosted tool and standalone window use the same File, Edit, View,
 Rename and Help menus; unavailable operations are disabled, and Show Rules keeps
 the current rules intact.
+
+## Platform availability
+
+This guide describes the desktop application. See [mobile availability](../user_mobile/user_mobile.md) for Android and iOS.
