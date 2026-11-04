@@ -1,8 +1,8 @@
 # Smart Home documentation
 
-Choose a guide for the task you want to complete.
+Smart Home provides desktop Philips Hue group controls and standalone Tautulli
+scripts. The mobile app does not currently include this feature.
 
-## Further reading
-
-- [Smart Home](development/development.md)
-- [Control Philips Hue lights](user/user.md)
+- [Desktop: control Philips Hue lights](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Implementation and validation](development/development.md)
