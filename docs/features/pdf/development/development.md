@@ -212,3 +212,10 @@ Documentation audit on 2026-11-04 reviewed source and test definitions only.
 No Qt, native renderer, device, build or test suite was launched during the
 release quiet hold. The test coverage described above identifies reusable checks;
 it does not claim a new passing run or current physical-device acceptance.
+
+
+## Internal page links
+
+`links.page_links` reads up to 2,000 link annotations on the displayed page using the existing pypdf dependency. It resolves internal explicit and named destinations, excludes hidden links and non-GoTo actions, and converts crop-relative rectangles through page rotation into normalized display coordinates. Invalid optional annotations do not prevent rendering. Mobile extraction runs with the existing page-loading worker. PDFCanvas maps normalized image taps through the compositor’s exact spread rectangles, including the seam; it guards busy, inactive and retired sessions and owns a three-second return action. The shared ImageCanvas transports only recognized finger tap coordinates. Desktop retains QPdfView’s native plain-click navigation and offers a timed return after a completed click changes pages.
+
+`test_pdf_links.py` in the reader and mobile reading suites covers real annotations, rotation, named destinations, notebook redirects, real Qt clicks, undo, spreads and stale-session rejection. The notebook V8 driver covers link gesture arbitration. Native Apple/Android adapter execution and a freshly compiled Android shell remain pending for this change; existing native results above do not validate these new callbacks.

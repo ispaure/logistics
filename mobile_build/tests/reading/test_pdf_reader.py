@@ -96,7 +96,7 @@ class PDFMobileTests(unittest.TestCase):
             Image.new('RGB', (width, height), 'white').save(output, format='PNG')
             return output.getvalue()
         pages = [page(300, 600)] * 5
-        document = SimpleNamespace(count=5, page=lambda index: pages[index])
+        document = SimpleNamespace(data=b'', count=5, page=lambda index: pages[index])
         navigation = PDFNavigation(document)
         self.assertEqual(navigation.load(0, (600, 1000))[0], (0,))
         indices, data = navigation.load(0, (1200, 800))
