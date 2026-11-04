@@ -46,6 +46,8 @@ def set_enabled(app, name, value, *, refresh=True):
 def refresh_features(app):
     if not app.active_host:
         return
+    from .navigation import sync_feature_destinations
+    sync_feature_destinations(app)
     # Keep retained readers and their drafts. Hubs are rebuilt on next entry.
     app.__dict__.pop('_home_content_state', None)
     retired = set()

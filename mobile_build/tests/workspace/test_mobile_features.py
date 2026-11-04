@@ -154,20 +154,48 @@ class MobileFeatureTests(unittest.TestCase):
         self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)
         self.assertIn(panel.session.id, app.workspace.sessions)
 
-    def test_disabled_chat_tab_offers_enable_without_starting_a_client(self):
+    def test_chat_tab_tracks_feature_switch_and_keeps_other_tab_indices(self):
+        app = self.app
+        app.show_settings()
+        app.settings_navigation.choose('Features')
+        control = app.settings_navigation.sections['Features'].feature_switches['lm']
+        control.value = False
+        self.run_async(asyncio.sleep(0))
+        self.assertFalse(app.navigation.content[3].enabled)
+        self.assertEqual(app.native_host.state.destination, 'settings')
+        self.assertFalse(app.select_destination('chat'))
+        self.assertFalse(hasattr(app.chat_controller(), 'chat_store'))
+        self.assertEqual(app.navigation.content[4].text, 'Settings')
+        app.settings_navigation.sections['Features'].feature_switches['lm'].value = True
+        self.run_async(asyncio.sleep(0))
+        self.assertTrue(app.navigation.content[3].enabled)
+        app.show_chat()
+        self.assertIsNone(app.chat_controller().state.client)
+
+    def test_disabling_selected_chat_returns_home_and_preserves_conversation(self):
+        app = self.app
+        app.show_chat()
+        chat = app.chat_controller()
+        chat.chat_prompt.value = 'Keep this draft'
+        app.set_feature_enabled('lm', False)
+        self.run_async(asyncio.sleep(0))
+        self.assertEqual(app.native_host.state.destination, 'home')
+        self.assertFalse(app.navigation.content[3].enabled)
+        app.set_feature_enabled('lm', True)
+        self.run_async(asyncio.sleep(0))
+        app.show_chat()
+        self.assertEqual(chat.chat_prompt.value, 'Keep this draft')
+
+    def test_persisted_disabled_chat_is_hidden_on_startup(self):
         app = self.app
         app.set_feature_enabled('lm', False, refresh=False)
-        app.native_host.activate('chat')
-        app.select_destination('chat')
-        chat = app.chat_controller()
-        self.assertFalse(hasattr(chat, 'chat_store'))
-        self.assertFalse(app.feature_enabled('lm'))
-        view = app.routes.roots['chat'].children[0]
-        view.children[2].on_press()
-        self.run_async(asyncio.sleep(0))
-        self.assertTrue(app.feature_enabled('lm'))
-        self.assertTrue(hasattr(chat, 'chat_store'))
-        self.assertIsNone(chat.state.client)
+        other = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        try:
+            self.assertFalse(other.navigation.content[3].enabled)
+            self.assertEqual(other.native_host.state.destination, 'home')
+        finally:
+            other.main_window.close()
+            close_loop(other.loop)
 
     def test_cloud_off_keeps_local_text_creation_and_hides_remote_sources(self):
         app = self.app
