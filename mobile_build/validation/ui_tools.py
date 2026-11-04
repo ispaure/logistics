@@ -176,6 +176,7 @@ def record_ios_stall(path, row):
         return
     receipt = path.with_name('ios-webview-stall-' + str(pid) + '.json')
     record = dict(pid=pid, received_ns=time.time_ns(), sent_ns=row.get('sent_ns'))
+    service_capture = None
     def save(status):
         record['status'] = status
         try:
@@ -197,7 +198,13 @@ def record_ios_stall(path, row):
             return
         if path.with_name('ios-native-ui-owned.json').is_file():
             from mobile_build.validation.screen_time_rpc import capture
-            capture(path, record['executable'], pid)
+            def capture_services():
+                try:
+                    capture(path, record['executable'], pid)
+                except Exception as error:
+                    log(Severity.WARNING, 'Simulator service diagnostics', type(error).__name__)
+            service_capture = Thread(target=capture_services, daemon=True)
+            service_capture.start()
         output = path.with_name('ios-webview-stall-' + str(pid) + '.sample.txt')
         if output.exists():
             return
@@ -215,6 +222,11 @@ def record_ios_stall(path, row):
     except (OSError, subprocess.TimeoutExpired) as error:
         record['error'] = type(error).__name__ + ': ' + str(error)[:500]
         save('capture-error')  # Diagnostics never alter native acceptance.
+    finally:
+        if service_capture is not None:
+            # Start both sides together; symbolication or an unavailable
+            # service must not delay collecting the app's waiting stacks.
+            service_capture.join(timeout=5)
 
 
 def record_android_stall(path, row):
