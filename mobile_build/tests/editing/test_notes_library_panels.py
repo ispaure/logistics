@@ -109,6 +109,21 @@ class NotesLibraryPanelTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_command_group_is_centered_in_the_allocated_panel_width(self):
+        from travertino.layout import Viewport
+        import toga
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            commands = [child for child in owner.panel_actions.children if isinstance(child, toga.Button)]
+            for width in (264, 320, 600):
+                owner.tree.style.layout(Viewport(width=width, height=700))
+                left = commands[0].layout.absolute_content_left
+                right = commands[-1].layout.absolute_content_right
+                center = owner.tree.layout.absolute_content_left + owner.tree.layout.content_width / 2
+                self.assertAlmostEqual((left + right) / 2, center, delta=1)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_centered_commands_collapse_without_changing_document(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
@@ -126,7 +141,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertFalse(hasattr(owner, 'panel_footer'))
             self.assertEqual(owner.tree.children[1:3], [owner.panel_actions, owner.panel_body])
             self.assertEqual(owner.panel_actions.style.justify_content, 'center')
-            self.assertEqual(len(owner.panel_actions.children), 3)
+            self.assertEqual(sum(hasattr(child, 'on_press') for child in owner.panel_actions.children), 3)
             owner.dispose()
             collapse.on_press()
             self.assertEqual(owner.expanded, set())
