@@ -1037,6 +1037,22 @@ the owning workload removes its disposable source and test workspace.
 PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_platform_probe.py --profile full --output test-results/notebook-native
 ```
 
+The November 4, 2026 managed guest gate passed all 121 notebook cases and all
+12 native probe types on Fedora 44 ARM64 (Qt/X11 under owned Xvfb, software
+rendering) and Windows 11 ARM64 (x64 Python/Qt 6.12, native rendering). Coverage
+combines separate exclusive drawing and functional legs from `bced229c` with
+probe-only repairs in `2b9a29de`; notebook production code, shared dependencies
+and environment pins are identical. Exclusive drawing reached maximum frame
+gaps of 33.3 ms on Linux and 16.8 ms on Windows against the unchanged 80 ms guard.
+The earlier Linux 366.8 ms stall did not reproduce; historical counters and
+source differences prevent attributing that failure to a single cause.
+
+The repaired memory fixture selects the Highlighter's offered fixed width and
+verifies each brush stroke is accepted, preserving all 217 strokes rather than
+lowering the expected counts. Chrome checks use the calibrated palette. Both
+guests collected evidence and removed their test workspaces. Optional RSS
+ceilings were unset, so these runs do not claim an absolute memory-budget pass.
+
 Full native acceptance requires a desktop display, the configured rclone binary
 and Go (discovered on PATH or in the existing mobile toolchain, or supplied with
 `--go`). Python/native runtimes and rclone must already be installed. Go may
@@ -1445,8 +1461,8 @@ its scratch files while they are in use. The drawing latency guard is unchanged.
 The isolated retest with only these QA changes passed all 16 functional stress
 checks, including saving a 1,007-stroke page after continued drawing, and removed
 its guest workspace without a thread failure. Its normal-renderer frame gap
-still reached 300.1 ms against the 80 ms guard, so Windows responsiveness remains
-unresolved despite the passing memory, ink-quality and file-preservation checks.
+still reached 300.1 ms against the 80 ms guard, so Windows responsiveness was still
+unresolved in that snapshot despite the passing memory, ink-quality and file-preservation checks.
 
 ## Recovery history sharing
 
