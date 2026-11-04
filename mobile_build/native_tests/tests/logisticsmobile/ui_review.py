@@ -2,9 +2,10 @@
 
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from commonUtils.runtime.platform import get_os, OS
+
+TEST_STAGE = TestStage.REGRESSION
 
 
 async def wait_for_file_entry(app, path):
@@ -240,10 +241,10 @@ async def exercise_ui_review(app):
             assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']
         assert folder.text == 'Shared Files'
-        # Shared Files is a text action below the hierarchy. Folder glyphs
-        # belong to actual folder rows; verify one before tapping the root action.
-        folder_row = app.folder_buttons['UI Review']
-        indicator = next(child for child in folder_row.parent.children
+        # The Shared Files entry has the same native folder glyph as other
+        # workspace rows. Ordinary directories belong inside its browser.
+        assert 'UI Review' not in app.folder_buttons
+        indicator = next(child for child in folder.parent.children
                          if getattr(child, 'control_icon', '') == 'folder')
         if get_os() is OS.IOS:
             assert indicator._impl.native.imageForState(0) is not None
@@ -265,9 +266,11 @@ async def exercise_ui_review(app):
             from services.documents.locations import collection_path
             collection = collection_path(app.private_root).name
             assert collection not in [entry.payload['path'] for entry in app.file_browser.entries]
-            app.show_locations()
-            assert await app.refresh_folder_hub()
-            await app.folder_buttons['UI Review'].on_press()
+            row = next(row for row in app.file_rows.values() if row['name'] == 'Local')
+            assert await app.browser_file_folder(row)
+            await wait_for_file_entry(app, 'UI Review')
+            row = next(row for row in app.file_rows.values() if row['name'] == 'UI Review')
+            assert await app.browser_file_folder(row)
             assert app.file_storage.value == 'Local files' and app.file_path == 'UI Review'
             await wait_for_file_entry(app, 'UI Review/Meeting notes.md')
         else:
