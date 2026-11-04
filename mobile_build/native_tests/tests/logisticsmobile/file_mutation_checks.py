@@ -101,8 +101,8 @@ async def exercise_destination_edges(app):
         native = dialog._impl.native
         if type(app._impl).__module__.startswith('toga_iOS.'):
             assert native.presentingViewController is not None
-            native.dismissViewControllerAnimated(False, completion=None)
-            dialog._impl.response(False)
+            from .dialog_driver import respond_ios_dialog
+            await respond_ios_dialog(dialog, False)
         else:
             assert native.isShowing()
             native.getButton(-2).performClick()
@@ -304,8 +304,8 @@ async def exercise_cross_storage(app, encrypted):
         await asyncio.sleep(.3)
         native = dialog._impl.native
         if type(app._impl).__module__.startswith('toga_iOS.'):
-            native.dismissViewControllerAnimated(False, completion=None)
-            dialog._impl.response(True)
+            from .dialog_driver import respond_ios_dialog
+            await respond_ios_dialog(dialog, True)
         else:
             native.getButton(-1).performClick()
         return await asyncio.wait_for(task, 5)

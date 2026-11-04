@@ -122,6 +122,13 @@ covering the separate 30-second render, action and retirement assertions; cleanu
 releases it immediately when any assertion fails. Diagnostics record accepted
 actions, click counts and revisions.
 
+An acknowledgement received during the driver's polling delay stops further
+clicks before its next JavaScript call. This prevents a delayed second approval
+from presenting a real confirmation after a fixture's dialog mock has ended.
+Fixture answers to real iOS dialogs wait for presentation, native dismissal
+completion and overlay detachment before resolving the response future. A fixed
+delay can otherwise leave UIKit's dimming view attached after the test proceeds.
+
 The suite runner reports the active test and completed count every 60 seconds.
 Native crashes also produce Python tracebacks. The outer platform runner allows
 ten minutes for the shared suite and fifteen for Logistics and uploads its logs; macOS jobs also collect native Python
