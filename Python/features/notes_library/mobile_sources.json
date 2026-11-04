@@ -8,6 +8,7 @@
     "library_files.py",
     "link_policy.py",
     "mobile/__init__.py",
+    "mobile/breadcrumbs.py",
     "mobile/dataview.py",
     "mobile/file_preview.py",
     "mobile/library_document.py",

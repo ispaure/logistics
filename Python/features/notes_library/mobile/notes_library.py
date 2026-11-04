@@ -272,7 +272,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.secondary.add(button)
         self.view.insert(1, self.secondary)
         self.breadcrumbs = toga.Box(style=Pack(direction=ROW))
-        self.breadcrumb_scroll = toga.ScrollContainer(content=self.breadcrumbs, horizontal=True,
+        from .breadcrumbs import BreadcrumbScroll
+        self.breadcrumb_scroll = BreadcrumbScroll(content=self.breadcrumbs, horizontal=True,
             vertical=False, style=Pack(flex=1, height=44))
         self.secondary.insert(2, self.breadcrumb_scroll)
         self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
@@ -363,6 +364,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
     def refresh_breadcrumbs(self):
         if not self.path:
+            self.breadcrumb_scroll.cancel_pending_end()
             self.breadcrumbs.clear()
             self._breadcrumb_key = None
             return
@@ -373,6 +375,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     self.folder_pages.get(folder), folder) for folder in folders]
         key = (tuple(entries), self._breadcrumb_width)
         if key == self._breadcrumb_key:
+            self.breadcrumb_scroll.retry_end(self.host.loop,
+                valid=lambda: self._breadcrumb_key == key and self.valid())
             return
         self._breadcrumb_key = key
         self.breadcrumbs.clear()
@@ -412,10 +416,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             button.breadcrumb_folder = folder
             underline_folder_link(button)
             self.breadcrumbs.add(button)
-        def reveal_end():
-            if self._breadcrumb_key == key and self.valid():
-                self.breadcrumb_scroll.horizontal_position = self.breadcrumb_scroll.max_horizontal_position
-        self.host.loop.call_soon(reveal_end)
+        self.breadcrumb_scroll.reveal_end(self.host.loop,
+            valid=lambda: self._breadcrumb_key == key and self.valid())
 
 
     def valid(self):
