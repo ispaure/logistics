@@ -210,7 +210,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         assert name.value == 'Home.md'
         name.value = 'Renamed.md'
         self.click(self.button(form, 'Rename'))
-        await self.until(lambda: owner.path == 'Library/Renamed.md', 'Rename did not publish')
+        await self.until(lambda: owner.path == 'Library/Renamed.md' and not owner.file_command_busy and owner.file_action_view is None, 'Rename did not finish')
         picker = await owner.move_picker(owner.path)
         browser = picker._folder_browser
         assert all(row.entry.container for row in browser.native_list.data)
@@ -227,7 +227,7 @@ class NotesMarkdownFeedbackProbe(DocumentWorkspaceProbe):
         await self.until(lambda: browser.search_directory == 'Destination', 'Native folder tap did not browse')
         await self.screenshot(label + '-move-destination')
         self.click(self.button(picker, 'Move here'))
-        await self.until(lambda: owner.path == 'Library/Destination/Renamed.md', 'Move did not publish')
+        await self.until(lambda: owner.path == 'Library/Destination/Renamed.md' and not owner.file_command_busy and owner.file_action_view is None, 'Move did not finish')
         assert owner.library.read(owner.path).endswith(b'References removed')
         picker = await owner.move_picker('Library/Folder')
         assert all(row.entry.label != 'Folder' for row in picker._folder_browser.native_list.data)
