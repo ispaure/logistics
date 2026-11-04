@@ -24,6 +24,15 @@ RAW_METHODS = {'remove_empty', 'write_bytes', 'write_text', 'read_bytes', 'read_
                'replace_stream', 'replace_created', 'create_file'}
 
 
+# Exact parameter types for the in-memory native notebook codec. These are not
+# filesystem handles: TaggedBlockReader/Writer.data is the codec's DataStream.
+MEMORY_CODEC_METHODS = {
+    'features.notebooks._vendor.rmscene.tagged_block_reader.TaggedBlockReader': 'read_bytes',
+    'features.notebooks._vendor.rmscene.tagged_block_writer.TaggedBlockWriter': 'write_bytes',
+}
+MEMORY_CODEC_MARKER = '@typed-memory-codec:'
+
+
 def prefix(name, prefixes):
     return any(name == item or name.startswith(item + '.') for item in prefixes)
 
@@ -55,6 +64,11 @@ class StorageVisitor(ast.NodeVisitor):
         if isinstance(node, ast.Call):
             return self.resolve(node.func) + '()'
         return '?'
+
+    def memory_codec_reference(self, node):
+        name = self.resolve(node)
+        return any(name == MEMORY_CODEC_MARKER + kind + '.data.' + method
+                   for kind, method in MEMORY_CODEC_METHODS.items())
 
     def visit_Import(self, node):
         for alias in node.names:
@@ -89,7 +103,7 @@ class StorageVisitor(ast.NodeVisitor):
             self.report(node, 'raw-call:' + name)
         if node.attr == 'replace' and self.resolve(node.value) == 'pathlib.Path()':
             self.report(node, 'raw-method:replace')
-        if node.attr in RAW_METHODS - {'rename'}:
+        if node.attr in RAW_METHODS - {'rename'} and not self.memory_codec_reference(node):
             self.report(node, 'raw-method:' + node.attr)
         if node.attr in BACKEND_ATTRIBUTES:
             self.report(node, 'backend-policy:' + node.attr)
@@ -118,7 +132,13 @@ class StorageVisitor(ast.NodeVisitor):
             self.visit(value)
         self.scope.append(node.name)
         args = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
-        self.bindings.append({arg.arg: arg.arg for arg in args})
+        arguments = {}
+        for arg in args:
+            kind = self.resolve(arg.annotation) if arg.annotation is not None else None
+            arguments[arg.arg] = MEMORY_CODEC_MARKER + kind if kind in MEMORY_CODEC_METHODS else arg.arg
+        if self.resolve(ast.Name(id=node.name, ctx=ast.Load())) in MEMORY_CODEC_METHODS:
+            self.bindings[-1][node.name] = node.name
+        self.bindings.append(arguments)
         for child in node.body:
             self.visit(child)
         self.bindings.pop()
@@ -132,6 +152,8 @@ class StorageVisitor(ast.NodeVisitor):
         self.generic_visit(node)
         self.bindings.pop()
         self.scope.pop()
+        if self.resolve(ast.Name(id=node.name, ctx=ast.Load())) in MEMORY_CODEC_METHODS:
+            self.bindings[-1][node.name] = node.name
 
     def visit_Call(self, node):
         name = self.resolve(node.func)
@@ -158,7 +180,7 @@ class StorageVisitor(ast.NodeVisitor):
                 'atomic_write_bytes', 'atomic_write_json', 'atomic_write_text',
                 'write_text_file', 'read_text_file', 'save_transaction'}:
             self.report(node, 'raw-call:' + name)
-        elif method in RAW_METHODS:
+        elif method in RAW_METHODS and not self.memory_codec_reference(node.func):
             self.report(node, 'raw-method:' + method)
         elif method == 'open':
             # Path(...) aliases identify filesystem reads. Unknown receivers can
