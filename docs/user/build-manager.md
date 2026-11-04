@@ -57,14 +57,17 @@ not from the current checkout. Build numbers are separate from app version and r
 | TestFlight | Guarded app/bundle ID; selected external group; enabled state; What to Test; locale; polling interval and processing timeout |
 | Firebase | App ID (verified against the guarded package); tester group; release notes |
 | Tools | Desktop/mobile interpreter, Xcode developer directory, Android SDK and JDK directories |
-| Local targets | iPhone/Duo/iPad template selectors, disposable Android image/model, Linux/Fedora/Windows guest selectors, Linux distro scope/Fedora mode and shutdown preference; availability is validated before execution |
+| Local targets | iPhone/Duo/iPad template selectors, disposable Android image/model, Fedora/Windows guest selectors, Fedora mode and shutdown preference; availability is validated before execution |
 | Legacy reserved targets | `vm.shared_host` and `vm.shared_guest` are shown read-only for compatibility; `android.avd` remains editable to clear a legacy value, and must be empty. Local backends do not attach existing AVDs or mount shared folders |
 | Authentication | Existing TestFlight credential JSON and `.p8` references, with Browse/Locate; GitHub repository, credential-helper strategy and token environment name; existing Firebase CLI account storage |
 | Signing | Optional manual app, Inbox, widget and widget-action profile references; all extensions are required for manual signing. Leave all references empty for automatic signing with the pinned team |
 | Versions | Read-only app version and next iOS/Android build previews; one-run explicit build override; intentional tracked app-version edit; explicit independent release tag |
 
-The local profile is `mobile_build/.tools/build-manager/profile.json` (schema 1,
-`values` mapping), overridable with `LOGISTICS_MANAGER_PROFILE`. Existing provider
+The standalone manager saves a separate private profile for each checkout.
+On first Save, it preserves values from the legacy
+`mobile_build/.tools/build-manager/profile.json` without rewriting that file.
+Direct command-line tools use the legacy location unless
+`LOGISTICS_MANAGER_PROFILE` selects another profile. Existing provider
 JSON remains the tracked default. `LOGISTICS_TESTFLIGHT_GROUP`,
 `LOGISTICS_FIREBASE_GROUP`, `ANDROID_HOME`, `JAVA_HOME` and `DEVELOPER_DIR` have
 visible precedence. Existing `ASC_KEY_PATH`, `ASC_KEY_ID` and `ASC_ISSUER_ID`

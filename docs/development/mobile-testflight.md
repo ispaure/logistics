@@ -40,7 +40,9 @@ App Store Connect configuration and distribution signing are separate steps:
    for builds containing Notes Library scripting. Include it in both beta and
    App Store review information, with the sample attachment or an accessible link.
 6. Capture the intended mobile sources in the manager; current uncommitted mobile
-   files are supported. The pinned commonUtils source must still be committed. Pick a unique,
+   and commonUtils files are supported through the captured working-tree snapshot.
+   Required native/runtime evidence must match that snapshot; this does not permit
+   dirty-source GitHub publication. Pick a unique,
    increasing positive build number (at most nine digits) for every uploaded build.
 
 Apple describes [distribution preparation](https://developer.apple.com/documentation/xcode/preparing-your-app-for-distribution)
