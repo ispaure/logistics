@@ -346,8 +346,11 @@ rejects automatic desktop settings paths on mobile. This host uses immutable
 in-code defaults and an app-private `preferences.ini`. **Settings** controls the
 editor/preview font size and whether the last selected document is restored.
 Reads do not create the INI; saving does. Invalid files are preserved and defaults
-are used; saving refuses to overwrite them. Reload after repairing or moving such
-a file. Concurrent external edits also require reload. Home remains the launch
+are used; saving refuses to overwrite them. **Settings → App → Reload preferences** rereads this file and rebuilds Settings.
+Use it after repairing, moving or externally editing the file; changes made in
+Settings are already saved and do not need reloading. Reload is retained as a
+recovery action because saves refuse to overwrite invalid or externally changed
+files. Home remains the launch
 screen; restoring a document makes it ready under Documents.
 
 Desktop preferences cannot simply be copied wholesale: filesystem paths,
