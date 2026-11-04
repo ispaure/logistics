@@ -109,6 +109,11 @@ Review these Logistics test owners when changing the corresponding behavior:
 | `test_archive_browser.py` | Actual BrowserView registration, ZIP/TAR activation, CBZ precedence, selection actions, direct extraction, success-only workspace refresh, feature toggles and document-host routing |
 | `test_archive_password_ui.py` | Configured encrypted creation, conflicting passwords and prompt cancellation before a job starts |
 | `test_archive_zip_creation_lifecycle.py` | Suggested output names, folder roots, password confirmation and cancellation without destroying a live worker |
+| `test_archive_failure_cleanup.py` | Actual creation fixtures retain an intentional assertion while cancelling and retiring active workers, removing their fixtures and exiting without a native abort |
+
+Worker-owning creation dialogs rely on managed fixture scopes rather than raw
+`deleteLater` cleanups. The failure-cleanup regression uses an isolated Qt child;
+it checks failure unwinding without explaining or relaxing a creation wait deadline.
 
 Credential-package publication tests live in
 `Python/tests/resources/test_credential_archive.py`; Comics retry tests have their

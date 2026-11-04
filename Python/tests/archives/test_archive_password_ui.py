@@ -30,7 +30,6 @@ class ArchivePasswordUITests(QtTestCase):
         source = self.root / 'source.txt'
         source.write_text('original')
         dialog = CreateZipDialog([source])
-        self.addCleanup(dialog.deleteLater)
         with patch('features.archives.ui.create_zip.confirmed_password') as prompt:
             dialog._create()
             self.wait(dialog)
@@ -52,7 +51,6 @@ class ArchivePasswordUITests(QtTestCase):
             source.write_text(name)
             sources.append(source)
         dialog = CreateZipDialog(sources)
-        self.addCleanup(dialog.deleteLater)
         with patch('features.archives.ui.create_zip.confirmed_password') as prompt:
             dialog._create()
             self.wait(dialog)
@@ -65,7 +63,6 @@ class ArchivePasswordUITests(QtTestCase):
         source = self.root / 'source.txt'
         source.write_bytes(b'Original source')
         dialog = CreateZipDialog([source])
-        self.addCleanup(dialog.deleteLater)
         with patch('features.archives.ui.create_zip.confirmed_password', return_value=None) as prompt, \
              patch.object(dialog.task, 'start') as start:
             dialog._create()

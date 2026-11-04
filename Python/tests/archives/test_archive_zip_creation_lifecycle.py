@@ -37,7 +37,6 @@ class ZipCreationLifecycleTests(QtTestCase):
     def test_zip_suggests_stem_and_prompts_without_configuration(self):
         path = self.comic('Comic.cbz')
         dialog = CreateZipDialog([path])
-        self.addCleanup(dialog.deleteLater)
         self.assertEqual(Path(dialog.output.text()), self.root / 'Comic.zip')
         with patch('features.archives.ui.create_zip.confirmed_password', return_value='shared') as prompt:
             dialog._create()
@@ -56,7 +55,6 @@ class ZipCreationLifecycleTests(QtTestCase):
         folder = path.parent
         (folder / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=configured\n')
         dialog = CreateZipDialog([folder])
-        self.addCleanup(dialog.deleteLater)
         self.assertEqual(Path(dialog.output.text()), self.root / 'Books.zip')
         with patch('features.archives.ui.create_zip.confirmed_password') as prompt:
             dialog._create()
@@ -98,7 +96,6 @@ class ZipCreationLifecycleTests(QtTestCase):
         (self.root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=test-only\n')
         entered, release = Event(), Event()
         dialog = CreateZipDialog([source])
-        self.addCleanup(dialog.deleteLater)
         def create(*args, cancelled, **kwargs):
             entered.set()
             if not release.wait(5):
