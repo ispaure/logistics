@@ -24,6 +24,7 @@ def columns_controller():
 
 class WorkspaceColumns:
     def __init__(self, workspace, master):
+        self.closed = False
         from toga_iOS.container import ControlledContainer
         self.workspace, self.master = workspace, master
         self.app = workspace.app
@@ -76,6 +77,8 @@ class WorkspaceColumns:
         self.layout()
 
     def layout_sidebar(self, container):
+        if self.closed:
+            return
         # navigationController can resolve to the window's outer navigation
         # controller through the tab hierarchy. This column owns its own frame.
         safe = container.native.safeAreaInsets
@@ -89,6 +92,8 @@ class WorkspaceColumns:
         reserve_navigation(self.app, view=self.sidebar_box)
 
     def layout_root(self, container):
+        if self.closed:
+            return
         # The tab exposes the wrapper, but its retained root content belongs to
         # the inner navigation controller. Never temporarily change controller:
         # Toga can synchronously refresh the tab list during content layout.
@@ -100,6 +105,8 @@ class WorkspaceColumns:
             container.content.interface.refresh()
 
     def layout(self):
+        if self.closed:
+            return
         from rubicon.objc import CGRect
         from .pane_layout import panes
         from dataclasses import replace
@@ -182,6 +189,11 @@ class WorkspaceColumns:
             apply()
 
     def close(self):
+        if self.closed:
+            return
+        # UIKit can synchronously deliver layout while containment changes.
+        # Retire these callbacks before detaching either child controller.
+        self.closed = True
         self.adapter.controller.setViewControllers([], animated=False)
         for child in (self.navigation, self.sidebar.controller):
             child.willMoveToParentViewController(None)
@@ -197,7 +209,8 @@ class WorkspaceColumns:
         self.root_container.on_native_layout = self.old_root_layout
         self.adapter.impl.refresh_tabs()
         self.app.native_host.activate(self.app.native_host.state.destination)
-        self.controller.owner = None
+        # Rubicon's weak Python property does not accept None. Its weakref
+        # expires with this owner; closed callbacks already return above.
 
 
 def sync(workspace):

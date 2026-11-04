@@ -187,6 +187,10 @@ be skipped. Device matrix jobs use `fail-fast: false` to retain other devices'
 diagnostics after a failure. Source release packaging also requires the separate
 desktop/platform and Android/iOS document-runtime workflows to succeed.
 
+Native log verification also rejects exceptions ignored by ctypes callbacks.
+A completed suite cannot pass while a native-to-Python callback reports a
+cleanup or layout exception.
+
 Local scheduling validation uses `test_parallel_ios_workflow.py` and
 `test_native_report.py` under `mobile_build/tests/`: actual workflow shell steps
 run against disposable fixtures, covering archive reuse, executable permissions,

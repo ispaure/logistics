@@ -164,7 +164,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         from unittest.mock import Mock
         from mobile.workspace_navigation import WorkspaceFrame
         frame = object.__new__(WorkspaceFrame)
-        controller = NS(navigationItem=NS())
+        controller = NS(navigationItem=NS(leftBarButtonItem=None))
         app = NS(routes=NS(apple=True), main_window=object(),
                  native_host=NS(adapter=NS(content_controller=Mock(return_value=controller))))
         frame.navigation = NS(app=app, menu_open={'files': False})
@@ -172,8 +172,9 @@ class WorkspaceNavigationTests(unittest.TestCase):
         frame.header, frame.menu, frame.compact_toolbar = object(), NS(), None
         frame.view = lambda: NS(children=[])
         with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(), SEL=lambda name: name)}), \
-                patch('mobile.workspace_navigation.mount_native_menu', return_value=NS()):
+                patch('mobile.workspace_navigation.mount_native_menu', return_value=NS()) as mount:
             frame.sync_native_header()
+        mount.assert_not_called()
         app.native_host.adapter.content_controller.assert_called_once_with('files')
         self.assertIsNone(controller.navigationItem.leftBarButtonItem)
 

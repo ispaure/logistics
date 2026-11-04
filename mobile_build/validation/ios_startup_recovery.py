@@ -104,7 +104,7 @@ def preserve(logs, target):
     hashes = {}
     total = 0
     for path in logs.iterdir():
-        if not (path.name.startswith(('ios-native-ui', 'ios-webview-stall-', 'ios-webkit-live'))
+        if not (path.name.startswith(('ios-native-ui', 'ios-webview-stall-', 'ios-webkit-live', 'ios-screen-time-rpc-'))
                 or path.name == 'ios-report-transport.json') or not path.is_file():
             continue
         data = read(path, 32 * 1024 * 1024)

@@ -51,6 +51,7 @@ class WorkspaceColumnsTests(TestCase):
                                 safeAreaInsets=NS(top=24, bottom=20, left=0, right=0)),
                        content=NS(interface=Mock()))
         columns = object.__new__(WorkspaceColumns)
+        columns.closed = False
         columns.app, columns.sidebar_box = Mock(), Mock()
         with patch('mobile.appearance.reserve_navigation') as reserve, \
                 patch('mobile.folder_hub_ui.reflow_folder_notice') as notice:
@@ -64,6 +65,7 @@ class WorkspaceColumnsTests(TestCase):
     def test_root_layout_never_publishes_inner_navigation_as_the_tab_controller(self):
         wrapper, bounds = object(), object()
         columns = object.__new__(WorkspaceColumns)
+        columns.closed = False
         columns.navigation = NS(view=NS(bounds=bounds))
         container = NS(controller=wrapper, native=NS(safeAreaInsets=NS(top=0, bottom=20, left=0, right=0)),
                        content=NS(interface=Mock()))
@@ -88,6 +90,7 @@ class WorkspaceColumnsTests(TestCase):
                 self.bounds = value
         native = Native()
         columns = object.__new__(WorkspaceColumns)
+        columns.closed = False
         columns.app = NS(routes=NS(screens={'files': []}))
         columns.sidebar = NS(controller=NS(view=NS(hidden=False)))
         columns.controller = NS(view=native)
@@ -105,6 +108,7 @@ class WorkspaceColumnsTests(TestCase):
         def rect(origin, size):
             return NS(origin=NS(x=origin[0], y=origin[1]), size=NS(width=size[0], height=size[1]))
         columns = object.__new__(WorkspaceColumns)
+        columns.closed = False
         screens = [('folder:books', None, '')]
         columns.app = NS(routes=NS(screens={'files': screens}))
         native = NS(superview=None, bounds=rect((0, 0), (900, 600)),
@@ -151,3 +155,41 @@ class WorkspaceColumnsTests(TestCase):
                 patch('mobile.ios_workspace_columns.WorkspaceColumns') as create:
             sync(workspace)
             self.assertIs(workspace.file_columns, create.return_value)
+
+    def test_closed_columns_ignore_late_native_layout_callbacks(self):
+        columns = object.__new__(WorkspaceColumns)
+        columns.closed = True
+        columns.layout()
+        columns.layout_root(None)
+        columns.layout_sidebar(None)
+
+    def test_close_retires_callbacks_before_native_detach_without_nil_weak_owner(self):
+        import weakref
+        class WeakOwnerController:
+            @property
+            def owner(self):
+                return self._owner()
+            @owner.setter
+            def owner(self, value):
+                self._owner = weakref.ref(value)
+        columns = object.__new__(WorkspaceColumns)
+        columns.closed = False
+        columns.controller = WeakOwnerController()
+        columns.controller.owner = columns
+        container = Mock()
+        container.setViewControllers.side_effect = lambda *a, **k: self.assertTrue(columns.closed)
+        columns.adapter = NS(controller=container, impl=NS(refresh_tabs=Mock()))
+        columns.navigation = Mock()
+        columns.navigation_autoresizing = 18
+        columns.sidebar = NS(controller=Mock(), content=object())
+        columns.master = NS(main=toga.Box(), row=toga.Box())
+        columns.sidebar_box = NS(window=object(), app=object())
+        columns.root_container = NS(controller=object(), on_native_layout=None)
+        columns.old_root_layout = object()
+        columns.app = NS(native_host=NS(activate=Mock(), state=NS(destination='files')))
+        columns.close()
+        columns.close()
+        container.setViewControllers.assert_called_once_with([], animated=False)
+        self.assertIsNone(columns.sidebar.content)
+        self.assertIs(columns.root_container.controller, columns.navigation)
+        self.assertIs(columns.controller.owner, columns)

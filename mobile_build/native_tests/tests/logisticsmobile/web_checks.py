@@ -15,6 +15,10 @@ def native_state(view):
     state = {}
     try:
         impl = getattr(view, '_impl', None)
+        from .navigation_trace import lifecycle_snapshot
+        counts = lifecycle_snapshot()
+        if counts is not None:
+            state.update(view_index=getattr(view, '_native_view_index', None), lifecycle=counts)
         state.update(backend=type(impl).__module__, parent=getattr(view, 'parent', None) is not None,
                      navigation=getattr(view, '_native_policy_trace', []))
         if impl is None:
