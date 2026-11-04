@@ -241,10 +241,11 @@ async def exercise_ui_review(app):
             assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']
         assert folder.text == 'Shared Files'
-        # The Shared Files entry has the same native folder glyph as other
-        # workspace rows. Ordinary directories belong inside its browser.
+        # Shared Files is a text action below the hierarchy. Folder glyphs
+        # belong to actual folder rows; verify one before tapping the root action.
         assert 'UI Review' not in app.folder_buttons
-        indicator = next(child for child in folder.parent.children
+        folder_row = app.folder_buttons['Received Files']
+        indicator = next(child for child in folder_row.parent.children
                          if getattr(child, 'control_icon', '') == 'folder')
         if get_os() is OS.IOS:
             assert indicator._impl.native.imageForState(0) is not None
@@ -259,20 +260,21 @@ async def exercise_ui_review(app):
         assert app.files_view in app.body.children
         assert app.file_storage.value == app.local_browser_root() and app.file_path == ''
         assert app.file_browser.search.value == ''
-        # Browsing Shared Files exposes the collection entry points. Only the
-        # selected-download destination picker hides these duplicate choices.
+        # Local → Others offers Received Files and Shared Files. Enter
+        # ordinary folders through Shared Files → Local, keeping the managed
+        # collection root protected while its contents remain browsable.
         if app.file_storage.value != 'Local files':
-            assert {'Local', 'Received Files'} <= {entry.payload['path'] for entry in app.file_browser.entries}
-            row = next(row for row in app.file_rows.values() if row['name'] == 'Local')
-            assert await app.browser_file_folder(row)
-            await wait_for_file_entry(app, 'UI Review')
-            row = next(row for row in app.file_rows.values() if row['name'] == 'UI Review')
-            assert await app.browser_file_folder(row)
-            assert app.file_storage.value == 'Local files' and app.file_path == 'UI Review'
-            await wait_for_file_entry(app, 'UI Review/Meeting notes.md')
-        else:
-            assert app.file_path == ''
-            await wait_for_file_entry(app, 'UI Review')
+            from services.documents.locations import collection_path
+            collection = collection_path(app.private_root).name
+            local_entry = await wait_for_file_entry(app, collection)
+            assert local_entry.label == 'Local'
+            assert any(entry.label == 'Received Files' for entry in app.file_browser.entries)
+            await app.file_browser.activate_entry(local_entry)
+        assert app.file_storage.value == 'Local files' and app.file_path == ''
+        folder_entry = await wait_for_file_entry(app, 'UI Review')
+        await app.file_browser.activate_entry(folder_entry)
+        assert app.file_storage.value == 'Local files' and app.file_path == 'UI Review'
+        await wait_for_file_entry(app, 'UI Review/Meeting notes.md')
     dialog = toga.ConfirmDialog('Pull folder?', 'From: Example remote:/Comics\nTo: Local/Comics\n\nLocal files may be replaced or removed. Continue?')
     pending = asyncio.create_task(app.main_window.dialog(dialog))
     await asyncio.sleep(.2)
