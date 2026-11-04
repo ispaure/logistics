@@ -36,6 +36,8 @@ class ReaderTopClearanceTests(unittest.TestCase):
 
     def test_camera_or_activity_over_the_content_still_reserves_its_height(self):
         self.assertEqual(self.clearance(((400,0,100,102),)),110)
+        self.assertEqual(self.clearance(((400,0,100,22),),top=62),62)
+        self.assertEqual(self.clearance(((867,0,84,102),(400,0,100,22)),top=62),62)
         self.assertEqual(self.clearance(((400,0,100,30),(400,45,100,60))),113)
         self.assertEqual(self.clearance(((400,-50,100,72),),top=24),30)
 
