@@ -18,6 +18,28 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class TransferFeedbackTests(TestCase):
+    def test_native_background_fixture_uses_shared_files_during_transfer(self):
+        from threading import Event
+        from mobile_build.tests.support.app import mobile_app
+        from mobile_build.native_tests.tests.logisticsmobile.mirror_checks import browse_local_during_transfer
+        from services.documents.locations import collection_path, use_shared_local, _shared_local_roots
+
+        for shared in (False, True):
+            with self.subTest(shared_documents=shared), TemporaryDirectory() as root, \
+                    patch.dict(_shared_local_roots), mobile_app(root=Path(root) / 'private') as app:
+                if shared:
+                    public = Path(root) / 'Public Documents'
+                    public.mkdir()
+                    use_shared_local(app.private_root, public)
+                folder = collection_path(app.private_root) / 'Browse during pull'
+                folder.mkdir(parents=True)
+                (folder / 'Local note.txt').write_text('Unrelated local file')
+                app.show_cloud(present=False)
+                app.transfer_busy = True
+                app.transfer_controller()._transfer_cancel = Event()
+                app.set_cloud_busy(True)
+                app.loop.run_until_complete(browse_local_during_transfer(app, folder.name))
+
     def test_download_handoff_keeps_workspaces_usable_during_and_after_transfer(self):
         import asyncio
         from threading import Event
