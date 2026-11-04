@@ -16,6 +16,7 @@
     "bridge.py",
     "brushes.py",
     "canvas.py",
+    "preferences.py",
     "icons.py",
     "ink.py",
     "mobile/__init__.py",
