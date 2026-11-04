@@ -13,7 +13,8 @@ from uuid import uuid4
 
 from commonUtils.runtime.platform import get_os, OS
 from mobile.app import LogisticsMobile
-from . import CASES, start_native_check
+from . import CASES
+from .startup_trace import start_traced_check
 from .fixtures import make_books
 from .timings import SuiteTimings, measure
 
@@ -128,6 +129,9 @@ async def exercise(app):
 class NativeCheckApp(LogisticsMobile):
     def startup(self):
         print('LOGISTICS_NATIVE_STARTUP', flush=True)
+        if get_os() is OS.ANDROID:
+            from .startup_trace import install as install_startup_trace
+            install_startup_trace(self)
         from .navigation_trace import install
         install(self.paths.cache)
         if get_os() is OS.IOS:
@@ -139,22 +143,48 @@ class NativeCheckApp(LogisticsMobile):
                                                      else 'native-check-' + uuid4().hex)
         try:
             super().startup()
+            from .startup_trace import mark
+            mark(self, 'super-startup-returned')
         except Exception:
             # Preserve chained backend errors before the native launcher wraps them.
             traceback.print_exc()
             raise
 
+    def _startup_steps(self):
+        from .startup_trace import mark
+        steps = super()._startup_steps()
+        index = 0
+        while True:
+            mark(self, 'phase-next-enter', phase=index)
+            try:
+                name = next(steps)
+            except StopIteration:
+                mark(self, 'phases-complete')
+                return
+            mark(self, 'phase-next-exit', phase=index)
+            yield name
+            index += 1
+
+    async def _prepare_startup_phase(self, index):
+        from .startup_trace import mark
+        mark(self, 'phase-prepare-enter', phase=int(index))
+        await super()._prepare_startup_phase(index)
+        mark(self, 'phase-prepare-exit', phase=int(index))
+
     def on_running(self):
+        from .startup_trace import mark
+        mark(self, 'on-running-enter')
         self.show_documents()
         self.show_home()
+        mark(self, 'on-running-navigation-ready')
         if self.workspace_hold:
             from .workspace_hold import hold_workspace
-            start_native_check(self, hold_workspace)
+            start_traced_check(self, hold_workspace)
         elif self.navigation_hold:
             from .navigation_hold import hold_navigation
-            start_native_check(self, hold_navigation)
+            start_traced_check(self, hold_navigation)
         else:
-            start_native_check(self, exercise)
+            start_traced_check(self, exercise)
 
 
 
