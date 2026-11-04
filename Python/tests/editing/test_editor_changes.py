@@ -76,6 +76,23 @@ class BaselineTests(unittest.TestCase):
             self.assertTrue(changes, label)
             self.assertEqual(changes[0].kind, 'add')
 
+    def test_real_git_timeout_falls_back_to_saved_text_with_and_without_edits(self):
+        from commonUtils.integrations.wrappers.cmdShellWrapper.capture import CommandTimeout
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'file.txt'
+            path.write_text('saved\n')
+            snapshot = read_text_file(path)
+            # Exercise GitRunner's timeout translation, then the editor's
+            # intentional fallback. An unchanged saved buffer has no markers.
+            with patch('features.git.runner.run_captured', side_effect=CommandTimeout('synthetic deadline')):
+                changed, changed_label = compare(snapshot, 'unsaved\n')
+                unchanged, unchanged_label = compare(snapshot, snapshot.text)
+            self.assertIn('Last saved', changed_label)
+            self.assertTrue(changed, changed_label)
+            self.assertEqual(changed[0].kind, 'modify')
+            self.assertIn('Last saved', unchanged_label)
+            self.assertEqual(unchanged, ())
+
     def test_worktree_discovery_and_index_are_local_to_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / 'main'
@@ -197,9 +214,15 @@ class AutoSaveTests(QtTestCase):
     def test_edit_during_save_stays_dirty_and_close_save_reload_are_guarded(self):
         from features.ide.ui.autosave import write_snapshot
         started, release = Event(), Event()
+        next_started, next_release = Event(), Event()
+        requests = []
+        self.addCleanup(release.set)
+        self.addCleanup(next_release.set)
         def delayed(snapshot, text):
-            started.set()
-            if not release.wait(5):
+            requests.append(text)
+            ready, gate = (started, release) if len(requests) == 1 else (next_started, next_release)
+            ready.set()
+            if not gate.wait(5):
                 raise RuntimeError('Test worker timed out')
             return write_snapshot(snapshot, text)
         with patch('features.ide.ui.autosave.write_snapshot', side_effect=delayed):
@@ -211,10 +234,14 @@ class AutoSaveTests(QtTestCase):
             self.assertFalse(self.view.save_document(self.doc))
             self.view.reload_current()
             release.set()
-            self.until(lambda: not self.doc.buffer.autosave.busy)
-        self.assertTrue(self.doc.document().isModified())
-        self.assertEqual(self.path.read_bytes(), b'first original\r\n')
-        self.until(lambda: not self.doc.document().isModified())
+            # The follow-up save starts automatically. Hold it before writing
+            # so the first completion's dirty state cannot vanish between polls.
+            self.until(next_started.is_set)
+            self.assertTrue(self.doc.document().isModified())
+            self.assertEqual(self.path.read_bytes(), b'first original\r\n')
+            next_release.set()
+            self.until(lambda: not self.doc.buffer.autosave.busy and not self.doc.document().isModified())
+        self.assertEqual(requests, ['first original\n', 'first second original\n'])
         self.assertEqual(self.path.read_bytes(), b'first second original\r\n')
 
     def test_format_only_revision_during_save_does_not_leave_text_dirty(self):
