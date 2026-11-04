@@ -32,13 +32,16 @@ body text does not rename the navigation entry.
 
 ## Back, Forward and Up
 
-The top bar keeps Back (‹), Forward (›) and Up (↑) visible in both browse and read
-views. These icon buttons have accessible action labels.
+The filename/title row keeps room for the current page. A separate command row
+keeps Back (‹), Forward (›) and speech available in both browse and read views.
+Open **••• → Parent folder page** to go Up; the menu also offers Find in this
+page and Browse documentation. These controls have accessible action labels.
 Back and Forward revisit opened pages. Opening a new page after going Back starts
 a new history branch. Up opens the containing folder's same-named page; if you
 are already reading that folder page, it opens the parent folder's page. At the
-guide root, README.md or index.md can serve as the folder page. Buttons are disabled
-when there is no destination. Browsing and search state stay in place.
+guide root, README.md or index.md can serve as the folder page. History buttons
+are disabled when there is no destination; the parent-page action appears only
+when a parent page is available. Browsing and search state stay in place.
 
 The **×** button closes documentation and returns to the screen that opened it,
 even after following links. The separate **‹ / ›** buttons revisit previous and

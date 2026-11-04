@@ -6,7 +6,9 @@ from .preview import markdown_preview
 from .markdown_speech import MarkdownSpeech
 from .browser_ui import entry_icon, middle_filename
 from .appearance import accessible_name, hierarchy_row_style
-from toga.style.pack import CENTER
+import toga
+from toga.style import Pack
+from toga.style.pack import CENTER, ROW
 
 
 class DocumentationReader(MarkdownWikiView):
@@ -41,8 +43,24 @@ class DocumentationReader(MarkdownWikiView):
         self.view._reader_close_button = self.close_button
         self.view._workspace_menu_button = self.reader_menu
         self.view._native_reader_toolbar = self.navigation
-        self.view._native_reader_buttons = lambda: [self.back_button, self.forward_button,
-            self.speech.button, self.reader_actions_button]
+        # History and reading tools keep full touch targets without consuming
+        # the document title's horizontal space in the native navigation bar.
+        self.commands = toga.Box(style=Pack(direction=ROW, height=48, gap=4))
+        for button in (self.back_button, self.forward_button):
+            if button.parent is not None:
+                button.parent.remove(button)
+            self.commands.add(button)
+        self.commands.add(toga.Box(style=Pack(flex=1)))
+        if self.speech.button.parent is not None:
+            self.speech.button.parent.remove(self.speech.button)
+        self.commands.add(self.speech.button)
+        if app.routes.apple:
+            self.view._document_title_controls = (self.reader_menu, self.reader_actions_button)
+        else:
+            self.commands.add(self.reader_actions_button)
+        self.view._native_reader_buttons = lambda: []
+        self.view._document_title_parent = self.article if self.wide else self.view
+        self.reflow(app.adaptive.content_width('settings', margin=0))
         self.view._native_reader_title = lambda: self.title.text
         self.view._document_path = lambda: self.path
         self.view._native_reader_hidden = [self.title]
@@ -65,6 +83,17 @@ class DocumentationReader(MarkdownWikiView):
     def reflow(self, width):
         super().reflow(width)
         parent = self.article if self.wide else self.view
+        self.view._document_title_parent = parent
+        header = getattr(self.view, '_document_title_header', None)
+        if header is not None and header.parent is not parent:
+            if header.parent is not None:
+                header.parent.remove(header)
+            parent.insert(0, header)
+        if hasattr(self, 'commands') and self.commands.parent is not parent:
+            if self.commands.parent is not None:
+                self.commands.parent.remove(self.commands)
+            index = list(parent.children).index(header) + 1 if header is not None and header.parent is parent else 0
+            parent.insert(index, self.commands)
         if not self.host_app.routes.apple and self.navigation.parent is not parent:
             if self.navigation.parent is not None:
                 self.navigation.parent.remove(self.navigation)

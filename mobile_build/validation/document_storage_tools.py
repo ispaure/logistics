@@ -428,7 +428,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
-            if tablet or (device is None and entry_point.endswith('.document_creation_probe')):
+            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -516,7 +516,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     finally:
         try:
             if record is not None:
-                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe')):
+                if entry_point.endswith(('.dataview_probe', '.viewer_layout_probe', '.control_center_probe', '.rclone_transfer_probe', '.notes_library_probe', '.notes_audit_probe', '.documentation_header_probe')):
                     import io
                     import tarfile
                     archive = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
@@ -567,6 +567,12 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 except RuntimeError:
                     pass
         finally:
+            boot_log = workspace / 'emulator/emulator.log'
+            try:
+                if boot_log.is_file():
+                    shutil.copyfile(boot_log, output / 'android-emulator.log')
+            except OSError:
+                pass  # Evidence failure must not prevent owned cleanup.
             try:
                 if record is not None:
                     installed = emulator.invoke('-s', record['serial'], 'shell', 'pm', 'list', 'packages', bundle)
@@ -588,7 +594,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -633,6 +639,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'documentation-header':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.documentation_header_probe', result_name='documentation-header-result.json')
         if args.probe == 'notes-audit':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotesauditqa',
                 entry_point='tests.logisticsmobile.notes_audit_probe', result_name='notes-audit-result.json')
