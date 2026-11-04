@@ -47,6 +47,8 @@ class SettingsCategories:
             'The last active document stays open if Restore last document is on.'))
         box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=app.reload_preferences, style=Pack(height=48)))
+        box.add(SettingsLabel('Reread the preferences file after editing or repairing it outside the app. '
+                              'Changes made in Settings are already saved.'))
         if app.scene_manager.supported:
             box.add(toga.Button('New window', on_press=app.scene_manager.new_window, style=Pack(height=48)))
             if app.window_id != 'primary':
