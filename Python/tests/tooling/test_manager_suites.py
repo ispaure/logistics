@@ -76,10 +76,22 @@ class ManagerSuiteTests(unittest.TestCase):
             with patch.object(project, '_make_plan', return_value=full), patch('logistics_build.build_retention.clean'):
                 core = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.runtime')
                 native = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.native')
-            self.assertEqual([p.id for p in core.phases], ['test-structure','ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
-            self.assertEqual(core.phases[2].dependencies, ('ios-runtime-tools', 'test-structure'))
-            self.assertIn('--runtime', core.phases[2].argv)
-            self.assertEqual([p.id for p in native.phases], ['test-structure','ios-build','iphone','iphone-cleanup'])
+            self.assertEqual([p.id for p in core.phases], ['test-structure','native-prerequisites','ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
+            core_rows = {phase.id: phase for phase in core.phases}
+            self.assertEqual(core_rows['native-prerequisites'].dependencies, ('test-structure',))
+            gate = core_rows['native-prerequisites']
+            self.assertEqual(gate.argv[gate.argv.index('--capability') + 1], 'runtime')
+            self.assertEqual(gate.effect, 'inspect')
+            self.assertEqual(core_rows['ios-runtime-cleanup'].dependencies, ('ios-runtime',))
+            self.assertEqual(core_rows['ios-runtime'].dependencies,
+                             ('ios-runtime-tools', 'test-structure', 'native-prerequisites'))
+            self.assertIn('--runtime', core_rows['ios-runtime'].argv)
+            self.assertEqual([p.id for p in native.phases], ['test-structure','native-prerequisites','ios-build','iphone','iphone-cleanup'])
+            native_rows = {phase.id: phase for phase in native.phases}
+            native_gate = native_rows['native-prerequisites']
+            self.assertEqual(native_gate.argv[native_gate.argv.index('--capability') + 1], 'native')
+            self.assertIn(native_gate.id, native_rows['ios-build'].dependencies)
+            self.assertEqual(native_rows['iphone-cleanup'].dependencies, ('iphone',))
             with patch.dict('os.environ', LOGISTICS_IOS_RUNTIME_EVIDENCE='wrong-external-receipt.json'):
                 gate = suites.acceptance_phase(core, 'ios')
             self.assertEqual(gate.argv[gate.argv.index('--runtime-report')+1], str(root/'core.json'))
@@ -224,14 +236,14 @@ class ManagerSuiteTests(unittest.TestCase):
             host_gates = ('test-structure', 'commonutils.smoke', 'portable-contracts.smoke',
                           'desktop-ui.smoke', 'mobile-host.smoke',
                           'commonutils', 'portable-contracts', 'desktop-ui', 'mobile-host')
-            self.assertEqual(rows['release-acceptance'].dependencies, (*host_gates, 'android-native', 'android-runtime'))
-            self.assertEqual(rows['android-native'].dependencies, host_gates)
-            self.assertEqual(rows['android-runtime'].dependencies, host_gates)
+            self.assertEqual(rows['release-acceptance'].dependencies, (*host_gates, 'android-native', 'android-runtime', 'native-prerequisites'))
+            self.assertEqual(rows['android-native'].dependencies, (*host_gates, 'native-prerequisites'))
+            self.assertEqual(rows['android-runtime'].dependencies, (*host_gates, 'native-prerequisites'))
             self.assertIn('Python/tests/tooling', rows['portable-contracts'].argv)
             self.assertIn('Python/tests/application', rows['desktop-ui'].argv)
             self.assertIn('mobile_build/tests', rows['mobile-host'].argv)
             self.assertIn('release-acceptance', rows['prepare-verified-artifact'].dependencies)
-            self.assertEqual(rows['reviewed-distribution'].dependencies, ('prepare-verified-artifact',))
+            self.assertEqual(rows['reviewed-distribution'].dependencies, ('prepare-verified-artifact', 'native-prerequisites'))
             self.assertEqual(rows['reviewed-distribution'].effect, 'upload')
             self.assertNotIn('host.mobile-device-session', plan.resources)
             device_resource = 'android.device-workspace:' + plan.workspace
