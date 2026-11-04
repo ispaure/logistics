@@ -385,10 +385,13 @@ def main(output, *, latency_mode='enforce'):
             perform = probe.panel.perform
             def timed_perform(action):
                 started = time.monotonic()
+                cpu_started = time.thread_time()
                 try:
                     return perform(action)
                 finally:
-                    host_costs.append(dict(op=action['op'], ms=(time.monotonic() - started) * 1000))
+                    host_costs.append(dict(op=action['op'], ms=(time.monotonic() - started) * 1000,
+                        thread_cpu_ms=(time.thread_time() - cpu_started) * 1000,
+                        started_monotonic_seconds=started))
             probe.panel.perform = timed_perform
             probe.js("(()=>{window.qaDraws=0;window.qaFrames=0;window.qaGap=0;window.qaGapEvents=[];window.qaDeferred=0;window.qaFramePrevious=performance.now();let base=draw;draw=function(){qaDraws++;return base()};let ack=window.notebookStrokeUpdate;window.notebookStrokeUpdate=function(...args){if(active!==null)qaDeferred++;return ack(...args)};window.qaFrameLoop=true;function frame(now){qaFrames++;let gap=now-qaFramePrevious;qaGap=Math.max(qaGap,gap);if(gap>=80&&qaGapEvents.length<100)qaGapEvents.push({start:qaFramePrevious,end:now,duration:gap,active:active!==null,busy,queued:queue.length,visibility:document.visibilityState});qaFramePrevious=now;if(qaFrameLoop)requestAnimationFrame(frame)}requestAnimationFrame(frame);$('tool').value='23';$('tool').onchange();return true})()")
             delivered = probe.panel.deliver
@@ -426,7 +429,7 @@ def main(output, *, latency_mode='enforce'):
                 probe.js('(()=>{qaDraws=0;qaFrames=0;qaGap=0;qaGapEvents=[];window.qaGestureStarted=performance.now();qaFramePrevious=qaGestureStarted;return true})()')
                 duration = probe.stroke(6 + gesture, samples=200, pace_ms=5)
                 probe.idle()
-                row = probe.js('({draws:qaDraws,frames:qaFrames,max_frame_gap:qaGap,started_ms:qaGestureStarted,finished_ms:performance.now(),frame_gaps:qaGapEvents,function_costs_cumulative:qaCosts,long_tasks:qaLongTasks.filter(task=>task.start+task.duration>=qaGestureStarted)})')
+                row = probe.js('({draws:qaDraws,frames:qaFrames,max_frame_gap:qaGap,started_ms:qaGestureStarted,finished_ms:performance.now(),frame_gaps:qaGapEvents,presentation:{paper_filter:getComputedStyle($("paperWrap")).filter,draft_blend:getComputedStyle(draft).mixBlendMode},function_costs_cumulative:qaCosts,long_tasks:qaLongTasks.filter(task=>task.start+task.duration>=qaGestureStarted)})')
                 row.update(duration_ms=duration, scheduler_before=scheduler_before,
                            scheduler_after=scheduler_sample(), native_command_costs=host_costs[host_start:])
                 paced_runs.append(row)
