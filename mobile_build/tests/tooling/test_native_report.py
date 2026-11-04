@@ -767,3 +767,13 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                     with self.assertRaisesRegex(OSError,'synthetic missing tool'):ui_tools.run('ios','synthetic',local=True)
                 self.assertTrue(retired.is_set())
             finally:os.chdir(previous)
+
+
+class IgnoredNativeCallbackTests(unittest.TestCase):
+    def test_ctypes_callback_exception_is_a_native_validation_failure(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'ios-native-ui.log'
+            path.write_text('Exception ignored on calling ctypes callback function: objc setter\n'
+                            "TypeError: cannot create weak reference to 'NoneType' object\n")
+            with self.assertRaisesRegex(ValueError, 'Unhandled native app error'):
+                ui_tools.verify_native_diagnostics(path)
