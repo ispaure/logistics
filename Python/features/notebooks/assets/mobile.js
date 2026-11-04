@@ -185,6 +185,7 @@ renderEraserChoices();
     bp.append(control(id))
   }
   let lp = panels.layers;
+  lp.append(control('templateControls'));
   field(lp, 'Draw on layer', control('layer'));
   heading(lp, 'Manage layers');
   field(lp, 'Layer visibility', control('layerVisibility'));
@@ -698,8 +699,9 @@ renderEraserChoices();
     const r = canvas.getBoundingClientRect(), v = $('viewport').getBoundingClientRect(), ink = chosenInk();
     const visible = el => el && !el.hidden && getComputedStyle(el).display !== 'none';
     const overlay = visible($('mobileSheet')) || !!document.querySelector('dialog[open]');
-    const rect = [Math.max(0, r.left, v.left), Math.max(0, r.top, v.top),
-      Math.min(innerWidth, r.right, v.right), Math.min(innerHeight, r.bottom, v.bottom)];
+    const paper = $('paperWrap').getBoundingClientRect();
+    const rect = [Math.max(0, r.left, v.left, paper.left), Math.max(0, r.top, v.top, paper.top),
+      Math.min(innerWidth, r.right, v.right, paper.right), Math.min(innerHeight, r.bottom, v.bottom, paper.bottom)];
     const exclude = [...document.querySelectorAll('header,nav,#restoreTools')].filter(visible).map(el => {
       const b = el.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]
     });

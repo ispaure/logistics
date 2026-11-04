@@ -56,6 +56,9 @@ window.notebookStrokeUpdate = function(stroke, status) {
   $('undo').disabled = false;
   $('redo').disabled = true;
   $('status').textContent = queue.length ? 'Saving…' : status;
+  // Interior strokes keep the existing incremental painting path. Only an
+  // actual change in visible paper extent requires replaying the saved scene.
+  if (strokeExpandsPaper(stroke)) resize();
   pump();
 };
 window.notebookInkUpdate = function(patch) {
@@ -76,7 +79,8 @@ window.notebookInkUpdate = function(patch) {
   $('undo').disabled = !state.undo;
   $('redo').disabled = !state.redo;
   $('status').textContent = queue.length ? 'Saving…' : patch.save_status;
-  draw();
+  if (paperView === 'move' && JSON.stringify(paperBounds()) !== JSON.stringify(displayedPaperBounds)) resize();
+  else draw();
   pump()
 };
 

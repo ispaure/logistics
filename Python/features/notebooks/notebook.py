@@ -220,7 +220,14 @@ class Notebook:
             parts = PurePosixPath(name).parts
             if len(parts) == 2 and parts[0].startswith(source.id + '.') and (parts[1] == original.id or parts[1].startswith(original.id + '.')):
                 staged[self.id + parts[0][len(source.id):] + '/' + identity + parts[1][len(original.id):]] = data
+        # Original custom template artwork is document-level, unlike page sidecars.
+        artwork = original.template + '.template'
+        if (artwork in source.members and artwork in self.members
+                and self.members[artwork] != source.members[artwork]):
+            raise ValueError('This template name has different artwork in the destination notebook.')
         self.members.update(staged)
+        if artwork in source.members:
+            self.members[artwork] = source.members[artwork]
         page = Page(identity, record, original.template)
         self.pages.insert(at, page)
         self.structure_dirty = True
@@ -237,9 +244,7 @@ class Notebook:
                 if members.get(path) != raw:
                     members[path] = raw
                     changed = True
-        baseline = ([r['id'] for r in sorted(content.get('cPages', {}).get('pages', []), key=lambda r: r.get('idx', {}).get('value', '')) if r.get('deleted', {}).get('value', 0) != 1]
-                    if 'cPages' in content else content.get('pages', []))
-        if self.structure_dirty and baseline != [p.id for p in self.pages]:
+        if self.structure_dirty:
             content['pageCount'] = len(self.pages)
             if 'cPages' in content:
                 # Keep page records and deleted records; publish fresh ordered indices.

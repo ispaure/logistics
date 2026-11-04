@@ -6,6 +6,7 @@ header{max-height:50dvh;overflow:auto;background:#fafaf7;border-bottom:1px solid
    Blending the draft against white/PDF first changes translucent edges at pen-up. */
 #inkLayers{position:relative;isolation:isolate;background:transparent!important}
 #paperWrap{background:white}#pdfBackground{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:white;pointer-events:none}#paper{position:relative;background:transparent}
+#paperWrap{overflow:hidden}#templateControls{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}#templateControls label{display:flex;align-items:center;justify-content:space-between;gap:8px;white-space:normal}#templateControls select{min-width:0;max-width:65%}
 
 #eraserDialog{width:min(360px,calc(100vw - 32px));max-height:80dvh;overflow:auto;border:1px solid #888;border-radius:12px;padding:20px;background:#fafaf7;color:#20221e}#eraserDialog::backdrop{background:#0005}#eraserDialog h2{margin:0 0 16px;font-size:20px}#eraserDialog label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}#eraserDialog select{min-width:0;max-width:80%}#closeEraser{display:block;margin-left:auto}
 
