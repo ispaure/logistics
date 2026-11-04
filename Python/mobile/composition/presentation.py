@@ -174,7 +174,7 @@ def notes_host(app):
     from features.notes_library.mobile.notes_library import NotesHost
     from features.notes_library.notes import MAX_NOTE, MAX_RENDERED_HTML, MAX_IMAGE_HTML
     from commonUtils.ui.native.markdown_preview import MarkdownPreviewLimits
-    from ..appearance import list_button
+    from ..appearance import list_button, batch_surfaces
     from ..browser_ui import middle_filename, entry_icon, highlight_entry
     from ..markdown_speech import MarkdownSpeech
     from ..action_menu import FeatureCommands
@@ -261,6 +261,7 @@ def notes_host(app):
             privacy_gate=lambda: getattr(app.cloud_client, 'session_privacy', None),
             privacy_gates=lambda: app.screen_privacy.gates()),
         presentation=app.presentation,
+        batch_rows=batch_surfaces,
         loop=app.loop,
         workspace=app.workspace,
         apple=app.routes.apple,
