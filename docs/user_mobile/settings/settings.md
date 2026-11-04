@@ -59,13 +59,13 @@ available independently of Text Editor.
 
 ## Appearance and E Ink status
 
-**Accent color** offers Hue and Saturation sliders with a live tab preview.
+**Accent color** offers Hue and Saturation sliders with live color feedback.
 Both sliders' filled tracks and thumbs match the selected color while dragging.
 One accent choice applies throughout the app, with no separate regional colors.
 Drag to preview; release to save on this device. Text and controls use the same
 selected color in light and dark appearance, without automatic lightening or
 darkening. The hue spectrum follows the selected saturation; 100% gives vivid
-colors. **Reset to blue** restores the default.
+colors. **Reset to Default Accent Color** restores the default.
 Selected tabs, navigation indicators, settings actions and native control tints
 use the accent. File/folder icons, workspace locked/unlocked icons and destructive
 actions retain their own colors. High contrast / E Ink remains black and white
