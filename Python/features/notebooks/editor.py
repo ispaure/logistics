@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 
 from .protocol import validate_action
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS
-from .brushes import BRUSHES, PALETTE, HIGHLIGHTS, SHADERS, WIDTHS
+from .brushes import BRUSHES, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
 
 
 class Editor:
@@ -191,7 +191,9 @@ class Editor:
             if pdf else description(page.template, artwork_available=template_available))
         return dict(name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
-                    brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS, shaders=SHADERS, widths=WIDTHS,
+                    brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
+                    highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,
+                    shaders=SHADERS, widths=WIDTHS,
                     strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),

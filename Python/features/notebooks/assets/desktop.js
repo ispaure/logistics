@@ -90,6 +90,12 @@ for (let [label, value] of Object.entries(state.widths)) {
 function syncChrome() {
   if (mode !== 'erase' && eraserDialog.open) closeEraserSettings();
   syncSwatches();
+  for (let b of $('widths').children) {
+    let fixed = brushFor(Number($('tool').value)).fixed_width;
+    b.style.display = fixed && b.dataset.value !== '1' ? 'none' : '';
+    b.title = fixed ? 'Fixed highlighter width' : Object.keys(state.widths)[Number(b.dataset.value) - 1];
+    b.setAttribute('aria-label', b.title + ' stroke width');
+  }
   for (let [group, id] of [
       ['brushes', 'tool'],
       ['swatches', 'color'],

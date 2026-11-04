@@ -1,6 +1,7 @@
 # Notebook implementation and acceptance
 
 The remaining physical procedure is [notebook hardware acceptance](hardware-acceptance.md).
+Measured brush corrections are recorded in [Paper Pro calibration](brush-calibration.md).
 
 ## Current implementation and acceptance boundary
 
@@ -147,7 +148,8 @@ scale or reapplying pressure. New-stroke brush dynamics are approximate. Layer I
 visibility and supported brushes remain native scene data. Tablet rendering is
 an independent acceptance gate.
 
-The codec is MIT licensed. Its source (with one type-annotation namespace fix) and full license are under
+The codec is MIT licensed. Its source (with a type-annotation namespace fix and measured native Highlighter
+color IDs 14–16) and full license are under
 `_vendor/rmscene`, pinned from the PyPI 0.8.0 distribution. It requires the declared
 portable `packaging` runtime. Vendoring avoids rmscene's obsolete packaging<24
 metadata conflicting with Briefcase's packaging>=24.2 build requirement.
@@ -309,16 +311,21 @@ brush/color/width commands are rejected before saving; imported ink is not
 restricted to the creation palette. The standard writing palette has nine colors;
 Highlighter has yellow/green/pink/blue/orange/gray. Shader has gray and seven
 hues (blue/red/green/yellow/cyan/magenta/orange), with no black or white choice.
-Native green/yellow use IDs 10/13, distinct from legacy 4/3.
-Orange uses editor choice -1, resolved before storage to native color 9 with an
-RGBA override. Highlighter and Shader both use native color 9 plus RGBA.
+Writing green/yellow use IDs 10/13. Highlighter uses native yellow/green/pink
+3/4/5 and blue/orange/gray 14/15/16, with a tool-specific preview palette. Orange
+uses editor choice -1, mapped to native 15 for Highlighter and native 9 plus
+RGBA for Shader. Older imported RGBA Highlighter frames remain supported.
 Shader uses its own eight native RGB/alpha definitions, not the writing palette
 with one uniform transparency. Swatches composite that alpha over white.
 Reading, moving, copying,
 undo and recovery preserve imported RGBA fields and original scene frames.
 
-Thin/Medium/Thick select thickness scales 1/2/3. Nominal rendered widths are
-tool-specific approximations, not measured firmware parity. New point widths are
+Thin/Medium/Thick select measured native thickness scales approximately
+0.8705015/1.7410030/2.6115046. Highlighter exposes one Fixed 26-unit width;
+old three-width commands remain accepted as aliases of that fixed size. Fineliner
+and Mechanical Pencil widths now match the measured constant point fields.
+Other width/pressure profiles use the November 4 Paper Pro sample; speed, tilt,
+texture and calligraphy geometry remain approximations. New point widths are
 computed once in page units, quantized to quarter-units and written to native
 points. JavaScript preview and Python creation use the same catalog and equivalent
 rules; the WebEngine probe compares them at all three widths. Imported v6 widths

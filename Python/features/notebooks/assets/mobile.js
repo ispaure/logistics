@@ -576,8 +576,8 @@ renderEraserChoices();
 
   function paletteColor(tool, color) {
     let native = nativeColor(tool, color),
-      rgba = native.color_rgba;
-    let rgb = rgba ? rgba.slice(0, 3) : [1, 3, 5].map(i => parseInt((palette[color] || '#000000').slice(i, i + 2), 16));
+      rgba = native.color_rgba || (tool === 18 ? state.native_highlights[native.color] : null);
+    let rgb = rgba ? rgba.slice(0, 3) : [1, 3, 5].map(i => parseInt((palette[native.color] || '#000000').slice(i, i + 2), 16));
     let alpha = rgba ? rgba[3] / 255 : 1;
     return colorCss(rgb.map(v => Math.round(v * alpha + 255 * (1 - alpha))))
   }
@@ -649,7 +649,15 @@ renderEraserChoices();
     }
     for (let b of grid.children) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
     for (let b of swatches.children) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
-    for (let b of widths.children) b.setAttribute('aria-pressed', String(Number(b.dataset.width) === Number(control('width').value)));
+    for (let b of widths.children) {
+      let fixed = brushFor(Number(t.value)).fixed_width;
+      b.hidden = fixed && b.dataset.width !== '1';
+      let label = fixed ? 'Fixed' : Object.keys(state.widths)[Number(b.dataset.width) - 1];
+      b.title = label;
+      b.lastChild.textContent = label;
+      b.setAttribute('aria-label', label + ' stroke');
+      b.setAttribute('aria-pressed', String(Number(b.dataset.width) === Number(control('width').value)));
+    }
     let name = t.selectedOptions[0]?.textContent || 'Pen';
     brushToggle.innerHTML = svg(brushNib(t.value)) + '<small></small>';
     brushToggle.lastChild.textContent = name;
@@ -720,6 +728,8 @@ renderEraserChoices();
       queue.every(a => a.op === 'stroke'), tool: ink.tool, color: ink.color, argb,
       width: brushFor(ink.tool).widths[ink.width - 1] * r.width / state.width,
       baseWidth: brushFor(ink.tool).widths[ink.width - 1],
+      pressureFactor: brushFor(ink.tool).pressure,
+      pressureExponent: brushFor(ink.tool).exponent,
       rect, exclude, viewportWidth: innerWidth, viewportHeight: innerHeight,
       // Changing scene or layer cancels any outstanding native gesture.
       scene: [state.index, state.width, state.height, ink.layer]});
