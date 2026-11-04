@@ -6,7 +6,6 @@ it does not certify an Android or iOS native host or physical stylus behavior.
 import argparse
 import json
 from pathlib import Path
-import time
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtTest import QTest
@@ -19,6 +18,7 @@ from features.notebooks.notebook import Notebook
 from features.notebooks.editor import Editor
 from features.notebooks.recovery import Repository
 from logistics_build.build_retention import scratch
+from tests.notebooks.webengine_driver import javascript, wait_until
 from mobile_build.native_tests.tests.logisticsmobile.notebook_pointer_checks import POINTER_CHECKS
 from mobile_build.native_tests.tests.logisticsmobile.notebook_chrome_checks import CHROME_CHECKS
 from mobile_build.native_tests.tests.logisticsmobile.notebook_input_checks import INPUT_CHECKS
@@ -63,21 +63,13 @@ def main(output, *, palm_only=False, laptop_only=False):
         view.show()
 
         def wait(predicate):
-            deadline = time.monotonic() + 15
-            while time.monotonic() < deadline:
-                app.processEvents()
-                if predicate():
-                    return
-                QTest.qWait(20)
-            raise AssertionError('Browser probe timed out: ' + repr(failures))
+            wait_until(predicate, 'browser state; console errors: ' + repr(failures))
 
         def js(script):
-            results = []
-            page.runJavaScript(script, results.append)
-            wait(lambda: bool(results))
+            result = javascript(view, script)
             if failures:
                 raise AssertionError(failures)
-            return results[0]
+            return result
 
         loaded = []
         view.loadFinished.connect(loaded.append)
@@ -273,9 +265,13 @@ def main(output, *, palm_only=False, laptop_only=False):
         js("document.querySelector('header button[aria-label=\"Notebook actions\"]').click();document.getElementById('hideTools').click();document.getElementById('restoreTools').click()")
         assert js("JSON.stringify({zoom:document.getElementById('zoom').value,x:document.getElementById('viewport').scrollLeft,y:document.getElementById('viewport').scrollTop})") == snapshot
         js("document.getElementById('zoom').value='fit';document.getElementById('zoom').onchange();document.getElementById('viewport').scrollLeft=0;document.getElementById('viewport').scrollTop=0")
-        rect = json.loads(js("JSON.stringify(document.getElementById('paper').getBoundingClientRect())"))
+        # The full-scene canvas can extend left of the phone in Move view;
+        # place native mouse input inside its visible clipped paper instead.
+        rect = json.loads(js("JSON.stringify(document.getElementById('paperWrap').getBoundingClientRect())"))
         target = view.focusProxy() or view
         point = qt.QPoint(int(rect['x'] + 60), int(rect['y'] + 60))
+        assert js(f'document.elementFromPoint({point.x()},{point.y()})===canvas'), \
+            ('Native mouse fixture does not hit visible ink', rect)
         QTest.mousePress(target, qt.Qt.MouseButton.LeftButton, pos=point)
         QTest.mouseMove(target, point + qt.QPoint(30, 40), delay=30)
         QTest.mouseRelease(target, qt.Qt.MouseButton.LeftButton, pos=point + qt.QPoint(30, 40))

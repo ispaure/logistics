@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import json
+import argparse
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -14,6 +15,31 @@ from logistics_build import vm_backend, windows_backend
 
 
 class GuestToolPreparationTests(unittest.TestCase):
+    def test_notebook_guest_selection_preserves_full_coverage_and_timeout(self):
+        from logistics_build.notebook_validation import arguments, command
+        parser = argparse.ArgumentParser()
+        arguments(parser, windows=True)
+        args = parser.parse_args(['--notebook-profile', 'full', '--notebook-rendering', 'all',
+                                  '--notebook-go', 'C:\\Tools\\go.exe'])
+        argv, timeout = command(args, 'python.exe', 'reports', windows=True)
+        self.assertIn('full', argv)
+        self.assertEqual(argv[argv.index('--go') + 1], 'C:\\Tools\\go.exe')
+        self.assertEqual(argv[argv.index('--latency-mode') + 1], 'enforce')
+        from Python.tests.notebooks.notebook_platform_probe import PROBES
+        self.assertEqual(timeout, sum(limit * (4 if renderer else 1)
+                                      for _, limit, renderer in PROBES.values()) + 30)
+
+    def test_notebook_linux_focus_forwards_noncore_checks(self):
+        from logistics_build.notebook_validation import arguments, command
+        parser = argparse.ArgumentParser()
+        arguments(parser)
+        args = parser.parse_args(['--notebook-probe', 'encrypted-storage',
+                                  '--notebook-probe', 'mobile-laptop'])
+        argv, timeout = command(args, 'python', 'reports')
+        self.assertEqual(argv.count('--probe'), 2)
+        self.assertIn('mobile-laptop', argv)
+        self.assertEqual(timeout, 510)
+
     def test_linux_catalog_keeps_existing_runtime_and_uv_pins(self):
         catalog = json.loads(Path(vm_backend.__file__).with_name('build_manager_tools.json').read_text())
         self.assertEqual(linux_parameters(**catalog['linux']), dict(python='3.12.2', uv_version='0.13.4'))

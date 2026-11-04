@@ -19,7 +19,7 @@ from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice
 
 
-class TextEditorTests(QtTestCase):
+class TextEditorContributionTests(unittest.TestCase):
     def test_editor_contributes_settings_and_browser_actions_without_a_navigation_tab(self):
         from features.text_editor.contributions import register
         feature = register()
@@ -27,6 +27,8 @@ class TextEditorTests(QtTestCase):
         self.assertTrue(feature.settings)
         self.assertTrue(feature.browser.actions)
 
+
+class TextEditorTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
@@ -573,6 +575,7 @@ class TextEditorTests(QtTestCase):
         self.assertEqual(metrics.horizontalAdvance("iiii"), metrics.horizontalAdvance("WWWW"))
 
     def test_real_browser_activation_and_disable_reenable_reuse_buffers(self):
+        from shiboken6 import isValid
         from features.text_editor import register
         from features.text_editor.ui.service import EditorService
         from commonUtils.filesystem.files import File
@@ -602,9 +605,13 @@ class TextEditorTests(QtTestCase):
         markdown = self.root / "note.md"
         markdown.write_text("# note")
         self.assertFalse(binding._activate(MarkdownFile(markdown), None))
-        self.wait_until(host.prepare_close, message='File browser did not finish shutdown')
-        host.close()
-        host.deleteLater()
+        # An idle notification can finish closing this WA_DeleteOnClose host
+        # during an event-loop turn, before the next readiness check.
+        self.wait_until(lambda: not isValid(host) or host.prepare_close(),
+                        message='File browser did not finish shutdown')
+        if isValid(host):
+            host.close()
+            host.deleteLater()
         self.app.processEvents()
 
     def test_bom_removal_and_optional_history_failure(self):

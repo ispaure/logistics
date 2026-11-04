@@ -1,4 +1,4 @@
-"""Archive navigation, worker lifecycle, password retries and sidebar placement."""
+"""Archive navigation, worker lifecycle, password retries and document registration."""
 
 from commonUtils.testing.stages import TestStage
 
@@ -6,7 +6,6 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
-from tempfile import TemporaryDirectory
 import time
 import unittest
 from unittest.mock import patch
@@ -23,30 +22,29 @@ from services.documents.zip_passwords import clear_passwords
 class ArchiveWorkspaceUITests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name)
         folder = self.root / 'source'
         folder.mkdir()
         (folder / 'nested').mkdir()
         (folder / 'nested' / 'notes.txt').write_text('Nested preview')
         (folder / 'hello.txt').write_text('Hello preview')
-        self.path = self.root / 'sample.zip'
-        archives.create([folder], self.path)
         self.page = ArchivePage()
         self.page.resize(1200, 750)
         self.page.show()
-        self.addCleanup(self.page.deleteLater)
         clear_passwords()
         self.addCleanup(clear_passwords)
 
+    @property
+    def path(self):
+        path = self.root / 'sample.zip'
+        if not path.exists():
+            archives.create([self.root / 'source'], path)
+        return path
+
     def wait(self):
-        deadline = time.monotonic() + 10
-        while self.page.busy:
-            self.assertLess(time.monotonic(), deadline)
-            self.app.processEvents()
-            time.sleep(.005)
-        self.app.processEvents()
+        self.wait_until(lambda: not self.page.busy, timeout=10,
+                        message=lambda: f'Archive operation did not finish: {self.page.status.text()}')
 
     def open(self):
         self.page.open_archive(self.path)
@@ -98,13 +96,17 @@ class ArchiveWorkspaceUITests(QtTestCase):
         archives.create([self.root / 'source'], encrypted, password='secret')
         self.page.open_archive(encrypted)
         self.wait()
-        with patch('features.archives.ui.session.ask_password', return_value=None):
+        with patch('features.archives.ui.session.ask_password', return_value=None), \
+             patch('desktop.notifications.notify') as notification:
             self.page.test()
             self.wait()
+        notification.assert_called_once()
+        self.assertEqual(notification.call_args.kwargs['outcome'], 'cancelled')
         self.assertFalse(self.page.busy)
         self.assertTrue(self.page.commands['open'].isEnabled())
+        self.assertIn('Cancelled. No output was published.', self.page.status.text())
 
-    def test_close_cancels_worker_and_prevents_queued_retry(self):
+    def test_close_cancels_active_worker(self):
         from threading import Event
         started = Event()
         def long_job(progress, cancelled, password):
@@ -114,10 +116,28 @@ class ArchiveWorkspaceUITests(QtTestCase):
             from commonUtils.runtime.operations import check_cancelled
             check_cancelled(cancelled)
         self.page._run('test', long_job, self.path)
-        self.assertTrue(started.wait(1))
+        self.wait_until(started.is_set, message='Archive cancellation worker did not start')
         self.assertFalse(self.page.prepare_close())
         self.wait()
         self.assertTrue(self.page.prepare_close())
+        self.assertFalse(self.page.commands['open'].isEnabled())
+
+    def test_close_prevents_queued_password_retry_from_starting(self):
+        from features.archives.ui.session import ArchiveJob
+        session = self.page.session
+        session._pending = ArchiveJob('test', self.path, lambda *args: None, unlock=True)
+        idle = []
+        session.idle.connect(lambda: idle.append(True))
+        with patch('features.archives.ui.session.ask_password', return_value='secret') as prompt, \
+             patch.object(session, 'start') as start:
+            session._completed(None, 'Archive password required: sample.zip')
+            prompt.assert_called_once()
+            self.assertTrue(session.busy)
+            self.assertTrue(self.page.prepare_close())
+            self.wait_until(lambda: bool(idle), message='Queued archive retry did not retire after closure')
+            start.assert_not_called()
+        self.assertEqual(idle, [True])
+        self.assertFalse(session.busy)
         self.assertFalse(self.page.commands['open'].isEnabled())
 
     def test_new_archive_options_and_source_deduplication(self):
@@ -133,12 +153,6 @@ class ArchiveWorkspaceUITests(QtTestCase):
         self.assertEqual(options['format'], 'tar.gz')
         self.assertEqual(options['sources'], [self.root / 'source'])
         self.assertIsNone(options['password'])
-
-    def test_archive_contributes_document_launcher(self):
-        declaration = register()
-        self.assertEqual(declaration.pages, [])
-        self.assertEqual(declaration.document_launchers[0].editor_id, 'archive')
-        self.assertEqual(declaration.document_launchers[0].icon, 'archives')
 
     def test_tar_disables_zip_editing(self):
         tar = self.root / 'sample.tar.gz'
@@ -181,17 +195,26 @@ class ArchiveWorkspaceUITests(QtTestCase):
         self.assertFalse(self.page.contents.preview_image.pixmap().isNull())
 
     def test_edit_keeps_verified_password_in_session_for_next_action(self):
+        from commonUtils.archives.zip_access import open_archive
         encrypted = self.root / 'encrypted.zip'
         archives.create([self.root / 'source'], encrypted, password='secret')
+        original = encrypted.read_bytes()
         self.page.open_archive(encrypted)
         self.wait()
         extra = self.root / 'extra.txt'
         extra.write_text('new')
         with patch('features.archives.ui.session.ask_password', return_value='secret') as ask:
+            opened = []
+            self.page.session.completed.connect(lambda kind, *args: opened.append(kind) if kind == 'open' else None)
             self.page._edit(sources=[extra])
-            self.wait()
-            # Complete the queued refresh after successful editing.
-            self.wait()
+            self.wait_until(lambda: bool(opened) and not self.page.busy, timeout=10,
+                            message='Edited archive did not finish its queued refresh')
+            self.assertNotEqual(encrypted.read_bytes(), original)
+            with open_archive(encrypted, password='secret') as archive:
+                self.assertEqual(archive.read('extra.txt'), b'new')
+                self.assertEqual(archive.read('source/hello.txt'), b'Hello preview')
+            self.assertIn('extra.txt', [self.page.contents.files.topLevelItem(i).text(0)
+                                       for i in range(self.page.contents.files.topLevelItemCount())])
             self.page.test()
             self.wait()
             self.assertEqual(ask.call_count, 1)
@@ -210,14 +233,10 @@ class ArchiveWorkspaceUITests(QtTestCase):
             from commonUtils.runtime.operations import check_cancelled
             check_cancelled(cancelled)
         window.page._run('test', long_job, self.path)
-        self.assertTrue(started.wait(1))
+        self.wait_until(started.is_set, message='Standalone archive worker did not start')
         self.assertFalse(window.close())
-        deadline = time.monotonic() + 5
-        while window in _windows:
-            self.assertLess(time.monotonic(), deadline)
-            self.app.processEvents()
-            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
-            time.sleep(.005)
+        self.wait_until(lambda: window not in _windows, drain_deferred=True,
+                        message='Closed archive window outlived its worker')
 
     def test_browser_action_opens_retained_archive_document(self):
         from features.archives import _manage
@@ -230,10 +249,16 @@ class ArchiveWorkspaceUITests(QtTestCase):
         _manage(context)
         window = next(window for window in _windows if not window.page.closing)
         self.addCleanup(window.close)
-        deadline = time.monotonic() + 5
-        while window.page.busy:
-            self.assertLess(time.monotonic(), deadline)
-            self.app.processEvents(); time.sleep(.005)
+        self.wait_until(lambda: window.page.path == self.path and not window.page.busy,
+                        message='Browser action did not finish opening its archive')
         self.assertEqual(window.page.path, self.path)
         _manage(context)
         self.assertEqual(len([view for view in _windows if not view.page.closing]), 1)
+
+
+class ArchiveDeclarationTests(unittest.TestCase):
+    def test_archive_contributes_document_launcher(self):
+        declaration = register()
+        self.assertEqual(declaration.pages, [])
+        self.assertEqual(declaration.document_launchers[0].editor_id, 'archive')
+        self.assertEqual(declaration.document_launchers[0].icon, 'archives')

@@ -4,7 +4,6 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import subprocess
 import unittest
@@ -57,8 +56,7 @@ class UndoUITests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name).resolve()
         self.project = Project('Undo fixture', str(self.root / 'source'), autosave='off')
         self.project.root.mkdir()

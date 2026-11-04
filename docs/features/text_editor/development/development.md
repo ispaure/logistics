@@ -176,7 +176,13 @@ manual validation.
 Run `test_text_editor*.py` for feature lifecycle, commands, diff, split views and
 recovery failure paths. The reusable `test_code*.py`, `test_session_store.py`,
 `test_text_files.py` and `test_workspace.py` suites cover the shared components.
-`test_document_workspace.py`, `test_main_window.py` and
+Registration and project-store serialization checks use lightweight fixtures;
+pure mobile Markdown block/source tests do not construct the application.
+Search and preview tests await their scheduled result or verify timer cancellation
+instead of sleeping past every debounce interval. Shared picker/editor-widget
+coverage lives in commonUtils' `test_resource_editor_ui.py`; Logistics retains
+launcher, format-filter, private-document and reader-handoff checks.
+`test_document_workspace.py`, `test_document_hosting.py`, `test_reader_host_integration.py` and
 `test_launch.py` cover surrounding Logistics integration. These
 headless Qt checks run on macOS, Windows, and Fedora in CI, using the environment
 versions in `test-environments.json`; native

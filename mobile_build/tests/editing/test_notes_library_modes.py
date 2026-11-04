@@ -345,10 +345,21 @@ class NotesLibraryModeTests(unittest.TestCase):
 
     def test_move_picker_cancel_and_folder_exclusion_preserve_source(self):
         import toga
+        from dataclasses import replace
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            created = []
+            factory = owner.host.folder_browser
+            def supplied_browser(**callbacks):
+                browser = factory(**callbacks)
+                created.append(browser)
+                return browser
+            owner.host = replace(owner.host, folder_browser=supplied_browser)
             picker = await owner.move_picker('Vault/Projects')
             browser = picker._folder_browser
+            self.assertEqual(created, [browser])
+            self.assertIsNone(browser.local_search)
+            self.assertIsNone(browser.resource_search)
             paths = [entry.payload['path'] for entry in browser.entries]
             self.assertNotIn('Projects', paths)
             with self.assertRaises(ValueError):

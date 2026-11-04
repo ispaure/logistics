@@ -11,7 +11,6 @@ import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
-from commonUtils.formats.iniType import INIFile
 from commonUtils.ui.settings.ini_editor import INISettingsEditor as SharedINISettingsEditor
 
 
@@ -30,12 +29,6 @@ class SettingsIntegrationTests(QtTestCase):
         editor = panel.editors[self.path]
         self.assertIsInstance(editor, SharedINISettingsEditor)
         self.assertIsInstance(editor.fields['S', 'on_bool'], qt.QCheckBox)
-
-    def test_shared_editor_keeps_untyped_default(self):
-        self.path.write_text('[S]\non_bool = true\n')
-        editor = SharedINISettingsEditor(self.path)
-        self.addCleanup(editor.deleteLater)
-        self.assertIsInstance(editor.fields['S', 'on_bool'], qt.QLineEdit)
 
     def test_feature_readers_support_typed_and_legacy_keys(self):
         from features.links import configuration as links

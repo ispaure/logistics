@@ -1,5 +1,6 @@
 """Real desktop decoder and stable overlay acceptance for mobile parity."""
 
+from collections import deque
 from pathlib import Path
 import shutil
 import subprocess
@@ -50,7 +51,9 @@ class DesktopVideoParityTests(QtTestCase):
                         window.seek_to(1000)
                         if paused:
                             window.toggle_play()
-                        self.wait_until(lambda: window.have_frame and window.player.position() > 1200, timeout=10)
+                        # Let the post-seek decoded clock drain audio queued at
+                        # the previous rate before measuring its steady speed.
+                        self.wait_until(lambda: window.have_frame and window.player.position() > 2500, timeout=10)
                         start, position = monotonic(), window.player.position()
                         self.wait_until(lambda: monotonic() - start >= 2, timeout=3)
                         actual = (window.player.position() - position) / ((monotonic() - start) * 1000)
@@ -183,9 +186,9 @@ class DesktopVideoParityTests(QtTestCase):
             with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'state'):
                 window = VideoWindow(ResourceChoice(LocalFiles(root), path.name),
                     backend_factory=lambda owner: VLCPlayback(owner, interactive=False))
-            frames = []
+            frames = deque(maxlen=1)
             window.player.videoSink().videoFrameChanged.connect(
-                lambda frame: frames.append(frame.toImage()) if frame.isValid() else None)
+                lambda frame, frames=frames: frames.append(frame.toImage()) if frame.isValid() else None)
             try:
                 window.show()
                 self.wait_until(lambda: bool(frames) and window.player.position() >= 200, timeout=25)
@@ -226,9 +229,9 @@ class DesktopVideoParityTests(QtTestCase):
                     with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'state'):
                         window = VideoWindow(ResourceChoice(LocalFiles(root), path.name),
                             backend_factory=lambda owner: VLCPlayback(owner, interactive=False))
-                    frames = []
+                    frames = deque(maxlen=1)
                     window.player.videoSink().videoFrameChanged.connect(
-                        lambda frame: frames.append(frame.toImage()) if frame.isValid() else None)
+                        lambda frame, frames=frames: frames.append(frame.toImage()) if frame.isValid() else None)
                     try:
                         # A cloud guest has no speaker device; the dummy output
                         # still decodes audio and exposes the native statistics.
@@ -311,9 +314,9 @@ class DesktopVideoParityTests(QtTestCase):
                     with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / ('state-' + extension)):
                         window = VideoWindow(ResourceChoice(provider, path.name),
                             backend_factory=lambda owner: VLCPlayback(owner, interactive=False))
-                    frames = []
+                    frames = deque(maxlen=1)
                     window.player.videoSink().videoFrameChanged.connect(
-                        lambda frame: frames.append(frame.toImage()) if frame.isValid() else None)
+                        lambda frame, frames=frames: frames.append(frame.toImage()) if frame.isValid() else None)
                     try:
                         window.show()
                         self.wait_until(lambda: bool(frames), timeout=20)

@@ -11,6 +11,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from features.lm.mobile.storage import ChatStore
+from mobile_build.tests.support.chat import wait_for_chat_writes
 
 
 class DeferredChatTests(IsolatedAsyncioTestCase):
@@ -18,7 +19,18 @@ class DeferredChatTests(IsolatedAsyncioTestCase):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.store = ChatStore(Path(directory.name))
+        self.addAsyncCleanup(self.retire_writes)
         self.data = self.store.new()
+
+    async def retire_writes(self):
+        # Failed assertions/timeouts must not leave a debounce callback or an
+        # executor write running after the temporary directory is removed.
+        for key in tuple(self.store._pending):
+            self.store._cancel_save(key)
+        results = await asyncio.gather(*self.store._writes, return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
 
     async def test_fifty_draft_changes_publish_one_latest_record(self):
         from features.lm.mobile.storage import atomic_write_bytes
@@ -26,8 +38,7 @@ class DeferredChatTests(IsolatedAsyncioTestCase):
             for index in range(50):
                 self.data['draft'] = str(index)
                 self.store.queue_save(self.data, asyncio.get_running_loop())
-            await asyncio.sleep(.3)
-            await asyncio.gather(*self.store._writes)
+            await wait_for_chat_writes(self.store)
         self.assertEqual(write.call_count, 1)
         self.assertEqual(self.store.load(self.data['id'])['draft'], '49')
 

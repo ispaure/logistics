@@ -11,6 +11,38 @@ from mobile.app import LogisticsMobile
 
 
 class FileUITests(unittest.TestCase):
+    def test_local_thumbnail_decoder_errors_keep_file_icon_and_cancellation_propagates(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from commonUtils.runtime.operations import OperationCancelled
+        from commonUtils.runtime.resources.local import LocalFiles
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory).resolve()
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.loop.run_until_complete(app.show_files())
+                root = app.private_root / 'Images'
+                root.mkdir()
+                (root / 'broken.png').write_bytes(b'Invalid PNG')
+                app.file_provider = provider = LocalFiles(root)
+                app.file_path = ''
+                app.cloud_client = SimpleNamespace(supports_streaming=True)
+                decoder = Mock(side_effect=ValueError('image exceeds decode dimensions'))
+                with patch('mobile.browser_preview.callbacks', return_value=(decoder, None)):
+                    app.populate_file_browser(provider.list())
+                loader = app.file_browser.thumbnail
+                row = provider.entry('broken.png')
+                self.assertEqual(loader(row, (160, 160), lambda: False), b'')
+                decoder.side_effect = OperationCancelled()
+                with self.assertRaises(OperationCancelled):
+                    loader(row, (160, 160), lambda: True)
+                (root / 'broken.png').unlink()
+                self.assertEqual(loader(row, (160, 160), lambda: False), b'')
+            finally:
+                app.main_window.close()
+                close_loop(app.loop)
+
     def test_credential_cleanup_retires_private_rows_but_keeps_ordinary_choices(self):
         from types import SimpleNamespace
         with TemporaryDirectory() as directory:

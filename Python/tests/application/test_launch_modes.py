@@ -23,30 +23,6 @@ class Settings(qt.QWidget):
 
 
 class LaunchModeTests(QtTestCase):
-    def test_landing_retires_private_favourite_labels_on_credential_lock(self):
-        from pathlib import Path
-        from types import SimpleNamespace
-        from features.rclone.credential_sessions import CredentialSessions
-        from services.documents.credential_state import DesktopCredentialCipher
-        from desktop.landing import LandingPage
-        from services.documents.catalog import DocumentCatalog
-        sessions = CredentialSessions()
-        context = Path('/fixture/landing.session')
-        with self.temporary_directory() as directory, patch('features.rclone.session.registry', sessions), \
-                patch('features.rclone.session.paths', sessions.paths), \
-                patch('features.rclone.session.on_forget', sessions.on_forget), \
-                patch('desktop.document_catalog.cache_directory', return_value=Path(directory)):
-            sessions.remember(context, {}, state_password='secret', state_identity='c' * 64)
-            cipher = DesktopCredentialCipher(SimpleNamespace(context=context))
-            DocumentCatalog(directory).remember(dict(type='crypt', path='private.md'), 'Private favourite', {}, favourite=True, cipher=cipher)
-            page = LandingPage()
-            page.show()
-            self.assertIn('Private favourite', [button.text() for button in page.findChildren(qt.QPushButton)])
-            sessions.forget(context)
-            self.wait_until(lambda: not any(button.text() == 'Private favourite' and button.isVisible()
-                                           for button in page.findChildren(qt.QPushButton)))
-            page.close()
-
     def test_feature_browser_location_opens_in_the_existing_browser_destination(self):
         from types import SimpleNamespace
         window = self.window
@@ -56,31 +32,6 @@ class LaunchModeTests(QtTestCase):
         self.assertIs(window.dlg.open_browser_location(location), view)
         browser.workspace.add_view.assert_called_once_with(location)
         self.assertIs(window.tabs.currentWidget(), browser)
-
-    def test_launch_cards_are_stable_from_their_first_paint(self):
-        window = self.window
-        from desktop.landing import LandingPage
-        page = LandingPage()
-        page.set_tool_launchers(window._tool_launchers())
-        page.set_document_launchers(window.sidebar.launchers)
-        page.resize(1250, 800)
-        self.addCleanup(page.deleteLater)
-        cards = page._tool_cards + page._document_cards
-        first = {}
-        class PaintObserver(qt.QObject):
-            def eventFilter(self, watched, event):
-                if event.type() == qt.QEvent.Type.Paint and watched not in first:
-                    first[watched] = (watched.size(), watched.font().family(), watched.font().pointSizeF())
-                return False
-        observer = PaintObserver(page)
-        for card in cards:
-            card.installEventFilter(observer)
-        page.show()
-        self.wait_until(lambda: bool(first))
-        for _ in range(20):
-            self.app.processEvents()
-        for card in first:
-            self.assertEqual(first[card], (card.size(), card.font().family(), card.font().pointSizeF()))
 
     def setUp(self):
         super().setUp()
@@ -359,6 +310,74 @@ class LaunchModeTests(QtTestCase):
         for utility in ('hub', 'settings', 'documents', 'debug'):
             self.assertNotIn(utility, self.window.landing.buttons)
 
+    def test_tool_settings_menu_contains_only_enabled_features(self):
+        from features.feature_runtime import FeatureState
+        states = [FeatureState('on', 'Enabled Tool', True, True, (), ()),
+                  FeatureState('off', 'Disabled Tool', True, False, (), ())]
+        with patch.object(main_window.registry, 'get_feature_states', return_value=states):
+            self.window.header_menus.update_settings()
+        self.assertEqual([action.text() for action in self.window.header_menus.feature_settings.actions()],
+                         ['Enabled Tool'])
+
+
+class LandingRenderingTests(QtTestCase):
+    """Standalone surfaces do not need a main window or feature-page registry."""
+
+    def setUp(self):
+        super().setUp()
+        self.app = qt.QApplication.instance()
+
+    def test_landing_retires_private_favourite_labels_on_credential_lock(self):
+        from pathlib import Path
+        from types import SimpleNamespace
+        from features.rclone.credential_sessions import CredentialSessions
+        from services.documents.credential_state import DesktopCredentialCipher
+        from desktop.landing import LandingPage
+        from services.documents.catalog import DocumentCatalog
+        sessions = CredentialSessions()
+        context = Path('/fixture/landing.session')
+        with self.temporary_directory() as directory, patch('features.rclone.session.registry', sessions), \
+                patch('features.rclone.session.paths', sessions.paths), \
+                patch('features.rclone.session.on_forget', sessions.on_forget), \
+                patch('desktop.document_catalog.cache_directory', return_value=Path(directory)):
+            sessions.remember(context, {}, state_password='secret', state_identity='c' * 64)
+            cipher = DesktopCredentialCipher(SimpleNamespace(context=context))
+            DocumentCatalog(directory).remember(dict(type='crypt', path='private.md'), 'Private favourite', {}, favourite=True, cipher=cipher)
+            page = LandingPage()
+            page.show()
+            self.assertIn('Private favourite', [button.text() for button in page.findChildren(qt.QPushButton)])
+            sessions.forget(context)
+            self.wait_until(lambda: not any(button.text() == 'Private favourite' and button.isVisible()
+                                           for button in page.findChildren(qt.QPushButton)))
+            page.close()
+
+    def test_launch_cards_are_stable_from_their_first_paint(self):
+        from desktop.landing import LandingPage
+        page = LandingPage()
+        page.set_tool_launchers([('git', 'Git', 'Inspect repositories.', 'git'),
+                                 ('ide', 'IDE', 'Edit code.', 'ide')])
+        page.set_document_launchers({'text': DocumentLauncherContribution(
+            'text', 'Text Editor', Mock(), 'text', 10, Mock())})
+        page.resize(1250, 800)
+        self.addCleanup(page.deleteLater)
+        cards = page._tool_cards + page._document_cards
+        first = {}
+        class PaintObserver(qt.QObject):
+            def eventFilter(self, watched, event):
+                if event.type() == qt.QEvent.Type.Paint and watched not in first:
+                    first[watched] = (watched.size(), watched.font().family(), watched.font().pointSizeF())
+                return False
+        observer = PaintObserver(page)
+        for card in cards:
+            card.installEventFilter(observer)
+        page.show()
+        self.wait_until(lambda: len(first) == len(cards),
+                        message='Not every launch card received its first paint')
+        for _ in range(20):
+            self.app.processEvents()
+        for card in first:
+            self.assertEqual(first[card], (card.size(), card.font().family(), card.font().pointSizeF()))
+
     def test_chooser_expands_reflows_and_scrolls_with_mouse_wheel(self):
         from desktop.landing import DocumentChooser
         chooser = DocumentChooser(); self.addCleanup(chooser.deleteLater)
@@ -382,15 +401,6 @@ class LaunchModeTests(QtTestCase):
                               qt.Qt.KeyboardModifier.NoModifier, qt.Qt.ScrollPhase.NoScrollPhase, False)
         self.app.sendEvent(chooser.scroll.viewport(), event); self.app.processEvents()
         self.assertGreater(scrollbar.value(), 0)
-
-    def test_tool_settings_menu_contains_only_enabled_features(self):
-        from features.feature_runtime import FeatureState
-        states = [FeatureState('on', 'Enabled Tool', True, True, (), ()),
-                  FeatureState('off', 'Disabled Tool', True, False, (), ())]
-        with patch.object(main_window.registry, 'get_feature_states', return_value=states):
-            self.window.header_menus.update_settings()
-        self.assertEqual([action.text() for action in self.window.header_menus.feature_settings.actions()],
-                         ['Enabled Tool'])
 
     @patch('commonUtils.ui.appearance.typography.font_dpi', new=lambda: 72)
     def test_cards_grow_uniformly_for_wrapped_large_text(self):

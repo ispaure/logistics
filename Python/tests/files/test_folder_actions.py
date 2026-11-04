@@ -11,7 +11,8 @@ from unittest.mock import patch
 from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.process_host import register_process_host
-from commonUtils.ui.tasks.process_progress import open_process
+from commonUtils.ui.tasks.process_progress import ProcessProgressWindow, open_process
+from commonUtils.ui.tasks.process_runner import ProcessResult
 from desktop.folder_actions import FolderActionsPage
 
 
@@ -51,6 +52,16 @@ class FolderActionTests(QtTestCase):
         self.app.processEvents()
         return window
 
+    def pending_window(self):
+        # Exercise the real presentation and completion signal without spawning
+        # another interpreter for each notification-policy permutation.
+        window = ProcessProgressWindow('Sync', context={
+            'operation': 'Sync', 'source': '/tmp/source', 'destination': '/tmp/destination'})
+        self.windows.append(window)
+        self.page.present(window)
+        self.app.processEvents()
+        return window
+
     def cleanup(self):
         self.page.closing = True
         for window in self.windows:
@@ -83,6 +94,11 @@ class FolderActionTests(QtTestCase):
         self.assertTrue(not isValid(window) or not window.busy)
 
     def test_completion_notifications_follow_job_visibility_and_window_focus(self):
+        outcomes = (
+            (ProcessResult('succeeded', 0, 1), 'Complete'),
+            (ProcessResult('failed', 3, 1, 'Synthetic process failure'), 'Failed'),
+            (ProcessResult('cancelled', None, 1), 'Cancelled'),
+        )
         with patch.object(self.host, 'isActiveWindow', return_value=True) as active, \
                 patch.object(self.host, 'isMinimized', return_value=False) as minimized:
             for selected, focused, reduced, expected in (
@@ -93,17 +109,29 @@ class FolderActionTests(QtTestCase):
                 with self.subTest(selected=selected, focused=focused, minimized=reduced):
                     active.return_value = focused
                     minimized.return_value = reduced
-                    self.notice.reset_mock()
-                    window = self.start('import time; time.sleep(.1)')
+                    window = self.pending_window()
                     self.tabs.setCurrentWidget(self.page if selected else self.tabs.widget(0))
-                    self.wait(lambda: window.result is not None)
-                    self.assertEqual(self.notice.called, expected)
-                    self.assertEqual(self.page.records[window]['unseen'], expected)
-                    self.assertIn('Complete', window.windowTitle())
+                    # Reuse the pane to test outcome projection without adding
+                    # processes or rebuilding the same window for each result.
+                    for result, label in outcomes:
+                        with self.subTest(state=result.state):
+                            self.notice.reset_mock()
+                            window.runner.completed.emit(result)
+                            self.assertIs(window.result, result)
+                            self.assertEqual(self.page.records[window]['unseen'], expected)
+                            self.assertIn(label, window.windowTitle())
+                            if expected:
+                                self.notice.assert_called_once_with(
+                                    window.windowTitle(), result.error or 'Open Workspace actions for details.',
+                                    failed=result.state == 'failed',
+                                    outcome='cancelled' if result.state == 'cancelled' else None)
+                            else:
+                                self.notice.assert_not_called()
 
     def test_unavailable_system_notifications_leave_the_job_and_badge_intact(self):
-        window = self.start("import time; time.sleep(.1)")
-        self.tabs.setCurrentIndex(0); self.wait(lambda: window.result is not None)
+        window = self.pending_window()
+        self.tabs.setCurrentIndex(0)
+        window.runner.completed.emit(ProcessResult('succeeded', 0, 1))
         with patch.object(qt.QSystemTrayIcon, 'isSystemTrayAvailable', return_value=False):
             FolderActionsPage.notify(self.page, 'Done', 'Details')
         self.assertIsNone(self.page.tray)

@@ -3,7 +3,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 from io import BytesIO
-from threading import Event, Thread
+from threading import Condition, Event, Thread
 import unittest
 from features.video.buffering import BufferingPolicy, MemoryRanges
 
@@ -77,8 +77,13 @@ class VideoMemoryTests(unittest.TestCase):
             cache.read(0, 8, stream)
 
     def test_parallel_streams_share_one_fetch(self):
-        entered, release = Event(), Event()
+        entered, release, contended = Event(), Event(), Event()
         cache = MemoryRanges(8, self.policy(), lambda: None)
+        class ObservedCondition(Condition):
+            def wait(self, timeout=None):
+                contended.set()
+                return super().wait(timeout)
+        cache.condition = ObservedCondition()
         results, calls = [], []
         class Stream(BytesIO):
             def read(self, count):
@@ -95,6 +100,7 @@ class VideoMemoryTests(unittest.TestCase):
             workers[0].start()
             self.assertTrue(entered.wait(2))
             workers[1].start()
+            self.assertTrue(contended.wait(2), 'Second stream never waited on the in-flight fetch')
             release.set()
             for worker in workers:
                 worker.join(3)
