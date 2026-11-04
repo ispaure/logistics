@@ -20,8 +20,9 @@ from commonUtils.runtime.streams import file_sha256
 BUNDLE = 'io.github.ispaure.logisticsmobile'
 
 
-def ios_provisioning_args(source, ios):
-    mode = source.get('run_overrides', {}).get('devices.ios_provisioning', 'existing')
+def ios_provisioning_args(source, ios, overrides=None):
+    choices = source.get('run_overrides', {}) if overrides is None else overrides
+    mode = choices.get('devices.ios_provisioning', 'existing')
     if mode == 'existing':
         return []
     if mode != 'update':
@@ -133,7 +134,17 @@ def android_connections(value):
     return connections
 
 
-def make_plan(project, platform, targets, context, revision, *, shared=None):
+def availability_policy(choice='bounded'):
+    """A failed availability check never reports a successful installation."""
+    if choice == 'bounded':
+        return dict(timeout=90, retry_exit_codes=(), description='Try once for up to 90 seconds; unreachable recipients remain not installed.')
+    if choice == 'wait':
+        return dict(timeout=120, retry_exit_codes=(75,), retry_delay=30,
+                    description='Wait until this saved recipient is reachable; unrelated deliveries continue.')
+    raise ValueError('Choose Try once or Wait until reachable for device availability.')
+
+
+def make_plan(project, platform, targets, context, revision, *, shared=None, retained_snapshot=None):
     from logistics_build.build_snapshots import materialize, PRIVATE_RUNTIME_NAMES
     source = context.source(project, revision)
     signing_mode = None
@@ -151,7 +162,7 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
         if len(groups) > 1:
             plans = []
             for mode, recipients in groups.items():
-                plan = make_plan(project, platform, recipients, context, revision, shared=shared)
+                plan = make_plan(project, platform, recipients, context, revision, shared=shared, retained_snapshot=retained_snapshot)
                 names = {phase.id: 'signing-' + mode + '.' + phase.id for phase in plan.phases}
                 plans.append(replace(plan, phases=tuple(replace(phase, id=names[phase.id],
                     dependencies=tuple(names[dep] for dep in phase.dependencies)) for phase in plan.phases)))
@@ -163,11 +174,19 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
         if signing_mode == 'debug':
             shared = None
     snapshot = project.private / 'snapshots' / source['fingerprint']
-    materialize(project.root, snapshot, revision, expected=source)
-    for name in PRIVATE_RUNTIME_NAMES:
-        original, link = project.mobile / name, snapshot / 'mobile_build' / name
-        if original.exists() and not link.exists():
-            link.symlink_to(original, target_is_directory=original.is_dir())
+    if retained_snapshot is None:
+        materialize(project.root, snapshot, revision, expected=source)
+        for name in PRIVATE_RUNTIME_NAMES:
+            original, link = project.mobile / name, snapshot / 'mobile_build' / name
+            if original.exists() and not link.exists():
+                link.symlink_to(original, target_is_directory=original.is_dir())
+    else:
+        if Path(retained_snapshot).resolve() != snapshot.resolve():
+            raise ValueError('Retained source must be the project-owned captured snapshot.')
+        # Planning-only import: copied runners remain compatible with captured
+        # older source that does not contain this new project adapter module.
+        from logistics_build.retained_devices import verify_snapshot
+        verify_snapshot(snapshot, source)
     options = source['effective_settings']['values']
     workspace = project.private / 'workspaces' / 'devices' / platform / uuid4().hex
     workspace.mkdir(parents=True, exist_ok=True)
@@ -211,8 +230,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
         ready_id = 'ready-' + str(index + 1) + '-' + label
         phases.append(Phase(ready_id, (*command, 'ready', '--recipe', str(path), '--sha256', file_sha256(path),
             '--device', target['id']), str(snapshot), dependencies=(prepare.id,), environment=env,
-            effect='inspect', kind='connection', timeout=120, retry_exit_codes=(75,), retry_delay=30,
-            label='Connect to ' + target['name'], description='Retries until available; other deliveries continue.'))
+            effect='inspect', kind='connection', label='Connect to ' + target['name'],
+            **availability_policy(source.get('run_overrides', {}).get('devices.availability', 'bounded'))))
         phases.append(Phase('install-' + str(index + 1) + '-' + label, (*command, 'install', '--report', str(report),
             '--device', target['id'], '--receipt', str(receipt)), str(snapshot), dependencies=(prepare.id, ready_id),
             environment=env, effect='deploy', kind='distribution', approval_required=False, timeout=600, artifacts=(str(receipt),),
@@ -351,7 +370,7 @@ def prepare_shared(data):
         exported = workspace / 'device-export'
         ios.run(['xcodebuild', '-exportArchive', '-archivePath', str(Path(state['workspace']) / 'Logistics.xcarchive'),
             '-exportOptionsPlist', str(options), '-exportPath', str(exported),
-            *ios_provisioning_args(data['source'], ios)], env=env,
+            *ios_provisioning_args(data['source'], ios, data.get('execution_choices'))], env=env,
             log=workspace / 'logs/device-export.log')
         ipas = list(exported.glob('*.ipa'))
         if len(ipas) != 1:raise ValueError('Expected one provisioned device export.')

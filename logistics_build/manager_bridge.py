@@ -31,6 +31,9 @@ def main():
             if intent.get('schema') != 1:
                 raise ValueError('Unsupported journey request schema.')
             result = project.make_journey(intent['goal'], intent['platforms'], intent['destinations'], backends=intent.get('backends'), **values).data()
+        elif action == 'retained_delivery_plan':
+            result = project.retained_delivery_plan(values['run_directory'], values['destinations'],
+                                                     values.get('run_overrides')).data()
         elif action == 'run_choices':
             from logistics_build.manager_devices import choices
             result = choices(ROOT)

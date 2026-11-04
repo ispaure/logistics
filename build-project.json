@@ -681,7 +681,7 @@
       "destinations": [
         "ios-devices"
       ],
-      "description": "Explicitly permit Apple profile and capability updates for a Debug device build using the configured API key. Does not register devices. Release exports use existing profiles."
+      "description": "Explicitly permit Apple profile and capability updates for a Debug device build or an existing Release archive export using the configured API key. Does not register devices or recompile a retained archive; existing team and recipient provisioning checks remain required."
     },
     {
       "id": "testing.manager_source",
@@ -694,6 +694,21 @@
       },
       "workflow_option": true,
       "description": "Explicit local validation only. Captures current manager source/tests with a verified content identity; releases and delivery retain the committed pin."
+    },
+    {
+      "id": "devices.availability",
+      "label": "Device availability",
+      "kind": "choice",
+      "default": "bounded",
+      "options": {
+        "bounded": "Try once (up to 90 seconds)",
+        "wait": "Wait until reachable"
+      },
+      "destinations": [
+        "ios-devices",
+        "android-devices"
+      ],
+      "description": "Try once leaves unreachable recipients not installed and does not retry. Wait retries this saved recipient while other deliveries continue. Applies to new builds and retained-artifact delivery."
     }
   ],
   "dynamic_run_inputs": true,
@@ -709,6 +724,7 @@
     "storage_inventory",
     "delete_storage",
     "storage_maintenance",
-    "enroll_storage"
+    "enroll_storage",
+    "retained_delivery_plan"
   ]
 }
