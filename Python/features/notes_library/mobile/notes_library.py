@@ -2,6 +2,7 @@
 from commonUtils.search.policy import SEARCH_DEBOUNCE_SECONDS
 
 from collections import Counter
+from contextlib import nullcontext
 import asyncio
 import posixpath
 from pathlib import PurePosixPath
@@ -59,6 +60,7 @@ class NotesHost:
     open_resource: Callable = None
     relocate_references: Callable = lambda provider, source, destination: None
     remember_document: Callable = lambda owner: None
+    batch_rows: Callable = nullcontext
 
 
 from .library_panels import LibraryPanels, CONTROL_FONT
@@ -685,18 +687,37 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if getattr(self, 'panel_tab', 'Files') == 'Calendar':
             return
         from commonUtils.ui.native.text_size import native_backend
-        updates = self.tree_updates()
+        row_updates = self.tree_updates()
+        def batched_updates():
+            try:
+                while True:
+                    # Native controls acquire several provisional styles during
+                    # construction. Paint each control's final style once.
+                    with self.host.batch_rows():
+                        try:
+                            next(row_updates)
+                        except StopIteration:
+                            return
+                    yield
+            finally:
+                row_updates.close()
+        updates = batched_updates()
         if native_backend(self.rows).startswith('toga_dummy.'):
             for _ in updates:
                 pass
             return
         async def render():
+            deadline, count = monotonic() + .008, 0
             try:
                 for _ in updates:
                     if not self.valid():
                         break
-                    # Native control creation/layout must release the main loop.
-                    await asyncio.sleep(.001)
+                    count += 1
+                    # Keep expensive native rows cooperative without imposing a
+                    # timer round trip on every cached row or cleanup step.
+                    if count >= 8 or monotonic() >= deadline:
+                        await asyncio.sleep(.001)
+                        deadline, count = monotonic() + .008, 0
             finally:
                 updates.close()
         self.tree_task = self.host.loop.create_task(render())

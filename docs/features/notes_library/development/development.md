@@ -531,6 +531,12 @@ native probes wait for the matching identity before testing queued input.
 ## Folder browsing cost
 
 Folder expansion reads names and metadata, without opening document bodies.
+`NotesLibrary.folders` uses the provider's guarded `list_names` snapshot when
+available, avoiding full per-file entries and timestamp formatting. Providers
+without that API retain their normal listing; adapted local providers retain
+their own namespace and filtering. Document admission and connection reuse still
+obtain fresh revisions independently.
+
 Landing-note detection uses `NotesLibrary.folder_pages`; desktop LocalCrypt
 encodes candidates in batches of at most 128 rather than spawning a process for
 each candidate and alternate directory spelling. Mobile LocalCrypt probes only
@@ -538,6 +544,21 @@ the encoded file spelling. Probes retain cancellation and credential checks and
 validate physical paths before inspecting them. No additional plaintext index is
 persisted. Focused provider tests check real encrypted landing-note detection and
 that a folder page batch never reads document content.
+
+Mobile row construction uses the host's existing surface-paint batch for each
+row, so provisional button, icon and selection styles paint only their final
+state. Rendering yields after eight steps or eight milliseconds of work, retaining
+cancellation without a timer round trip for every cached row. Controls are built
+offscreen and published in one batch; row reuse, holds and drag bindings retain
+their existing retirement rules. Desktop uses its existing Qt tree and shares
+the names-only provider improvement.
+
+The optional `notes-folders` native probe separates listing, landing-note probes,
+row work and publication for local and LocalCrypt folders on Android/iOS. Its
+fixture includes 40 notes and four landing-note folders and checks cold and
+retained-directory expansion. Host regressions cover final-paint counts, bounded
+timer overhead, cancellation and provider fallbacks. Timings from an emulator or
+simulator do not establish performance on a physical Samsung S8+.
 
 ## Scoped desktop library tabs
 
