@@ -157,6 +157,8 @@ class CreationFormats:
 
     def set_enabled(self, enabled):
         self.change.enabled = enabled
+        if self.picker.notebook_templates is not None:
+            self.picker.notebook_templates.set_enabled(enabled)
         for button in (*self.buttons.values(), *self.tab_buttons.values()):
             button.enabled = enabled
 
@@ -193,6 +195,8 @@ class CreationFormats:
         fit_text(self.summary, max(120, width - 130))
         self.compact = compact
         view = self.picker.name_view
+        if self.picker.notebook_templates is not None:
+            self.picker.notebook_templates.fit(width)
         short = self.tabbed and keyboard and height < 140
         self.picker.save_as_name.style.height = 44 if short else 48
         # Reserve the short viewport for the field itself. Avoid partially

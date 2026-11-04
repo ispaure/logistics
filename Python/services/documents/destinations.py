@@ -36,10 +36,11 @@ class DestinationRequest:
 
     @classmethod
     def capture(cls, provider, folder, filename, data, extensions, *, notebook,
-                creating, session_count, session_limit, store, source_document):
+                creating, session_count, session_limit, store, source_document,
+                notebook_template='Blank', notebook_format='pro'):
         from features.notebooks.notebook import MAX_ARCHIVE, Notebook
         if creating and notebook:
-            data = Notebook.new(Path(filename).stem).to_bytes()
+            data = Notebook.new(Path(filename).stem, template=notebook_template, paper_format=notebook_format).to_bytes()
         maximum = MAX_ARCHIVE if notebook else 1024 * 1024
         if Path(filename).suffix.lower() not in extensions or len(data) > maximum:
             raise ValueError('Choose a text, source or configuration filename; saves are limited to 1 MiB.')

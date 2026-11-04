@@ -8,7 +8,7 @@ creating files. PDF-backed pages can be duplicated inside their notebook,
 but cannot be copied to another notebook; overview thumbnails show ink only.
 
 A notebook is a document type in **New document**: choose **Notebook (.rmdoc)**,
-enter its name and choose a folder in ordinary Local storage or an unlocked
+enter its name, choose **First page template** and its template size, then choose a folder in ordinary Local storage or an unlocked
 **LocalCrypt** location. Open existing `.rmdoc` files from the file browser,
 including Workspaces. The editor opens above the current screen. **Close document (X)** uses the shared
 save/discard guard and returns to Home. iOS/iPadOS has one native X, with no
@@ -153,10 +153,12 @@ a simulator cannot certify writing latency, palm rejection or tablet editability
 
 ## Page templates
 
-Open **Layers** to select the current page's template, Paper Pro or Paper Pro Move
+Open **Page template and layers**, or **Pages → Page template…**, to select the current page's template, Paper Pro or Paper Pro Move
 template format, and background visibility. The catalog includes lined paper,
-grids, dots, restaurant reviews, meeting notes and daily plans. Edits use the same
-Save, recovery and Undo/Redo behavior as desktop. New pages inherit the template.
+grids, dots, restaurant reviews, meeting notes, daily plans, checklists, Cornell
+notes and weekly plans. Edits use the same
+Save, recovery and Undo/Redo behavior as desktop. New pages inserted after the current page inherit its template, size and
+background visibility. Other pages stay unchanged.
 PDF-backed documents retain their embedded PDF background.
 
 Use **Export .rmdoc** for a copy to import into reMarkable. Custom layouts and

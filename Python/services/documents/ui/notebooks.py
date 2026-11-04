@@ -9,13 +9,20 @@ def open_notebook_choice(choice, parent=None, *, create=False):
     from features.notebooks.notebook import Notebook, MAX_ARCHIVE
     from features.notebooks.storage import NotebookDocument
     from features.notebooks.ui.workspace import open_workspace
+    created_book = None
+    if create:
+        from features.notebooks.ui.setup import choose_new_notebook
+        created_book = choose_new_notebook(parent, name=Path(choice.path).stem, fixed_name=True)
+        if created_book is None:
+            choice.close()
+            return None
     dialog = ResourceTaskDialog(parent, 'Creating notebook' if create else 'Opening notebook')
     opened = []
     def work(report, cancelled):
         resource = DocumentResource(choice.provider, choice.path, max_bytes=MAX_ARCHIVE)
         try:
             if create:
-                DocumentResource.publish(choice.provider, choice.path, Notebook.new(Path(choice.path).stem).to_bytes(),
+                DocumentResource.publish(choice.provider, choice.path, created_book.to_bytes(),
                     max_bytes=MAX_ARCHIVE, validate=Notebook.read, cancelled=cancelled)
             book = Notebook.read(resource.read(cancelled=cancelled))
             return NotebookDocument(book, resource=resource)
@@ -46,10 +53,13 @@ def open_notebook_choice(choice, parent=None, *, create=False):
 
 
 def new_notebook_document(parent=None):
-    from features.notebooks.notebook import Notebook
     from features.notebooks.storage import NotebookDocument
     from features.notebooks.ui.workspace import open_workspace
-    return open_workspace(parent, document=NotebookDocument(Notebook.new()))
+    from features.notebooks.ui.setup import choose_new_notebook
+    book = choose_new_notebook(parent)
+    if book is None:
+        return None
+    return open_workspace(parent, document=NotebookDocument(book))
 
 
 def choose_notebook_document(parent=None):
