@@ -14,8 +14,9 @@ profile, transcript, image and IDE-context modules own their specific UI work.
 The root `session.py` owns the conversation record, edit lease, dirty state and
 response transitions independently of widgets. See the feature's
 [module map](development.md) before changing these owners.
-Old root-level presentation imports remain compatible; registration uses the
-new package lazily. Mobile also consumes the shared generation/session owners
+Root-level presentation forwarding modules have been removed; registration imports
+`ui/page.py` lazily. Import presentation from `features.lm.ui`. Mobile also
+consumes the shared generation/session owners
 through its own execution adapter; see the
 [shared lifecycle contract](development.md#shared-desktop-and-mobile-generation).
 
