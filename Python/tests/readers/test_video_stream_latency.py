@@ -15,7 +15,7 @@ class VideoStreamLatencyTests(unittest.TestCase):
     def test_overlapping_seek_waits_for_a_range_slot(self):
         from threading import Event, Thread
         from urllib.request import urlopen
-        entered, complete = Event(), Event()
+        waiting, complete = Event(), Event()
         class Content:
             path, remote, size = 'movie.avi', False, 4
             def check(self): pass
@@ -27,20 +27,33 @@ class VideoStreamLatencyTests(unittest.TestCase):
         transport.failed = failures.append
         for _ in range(4):
             self.assertTrue(transport.slots.acquire(False))
+        slots = transport.slots
+        class ObservedSlots:
+            def acquire(self, *args, **kwargs):
+                acquired = slots.acquire(*args, **kwargs)
+                if not acquired:
+                    waiting.set()
+                return acquired
+            def release(self):
+                slots.release()
+        transport.slots = ObservedSlots()
+        errors = []
         def request():
-            entered.set()
             try:
                 with urlopen(transport.url, timeout=3) as response:
                     result.append((response.status, response.read()))
+            except Exception as error:
+                errors.append(error)
             finally:
                 complete.set()
         worker = Thread(target=request)
         worker.start()
         try:
-            self.assertTrue(entered.wait(1))
-            self.assertFalse(complete.wait(.15), 'A normal seek burst was rejected')
+            self.assertTrue(waiting.wait(2), 'Request never reached the occupied range slots')
+            self.assertFalse(complete.is_set(), 'A normal seek burst was rejected')
             transport.slots.release()
             self.assertTrue(complete.wait(2))
+            self.assertEqual(errors, [])
             self.assertEqual(result, [(200,b'data')])
             self.assertEqual(failures, [])
         finally:
