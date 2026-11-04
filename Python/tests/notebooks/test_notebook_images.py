@@ -43,7 +43,7 @@ const s={console,events,$:control,document:{body:node(),createElement:node},
   cancelTouchZoom(){},flushPreview(){if(s.points.length)events.push('paint')},
   cancelPreview(){},draw(){events.push('draw')},render(){events.push('render')},
   strokeExpandsPaper:()=>false};
-s.performance={now:()=>1000};s.window=s;vm.createContext(s);
+s.crypto=require('node:crypto').webcrypto;s.performance={now:()=>1000};s.window=s;vm.createContext(s);
 vm.runInContext(fs.readFileSync(process.argv[1]+'/input.js','utf8'),s);
 vm.runInContext(fs.readFileSync(process.argv[1]+'/queue.js','utf8')
   .replaceAll('__MAX_COMMAND__','100000').replaceAll('__SEND_COMMAND__',"events.push('send')"),s);
@@ -68,6 +68,12 @@ assert.equal(s.queue.length,0);assert.equal(s.busy,false);
 assert.equal(s.logisticsInputTrace().counts['accepted-down:pen'],1);
 assert.equal(s.logisticsInputTrace().counts['stroke-ack-applied:host'],2);
 assert.ok(listeners.every(row=>typeof row.handler==='function'));
+const firstView=s.logisticsInputTrace().view_id;
+assert.match(firstView,/^[0-9a-f]{32}$/);
+const other={...s,canvas:{...s.canvas}};other.window=other;vm.createContext(other);
+vm.runInContext(fs.readFileSync(process.argv[1]+'/input.js','utf8'),other);
+assert.notEqual(other.logisticsInputTrace().view_id,firstView,'New DOM lifetime needs a new nonce');
+assert.equal(s.logisticsInputTrace().view_id,firstView,'Reads must preserve the current lifetime nonce');
 console.log(JSON.stringify({passed:true,bare_command_does_not_paint:true,pen_paints_before_ack:true}));
 """
         result = subprocess.run(['node', '-e', driver, str(assets)], capture_output=True,

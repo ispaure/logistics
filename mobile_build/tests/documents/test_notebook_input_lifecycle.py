@@ -226,6 +226,22 @@ class PencilInputTraceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(module.attach_diagnostics(object(),object(),output))
             constructor.assert_not_called();self.assertFalse(output.exists())
 
+    async def test_new_observer_has_distinct_nonidentifying_lifetime_nonce(self):
+        with TemporaryDirectory() as folder,patch('builtins.print'):
+            first=self.make(folder);second=self.make(folder)
+            left,right=first.snapshot()['observer_id'],second.snapshot()['observer_id']
+            self.assertNotEqual(left,right)
+            self.assertEqual(len(left),32)
+            self.assertTrue(all(character in '0123456789abcdef' for character in left))
+            first.close();second.close()
+
+    def test_dom_lifetime_nonce_accepts_only_exact_random_hex_shape(self):
+        first=module._safe_dom_trace(dict(view_id='a'*32))
+        second=module._safe_dom_trace(dict(view_id='b'*32))
+        self.assertNotEqual(first['view_id'],second['view_id'])
+        for token in ('private-document.md','a'*31,'A'*32,7,None,'../'+'a'*29):
+            self.assertIsNone(module._safe_dom_trace(dict(view_id=token))['view_id'])
+
     def test_dom_privacy_projection_drops_unknown_and_content_fields(self):
         result=module._safe_dom_trace(dict(document='SECRET',counts={'title:private':7,'accepted-down:pen':3},
             recent=[dict(kind='accepted-down',type='pen',queued=999,coordinates=[1,2],title='SECRET',trusted=True)]))
