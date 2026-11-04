@@ -115,6 +115,7 @@ canvas.onpointermove = e => {
 };
 
 function finish(e, cancelled = false) {
+  if (mode === 'select') return selectionFinish(e, cancelled);
   if (mode === 'capture') return finishImage(e, cancelled);
   if (pan && pan.id === e.pointerId) {
     let gesture = pan,
@@ -264,6 +265,7 @@ $('erase').onclick = () => {
   if (!eraserDialog.open) showEraserSettings()
 };
 $('select').onclick = () => {
+  if (active !== null) return;
   mode = mode === 'select' ? 'ink' : 'select';
   $('select').classList.toggle('active', mode === 'select');
   $('erase').classList.remove('active');
@@ -271,6 +273,7 @@ $('select').onclick = () => {
   draw()
 };
 $('tool').onchange = () => {
+  if (active !== null) return;
   brushOptions();
   mode = 'ink';
   $('erase').classList.remove('active');
