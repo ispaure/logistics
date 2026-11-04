@@ -3,6 +3,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from datetime import date
+from itertools import count
 from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -608,10 +609,13 @@ class NotesLibraryPanelTests(unittest.TestCase):
     def test_typing_cancels_unfinished_native_result_rendering(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
-            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_android.widgets.box'):
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_android.widgets.box'), \
+                    patch('features.notes_library.mobile.notes_library.monotonic', side_effect=count()):
                 owner.render_tree()
                 pending = owner.tree_task
-                await asyncio.sleep(.002)
+                # Resume after the renderer reaches its first cooperative yield.
+                # A wall-clock delay can let this small fixture finish first.
+                await asyncio.sleep(0)
                 self.assertFalse(pending.done())
                 owner.search.value = 'Home'
                 await asyncio.gather(pending, return_exceptions=True)
@@ -642,10 +646,13 @@ class NotesLibraryPanelTests(unittest.TestCase):
     def test_native_tree_batches_yield_cancel_and_reuse_rows(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
-            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_android.widgets.box'):
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_android.widgets.box'), \
+                    patch('features.notes_library.mobile.notes_library.monotonic', side_effect=count()):
                 owner.render_tree()
                 first = owner.tree_task
-                await asyncio.sleep(.002)
+                # Resume after the renderer reaches its first cooperative yield.
+                # A wall-clock delay can let this small fixture finish first.
+                await asyncio.sleep(0)
                 self.assertFalse(first.done())
                 owner.render_tree()
                 await asyncio.gather(first, return_exceptions=True)
