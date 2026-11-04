@@ -13,13 +13,14 @@ TEST_STAGE = TestStage.REGRESSION
 BUNDLE = 'io.github.ispaure.logisticsnotebookqa'
 
 
-def fixture():
+def fixture(*, edge=False):
     from pypdf import PdfWriter
     from pypdf.annotations import Link
     writer = PdfWriter()
     for _ in range(3):
-        writer.add_blank_page(300, 600)
-    writer.add_annotation(0, Link(rect=(30, 330, 150, 450), target_page_index=2))
+        writer.add_blank_page(1400 if edge else 300, 600)
+    for rect in ((0, 240, 70, 360), (1330, 240, 1400, 360)) if edge else [(30, 330, 150, 450)]:
+        writer.add_annotation(0, Link(rect=rect, target_page_index=2))
     stream = BytesIO()
     writer.write(stream)
     return stream.getvalue()
@@ -32,6 +33,14 @@ class Probe(NotebookProbe):
                 return
             await asyncio.sleep(.05)
         raise AssertionError(message)
+
+    async def idle(self, panel):
+        for _ in range(160):
+            if not panel.busy and await panel.web.evaluate_javascript(
+                    "typeof window.notebookIdle==='function'&&window.notebookIdle()"):
+                return
+            await asyncio.sleep(.05)
+        raise AssertionError('Notebook link command acknowledgement did not finish')
 
     async def ios_touch(self, point, end=None):
         cache = Path(self.paths.cache)
@@ -84,12 +93,28 @@ class Probe(NotebookProbe):
         native.getImageMatrix().mapPoints(point)
         return [float(point[0])+native.getPaddingLeft(), float(point[1])+native.getPaddingTop()]
 
-    async def touch_pdf(self, canvas, **kwargs):
-        point = await self.pdf_point(canvas)
+    async def touch_pdf(self, canvas, *, x=.3, y=.35, **kwargs):
+        point = await self.pdf_point(canvas, x, y)
         if self.apple:
             await self.ios_touch(point, **kwargs)
         else:
             await self.android_gesture(canvas._impl.native, point, **kwargs)
+
+    async def pdf_idle(self, owner):
+        from features.pdf.mobile.canvas import pdf_viewport
+        await asyncio.sleep(.1)  # Let native geometry publish an inserted/removed action row.
+        await self.wait(lambda: not owner.cloud_busy and
+            owner.crypt_reader.pdf_navigation.viewport == pdf_viewport(owner), 'PDF layout did not settle')
+
+    async def native_undo(self, canvas, owner):
+        await self.pdf_idle(owner)
+        button = canvas.return_box.children[0]._impl.native
+        if self.apple:
+            frame = button.convertRect_toView_(button.bounds, None)
+            await self.ios_touch([float(frame.origin.x+frame.size.width/2), float(frame.origin.y+frame.size.height/2)])
+        else:
+            button.performClick()
+        await self.wait(lambda: owner.crypt_reader.pdf_navigation.indices[0] == 0, 'Native undo button did not return')
 
     async def check(self, app):
         output = Path(self.paths.cache) / 'link-evidence'
@@ -114,14 +139,16 @@ class Probe(NotebookProbe):
             await asyncio.sleep(.5)
             assert owner.crypt_reader.pdf_navigation.indices == (0,)
             for zoom in (1, 2):
+                await self.pdf_idle(owner)
                 canvas.set_zoom(zoom)
                 await asyncio.sleep(.2)
+                assert abs(canvas.zoom_scale-zoom) < .05, canvas.zoom_scale
                 await self.touch_pdf(canvas)
                 await self.wait(lambda: canvas.return_page is not None, 'Native finger tap did not follow PDF link')
                 assert owner.crypt_reader.pdf_navigation.indices[0] == 2
                 assert not owner.reading_frame.immersive
                 await capture_window(self, output / f'pdf-undo-{zoom}.png')
-                await canvas.undo_link()
+                await self.native_undo(canvas, owner)
                 assert owner.crypt_reader.pdf_navigation.indices[0] == 0
                 report['cases'].append(f'native_pdf_finger_link_and_undo_zoom_{zoom}')
             if not self.apple:
@@ -133,12 +160,15 @@ class Probe(NotebookProbe):
                     await asyncio.sleep(.2)
                     assert owner.crypt_reader.pdf_navigation.indices[0] == 0, label
                     report['cases'].append('android_pdf_no_link_'+label)
+            await self.pdf_idle(owner)
             point = await self.pdf_point(canvas)
             end = [point[0], point[1] - (120 if self.apple else canvas._impl.native.getHeight()*.25)]
             await self.touch_pdf(canvas, end=end)
             await self.wait(lambda: owner.crypt_reader.pdf_navigation.indices[0] == 1, 'Native swipe did not advance one page')
             assert canvas.return_page is None, 'Swipe followed the link instead of paging'
+            await self.pdf_idle(owner)
             await owner.move_private_page(0)
+            await self.pdf_idle(owner)
             report['cases'].append('native_pdf_swipe_does_not_follow_link')
             await self.touch_pdf(canvas)
             await self.wait(lambda: canvas.return_page is not None, 'Expiry fixture did not navigate')
@@ -146,13 +176,41 @@ class Probe(NotebookProbe):
             assert canvas.return_page is None and not canvas.return_box.children
             report['cases'].append('native_pdf_real_timer_expiry')
             owner.clear_private_reader()
+            edge_path = self.private_root / 'edge-links.pdf'
+            edge_path.write_bytes(fixture(edge=True))
+            assert await self.open_download(path=edge_path)
+            owner = self.private_sessions.active
+            canvas = owner.crypt_image
+            await asyncio.sleep(.5)
+            for fraction in (.02, .98):
+                point = await self.pdf_point(canvas, fraction, .5)
+                if not self.apple:
+                    native = canvas._impl.native
+                    density = native.getResources().getDisplayMetrics().density
+                    assert point[0] < 24*density or point[0] > native.getWidth()-24*density, point
+                await self.touch_pdf(canvas, x=fraction, y=.5)
+                await self.wait(lambda: canvas.return_page is not None, 'Native edge link did not navigate')
+                assert owner.crypt_reader.pdf_navigation.indices[0] == 2
+                await capture_window(self, output / f'edge-undo-{fraction}.png')
+                await self.native_undo(canvas, owner)
+                report['cases'].append('native_edge_link_and_undo_'+str(fraction))
+                if not self.apple:
+                    point = await self.pdf_point(canvas, fraction, .5)
+                    for label, kwargs in [('cancel', dict(cancel=True)), ('pen', dict(tool=2)),
+                            ('swipe', dict(end=[point[0], point[1]-native.getHeight()*.2])),
+                            ('move_back', dict(end=[point[0]+(60 if fraction<.5 else -60), point[1]], moved_back=True))]:
+                        await self.android_gesture(native, point, **kwargs)
+                        await asyncio.sleep(.15)
+                        assert owner.crypt_reader.pdf_navigation.indices[0] == 0 and canvas.return_page is None, label
+                        report['cases'].append('android_edge_no_link_'+str(fraction)+'_'+label)
+            owner.clear_private_reader()
             from features.pdf.annotation import notebook_from_pdf
             notebook = self.private_root / 'linked.rmdoc'
             notebook.write_bytes(notebook_from_pdf(fixture(), 'Native link QA').to_bytes())
             assert await self.open_download(path=notebook)
             panel = self.notebook_panel
             await self.wait(lambda: panel.editor is not None, 'Notebook editor absent')
-            await asyncio.sleep(.5)
+            await self.idle(panel)
             for finger in (False, True):
                 await panel.web.evaluate_javascript("paperView='pro';$('paperView').value=paperView;setZoom('page');$('finger').checked="+json.dumps(finger))
                 await asyncio.sleep(.15)
@@ -171,16 +229,19 @@ class Probe(NotebookProbe):
                     scale = native.getWidth()/point['w']
                     await self.android_gesture(native, [point['x']*scale, point['y']*scale])
                 await self.wait(lambda: panel.editor.index == 2, 'Native notebook finger tap did not navigate')
+                await self.idle(panel)
                 assert await panel.web.evaluate_javascript('!undoPageJump.hidden')
                 assert not panel.editor.undo, 'Link tap added ink/history'
                 await capture_window(self, output / ('notebook-undo-'+str(finger)+'.png'))
                 await panel.web.evaluate_javascript('undoPageJump.click()')
                 await self.wait(lambda: panel.editor.index == 0, 'Notebook undo did not return')
+                await self.idle(panel)
                 report['cases'].append('native_notebook_finger_link_drawing_'+str(finger))
             if not self.apple:
                 before = len(panel.editor.notebook.page(0).strokes)
                 await self.android_gesture(native, [point['x']*scale, point['y']*scale], tool=2)
                 await self.wait(lambda: len(panel.editor.notebook.page(0).strokes) > before, 'Native pen did not draw')
+                await self.idle(panel)
                 assert panel.editor.index == 0
                 report['cases'].append('native_android_notebook_pen_draws_without_link')
             report['success'] = True
