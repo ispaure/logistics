@@ -83,7 +83,7 @@ class UsageNavigationTests(QtTestCase):
             path = root / 'main.py'
             code = 'def action():\n    pass\n\naction()\n'
             path.write_text(code)
-            view = ProjectWorkspace(Project('popup', str(root)))
+            view = ProjectWorkspace(Project('popup', str(root), autosave='off'))
             view.resize(900, 600)
             view.show()
             view.open_path(path)
@@ -126,7 +126,7 @@ class UsageNavigationTests(QtTestCase):
             source.write_text('def action():\n    pass\n')
             caller = root / 'caller.py'
             caller.write_text('from model import action\naction()\n')
-            view = ProjectWorkspace(Project('click', str(root)))
+            view = ProjectWorkspace(Project('click', str(root), autosave='off'))
             view.resize(900, 600)
             view.show()
             view.open_path(source)
