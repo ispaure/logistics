@@ -31,6 +31,7 @@ function brushOptions() {
   if ($('width').options.length > 1) normalWidth = $('width').value;
   options('width', brush.fixed_width ? [['Fixed', 1]] : Object.entries(state.widths));
   $('width').value = brush.fixed_width ? '1' : normalWidth;
+  warmSelectedGraphite();
 }
 
 function chosenInk() {
@@ -114,25 +115,85 @@ function swatchColor(tool, color) {
   return rgb.map(v => Math.round(v * alpha + 255 * (1 - alpha)))
 }
 const grainCache = new Map();
+const grainCacheLimit = 24;
+const graphiteMasks = new Map();
+
+function graphiteNoise(x, y, seed) {
+  let value = Math.imul(x ^ seed, 0x45d9f3b) ^ Math.imul(y, 0x27d4eb2d);
+  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967296
+}
+
+function graphiteMask(mechanical) {
+  if (graphiteMasks.has(mechanical)) return graphiteMasks.get(mechanical);
+  // Original graphite deposition, not a tablet texture or captured brush asset.
+  // Fine tooth sits over a smooth paper field. The field wraps at its boundary,
+  // so repeated tiles have no seam or the former tiny diagonal dot lattice.
+  const side = 128, cells = 8, spacing = side / cells,
+    seed = mechanical ? 173 : 419, mask = new Uint8ClampedArray(side * side),
+    field = Array.from({length: cells * cells}, (_, i) => graphiteNoise(i % cells, Math.floor(i / cells), 827));
+  for (let y = 0; y < side; y++) {
+    const cy = Math.floor(y / spacing), fy = (y % spacing) / spacing,
+      sy = fy * fy * (3 - 2 * fy);
+    for (let x = 0; x < side; x++) {
+      const cx = Math.floor(x / spacing), fx = (x % spacing) / spacing,
+        sx = fx * fx * (3 - 2 * fx),
+        top = field[cy * cells + cx] * (1 - sx) + field[cy * cells + (cx + 1) % cells] * sx,
+        bottom = field[((cy + 1) % cells) * cells + cx] * (1 - sx) + field[((cy + 1) % cells) * cells + (cx + 1) % cells] * sx,
+        paper = top * (1 - sy) + bottom * sy,
+        tooth = graphiteNoise(x, y, seed),
+        deposit = graphiteNoise(Math.floor(x / 2), Math.floor(y / 2), seed + 71);
+      // Pencil leaves clustered paper gaps and a softer graphite body. A fine
+      // mechanical lead stays dense and crisp, with only sparse tiny pinholes.
+      const opacity = mechanical ? (tooth < .035 ? .32 : .74 + .2 * tooth + .06 * paper) :
+        (deposit < .055 || tooth < .025 ? .22 : .16 + .42 * deposit + .24 * tooth + .16 * paper);
+      mask[y * side + x] = Math.round(opacity * 255)
+    }
+  }
+  graphiteMasks.set(mechanical, mask);
+  return mask
+}
 
 function grain(target, rgb, mechanical) {
-  let key = rgb.join(',') + mechanical;
-  if (grainCache.has(key)) return grainCache.get(key);
-  let tile = document.createElement('canvas');
-  tile.width = tile.height = 8;
-  let g = tile.getContext('2d');
-  g.fillStyle = colorCss(rgb);
-  g.globalAlpha = mechanical ? .75 : .6;
-  g.fillRect(0, 0, 8, 8);
-  for (let y = 0; y < 8; y++)
-    for (let x = 0; x < 8; x++) {
-      g.globalAlpha = ((x * 13 + y * 7) % 11) / 14;
-      g.fillRect(x, y, 1, 1)
-    }
-  let pattern = target.createPattern(tile, 'repeat');
+  const key = rgb.join(',') + ':' + Number(mechanical);
+  if (grainCache.has(key)) {
+    const pattern = grainCache.get(key);
+    grainCache.delete(key);
+    grainCache.set(key, pattern);
+    return pattern
+  }
+  const tile = document.createElement('canvas');
+  tile.width = tile.height = 128;
+  const g = tile.getContext('2d'), image = g.createImageData(128, 128),
+    mask = graphiteMask(mechanical);
+  for (let i = 0; i < mask.length; i++) {
+    const index = i * 4;
+    image.data[index] = rgb[0];
+    image.data[index + 1] = rgb[1];
+    image.data[index + 2] = rgb[2];
+    image.data[index + 3] = mask[i]
+  }
+  g.putImageData(image, 0, 0);
+  const pattern = target.createPattern(tile, 'repeat');
+  // A tile spans 64 native page units. Its origin stays on the page through
+  // zoom and between incremental draft recoloring and completed-stroke paint.
+  pattern.setTransform(new DOMMatrix().scale(.5));
   grainCache.set(key, pattern);
-  return pattern;
+  if (grainCache.size > grainCacheLimit) grainCache.delete(grainCache.keys().next().value);
+  return pattern
 }
+
+function warmSelectedGraphite() {
+  // Selection, palette clicks and grayscale changes happen before a fresh pen
+  // contact. Build their cached material here, never in a pointer-move hook.
+  if (active !== null) return;
+  const tool = Number($('tool').value), brush = brushFor(tool);
+  if (!brush.texture) return;
+  const {rgb} = inkColor(nativeColor(tool, Number($('color').value)));
+  grain(ctx, rgb, brush.family === 'mechanical')
+}
+document.addEventListener('click', warmSelectedGraphite);
+document.addEventListener('change', warmSelectedGraphite);
 
 // Stored point arrays are immutable; full updates replace them. Weak ownership
 // lets retired page/undo geometry go with its model instead of retaining a
