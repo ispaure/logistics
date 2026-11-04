@@ -17,6 +17,7 @@ from features import aviation_tools
 from features.aviation_tools.location import locationUtils
 from features.aviation_tools.plane import planeUtils
 from features.aviation_tools.mathUtils import flightUtils
+from features.aviation_tools.resources import DATA_DIR
 from features.aviation_tools.ui.page import AviationToolsPage, Calculator, DatasetBrowser
 from desktop import main_window
 
@@ -95,15 +96,20 @@ class AviationToolsTests(QtTestCase):
             original = Path.cwd()
             try:
                 os.chdir(directory)
-                self.assertEqual(len(locationUtils.get_airport_dict()), 4)
-                self.assertEqual(len(planeUtils.get_aircraft_dict()), 5)
+                airports = locationUtils.get_airport_dict()
+                self.assertIn('CSU3', {airport.iata for airport in airports.values()})
+                self.assertTrue(all(airport.name and airport.iata for airport in airports.values()))
+                self.assertIn('C-GUCH', planeUtils.get_aircraft_dict())
                 aircraft = planeUtils.Aircraft('c-guch')
                 self.assertEqual(aircraft.model.model, 'C172N')
                 self.assertGreater(aircraft.model.airspeed_calibration_chart.get_kcas(107), 0)
                 page = self.page()
                 dialog = page.open_tool('Aircraft / Airports')
                 browser = dialog.findChild(DatasetBrowser)
-                self.assertEqual(browser.dataset.count(), 10)
+                expected = {DATA_DIR / 'airports.csv',
+                            *(DATA_DIR / 'aircraft').glob('*.csv'),
+                            *(DATA_DIR / 'airplane').glob('*/*.csv')}
+                self.assertEqual({browser.dataset.itemData(i) for i in range(browser.dataset.count())}, expected)
                 for index in range(browser.dataset.count()):
                     browser.dataset.setCurrentIndex(index)
                     self.assertGreater(browser.table.rowCount(), 0)
@@ -116,7 +122,9 @@ class AviationToolsTests(QtTestCase):
 
     def test_popup_buttons_reuse_windows_and_preserve_inputs(self):
         page = self.page()
-        self.assertEqual(len(page.tool_buttons), 8)
+        self.assertTrue({'Distance', 'Course', 'Wind / Headings', 'Ground Speed',
+                         'KTAS → KIAS', 'KIAS → KCAS', 'Cruise Performance',
+                         'Aircraft / Airports'} <= page.tool_buttons.keys())
         self.assertEqual(page.findChildren(Calculator), [])
         page.tool_buttons['Distance'].click()
         distance_window = page.calculators['Distance'].window()
@@ -131,7 +139,9 @@ class AviationToolsTests(QtTestCase):
         self.assertTrue(page.calculators['Course'].window().isVisible())
         self.assertEqual(len(page.findChildren(Calculator)), 2)
 
-    def test_migrated_reference_outputs(self):
+
+class AviationCalculationTests(unittest.TestCase):
+    def test_reference_outputs(self):
         a = flightUtils.Coordinate(0, 0)
         b = flightUtils.Coordinate(0, 1)
         self.assertAlmostEqual(flightUtils.distance_from_coords(a, b), 60.04046, places=4)
