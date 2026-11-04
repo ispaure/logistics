@@ -56,10 +56,6 @@ def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None, pul
         extra = ''.join(f'{key}={value}\n' for key, value in (crypt_settings or {}).items())
         archive.writestr('Secret.txt', f'[Secret]\ntype=crypt\nremote=Cloud:{cloud}\npassword={obscured}\n' + extra)
     context = root / 'Accounts.session'
-    session.remember(context, session.read_package(package, 'synthetic-package-password'), package_path=package,
-                     state_password=state_password, state_identity=__import__('hashlib').sha256(package.read_bytes()).hexdigest())
-    environment, source, destination = session.launch(context, plain, 'Secret:')
-    run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copy', str(source), str(destination)], environment=environment, max_output=0)
     actual_sync = sync.rclone_sync
     def transfer(source, destination, **options):
         options.update(wait_for_output=True, executable_path=binary)
@@ -70,6 +66,11 @@ def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None, pul
         patches.enter_context(patch.object(actions.config, 'LogisticsConfig', return_value=SimpleNamespace(server_path=root / 'Server', path_remote_local=root / 'Server/Local')))
         patches.enter_context(patch.object(sync, 'rclone_sync', side_effect=transfer))
         patches.enter_context(patch.object(sync.executable, 'ensure_rclone', return_value=binary))
+        patches.callback(session.forget, context)
+        session.remember(context, session.read_package(package, 'synthetic-package-password'), package_path=package,
+                         state_password=state_password, state_identity=__import__('hashlib').sha256(package.read_bytes()).hexdigest())
+        environment, source, destination = session.launch(context, plain, 'Secret:')
+        run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copy', str(source), str(destination)], environment=environment, max_output=0)
         item = copy_mapping.connection(context, 'Secret')
         if pull:
             assert actions.pull_encrypted_copy('Secret', context)
@@ -79,9 +80,6 @@ def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None, pul
             item.publish()
             shutil.copytree(cloud, item.data, dirs_exist_ok=True)
         provider = local_crypt.CryptResources(item, binary=binary)
-        try:
-            yield SimpleNamespace(root=root, plain=plain, cloud=cloud, package=package, context=context,
-                                  item=item, provider=provider, original=original, image=image)
-        finally:
-            provider.close()
-            session.forget(context)
+        patches.callback(provider.close)
+        yield SimpleNamespace(root=root, plain=plain, cloud=cloud, package=package, context=context,
+                              item=item, provider=provider, original=original, image=image)
