@@ -91,6 +91,16 @@ Selecting an Android subtitle track refreshes the current seekable position so
 turning captions back on redraws the active cue immediately. The existing seek
 path preserves play/pause intent and enforces access and control-lock policy.
 
+`python -m mobile_build.validation.video_android_pip_tools --output <evidence>`
+compiles the production Java player into an isolated native QA app and uses a
+manager-owned disposable emulator. It sends the actual submitted PiP
+RemoteAction PendingIntents, checks both ten-second seek directions while paused
+and playing, compares rendered subtitle cues and off/on pixels, and retires the
+player, QA package and emulator. Pixel capture rejects Android's app-icon
+transition overlay. The optional `--software-decode` fixture setting avoids
+virtual MediaCodec stalls; it does not validate hardware decoding or HDR, the
+full application package, or physical-device button taps.
+
 iOS PiP delegate seeks use the bounded 64-bit on-screen seek path, including its
 paused-position bookkeeping. Every system request completes, including a no-op at
 a boundary, and seeking eligibility respects the control lock and access policy.
