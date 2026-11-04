@@ -37,8 +37,10 @@ TEMPLATE_NOTICE = ('Logistics draws its own previews and layouts. Compatible wit
                    'not affiliated with or endorsed by reMarkable.')
 
 
-def description(name):
+def description(name, *, artwork_available=True):
     name = template_name(name)
+    if not artwork_available or name not in CATALOG:
+        return 'Imported template artwork is preserved. Choose a Logistics template to replace only this page’s background.'
     if name in LINE_COUNTS and not name.startswith('Logistics '):
         return 'Original Logistics ruled preview. Native export uses the lined template already on your reMarkable.'
     if name == 'Blank':

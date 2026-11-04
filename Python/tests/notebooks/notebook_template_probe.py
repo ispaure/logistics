@@ -102,12 +102,33 @@ def main(output):
                 js(view, update_script(editor.state()))
                 assert js(view, "$('pdfBackground').hidden&&$('templateNotice').textContent.includes('unavailable')"), 'Foreign artwork was silently replaced'
                 assert js(view, "$('templateFormat').disabled&&$('templateVisible').disabled&&!$('pageTemplate').disabled")
+                assert js(view, "$('templateDescription').textContent.includes('Imported')"), 'Imported artwork incorrectly claimed as original'
                 # Imported names which happen to match Object.prototype keys
                 # still need a preserved option and an unavailable-artwork notice.
                 for reference in ('toString', '__proto__', 'P Lines small Move'):
                     page.template = reference
                     js(view, update_script(editor.state()))
                     assert js(view, "$('pageTemplate').value===" + json.dumps(reference) + "&&$('templateNotice').textContent.includes('unavailable')")
+                # Exercise one-page changes and Add Page through the real shared
+                # UI queue, including inheritance without duplicating handwriting.
+                def change_template(template):
+                    js(view, "$('pageTemplate').value=" + json.dumps(template)
+                       + ";$('templateFormat').value='move';$('templateVisible').checked=true;"
+                         "$('pageTemplate').dispatchEvent(new Event('change'))")
+                    editor.apply(json.loads(js(view, 'JSON.stringify(queue[0])')))
+                    js(view, update_script(editor.state()))
+                change_template('Logistics Cornell notes')
+                parent_id = book.pages[editor.index].id
+                parent_ink = book.page(editor.index).to_bytes()
+                js(view, "send({op:'add-page'})")
+                editor.apply(json.loads(js(view, 'JSON.stringify(queue[0])')))
+                js(view, update_script(editor.state()))
+                assert js(view, "$('pageTemplate').value==='Logistics Cornell notes'&&$('templateFormat').value==='move'&&$('templateVisible').checked")
+                assert not book.page(editor.index).strokes, 'New page copied handwriting'
+                change_template('Logistics Checklist')
+                parent = next(i for i, p in enumerate(book.pages) if p.id == parent_id)
+                assert book.pages[parent].template == 'Logistics Cornell notes Move', 'Changed another page template'
+                assert book.page(parent).to_bytes() == parent_ink, 'Changed another page handwriting'
                 reports.append(report)
             finally:
                 view.close()
