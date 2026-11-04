@@ -1,5 +1,9 @@
 # Notebook hardware acceptance
 
+These are procedures, not a record of passing acceptance. Pending source-bound native
+template/fence checks and Linux latency acceptance are listed in the
+[implementation guide](development.md#current-implementation-and-acceptance-boundary).
+
 ## Prepare disposable notebooks
 
 Run the focused acceptance generator from the repository root with the project
@@ -29,6 +33,19 @@ finger behavior, zoom/pan/rotation geometry, whole-stroke erase, select/move,
 undo/redo, save/reopen and background/resume. Add a second page and layer, reorder
 pages, copy a page, and export through the installed app's destination picker.
 Cancel one export and verify writing still works. Keep the exported archive's hash.
+
+Create both a native lined notebook and a Logistics form with Move format. Change
+only one page's template and visibility, insert a page after it, and verify the
+new page inherits paper without copying ink. Save/reopen and check Undo/Redo in
+the original session. Export the custom form and verify its fixed background
+remains separate from selectable ink. Retain the original editable-template
+notebook alongside the export.
+
+Exercise rapid strokes followed immediately by Save or close, including choosing
+Keep editing/cancel. Verify the final stroke survives Save/reopen and a closed
+canvas cannot send edits to its replacement. Record source snapshot and payload
+identity with the native result; a settled screenshot alone cannot establish
+command ordering.
 
 If measuring pen-to-visible-pixel latency, use an external camera and state the
 frame rate and measurement method. Software event/animation callback times do not
