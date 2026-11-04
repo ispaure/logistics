@@ -46,10 +46,9 @@ def fit_document_title(root, label, leading_count, trailing_count):
             width = right - left
             if width <= 0:
                 return
-            leading = leading_count * unit
-            trailing = min(trailing_count * unit, max(0, width - leading - unit))
-            gutter = max(leading, trailing)
-            start, end = (gutter, gutter) if width >= 2 * gutter + unit else (leading, trailing)
+            from commonUtils.ui.native.bars import android_title_insets
+            start, end = android_title_insets(width, leading_count, trailing_count, size=unit)
+            trailing = end
             titles = widget.getChildAt(title_index)
             margins = titles.getLayoutParams()
             if margins.getMarginStart() != start or margins.getMarginEnd() != end:
