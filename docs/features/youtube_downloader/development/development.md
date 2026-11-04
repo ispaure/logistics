@@ -100,3 +100,10 @@ transfer remote files.
 downloader module; they retain the same callable objects and signatures. An
 unused-import report inside `downloader.py` is not evidence these commands can be
 removed. Transfer preparation and review remain in their existing owners.
+
+## Desktop and mobile ownership
+
+The feature registers desktop folder workflows through `ui_contributions.py`
+and opens its Qt dialog lazily. It has no feature-owned `mobile_sources.json`
+or mobile management adapter. Do not expose the desktop dialog as an implemented
+Android/iOS workflow. See the [mobile support boundary](../user_mobile/user_mobile.md).
