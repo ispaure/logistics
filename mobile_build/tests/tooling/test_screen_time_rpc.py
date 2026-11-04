@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('screen_time_rpc', Path(__file__).resolve().parents[2] / 'validation/screen_time_rpc.py')
 rpc = importlib.util.module_from_spec(spec)
@@ -73,3 +74,50 @@ class ScreenTimeRPCDiagnosticsTests(unittest.TestCase):
             result = rpc.capture(logs / 'ios-native-ui.log', EXE, 1234, runner=runner)
             self.assertEqual(result['status'], 'capture-error')
             self.assertIn('TimeoutExpired', result['error'])
+
+    def test_collects_both_sides_of_service_candidates_without_environment_dumps(self):
+        with TemporaryDirectory() as directory:
+            logs, calls, original = self.fixture(directory)
+            programs = {5678: PROGRAM,
+                6789: '/Runtime/System/Library/PrivateFrameworks/ScreenTimeCore.framework/ScreenTimeAgent',
+                7890: '/Runtime/System/Library/CoreServices/SpringBoard.app/SpringBoard'}
+            (logs / 'ios-webkit-live.log').write_text('old' + 'x' * (1024 * 1024) + '\nconnection timeline\n')
+            def runner(args, **kwargs):
+                if 'launchctl' in args:
+                    calls.append(args)
+                    label = args[-1]
+                    if label in ('user/foreground', 'system'):
+                        text = 'com.apple.ScreenTimeSettings.settings-service\nenvironment = { PRIVATE_TOKEN=secret }'
+                    else:
+                        key = (5678 if label.endswith('/com.apple.ScreenTimeSettingsAgent') else
+                            6789 if label.endswith(('/com.apple.ScreenTimeAgent', '/com.apple.ScreenTimeSettings.settings-service')) else
+                            7890 if label.endswith('/com.apple.SpringBoard') else None)
+                        if key is None:
+                            return subprocess.CompletedProcess(args, 113, '', '')
+                        text = f'state = running\nprogram = {programs[key]}\npid = {key}\nendpoints = {{ com.apple.ScreenTimeSettings.settings-service }}\nenvironment = {{ PRIVATE_TOKEN=secret }}'
+                    return subprocess.CompletedProcess(args, 0, text, '')
+                if args[0] == 'ps':
+                    calls.append(args)
+                    return subprocess.CompletedProcess(args, 0, programs[int(args[args.index('-p') + 1])], '')
+                if args[:4] == ['xcrun', 'simctl', 'list', 'runtimes']:
+                    return subprocess.CompletedProcess(args, 0, json.dumps(dict(runtimes=[dict(identifier='runtime', version='27.0', buildversion='fixture-build')])), '')
+                return original(args, **kwargs)
+            result = rpc.capture(logs / 'ios-native-ui.log', EXE, 1234, runner=runner)
+            self.assertEqual(result['status'], 'sampled')
+            self.assertEqual({row['pid'] for row in result['services'] if row['status'] == 'sampled'}, {5678, 6789, 7890})
+            self.assertEqual(sum(args[0] == 'sample' for args in calls), 3)
+            self.assertEqual(result['runtime']['buildversion'], 'fixture-build')
+            self.assertNotIn('PRIVATE_TOKEN', json.dumps(result))
+            timeline = logs / 'ios-screen-time-rpc-1234.timeline.log'
+            self.assertEqual(timeline.stat().st_size, 1024 * 1024)
+            self.assertTrue(timeline.read_text().endswith('connection timeline\n'))
+            self.assertFalse(any('kill' in args or 'kickstart' in args for args in calls))
+
+    def test_total_capture_budget_stops_further_process_operations(self):
+        with TemporaryDirectory() as directory:
+            logs, calls, runner = self.fixture(directory)
+            with patch.object(rpc.time, 'monotonic', side_effect=[0, 41]):
+                result = rpc.capture(logs / 'ios-native-ui.log', EXE, 1234, runner=runner)
+            self.assertEqual(result['status'], 'capture-error')
+            self.assertIn('budget expired', result['error'])
+            self.assertEqual(calls, [])

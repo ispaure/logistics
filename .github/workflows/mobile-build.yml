@@ -249,7 +249,7 @@ jobs:
           # first size limit discarded the minutes containing late failures.
           xcrun simctl spawn "$device" log stream \
             --style compact --level debug --predicate \
-            'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR subsystem BEGINSWITH "com.apple.extensionkit" OR subsystem BEGINSWITH "com.apple.extensionfoundation" OR process == "runningboardd" OR process == "ScreenTimeSettingsAgent" OR subsystem BEGINSWITH "com.apple.ScreenTime"' \
+            'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR subsystem BEGINSWITH "com.apple.extensionkit" OR subsystem BEGINSWITH "com.apple.extensionfoundation" OR process == "runningboardd" OR process == "ScreenTimeSettingsAgent" OR process == "ScreenTimeAgent" OR process == "ManagedSettingsAgent" OR process == "FamilyControlsAgent" OR subsystem BEGINSWITH "com.apple.ScreenTime" OR subsystem BEGINSWITH "com.apple.BoardServices"' \
             2>&1 | python validation/bounded_log.py logs/ios-webkit-live.log &
           webkit_log_pid=$!
           trap 'kill "$webkit_log_pid" 2>/dev/null || true; kill -KILL "$webkit_log_pid" 2>/dev/null || true; wait "$webkit_log_pid" 2>/dev/null || true' EXIT

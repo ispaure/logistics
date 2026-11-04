@@ -191,6 +191,13 @@ Native log verification also rejects exceptions ignored by ctypes callbacks.
 A completed suite cannot pass while a native-to-Python callback reports a
 cleanup or layout exception.
 
+On an owned iOS simulator stall, app stack collection starts alongside a bounded
+40-second capture of Screen Time service candidates and SpringBoard. Diagnostics
+retain selected launchd state and advertised Apple service names, runtime/build
+versions, transport timestamps and a bounded pre-stall connection-log tail.
+They do not persist launchd environment dumps or restart services. Candidate
+service names are evidence for analysis, not proof of the blocked request's target.
+
 The hosted Android native job uses job-owned Go build and module caches. It
 clears those disposable caches after native compilation, before unpacking the
 emulator image, and records disk usage on either side. The APK and native

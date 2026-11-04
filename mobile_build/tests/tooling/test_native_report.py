@@ -79,6 +79,28 @@ class NativePreflightTests(unittest.TestCase):
             self.assertEqual(receipt['status'], 'capture-error')
             self.assertIn('TimeoutExpired', receipt['error'])
 
+    def test_app_stack_collection_does_not_wait_for_service_diagnostics(self):
+        from threading import Event
+        started, release, finished = Event(), Event(), Event()
+        def service(*args):
+            started.set()
+            release.wait(2)
+            finished.set()
+        def command(args, **kwargs):
+            if args[0] == 'sample':
+                self.assertTrue(started.wait(.5))
+                self.assertFalse(finished.is_set())
+                Path(args[-1]).write_text('Call graph:\n Thread_123\n')
+                release.set()
+            return SimpleNamespace(returncode=0, stdout='/tmp/Fixture/Logistics Mobile.app/Logistics Mobile\n', stderr='')
+        with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'), patch(
+                'mobile_build.validation.screen_time_rpc.capture', side_effect=service), patch.object(
+                ui_tools.subprocess, 'run', side_effect=command):
+            path = Path(directory) / 'ios-native-ui.log'
+            path.with_name('ios-native-ui-owned.json').write_text('{}')
+            ui_tools.record_ios_stall(path, dict(pid=123))
+            self.assertTrue(finished.is_set())
+
     def test_ios_stall_requires_thread_stacks_not_just_a_successful_tool_exit(self):
         for graph, status in (('Call graph:\n\nBinary Images:\n', 'empty-sample'),
                               ('Call graph:\n Thread_123 DispatchQueue_1\n', 'sampled')):
