@@ -112,7 +112,8 @@ def source_choices(choices, source, network_remotes=(), *, local_group=None):
                       if copy['source'] in ('Local', 'LocalCrypt')]
             if local_group is not None:
                 copies = [copy for copy in copies
-                          if bool(copy.get('remote')) == (local_group == 'Rclone')]
+                          if (bool(copy.get('remote')) if local_group == 'Rclone' else
+                              copy.get('browser_root') or copy['kind'] == 'inbox')]
             return bool(copies)
         return (owner(entry) == source and (source != 'rclone' or any(copy['source'] == 'Remote'
                 for copy in [entry, *entry.get('copies', ())])))
@@ -122,7 +123,8 @@ def source_choices(choices, source, network_remotes=(), *, local_group=None):
         # Keep browse/menu actions within the selected local group too.
         for name, entry in list(result.items()):
             copies = [copy for copy in (entry.get('copies') or [entry])
-                      if bool(copy.get('remote')) == (local_group == 'Rclone')
+                      if (bool(copy.get('remote')) if local_group == 'Rclone' else
+                          copy.get('browser_root') or copy['kind'] == 'inbox')
                       and (local_group == 'Rclone' or copy['source'] == 'Local')]
             primary = next(copy for copy in copies if copy['source'] in ('Local', 'LocalCrypt'))
             result[name] = {**entry, **primary, 'copies': copies}
@@ -231,7 +233,7 @@ def discover_folder_choices(snapshot):
                 crypt[label] = remote
     # Rendering and menu opening must never enter the native bridge. A
     # credential load updates this discovery snapshot.
-    choices = {'All files': dict(source='Local', kind='shared-local', value='', name='Browse All Files', copies=[], browser_root=True)}
+    choices = {'All files': dict(source='Local', kind='shared-local', value='', name='Shared Files', copies=[], browser_root=True)}
     descriptors = _folder_copy_descriptors(snapshot, remotes, crypt)
     # A remote name denotes the same folder across credential packages.
     groups = project_catalog(descriptors, grouping='name')
@@ -258,17 +260,6 @@ def discover_folder_choices(snapshot):
         choices[group.name] = entry
     from .incoming_files import inbox_path
     received = inbox_path(snapshot.private_root)
-    from .local_sources import shared_files
-    shared = shared_files(snapshot.private_root)
-    if shared is not None:
-        for row in shared.list():
-            if row['directory'] and row['name'] not in ('Local', received.name):
-                title = row['name']
-                copy = dict(source='Local', kind='shared-local', value=title, name=title)
-                if title in choices:
-                    choices[title]['copies'].append(copy)
-                else:
-                    choices[title] = dict(copy, copies=[])
     title = received.name
     while title in choices:
         title += ' (received)'

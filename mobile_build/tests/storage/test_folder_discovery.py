@@ -201,7 +201,7 @@ class FolderDiscoveryTests(TestCase):
         self.app.loop.run_until_complete(controller.discovery.request())
         choices = controller.discovery.cached_choices()
         choices['All files']['name'] = 'Caller changed this'
-        self.assertEqual(controller.discovery.cached_choices()['All files']['name'], 'Browse All Files')
+        self.assertEqual(controller.discovery.cached_choices()['All files']['name'], 'Shared Files')
         controller.discovery.cache['SECRET'] = dict(source='Remote', copies=[])
         self.app.cloud_client.generation += 1
         self.assertEqual(set(controller.discovery.cached_choices()), {'All files'})
@@ -227,8 +227,8 @@ class FolderDiscoveryTests(TestCase):
         for package in ('One.zip', 'Two.zip'):
             self.assertEqual(list(credential_choices(cloud, CredentialScope(['Drive'], package))), ['Drive'])
         local = source_choices(choices, 'Local')
-        self.assertIn('Drive', local)
-        self.assertEqual(folder_browse_copy(local['Drive'], 'Local')['kind'], 'shared-local')
+        self.assertNotIn('Drive', local)
+        self.assertEqual(folder_browse_copy(local['All files'], 'Local')['kind'], 'shared-local')
 
     def test_stale_sync_mapping_does_not_hide_loaded_cloud_credentials(self):
         from mobile.folder_hub import folder_browse_copy, folder_row_presentation, credential_choices
