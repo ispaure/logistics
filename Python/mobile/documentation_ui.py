@@ -81,6 +81,7 @@ class DocumentationReader(MarkdownWikiView):
         return None
 
     def reflow(self, width):
+        previous_wide = self.wide
         super().reflow(width)
         parent = self.article if self.wide else self.view
         self.view._document_title_parent = parent
@@ -98,6 +99,10 @@ class DocumentationReader(MarkdownWikiView):
             if self.navigation.parent is not None:
                 self.navigation.parent.remove(self.navigation)
             parent.insert(0, self.navigation)
+        if hasattr(self, 'reader_actions_button'):
+            self.reader_menu.enabled = not self.wide
+            if previous_wide != self.wide:
+                self.refresh_reader_actions()
 
     def refresh_reader_actions(self):
         if hasattr(self, 'reader_actions'):
@@ -107,7 +112,8 @@ class DocumentationReader(MarkdownWikiView):
         if self.up_button.enabled:
             actions.append(('Parent folder page', self.up))
         actions.append(('Find in this page…', self.show_page_search))
-        actions.append(('Browse documentation', self.toggle_browse))
+        if not self.wide:
+            actions.append(('Browse documentation', self.toggle_browse))
         self.reader_actions = FeatureCommands(self.reader_actions_button, self.host_app, actions, self.show_browse)
 
     def update_navigation(self):
