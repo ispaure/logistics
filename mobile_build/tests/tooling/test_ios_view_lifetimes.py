@@ -103,6 +103,16 @@ class DiagnosticBoundaryTests(unittest.TestCase):
             self.assertEqual([(row['pid'], row['class_name']) for row in result['unmatched_candidates']],
                              [('0x2', 'ChildView')])
 
+    def test_reviewed_release_parent_owns_reusable_mobile_artifact_but_other_sources_and_workflows_fail(self):
+        parent = dict(id=41819543378, head_sha=diagnostic.BASE_SOURCE,
+                      path='.github/workflows/release.yml', workflow_id=186613344)
+        diagnostic.verify_source_run(parent)
+        diagnostic.verify_source_run(dict(parent, path='.github/workflows/mobile-build.yml'))
+        with self.assertRaisesRegex(ValueError, 'original 43a source'):
+            diagnostic.verify_source_run(dict(parent, head_sha='b' * 40))
+        with self.assertRaisesRegex(ValueError, 'unreviewed workflow'):
+            diagnostic.verify_source_run(dict(parent, path='.github/workflows/docs-checks.yml'))
+
     def test_compile_argv_keeps_literal_paths_and_disables_arc(self):
         arguments = diagnostic.compile_command(Path('source & spaces.m'), Path('QA output.dylib'), Path('SDK path'))
         self.assertIn('-fno-objc-arc', arguments)
