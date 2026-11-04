@@ -3,7 +3,7 @@ import posixpath
 import os
 from pathlib import PurePosixPath
 from threading import RLock
-from services.documents.storage import DocumentResource
+from services.documents.storage import DocumentResource, document_remote
 from services.documents.access import can_write
 
 MARKDOWN = {'.md', '.markdown'}
@@ -343,7 +343,7 @@ class NotesLibrary:
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
         with operation(self.provider, cancelled):
-            cacheable = (os.name != 'nt' and not getattr(self.provider, 'remote_storage', False)
+            cacheable = (os.name != 'nt' and not document_remote(self.provider)
                          and callable(getattr(self.provider, 'transfer_location', None))
                          and not callable(getattr(self.provider, 'find_note_paths', None)))
             key = current, target
