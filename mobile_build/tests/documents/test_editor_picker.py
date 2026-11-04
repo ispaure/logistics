@@ -220,7 +220,9 @@ class EditorPickerTests(unittest.TestCase):
         name.isFirstResponder = False
         folder.isFirstResponder = True
         folder.isDescendantOfView.return_value = True
-        folder.convertRect.side_effect = lambda *a, **k: events.append('convert') or 'current rect'
+        rect = SimpleNamespace(size=SimpleNamespace(height=48))
+        folder.convertRect.side_effect = lambda *a, **k: events.append('convert') or rect
+        scroll.contentInset = SimpleNamespace(bottom=0)
         window = Mock()
         window.layoutIfNeeded.side_effect = lambda: events.append('layout')
         view = Mock()
@@ -230,16 +232,82 @@ class EditorPickerTests(unittest.TestCase):
             picker_form=SimpleNamespace(content=view, _impl=SimpleNamespace(native=scroll)),
             save_as_name=SimpleNamespace(_impl=SimpleNamespace(native=name)),
             new_folder_name=SimpleNamespace(_impl=SimpleNamespace(native=folder)),
-            save_as_view=view, app=SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window))))
+            save_as_view=view, app=SimpleNamespace(
+                native_host=SimpleNamespace(adapter=SimpleNamespace(keyboard_frame=None, keyboard_visible=False)),
+                main_window=SimpleNamespace(_impl=SimpleNamespace(native=window))))
         reveal_picker_input(picker)
         self.assertEqual(events, ['layout', 'content', 'convert', 'reveal'])
         folder.convertRect.assert_called_once_with(folder.bounds, toView=scroll)
-        scroll.scrollRectToVisible.assert_called_once_with('current rect', animated=False)
+        scroll.scrollRectToVisible.assert_called_once_with(rect, animated=False)
         name.convertRect.assert_not_called()
         events.clear()
         folder.isDescendantOfView.return_value = False
         reveal_picker_input(picker)
         self.assertEqual(events, [])
+
+    def test_apple_keyboard_reveal_accounts_for_actual_occluded_scroll_bounds(self):
+        from mobile.keyboard import reveal_picker_input, reset_picker_keyboard_insets
+        def rect(x, y, width, height):
+            return SimpleNamespace(origin=SimpleNamespace(x=x, y=y),
+                                   size=SimpleNamespace(width=width, height=height))
+        # Hosted Duo failure: the 48pt field ends at229, keyboard starts204,
+        # but the still272pt scroll viewport tells UIKit it is already visible.
+        scroll = Mock()
+        scroll.contentInset = SimpleNamespace(bottom=7)
+        scroll.bounds = rect(0, 0, 570, 272)
+        scroll.convertRect.return_value = rect(96, 153, 570, 272)
+        focused = Mock(isFirstResponder=True)
+        focused.isDescendantOfView.return_value = True
+        scroll.contentOffset = SimpleNamespace(x=0, y=0)
+        def field_rect(*args, toView):
+            return (rect(96, 181 - scroll.contentOffset.y, 570, 48)
+                    if toView is window else rect(0, 28, 570, 48))
+        focused.convertRect.side_effect = field_rect
+        keyboard = rect(0, 204, 678, 228)
+        window = Mock()
+        window.bounds = rect(0, 0, 678, 432)
+        window.convertRect.return_value = keyboard
+        adapter = SimpleNamespace(keyboard_frame=object(), keyboard_visible=True)
+        form = SimpleNamespace(content=Mock(), _impl=SimpleNamespace(native=scroll))
+        picker = SimpleNamespace(name_panel=None, picker_form=form,
+            save_as_name=SimpleNamespace(_impl=SimpleNamespace(native=focused)),
+            new_folder_name=SimpleNamespace(_impl=SimpleNamespace(native=Mock(isFirstResponder=False))),
+            app=SimpleNamespace(native_host=SimpleNamespace(adapter=adapter),
+                main_window=SimpleNamespace(_impl=SimpleNamespace(native=window))))
+        # Test both native semantics: already accounting for the keyboard
+        # inset, or treating the field as visible in the full viewport.
+        for native_reveals in (False, True):
+            scroll.contentOffset.y = 0
+            scroll.setContentOffset.reset_mock()
+            def reveal(area, animated):
+                self.assertEqual(area.size.height, 48)
+                if native_reveals:
+                    scroll.contentOffset.y = 25
+            scroll.scrollRectToVisible.side_effect = reveal
+            for _ in range(2):
+                reveal_picker_input(picker)
+                self.assertEqual(scroll.contentInset.bottom, 228)
+                self.assertEqual(form._keyboard_overlap, 221)
+                self.assertEqual(scroll.contentOffset.y, 25)
+                self.assertEqual(181 + 48 - scroll.contentOffset.y, 204)
+            self.assertEqual(scroll.setContentOffset.call_count, 0 if native_reveals else 1)
+        # A settled safe-area layout already above the keyboard needs no
+        # additional reservation; neither repeated reveal nor rotation adds up.
+        scroll.convertRect.return_value = rect(96, 120, 570, 84)
+        reveal_picker_input(picker)
+        self.assertEqual(scroll.contentInset.bottom, 7)
+        scroll.convertRect.return_value = rect(96, 153, 570, 272)
+        reveal_picker_input(picker)
+        reset_picker_keyboard_insets(picker)
+        self.assertEqual(scroll.contentInset.bottom, 7)
+        self.assertEqual(form._keyboard_overlap, 0)
+        reset_picker_keyboard_insets(picker)
+        self.assertEqual(scroll.contentInset.bottom, 7)
+        # Floating keyboards do not reserve the whole form's bottom edge.
+        keyboard.origin.y = 150
+        keyboard.size.height = 80
+        reveal_picker_input(picker)
+        self.assertEqual(scroll.contentInset.bottom, 7)
 
     def test_late_listing_and_error_do_not_publish_after_invalidation(self):
         app, picker = self.app, self.app.editor_picker()
