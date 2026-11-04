@@ -1,28 +1,20 @@
-"""Compact preference rows and offline installed-build information."""
-import json
-from pathlib import Path
-import sys
-from collections.abc import Mapping
-
+"""Automatically discover installed read-aloud voices for the retained settings page."""
+import asyncio
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW, CENTER
-from services.build_version import BuildVersion, installed_build
-
-
-from commonUtils.ui.native import forms as _forms
-from commonUtils.ui.native.forms import wrap_text, FittedLabel as SettingsLabel
+from toga.style.pack import COLUMN
+from commonUtils.ui.native.forms import FittedLabel as SettingsLabel
 
 
 def speech_voice_setting(app):
-    """Load offline voice names on demand, without retaining a speech engine."""
-    import asyncio
+    """Refresh on entry without retaining an idle speech engine or duplicating loads."""
     from commonUtils.ui.native.speech import NativeSpeech
     system = 'System default'
     saved = app.preferences.values['speech_voice']
     choice = toga.Selection(items=[system] + ([saved] if saved else []),
                             value=saved or system, style=Pack(height=48))
-    status = SettingsLabel('Uses an installed offline system voice.', style=Pack(font_size=12))
+    status = SettingsLabel('Loading installed voices…', style=Pack(font_size=12))
+    spinner = toga.ActivityIndicator()
 
     def save(widget, **kwargs):
         try:
@@ -31,10 +23,23 @@ def speech_voice_setting(app):
         except (OSError, ValueError) as error:
             status.text = str(error)
 
-    choice.on_change = save
+    def populate(voices):
+        selected = app.preferences.values['speech_voice']
+        choice.on_change = None
+        try:
+            choice.items = [system, *sorted(voices)]
+            picker = getattr(choice._impl, 'native_picker', None)
+            if picker is not None:
+                picker.reloadAllComponents()
+            choice.value = selected if selected in voices else system
+        finally:
+            choice.on_change = save
+        return bool(selected and selected not in voices)
 
-    async def load(widget, **kwargs):
-        widget.enabled = False
+    async def load():
+        refresh.enabled = False
+        status.text = 'Loading installed voices…'
+        spinner.start()
         engine = None
         try:
             engine = NativeSpeech(app.loop)
@@ -43,24 +48,36 @@ def speech_voice_setting(app):
                     break
                 await asyncio.sleep(.1)
             if not engine.ready:
-                status.text = engine.error or 'Speech engine did not start.'
+                populate({})
+                status.text = engine.error or 'Speech engine did not start. Try refreshing voices.'
                 return
-            selected = app.preferences.values['speech_voice']
-            choice.on_change = None
-            choice.items = [system, *sorted(engine.voices)]
-            picker = getattr(choice._impl, 'native_picker', None)
-            if picker is not None:
-                picker.reloadAllComponents()
-            choice.value = selected if selected in engine.voices else system
-            status.text = ('Saved voice unavailable; using the system default.' if selected and selected not in engine.voices
+            missing = populate(engine.voices)
+            status.text = ('Saved voice unavailable; using the system default.' if missing
                            else 'Choose an installed offline voice.')
+        except Exception as error:
+            populate({})
+            status.text = 'Voices unavailable: ' + str(error)[:180]
         finally:
-            choice.on_change = save
-            if engine is not None:
-                engine.close()
-            widget.enabled = True
+            try:
+                if engine is not None:
+                    engine.close()
+            finally:
+                spinner.stop()
+                refresh.enabled = True
 
+    task = None
+    def start(widget=None, **kwargs):
+        nonlocal task
+        if task is None or task.done():
+            task = app.loop.create_task(load())
+            app.speech_voice_load_task = task
+        return task
+
+    choice.on_change = save
+    refresh = toga.Button('Refresh voices', on_press=start, style=Pack(height=48))
     app.speech_voice_choice = choice
-    return toga.Box(children=[toga.Label('Read-aloud voice'), choice,
-        toga.Button('Load installed voices', on_press=load, style=Pack(height=48)), status],
-        style=Pack(direction=COLUMN))
+    box = toga.Box(children=[toga.Label('Read-aloud voice'), choice, refresh, spinner, status],
+                   style=Pack(direction=COLUMN))
+    box._settings_on_open = start
+    start()
+    return box
