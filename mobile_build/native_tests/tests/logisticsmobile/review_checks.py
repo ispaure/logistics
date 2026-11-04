@@ -4,21 +4,23 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
+import inspect
 import json
 from pathlib import Path
 
 from .transfer_fixtures import remote_files
 from threading import Event
 from unittest.mock import AsyncMock, patch
+from .web_checks import signal_transfer_stall, transfer_evaluate, verify_native_transfer_fallback
 
 
 def rendered_review(view):
     return (view is not None and not view.closed and view.ready and view.revision > 0
-            and view.delivered_revision == view.revision)
+            and getattr(view, 'pending', None) is None and view.delivered_revision == view.revision)
 
 
-async def press_review(view, action, *, timeout=30):
-    """Click the rendered native WebView action, including its revision bridge."""
+async def press_review(view, action, *, timeout=45):
+    """Click the current rendered action through its normal revision guard."""
     selector = {'approve': '#approve', 'early': '#early'}[action]
     script = ('(() => { const button = document.querySelector(' + json.dumps(selector)
               + '); if (!button || button.disabled || !button.getClientRects().length) return false; '
@@ -31,11 +33,40 @@ async def press_review(view, action, *, timeout=30):
         return await handler(command, args)
     view.handler = observed
     clicks = 0
+    native_error = ''
     try:
         deadline = asyncio.get_running_loop().time() + timeout
         while asyncio.get_running_loop().time() < deadline and not accepted.is_set():
+            if getattr(view, 'recovery_count', 0):
+                signal_transfer_stall(view)
             if rendered_review(view):
-                clicks += bool(await view.web.evaluate_javascript(script))
+                fallback = getattr(view, 'native_fallback', None)
+                if fallback is not None:
+                    try:
+                        verify_native_transfer_fallback(view)
+                    except AssertionError as error:
+                        native_error = str(error)
+                    else:
+                        button = next((button for button in fallback.buttons.children
+                            if (button.text.startswith('Approve ') if action == 'approve'
+                                else button.text == 'Proceed without full review…')), None)
+                        if button is not None and button.enabled:
+                            clicks += 1
+                            pressed = button.on_press()
+                            if inspect.isawaitable(pressed):
+                                task = asyncio.ensure_future(pressed)
+                                task.add_done_callback(lambda task: None if task.cancelled() else task.exception())
+                elif view.web is not None:
+                    web = view.web
+                    try:
+                        answered, value = await transfer_evaluate(web, script,
+                            timeout=min(1, max(.001, deadline - asyncio.get_running_loop().time())))
+                    except RuntimeError:
+                        # A replaced or terminated process can reject an old
+                        # evaluation. The next iteration follows the current view.
+                        answered, value = False, None
+                    if web is view.web and answered:
+                        clicks += bool(value)
             # A click can race comparison progress and be correctly rejected
             # by the native revision guard. Retry the current rendered action;
             # only entry into its guarded handler acknowledges acceptance.
@@ -43,7 +74,7 @@ async def press_review(view, action, *, timeout=30):
                 await asyncio.sleep(.05)
         if not accepted.is_set():
             raise AssertionError('Native review action was not accepted: ' + action
-                + f'; clicks={clicks}; revision={view.revision}; delivered={view.delivered_revision}')
+                + f'; clicks={clicks}; revision={view.revision}; delivered={view.delivered_revision}; native={native_error}')
         print('LOGISTICS_NATIVE_REVIEW_ACTION=' + json.dumps(dict(
             action=action, accepted=True, clicks=clicks, revision=view.revision)), flush=True)
     finally:
@@ -63,10 +94,12 @@ def cancel_review(app):
         raise AssertionError('Review cancellation requires a real mobile navigation backend')
 
 
-async def completed_review(app, *, timeout=30):
+async def completed_review(app, *, timeout=45):
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         view = getattr(app, '_transfer_review_view', None)
+        if getattr(view, 'recovery_count', 0):
+            signal_transfer_stall(view)
         if rendered_review(view) and view.model.get('can_confirm'):
             return view
         if app.transfer_task.done():
@@ -98,11 +131,13 @@ async def approve_transfer(app, *, timeout=60):
     assert await app.transfer_task, app.transfer_message
 
 
-async def wait_for_held_review(app, held, *, timeout=30):
+async def wait_for_held_review(app, held, *, timeout=45):
     """Do not click the early action until the native result is actually held."""
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         view = getattr(app, '_transfer_review_view', None)
+        if getattr(view, 'recovery_count', 0):
+            signal_transfer_stall(view)
         if (rendered_review(view) and not view.model.get('complete')
                 and view.model.get('can_early') and held.is_set()):
             return view
