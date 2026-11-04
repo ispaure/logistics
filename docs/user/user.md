@@ -1,6 +1,6 @@
 # Using Logistics
 
-- [Reader history and saved positions](reader-history.md)
+For installation and first-run requirements, use [desktop setup](../../README.md#get-started).
 
 Start in **File Browser** to work with any folder, or **Workspaces** for configured
 libraries, servers and remote storage. **Documents** lists open readers/editors;
@@ -11,6 +11,8 @@ together, and disabling a dependency with active dependents is refused.
 - [Choose storage, save confidently and recover](working-safely.md)
 - [Bulk Rename: preview, apply and recover](../features/bulk_rename/user/user.md)
 - [Configuration: paths, credentials and saved settings](configuration.md)
+- [Reader history and saved positions](reader-history.md)
+- [Feature catalog and mobile availability](features.md)
 
 Save settings explicitly; some changes apply to new windows or after a restart.
 A cancelled batch may already have changed some files;
