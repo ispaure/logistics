@@ -87,7 +87,8 @@ def test(root, result, kind, model, runtime, lease):
     started = time.monotonic()
     try:
         device = client.create(name, model, runtime)
-        lease.write_text(json.dumps(dict(device=device, name=name)))
+        owner = dict(device=device, name=name)
+        lease.write_text(json.dumps(owner))
         record['device'] = device
         boot = time.monotonic()
         try:
@@ -104,7 +105,9 @@ def test(root, result, kind, model, runtime, lease):
         os.chdir(mobile)
         launch = time.monotonic()
         report = ui_tools.run('ios', device, local=True, no_update=True,
-                              require_duo=kind=='duo', require_independent_windows=kind=='ipad')
+                              require_duo=kind=='duo', require_independent_windows=kind=='ipad',
+                              evidence_collector=lambda selected, started_ns, logs: ui_tools.collect_leased_ios_evidence(
+                                  client, lease, owner, selected, started_ns, logs))
         record.update(status='passed', native_seconds=time.monotonic()-launch, report=report)
     except BaseException as error:
         record.update(status='cancelled' if isinstance(error, KeyboardInterrupt) else 'failed', error=str(error))
@@ -115,6 +118,8 @@ def test(root, result, kind, model, runtime, lease):
             for path in logs.glob('ios-*'):
                 if path.is_file():
                     shutil.copy2(path, result.parent/path.name)
+                elif path.name == 'ios-native-ui-evidence' and path.is_dir():
+                    shutil.copytree(path, result.parent/path.name, dirs_exist_ok=True)
         teardown = time.monotonic()
         try:
             cleanup(lease)
