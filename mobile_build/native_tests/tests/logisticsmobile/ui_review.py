@@ -21,6 +21,18 @@ async def wait_for_file_entry(app, path):
                           app.file_status.value))
 
 
+async def open_review_folder_from_shared_files(app):
+    """Keep managed collections out of Shared Files and use their own route."""
+    assert app.file_storage.value == app.local_browser_root() and app.file_path == ''
+    assert await app.browse_files()
+    assert not {'Local', 'Received Files'} & {entry.label for entry in app.file_browser.entries}
+    await app.parent_file_folder()
+    assert not app.routes.screens['files']
+    assert await app.browse_hub_folder('UI Review')
+    assert app.file_storage.value == 'Local files' and app.file_path == 'UI Review'
+    await wait_for_file_entry(app, 'UI Review/Meeting notes.md')
+
+
 async def exercise_ui_review(app):
     import base64
     import toga
@@ -166,7 +178,8 @@ async def exercise_ui_review(app):
     if restore is not None and not restore.done():
         await restore
     await app.show_files()
-    root = app.private_root / 'LocalFiles'
+    from services.documents.locations import collection_path
+    root = collection_path(app.private_root)
     folder = root / 'UI Review'
     folder.mkdir(parents=True, exist_ok=True)
     (folder / 'Meeting notes.md').write_text('# Meeting notes\n\nA local Markdown file.\n', encoding='utf-8')
@@ -260,21 +273,7 @@ async def exercise_ui_review(app):
         assert app.files_view in app.body.children
         assert app.file_storage.value == app.local_browser_root() and app.file_path == ''
         assert app.file_browser.search.value == ''
-        # Local → Others offers Received Files and Shared Files. Enter
-        # ordinary folders through Shared Files → Local, keeping the managed
-        # collection root protected while its contents remain browsable.
-        if app.file_storage.value != 'Local files':
-            from services.documents.locations import collection_path
-            collection = collection_path(app.private_root).name
-            local_entry = await wait_for_file_entry(app, collection)
-            assert local_entry.label == 'Local'
-            assert any(entry.label == 'Received Files' for entry in app.file_browser.entries)
-            await app.file_browser.activate_entry(local_entry)
-        assert app.file_storage.value == 'Local files' and app.file_path == ''
-        folder_entry = await wait_for_file_entry(app, 'UI Review')
-        await app.file_browser.activate_entry(folder_entry)
-        assert app.file_storage.value == 'Local files' and app.file_path == 'UI Review'
-        await wait_for_file_entry(app, 'UI Review/Meeting notes.md')
+        await open_review_folder_from_shared_files(app)
     dialog = toga.ConfirmDialog('Pull folder?', 'From: Example remote:/Comics\nTo: Local/Comics\n\nLocal files may be replaced or removed. Continue?')
     pending = asyncio.create_task(app.main_window.dialog(dialog))
     await asyncio.sleep(.2)
