@@ -133,7 +133,8 @@ chapter replacement still requires native acceptance.
 nonpersistent native WebView, which clears content on disposal. `mobile/text_reader.py` remains the unsupported-backend fallback.
 `mobile/appearance.py` supplies the shared native Books & Comics appearance form.
 `library/metadata.py` owns portable field/patch and catalogue mapping semantics;
-`mobile/metadata.py` preserves its compatibility imports.
+Native forms consume these portable helpers through the host; there is no
+Books `mobile/metadata.py` module.
 Mobile rendering and chapter labels are feature-owned; import records, provider
 transactions and session/privacy policy remain host-owned. See the
 [parity assessment](books-comics-parity.md) for remaining
@@ -147,8 +148,9 @@ reader and editing gaps. Shared parsing does not imply full reading parity.
 fonts are enumerated locally. The host stores preference values and reloads the
 current chapter; DOM offsets continue to index the same sanitized text.
 
-`mobile/speech.py` and `speech_native.py` preserve existing imports over reusable
-commonUtils speech sessions and native engines. The shared native Java root owns
+`mobile/speech.py` adapts reusable commonUtils speech sessions and re-exports
+`PlaybackTimer` and utterance helpers. Native engines are provided by
+`commonUtils.ui.native.speech.NativeSpeech`. The shared native Java root owns
 progress/error callbacks; the feature retains media controls, Android service
 resources and the speech-service query. `mobile/speech_host.py` declares explicit
 icon, overlay, saved-voice and playback factories; `speech_view.py` imports no
@@ -166,7 +168,7 @@ Playback buttons share the available row width and status text sits below them.
 The overlay height includes the section spacing and grows for wrapped status
 messages. `test_speech_overlay` covers slider quantization and timer behavior;
 `speech_controls_probe` checks native control bounds with a silent fixture engine.
-`mobile/speech_overlay.py` hosts them in a detached iOS container or
+Host `Python/mobile/speech_overlay.py` hosts them in a detached iOS container or
 Android popup, leaving the document layout tree unchanged. Disposal detaches the
 surface. Both native hosts size the popup to its status message and controls,
 expanding for wrapped errors and shrinking again for short playback messages.
@@ -182,7 +184,7 @@ outside its native subtree without consuming them, and Android uses a focusable,
 outside-touchable popup with a dismissal callback. Teardown removes the observer
 or callback before releasing the native surface. Hosts reuse
 the panel when reopening controls and retain session disposal for reader teardown.
-`PlaybackTimer` in `mobile/speech.py` owns a monotonic listening-time budget.
+The reusable `PlaybackTimer` exported by `mobile/speech.py` owns a monotonic listening-time budget.
 The panel forwards speaking/paused/stopped transitions, including system media
 commands, without resetting the budget at utterance boundaries or speed changes.
 An event-loop callback refreshes the remaining-time label at most once per second
@@ -244,7 +246,7 @@ written to the catalogue or recovery records.
 
 ## Desktop presentation
 
-Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package. IDE/Text Editor change-marker and hunk integration is shared through `services/editors/ui/`.
+Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package.
 
 ## Format mutations
 
@@ -252,7 +254,7 @@ Desktop widgets and controllers live in feature-owned `ui/`. Registration stays 
 
 ## Mobile source manifest
 
-`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+`Python/features/books/mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
 
 ## Native mobile pagination and speech
 
@@ -384,7 +386,7 @@ identity; storage, credential checks and writer ownership remain in Logistics.
 
 `library/index.py` owns the existing ordinary-import SQLite cache and its unchanged
 schema. `library/metadata.py` supplies bounded per-format metadata loaders.
-`mobile/library/catalog.py` owns mixed library filtering and incremental refresh,
+`mobile/library/catalog.py` owns configured-folder presentation and incremental import metadata refresh,
 with `LibraryHost` callbacks for discovery snapshots, routing and presentation.
 Discovery itself stays in the host. Protected metadata is excluded from indexing.
 The catalogue and reader controllers retain their own tasks and generation guards.
@@ -499,3 +501,25 @@ resize invalidation. Mobile pagination tests cover counting without navigation a
 disposal before private chapter preparation. The browser DOM fixture compares live
 and hidden counts in single- and two-column layouts. The native EPUB journey checks
 the combined footer once its two-chapter fixture has finished counting.
+
+## Documentation audit and validation scope
+
+The November 4, 2026 audit compared the guides with feature registration, mobile
+catalogue/controllers, archive policies and test source. It did not rerun Qt,
+browser, native-device or build validation during the release quiet hold. Earlier
+results in this guide and the [parity record](books-comics-parity.md) remain dated
+evidence, not current release acceptance.
+
+The visible mobile catalogue lists configured folders. Ordinary imported records
+and their metadata index still support document sessions and suggestions; they
+do not imply imported-result rows, search or pagination in that screen.
+`mobile_build/tests/reading/test_library_catalog.py` checks folder discovery,
+activation and retirement of private rows.
+
+Provider reading state is routed through `Python/mobile/provider_progress.py`
+and `services/documents/credential_state.py`. Positions and bookmarks have
+separate credential-bound stores; an available credential ZIP password allows
+encrypted persistence, while passwordless state remains in memory. See the
+[shared reader-state contract](../../../development/reader-state.md) for host
+ownership and clearing behavior. Do not infer a session-only policy from the
+legacy `epub_session_bookmarks` field name.

@@ -9,9 +9,9 @@ remote and encrypted readers.
 
 ## Mobile development builds
 
-The independent native app has private EPUB and PNG/JPEG CBZ/ZIP reading,
-chapter/page progress and bookmarks. It has a smaller format/UI scope than this
-desktop guide. See the [mobile guide](../../../user_mobile/user_mobile.md)
+The native app reads EPUBs and CBZ/ZIP comics with PNG/JPEG/static WebP pages.
+It supports chapter/page progress and EPUB bookmarks, with a smaller format/UI
+scope than the desktop reader. See the [mobile guide](../../../user_mobile/user_mobile.md)
 for imports, limits and current validation status.
 
 ## Native mobile reading
@@ -69,8 +69,10 @@ On Android and iPad/iPhone, provider-backed EPUBs, including LocalCrypt, use the
 same safe rich rendering, nested contents, internal links, discrete page turns and
 highlighted chapter search as imported books. **Appearance…** offers the same fonts,
 spacing, width, margins and themes described below. Changing appearance or leaving and
-returning to the reader keeps the passage. Provider positions/bookmarks stay in
-the session and clear on close; they are not saved as ordinary imported records.
+returning to the reader keeps the passage. Provider positions and bookmarks are kept separate from ordinary import records.
+With an owning credential ZIP password, they can persist encrypted; passwordless
+sessions keep them in RAM. Locking retires the active decrypted state. See
+[private reading state](../../../development/reader-state.md).
 Provider-backed books use the same nested chapter sidebar. **Find in chapter…**
 is a separate reader action. A successful search returns to the passage; an
 unsuccessful search keeps its feedback open.
@@ -189,8 +191,8 @@ private bookmarks use credential-password encryption when available, with a RAM-
 closes the reader and returns to its originating folder or screen. Android Back
 does the same after dismissing chapter/search panels; secondary screens retain
 Back to reading. Unsaved metadata edits prompt before close. Imported reading
-progress stays saved. Provider EPUB passage positions remain in memory for
-reopening until private readers are locked or the app restarts.
+progress stays saved. Provider EPUB passage positions follow the credential-bound persistence policy
+above; closing does not turn them into ordinary import history.
 
 ### Mobile EPUB speech and expanded appearance
 
@@ -200,9 +202,9 @@ Appearance includes local font families, custom line spacing and maximum width,
 and Sepia/Slate alongside existing themes. See the
 [Books guide](reading.md#native-mobile-reading).
 
-Imported catalogue search indexes all ordinary imports incrementally, persists a
-disposable local cache, and shows 50 results per page. Comic edit forms offer
-collection suggestions. Ordinary local and unlocked LocalCrypt folders have recursive comic
+Ordinary imports have an incremental disposable metadata cache; the Books &
+Comics screen itself lists configured folders, without imported-results search
+or paging. Comic edit forms offer collection suggestions. Ordinary local and unlocked LocalCrypt folders have recursive comic
 metadata batches through **Files → Actions → Edit comics in this folder…**. See the
 [Comics guide](../../comics/user_mobile/reading.md#mobile-collection-search-and-folder-batches)
 for scan limits, explicit-field saves and private-session cleanup.
