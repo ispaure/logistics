@@ -78,6 +78,8 @@
       "tests": {
         "desktop": [
           "test_comic*.py",
+          "test_async_comic_operations.py",
+          "test_viewer_page_progress.py",
           "test_encrypted_comics.py"
         ],
         "mobile": [

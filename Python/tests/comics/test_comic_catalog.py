@@ -18,7 +18,7 @@ from features.comics.catalog import LibraryCatalog, split_values
 from features.comics.library import ComicDocument
 
 
-class CatalogTests(QtTestCase):
+class CatalogTests(unittest.TestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
