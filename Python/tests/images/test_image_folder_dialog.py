@@ -14,6 +14,33 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class ImageFolderDialogTests(QtTestCase):
+    def test_invalid_options_show_feedback_before_confirmation_or_background_work(self):
+        root = Path(self.temporary_directory().name).resolve()
+        source = root / 'sample.png'
+        Image.new('RGB', (32, 32), 'red').save(source)
+        original = source.read_bytes()
+        for invalid in ('conflicting preservation', 'invalid quality'):
+            with self.subTest(invalid=invalid):
+                dialog = ImageCompressDialog(initial_path=root)
+                if invalid == 'conflicting preservation':
+                    dialog.always_keep.setChecked(True)
+                else:
+                    dialog.quality_color.setText('0')
+                with patch('features.images.ui.dialogs.ui.display_msg_box_ok') as feedback, \
+                        patch.object(dialog, '_confirm') as confirm, \
+                        patch.object(dialog, '_run_background') as background, \
+                        patch.object(actions, 'compress_folders') as compress:
+                    dialog.action_button.click()
+                feedback.assert_called_once()
+                confirm.assert_not_called()
+                background.assert_not_called()
+                compress.assert_not_called()
+                self.assertFalse(dialog.busy)
+                self.assertEqual(dialog.results.topLevelItemCount(), 0)
+                self.assertEqual(source.read_bytes(), original)
+                self.assertEqual(list(root.iterdir()), [source])
+                dialog.close()
+
     def test_selected_options_reach_folder_workflow_and_results_remain_visible(self):
         root = Path(self.temporary_directory().name).resolve()
         source = root / 'sample.png'
