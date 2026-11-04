@@ -30,7 +30,7 @@ change. Viewport state is presentation state and is not saved into native ink.
 ## Palm rejection
 
 The shared canvas rejects touch drawing, panning and pinching during a pen
-contact or detected pen proximity over the paper, and for 350 milliseconds after
+contact or detected pen proximity over the paper, and for 250 milliseconds after
 release. A pen taking over cancels an unfinished finger gesture without saving
 its preview. The guard leaves toolbar controls available and restores ordinary
 finger input after the bounded grace period. Focus loss and hidden-document
