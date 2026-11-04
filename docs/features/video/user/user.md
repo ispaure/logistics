@@ -15,9 +15,9 @@ LibVLC 3 libraries and codec/subtitle plugins. On Ubuntu, install `libvlc5`,
 [Fedora's codec guidance](https://fedoraproject.org/wiki/Hardware_Video_Acceleration)
 when enabling that repository.
 
-Opening a video starts playback automatically. The filename and source are in a
-header above the picture. Its icons add the file to **Favourites**, **Show in
-folder**, enter a **Floating window**, and **Cast** when the decoder supports it.
+Opening a video starts playback automatically. The window/tab title identifies
+the video and the storage row identifies its source. The heart adds the file to
+**Favourites**; the other header icons **Show in folder** and **Cast** when available.
 The timeline and icon controls stay in a deck below the picture. Play/Pause,
 ten-second skips, Previous/Next and Mute are directly available. The volume slider
 moves into Audio settings in narrow windows.
@@ -28,14 +28,16 @@ windows. In short narrow windows, an open settings pane provides a category
 selector in place of the secondary icon row; closing it restores the icons.
 Filename, track names and status messages expose their full text in tooltips
 when space is limited. **Picture** offers Fit, Fill and Original size. Desktop
-currently displays SDR frames; the native iOS HDR brightness selector is not
-available with this desktop renderer.
+currently displays 8-bit SDR frames. Native HDR output is unavailable, and
+HDR-to-SDR tone-mapping quality remains limited by that conversion.
 
 The deck stays visible in a normal window. In fullscreen, it hides after three
 seconds of active playback; moving the pointer or clicking reveals it. Pausing,
-loading, settings and keyboard focus keep it available. Its allocated space stays
-reserved when hidden or locked, so revealing controls does not cover or move the
-picture. Buttons have tooltips, accessible names and keyboard focus.
+loading, settings and keyboard focus keep it available. Fullscreen isolates the
+player from the workspace and overlays controls on the picture, which uses the
+whole viewport without reserved header/footer space. Fit preserves the entire
+picture with aspect-ratio bars; Fill crops it to the viewport. Leaving fullscreen
+restores its original document pane. Buttons have tooltips, accessible names and keyboard focus.
 Space toggles playback; Left/Right skip ten seconds; **M** toggles mute.
 **Full screen** or **F** toggles fullscreen. Escape closes settings, unlocks
 controls, or returns to the normal window. Audio and Subtitle settings choose
@@ -55,14 +57,11 @@ center to toggle Play/Pause. **Playback → Lock controls** prevents accidental
 touch and keyboard actions; the visible Unlock button or Escape restores them.
 **Show in folder** opens the provider browser, selects the video and closes playback.
 
-**Floating window** detaches an ordinary local video and keeps its window on top.
-Use **Return to document size** to restore the previous window geometry.
+Detach the video tab using the workspace controls to place it in another window.
 **Cast…** discovers VLC-compatible receivers and offers a return-to-window action.
 Discovery can take a few seconds; use **Refresh receivers** in the Cast pane. Session-only
-credentials disable casting and floating, including while another session-only
-credential package is loaded. Desktop LocalCrypt currently uses
-a session credential context, so its floating action remains unavailable even if
-a separate cloud connection has saved credentials.
+credentials disable casting, including while another session-only
+credential package is loaded. Desktop LocalCrypt uses a session credential context.
 
 Leaving the desktop app conceals a session-only video and retires its buffered
 frames. Enter the owning credential ZIP password in the video lock panel before
@@ -94,7 +93,7 @@ for the separate native validation status.
 
 Caption playback uses software decoding where required for VLC's subtitle
 composition; movies without captions retain automatic hardware decoding.
-ASS styling can constrain font overrides. Desktop HDR is outside the current scope.
+ASS styling can constrain font overrides.
 
 ## Cloud playback
 

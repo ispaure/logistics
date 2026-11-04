@@ -73,7 +73,8 @@ class PlaybackPanels:
         self.settings_pane.hide()
         self.reflow_chrome()
         for button in getattr(self, 'utility_buttons', ()):
-            button.setChecked(False)
+            if button is not getattr(self, 'fullscreen_button', None):
+                button.setChecked(False)
         self.overlay.setFocus()
 
     def show_settings(self, name):
@@ -160,9 +161,7 @@ class PlaybackPanels:
         elif name == 'picture':
             choice('Framing', 'aspect', [(dict(fit='Fit · whole picture', fill='Fill · crop edges',
                                               original='Original size')[value], value) for value in ASPECTS])
-            hdr = action('HDR display mode · unavailable', lambda: None)
-            hdr.setEnabled(False)
-            note('This desktop decoder renders SDR frames. The iOS HDR brightness selector requires its native HDR display layer.')
+            note('HDR videos are displayed in SDR with this desktop renderer. Native HDR output is unavailable; tone mapping remains limited.')
         elif name == 'audio':
             note('Audio track')
             layout.addWidget(self.audio_tracks)
