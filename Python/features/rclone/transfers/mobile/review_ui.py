@@ -125,7 +125,8 @@ class TransferReviewDialog:
             elif action == 'background':
                 cancel()
 
-        surface = self.surface = TransferSurface(self.view.app, command)
+        surface = self.surface = TransferSurface(self.view.app, command,
+            visible=getattr(self.view, 'visible', lambda: True))
         surface.approve_review, surface.cancel_review = choose, cancel
         surface.review_ready = False
         try:
@@ -177,6 +178,11 @@ class MobileReviewPresentation:
     def retained(self):
         return any(screen[0] == 'transfer-review' for screen in self.owner.routes.screens['files'])
 
+    def visible(self):
+        owner = self.owner
+        screens = owner.routes.screens[owner.native_host.state.destination]
+        return owner.active_host and bool(screens and screens[-1][0] == 'transfer-review')
+
     def close(self):
         owner = self.owner
         self.review_snapshot = None
@@ -222,7 +228,10 @@ class TransferReviewUI:
             elif action == 'background':
                 surface.dispose()
                 self.routes.back()
-        surface = self._transfer_setup_surface = TransferSurface(self.app, command)
+        def visible():
+            screens = self.routes.screens[self.native_host.state.destination]
+            return self.active_host and bool(screens and screens[-1][0] == 'local-push')
+        surface = self._transfer_setup_surface = TransferSurface(self.app, command, visible=visible)
         surface.update(dict(mode='setup', operation='Push', workspace=folder, source='Local/' + folder,
                             destination=folder + ':', remotes=remotes))
         self.show_view(surface, destination='files', route='local-push', title='Transfer')
