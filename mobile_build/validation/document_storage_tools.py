@@ -33,6 +33,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.folder_feedback_probe'):
+        return NATIVE_DIAGNOSTICS + ('folder-feedback-startup.json', 'folder-feedback-tasks.txt')
     if entry_point.endswith('.links_images_voices_probe'):
         return NATIVE_DIAGNOSTICS + ('feedback-progress.json',) + tuple(
             'feedback-' + name + '.png' for name in ('15-outgoing', '15-loading', '15-backlinks',
@@ -261,7 +263,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         console_stream = (output / 'ios-console.log').open('w')
         console = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', device, bundle],
             env=env, stdout=console_stream, stderr=subprocess.STDOUT)
-        deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 600 if entry_point.endswith('.links_images_voices_probe') else 240)
+        deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 600 if entry_point.endswith(('.links_images_voices_probe', '.folder_feedback_probe')) else 240)
         next_progress = 0
         while time.monotonic() < deadline:
             background_request = cache / 'file-transfer-background'
@@ -435,7 +437,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             time.sleep(2)
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith('.links_images_voices_probe') else 240)
+        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.links_images_voices_probe', '.folder_feedback_probe')) else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
             if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe'))):
@@ -604,7 +606,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'notes-markdown-feedback', 'links-images-voices', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -716,6 +718,9 @@ def main():
         if args.probe == 'links-images-voices':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.links_images_voices_probe', result_name='links-images-voices-result.json')
+        if args.probe == 'folder-feedback':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.folder_feedback_probe', result_name='folder-feedback-result.json')
         if args.probe == 'notes-folders':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.notes_folders_probe', result_name='notes-folders-result.json')

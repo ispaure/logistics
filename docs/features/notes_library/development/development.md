@@ -560,6 +560,14 @@ retained-directory expansion. Host regressions cover final-paint counts, bounded
 timer overhead, cancellation and provider fallbacks. Timings from an emulator or
 simulator do not establish performance on a physical Samsung S8+.
 
+The combined `folder-feedback` native probe first exercises the Android item
+menu for root and nested LocalCrypt moves, verifies decrypted destination bytes
+and ciphertext retention, then runs both storage types through cold and repeated
+folder expansion. Each expansion must publish all 45 rows together and must not
+open document bodies. Startup bounds, active phases and task stacks are retained
+in ignored test evidence. Its acceptance deadline is bounded at ten minutes;
+manager-owned disposable devices and QA packages are removed by the runner.
+
 ## Scoped desktop library tabs
 
 `ui/library_workspace.py` hosts independent document-only Notes Library owners
