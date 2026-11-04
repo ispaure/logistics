@@ -326,6 +326,12 @@ mobile host suites. Real CLI tests use synthetic local/crypt backends when the
 pinned executable is available. Native bridge tests and physical-device acceptance
 are separate; host tests do not establish iOS or Android device behavior.
 
+Workspace item-menu dispatch accepts commands that return an already scheduled
+task, including the shared Move destination picker. Destination workflow host
+tests cover opening that picker from root and nested LocalCrypt files. The
+`workspace-move` native probe moves both through the item menu and verifies the
+destination bytes, source removal and encrypted storage on Android and iOS.
+
 The [implementation history](history/history.md) preserves earlier audits,
 streaming details and their original validation scope. Current owner entry points
 are in the [developer guide](development.md).
