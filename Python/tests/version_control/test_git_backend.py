@@ -29,17 +29,24 @@ class GitBackendTests(unittest.TestCase):
         self.assertEqual(self.repo.status().changes, [])
         self.assertEqual(index.read_bytes(), before)
 
+    @classmethod
+    def setUpClass(cls):
+        temporary = TemporaryDirectory()
+        cls.addClassCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        cls.repository_template = initialize(root / 'repo')
+        repo = Repository(cls.repository_template)
+        for key, value in [('user.name', 'Logistics Test'), ('user.email', 'test@example.invalid'),
+                           ('commit.gpgsign', 'false'), ('core.autocrlf', 'false'),
+                           ('core.hooksPath', str(root / 'no-hooks'))]:
+            repo.run(['config', key, value])
+        repo.run(['symbolic-ref', 'HEAD', 'refs/heads/main'])
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.repo = Repository(initialize(self.root / 'repo'))
-        self.repo.run(['config', 'user.name', 'Logistics Test'])
-        self.repo.run(['config', 'user.email', 'test@example.invalid'])
-        self.repo.run(['config', 'commit.gpgsign', 'false'])
-        self.repo.run(['config', 'core.autocrlf', 'false'])
-        self.repo.run(['config', 'core.hooksPath', str(self.root / 'no-hooks')])
-        self.repo.run(['symbolic-ref', 'HEAD', 'refs/heads/main'])
+        self.repo = Repository(shutil.copytree(self.repository_template, self.root / 'repo'))
 
     def test_repository_settings_save_template_remotes_and_inherit_identity(self):
         from unittest.mock import patch
