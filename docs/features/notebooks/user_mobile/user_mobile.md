@@ -222,3 +222,38 @@ A muted color preview is enabled by default to approximate Paper Pro / Paper Pro
 Logistics draws its own template previews and custom layouts. Native lined options
 are labeled reMarkable compatible; Logistics is not affiliated with or endorsed
 by reMarkable. Native exports reference the tablet’s installed lined backgrounds.
+
+
+## Image cutouts and protected PDFs
+
+Choose **Capture** as a separate drawing mode. Lasso an area of the page to copy
+its visible background, handwriting and images into the editor clipboard. The
+lasso outline and selection handles are excluded. **Paste** places a separate
+image on the active visible layer; paste again on the same page or switch pages
+and paste there. The clipboard lasts until this editor closes. It is separate
+from the system clipboard. **Add image** accepts PNG/JPEG through the browser
+file chooser and converts it into a bounded PNG. Native mobile file-chooser
+acceptance remains pending.
+
+**New cutout** lets a lasso start inside an existing image without moving it.
+In Capture mode, tap an existing image with a finger or pen to select it, then
+drag to move. Drag its lower-right handle to scale or its upper handle to rotate.
+The floating controls also offer size changes and 15-degree rotation. **Copy**
+puts the selected image into the editor clipboard; **Delete image** removes that
+instance. Ordinary Select / Move continues to select handwriting.
+
+**Arrange** moves the selected image one position forward/backward or to the
+front/back among both handwriting and images on its layer. Layers retain their
+own stacking. New pasted images and subsequent strokes start above existing
+objects on that layer. Image placement, arrangement and deletion support
+Undo/Redo, Save, page duplication and supported page transfers. The ink eraser
+leaves image pixels intact; on pages containing images, ink erasure appears when
+the gesture is acknowledged. New captures are limited to four megapixels and
+roughly 3 MiB of PNG data; large captures are reduced automatically.
+
+A password-protected embedded PDF displays an **Unlock PDF** form. An incorrect
+password leaves the form open for retry. The password and decrypted rendering
+copy stay in memory for that editing session. Save and Export retain the
+original encrypted PDF; reopening requires its password again. This applies to
+notebooks opened through Local and unlocked LocalCrypt. LocalCrypt continues
+to encrypt the entire saved notebook and keeps its unsaved draft in memory.
