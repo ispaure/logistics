@@ -115,6 +115,9 @@ class SettingsNavigation(toga.Box):
         self.update_selection(show_detail=True)
         self.fit_detail(title)
         view = self.options[title]
+        on_open = getattr(self.sections[title], '_settings_on_open', None)
+        if on_open is not None:
+            on_open()
         self.detach(view)
         if self.wide:
             for child in list(self.detail.children):

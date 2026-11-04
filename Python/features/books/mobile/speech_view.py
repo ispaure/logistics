@@ -26,6 +26,7 @@ class ReadAloudPanel(toga.Box):
         self.engine = engine or NativeSpeech(loop)
         self.status = toga.Label('Starting system speech engine…', style=Pack(height=20, font_size=12, margin_top=8))
         self.voice = ''
+        self.missing_saved_voice = False
         self.overlay = None
         self.speed_choice = toga.Slider(min=.5, max=2, tick_count=7, value=1,
             style=Pack(height=32, flex=1))
@@ -138,9 +139,11 @@ class ReadAloudPanel(toga.Box):
         if self.engine.ready:
             voices = sorted(self.engine.voices)
             saved = self.presentation.voice()
+            self.missing_saved_voice = bool(saved and saved not in voices)
             self.voice = saved if saved in voices else self.engine.default_voice or voices[0]
             self.play_button.enabled = True
-            self.set_status('Select text, or read from here.')
+            self.set_status('Saved voice unavailable; using the system default.' if self.missing_saved_voice
+                            else 'Select text, or read from here.')
         else:
             self.set_status(self.engine.error or 'Speech engine did not start.')
 
@@ -195,7 +198,8 @@ class ReadAloudPanel(toga.Box):
                 self.session.stop()
                 self.set_status('Unlock the credential session before reading aloud.')
                 return
-            voice = self.engine.voice_for_language(language, self.voice)
+            voice = (self.engine.default_voice if self.missing_saved_voice
+                     else self.engine.voice_for_language(language, self.voice))
             if not voice:
                 self.set_status(f'No installed voice for {language}. Install an offline system voice for this language.')
                 return
