@@ -1,6 +1,6 @@
 """Indexed eraser broad phase must preserve the exact full-scan cut geometry."""
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 import random
@@ -12,6 +12,47 @@ from features.notebooks.ink import Stroke
 
 
 class EraserIndexTests(unittest.TestCase):
+    def test_index_prunes_distant_candidates_without_a_timing_threshold(self):
+        from features.notebooks import eraser
+
+        class Sweeps(list):
+            reads = 0
+
+            def __getitem__(self, index):
+                self.reads += 1
+                return super().__getitem__(index)
+
+        path = [[i * 16, (i % 2) * 8, .5] for i in range(128)]
+        stroke = Stroke('ink', 'visible', 17, 0, [[0, -20, .5, 2], [0, 20, .5, 2]])
+        layers = [('visible', 'Ink', True)]
+        indexed_sweeps = Sweeps(eraser._sweeps(path))
+        baseline_sweeps = Sweeps(indexed_sweeps)
+        with patch.object(eraser, '_sweeps', return_value=indexed_sweeps):
+            indexed = erase([stroke], layers, path, 8)
+        with patch.object(eraser, '_sweeps', return_value=baseline_sweeps), \
+                patch.object(eraser, '_INDEX_THRESHOLD', float('inf')):
+            baseline = erase([stroke], layers, path, 8)
+        self.assertEqual([s.points for s in indexed], [s.points for s in baseline])
+        self.assertGreater(indexed_sweeps.reads, 0)
+        self.assertLess(indexed_sweeps.reads * 4, baseline_sweeps.reads)
+
+    def test_indexed_local_sweeps_dots_and_hidden_ink_match_full_scan(self):
+        # Corners survive simplification and exceed the actual index threshold.
+        layers = [('visible', 'Ink', True), ('hidden', 'Hidden', False)]
+        strokes = [Stroke('line', 'visible', 15, 6,
+                          [[0, 50, .5, 2], [100, 50, .8, 8]]),
+                   Stroke('dot', 'visible', 17, 0, [[50, 50, .5, 4]]),
+                   Stroke('hidden', 'hidden', 17, 0, [[50, 50, .5, 4]])]
+        path = [[45 + i % 2 * 10, i * 5, .5] for i in range(21)]
+        for whole in (False, True):
+            with self.subTest(whole=whole):
+                indexed = erase(strokes, layers, path, 8, whole)
+                with patch('features.notebooks.eraser._INDEX_THRESHOLD', float('inf')):
+                    baseline = erase(strokes, layers, path, 8, whole)
+                self.assertEqual([s.points for s in indexed], [s.points for s in baseline])
+                self.assertIs(indexed[-1], strokes[-1])
+                self.assertNotEqual([s.points for s in indexed], [s.points for s in strokes])
+
     def test_tangent_contact_does_not_remove_the_entire_segment(self):
         stroke = Stroke('ink', 'visible', 15, 0, [[0, 20, .5, 4], [100, 20, .5, 4]])
         actual = erase([stroke], [('visible', 'Ink', True)], [[50, 10, .5]], 8)
@@ -35,6 +76,7 @@ class EraserIndexTests(unittest.TestCase):
                         baseline = erase([stroke], layers, path, 8, whole)
                     self.assertEqual([s.points for s in actual], [s.points for s in baseline])
 
+    @stage(TestStage.EXTENDED)
     def test_dense_paths_wide_sweeps_dots_and_hidden_ink_match_full_scan(self):
         randomizer = random.Random(12345)
         layers = [('visible', 'Ink', True), ('hidden', 'Hidden', False)]

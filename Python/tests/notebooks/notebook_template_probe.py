@@ -6,7 +6,6 @@ This exercises both shared presentations, not physical tablet firmware import.
 import argparse
 import json
 from pathlib import Path
-import time
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtTest import QTest
@@ -17,6 +16,7 @@ from features.notebooks.notebook import Notebook
 from features.notebooks.protocol import update_script, stroke_script
 from features.notebooks.templates import CATALOG
 from logistics_build.build_retention import scratch
+from tests.notebooks.webengine_driver import javascript, wait_until
 
 
 def main(output):
@@ -24,19 +24,9 @@ def main(output):
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
     reports = []
-    def wait(predicate):
-        deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            app.processEvents()
-            if predicate():
-                return
-            QTest.qWait(20)
-        raise AssertionError('Template WebEngine timeout')
-    def js(view, code):
-        result = []
-        view.page().runJavaScript(code, result.append)
-        wait(lambda: bool(result))
-        return result[0]
+    wait = wait_until
+    js = javascript
+
     with scratch():
         for desktop in (True, False):
             book = Notebook.new('Template validation')
@@ -117,7 +107,7 @@ def main(output):
             finally:
                 view.close()
                 view.deleteLater()
-                app.processEvents()
+                qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
     (output / 'templates.json').write_text(json.dumps(dict(status='passed', presentations=reports,
         templates=len(CATALOG), formats=2, scope='Qt WebEngine; no tablet firmware or physical stylus'), indent=2))
     print('Desktop/mobile template controls, vector backgrounds and stable crop coordinates passed.')
