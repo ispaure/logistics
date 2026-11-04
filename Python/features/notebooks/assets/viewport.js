@@ -223,4 +223,5 @@ function draw() {
     preview(points);
     previewCount = points.length
   }
+  if (typeof paintSelection === 'function') paintSelection();
 }
