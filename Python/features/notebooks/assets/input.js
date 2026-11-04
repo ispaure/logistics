@@ -1,3 +1,18 @@
+// Bounded content-free input diagnostics: no coordinates, labels or stroke data.
+const inputTraceCounts = Object.create(null), inputTraceRing = [];
+function inputTrace(kind, event) {
+  try {
+    const type = event?.pointerType || 'host', key = kind + ':' + type;
+    inputTraceCounts[key] = (inputTraceCounts[key] || 0) + 1;
+    inputTraceRing.push({kind,type,trusted:!!event?.isTrusted,active:active!==null,
+      busy,queued:queue.length,ink:mode==='ink',ms:Math.round(performance.now())});
+    if(inputTraceRing.length>96)inputTraceRing.shift();
+  } catch (_) { /* Diagnostics must never change input dispatch. */ }
+}
+window.logisticsInputTrace = () => ({counts:{...inputTraceCounts},recent:inputTraceRing.slice(-24)});
+for(const kind of ['pointerdown','pointerup','pointercancel','lostpointercapture'])
+  canvas.addEventListener(kind,event=>inputTrace('delivered-'+kind,event),{capture:true,passive:true});
+
 let erasePreviewCount = 0, pendingErase = null;
 function sample(event, bounds) {
   let point = coord(event, bounds);
@@ -44,19 +59,20 @@ canvas.onpointerdown = e => {
   // A second contact (often the resting palm) must not fall through to the
   // browser's default selection even while a Pencil stroke owns the canvas.
   e.preventDefault();
-  if (e.pointerType === 'touch' && penTouchBlocked()) return;
+  if (e.pointerType === 'touch' && penTouchBlocked()) {inputTrace('reject-palm',e);return}
   if (e.pointerType === 'pen' && state.native_pen && e.isTrusted && !e.nativePen) {
+    inputTrace('reject-native-duplicate',e);
     e.preventDefault();
     return
   }
   // Prefer the stylus when a finger/palm started an unfinished ink gesture.
   if (e.pointerType === 'pen' && touchContacts.has(active)) cancelTouchZoom();
-  if (active !== null) return;
+  if (active !== null) {inputTrace('reject-active',e);return}
   if (e.pointerType === 'touch' && !$('finger').checked) {
     beginPan(e);
     return
   }
-  if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke'))) || state.warning || state.read_only || state.password_required) return;
+  if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke'))) || state.warning || state.read_only || state.password_required) {inputTrace('reject-locked-or-busy',e);return}
   if (e.pointerType === 'pen') {
     notePenContact(true);
     pan = null;
@@ -65,6 +81,7 @@ canvas.onpointerdown = e => {
   canvas.style.touchAction = 'none';
   e.preventDefault();
   active = e.pointerId;
+  inputTrace('accepted-down',e);
   if (!e.nativePen) canvas.setPointerCapture(active);
   inkSettings = chosenInk();
   start = last = coord(e);
@@ -131,6 +148,7 @@ function finish(e, cancelled = false) {
   }
   if (e.pointerId !== active || (state.native_pen && e.isTrusted && !e.nativePen)) return;
   if (e.pointerType === 'pen' || penContactActive) notePenContact(false);
+  inputTrace(cancelled?'cancelled-contact':'completed-contact',e);
   active = null;
   if (cancelled) {
     cancelPreview();

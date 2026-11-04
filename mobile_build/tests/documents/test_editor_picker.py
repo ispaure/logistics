@@ -53,6 +53,27 @@ class EditorPickerTests(unittest.TestCase):
         self.assertIsNone(picker.save_as_data)
         self.assertIsNone(picker.save_as_source_document)
 
+    def test_notebook_save_picker_exposes_and_navigates_ordinary_storage_roots(self):
+        from features.notebooks.notebook import Notebook
+        from services.documents.locations import collection_path
+        picker = self.app.editor_picker()
+        owner = SimpleNamespace(session=None, privacy_gate=None, document=None,
+            editor=SimpleNamespace(notebook=Notebook.new('Destination check')))
+        self.app.loop.run_until_complete(picker.show_notebook_destination(owner))
+        self.assertTrue({'Local files', 'Shared files', 'Received Files'} <=
+                        {row.value for row in picker.save_as_storage.items})
+        received = picker.editor_provider('Received Files')
+        self.assertTrue(self.app.loop.run_until_complete(
+            picker.browser_editor_location(('Received Files', ''))))
+        self.assertIs(picker._listed_provider, received)
+        self.assertTrue(picker.picker_primary.enabled)
+        self.app.loop.run_until_complete(picker.browser_editor_location(
+            ('Shared files', collection_path(self.app.private_root).name)))
+        self.assertEqual(picker.save_as_storage.value, 'Local files')
+        self.assertEqual(picker.picker_folder.value, '')
+        self.assertTrue(picker.picker_primary.enabled)
+        self.assertEqual(picker.save_as_name.value, 'Destination check.rmdoc')
+
     def test_new_text_destination_drops_previous_operation_owners(self):
         from mobile.editor_picker import PickerOperation
         picker = self.app.editor_picker()

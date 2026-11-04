@@ -38,6 +38,7 @@ class PlaybackSettings:
     audio_language: str = ""
     subtitle_language: str = ""
     autoplay_next: bool = False
+    pip_subtitles: bool = False
     audio_track: int | None = None
     subtitle_track: int | None = None
     subtitle_file: str = ""
@@ -62,6 +63,7 @@ class PlaybackSettings:
             or type(result.subtitle_scale) not in (float, int)
             or not 0.5 <= result.subtitle_scale <= 3
             or type(result.autoplay_next) is not bool
+            or type(result.pip_subtitles) is not bool
         ):
             raise ValueError("Invalid playback preferences.")
         if (not isinstance(result.subtitle_file, str) or len(json.dumps(result.subtitle_file)) > 2048

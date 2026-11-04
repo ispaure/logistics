@@ -7,6 +7,7 @@ from pathlib import Path
 from services.documents.storage import read_local_bytes
 import toga
 from commonUtils.ui.native.inline_html import set_inline_html
+from commonUtils.ui.native.text_size import native_backend
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
@@ -29,6 +30,7 @@ class NotebookPanel:
         self.boox_refresh = None
         self.pen_input = None
         self.pencil_hover = None
+        self.pencil_input_trace = None
         self.key = None
         self.busy = False
         self.closed = False
@@ -148,7 +150,7 @@ class NotebookPanel:
 
     def state(self):
         state = document_state(self.editor, self.document)
-        state['native_close'] = hasattr(self.view, '_native_reader_buttons')
+        state['native_close'] = False  # The unified canvas always owns its visible Close.
         state['native_actions'] = hasattr(self, 'native_actions')
         state['native_pen'] = self.pen_input is not None
         state['frame_batched_ink'] = sys.platform == 'ios'
@@ -178,13 +180,16 @@ class NotebookPanel:
             lambda owner, frame: owner.refresh_fold())
         self._fold_signature = ()
         self._canvas_ready = False
-        if type(self.web._impl).__module__.startswith('toga_android.'):
+        if native_backend(self.web).startswith('toga_android.'):
             from java import jclass
             self.boox_refresh = jclass('io.github.ispaure.logistics.notebooks.BooxRefresh').attach(self.web._impl.native)
             self.pen_input = jclass('io.github.ispaure.logistics.notebooks.NotebookInput').attach(
                 self.web._impl.native, self.boox_refresh)
         from .ios_input import attach
         self.pencil_hover = attach(self.web)
+        from .ios_input import attach_diagnostics
+        self.pencil_input_trace = attach_diagnostics(self.web,self.app.loop,
+            Path(self.app.private_root)/'notebook-input-diagnostics.json')
         location = getattr(self.view, '_document_location_row', None)
         restore_location = location is not None and location.parent is self.view
         header = getattr(self.view, '_document_title_header', None)
@@ -197,6 +202,9 @@ class NotebookPanel:
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
             self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables(),
             paper_preview=self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'))
+        changed = getattr(self.view, '_notebook_chrome_changed', None)
+        if changed is not None:
+            changed()
 
     async def canvas_loaded(self, widget=None, **kwargs):
         if widget is not self.web:
@@ -289,7 +297,10 @@ class NotebookPanel:
                     await canvas.wait(asyncio.to_thread(self.document.save))
                 else:
                     await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
-                    await canvas.wait(self.app.editor_picker().show_notebook_destination(self))
+                    picker = self.app.editor_picker()
+                    await canvas.wait(picker.show_notebook_destination(self))
+                    if getattr(self.document, 'source_unavailable', False):
+                        picker.save_as_status.value = 'The original file is unavailable or changed. Choose a new location to save your retained draft.'
                     return
             elif op == 'save-as':
                 await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
@@ -422,6 +433,9 @@ class NotebookPanel:
         if bridge is not None:
             bridge.retire()
         self.busy = False
+        if self.pencil_input_trace is not None:
+            self.pencil_input_trace.close()
+            self.pencil_input_trace = None
         if self.pencil_hover is not None:
             self.pencil_hover.close()
             self.pencil_hover = None
@@ -434,7 +448,7 @@ class NotebookPanel:
         web = getattr(self, 'web', None)
         if web is not None:
             web.on_navigation_starting = None
-            android = type(web._impl).__module__.startswith('toga_android.')
+            android = native_backend(web).startswith('toga_android.')
             private = callable(getattr(web, 'clear_private_content', None))
             # A retained panel must not retain its retired native WebView too.
             # Private retirement performs its own detach before clearing bytes.
@@ -452,6 +466,9 @@ class NotebookPanel:
                 native.removeAllViews()
                 native.destroy()
         self.web = None
+        changed = getattr(self.view, '_notebook_chrome_changed', None)
+        if changed is not None:
+            changed()
 
     def dispose(self):
         self.closed = True

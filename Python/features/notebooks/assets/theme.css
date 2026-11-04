@@ -41,7 +41,7 @@ header.mobile-head,#restoreTools{border:1px solid var(--border);border-radius:va
 .notebook-mobile .zoom-controls button{min-width:44px;min-height:44px;height:44px;font-size:20px}
 .notebook-mobile .zoom-controls #zoomLevel{font-size:12px;min-width:48px}
 .notebook-mobile .zoom-controls #zoomFit{font-size:12px}
-.notebook-mobile #viewport{padding-top:calc(72px + env(safe-area-inset-top));padding-bottom:calc(72px + env(safe-area-inset-bottom));scroll-padding-top:calc(72px + env(safe-area-inset-top));scroll-padding-bottom:calc(72px + env(safe-area-inset-bottom))}
-body.notebook-laptop #viewport{padding-bottom:calc(72px + env(safe-area-inset-bottom));scroll-padding-top:4px}
+.notebook-mobile #viewport{padding-top:0;padding-bottom:env(safe-area-inset-bottom);scroll-padding-top:0;scroll-padding-bottom:env(safe-area-inset-bottom)}
+body.notebook-laptop #viewport{padding-bottom:env(safe-area-inset-bottom);scroll-padding-top:4px}
 body.tools-hidden .zoom-controls{display:none}
 @media(prefers-contrast:more){button,select,input{border-color:var(--text)}button[aria-pressed=true]{outline:1px solid var(--text);outline-offset:1px}}

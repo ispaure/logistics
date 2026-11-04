@@ -11,14 +11,19 @@ A notebook is a document type in **New document**: choose **Notebook (.rmdoc)**,
 enter its name, choose **First page template** and its template size, then choose a folder in ordinary Local storage or an unlocked
 **LocalCrypt** location. Open existing `.rmdoc` files from the file browser,
 including Workspaces. The editor opens above the current screen. **Close document (X)** uses the shared
-save/discard guard and returns to Home. iOS/iPadOS has one native X, with no
-additional Back arrow; Android has one X on the canvas. There is no separate Notebooks tab.
+save/discard guard and returns to Home. Android and iOS/iPadOS have one X in the
+canvas toolbar. There is no separate Notebooks tab.
 
 **Save** writes edits to the selected notebook. **Save As** uses the shared
 location picker and switches the editor to the new file. **Export .rmdoc** writes
 a separate copy. **Quit without saving** discards edits since the last Save, including
 the recovery draft, so reopening shows the saved file. Cancel keeps editing. If
 discard cannot update recovery, the notebook stays open with an error.
+If an ordinary recovered draft's original file is missing or has changed, Save
+asks for a new location and preserves the draft. Save As offers **Local files**,
+**Shared files**, **Received Files** and available unlocked locations. Two files
+with the same name in different folders remain separate documents. Explicitly
+choosing **Quit without saving** discards only that draft.
 Ordinary notebook checkpoints support recovery; private drafts
 stay in memory until Save writes verified ciphertext. Private notebooks appear
 in the open Documents list while unlocked, without ordinary Recent or saved
@@ -31,19 +36,15 @@ strokes while preserving corners, pressure changes and stroke width within small
 bounds. Calligraphy retains every sample. Opening or saving existing handwriting
 does not reduce its points; the live pen preview is unchanged.
 
-The document fills the editor viewport. A small floating strip at the top provides the
-current brush, **Erase**, **Select / move**, **Undo** and **Redo** in one row,
-including on narrow phones. Swipe the drawing strip horizontally in narrow views
-to reach every tool. Android’s canvas X and **…** share that row. On
-iOS, the native toolbar provides X, **Pages Overview** (page thumbnails),
-**Page template and layers**, **View and input**, and **Notebook actions**.
-UIKit places these actions in Duo’s side rail when applicable and may collect
-extra actions in overflow when space is limited. Android’s **…** opens the
-anchored **Notebook actions** dropdown. There
-are no permanent title, save-status or page-navigation rows. Choose
-**Notebook actions → Hide tools** to
-leave only a **Show tools** button on the canvas (the native iOS X stays available); showing the tools again preserves your brush,
-color, width and view.
+The document fills the area beneath one compact toolbar. The current brush,
+**Erase**, **Select / move**, **Undo** and **Redo** share a row with **Close (X)**
+and **Notebook actions (… )**. The toolbar stays above the paper instead of
+covering handwriting. Swipe the drawing strip horizontally on narrow phones to
+reach every tool. **Notebook actions** opens page thumbnails, templates and
+layers, view/input settings, saving and document commands. There are no permanent
+title, save-status or page-navigation rows. Choose **Notebook actions → Hide tools**
+to leave only **Show tools** on the canvas; showing tools again preserves your
+brush, color, width and view.
 
 In iPhone Duo laptop posture, the upper screen keeps brushes, stroke widths,
 colors, view/input settings and layers open in a scrollable tool area. The lower
@@ -77,8 +78,10 @@ the visible layer to draw on, shows or hides layers, and adds a named layer.
 
 Controls follow the device's light or dark appearance using the app's Slate
 colors. Paper and PDF backgrounds stay white, and ink colors stay unchanged.
-The bottom zoom bar provides **−**, **+**, the current percentage and **Reset**
-to restore the current layout's default zoom and position. Changing pages also
+The bottom zoom bar is hidden initially. Pinching or changing zoom reveals **−**,
+**+**, the current percentage and **Reset** for three seconds after the last zoom
+change. Showing or hiding it does not move the paper. **Reset** restores the
+current layout's default zoom and position. Changing pages also
 resets zoom, including when returning to a page. Pinch with two
 fingers to zoom from 10% to 400%; this
 also works with **Draw with finger** enabled. Starting a pinch cancels the
@@ -164,8 +167,10 @@ Drag inside the selection box to move it; drag a square corner to scale uniforml
 or the upper circle to rotate. Moving farther from the centre makes rotation
 finer. **Copy**, **Cut** and **Delete** appear below the box. **Paste strokes**
 pastes into the current page at the original page position, independently of zoom
-or scroll. The private stroke clipboard lasts until this editor closes; it is
-separate from Capture's image clipboard. Cancelled gestures do not save edits.
+or scroll. A successful mobile paste consumes the stroke clipboard and hides
+**Paste strokes**; Copy again to paste another selection. A failed save keeps the
+clipboard available for retry. This is separate from Capture's reusable image
+clipboard. Cancelled gestures do not save edits.
 Open **Notebook actions → Pages Overview** for selectable ink thumbnails, the
 page count, previous/next arrows, **Go to page**, and commands to add, duplicate,
 delete, reorder or copy the current page to
@@ -247,7 +252,8 @@ by reMarkable. Native exports reference the tablet’s installed lined backgroun
 
 ## Image cutouts and protected PDFs
 
-Choose **Capture** as a separate drawing mode. Lasso an area of the page to copy
+Choose **Notebook actions → View and input → Capture cutouts and arrange images**
+to enter the separate Capture mode. Lasso an area of the page to copy
 its visible background, handwriting and images into the editor clipboard. The
 lasso outline and selection handles are excluded. **Paste** places a separate
 image on the active visible layer; paste again on the same page or switch pages
