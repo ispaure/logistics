@@ -454,5 +454,6 @@ async def exercise_ui_review(app):
         app._impl.native.getSystemService(Context.UI_MODE_SERVICE).setApplicationNightMode(UiModeManager.MODE_NIGHT_AUTO)
     from .workspace_checks import exercise_workspace
     workspace = await exercise_workspace(app)
-    return {**workspace, 'screenshots': screenshots, 'reader_toolbar_checks': toolbar_checks, 'tap_to_open_tested': True,
+    return {**workspace, 'screenshots': screenshots, 'transfer_renderer': transfer_renderer,
+            'reader_toolbar_checks': toolbar_checks, 'tap_to_open_tested': True,
             'provider_preview_cleanup_tested': True, 'light_dark_contrast_tested': True, 'theme_change_retains_drafts': True, 'synthetic_workspace': True}
