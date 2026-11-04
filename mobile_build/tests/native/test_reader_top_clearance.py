@@ -51,6 +51,20 @@ class ReaderTopClearanceTests(unittest.TestCase):
         self.assertEqual(self.clearance(((400,-100,100,62),),top=62,origin_y=100),0)
         self.assertEqual(self.clearance(((867,-12,84,114),),origin_y=12),0)
 
+    def test_negative_pane_origin_preserves_window_visibility_clearance(self):
+        for origin_y in (-20, -12.5):
+            for top in (0, 24, 102):
+                for leading in (False, True):
+                    with self.subTest(origin_y=origin_y,top=top,leading=leading):
+                        result = self.clearance(((0 if leading else 867,-origin_y,84,102),),
+                            top=top,origin_y=origin_y,left=84 if leading else 0,
+                            right=0 if leading else 84)
+                        self.assertEqual(result,-origin_y)
+                        self.assertEqual(origin_y+result,0)
+        # Missing/unsupported geometry still keeps the full hardware fallback.
+        self.assertEqual(self.clearance((),top=24,origin_y=-20),44)
+        self.assertEqual(self.clearance(((867,20,84,102),),top=24,origin_y=-20,supported=False),44)
+
     def test_rotation_between_side_and_horizontal_bars_restores_each_allocation(self):
         window=NS(safeAreaInsets=NS(top=102,bottom=0))
         native=NS(window=window,bounds=rect(0,0,951,669),

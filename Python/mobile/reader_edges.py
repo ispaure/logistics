@@ -72,7 +72,8 @@ def apple_reader_top(container, window):
     top_regions = [(x, width) for x, y, width, height in regions
                    if width > 0 and height > 0 and y <= top and y + height > 0]
     if top_regions and all(x + width <= left or x >= right for x, width in top_regions):
-        top = 0
+        # Reclaim the hardware band without moving content above the window.
+        top = max(0, -float(origin.y))
     return control_top_clearance(regions, left, right, top)
 
 
