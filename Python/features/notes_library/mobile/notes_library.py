@@ -63,6 +63,7 @@ class NotesHost:
     relocate_references: Callable = lambda provider, source, destination: None
     remember_document: Callable = lambda owner: None
     batch_rows: Callable = nullcontext
+    tree_rows: Callable = lambda owner: None
 
 
 from .library_panels import LibraryPanels, CONTROL_FONT
@@ -120,7 +121,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self._open_timing = None
         self.shown = 50
         self.base = "https://markdown.invalid/vault/" + uuid4().hex + "/"
-        self.rows = toga.Box(style=Pack(direction=COLUMN))
+        self.rows = self.new_panel_rows()
         self.notice = toga.Label("", style=Pack(font_size=12))
         self.tree = toga.Box(
             children=[
@@ -128,9 +129,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 toga.Label(self.access.label
                            + (' · Editable' if self.library.writable else ' · Read-only'),
                            style=Pack(font_size=12, margin_bottom=12)),
-                toga.ScrollContainer(
-                    content=self.rows, horizontal=False, style=Pack(flex=1)
-                ),
+                self.panel_rows_view(self.rows),
             ],
             style=Pack(direction=COLUMN, flex=1, margin=12),
         )
@@ -625,12 +624,15 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.search_status = 'Searching…'
         # A scan with no early matches still needs visible feedback. Updating
         # one status row avoids rebuilding the retained native result list.
-        if not hasattr(self, '_rows_message'):
-            self._rows_message = toga.Label(self.search_status)
+        if getattr(self.rows, 'recycled', False):
+            self.rows.message(self.search_status)
         else:
-            self._rows_message.text = self.search_status
-        if self._rows_message.parent is not self.rows:
-            self.rows.add(self._rows_message)
+            if not hasattr(self, '_rows_message'):
+                self._rows_message = toga.Label(self.search_status)
+            else:
+                self._rows_message.text = self.search_status
+            if self._rows_message.parent is not self.rows:
+                self.rows.add(self._rows_message)
         # Reuse existing results while the worker finds the new query's matches.
         from time import monotonic
         last_publish = 0
@@ -685,6 +687,16 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.render_tree()
         self.refresh_reader_actions()
 
+    def new_panel_rows(self):
+        rows = self.host.tree_rows(self)
+        return rows if rows is not None else toga.Box(style=Pack(direction=COLUMN))
+
+    @staticmethod
+    def panel_rows_view(rows):
+        if getattr(rows, 'recycled', False):
+            return rows.widget
+        return toga.ScrollContainer(content=rows, horizontal=False, style=Pack(flex=1))
+
     def render_tree(self):
         if not self.valid():
             return
@@ -709,7 +721,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             finally:
                 row_updates.close()
         updates = batched_updates()
-        if native_backend(self.rows).startswith('toga_dummy.'):
+        if getattr(self.rows, 'recycled', False) or native_backend(self.rows).startswith('toga_dummy.'):
             for _ in updates:
                 pass
             return
@@ -755,6 +767,30 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         else:
             add(self.root)
         counts = Counter(PurePosixPath(entry['path']).name.casefold() for entry, _ in flattened) if searching else {}
+        def row_label(entry):
+            path = entry['path']
+            label = PurePosixPath(path).name if searching else entry['name']
+            if counts.get(label.casefold(), 0) > 1:
+                parent = posixpath.dirname(posixpath.relpath(path, self.root or "."))
+                label += " · " + (parent or "Library root")
+            return label
+
+        message = ('Search file names or document contents.' if searching and not search_terms(self.search.value or '') else
+            self.search_status if searching and self.search_status else
+            'No matching notes or folders.' if searching and not flattened else
+            'No documents in this folder.' if not flattened else '')
+        if getattr(self.rows, 'recycled', False):
+            records = [dict(title=row_label(entry), subtitle='', folder=entry['directory'], icon=None,
+                path=entry['path'], page=self.folder_pages.get(entry['path']) if entry['directory'] else None,
+                searching=searching, tree_depth=depth,
+                tree_expanded=(entry['path'] in self.expanded) if entry['directory'] and not searching else None,
+                tree_landing=entry['directory'] and self.folder_pages.get(entry['path']) is not None)
+                for entry, depth in flattened[:self.shown]]
+            self.rows.footer(message, len(flattened) > self.shown)
+            self.rows.add(*records)
+            self.sidebar.refresh_gestures()
+            yield
+            return
         for entry, depth in flattened[: self.shown]:
             path, directory = entry["path"], entry["directory"]
             page = self.folder_pages.get(path) if directory else None
@@ -769,10 +805,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 else:
                     await self.open_note(path)
 
-            label = PurePosixPath(path).name if searching else entry['name']
-            if counts.get(label.casefold(), 0) > 1:
-                parent = posixpath.dirname(posixpath.relpath(path, self.root or "."))
-                label += " · " + (parent or "Library root")
+            label = row_label(entry)
             key = (searching, path, directory, page, depth, label, path in self.expanded)
             row = old_rows.get(key)
             if row is None:
@@ -848,10 +881,6 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     self.render_tree()
                 self._more_rows = toga.Button('Show more notes', on_press=more, style=Pack(height=48))
             desired.append(self._more_rows)
-        message = ('Search file names or document contents.' if searching and not search_terms(self.search.value or '') else
-            self.search_status if searching and self.search_status else
-            'No matching notes or folders.' if searching and not flattened else
-            'No documents in this folder.' if not flattened else '')
         if message:
             if not hasattr(self, '_rows_message'):
                 self._rows_message = toga.Label(message)
