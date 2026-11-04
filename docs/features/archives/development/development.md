@@ -58,7 +58,9 @@ headers never prompt for a password.
 `ArchiveSession` owns one `OperationProgress` job, includes queued credential
 retries in its busy state and schedules callbacks with a Qt owner context.
 Passwords are resolved in the worker; entry prompts and retries run on the GUI
-thread. Verified replacements are remembered under their new file identity.
+thread. Dismissing a password prompt restores controls and reports a cancelled
+operation/notification, without emitting a mutation signal. Verified replacements
+are remembered under their new file identity.
 Closing cancels work and prevents queued retries or refreshes from restarting it.
 The contents widget only displays validated entries and decoded previews and
 emits requests; it does not own jobs, credentials or filesystem writes.
@@ -70,10 +72,25 @@ preserve Logistics' shared theme and work in light and dark modes.
 
 Shared tests cover archive formats, staging, traversal/collision checks, source
 changes, encryption, cancellation, file hooks and the passive contents view.
-`test_archive_workspace_ui.py` covers Logistics jobs, credentials, shutdown,
+`test_archive_workspace_ui.py` covers Logistics jobs, credentials, active-worker and queued-retry shutdown,
 source options and document-category registration. `test_archive_browser.py` installs the actual
 feature into a Logistics `BrowserView` and checks activation, CBZ reader precedence,
-selection menus, direct extraction, refresh, toggles and standalone routing.
+selection menus, direct extraction, refresh, toggles and registered document-host routing.
+It installs the actual Comics declaration for CBZ precedence, verifies that failed
+or cancelled extraction emits no browser refresh, and checks that retained archive
+documents remain usable after their originating browser closes.
+Browser fixtures create archives on demand and report pending detail, index, cover
+and document work on timeout. Automatic folder-size indexing is disabled in these
+archive integration fixtures; dedicated shared browser/index tests own that work.
+Archive detail workers remain real, and successful extraction must still request
+the browser's item and parent refresh. Extraction checks wait for the reopened document;
+editing checks wait for the queued header refresh rather than repeating idle polls.
+Creation checks run real workers through successful dialog completion. Editing
+checks verify added and preserved payloads and the refreshed view before testing
+password reuse; queued-retry closure checks use the real Qt timer delivery.
+Qt fixture scopes retire workers before removing source files.
+Credential-package publication tests belong to `resources/test_credential_archive.py`;
+Comics reader/editor password retries belong to `comics/test_comic_password_ui.py`.
 The existing browser and Comics regression suites check compatibility.
 
 ## Password configuration
@@ -125,7 +142,8 @@ The dialog stays alive until its worker has stopped; failures and cancellation
 leave it open with an explanation. Completion after publication remains success.
 
 Use the [project test commands](../../../development/getting-started.md).
-`test_archive_password_ui.py` checks the legacy dialog/password behavior;
+`test_archive_password_ui.py` checks encrypted payload preservation, configured-password
+creation, conflicting passwords and password-prompt cancellation before any job starts;
 commonUtils ZIP and archive tests check source validation, cancellation, verification
 and publication.
 Keep this workflow's chunk-level cancellation separate from Comics' per-comic boundary.
