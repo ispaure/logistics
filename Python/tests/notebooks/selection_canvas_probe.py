@@ -103,7 +103,7 @@ def main(output):
                 profile = QWebEngineProfile(view)
                 page = QWebEnginePage(profile, view)
                 view.setPage(page)
-                view.resize(1200 if desktop else 760, 900)
+                view.resize(1200 if desktop else 390 if name == 'mobile' else 760, 900)
                 view.show()
                 result = dict(success=False, actions=[])
                 report['presentations'][name] = result

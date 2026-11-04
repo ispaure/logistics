@@ -11,32 +11,90 @@ pasteStrokes.style.cssText='position:fixed;right:12px;bottom:max(12px,env(safe-a
 document.body.append(pasteStrokes);
 function selectionLocked() { return busy || state.warning || state.read_only || state.password_required }
 function selectionVisible(s) { return state.layers.some(row => row[0] === s.layer && row[2]) }
-function selectionInside(p, path) {
-  let inside = false;
-  for (let i=0,j=path.length-1;i<path.length;j=i++) {
-    const a=path[i],b=path[j];
-    if (distance(p,a,b)<1e-8) return true;
-    if ((a[1]>p[1]) !== (b[1]>p[1]) && p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0]) inside=!inside
+// The lasso index is shared by every stroke in one selection. A boundary-free
+// grid cell is an exact containment certificate, not a raster approximation.
+function selectionPrepare(path) {
+  if(!Array.isArray(path))return path;
+  const edges=path.map((a,i)=>{const b=path[(i+1)%path.length];return {a,b,box:[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])]}});
+  function tree(rows) {
+    if(!rows.length)return null;
+    const box=rows.reduce((v,e)=>[Math.min(v[0],e.box[0]),Math.min(v[1],e.box[1]),Math.max(v[2],e.box[2]),Math.max(v[3],e.box[3])],[Infinity,Infinity,-Infinity,-Infinity]);
+    if(rows.length<=8)return {box,edges:rows};
+    const axis=box[2]-box[0]>=box[3]-box[1]?0:1;
+    rows.sort((a,b)=>a.box[axis]+a.box[axis+2]-b.box[axis]-b.box[axis+2]);
+    const middle=rows.length>>1;return {box,left:tree(rows.slice(0,middle)),right:tree(rows.slice(middle))}
   }
-  return inside
+  const root=tree(edges);
+  return {path,root,box:root?.box||[0,0,0,0],cells:new Map(),work:0,edgeTests:0,limit:8_000_000,exhausted:false}
+}
+function selectionWork(index) {
+  if(++index.work>index.limit)index.exhausted=true;
+  return !index.exhausted
+}
+function selectionCandidates(index,box) {
+  const rows=[],stack=index.root?[index.root]:[];
+  while(stack.length&&!index.exhausted) {
+    if(!selectionWork(index))break;
+    const node=stack.pop(),b=node.box;
+    if(b[0]>box[2]||b[2]<box[0]||b[1]>box[3]||b[3]<box[1])continue;
+    if(node.edges)for(const edge of node.edges) {
+      if(!selectionWork(index))break;
+      const q=edge.box;
+      if(q[0]<=box[2]&&q[2]>=box[0]&&q[1]<=box[3]&&q[3]>=box[1])rows.push(edge)
+    } else stack.push(node.left,node.right)
+  }
+  return rows
+}
+function selectionInsideExact(p,index) {
+  let inside=false;
+  for(const {a,b} of selectionCandidates(index,[p[0]-1e-8,p[1]-1e-8,index.box[2]+1e-8,p[1]+1e-8])) {
+    index.edgeTests++;
+    if(distance(p,a,b)<1e-8)return true;
+    if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside
+  }
+  return !index.exhausted&&inside
+}
+function selectionCell(index,box) {
+  const [left,top,right,bottom]=index.box;
+  if(box[0]<left||box[1]<top||box[2]>right||box[3]>bottom)return false;
+  const dx=Math.max(1e-9,(right-left)/32),dy=Math.max(1e-9,(bottom-top)/32);
+  const x=Math.min(31,Math.floor((box[0]-left)/dx)),y=Math.min(31,Math.floor((box[1]-top)/dy));
+  if(x!==Math.min(31,Math.floor((box[2]-left)/dx))||y!==Math.min(31,Math.floor((box[3]-top)/dy)))return null;
+  const key=y*32+x;
+  if(!index.cells.has(key)) {
+    const a=left+x*dx,b=top+y*dy,c=a+dx,d=b+dy;
+    const boundary=selectionCandidates(index,[a-1e-8,b-1e-8,c+1e-8,d+1e-8]);
+    index.cells.set(key,boundary.length?null:selectionInsideExact([(a+c)/2,(b+d)/2],index))
+  }
+  return index.cells.get(key)
+}
+function selectionInside(p,path) {
+  const index=selectionPrepare(path),cell=selectionCell(index,[p[0],p[1],p[0],p[1]]);
+  if(cell===false&&p[0]>=index.box[0]-1e-8&&p[0]<=index.box[2]+1e-8&&p[1]>=index.box[1]-1e-8&&p[1]<=index.box[3]+1e-8)return selectionInsideExact(p,index);
+  return cell===null?selectionInsideExact(p,index):cell
 }
 function selectionCross(a,b,c,d) {
   const side=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
-  return side(a,b,c)*side(a,b,d)<0 && side(c,d,a)*side(c,d,b)<0
+  return side(a,b,c)*side(a,b,d)<0&&side(c,d,a)*side(c,d,b)<0
 }
-function selectionContains(stroke, path) {
-  if (path.length<3 || !stroke.points.length) return false;
-  const box=path.reduce((b,p)=>[Math.min(b[0],p[0]),Math.min(b[1],p[1]),Math.max(b[2],p[0]),Math.max(b[3],p[1])],[Infinity,Infinity,-Infinity,-Infinity]);
-  if(stroke.points.some(p=>p[0]-p[3]/2<box[0]||p[1]-p[3]/2<box[1]||p[0]+p[3]/2>box[2]||p[1]+p[3]/2>box[3]))return false;
-  // Check the complete painted segments, including diameter. Endpoints alone
-  // would incorrectly include strokes spanning the mouth of a concave lasso.
+function selectionContains(stroke,path) {
+  const index=selectionPrepare(path);
+  if(index.path.length<3||!stroke.points.length)return false;
+  // Query only edges near each painted segment. Interior cell certificates
+  // make dense, short segments independent of the lasso's edge count.
   for(let i=0;i<stroke.points.length;i++) {
+    if(!selectionWork(index))return false;
     const b=stroke.points[i],a=stroke.points[Math.max(0,i-1)],radius=Math.max(a[3]||0,b[3]||0)/2;
-    if(!selectionInside(b,path))return false;
-    for(let j=0;j<path.length;j++) {
-      const c=path[j],d=path[(j+1)%path.length];
-      if(selectionCross(a,b,c,d) || Math.min(distance(a,c,d),distance(b,c,d),distance(c,a,b),distance(d,a,b))<radius-1e-8)return false
+    const box=[Math.min(a[0],b[0])-radius,Math.min(a[1],b[1])-radius,Math.max(a[0],b[0])+radius,Math.max(a[1],b[1])+radius];
+    const cell=selectionCell(index,box);
+    if(cell===false)return false;
+    if(cell===true)continue;
+    if(!selectionInside(b,index))return false;
+    for(const {a:c,b:d} of selectionCandidates(index,box)) {
+      index.edgeTests++;
+      if(selectionCross(a,b,c,d)||Math.min(distance(a,c,d),distance(b,c,d),distance(c,a,b),distance(d,a,b))<radius-1e-8)return false
     }
+    if(index.exhausted)return false
   }
   return true
 }
@@ -53,7 +111,9 @@ function selectionHandles(b) {
 function selectionRender() {
   const page=state.page_id ?? state.index;
   if(selectionPage!==page) { selected.clear();selectionGesture=null;selectionPage=page }
-  selected=new Set([...selected].filter(id=>state.strokes.some(s=>s.id===id&&selectionVisible(s))));
+  const shown=new Set(state.layers.filter(row=>row[2]).map(row=>row[0]));
+  const visibleIds=new Set(state.strokes.filter(s=>shown.has(s.layer)).map(s=>s.id));
+  selected=new Set([...selected].filter(id=>visibleIds.has(id)));
   const b=mode==='select'?selectionBounds():null;
   // Inline display wins over the hidden attribute in some WebViews.
   selectionActions.style.display=b&&!state.password_required?'flex':'none';
@@ -127,7 +187,18 @@ function selectionFinish(e,cancelled=false) {
   if(!cancelled)selectionMove(e);
   const g=selectionGesture,path=points;active=null;points=[];selectionGesture=null;
   if(e.pointerType==='pen'||penContactActive)notePenContact(false);
-  if(g.kind==='lasso') {if(!cancelled&&!g.overflow)selected=new Set(state.strokes.filter(s=>selectionVisible(s)&&selectionContains(s,path)).map(s=>s.id));if(g.overflow)$('status').textContent='Lasso too long. Draw a shorter outline.'}
+  if(g.kind==='lasso') {
+    if(!cancelled&&!g.overflow) {
+      const index=selectionPrepare(path),ids=[];
+      for(const stroke of state.strokes) {
+        if(index.exhausted)break;
+        if(selectionVisible(stroke)&&selectionContains(stroke,index))ids.push(stroke.id)
+      }
+      selected=new Set(index.exhausted?[]:ids);
+      if(index.exhausted)$('status').textContent='Selection too complex. Draw a smaller outline.'
+    }
+    if(g.overflow)$('status').textContent='Lasso too long. Draw a shorter outline.'
+  }
   else {
     const originals=new Map(g.rows.map(s=>[s.id,s]));state.strokes=state.strokes.map(s=>originals.get(s.id)||s);
     if(!cancelled&&(g.dx||g.dy||g.angle||g.scale!==1))send({op:'transform',ids:[...selected],dx:g.dx,dy:g.dy,scale:g.scale,angle:g.angle,cx:g.cx,cy:g.cy})
