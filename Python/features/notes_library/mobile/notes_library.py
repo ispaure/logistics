@@ -414,8 +414,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 button._impl.native.titleLabel.font = self.breadcrumb_metrics._impl.native.font
                 button._impl.native.accessibilityLabel = name
             elif backend.startswith('toga_android.'):
-                button._impl.native.setTextSize(0, self.breadcrumb_metrics._impl.native.getTextSize())
-                button._impl.native.setContentDescription(name)
+                native = button._impl.native
+                # Match measure() and remove Android's default button insets;
+                # the explicit width already includes the breadcrumb spacing.
+                native.setTypeface(self.breadcrumb_metrics._impl.native.getTypeface())
+                native.setTextSize(0, self.breadcrumb_metrics._impl.native.getTextSize())
+                native.setPaddingRelative(0, native.getPaddingTop(), 0, native.getPaddingBottom())
+                native.setContentDescription(name)
             button.breadcrumb_path = page
             button.breadcrumb_folder = folder
             underline_folder_link(button)

@@ -182,6 +182,11 @@ window.notebookViewState = () => ({
 });
 window.notebookUI = (name, value) => {
   if (active !== null) return;
+  if (name === 'template') {
+    $('layerOptions').open = true;
+    $('pageTemplate').focus();
+    return
+  }
   if (name === 'toolbar') {
     $('focus').click();
     return
