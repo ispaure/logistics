@@ -31,3 +31,13 @@ def retire_stale_content(app):
     app.refresh_folder_actions()
     from features.books.mobile.media_controls import enforce_privacy
     enforce_privacy(app)
+
+
+def dismiss_floating_panels(app):
+    """Remove native windows before updating the authentication root."""
+    for overlay in tuple(getattr(app, '_speech_overlays', ())):
+        # Retiring overlays still own visible native surfaces during animation.
+        # Detach first, before owner callbacks can reenter layout or navigation.
+        overlay.close()
+        if getattr(overlay.panel, 'overlay', None) is overlay:
+            overlay.panel.hide()

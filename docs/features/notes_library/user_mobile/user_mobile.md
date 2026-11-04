@@ -138,6 +138,8 @@ side panel. Selected text and zoomed pages retain their ordinary gestures.
 
 Floating Files and Links panels dim the content behind them and block its controls until the
 panel closes. Tap the dimmed area to dismiss either panel; there is no panel X.
+When a protected session locks during app switching, floating panels close
+immediately. Reopen them after unlocking.
 Both drawers use the same width and full usable screen height. On iOS, both have
 rounded corners. The Files drawer tabs stay at the top;
 a centered row directly below them contains New document, New folder and

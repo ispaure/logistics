@@ -1,5 +1,7 @@
 """Drawer exit motion over the same native container used for entry."""
 def slide_out(overlay, direction, app):
+    if overlay.container is None and overlay.popup is None:
+        return 0
     if app.preferences.values.get('android_eink') == 'true':
         return 0
     backend = type(overlay.panel._impl).__module__
