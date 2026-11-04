@@ -89,11 +89,13 @@ right-to-left manga. A strict landscape source in a strict portrait viewport is
 eligible, independently of Single/Automatic/Two-page layout. Square viewports and
 landscape windows keep the whole image.
 
-On Duo, a single wide source page in a landscape reading viewport fits across
-the full view, including the fold. `mobile/composite.py` bypasses the half-width
-seam slots for that case. Portrait viewports and paired portrait pages retain
-their fold placement. `mobile_build/tests/native/test_fold_layout.py` checks
-geometry and composed pixels in both reading directions with the dummy backend.
+On Duo, `mobile/composite.py` reserves a vertical fold gap for paired pages.
+A lone page, including wide artwork, bypasses the seam slots and fits the full
+available reading canvas; it can span a vertical fold. An active horizontal fold
+instead constrains the page region above it. Flat/inactive divisions do not
+force a seam or override the saved page-layout preference.
+`mobile_build/tests/native/test_fold_layout.py` checks geometry and composed
+pixels in both reading directions with the dummy backend.
 
 Horizontal source bounds are `[0, .54]` and `[.46, 1]`, with 8% source-width
 overlap. `mobile/composite.py` draws the source at an offset into a bounded, RAM-only
@@ -230,7 +232,7 @@ ComicInfo reads/saves and compressed page-byte access do not eagerly load Pillow
 or legacy archive tools. TIFF decoding and cover rendering load Pillow on demand
 and report a missing decoder at the operation boundary. Archive rebuilding keeps
 its established desktop tooling. See [mobile preparation](../../../development/mobile-preparation.md)
-for the headless checks and remaining mobile-host work.
+for the portable import boundary and manifest checks.
 
 ReadingState saves the page-list total alongside the existing index/name resume
 record and provides a compact thumbnail badge. ComicBrowserMixin seeds page names
@@ -257,12 +259,12 @@ read exposes controls and its error. `mobile_build/tests/documents/test_private_
 covers repeated password resume after memory cleanup, wrong-password protection,
 page navigation after resume and recovery from a failed reload.
 
-`mobile/pages.py` applies the native PNG/JPEG/WebP policy to `comic_page_names`.
+`collection/pages.py` applies the native PNG/JPEG/WebP policy to `comic_page_names`.
 Imports, provider readers and ordinary browser covers use that policy, including
 macOS resource-fork exclusions. Unsupported image pages fail explicitly rather
 than being silently omitted by provider readers. See the
 [desktop/mobile parity assessment](../../books/development/books-comics-parity.md)
-for remaining spreads, reader controls and collection-tool gaps.
+for implemented desktop/mobile behavior and remaining collection-tool gaps.
 
 Mobile spread loading/navigation and rendering live under `mobile/navigation.py`
 and `mobile/presentation.py`, reusing `reading.visible_pages` and
@@ -326,7 +328,7 @@ imports; archive files and recovery journals are never used as cache storage.
 
 ## Mobile source manifest
 
-`../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+`Python/features/comics/mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
 
 ## Shared mobile magnifier preference
 
@@ -366,9 +368,10 @@ left. Rendering commits anchor and visible indices only after native preparation
 succeeds. Ordinary platforms keep their original spread-start navigation.
 
 The host's `ReadingPresentation` supplies local seam geometry and reserved gap.
-Inactive interior divisions preserve the physical anchor when flat. The gap is
-blank in the bounded composition bitmap. Wide artwork uses one region rather
-than crossing the active fold. `page_region` constrains discrete pages above an
+Only an active vertical division supplies the seam; inactive flat divisions
+use the normal layout preference. The reserved gap is blank in paired-page
+composition. A lone page ignores the seam slots and fits the whole canvas,
+including wide artwork across a vertical fold. `page_region` constrains discrete pages above an
 active horizontal fold without relocating continuous articles. Layout watchers distinguish relayout from explicit
 navigation to preserve wide-page halves and bypass zoom deferral only when the
 fold region changes. Imported progress persists the anchor using the existing
@@ -496,3 +499,13 @@ Desktop local CBZ navigation is covered by
 boundary gestures and corrupt-target recovery. Desktop private/provider-backed
 readers currently restrict the sibling list to the open comic, so adjacent-file
 controls remain unavailable there.
+
+## Documentation audit scope
+
+The November 4, 2026 documentation audit checked source and test definitions for
+page formats, wide-page/fold layout, imported versus provider metadata workflows
+and neighboring-file navigation. It ran Markdown/link and diff checks only; no
+Qt, native app, build, simulator or device validation was run during the release
+hold. The native and physical-display observations above remain historical
+evidence with their stated limits. Mobile compression, CBR conversion and
+collection organization are not implemented by these reader controllers.
