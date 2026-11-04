@@ -15,6 +15,60 @@ from mobile.chat_fixture import fixture_server
 
 
 class ChatUITests(unittest.TestCase):
+    def test_configuration_disclosures_preserve_values_and_fit_narrow_width(self):
+        app = self.app
+        app.show_chat_configuration()
+        owner = app.chat_controller()
+        self.assertFalse(owner.chat_manual_box.children)
+        self.assertFalse(owner.chat_generation_box.children)
+        owner.chat_manual_toggle.on_press()
+        app.chat_model.value = 'manual-model'
+        owner.chat_generation_toggle.on_press()
+        app.chat_context.value = '8192'
+        app.chat_max_tokens.value = '512'
+        for width in (280, 390, 900, 280):
+            with patch.object(app.adaptive, 'content_width', return_value=width):
+                owner.fit_chat_configuration()
+            self.assertEqual(app.chat_context.value, '8192')
+            self.assertEqual(app.chat_max_tokens.value, '512')
+        owner.chat_manual_toggle.on_press()
+        owner.chat_generation_toggle.on_press()
+        self.assertFalse(owner.chat_manual_box.children)
+        self.assertFalse(owner.chat_generation_box.children)
+        self.assertEqual(app.chat_model.value, 'manual-model')
+
+    def test_configuration_save_from_chat_returns_to_conversation_and_keeps_draft(self):
+        app = self.app
+        app.chat_prompt.value = 'Draft survives settings'
+        app.show_chat_configuration()
+        self.configure('http://127.0.0.1:1234')
+        app.save_chat_configuration()
+        self.assertEqual(app.native_host.state.destination, 'chat')
+        self.assertFalse(app.routes.screens['chat'])
+        self.assertEqual(app.chat_prompt.value, 'Draft survives settings')
+
+    def test_configuration_save_is_unavailable_while_connecting(self):
+        app = self.app
+        self.configure('http://127.0.0.1:1234')
+        app.show_chat_configuration()
+        app.set_chat_busy(True)
+        owner = app.chat_controller()
+        self.assertFalse(owner.chat_config_save.enabled)
+        app.save_chat_configuration()
+        self.assertEqual(app.routes.screens['chat'][-1][0], 'chat-settings')
+        app.set_chat_busy(False)
+        self.assertTrue(owner.chat_config_save.enabled)
+
+    def test_server_with_no_models_reveals_manual_id_and_does_not_leave_empty_picker(self):
+        app = self.app
+        self.configure('http://127.0.0.1:1234')
+        owner = app.chat_controller()
+        with patch('features.lm.mobile.ui.ChatClient') as client:
+            client.return_value.models.return_value = []
+            app.loop.run_until_complete(app.refresh_chat_models())
+        self.assertIn(app.chat_model, owner.chat_manual_box.children)
+        self.assertEqual(list(owner.chat_model_choices.children), [owner.chat_model_hint])
+
     def test_markdown_size_updates_chat_without_replacing_the_draft_or_transcript(self):
         from mobile.font_scaling import refresh
         app = self.app

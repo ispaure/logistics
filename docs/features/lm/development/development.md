@@ -27,6 +27,20 @@ keyboard and WebKit transcript, an injected horizontal reserved region, and a
 synthetic loopback streaming server. Physical hinge geometry and personal model
 servers are outside that test's scope.
 
+Mobile configuration retains its native controls and uses the destination that
+opened it. Cold Settings entry initializes Chat without presenting its tab;
+Save pops only the configuration route. Provider selection mounts either the
+server form or the on-device availability controls. Manual model ID and token
+limits are retained disclosures, and labels reflow through the shared native
+form fitter. Server model choices are restored as values rather than Toga rows.
+
+`test_settings_navigation.py`, `test_chat_ui.py` and `test_on_device.py` cover
+origin, validation, provider switching, empty discovery, busy state and retained
+inputs. The managed `document_storage_tools android|ios --probe chat-settings`
+probe checks native rotation, reachable Save, destination-local Back/Save,
+provider-specific controls, and hiding/restoring the Chat tab without losing a
+draft. It uses synthetic settings and does not prepare system model assets.
+
 | Module | Ownership |
 | --- | --- |
 | `domain.py` | Version-one records, validation, generation defaults, context budgeting |

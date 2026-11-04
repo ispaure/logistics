@@ -33,6 +33,10 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.chat_settings_probe'):
+        return NATIVE_DIAGNOSTICS + ('chat-settings-hidden.png',) + tuple(
+            f'chat-settings-{pose}-{panel}.png' for pose in ('portrait', 'landscape-left')
+            for panel in ('server', 'limits', 'device'))
     if entry_point.endswith('.documents_hub_probe'):
         return NATIVE_DIAGNOSTICS + tuple(f'documents-hub-{orientation}-{panel}.png'
             for orientation in ('portrait', 'landscape-left')
@@ -584,7 +588,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
@@ -666,6 +670,9 @@ def main():
         if args.probe == 'pdf-annotation':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.pdf_annotation_probe', result_name='pdf-annotation-result.json')
+        if args.probe == 'chat-settings':
+            creation_profile = dict(entry_point='tests.logisticsmobile.chat_settings_probe',
+                                    result_name='chat-settings-result.json')
         if args.probe == 'chat-laptop':
             creation_profile = dict(entry_point='tests.logisticsmobile.chat_laptop_probe',
                                     result_name='chat-laptop-result.json')
