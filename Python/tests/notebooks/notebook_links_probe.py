@@ -26,7 +26,7 @@ const event=(type,kind='touch',dx=0,dy=0,keys={})=>{
     clientY:r.top+(b.y+b.height*.2)/state.height*r.height+dy,pressure:.5,...keys}))
 };
 const reset=()=>{queue=[];busy=false;commands.length=0;active=null;pan=null;points=[];linkGesture=null;
-  touchContacts.clear();touchPinch=null;touchZoomBlocked=false;resetPenRejection();clearLinkReturn();pendingLinkJump=null;state.index=0;state.native_pen=false};
+  touchContacts.clear();touchPinch=null;touchZoomBlocked=false;pageTouch=null;hideSwipePage();addingSwipePage=false;resetPenRejection();clearLinkReturn();pendingLinkJump=null;state.index=0;state.native_pen=false};
 const tap=(kind,keys={})=>{event('pointerdown',kind,0,0,keys);event('pointerup',kind,0,0,keys)};
 const mobile=mobileViewport();
 if(mobile){
@@ -49,6 +49,37 @@ if(mobile){
   reset();notePenContact(true);tap('touch');check(commands.length===0,'Palm never follows link');
   reset();tap('touch');window.notebookUpdate({...state,index:0},'Navigation failed');
   check(undoPageJump.hidden,'Failed navigation has no undo');
+  const originalLinks=state.links;
+  const navReset=()=>{reset();state.links=[];state.count=3;$('finger').checked=false;setZoom('2');
+    $('viewport').scrollLeft=100;$('viewport').scrollTop=150};
+  const navEvent=(type,dx=0,dy=0,id=41,target=canvas)=>{
+    const b=$('viewport').getBoundingClientRect();
+    target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:'touch',
+      pointerId:id,button:0,clientX:b.left+b.width/2+dx,clientY:b.top+b.height/2+dy}))
+  };
+  const navSwipe=(dx,dy=0,target=canvas)=>{navEvent('pointerdown',0,0,41,target);
+    navEvent('pointermove',dx,dy,41,target);navEvent('pointerup',dx,dy,41,target)};
+  navReset();let before=[$('viewport').scrollLeft,$('viewport').scrollTop];navSwipe(-100);
+  check(commands.length===1&&commands[0].index===1,'Zoomed horizontal finger swipe pages');
+  check($('viewport').scrollLeft===before[0]&&$('viewport').scrollTop===before[1],'Page swipe never pans');
+  navReset();before=[$('viewport').scrollLeft,$('viewport').scrollTop];navSwipe(0,-100);
+  check(!commands.length&&$('viewport').scrollTop===before[1],'Vertical finger drag never pans');
+  navReset();navSwipe(-100,0,$('viewport'));
+  check(commands[0]?.index===1,'Viewport-margin swipe pages');
+  navReset();state.index=2;navSwipe(-100);
+  check(!commands.length&&!swipeAddPage.hidden,'Final-page swipe offers explicit creation');
+  const offer=swipeAddPage.getBoundingClientRect(),viewBox=$('viewport').getBoundingClientRect();
+  check(offer.width>=44&&offer.right<=viewBox.right&&offer.left>viewBox.left+viewBox.width/2,
+    'Page creation button is usable on right side of page view');
+  swipeAddPage.click();check(commands.length===1&&commands[0].op==='add-page','Page button requests creation');
+  window.notebookUpdate({...state,index:3,count:4});check(swipeAddPage.hidden,'Creation acknowledgment hides offer');
+  navReset();before=[$('viewport').scrollLeft,$('viewport').scrollTop];
+  navEvent('pointerdown',-50,0,41);navEvent('pointerdown',50,0,42);
+  navEvent('pointermove',-20,20,41);navEvent('pointermove',80,20,42);navEvent('pointerup',80,20,42);
+  check(Math.abs($('viewport').scrollLeft-(before[0]-30))<2&&
+    Math.abs($('viewport').scrollTop-(before[1]-20))<2&&!commands.length,'Two fingers pan in both axes');
+  navEvent('pointerup',-20,20,41);state.links=originalLinks;
+
 } else {
   for(const platform of ['MacIntel','Win32','Linux x86_64']){
     Object.defineProperty(navigator,'platform',{value:platform,configurable:true});
