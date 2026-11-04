@@ -15,8 +15,10 @@ from commonUtils.persistence.text import FileConflictError
 
 @unittest.skipUnless(shutil.which('git'), 'Git required')
 class GitMergeTests(unittest.TestCase):
-    def setUp(self):
-        self.temp=TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
+    @classmethod
+    def setUpClass(cls):
+        self = cls()
+        self.temp=TemporaryDirectory(); cls.addClassCleanup(self.temp.cleanup)
         self.repo=Repository(initialize(Path(self.temp.name)/'repo'))
         for key,value in [('user.name','Test'),('user.email','test@example.invalid'),('commit.gpgsign','false'),
                           ('core.autocrlf','false'),('core.hooksPath',str(Path(self.temp.name)/'hooks'))]:
@@ -26,6 +28,14 @@ class GitMergeTests(unittest.TestCase):
         self.commit('base\n'); self.repo.create_branch('incoming'); self.commit('incoming\n')
         self.repo.switch('main'); self.commit('local\n')
         with self.assertRaises(GitError): self.repo.merge('incoming')
+
+        cls.repository_template = self.repo.path
+
+    def setUp(self):
+        self.temp = TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Repository(shutil.copytree(self.repository_template, Path(self.temp.name) / "repo"))
+        self.path = self.repo.path / "[literal].txt"
 
     def commit(self,text):
         self.path.write_text(text,encoding='utf-8',newline='')
