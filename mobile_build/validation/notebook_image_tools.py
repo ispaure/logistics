@@ -37,12 +37,14 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--rclone',type=Path,required=True,help='Verified host fixture tool; never a user remote')
     parser.add_argument('--ios-shell-receipt',type=Path)
-    parser.add_argument('--android-build',action='store_true',help='Explicitly allow a fresh isolated QA build')
+    android=parser.add_mutually_exclusive_group()
+    android.add_argument('--android-build',action='store_true',help='Explicitly allow a fresh isolated QA build')
+    android.add_argument('--android-shell-receipt',type=Path,help='Restage Python/assets in a verified immutable QA APK')
     args=parser.parse_args()
     if args.platform=='ios' and args.ios_shell_receipt is None:
         parser.error('iOS is copy-only and requires an explicit compiled-shell receipt')
-    if args.platform=='android' and not args.android_build:
-        parser.error('Android requires explicit --android-build; no shell is assumed compatible')
+    if args.platform=='android' and not (args.android_build or args.android_shell_receipt):
+        parser.error('Android requires --android-build or --android-shell-receipt')
     root=Path(__file__).resolve().parents[2]
     output=args.output.resolve();output.mkdir(parents=True,exist_ok=True)
     options,_=manager_settings.settings(root/'mobile_build')
@@ -76,6 +78,15 @@ def main():
                 receipt=json.loads(args.ios_shell_receipt.read_text())
                 (output/'compiled-shell.json').write_text(json.dumps(receipt,indent=2))
                 driver.run_ios(work,payload,output,env,family='iPad',source_app=Path(receipt['app']),**profile)
+            elif args.android_shell_receipt:
+                from mobile_build.validation.notebook_template_tools import android_shell
+                # Synthetic test data is injected only into this owned materialized
+                # source, after recording its committed identity and fixture hash.
+                fixture_path=source/'mobile_build/native_tests/tests/logisticsmobile/notebook-image-fixture.json'
+                fixture_path.write_bytes(fixture)
+                (work/'repack').mkdir()
+                apk=android_shell(args.android_shell_receipt,source,work,output,env,probe='notebook_image_probe')
+                driver.exercise_android_app(apk,work,output,env,options,probe_timeout=240,**profile)
             else:
                 driver.run_android(work,payload,output,env,options,probe_timeout=240,**profile)
         finally:
