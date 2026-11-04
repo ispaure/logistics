@@ -15,7 +15,10 @@ conversation or clearing the draft.
 
 ## On-device models
 
-Open **Chat → ••• → Model & server settings** and choose a **Chat provider**.
+Open **Chat → ••• → Model & server settings**, or
+**Settings → LM Chat → Server & generation settings**. The page, Save and Back
+stay in the tab where you opened it. Choose a **Provider**; only that provider's
+controls appear. Opening the page does not contact a provider.
 On iOS, choose **Apple Intelligence (on device)** and tap **Check on-device
 availability**. This uses Apple's Foundation Models framework on iOS 26 or later
 with Apple Intelligence enabled and its model ready. Supported iPhones start with
@@ -28,7 +31,7 @@ system reports downloadable model assets, this explicit action downloads them;
 opening Chat or sending a message does not start a model download. Unsupported
 or unready devices show a status message and cannot select the built-in model.
 
-Once the model is ready, tap **Save & return to chat**. Neither provider needs a
+Once the model is ready, tap **Save settings**. Neither provider needs a
 server address or API key. Inference stays on the device with no cloud fallback.
 Apple replies stream; Gemini Nano currently displays the completed reply.
 Both use the same private conversation history and Stop control as server chat.
@@ -45,15 +48,18 @@ is preserved. Tap **Connect & load models** to contact the server and fill the
 model selector. The first model is selected and saved automatically, or your
 current model is retained if still available. Choose another model if needed.
 You do not need to type a model ID to connect. If your server does not list
-models, enter its exact model ID in the labeled field instead.
+models, the manual model ID field opens automatically. You can also choose
+**Enter model ID manually** at any time. Switching providers keeps your server
+address, session key and model entry.
 Use the computer's LAN address/hostname when the
 server is on a computer: `localhost` on a phone means the phone itself. HTTPS
 protects requests and credentials; HTTP sends them unencrypted. TLS verification
 is enforced for HTTPS, and redirects are refused. iOS declares the local-network
 purpose; physical-device permission behavior still requires validation.
 
-Generation defaults can usually be left as they are. To adjust them, choose
-context tokens and maximum reply tokens, then tap **Save & return to chat**.
+Generation defaults can usually be left as they are. Open **Generation limits**
+to adjust the separately labeled context and maximum reply token limits, then
+tap **Save settings**.
 These settings, URL and model persist privately. API keys remain in memory for
 this app session and are not written to configuration or conversation fields.
 Re-enter a required key after restarting. Opening chat alone makes no request.

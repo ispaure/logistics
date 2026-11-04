@@ -110,6 +110,27 @@ class OnDeviceTests(unittest.TestCase):
 
 
 class OnDeviceUITests(unittest.TestCase):
+    def test_provider_switch_mounts_only_relevant_controls_and_stays_in_settings(self):
+        app = self.app
+        app.show_settings()
+        app.show_chat_configuration()
+        owner = app.chat_controller()
+        app.chat_loading = True
+        app.chat_models.items = ['Other model', 'Keep my server model']
+        app.chat_loading = False
+        app.chat_model.value = 'Keep my server model'
+        app.chat_provider.value = MODELS['apple']
+        self.assertNotIn(owner.chat_server_section, owner.chat_provider_content.children)
+        self.assertNotIn(owner.chat_model_section, owner.chat_provider_content.children)
+        self.assertIn(owner.chat_device_note, owner.chat_provider_content.children)
+        self.assertEqual(app.native_host.state.destination, 'settings')
+        app.chat_provider.value = 'OpenAI-compatible server'
+        self.assertIn(owner.chat_server_section, owner.chat_provider_content.children)
+        self.assertIn(owner.chat_model_section, owner.chat_provider_content.children)
+        self.assertNotIn(owner.chat_device_note, owner.chat_provider_content.children)
+        self.assertEqual(app.chat_model.value, 'Keep my server model')
+        self.assertEqual(app.chat_models.value, 'Keep my server model')
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)

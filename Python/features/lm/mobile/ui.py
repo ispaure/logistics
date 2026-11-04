@@ -105,27 +105,55 @@ class ChatUI:
         contexts = sorted({'2048', '3072', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
         replies = sorted({'256', '512', '1024', '2048', '4096', str(self.chat_profile['settings']['max_tokens'])}, key=int)
         self.chat_context = toga.Selection(items=contexts,
-            value=str(self.chat_profile['settings']['context_tokens']), style=Pack(flex=1, height=48))
+            value=str(self.chat_profile['settings']['context_tokens']), style=Pack(height=48))
         self.chat_max_tokens = toga.Selection(items=replies,
-            value=str(self.chat_profile['settings']['max_tokens']), style=Pack(flex=1, height=48))
+            value=str(self.chat_profile['settings']['max_tokens']), style=Pack(height=48))
         self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
-        self.chat_config_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-            toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
-            toga.Label('Chat provider'), self.chat_provider,
-            toga.Label('On-device models need a supported device and a ready system model.\nNo server or API key is needed. Preparing Gemini Nano may download model assets.', style=Pack(font_size=12)),
-            toga.Label('Server API URL'), self.chat_url,
-            toga.Label('A plain address uses /v1 automatically.\nFor a computer server, use its LAN address.', style=Pack(font_size=12)),
-            toga.Label('API key (optional; session only)'), self.chat_key,
-            self.chat_refresh, self.chat_config_status_box,
-            toga.Label('Model'), self.chat_models,
-            toga.Label('Choose a model above, or enter its exact ID below.', style=Pack(font_size=12)), self.chat_model,
-            toga.Label('Generation settings (defaults work for most servers)'),
-            toga.Label('Context tokens / maximum\nreply tokens'),
-            toga.Box(children=[self.chat_context, self.chat_max_tokens], style=Pack(direction=ROW)),
-            toga.Button('Save & return to chat', on_press=self.save_chat_configuration, style=Pack(height=48))],
-            style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+        from commonUtils.ui.native.forms import FittedLabel
+        def label(text, *, heading=False):
+            control = FittedLabel(text, style=Pack(font_size=16 if heading else 12,
+                font_weight='bold' if heading else 'normal', margin_top=12 if heading else 4))
+            return self.presentation.surface(control, radius=0,
+                foreground='text' if heading else 'muted', background='transparent', outlined=False, eink_outlined=False)
+
+        self.chat_config_back = toga.Button('Back', on_press=lambda widget, **kw: self.routes.back(), style=Pack(height=48))
+        self.chat_config_save = toga.Button('Save settings', on_press=self.save_chat_configuration, style=Pack(height=48, margin_top=12))
+        self.chat_server_section = toga.Box(children=[label('Connection', heading=True),
+            label('Server address', heading=True), self.chat_url,
+            label('Use your computer’s LAN address. /v1 is added automatically.'),
+            label('API key · optional', heading=True), self.chat_key,
+            label('Kept for this session only.')], style=Pack(direction=COLUMN))
+        self.chat_device_note = label('')
+        self.chat_manual_box = toga.Box(style=Pack(direction=COLUMN))
+        self.chat_manual_toggle = toga.Button('Enter model ID manually',
+            on_press=self.toggle_chat_manual_model, style=Pack(height=48))
+        if self.chat_profile.get('provider', 'server') == 'server' and self.chat_model.value:
+            self.chat_manual_box.add(self.chat_model)
+            self.chat_manual_toggle.text = 'Hide manual model ID'
+        self.chat_model_choices = toga.Box(style=Pack(direction=COLUMN))
+        self.chat_model_hint = label('Connect to load available models, or enter a model ID.')
+        self.chat_generation_box = toga.Box(style=Pack(direction=COLUMN))
+        self.chat_generation_fields = toga.Box(children=[
+            label('Context tokens', heading=True), self.chat_context,
+            label('Maximum reply tokens', heading=True), self.chat_max_tokens], style=Pack(direction=COLUMN))
+        self.chat_generation_toggle = toga.Button('Generation limits…',
+            on_press=self.toggle_chat_generation, style=Pack(height=48))
+        self.chat_model_section = toga.Box(children=[label('Model', heading=True), self.chat_model_choices,
+            self.chat_manual_toggle, self.chat_manual_box,
+            self.chat_generation_toggle, self.chat_generation_box], style=Pack(direction=COLUMN))
+        self.chat_provider_content = toga.Box(style=Pack(direction=COLUMN))
+        self.chat_config_content = toga.Box(children=[self.chat_config_back, label('Chat settings', heading=True)],
+            style=Pack(direction=COLUMN, margin=16))
+        if len(choices) > 1:
+            self.chat_config_content.add(label('Provider', heading=True), self.chat_provider)
+        self.chat_config_content.add(self.chat_provider_content, self.chat_config_save)
+        self.chat_config_view = toga.ScrollContainer(horizontal=False,
+            content=self.chat_config_content, style=Pack(flex=1))
+        self.presentation.surface(self.chat_config_content, radius=0,
+            background='settings_background', outlined=False, eink_outlined=False)
+        self.presentation.register_layout('chat-settings', self, ChatUI.fit_chat_configuration)
 
         self.select_chat_provider()
 
@@ -394,12 +422,40 @@ class ChatUI:
             self.chat_drawer_open = False
         self.render_chat_workspace()
 
-    def show_chat_configuration(self, widget=None, **kwargs):
-        if not self.app.require_feature('lm', destination='chat'):
+    def show_chat_configuration(self, widget=None, *, destination=None, **kwargs):
+        destination = destination or ('settings' if self.native_host.state.destination == 'settings' else 'chat')
+        if not self.app.require_feature('lm', destination=destination):
             return
         if not hasattr(self, 'chat_store'):
-            self.show_chat()
-        self.show_view(self.chat_config_view, destination='chat', route='chat-settings', title='Chat settings')
+            self.show_chat(present=False)
+        self.chat_config_destination = destination
+        self.chat_config_back.text = 'Back to LM Chat' if destination == 'settings' else 'Back to conversation'
+        self.show_view(self.chat_config_view, destination=destination, route='chat-settings', title='Chat settings')
+        self.fit_chat_configuration()
+
+    def fit_chat_configuration(self, frame=None):
+        from commonUtils.ui.native.forms import fit_section
+        destination = getattr(self, 'chat_config_destination', 'chat')
+        width = self.adaptive.content_width(destination, margin=0)
+        fit_section(self.chat_config_content, max(1, width))
+
+    def toggle_chat_manual_model(self, widget=None, **kwargs):
+        if self.chat_model in self.chat_manual_box.children:
+            self.chat_manual_box.remove(self.chat_model)
+            self.chat_manual_toggle.text = 'Enter model ID manually'
+        else:
+            self.chat_manual_box.add(self.chat_model)
+            self.chat_manual_toggle.text = 'Hide manual model ID'
+        self.fit_chat_configuration()
+
+    def toggle_chat_generation(self, widget=None, **kwargs):
+        if self.chat_generation_fields in self.chat_generation_box.children:
+            self.chat_generation_box.remove(self.chat_generation_fields)
+            self.chat_generation_toggle.text = 'Generation limits…'
+        else:
+            self.chat_generation_box.add(self.chat_generation_fields)
+            self.chat_generation_toggle.text = 'Hide generation limits'
+        self.fit_chat_configuration()
 
     def save_chat_configuration(self, widget=None, **kwargs):
         if self.state.busy:
@@ -409,7 +465,12 @@ class ChatUI:
                 raise ValueError('Check on-device availability first.' if PROVIDERS[self.chat_provider.value] != 'server' else 'Connect & load models, then choose a model, or enter its exact ID.')
             self.chat_fields()
             self.set_chat_status('Configuration saved.' if self.chat_profile.get('provider', 'server') != 'server' else 'Configuration saved. The API key stays in this session only.')
-            self.show_chat()
+            self.update_chat_readiness()
+            self.update_chat_transcript()
+            destination = self.native_host.state.destination
+            screens = self.routes.screens[destination]
+            if screens and screens[-1][0] == 'chat-settings':
+                self.routes.back()
         except (OSError, ValueError) as error:
             self.set_chat_status(str(error))
 
@@ -617,6 +678,7 @@ class ChatUI:
     def set_chat_busy(self, busy, *, generating=False):
         self.state.busy = busy
         self.state.generating = busy and generating
+        self.chat_config_save.enabled = not busy
         for control in (self.chat_provider, self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
                         self.chat_new, self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
                         self.chat_context, self.chat_max_tokens):
@@ -665,23 +727,46 @@ class ChatUI:
         self.chat_refresh.text = ('Connect & load models' if server else
                                   'Prepare Gemini Nano (may download)' if provider == 'nano' else
                                   'Check on-device availability')
+        self.chat_config_save.enabled = not self.state.busy
+        content = [self.chat_server_section] if server else [self.chat_device_note]
+        self.chat_device_note.text = ('Uses the system model. Preparation may download model assets.' if provider == 'nano'
+                                      else 'Uses Apple Intelligence. Requires a supported device and a ready system model.')
+        content.extend([self.chat_refresh, self.chat_config_status_box])
+        if server:
+            content.append(self.chat_model_section)
+        if list(self.chat_provider_content.children) != content:
+            for child in list(self.chat_provider_content.children):
+                self.chat_provider_content.remove(child)
+            self.chat_provider_content.add(*content)
         changed = provider != self._selected_chat_provider
+        previous = self._selected_chat_provider
         self._selected_chat_provider = provider
         if changed:
-            self.chat_model.value = ''
+            if previous == 'server':
+                self._chat_server_model = (self.chat_model.value, [row.value for row in self.chat_models.items])
+            saved_model, saved_models = getattr(self, '_chat_server_model', ('', [])) if server else ('', [])
+            self.chat_model.value = saved_model
             self.state.loading = True
             try:
-                self.chat_models.items = []
+                self.chat_models.items = saved_models
+                if saved_model in saved_models:
+                    self.chat_models.value = saved_model
             finally:
                 self.state.loading = False
-            self.set_chat_status('Connect to a server or enter a model ID.' if server else 'Check availability to select the built-in model.')
+            self.set_chat_status('')
+        model_choice = self.chat_models if self.chat_models.items else self.chat_model_hint
+        if list(self.chat_model_choices.children) != [model_choice]:
+            for child in list(self.chat_model_choices.children):
+                self.chat_model_choices.remove(child)
+            self.chat_model_choices.add(model_choice)
+        self.fit_chat_configuration()
 
     def select_chat_model(self, widget, **kwargs):
         if not self.state.loading and widget.value:
             self.chat_model.value = widget.value
 
     async def refresh_chat_models(self, widget=None, **kwargs):
-        if not self.app.require_feature('lm', destination='chat'):
+        if not self.app.require_feature('lm', destination=getattr(self, 'chat_config_destination', 'chat')):
             return
         if self.state.busy:
             return
@@ -705,7 +790,9 @@ class ChatUI:
             if models:
                 self.chat_model.value = selected
                 self.chat_fields()
-            self.set_chat_status('On-device model ready. Save & return to chat.' if profile.get('provider') in MODELS else f'Connected. {len(models)} model(s) available. Save & return to chat.' if models
+            elif profile.get('provider', 'server') == 'server' and self.chat_model not in self.chat_manual_box.children:
+                self.toggle_chat_manual_model()
+            self.set_chat_status('On-device model ready. Save settings to finish.' if profile.get('provider') in MODELS else f'Connected. {len(models)} model(s) available. Save settings to finish.' if models
                                  else 'Connected, but no models were listed. Load a model on the server or enter its exact ID below.')
         except Exception as error:
             if PROVIDERS[self.chat_provider.value] != 'server':
