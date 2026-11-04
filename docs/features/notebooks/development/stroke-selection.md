@@ -54,8 +54,8 @@ cross-page Copy/Cut/Paste, fresh IDs, native metadata, Undo/Redo, failed checkpo
 rollback and invalid transforms. `selection_work_logic.js` invokes the production
 selection, input and link handlers in V8, including concave containment, painted
 width, all pointer types, off-page precision, cancellation and native pen routing.
-Its combined Capture/Select keyboard check requires Capture's mode-specific
-keyboard guard. A causal in-memory guard is not acceptance of the on-disk source.
+The combined Capture/Select keyboard check invokes both production clipboard
+handlers together, including the Capture-only routing guard and modal blocking.
 `selection_index_logic.js` compares the index to an exhaustive geometry oracle:
 16,508 deterministic checks cover concave and self-crossing contours, boundary
 epsilon, painted radius, stationary samples and degenerate outlines. An operation
@@ -63,6 +63,25 @@ count fixture processes one million dense interior samples against 2,048 edges
 with 1,000,040 counted work units and one exact edge test. These are complexity
 checks, rather than measured device latency.
 
-Synthetic host and V8 checks do not establish physical pen latency, native mobile
-touch behavior or reMarkable interoperability. Browser presentation checks and
-their exact scope must be recorded after running `selection_canvas_probe.py`.
+On November 4, 2026, `selection_canvas_probe.py` passed on macOS Qt WebEngine
+against Logistics `cce65617`, commonUtils `888872d1` and build SDK `0f9285bb`.
+The desktop (1,200 pixels), phone (390 pixels) and tablet/iOS-style frame-batched
+presentation (760 pixels) passed synthetic DOM finger/pen/mouse gestures,
+full-stroke containment, uniform scale, rotation, cancellation, actual Python
+Editor acknowledgements, original-position Copy/Cut/Paste and native save/reopen.
+A corner tap on a half-unit dot emitted no edit. Tiny-dot and clipboard routing
+also have failing-control V8 regressions.
+
+All six compositor-fenced light/dark screenshots were inspected. Selection
+outlines, square corners, rotation circles and Copy/Cut/Delete were visible;
+Paste remained clear of the zoom dock, desktop footer and selection actions.
+Geometry guards check that clearance and menu stacking in every presentation.
+The complete controller finished in 20.59 seconds, with no claim of exclusive
+benchmark conditions. Its private source, full SDK/submodule, Qt environment,
+profiles, storage/cache and manager scratch workspace were removed, and its
+owned process group had no remaining processes.
+
+These are Qt WebEngine presentation checks, including mobile HTML, rather than
+native Android WebView or iOS WKWebView acceptance. Synthetic events use a
+capture-identity stub; physical pointer capture, pen latency, native mobile
+touch behavior and reMarkable interoperability remain separate hardware gates.
