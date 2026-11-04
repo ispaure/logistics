@@ -8,7 +8,7 @@ import toga
 from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from commonUtils.ui.native.markdown_search import MarkdownPageSearch
-from .markdown_editor import FormattedMarkdownInput
+from .markdown_editor import FormattedMarkdownInput, prepare_editor
 from services.documents.mobile_views import markdown_webview
 from services.documents.mobile_views import retire_webview
 
@@ -110,6 +110,10 @@ class ProviderMarkdown:
             self.search.dispose()
             self.search = None
         self.token = None
+        preparing = getattr(self, 'preparing_formatted', None)
+        if preparing is not None:
+            preparing.dispose()
+            self.preparing_formatted = None
         if self.edit_mode is not None and self.edit_mode in self.footer.children:
             self.footer.remove(self.edit_mode)
         if self.speech is not None:
@@ -337,14 +341,55 @@ class ProviderMarkdown:
             if self.edit_mode is not None:
                 self.edit_mode.value = 'Source'
             return
+        self.preparing_formatted = formatted
         formatted.scroll_top = self.scroll_top
-        try:
-            formatted.load(self.source.value)
-        except ValueError as error:
-            formatted.dispose()
-            self.host.error(str(error))
-            return
-        self.host.bind_font(formatted.view, web=True, formatted=formatted)
-        self.formatted = formatted
+        text = self.source.value
+        inputs = formatted.preparation_inputs()
+        token = self.token = object()
+        retained = list(self.content.children)
+        def cancel(widget=None, **kwargs):
+            if self.token is token:
+                self.clear()
+                if self.host.valid(reader):
+                    self.toggle_preview(initial=True)
+        panel = toga.Box(children=[toga.Label('Preparing for editing…'),
+            toga.Button('Cancel', on_press=cancel, style=Pack(height=48))],
+            style=Pack(direction='column', margin=16))
         self.content.clear()
-        self.content.add(formatted.view)
+        self.content.add(panel)
+
+        def current():
+            return (not self.closed and self.token is token and self.host.valid(reader)
+                    and self.source.value == text and panel in self.content.children)
+
+        async def prepare():
+            published = False
+            try:
+                prepared = await asyncio.to_thread(prepare_editor, text, **inputs)
+                if not current():
+                    return
+                formatted.load(text, prepared=prepared)
+                self.host.bind_font(formatted.view, web=True, formatted=formatted)
+                self.formatted = formatted
+                self.content.clear()
+                self.content.add(formatted.view)
+                published = True
+            except (ValueError, OSError) as error:
+                if current():
+                    self.host.error(str(error))
+            finally:
+                if not published:
+                    formatted.dispose()
+                if getattr(self, 'preparing_formatted', None) is formatted:
+                    self.preparing_formatted = None
+                if panel in self.content.children:
+                    self.content.clear()
+                    for child in retained:
+                        self.content.add(child)
+                if self.token is token:
+                    self.pending = None
+                self.refresh_controls()
+        if self.host.loop.is_running():
+            self.pending = self.host.loop.create_task(prepare())
+        else:
+            self.host.loop.run_until_complete(prepare())
