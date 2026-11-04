@@ -263,7 +263,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         console_stream = (output / 'ios-console.log').open('w')
         console = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', device, bundle],
             env=env, stdout=console_stream, stderr=subprocess.STDOUT)
-        deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 600 if entry_point.endswith(('.links_images_voices_probe', '.folder_feedback_probe')) else 240)
+        deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
         next_progress = 0
         while time.monotonic() < deadline:
             background_request = cache / 'file-transfer-background'
@@ -386,14 +386,18 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
 
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
-                result_name='document-storage-result.json', device=None, tablet=False):
+                result_name='document-storage-result.json', device=None, tablet=False, reuse_project=False):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe', '.notebook_load_probe'))
     project = workspace / 'build/logisticsmobile/android/gradle'
-    shutil.copytree(REPO / 'mobile_build/build/logisticsmobile/android/gradle', project,
-                    ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
-    android()
+    if reuse_project:
+        if not (workspace / '.manager-scratch').is_file() or not project.is_dir():
+            raise ValueError('Reuse requires the original manager-owned scratch project.')
+    else:
+        shutil.copytree(REPO / 'mobile_build/build/logisticsmobile/android/gradle', project,
+                        ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
+        android()
     copy_payload(payload, project / 'app/src/main/python', entry_point=entry_point)
     gradle = project / 'app/build.gradle'
     gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + bundle + '"', gradle.read_text()))
@@ -412,7 +416,16 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         with (project / 'gradle.properties').open('a') as stream:
             stream.write('\nandroid.enableJetifier=true\n')
     command([project / 'gradlew', *([] if raw_ink else ['--offline']), '--no-daemon', 'assembleDebug'], output / 'android-build.log', cwd=project, env=env)
-    emulator = AndroidEmulator(options['tools.android_sdk'], workspace / 'emulator', environment=env)
+    emulator_workspace = workspace / ('emulator-' + str(time.time_ns()) if reuse_project else 'emulator')
+    # Keep the published manager pin compatible while local reviewed backends
+    # expose additional probe controls. The lease records the actual selection.
+    import inspect
+    emulator_options = dict(environment=env)
+    parameters = inspect.signature(AndroidEmulator).parameters
+    for key, value in (('startup_timeout', 600), ('gpu', 'swiftshader')):
+        if key in parameters:
+            emulator_options[key] = value
+    emulator = AndroidEmulator(options['tools.android_sdk'], emulator_workspace, **emulator_options)
     record = None
     try:
         if device is not None:
@@ -437,7 +450,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             time.sleep(2)
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.links_images_voices_probe', '.folder_feedback_probe')) else 240)
+        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
         last_stage = last_orientation = None
         while time.monotonic() < deadline:
             if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe'))):
@@ -579,7 +592,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 except RuntimeError:
                     pass
         finally:
-            boot_log = workspace / 'emulator/emulator.log'
+            boot_log = emulator.workspace / 'emulator.log'
             try:
                 if boot_log.is_file():
                     shutil.copyfile(boot_log, output / 'android-emulator.log')
