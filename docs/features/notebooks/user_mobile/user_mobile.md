@@ -16,7 +16,10 @@ additional Back arrow; Android has one X on the canvas. There is no separate Not
 
 **Save** writes edits to the selected notebook. **Save As** uses the shared
 location picker and switches the editor to the new file. **Export .rmdoc** writes
-a separate copy. Ordinary notebook checkpoints support recovery; private drafts
+a separate copy. **Quit without saving** discards edits since the last Save, including
+the recovery draft, so reopening shows the saved file. Cancel keeps editing. If
+discard cannot update recovery, the notebook stays open with an error.
+Ordinary notebook checkpoints support recovery; private drafts
 stay in memory until Save writes verified ciphertext. Private notebooks appear
 in the open Documents list while unlocked, without ordinary Recent or saved
 workspace entries. Exporting or saving private content to ordinary storage asks
