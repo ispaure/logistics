@@ -259,13 +259,10 @@ async def exercise_ui_review(app):
         assert app.files_view in app.body.children
         assert app.file_storage.value == app.local_browser_root() and app.file_path == ''
         assert app.file_browser.search.value == ''
-        # Shared Files contains ordinary shared/device files. Managed
-        # collections are selected through Workspaces, rather than duplicated
-        # as mutable root entries in that provider.
+        # Browsing Shared Files exposes the collection entry points. Only the
+        # selected-download destination picker hides these duplicate choices.
         if app.file_storage.value != 'Local files':
-            from services.documents.locations import collection_path
-            collection = collection_path(app.private_root).name
-            assert collection not in [entry.payload['path'] for entry in app.file_browser.entries]
+            assert {'Local', 'Received Files'} <= {entry.payload['path'] for entry in app.file_browser.entries}
             row = next(row for row in app.file_rows.values() if row['name'] == 'Local')
             assert await app.browser_file_folder(row)
             await wait_for_file_entry(app, 'UI Review')

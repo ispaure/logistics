@@ -31,6 +31,56 @@ class NotebookCreationTemplateTests(unittest.TestCase):
         self.assertEqual(settings(book, book.pages[0]), dict(format='move', visible=True))
         self.assertEqual(self.app.notebook_panel.editor.notebook.pages[0].template, book.pages[0].template)
 
+    def test_create_reads_visible_values_before_native_change_notifications(self):
+        _, picker = self.choose('Late selection', 'Remarkable Document (.rmdoc)')
+        controls = picker.notebook_templates
+        # Native getters can reflect the new selection before on_change arrives.
+        controls.template.on_change = controls.paper_format.on_change = None
+        controls.template.value = CATALOG['Logistics Weekly planner']
+        controls.paper_format.value = FORMATS['move']
+        self.assertEqual(picker.operation.notebook_template, 'Blank')
+        self.app.loop.run_until_complete(picker.save_text_destination())
+        book = Notebook.read((self.root / 'LocalFiles/Late selection.rmdoc').read_bytes())
+        self.assertEqual(book.pages[0].template, 'Logistics Weekly planner Move')
+
+    def test_missing_native_selection_fails_without_publication_and_can_retry(self):
+        _, picker = self.choose('Retry selection', 'Remarkable Document (.rmdoc)')
+        controls = picker.notebook_templates
+        with patch.object(controls.template._impl, 'get_selected_index', return_value=None):
+            self.app.loop.run_until_complete(picker.save_text_destination())
+        target = self.root / 'LocalFiles/Retry selection.rmdoc'
+        self.assertFalse(target.exists())
+        self.assertIn('Choose a page template', ' '.join(picker.save_as_status.value.split()))
+        self.assertFalse(self.app.cloud_busy)
+        controls.template.value = CATALOG['P Lines large']
+        self.app.loop.run_until_complete(picker.save_text_destination())
+        self.assertEqual(Notebook.read(target.read_bytes()).pages[0].template, 'P Lines large')
+
+    def test_disabled_or_transient_native_events_do_not_reenable_controls(self):
+        from unittest.mock import Mock
+        from features.notebooks.mobile.setup import NotebookTemplateChoices
+        changed = Mock()
+        controls = NotebookTemplateChoices(changed)
+        controls.set_enabled(False)
+        changed.reset_mock()
+        controls.template.value = CATALOG['Logistics Checklist']
+        self.assertFalse(controls.template.enabled)
+        self.assertFalse(controls.paper_format.enabled)
+        changed.assert_not_called()
+        controls.set_enabled(True)
+        with patch.object(controls.template._impl, 'get_selected_index', return_value=None):
+            controls.update_choice()
+        self.assertTrue(controls.template.enabled)
+
+    def test_navigation_after_template_choice_does_not_open_another_dialog(self):
+        from features.notebooks.mobile.setup import choose_new_notebook
+        async def changed_navigation(dialog):
+            self.app.navigation_generation += 1
+            return 'Logistics Checklist'
+        with patch.object(self.app.main_window, 'dialog', AsyncMock(side_effect=changed_navigation)) as dialog:
+            self.assertIsNone(self.app.loop.run_until_complete(choose_new_notebook(self.app)))
+        dialog.assert_awaited_once()
+
     def test_cancel_leaves_no_notebook_and_fresh_creation_resets_choices(self):
         self.app.loop.run_until_complete(self.app.choose_document_type())
         picker = self.app.editor_picker()

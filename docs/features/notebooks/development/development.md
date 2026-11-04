@@ -165,7 +165,12 @@ navigation and resizing preserve its selection. `DestinationRequest.capture()`
 serializes that selection before publication. Native library creation uses the
 same catalog through a scrolling native choice dialog. Busy or retired creation
 requests cannot replace a newer notebook. The mobile owner manifest includes the
-native controls without importing the desktop dialog.
+native controls without importing the desktop dialog. Creation reads the native
+selection getters when capturing the publication request, so delayed change
+notifications cannot publish an older template or size. Disabled controls ignore
+late events; temporary missing selections report a recoverable creation error
+without publishing a file. Native multi-step setup checks navigation before
+opening its next dialog and before returning a notebook.
 
 Desktop Page → Page Template and the toolbar's labeled control open the existing
 per-page selector. Mobile exposes it in Page template and layers and from Pages.
@@ -174,7 +179,13 @@ page, inheriting its reference and opaque format/visibility sidecar without ink;
 PDF-backed page behavior is unchanged. `test_notebook_setup.py` and mobile
 `test_notebook_creation_templates.py` cover selection, cancellation, format
 switches, publication, middle insertion, unchanged neighbors and history/readback.
-The WebEngine template probe checks both visible Page Template entry points.
+The WebEngine template probe checks both visible Page Template entry points,
+single-page isolation and inherited paper through the actual UI command queue.
+Regression coverage includes failed-checkpoint rollback, opaque imported
+artwork/sidecars, reordered modern page records, no copied ink, transient native
+selection events and creation retries. Imported artwork is described as imported;
+PDF-backed documents explain that their backgrounds cannot be replaced by
+notebook templates.
 
 Template edits mark structure dirty even when page IDs do not change. Export
 must therefore serialize page references on every structural change, rather than
