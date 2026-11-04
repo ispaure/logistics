@@ -13,7 +13,7 @@ The dated results below retain their original workload and source scope.
 | Area | Implemented behavior and remaining validation |
 | --- | --- |
 | Desktop | Qt WebEngine editor, document tabs, native menus, local/private Save and portable export. Historical macOS, Windows and Linux results below cover specific environments, not every renderer or architecture. |
-| Android and iOS | Native creation controls and WebView/WKWebView canvas share page templates, native ink and storage policy. The scoped iOS template result below covers one iPhone simulator; Android template and queued-command fence acceptance remain pending. |
+| Android and iOS | Native creation controls and WebView/WKWebView canvas share page templates, native ink and storage policy. The scoped template results below cover one Android emulator and one iPhone simulator. Queued-command fence acceptance remains separate. |
 | Responsiveness | Remaining Linux latency acceptance is pending. Historical Fedora/Xvfb functional passes do not close it. Windows drawing responsiveness also remains unresolved as recorded below; diagnostic latency mode does not turn a failed guard into a pass. |
 | Physical hardware | Actual Pencil pressure/palm behavior, optical Boox latency and reMarkable import/select/move/erase remain separate acceptance gates. Synthetic input and successful codec readback do not complete them. |
 
@@ -38,6 +38,19 @@ picker interaction, physical pen acceptance, a Duo layout run, or acceptance of
 later brush-calibration changes. The reusable driver is
 `mobile_build/validation/notebook_template_tools.py`; iOS requires an explicit
 verified shell receipt and never compiles implicitly.
+
+The Android template probe also passed on November 4, 2026, using a managed
+Pixel 9 emulator, API 36 Google APIs arm64, Logistics `ce783064` and commonUtils
+`d44cfd4e`. It covered the same creation, isolated page change, inherited
+template/size/hidden state, no copied ink, Undo/Redo and disk-reopen workflows.
+Screenshots and both saved archives were inspected. Its copied QA APK retained
+all 40 DEX/native-library entries byte-for-byte from the verified `649d7c68`
+shell; the staged Python source includes the Paper Pro brush calibration.
+The runner was frozen at `bced229c`; no compilation occurred. The controller
+exited successfully, and the isolated QA app, emulator and scratch workspace
+were removed. This uses native widget setters and the actual WebView bridge;
+it does not certify physical touch/pen interaction, every template/viewport, or
+the later Android destination-rail change `eebdc183`.
 
 Desktop save/export progress uses commonUtils' shared compact `OperationProgress`
 footer below the canvas. The canvas takes the workspace stretch; progress stays
