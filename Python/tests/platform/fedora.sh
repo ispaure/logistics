@@ -28,8 +28,6 @@ export LOGISTICS_REQUIRE_LOCALCRYPT_TESTS=1
 export SSL_CERT_FILE
 SSL_CERT_FILE=$("$python" -c 'import certifi; print(certifi.where())')
 status=0
-for pattern in test_pdf_reader.py test_video_decode.py test_video_cloud_decode.py test_video_desktop_parity.py; do
-    run_step "$pattern" 600s "$python" Python/tests/run_regressions.py Python/tests --pattern "$pattern" --isolate-modules || status=1
-done
+run_step platform 5400s "$python" Python/tests/run_platform_checks.py || status=1
 run_step release-tooling 300s "$python" -m unittest discover -s .github/scripts -p 'test_*.py' -v || status=1
 exit "$status"
