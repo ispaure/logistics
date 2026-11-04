@@ -64,7 +64,17 @@ def apple_reader_top(container, window):
     from .ios_reader_chrome import occlusion_geometry
     left, right = container.left_inset, float(native.bounds.size.width) - container.right_inset
     from .ios_system_occlusions import control_top_clearance
-    return control_top_clearance(occlusion_geometry(native), left, right, top)
+    regions = occlusion_geometry(native)
+    # A window-wide rectangular inset can describe a status/activity cluster
+    # entirely inside the excluded side rail. When UIKit reports that top
+    # cluster wholly outside the content column, reclaim its rectangular row.
+    # Retain hardware clearance for missing or content-intersecting geometry.
+    top_regions = [(x, width) for x, y, width, height in regions
+                   if width > 0 and height > 0 and y <= top and y + height > 0]
+    if top_regions and all(x + width <= left or x >= right for x, width in top_regions):
+        # Reclaim the hardware band without moving content above the window.
+        top = max(0, -float(origin.y))
+    return control_top_clearance(regions, left, right, top)
 
 
 
