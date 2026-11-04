@@ -29,6 +29,9 @@ class ScreenPrivacy:
         self.saved_lock_layout = None
         self.lock_gates = ()
         self.unlock_busy = False
+        from .layout_participants import participants
+        self.lock_layout_subscription = participants(app).register(
+            ('resume-lock', id(self)), self, lambda owner, frame: owner.fit_lock_view(frame.width))
         from .trusted_wifi import WifiResume
         self.wifi_resume = WifiResume()
         self.activity_listener = self.application = None
@@ -356,23 +359,30 @@ class ScreenPrivacy:
                 from toga.style.pack import COLUMN, CENTER
                 from .appearance import action_button, surface
                 self.lock_icon = toga.Label('🔒', style=Pack(font_size=40, text_align=CENTER, margin_bottom=12))
-                self.lock_title = toga.Label('Welcome back', style=Pack(font_size=24, font_weight='bold', margin_bottom=8))
-                self.lock_credential = toga.Label('', style=Pack(font_size=16, font_weight='bold', margin_top=16, margin_bottom=12))
-                self.lock_hint = toga.Label('Enter the session password to resume.')
+                from .settings.forms import SettingsLabel
+                self.lock_title = SettingsLabel('Welcome back', style=Pack(font_size=24, font_weight='bold', margin_bottom=8))
+                self.lock_credential = SettingsLabel('', style=Pack(font_size=16, font_weight='bold', margin_top=16, margin_bottom=12))
+                self.lock_hint = SettingsLabel('Enter the session password to resume.')
                 self.lock_password = PasswordInput(placeholder='Session password',
                     on_confirm=self.unlock, style=Pack(height=48))
                 self.lock_confirmation = PasswordInput(placeholder='Confirm new lock password',
                     style=Pack(height=48))
-                self.lock_status = toga.Label('', style=Pack(margin_top=12))
+                self.lock_status = SettingsLabel('', style=Pack(margin_top=12))
                 self.lock_button = action_button(toga.Button('Unlock', on_press=self.unlock, style=Pack(height=48, margin_top=16)))
                 self.lock_fields = toga.Box(children=[self.lock_icon, self.lock_title, self.lock_hint,
                     self.lock_credential, self.lock_password, self.lock_button, self.lock_status],
                     style=Pack(direction=COLUMN, margin=24))
                 self.lock_card = surface(toga.Box(children=[self.lock_fields],
-                    style=Pack(direction=COLUMN, margin=4)), radius=20)
-                self.lock_view = toga.Box(children=[toga.Box(style=Pack(flex=1)),
-                    toga.ScrollContainer(horizontal=False, content=self.lock_card, style=Pack(flex=4)),
-                    toga.Box(style=Pack(flex=1))], style=Pack(direction=COLUMN, flex=1, margin=20))
+                    style=Pack(direction=COLUMN)), radius=20)
+                # Scroll an unpainted, padded body, not the rounded surface itself.
+                # The whole available height belongs to the form, including with
+                # the keyboard open; card corners stay inside the scroll bounds.
+                self.lock_body = toga.Box(children=[self.lock_card],
+                    style=Pack(direction=COLUMN, align_items=CENTER, margin=20))
+                self.lock_scroll = toga.ScrollContainer(horizontal=False,
+                    content=self.lock_body, style=Pack(flex=1))
+                self.lock_view = toga.Box(children=[self.lock_scroll],
+                    style=Pack(direction=COLUMN, flex=1))
             pending = tuple(gate for gate in gates if gate.locked)
             names = list(dict.fromkeys(getattr(gate, 'credential_name', '') for gate in pending
                                        if getattr(gate, 'credential_name', '')))
@@ -390,6 +400,7 @@ class ScreenPrivacy:
             elif not setup and self.lock_confirmation in self.lock_fields.children:
                 self.lock_fields.remove(self.lock_confirmation)
             self.lock_button.text = 'Set lock password' if setup else 'Unlock'
+            self.fit_lock_view()
             if self.app.main_window.content is not self.lock_view:
                 self.saved_content = self.app.main_window.content
                 if self.backend.startswith('toga_iOS.'):
@@ -415,6 +426,18 @@ class ScreenPrivacy:
                 self.app.adaptive.render()
             self.resume_reader()
 
+    def fit_lock_view(self, width=None):
+        if self.lock_view is None:
+            return
+        from .settings.forms import fit_section
+        # Explicit wrapping prevents long credential labels from imposing a
+        # wider content minimum than the native viewport can display.
+        width = self.app.main_window.size.width if width is None else width
+        card_width = max(24, min(560, width - 40))
+        if self.lock_card.style.width != card_width:
+            self.lock_card.style.width = card_width
+        fit_section(self.lock_card, card_width)
+
     def layout_lock_view(self, container):
         # The normal root hosts native navigation controllers, whose leaf
         # containers handle safe areas. The lock form replaces that entire
@@ -422,6 +445,7 @@ class ScreenPrivacy:
         insets = container.native.safeAreaInsets
         container.top_inset, container.bottom_inset = insets.top, insets.bottom
         container.left_inset, container.right_inset = insets.left, insets.right
+        self.fit_lock_view(self.app.main_window.size.width - insets.left - insets.right)
         self.app.main_window._impl.notify_resize(container)
         if container.content is not None:
             container.content.interface.refresh()
@@ -481,6 +505,7 @@ class ScreenPrivacy:
 
     def dispose(self):
         self.disposed = True
+        self.lock_layout_subscription.dispose()
         from .protection import for_app
         for_app(self.app).process.listeners.discard(self)
         for_app(self.app).dispose()
