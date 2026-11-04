@@ -9,8 +9,8 @@ The [Mobile Markdown editor and library rework](mobile-markdown-rework.md) recor
 the redesign, storage permissions, refactoring and remaining native acceptance gates.
 
 An optional Logistics feature for plain text and code, independent of Books,
-Comics and the shared Markdown reader. Open **Settings → Text Editor → Open Text
-Editor**, or use **Open in Text Editor** in a browser. Each file has one editor
+Comics and the shared Markdown reader. Open **Documents → Text Editor**, or use **Open in Text Editor**
+in File Browser. Each file has one editor
 pane in the application's document workspace, and can detach into its own window.
 Reopening a file focuses its existing pane. Disabling the feature removes
 contributions while retaining open documents for re-enablement.
@@ -156,13 +156,21 @@ gate to publication and retires the original draft only after successful transfe
 
 ## Validation
 
-From the checkout root:
+Use the project test selector from the checkout root after any active release
+hold is lifted:
 
 ```sh
-QT_QPA_PLATFORM=offscreen PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/tests -p test_text_editor.py -v
-QT_QPA_PLATFORM=offscreen PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/commonUtils/tests -p 'test_code*.py' -v
-PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/commonUtils/tests -p test_text_files.py -v
+python3 dev.py test desktop test_text_editor.py
+python3 dev.py test desktop test_text_editor_extensions.py
+python3 dev.py test desktop test_text_editor_recovery.py
+python3 dev.py test mobile test_source_editor.py
+python3 dev.py test mobile test_provider_markdown.py
 ```
+
+The desktop feature tests live in `Python/tests/editing/`; mobile editor tests live
+in `mobile_build/tests/editing/`. Shared `test_code*.py`, `test_text_files.py` and
+session/workspace suites belong to commonUtils and its own test workflow. See
+[Testing](../../../development/testing.md) for interpreter and selector setup.
 
 Tests cover byte preservation, legacy and Unicode encodings, conflicts, binary
 handling, queue/window lifetime, shared browser activation, feature toggles,
@@ -186,7 +194,7 @@ launcher, format-filter, private-document and reader-handoff checks.
 `test_launch.py` cover surrounding Logistics integration. These
 headless Qt checks run on macOS, Windows, and Fedora in CI, using the environment
 versions in `test-environments.json`; native
-desktop interaction still benefits from manual validation. New UI surfaces have also been rendered and inspected in both themes.
+desktop interaction still benefits from manual validation. Past UI reviews in both themes are historical evidence, not validation of a new change.
 
 ## Merge external changes
 
@@ -281,8 +289,8 @@ wake. Normal navigation still suspends hidden provider WebViews and reconstructs
 the chosen surface on resume. Both mobile Markdown Web surfaces use Apple's
 system font names followed by generic `sans-serif`, allowing Android's device
 font choice instead of WebView's `system-ui` face; code remains monospace.
-`resources.py` owns provider text adapters, and `names.py` owns display-name
-validation. The mobile application supplies
+`resources.py` owns provider text adapters, and
+`services/documents/names.py` owns display-name validation. The mobile application supplies
 `services.mobile_presentation.MobilePresentation`; managed recovery records,
 picker workflows and scene ownership remain host concerns. Both platforms reuse
 commonUtils text persistence and conflict handling.
@@ -558,7 +566,7 @@ Notes Library image sources additionally accept root-relative paths and a bounde
 set of common attachment-directory candidates; they never recursively list folders.
 
 `test_notes_library_desktop.py` covers local/remote image resources and their
-revocation. `test_markdown_image_layout_dom.py` measures production mobile preview
+revocation. `Python/tests/editing/test_markdown_image_layout_dom.py` measures production mobile preview
 and formatted HTML in a real Chromium document at 320, 500 and 700 pixels for
 PNG/JPEG/WebP/GIF, checking width, aspect ratio and following-text spacing.
 Shared `test_markdown_image_sizes.py` measures Qt Read/Formatted layout for the
@@ -584,3 +592,32 @@ See [Notes Library development](../../notes_library/development/development.md#s
 ## Library file dragging
 
 See [Notes Library development](../../notes_library/development/development.md#library-file-dragging).
+
+
+## Current platform and audit scope
+
+Desktop code editing and mobile document editing use different presentations.
+Desktop menus for comparison/merge, multi-cursor editing, shared split views,
+command discovery and Git change markers are not a mobile feature checklist.
+Mobile `mobile/ui.py` owns the native plain-text/source input, language dropdown,
+line count, search and managed Markdown modes; provider-backed Markdown uses the
+host authoring workflow described above. The current mobile text adapter and
+managed DocumentStore bound text documents to 1 MiB. Desktop ordinary text uses
+the 16 MiB limit above, including private desktop text opening; private Markdown
+opening is capped at 8 MiB (`services/documents/preparation.py`).
+
+`DocumentPolicy` and `DocumentResource` in `services/documents/storage.py` own
+provider writability/privacy checks. Local and unlocked LocalCrypt documents can
+edit; remote and remote-crypt documents remain read-only even when backed by a
+local cache. Private provider drafts avoid ordinary recovery/recent persistence.
+`test_provider_markdown.py` explicitly checks remote edit/save rejection and stale
+render retirement; source-language/search tests are in `test_source_editor.py`,
+and picker cancellation/state ownership is in `test_editor_picker.py`.
+
+The November 4, 2026 documentation audit inspected these source/test owners and
+ran static Markdown/link checks only. No runtime, Qt, browser, build or device
+validation was run during the release hold. The dated
+[Markdown rework record](mobile-markdown-rework.md#remaining-acceptance-gates)
+retains its unverified acceptance gates; source implementation is not proof of
+Duo fold transitions, narrow iPad multitasking, spoken accessibility traversal
+or sustained memory behavior.
