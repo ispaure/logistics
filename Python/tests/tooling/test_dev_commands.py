@@ -94,20 +94,48 @@ class SetupCommandTests(unittest.TestCase):
 
     def test_mobile_setup_stops_when_environment_creation_fails(self):
         from Scripts import development
-        with tempfile.TemporaryDirectory() as directory, patch.object(development, 'find_uv', return_value='/tools/uv'), patch.object(development.subprocess, 'run') as run:
+        from logistics_build import tooling_bootstrap as tooling
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(development, 'find_uv', return_value='/tools/uv'), \
+                patch.object(tooling, 'boot_identity', return_value='11111111-1111-4111-8111-111111111111'), \
+                patch.object(tooling, 'run_command') as run, \
+                patch.object(tooling, '_repair_locked') as repair:
             run.return_value.returncode = 4
-            root = Path(directory)
+            root = Path(directory).resolve()
             self.assertEqual(development.setup(root, 'mobile', lambda _: root / 'missing/python'), 4)
             self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0][1], 'venv')
+            repair.assert_not_called()
+            self.assertFalse(tooling.enrolled(root))
+            if os.name == 'posix':
+                pending = tooling.read_intent(root)
+                self.assertEqual(pending['cleanup'], tooling.cleanup_proof(pending))
+            with tooling.file_lock(tooling.lock_path(root)):
+                pass
 
     def test_mobile_install_requires_hashes_and_preserves_other_packages(self):
         from Scripts import development
-        with patch.object(development, 'find_uv', return_value='/tools/uv'), patch.object(development.subprocess, 'run') as run:
+        from logistics_build import tooling_bootstrap as tooling
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(development, 'find_uv', return_value='/tools/uv'), \
+                patch.object(tooling, 'boot_identity', return_value='11111111-1111-4111-8111-111111111111'), \
+                patch.object(tooling, 'run_command') as run, \
+                patch.object(tooling, '_repair_locked') as repair:
+            root = Path(directory).resolve()
+            python = tooling.environments(root)[1][2]
+            python.parent.mkdir(parents=True)
+            python.touch()
             run.return_value.returncode = 0
-            self.assertEqual(development.setup(ROOT, 'mobile', lambda _: Path(__file__)), 0)
+            self.assertEqual(development.setup(root, 'mobile', lambda _: python), 0)
+            self.assertEqual(run.call_count, 1)
             command = run.call_args.args[0]
             self.assertEqual(command[1:3], ['pip', 'install'])
             self.assertIn('--require-hashes', command)
+            self.assertEqual(command[command.index('--python') + 1], str(python))
+            self.assertEqual(run.call_args.kwargs['cwd'], root)
+            repair.assert_not_called()
+            self.assertFalse(tooling.enrolled(root))
+            self.assertFalse(tooling.intent_path(root).exists())
 
 
 class DoctorCommandTests(unittest.TestCase):

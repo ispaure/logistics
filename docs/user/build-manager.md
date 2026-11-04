@@ -187,9 +187,19 @@ Unenrolled environment syncs also hold that lock and refuse active workflows;
 they do not install or enroll project tooling. On POSIX, installer and sync
 process groups remain in the manager bridge's session; cooperative cancellation
 and local timeouts retire those groups before the environment lock is released.
-This does not guarantee lease safety after an abrupt bootstrap `SIGKILL`.
+An abrupt bootstrap `SIGKILL` can leave descendants running. On POSIX, a durable
+unfinished-change record then blocks subsequent environment mutations even when
+the advisory lock is free. Do not delete that record. Restart the host, then
+explicitly choose **Update project tooling** (or `update --confirmed`) to repair
+and verify both environments. Recovery from an unverified interruption requires
+a verified change in the host's boot identity; process absence and elapsed time
+do not authorize recovery. A failed sync or install whose owned process groups
+were definitively retired retains a matching cleanup receipt instead: explicit
+tooling repair may then proceed without restarting. Neither receipt alone clears
+the unfinished record; successful repair and verification are still required.
 Windows uses bounded local tree termination and the supported manager bridge's
-owning Job. Standalone Windows execution cannot guarantee orphan cleanup when
+owning Job; the POSIX recovery record is not enabled there. Standalone Windows
+execution cannot guarantee orphan cleanup when
 an installer parent exits before its descendants; local `taskkill` cannot recover
 that ownership. Use the supported manager GUI/CLI bridge for that containment.
 The optional shared-launcher `environment_sync_wrapper` contract uses this same
