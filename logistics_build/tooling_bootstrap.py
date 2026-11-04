@@ -1,5 +1,6 @@
 """Standard-library-only, explicit setup for this checkout's pinned tooling."""
 from contextlib import contextmanager, ExitStack
+from contextvars import ContextVar
 import argparse
 import errno
 import json
@@ -12,8 +13,10 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+_MUTATION = ContextVar('tooling_mutation', default=None)
 
 
 MESSAGES = {
@@ -28,6 +31,8 @@ MESSAGES = {
     'verification': 'Installed tooling did not verify in both environments. Inspect Project tooling readiness, then update again.',
     'install': 'Pinned tooling installation failed. Check Git access and Python build prerequisites, then update again.',
     'blocked': 'Tooling readiness could not be checked. Inspect the project environments and retry Project tooling readiness.',
+    'unfinished_mutation': 'An earlier environment change is unfinished. Explicitly Update project tooling to repair verified stopped work; an unverified interruption requires a host restart first. Do not remove its recovery record.',
+    'boot_identity': 'The host boot identity could not be verified. Restore access to the operating system boot identifier before changing project environments.',
 }
 
 
@@ -56,6 +61,104 @@ def enrollment(root):
     return private(root) / 'tooling/enrolled.json'
 
 
+def intent_path(root):
+    return private(root) / 'tooling-mutation.json'
+
+
+def boot_identity():
+    try:
+        if sys.platform == 'darwin':
+            value = subprocess.run(['/usr/sbin/sysctl', '-n', 'kern.bootsessionuuid'], check=True,
+                                   capture_output=True, text=True, timeout=3).stdout.strip()
+        else:
+            value = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        return str(uuid.UUID(value))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        raise BootstrapError('boot_identity') from None
+
+
+def read_intent(root):
+    path = intent_path(root)
+    if not owned_path(root, path):
+        raise BootstrapError('unfinished_mutation')
+    if not path.exists():
+        return None
+    try:
+        value = json.loads(path.read_text())
+        if (not isinstance(value, dict) or value.get('schema') != 1
+                or value.get('root') != str(Path(root).resolve())
+                or value.get('mode') not in ('sync', 'repair')
+                or not isinstance(value.get('groups'), list)):
+            raise ValueError
+        for field in ('nonce', 'boot_id'):
+            if not isinstance(value.get(field), str) or str(uuid.UUID(value[field])) != value[field]:
+                raise ValueError
+        if any(not isinstance(group, dict)
+               or any(type(group.get(field)) is not int or group[field] <= 0 for field in ('pgid', 'sid'))
+               for group in value['groups']):
+            raise ValueError
+        if 'cleanup' in value and value['cleanup'] != cleanup_proof(value):
+            raise ValueError
+        return value
+    except (OSError, ValueError, KeyError, TypeError):
+        raise BootstrapError('unfinished_mutation') from None
+
+
+def cleanup_proof(value):
+    return dict(nonce=value['nonce'], boot_id=value['boot_id'], groups=value['groups'])
+
+
+def save_intent(state):
+    current = read_intent(state['root'])
+    if current is None or current['nonce'] != state['value']['nonce']:
+        raise BootstrapError('unfinished_mutation')
+    atomic_json(intent_path(state['root']), state['value'])
+
+
+def clear_intent(root, nonce):
+    state = _MUTATION.get()
+    if (state is None or not state.get('verified') or not state['retired']
+            or state['value']['nonce'] != nonce or Path(state['root']) != Path(root)):
+        raise BootstrapError('unfinished_mutation')
+    current = read_intent(root)
+    if current is None or current['nonce'] != nonce or current.get('cleanup') != cleanup_proof(current):
+        raise BootstrapError('unfinished_mutation')
+    intent_path(root).unlink()
+    sync_directory(intent_path(root).parent)
+
+
+@contextmanager
+def mutation_intent(root, mode, *, recover=False):
+    if os.name != 'posix':
+        yield
+        return
+    previous = read_intent(root)
+    boot = boot_identity()
+    if previous is not None and (not recover or (previous['boot_id'] == boot and 'cleanup' not in previous)):
+        raise BootstrapError('unfinished_mutation')
+    value = dict(schema=1, root=str(Path(root).resolve()), nonce=str(uuid.uuid4()),
+                 boot_id=boot, mode=mode, groups=[])
+    if previous is not None:
+        value['recovery_nonce'] = previous['nonce']
+    atomic_json(intent_path(root), value)
+    state = dict(root=root, value=value, retired=True, uncertain=False)
+    token = _MUTATION.set(state)
+    try:
+        yield
+        if not state['retired'] or state['uncertain']:
+            raise BootstrapError('unfinished_mutation')
+        state['verified'] = True
+    finally:
+        try:
+            if state['retired'] and not state['uncertain']:
+                value['cleanup'] = cleanup_proof(value)
+                save_intent(state)
+                if state.get('verified'):
+                    clear_intent(root, value['nonce'])
+        finally:
+            _MUTATION.reset(token)
+
+
 def enrolled(root):
     marker = enrollment(root)
     return (marker.is_file() and not linked(marker)
@@ -68,10 +171,22 @@ def atomic_json(path, value):
         with os.fdopen(descriptor, 'w') as stream:
             json.dump(value, stream)
             stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary, path)
+        sync_directory(path.parent)
     finally:
         if Path(temporary).exists():
             Path(temporary).unlink()
+
+
+def sync_directory(path):
+    if os.name == 'posix':
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
 
 
 def pin(root):
@@ -173,6 +288,13 @@ def _retire(process):
                 if stream is not None:
                     stream.close()
             raise
+        if os.name == 'posix':
+            deadline = time.monotonic() + 2
+            while send(0):
+                if time.monotonic() >= deadline:
+                    return False
+                time.sleep(.02)
+        return True
 
 
 def run_command(args, *, timeout=None, check=False, capture_output=False, **kwargs):
@@ -185,8 +307,19 @@ def run_command(args, *, timeout=None, check=False, capture_output=False, **kwar
         # Deliver cancellation only once the child's cleanup finally is installed.
         # Do not block signals: the child must inherit an unblocked signal mask.
         cancellation['launching'] = True
+        state = _MUTATION.get()
+        if state is not None:
+            # Constructor failure may occur after a child has started. Never
+            # infer no-exec from an exception or issue a cleanup receipt for it.
+            state['uncertain'] = True
+            state['value'].pop('cleanup', None)
+            save_intent(state)
         process = subprocess.Popen([str(arg) for arg in args], text=True, **options, **kwargs)
         try:
+            if state is not None:
+                state['uncertain'] = False
+                state['value']['groups'].append(dict(pgid=process.pid, sid=os.getsid(0)))
+                save_intent(state)
             cancellation['launching'] = False
             if cancellation['cancelled']:
                 raise KeyboardInterrupt
@@ -196,7 +329,15 @@ def run_command(args, *, timeout=None, check=False, capture_output=False, **kwar
                 result.check_returncode()
             return result
         finally:
-            _retire(process)
+            state = _MUTATION.get()
+            previously_retired = state['retired'] if state is not None else True
+            if state is not None:
+                state['retired'] = False
+            retired = _retire(process)
+            if state is not None:
+                state['retired'] = previously_retired and retired
+                if not state['retired']:
+                    raise BootstrapError('unfinished_mutation')
 
 
 def run(args, **kwargs):
@@ -324,6 +465,15 @@ def mutation_guard(root):
 
 
 def status(root=ROOT):
+    if os.name == 'posix':
+        state = _MUTATION.get()
+        try:
+            pending = read_intent(root)
+            if pending is not None and (state is None or state['value']['nonce'] != pending['nonce']):
+                raise BootstrapError('unfinished_mutation')
+        except BootstrapError:
+            return dict(ready=False, status='blocked', reason='unfinished_mutation',
+                        message=MESSAGES['unfinished_mutation'], declared_revision=None, environments=[])
     declared = pin(root)
     rows = [inspect_environment(root, *item, declared) for item in environments(root)]
     ready = all(row['ready'] for row in rows)
@@ -347,7 +497,8 @@ def update(root=ROOT, *, confirmed=False):
                                                         checkout.with_suffix('.ownership.json'))):
         raise BootstrapError('linked_path')
     with mutation_guard(root):
-        return _repair_locked(root, declared, targets)
+        with mutation_intent(root, 'repair', recover=True):
+            return _repair_locked(root, declared, targets)
 
 
 def _repair_locked(root, declared, targets):
@@ -390,14 +541,15 @@ def environment_sync(root=ROOT):
     if any(not owned_path(root, path) for path in (lock_path(root), *(folder for _, folder, _ in environments(root)))):
         raise BootstrapError('linked_path')
     with mutation_guard(root):
-        restore = enrolled(root)
-        yield
-        if not restore:
-            return
-        targets = environments(root)
-        if any(not owned_path(root, folder) or not interpreter.is_file() for _, folder, interpreter in targets):
-            raise BootstrapError('environments')
-        _repair_locked(root, pin(root), targets)
+        with mutation_intent(root, 'sync'):
+            restore = enrolled(root)
+            yield
+            if not restore:
+                return
+            targets = environments(root)
+            if any(not owned_path(root, folder) or not interpreter.is_file() for _, folder, interpreter in targets):
+                raise BootstrapError('environments')
+            _repair_locked(root, pin(root), targets)
 
 
 def handle(root, action, values):
