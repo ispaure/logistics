@@ -137,9 +137,11 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         app.resize_workspace.assert_not_called()
         root.getWidth.return_value = 900
         content.getWidth.return_value = 820
-        root.isLayoutRequested.return_value = True
+        content.isLayoutRequested.return_value = True
         cover.before_draw()
         self.assertFalse(cover.future.done())
+        content.isLayoutRequested.return_value = False
+        cover.before_draw()
         app.resize_workspace.assert_called_once_with()
         app.navigation.refresh.assert_called_once_with()
         # A rail resize before the next draw must reflow again under the cover.
@@ -150,23 +152,60 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         cover.before_draw()
         self.assertTrue(cover.future.result())
 
-    async def test_persistent_toga_layout_request_does_not_strand_a_measured_workspace(self):
+    async def test_android_cover_uses_rendered_viewport_when_decorative_root_stays_pending(self):
         root, content = Mock(), Mock()
-        for native in (root, content):
-            native.getWidth.return_value = 1079
-            native.getHeight.return_value = 2071
-            native.isLayoutRequested.return_value = True
+        root.getWidth.return_value, root.getHeight.return_value = 1079, 2218
+        content.getWidth.return_value, content.getHeight.return_value = 1079, 2071
+        root.isLayoutRequested.return_value = True
+        content.isLayoutRequested.return_value = False
         app = SimpleNamespace(navigation=SimpleNamespace(
             _impl=SimpleNamespace(native=root, native_content=content), refresh=Mock()),
             resize_workspace=Mock())
         cover = object.__new__(AndroidStartupCover)
         cover.app, cover.parent, cover.geometry = app, Mock(), None
         cover.future = asyncio.get_running_loop().create_future()
+        # Exact hosted failure geometry: a stable rendered viewport must first
+        # receive reflow, then a subsequent stable frame, before reveal.
         cover.before_draw()
         self.assertFalse(cover.future.done())
+        app.resize_workspace.assert_called_once_with()
+        app.navigation.refresh.assert_called_once_with()
         cover.before_draw()
         self.assertTrue(cover.future.result())
-        app.resize_workspace.assert_called_once_with()
+        root.isLayoutRequested.assert_not_called()
+
+    async def test_android_pending_content_stays_covered_and_cancellation_restores_accessibility(self):
+        from mobile.startup import StartupScreen
+        root, content, parent = Mock(), Mock(), Mock()
+        root.getWidth.return_value, root.getHeight.return_value = 1079, 2218
+        content.getWidth.return_value, content.getHeight.return_value = 1079, 2071
+        root.isLayoutRequested.return_value = True
+        content.isLayoutRequested.return_value = True
+        app = SimpleNamespace(navigation=SimpleNamespace(
+            _impl=SimpleNamespace(native=root, native_content=content), refresh=Mock()),
+            resize_workspace=Mock())
+        cover = object.__new__(AndroidStartupCover)
+        cover.app, cover.root, cover.parent, cover.geometry = app, root, parent, None
+        cover.future = asyncio.get_running_loop().create_future()
+        cover.observer, cover.listener, cover.image = None, Mock(), Mock()
+        cover.accessibility, cover.bitmap = 1, object()
+        screen = object.__new__(StartupScreen)
+        screen.cover = cover
+        waiting = asyncio.create_task(screen.reveal_workspace(app))
+        await asyncio.sleep(0)
+        for _ in range(128):
+            cover.before_draw()
+        self.assertFalse(cover.future.done())
+        self.assertFalse(waiting.done())
+        app.resize_workspace.assert_not_called()
+        waiting.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await waiting
+        self.assertTrue(cover.future.cancelled())
+        self.assertIsNone(screen.cover)
+        root.setImportantForAccessibility.assert_called_once_with(1)
+        parent.removeView.assert_called_once_with(cover.image)
+        cover.observer.removeOnPreDrawListener.assert_called_once_with(cover.listener)
 
     async def test_startup_stays_cancellable_until_workspace_is_revealed(self):
         ready = asyncio.Event()
