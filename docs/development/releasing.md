@@ -64,9 +64,14 @@ This is optional; users and maintainers do not need to generate ZIPs locally.
 From a checkout with initialized submodules, run:
 
 ```sh
-python .github/scripts/package_release.py --output /tmp/logistics-release/release.zip
+python -m logistics_build.build_retention --scratch python /absolute/path/to/logistics/.github/scripts/package_release.py --root /absolute/path/to/logistics --output "{workspace}/release.zip"
 python -m unittest discover -s .github/scripts -p 'test_*.py' -v
 ```
+
+Replace `/absolute/path/to/logistics` with this checkout's absolute path. The
+scratch output is removed on exit; save any needed report or ZIP to ignored
+`test-results/` before leaving a Python `scratch()` context when inspecting it.
+See [scratch and evidence policy](validation-artifacts.md).
 
 A local dry run reads tracked working-tree files, so it may contain your unstaged
 edits. New untracked application files are omitted. CI uses the clean tagged
