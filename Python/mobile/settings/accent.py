@@ -13,7 +13,8 @@ class AccentControls(toga.Box):
     def __init__(self, app):
         super().__init__(style=Pack(direction=COLUMN, margin_bottom=20))
         self._settings_managed_content = True
-        self.app = app
+        # Toga clears Widget.app when a cached category is detached.
+        self._settings_app = app
         self._dragging = False
         self.add(SettingsLabel('Accent color', style=Pack(font_weight='bold', margin_bottom=12)))
         self.hue_label = SettingsLabel('Hue')
@@ -48,7 +49,7 @@ class AccentControls(toga.Box):
         light, dark = accent_colors(self.hue.value, self.saturation.value)
         # The filled tracks and thumbs preview the exact same opaque accent
         # as app controls, even before the saved app color changes.
-        backend = type(self.app._impl).__module__
+        backend = type(self._settings_app._impl).__module__
         for slider in (self.hue, self.saturation):
             slider._accent_preview = (light, dark)
             if self._dragging and backend.startswith('toga_android.'):
@@ -89,17 +90,17 @@ class AccentControls(toga.Box):
     def save(self, widget=None, **kwargs):
         self._dragging = False
         try:
-            self.app.preferences.save(accent_hue=str(self.hue.value),
+            self._settings_app.preferences.save(accent_hue=str(self.hue.value),
                                       accent_saturation=str(self.saturation.value))
         except (OSError, ValueError) as error:
-            self.set_values(float(self.app.preferences.values['accent_hue']),
-                            float(self.app.preferences.values['accent_saturation']))
-            self.app.settings_status.text = str(error)
+            self.set_values(float(self._settings_app.preferences.values['accent_hue']),
+                            float(self._settings_app.preferences.values['accent_saturation']))
+            self._settings_app.settings_status.text = str(error)
             return
         set_accent(self.hue.value, self.saturation.value)
-        refresh_appearance(self.app)
+        refresh_appearance(self._settings_app)
         self.preview_color()
-        self.app.settings_status.text = ''
+        self._settings_app.settings_status.text = ''
 
     def set_values(self, hue, saturation):
         # Programmatic changes must not preview half of a restored pair.
