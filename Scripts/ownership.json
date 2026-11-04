@@ -390,7 +390,10 @@
       "guide": "docs/development/ui-architecture.md",
       "tests": {
         "desktop": [
-          "test_main_window.py",
+          "test_main_window_navigation.py",
+          "test_document_hosting.py",
+          "test_notes_library_hosting.py",
+          "test_reader_host_integration.py",
           "test_document_workspace.py",
           "test_folder_controller.py",
           "test_folder_sources_ui.py"
@@ -546,8 +549,7 @@
         "desktop": [
           "test_notes_library*.py",
           "test_markdown_library_modes.py",
-          "test_text_editor_dataview.py",
-          "test_main_window.py"
+          "test_text_editor_dataview.py"
         ],
         "mobile": [
           "test_notes_library*.py",
