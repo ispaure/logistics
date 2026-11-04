@@ -147,6 +147,33 @@ class SettingsUITests(unittest.TestCase):
             show_licenses(app)
         collect.assert_called_once_with(platform='ios', native_inventory=None)
 
+    def test_license_list_limits_native_controls_and_searches_all_components(self):
+        import toga
+        from mobile.settings.licenses import show_licenses
+        from services.open_source import Notice
+        app = self.make_app()
+        def descendants(widget):
+            yield widget
+            if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
+                yield from descendants(widget.content)
+            for child in widget.children:
+                yield from descendants(child)
+        notices = [Notice(f'Component {index:03}', '', '', '', 'Offline notice') for index in range(100)]
+        with patch('mobile.settings.licenses.installed_notices', return_value=notices):
+            view = show_licenses(app)
+        def buttons():
+            return [widget for widget in descendants(view) if isinstance(widget, toga.Button)]
+        self.assertEqual(len(buttons()), 21)
+        self.assertEqual(buttons()[19].text, 'Component 019')
+        buttons()[-1].on_press()
+        self.assertEqual(len(buttons()), 41)
+        search = next(widget for widget in descendants(view) if isinstance(widget, toga.TextInput))
+        search.value = 'Component 099'
+        app.loop.run_until_complete(asyncio.sleep(.35))
+        self.assertEqual([widget.text for widget in buttons()], ['Component 099'])
+        buttons()[0].on_press()
+        self.assertEqual(app.routes.screens['settings'][-1][0], 'open-source-notice')
+
     def test_about_license_navigation_search_and_native_back(self):
         import toga
         from services.open_source import Notice
