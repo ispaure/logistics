@@ -11,6 +11,14 @@ from features.lm.mobile.presentation import transcript_document
 
 
 class AppearanceTests(unittest.TestCase):
+    def test_confirmation_commands_use_accent_and_delete_keeps_danger(self):
+        import toga
+        from mobile.appearance import action_button
+        primary = action_button(toga.Button('Move here'))
+        delete = action_button(toga.Button('Delete'), destructive=True)
+        self.assertEqual(primary._impl._surface_roles[1], 'accent')
+        self.assertEqual(delete._impl._surface_roles[1], 'destructive')
+
     def test_slider_preview_supplies_the_same_opaque_accent_on_both_platforms(self):
         import toga
         from unittest.mock import patch
