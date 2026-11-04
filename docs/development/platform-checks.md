@@ -110,6 +110,8 @@ and nonzero WebContent process identifiers. A controller restart cannot admit a
 second recovery for that simulator and prepared source. Both attempts and the
 admission record remain under the job's ignored logs and uploaded diagnostics.
 Local acceptance and ordinary application launches do not enable this recovery.
+The hosted job's outer budget includes the possible additional 30-minute native
+attempt; individual render and native-attempt deadlines remain unchanged.
 
 The suite runner reports the active test and completed count every 60 seconds.
 Native crashes also produce Python tracebacks. The outer platform runner allows

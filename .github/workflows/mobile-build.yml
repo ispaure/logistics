@@ -172,7 +172,9 @@ jobs:
     needs: [environment, ios-build]
     if: github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both'
     runs-on: ${{ needs.environment.outputs.ios_runner }}
-    timeout-minutes: 65
+    # Preserve the existing setup/diagnostics budget plus one complete
+    # 30-minute native attempt for evidenced Swift-worker startup recovery.
+    timeout-minutes: 95
     strategy:
       fail-fast: false
       matrix:
