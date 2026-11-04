@@ -30,6 +30,17 @@ helper performs these steps for you. Generated folders are ignored by Git.
 Keep release archives and their records if you need release history; they are
 not included in a source checkout.
 
+## Checkout and device ownership
+
+Use each checkout's own `.venv`, `mobile_build/.venv` and manager-owned build
+workspaces. Install the external manager in that checkout's tooling environments;
+do not share mutable environments or build outputs between checkouts. See
+[adapter ownership](build-deployment-audit.md) and [storage policy](build-manager.md).
+When `git config --get logistics.releaseWorktree` reserves a checkout, other
+work uses `logistics.developmentWorktree` or an explicitly isolated checkout.
+Physical installation belongs to the release coordinator while that reservation
+is active. Diagnostic commands below do not override this ownership.
+
 ## Set up a Mac
 
 1. Install Git, Python **3.12**, and Go **1.26.9**. This is the current repository
