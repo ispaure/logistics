@@ -322,8 +322,9 @@ class NotebookWorkspace(qt.QWidget):
         self.busy = True
         def work(report, cancelled):
             from commonUtils.runtime.operations import check_cancelled
+            from ..remarkable_export import export_rmdoc
             check_cancelled(cancelled)
-            data = book.to_bytes()
+            data = export_rmdoc(book, cancelled=cancelled)
             export_local_document(path, data, max_bytes=MAX_ARCHIVE,
                                   validate=Notebook.read, cancelled=cancelled)
         self.operation.start(work, message='Exporting notebook…')

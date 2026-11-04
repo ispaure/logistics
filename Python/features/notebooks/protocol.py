@@ -40,7 +40,7 @@ def validate_action(action):
                 or not 1 <= len(path) <= 100_000
                 or any(not isinstance(p, list) or len(p) != 3
                        or any(type(v) not in (int, float) or not math.isfinite(v) for v in p)
-                       or not 0 <= p[0] <= 1404 or not 0 <= p[1] <= 1872 or not 0 <= p[2] <= 1 for p in path)):
+                       or not 0 <= p[0] <= 1404 or not 0 <= p[1] <= 1_000_000 or not 0 <= p[2] <= 1 for p in path)):
             raise ValueError('Invalid eraser path or size.')
     elif op in {'erase', 'transform'}:
         ids = action['ids']

@@ -159,6 +159,16 @@ grids, dots, restaurant reviews, meeting notes and daily plans. Edits use the sa
 Save, recovery and Undo/Redo behavior as desktop. New pages inherit the template.
 PDF-backed documents retain their embedded PDF background.
 
+Use **Export .rmdoc** for a copy to import into reMarkable. Custom layouts and
+hidden backgrounds are carried as fixed vector PDF pages, beneath editable
+native ink. **Save / Save As** keeps the original Logistics template settings.
+The exported copy's backgrounds cannot be changed with reMarkable's template
+picker; keep the original notebook for later template changes.
+
+Structured forms export with distinct Pro and Move PDF page sizes, extending
+the page box when necessary to retain handwriting beyond the form’s edges.
+Repeating paper keeps a shared canvas.
+
 Phones start in **Paper Pro Move** paper view (large tablets start in Pro): the same ink coordinates, centered
 and aligned to the top, with the visible area expanded for writing beyond the
 Move edges. Choose **Paper Pro** in Layers to reveal and write in the surrounding

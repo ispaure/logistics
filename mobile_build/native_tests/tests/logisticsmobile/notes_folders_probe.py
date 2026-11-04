@@ -85,7 +85,8 @@ class NotesFoldersProbe(DocumentWorkspaceProbe):
                 with patch.object(owner.library, 'folders', measured('list_seconds', owner.library.folders)), \
                      patch.object(owner.library, 'folder_pages', measured('landing_seconds', owner.library.folder_pages)), \
                      patch.object(owner, 'tree_updates', tree_updates), patch.object(owner.rows, 'add', publish), \
-                     patch.object(painter, 'paint', paint_surface):
+                     patch.object(painter, 'paint', paint_surface), \
+                     patch.object(provider, 'open', side_effect=AssertionError('Folder expansion read document content')):
                     start = perf_counter()
                     profile.enable()
                     await owner.toggle_folder('Library/Folder')
@@ -97,6 +98,7 @@ class NotesFoldersProbe(DocumentWorkspaceProbe):
                                            own=value[2], cumulative=value[3])
                     for key, value in sorted(stats.stats.items(), key=lambda item: -item[1][3])[:25]]
                 assert len(owner.rows.children) == 45, len(owner.rows.children)
+                assert timings['publications'] == [45], timings['publications']
                 report['folders'].append(timings)
                 print('NOTES_FOLDER_TIMING=' + json.dumps(timings), flush=True)
             owner.dispose()
