@@ -230,7 +230,9 @@ class EditorPickerTests(unittest.TestCase):
             picker_form=SimpleNamespace(content=view, _impl=SimpleNamespace(native=scroll)),
             save_as_name=SimpleNamespace(_impl=SimpleNamespace(native=name)),
             new_folder_name=SimpleNamespace(_impl=SimpleNamespace(native=folder)),
-            save_as_view=view, app=SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window))))
+            save_as_view=view, app=SimpleNamespace(
+                main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)),
+                native_host=SimpleNamespace(adapter=SimpleNamespace(keyboard_visible=False, keyboard_frame=None))))
         reveal_picker_input(picker)
         self.assertEqual(events, ['layout', 'content', 'convert', 'reveal'])
         folder.convertRect.assert_called_once_with(folder.bounds, toView=scroll)
