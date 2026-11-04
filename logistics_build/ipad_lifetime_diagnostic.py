@@ -328,6 +328,15 @@ def finish(cache, output, client, device, name, pid, started, receipt, allocator
         print(json.dumps(summary(receipt)), flush=True)
 
 
+
+def verify_source_run(run_info):
+    if run_info.get('head_sha') != BASE_SOURCE:
+        raise ValueError('Artifact run is not the original 43a source.')
+    # Reusable mobile-build jobs publish artifacts on their caller's run.
+    if run_info.get('path') not in {'.github/workflows/mobile-build.yml', '.github/workflows/release.yml'}:
+        raise ValueError('Original artifact run has an unreviewed workflow owner.')
+
+
 def run(args):
     from build_manager.apple_simulators import AppleSimulators
     from build_manager.native_commands import command, interrupt
@@ -341,8 +350,7 @@ def run(args):
     client = AppleSimulators()
     github = GitHub('ispaure/logistics', os.environ['GITHUB_TOKEN'])
     run_info = github.request('GET', github.base + '/actions/runs/' + str(args.source_run))
-    if run_info.get('head_sha') != BASE_SOURCE or run_info.get('path') != '.github/workflows/mobile-build.yml':
-        raise ValueError('Artifact run is not the original 43a source.')
+    verify_source_run(run_info)
     if subprocess.check_output(['git', '-C', str(baseline), 'rev-parse', 'HEAD'], text=True).strip() != BASE_SOURCE:
         raise ValueError('Pristine source baseline must be exactly 43a.')
     receipt = dict(schema=1, diagnostic_only=True, status='preparing', source_run=args.source_run,
