@@ -2,12 +2,12 @@
 let selectionGesture = null, selectionPage = state.page_id ?? state.index;
 const selectionActions = document.createElement('div');
 selectionActions.id = 'selectionActions';
-selectionActions.style.cssText = 'position:fixed;z-index:50;display:flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:8px;background:var(--surface,white);color:var(--text,black)';
+selectionActions.style.cssText = 'position:fixed;z-index:1;display:flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:8px;background:var(--surface,white);color:var(--text,black)';
 selectionActions.innerHTML = '<button id="copyStrokes" type="button">Copy</button><button id="cutStrokes" type="button">Cut</button><button id="deleteStrokes" type="button">Delete</button>';
 document.body.append(selectionActions);
 const pasteStrokes = document.createElement('button');
 pasteStrokes.id = 'pasteStrokes'; pasteStrokes.type = 'button'; pasteStrokes.textContent = 'Paste strokes';
-pasteStrokes.style.cssText='position:fixed;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:40;min-height:44px';
+pasteStrokes.style.cssText='position:fixed;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:1;min-height:44px';
 document.body.append(pasteStrokes);
 function selectionLocked() { return busy || state.warning || state.read_only || state.password_required }
 function selectionVisible(s) { return state.layers.some(row => row[0] === s.layer && row[2]) }
@@ -117,12 +117,21 @@ function selectionRender() {
   const b=mode==='select'?selectionBounds():null;
   // Inline display wins over the hidden attribute in some WebViews.
   selectionActions.style.display=b&&!state.password_required?'flex':'none';
-  pasteStrokes.hidden=mode!=='select';pasteStrokes.disabled=!state.stroke_clipboard||!!selectionLocked();
+  pasteStrokes.hidden=mode!=='select'||!state.stroke_clipboard;pasteStrokes.disabled=!state.stroke_clipboard||!!selectionLocked();
+  const bars=[$('zoomControls'),document.querySelector('footer')].filter(el=>el&&!el.hidden&&el.getClientRects?.().length);
+  const floor=Math.min(innerHeight,...bars.map(el=>el.getBoundingClientRect().top));
+  pasteStrokes.style.bottom=Math.max(12,innerHeight-floor+12)+'px';
   for(const id of ['copyStrokes','cutStrokes','deleteStrokes']) $(id).disabled=!!selectionLocked()||active!==null;
   if(!b)return;
   const r=canvas.getBoundingClientRect(),u=selectionUnit();
-  selectionActions.style.left=Math.max(4,Math.min(innerWidth-220,r.left+(b[0]+b[2])/2/u-100))+'px';
-  selectionActions.style.top=Math.max(4,Math.min(innerHeight-52,r.top+b[3]/u+12))+'px'
+  const panel=selectionActions.getBoundingClientRect();
+  selectionActions.style.left=Math.max(4,Math.min(innerWidth-panel.width-4,r.left+(b[0]+b[2])/2/u-panel.width/2))+'px';
+  selectionActions.style.top=Math.max(4,Math.min(floor-panel.height-8,r.top+b[3]/u+12))+'px'
+  if(!pasteStrokes.hidden) {
+    const a=selectionActions.getBoundingClientRect(),p=pasteStrokes.getBoundingClientRect();
+    if(a.left<p.right&&p.left<a.right&&a.top<p.bottom&&p.top<a.bottom)
+      pasteStrokes.style.bottom=Math.max(12,innerHeight-a.top+8)+'px'
+  }
 }
 function paintSelection() {
   selectionRender();if(mode!=='select')return;
@@ -221,6 +230,7 @@ $('viewport').addEventListener('scroll',selectionRender,{passive:true});
 window.addEventListener('resize',selectionRender);
 for(const id of ['select','erase','tool','capture']) $(id).addEventListener(id==='tool'?'change':'click',selectionRender);
 document.addEventListener('keydown',e=>{
+  if(document.querySelector('dialog[open],#mobileSheet:not([hidden])'))return;
   if(mode==='select'&&selectionGesture&&e.key==='Escape') {
     e.preventDefault();e.stopImmediatePropagation();selectionFinish({pointerId:active,nativePen:true},true);return
   }
