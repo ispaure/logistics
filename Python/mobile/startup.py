@@ -249,7 +249,11 @@ class AndroidStartupCover:
         root = self.app.navigation._impl.native
         content = self.app.navigation._impl.native_content
         geometry = (root.getWidth(), root.getHeight(), content.getWidth(), content.getHeight())
-        if min(geometry) <= 0 or root.isLayoutRequested() or content.isLayoutRequested():
+        # OnPreDraw runs after native measurement. Toga can request another
+        # layout while applying those measurements (including pixel rounding),
+        # so isLayoutRequested() may remain true on every otherwise stable draw.
+        # Compare actual bounds across draws instead of waiting for that flag.
+        if min(geometry) <= 0:
             self.parent.invalidate()
             return
         if geometry != self.geometry:
