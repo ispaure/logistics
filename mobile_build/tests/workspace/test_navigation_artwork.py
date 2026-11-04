@@ -13,20 +13,60 @@ from mobile.navigation import DESTINATIONS, DESTINATION_ICON_NAMES, install_dest
 
 
 class NavigationArtworkTests(unittest.TestCase):
+    @staticmethod
+    def navigation_bar():
+        items = []
+        for _ in DESTINATIONS:
+            item = Mock()
+            item.isEnabled.return_value = item.isVisible.return_value = True
+            item.setEnabled.side_effect = lambda value, item=item: setattr(item.isEnabled, 'return_value', value)
+            item.setVisible.side_effect = lambda value, item=item: setattr(item.isVisible, 'return_value', value)
+            items.append(item)
+        return NS(getMenu=lambda: NS(getItem=lambda index: items[index])), items
+
+    def test_unchanged_visibility_does_not_invalidate_native_layout(self):
+        from mobile.navigation import sync_android_destination_visibility
+        bottom, items = self.navigation_bar()
+        host = NS(destinations=DESTINATIONS, adapter=NS(bottom=bottom, rail=None),
+                  root=NS(content=[NS(enabled=True) for key in DESTINATIONS]))
+        for _ in range(3):
+            sync_android_destination_visibility(host)
+        for item in items:
+            item.setEnabled.assert_not_called()
+            item.setVisible.assert_not_called()
+
     def test_feature_visibility_applies_to_both_android_bars_without_removing_items(self):
         from mobile.navigation import sync_android_destination_visibility
-        bottom, rail = Mock(), Mock()
-        host = NS(adapter=NS(bottom=bottom, rail=rail),
+        bottom, bottom_items = self.navigation_bar()
+        rail, rail_items = self.navigation_bar()
+        host = NS(destinations=DESTINATIONS, adapter=NS(bottom=bottom, rail=rail),
                   root=NS(content=[NS(enabled=key != 'chat') for key in DESTINATIONS]))
         sync_android_destination_visibility(host)
-        for bar in (bottom, rail):
-            self.assertEqual(bar.getMenu().getItem.call_count, 5)
-            self.assertEqual([call.args[0] for call in bar.getMenu().getItem().setVisible.call_args_list],
-                             [True, True, True, False, True])
+        sync_android_destination_visibility(host)
+        for items in (bottom_items, rail_items):
+            for index, item in enumerate(items):
+                if index == 3:
+                    item.setEnabled.assert_called_once_with(False)
+                    item.setVisible.assert_called_once_with(False)
+                else:
+                    item.setEnabled.assert_not_called()
+                    item.setVisible.assert_not_called()
         host.root.content[3].enabled = True
         sync_android_destination_visibility(host)
-        for bar in (bottom, rail):
-            bar.getMenu().getItem().setVisible.assert_called_with(True)
+        for items in (bottom_items, rail_items):
+            self.assertTrue(items[3].isEnabled())
+            self.assertTrue(items[3].isVisible())
+
+    def test_new_rail_keeps_disabled_chat_even_if_its_menu_starts_enabled(self):
+        from mobile.navigation import sync_android_destination_visibility
+        bottom, bottom_items = self.navigation_bar()
+        rail, rail_items = self.navigation_bar()
+        host = NS(destinations=DESTINATIONS, adapter=NS(bottom=bottom, rail=rail),
+                  root=NS(content=[NS(enabled=True) for key in DESTINATIONS]),
+                  _feature_destinations={'chat': False})
+        sync_android_destination_visibility(host)
+        self.assertFalse(bottom_items[3].isVisible())
+        self.assertFalse(rail_items[3].isVisible())
 
     def test_all_destinations_use_desktop_artwork_with_independent_tint_state(self):
         bottom, rail, resources = Mock(), Mock(), Mock()
