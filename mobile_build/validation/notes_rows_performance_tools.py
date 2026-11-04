@@ -8,8 +8,10 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import statistics
 import subprocess
+import sys
 import time
 
 from build_manager.locking import workspace_lock
@@ -206,10 +208,30 @@ def main():
                 env['PATH'] = str(root / 'mobile_build/.tools/go/bin') + os.pathsep + env['PATH']
                 os.environ.update(env)
                 runner.SOURCE = source
-                runner.android()
                 project = workspace / 'build/logisticsmobile/android/gradle'
                 shutil.copytree(root / 'mobile_build/build/logisticsmobile/android/gradle', project,
                                 ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
+                # Configure the copied shell only after it exists. Import build
+                # helpers from the frozen snapshot so their ROOT/default cwd
+                # cannot accidentally read concurrent working-tree edits.
+                build_env = dict(env, PYTHONPATH=os.pathsep.join((str(source / 'Python'), str(source))))
+                with (output / 'android-native-build.log').open('w') as stream:
+                    build = subprocess.Popen([sys.executable, '-c',
+                        'from mobile_build.cloud_build import android; android()'],
+                        cwd=source, env=build_env, stdout=stream, stderr=subprocess.STDOUT,
+                        start_new_session=True)
+                    try:
+                        code = build.wait(timeout=600)
+                    except subprocess.TimeoutExpired:
+                        os.killpg(build.pid, signal.SIGTERM)
+                        try:
+                            build.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            os.killpg(build.pid, signal.SIGKILL)
+                            build.wait()
+                        raise TimeoutError('Frozen Android native preparation exceeded 600 seconds') from None
+                    if code:
+                        raise RuntimeError('Frozen Android native preparation failed; see android-native-build.log')
                 with (project / 'app/build.gradle').open('a') as stream:
                     stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(
                         source / 'mobile_build/native_tests/android/notes_rows')) + ')\n')
