@@ -7,7 +7,7 @@ from unittest.mock import patch
 from commonUtils.testing.stages import TestStage
 from mobile_build.validation import android_perf_load as load
 from mobile_build.validation.notes_rows_performance_tools import compare, LoadObserver
-from mobile_build.validation.document_storage_tools import run_android, BUNDLE
+from mobile_build.validation.document_storage_tools import run_android, exercise_android_app, BUNDLE
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -65,9 +65,10 @@ class ControlledLoadTests(unittest.TestCase):
                 self.assertIsNone(observer.read('missing.json'))
 
     def test_probe_deadline_rejects_invalid_values_before_build_or_device_creation(self):
-        for value in (0, -1, 3601, True, '600'):
-            with self.assertRaises(ValueError):
-                run_android(None, None, None, None, None, bundle=BUNDLE, probe_timeout=value)
+        for function in (run_android, exercise_android_app):
+            for value in (0, -1, 3601, True, '600'):
+                with self.assertRaises(ValueError):
+                    function(None, None, None, None, None, bundle=BUNDLE, probe_timeout=value)
 
     def test_latency_targets_and_paired_sample_counts_are_enforced(self):
         rows = [dict(storage=s, cold=c, variant=v, first_draw_seconds=2 if v == 'legacy' else .1)
