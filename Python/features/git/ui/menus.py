@@ -120,7 +120,8 @@ class RepositoryMenus(qt.QObject):
 
     def update(self, busy=None):
         view = self.view
-        if not isValid(view) or view.closing or not isValid(view.changes):
+        if (not isValid(view) or view.closing or not isValid(view.changes)
+                or any(not isValid(menu) for menu in self.menus.values())):
             return
         busy = view.busy if busy is None else busy
         ready = view.snapshot is not None and not busy and not view.closing
