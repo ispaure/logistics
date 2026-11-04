@@ -79,3 +79,14 @@ Bindings stay in memory. A mount inherited after application restart, or a mount
 whose credentials changed during startup, requires explicit unmounting before it
 can be opened again. Unknown mounts are not automatically unmounted or browsed.
 Tests simulate these policies; native driver validation remains outstanding.
+
+## Host exposure and audit scope
+
+`ui_contributions._get_config_path` restricts the desktop action to rclone entries
+with a credential context and excludes `.session` contexts. Internal binding tests
+for session generations do not imply that session-only mounting is offered by the
+GUI. There is no mobile FUSE adapter; see [mobile scope](../user_mobile/user_mobile.md).
+
+The November 4 documentation audit inspected `actions.py`, `ui_contributions.py`,
+`bindings.py` and the integration test cases without starting Qt, drivers or
+mount processes. It adds no new platform acceptance result.
