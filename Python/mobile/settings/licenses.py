@@ -13,7 +13,8 @@ from .forms import SettingsLabel, page_button, fit_section, settings_presentatio
 def show_licenses(app, widget=None, **kwargs):
     inventory = None
     unavailable = None
-    if get_current_platform() == 'android':
+    platform = get_current_platform().lower()
+    if platform == 'android':
         try:
             from java import jclass
             scanner = jclass('java.util.Scanner')(
@@ -28,7 +29,7 @@ def show_licenses(app, widget=None, **kwargs):
             inventory = None
             unavailable = Notice('Android dependency inventory unavailable', '', '', '',
                 'This build does not include its resolved native dependency notice inventory.')
-    notices = installed_notices(native_inventory=inventory)
+    notices = installed_notices(platform=platform, native_inventory=inventory)
     if unavailable is not None:
         notices.insert(0, unavailable)
     rows = toga.Box(style=Pack(direction=COLUMN))
