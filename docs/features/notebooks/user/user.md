@@ -138,7 +138,7 @@ remain required before calling this fully tablet-verified. See the
 Open **Manage layers** in the desktop toolbar to choose the current page's
 template. Choose Blank, lined paper (large: 21 rules; small: 41), the native
 25-rule medium, or Logistics' more distinct 31-rule medium. Grid, Dots,
-Restaurant review, Meeting notes and Daily planner are also available.
+Restaurant review, Meeting notes, Daily planner, Checklist, Cornell notes and Weekly planner are also available.
 **Template format** selects Paper Pro or Paper Pro Move for Logistics layouts.
 **Show template** hides only the background in Logistics; it leaves writing intact.
 These are per-page edits with Undo/Redo, Save, recovery and page-copy support.
@@ -156,7 +156,7 @@ from the saved template format; changing it does not edit the notebook.
 settings and vector artwork. For reMarkable, use **Export Copy…** (mobile:
 **Export .rmdoc**). The exported copy embeds custom backgrounds as vector PDF
 pages inside the `.rmdoc`; handwriting stays separate as editable native ink.
-Restaurant review, Meeting notes and Daily planner use distinct Pro and Move
+Restaurant review, Meeting notes, Daily planner, Checklist, Cornell notes and Weekly planner use distinct Pro and Move
 PDF page sizes. Repeating paper keeps a shared canvas. The export extends a
 form’s page box if needed to retain handwriting beyond its nominal edges.
 Hidden backgrounds also stay hidden in that copy. Stock-only lined notebooks
@@ -186,3 +186,7 @@ you work in that editor.
 ## Paper Pro preview
 
 A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Toggle it in **Settings → Notebooks → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
+
+Logistics draws its own template previews and custom layouts. Native lined options
+are labeled reMarkable compatible; Logistics is not affiliated with or endorsed
+by reMarkable. Native exports reference the tablet’s installed lined backgrounds.
