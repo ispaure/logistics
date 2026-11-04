@@ -187,7 +187,9 @@ is available offline; the About heading keeps its normal appearance.
 
 Open **Settings → About → Open-source licenses** to search component names or
 licenses or notice text and read the bundled notices offline. Tap a component for its license
-text and source address; use Back to return to the list. Python dependencies and
+text and source address; use Back to return to the list. The list initially shows
+20 components; **Show more components** reveals the next 20. Search includes
+the full installed inventory. Python dependencies and
 native Go notices come from the installed build, and native entries are filtered
 for Android or iOS. Android includes the resolved native dependency inventory and
 bundled Google publisher terms. Entries with missing publisher notices are identified.
