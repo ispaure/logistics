@@ -135,6 +135,10 @@ class RemoteDownloadPickerTests(unittest.TestCase):
         self.assertEqual(picker.editor_storage_roots['LocalCrypt: empty unlocked'],'Empty')
         self.assertEqual(picker.picker_primary.text,'Download here')
         self.assertIs(picker.operation.destination_action,request)
+        shared = picker.editor_storage_roots['Shared files']
+        self.assertFalse(shared.include_collections)
+        self.assertNotIn('Local', [row['name'] for row in shared.list()])
+        self.assertNotIn('Received Files', [row['name'] for row in shared.list()])
         from services.documents.locations import collection_path
         app.loop.run_until_complete(picker.browser_editor_location(('Shared files', collection_path(app.private_root).name)))
         self.assertEqual(picker.save_as_storage.value,'Local files')
