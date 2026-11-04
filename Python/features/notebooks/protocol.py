@@ -8,6 +8,7 @@ import json
 import math
 
 MODEL_COMMANDS = frozenset({
+    'paste-image', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
     'page', 'stroke', 'add-layer', 'layer-visible', 'transform', 'erase',
     'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo', 'template',
 })
@@ -24,6 +25,10 @@ def validate_action(action):
     if op not in MODEL_COMMANDS | HOST_COMMANDS:
         raise ValueError('Unknown notebook command.')
     required = {
+        'paste-image': {'src': str, 'corners': list},
+        'image-transform': {'id': str, 'corners': list}, 'delete-image': {'id': str},
+        'arrange-image': {'id': str, 'direction': str},
+        'unlock-pdf': {'password': str},
         'template': {'name': str, 'format': str, 'visible': bool},
         'page': {'index': int}, 'move-page': {'index': int},
         'page-previews': {'start': int},
@@ -33,6 +38,8 @@ def validate_action(action):
     }.get(op, {})
     if any(type(action.get(key)) is not kind for key, kind in required.items()):
         raise ValueError('Invalid ' + op + ' command fields.')
+    if op == 'unlock-pdf' and len(action['password']) > 1024:
+        raise ValueError('Password is too long.')
     if op == 'erase' and 'points' in action:
         from .eraser import SIZES
         path = action['points']
@@ -88,7 +95,7 @@ def ink_patch_script(editor, document, previous):
     """Send changed ink and ordering after erasing, without resending the page."""
     strokes = editor.notebook.page(editor.index).strokes
     old = {s.id: s for s in previous}
-    patch = dict(order=[s.id for s in strokes],
+    patch = dict(order=[s.id for s in strokes], scene_order=editor.notebook.page(editor.index).order,
                  strokes=[s.payload() for s in strokes if old.get(s.id) is not s],
                  undo=bool(editor.undo), redo=bool(editor.redo), save_status=save_status(document))
     return 'window.notebookInkUpdate(' + json.dumps(patch, allow_nan=False) + ')'

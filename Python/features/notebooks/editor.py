@@ -14,6 +14,7 @@ class Editor:
         self.undo = []
         self.redo = []
         self._background = (None, None)
+        self._unlocked_pdf = None
         self._pdf_geometry = (None, None)
 
     def background(self):
@@ -23,7 +24,9 @@ class Editor:
         index = book.pages[self.index].record.get('redir', {}).get('value', -1)
         if index < 0:
             return None
-        data = book.members[book.id + '.pdf']
+        data = self.pdf_data()
+        if data is None:
+            return None
         key = (data, index)
         if self._background[0] != key:
             import base64
@@ -44,7 +47,9 @@ class Editor:
         index = book.pages[self.index].record.get('redir', {}).get('value', -1)
         if index < 0:
             return None
-        data = book.members[book.id + '.pdf']
+        data = self.pdf_data()
+        if data is None:
+            return None
         key = (data, index)
         if self._pdf_geometry[0] != key:
             from io import BytesIO
@@ -65,6 +70,31 @@ class Editor:
             self._pdf_geometry = (key, dict(x=(WIDTH - width) / 2, y=0, width=width, height=height))
         return self._pdf_geometry[1]
 
+    def pdf_data(self, password=None):
+        """Decrypt solely for rendering; retain encrypted source bytes on Save."""
+        from io import BytesIO
+        from pypdf import PdfReader, PdfWriter
+        if self.notebook.content.get('fileType') != 'pdf':
+            return None
+        data = self.notebook.members[self.notebook.id + '.pdf']
+        if self._unlocked_pdf and self._unlocked_pdf[0] is data:
+            return self._unlocked_pdf[1]
+        from .pdf_crypto import enable_aes
+        enable_aes()
+        reader = PdfReader(BytesIO(data))
+        if not reader.is_encrypted:
+            self._unlocked_pdf = (data, data)
+            return data
+        if not reader.decrypt(password if password is not None else ''):
+            if password is not None:
+                raise ValueError('Incorrect PDF password. Try again.')
+            return None
+        writer = PdfWriter(clone_from=reader)
+        output = BytesIO()
+        writer.write(output)
+        self._unlocked_pdf = (data, output.getvalue())
+        return self._unlocked_pdf[1]
+
     def page_height(self):
         bounds = self.pdf_bounds()
         return max(HEIGHT, bounds['height']) if bounds else HEIGHT
@@ -78,6 +108,8 @@ class Editor:
             if item.ink is not None:
                 item.ink = copy(item.ink)
                 item.ink.strokes = list(item.ink.strokes)
+                item.ink.images = list(item.ink.images)
+                item.ink.image_resources = list(item.ink.image_resources)
             pages.append(item)
         return pages, dict(book.members), deepcopy(book.metadata), self.index
 
@@ -89,6 +121,9 @@ class Editor:
     def apply(self, action):
         op = validate_action(action)
         book = self.notebook
+        if op == 'unlock-pdf':
+            self.pdf_data(action['password'])
+            return
         if op == 'page':
             index = action['index']
             if type(index) is not int or not 0 <= index < len(book.pages):
@@ -113,6 +148,41 @@ class Editor:
             if op == 'stroke':
                 ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
                         action.get('width', 2), action.get('layer'), page_height=self.page_height())
+            elif op == 'paste-image':
+                from .images import paste
+                paste(book, self.index, action)
+            elif op == 'image-transform':
+                from .images import validate_corners
+                validate_corners(action['corners'])
+                if ink.warning:
+                    raise ValueError(ink.warning)
+                shown = {key for key, _, visible in ink.layers if visible}
+                if not any(p.id == action['id'] and p.layer in shown for p in ink.images):
+                    raise ValueError('Select a visible image.')
+                ink.images = [type(p)(p.id, p.layer, p.resource, deepcopy(action['corners']))
+                              if p.id == action['id'] else p for p in ink.images]
+            elif op == 'arrange-image':
+                if ink.warning:
+                    raise ValueError(ink.warning)
+                picture = next((p for p in ink.images if p.id == action['id']), None)
+                shown = {key for key, _, visible in ink.layers if visible}
+                if picture is None or picture.layer not in shown:
+                    raise ValueError('Select a visible image.')
+                members = {s.id for s in [*ink.strokes, *ink.images] if s.layer == picture.layer}
+                order = [key for key in ink.order if key in members]
+                order += [s.id for s in [*ink.strokes, *ink.images] if s.id in members and s.id not in order]
+                old = order.index(picture.id)
+                positions = {'front': len(order)-1, 'back': 0, 'forward': min(old+1, len(order)-1), 'backward': max(0, old-1)}
+                if action['direction'] not in positions:
+                    raise ValueError('Unknown image arrangement.')
+                order.insert(positions[action['direction']], order.pop(old))
+                other = [key for key in ink.order if key not in members]
+                ink.order = [*other, *order]
+                ink.ordering_dirty = True
+            elif op == 'delete-image':
+                if ink.warning:
+                    raise ValueError(ink.warning)
+                ink.images = [p for p in ink.images if p.id != action['id']]
             elif op == 'add-layer':
                 ink.add_layer(action['name'])
             elif op == 'layer-visible':
@@ -135,6 +205,7 @@ class Editor:
                             raise ValueError('Keep moved strokes inside the page.')
                         ink.strokes[index] = moved
             elif op == 'erase':
+                old_ids = {s.id for s in ink.strokes}
                 if ink.warning:
                     raise ValueError(ink.warning)
                 if 'points' in action:
@@ -145,6 +216,15 @@ class Editor:
                                         action['radius'], action.get('kind') == 'whole')
                 else:
                     ink.strokes = [s for s in ink.strokes if s.id not in action['ids']]
+                fragments, owner = {}, None
+                for stroke in ink.strokes:
+                    if stroke.id in old_ids:
+                        owner = stroke.id
+                    fragments.setdefault(owner, []).append(stroke.id)
+                ink.order = [part for key in ink.order for part in
+                             (fragments.get(key, []) if key in old_ids else [key])]
+                if ink.images:
+                    ink.ordering_dirty = True
             elif op == 'add-page':
                 from .templates import inherit
                 current = book.pages[self.index]
@@ -189,7 +269,10 @@ class Editor:
         template_available = available(self.notebook, page)
         template_description = ('This document has fixed PDF backgrounds. Notebook template changes are unavailable.'
             if pdf else description(page.template, artwork_available=template_available))
-        return dict(name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
+        from .images import image_payloads
+        locked = self.notebook.content.get('fileType') == 'pdf' and self.pdf_data() is None
+        return dict(password_required=locked, images=image_payloads(self.notebook, self.index),
+                    scene_order=ink.order, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,

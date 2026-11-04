@@ -36,6 +36,12 @@ def page_size(book, index):
             # Include hidden layers too: revealing one later must not clip ink.
             width = max(width, 2 * (abs(x - WIDTH / 2) + radius))
             height = max(height, y + radius)
+    for image in ink.images:
+        for x, y in image.corners:
+            if y < 0:
+                raise ValueError('Images above the page cannot be exported with a fixed background.')
+            width = max(width, 2 * abs(x - WIDTH / 2))
+            height = max(height, y)
     return width, height
 
 
