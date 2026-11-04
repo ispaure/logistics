@@ -1,6 +1,7 @@
 """Virtual tree projection preserves Notes actions and retires stale row sources."""
 import asyncio
 from dataclasses import replace
+from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -122,6 +123,26 @@ class RecycledNotesRowsTests(unittest.TestCase):
                 opened.assert_not_awaited()
                 await rows.activate(row)
                 opened.assert_awaited_once_with(row.path)
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_uikit_table_must_be_attached_and_visible_before_dispatch(self):
+        async def exercise():
+            owner = await self.library()
+            rows = owner.rows
+            parent = SimpleNamespace(superview=None, alpha=1, isHidden=Mock(return_value=False))
+            native = Mock(window=None, superview=parent, alpha=1, isHidden=Mock(return_value=False))
+            backend = type('DetailedList', (), {'__module__': 'toga_iOS.widgets.detailedlist'})
+            with patch.object(rows.native_list.factory, 'DetailedList', backend), \
+                    patch.object(rows.native_list._impl, 'native', native, create=True):
+                self.assertFalse(rows.active())
+                native.window = object()
+                self.assertTrue(rows.active())
+                native.isHidden.return_value = True
+                self.assertFalse(rows.active())
+                native.isHidden.return_value = False
+                parent.isHidden.return_value = True
+                self.assertFalse(rows.active())
             owner.dispose()
         self.run_async(exercise())
 
