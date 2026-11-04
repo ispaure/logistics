@@ -1,6 +1,6 @@
 # Project IDE
 
-[User guide](../user/user.md) · [Architecture](ide.md)
+[User guide](../user/user.md) · [Mobile support](../user_mobile/user_mobile.md) · [Architecture](ide.md)
 
 `projects.py` owns the versioned registration store. `ui/page.py` manages project
 settings and retained tabs. `ui/workspace.py` owns canonical document paths, groups,
@@ -65,3 +65,21 @@ retain an automatic timer-driven check when a modified file becomes clean.
 
 These host checks validate Qt integration and document state, not native window
 manager behavior or visual appearance on each supported desktop platform.
+
+## Platform boundary and documentation audit
+
+IDE registers a desktop `PageContribution` in `features/ide/__init__.py` and
+constructs Qt widgets lazily through `ui/page.py`. It has no mobile adapter or
+`mobile_sources.json`, and `mobile_build/tools.py` does not include IDE among its
+source owners. The mobile app does not expose the project workspace. Portable
+project metadata alone does not establish mobile IDE support.
+
+The November 4, 2026 documentation audit reviewed registration, project storage,
+project-tree Git snapshots and mutation guards against the IDE tests. In
+particular, `test_ide_browser.py` asserts normal folder foregrounds, olive ignored
+paths and individual dirty-submodule files; `test_ide.py` covers renaming modified
+open files without losing shared buffers. The user guide now matches these
+contracts. No Qt, build, simulator or device checks were run during this audit;
+static link and whitespace checks do not establish native platform acceptance.
+The dated validation records in the architecture page describe their original
+revisions, not current acceptance.

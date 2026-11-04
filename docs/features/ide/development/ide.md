@@ -1,4 +1,4 @@
-# IDE architecture and implementation plan
+# IDE architecture and implementation
 
 Find in Files uses the same Qt Popup/host-and-screen anchoring helper as Find
 Usages. Its bounded executor searches immutable root/options/buffer snapshots;
@@ -106,7 +106,7 @@ See https://jedi.readthedocs.io/en/v0.19.2/docs/api.html and
 https://pypi.org/project/jedi/0.19.2/. Add to uv manifest/lock; release packaging
 already ships synchronized dependencies and the pinned commonUtils checkout.
 
-## Phases and validation
+## Original implementation sequence (historical)
 
 1. Confirm shared editor reuse and regression coverage; add only needed extensions.
 2. Add versioned project store, settings and independent lazy feature registration.
@@ -117,7 +117,8 @@ already ships synchronized dependencies and the pinned commonUtils checkout.
 6. Add bounded worker-backed file search and symbol navigation using existing tools.
 7. Run focused tests and both repository suites; document actual platform coverage.
 
-Each coherent phase is tested/reviewed and committed before continuing. Tests use
+This sequence records the initial implementation plan, not a current backlog.
+The implemented contracts below describe current behavior. Tests use
 isolated stores and temporary source trees, exercising persistence, imports,
 shared buffers, close cancellation, external edits and retained worker shutdown.
 No changes to commonUtils public interfaces or unrelated feature dependencies are
@@ -170,9 +171,11 @@ and exact saved-byte baselines. `MarkdownBuffer.configure()` updates that owner
 for each view while the source QTextDocument remains shared; rich imports and
 search/table presentation stay local to the view. See the
 [shared Markdown ownership contract](../../../../Python/commonUtils/docs/development/reference/ui/markdown/markdown.md#internal-ownership-and-embedding-contracts).
-Internal groups are QTabWidgets with project-confined tab bars. Browser mutations refuse to rename or
-delete paths containing an open document or pending open; only empty directory
-deletion is available. The shared model owns lazy loading and rename validation.
+Internal groups are QTabWidgets with project-confined tab bars. Rename preserves
+open buffers, but rejects affected pending opens, active autosaves and ownership
+in another project. Delete rejects open documents and pending opens; only files
+and empty directories can be deleted. The shared model owns lazy loading and
+rename validation.
 
 ResultWorker requests are serialized per project; a process-wide lock serializes
 Jedi's caches across projects. GUI inputs are copied before dispatch. Analysis
@@ -196,7 +199,8 @@ uv.lock. Pygments remains 2.19.2. Shared commonUtils changes are limited to lang
 detection and a Blade overlay delegating PHP/HTML grammar work to Pygments.
 Future work should move bounded save/reload IO off the GUI thread, add optional
 unsaved-import overlays, and validate native Windows/Linux interaction. Automatic
-diagnostics, automatic hover and Git handoff are outside this initial selection.
+diagnostics and automatic hover remain unimplemented. Git working-file handoff
+is implemented as described above.
 
 ## Validation record — 2026-10-11
 
@@ -241,6 +245,9 @@ Shared commonUtils commits: `7fc93d1` (PHP/Blade support) and `dc134af` (PHP/HTM
 state across lines), with the latter pinned by Logistics.
 
 ## Second review — 2026-10-11
+
+This historical table records limits at that review. Later contracts above
+supersede its shared-view, open-file rename and Git handoff limitations.
 
 A requirement-by-requirement source review and adversarial workflow tests found
 defects not exercised by the initial suite. This pass fixes:
