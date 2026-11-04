@@ -130,6 +130,11 @@ hunk/addition/deletion bands, while keeping ordinary blob previews unchanged.
 patch headers by default, displays separate hunk cards, and supplies hunk navigation, wrapping, whitespace-only
 filtering, and an explicit raw view. Status badges combine color with symbols;
 graph lanes use Okabe–Ito hues and filled commit dots.
+Active graph lanes retain their columns across integration merges. The first
+parent continues in the commit's column when it has no existing lane; edges to
+parents already shown join their existing columns. Vacated columns are reused
+without shifting unrelated branches, including parents below the loaded page.
+Loading more history preserves the layout of the existing prefix.
 
 Commit file lists use NUL-delimited first-parent comparisons, including root
 commits and deletions; full historical trees remain available separately. File
