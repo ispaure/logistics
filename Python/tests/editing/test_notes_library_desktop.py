@@ -1289,8 +1289,8 @@ class NotesLibraryDesktopTests(QtTestCase):
         from urllib.parse import quote
         from commonUtils.formats.markdown.images import image_targets
         from services.documents.markdown import prepare_markdown
-        for remote in (False, True):
-            with self.subTest(remote=remote), self.temporary_directory() as directory:
+        for provider_kind in ('local', 'private-local'):
+            with self.subTest(provider=provider_kind), self.temporary_directory() as directory:
                 root = Path(directory)
                 self.fixture(root)
                 (root / 'Attachments').mkdir()
@@ -1304,28 +1304,32 @@ class NotesLibraryDesktopTests(QtTestCase):
                 source = '\n\n'.join(embeds) + '\n\nFollowing text'
                 path = root / 'Nested/Next.md'
                 path.write_text(source)
-                provider = PrivateFiles(root) if remote else LocalFiles(root)
-                window = NotesLibraryWindow(lambda: provider, 'Images')
-                window.show()
-                self.wait_until(lambda: not window.progress.busy)
-                window.open_note('Nested/Next.md')
-                self.wait_until(lambda: not window.progress.busy)
-                self.assertEqual(len(window.storage.resources), 4)
-                for editing in ((False,) if remote else (False, True)):
-                    window.viewer.set_editing(editing)
-                    window.viewer.set_edit_mode('formatted')
-                    surface = window.viewer.formatted_editor if editing else window.viewer.browser
-                    for target in image_targets(source):
-                        url = surface.document().baseUrl().resolved(qt.QUrl(target))
-                        image = surface.document().resource(qt.QTextDocument.ResourceType.ImageResource, url)
-                        self.assertIsInstance(image, qt.QImage)
-                        self.assertFalse(image.isNull(), target)
-                    self.assertFalse(window.viewer.is_modified)
-                if remote:
-                    self.assertEqual(provider.calls, [''])
-                    window.retire()
-                    self.assertEqual(window.storage.resources, {})
-                window.close()
+                provider = PrivateFiles(root) if provider_kind == 'private-local' else LocalFiles(root)
+                with patch.object(provider, 'list_names', wraps=provider.list_names) as inventories:
+                    window = NotesLibraryWindow(lambda: provider, 'Images')
+                    window.show()
+                    self.wait_until(lambda: not window.progress.busy)
+                    window.open_note('Nested/Next.md')
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertEqual(len(window.storage.resources), 4)
+                    for editing in ((False,) if provider_kind == 'private-local' else (False, True)):
+                        window.viewer.set_editing(editing)
+                        window.viewer.set_edit_mode('formatted')
+                        surface = window.viewer.formatted_editor if editing else window.viewer.browser
+                        for target in image_targets(source):
+                            url = surface.document().baseUrl().resolved(qt.QUrl(target))
+                            image = surface.document().resource(qt.QTextDocument.ResourceType.ImageResource, url)
+                            self.assertIsInstance(image, qt.QImage)
+                            self.assertFalse(image.isNull(), target)
+                        self.assertFalse(window.viewer.is_modified)
+                    if provider_kind == 'private-local':
+                        # Windows validates local link caches through list_names.
+                        # Adapted local providers delegate those inventories to list.
+                        self.assertEqual(provider.calls, [''] + [
+                            call.args[0] for call in inventories.call_args_list])
+                        window.retire()
+                        self.assertEqual(window.storage.resources, {})
+                    window.close()
                 # Direct provider Markdown also collects wiki images, references,
                 # spaces and literal hashes, ignoring fenced code.
                 sibling = root / 'Nested/photo #1.png'
