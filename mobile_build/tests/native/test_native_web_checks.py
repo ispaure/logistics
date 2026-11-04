@@ -3,6 +3,7 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
 import unittest
 import json
 import time
@@ -10,7 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
-from mobile_build.native_tests.tests.logisticsmobile.web_checks import wait_for_text
+from mobile_build.native_tests.tests.logisticsmobile.web_checks import wait_for_text, wait_for_transfer_surface, verify_native_transfer_fallback
 from mobile_build.native_tests.tests.logisticsmobile.navigation_trace import native_event
 from mobile_build.validation import ios_startup_recovery as recovery
 
@@ -328,3 +329,126 @@ class WebViewLifecycleCounterTests(unittest.TestCase):
             saved = json.loads((Path(directory) / 'logistics-native-ui-webview-counts.json').read_text())
             self.assertEqual(saved['views_created'], 130)
             self.assertEqual(saved['live_python_views'], 130)
+
+
+class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
+    def surface(self):
+        state = SimpleNamespace
+        implementation = type('NativeFixture', (), {'__module__': 'toga_iOS.widgets.box'})
+        def widget(native, **values):
+            impl = implementation()
+            impl.native = native
+            return state(_impl=impl, **values)
+        def label(text):
+            return widget(state(text=text), text=text)
+        surface = state(closed=False, ready=True, pending=None, revision=3,
+            delivered_revision=3, recovery_count=2, web=None,
+            model=dict(mode='progress', workspace='Current transfer', source='Local/current',
+                destination='Remote:', phase='transfer', status='Copying files…',
+                files=2, total_files=4, done=500000, total=1000000, percentage=50,
+                checks=1, listed=4, busy=True))
+        native = state(window=object(), bounds=state(size=state(width=320, height=480)),
+            isHidden=lambda: False, alpha=1, superview=None)
+        fallback = widget(native, parent=surface, surface=surface,
+            title=label('Current transfer'), paths=label('Source: Local/current\nDestination: Remote:'),
+            status=label('Transfer\nCopying files…'),
+            metrics=label('50%\nFiles: 2 / 4\nData: 0.50 / 1.00 MB\nChecked: 1 · Listed: 4'),
+            buttons=state(children=[state(text='Stop transfer', enabled=True),
+                state(text='Continue browsing', enabled=True)]))
+        surface.native_fallback = fallback
+        return surface
+
+    def test_native_fallback_requires_real_attachment_and_current_native_label_values(self):
+        surface = self.surface()
+        proof = verify_native_transfer_fallback(surface)
+        self.assertEqual(proof, dict(renderer='native', mode='progress', revision=3, recoveries=2))
+        surface.native_fallback.paths._impl.native.text = 'Source: stale\nDestination: old'
+        with self.assertRaisesRegex(AssertionError, 'endpoints are stale'):
+            verify_native_transfer_fallback(surface)
+        # A matching cached Python property cannot conceal a stale native label.
+        self.assertEqual(surface.native_fallback.paths.text, 'Source: Local/current\nDestination: Remote:')
+
+    def test_detached_hidden_unlaid_out_or_unacknowledged_fallback_cannot_pass(self):
+        mutations = [lambda s: setattr(s.native_fallback._impl.native, 'window', None),
+            lambda s: setattr(s.native_fallback._impl.native, 'superview', SimpleNamespace(
+                isHidden=lambda: True, alpha=1, superview=None)),
+            lambda s: setattr(s.native_fallback._impl.native.bounds.size, 'height', 0),
+            lambda s: setattr(s, 'pending', s.model),
+            lambda s: setattr(s, 'delivered_revision', 2),
+            lambda s: setattr(s.native_fallback.buttons.children[0], 'enabled', False)]
+        for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                surface = self.surface()
+                mutate(surface)
+                with self.assertRaises(AssertionError):
+                    verify_native_transfer_fallback(surface)
+
+    def test_android_native_attachment_and_text_values_are_required(self):
+        surface = self.surface()
+        fallback = surface.native_fallback
+        implementation = type('AndroidFixture', (), {'__module__': 'toga_android.widgets.box'})
+        impl = implementation()
+        impl.native = SimpleNamespace(isAttachedToWindow=lambda: True, getVisibility=lambda: 0,
+            isShown=lambda: True, getWidth=lambda: 320, getHeight=lambda: 480)
+        fallback._impl = impl
+        for widget in (fallback.title, fallback.paths, fallback.status, fallback.metrics):
+            value = widget.text
+            widget._impl.native = SimpleNamespace(getText=lambda value=value: SimpleNamespace(toString=lambda: value))
+        self.assertEqual(verify_native_transfer_fallback(surface)['renderer'], 'native')
+        impl.native.isAttachedToWindow = lambda: False
+        with self.assertRaisesRegex(AssertionError, 'detached'):
+            verify_native_transfer_fallback(surface)
+
+    def test_native_review_requires_current_rows_and_paging_controls(self):
+        surface = self.surface()
+        fallback = surface.native_fallback
+        surface.model.update(mode='review', operation='Push', notice='Ready', can_confirm=True,
+            counts=dict(add=1, delete=1), rows=(('delete', 'current/file'),), page=0, page_size=30, total=31)
+        fallback.status._impl.native.text = 'Ready'
+        fallback.metrics._impl.native.text = 'Add: 1 · Replace: 0 · Delete: 1 · Cleanup: 0\nno undo\nPage 1 · 31 matching changes'
+        row_impl = type(fallback.title._impl)()
+        row_impl.native = SimpleNamespace(text='Delete: current/file')
+        fallback.rows = SimpleNamespace(children=[SimpleNamespace(_impl=row_impl)])
+        fallback.buttons.children = [SimpleNamespace(text='Previous changes', enabled=False),
+            SimpleNamespace(text='Next changes', enabled=True), SimpleNamespace(text='Approve Push', enabled=True),
+            SimpleNamespace(text='Cancel review', enabled=True)]
+        self.assertEqual(verify_native_transfer_fallback(surface)['mode'], 'review')
+        row_impl.native.text = 'Delete: stale/file'
+        with self.assertRaisesRegex(AssertionError, 'rows are stale'):
+            verify_native_transfer_fallback(surface)
+
+    async def test_transfer_check_follows_current_webview_and_ignores_retired_result(self):
+        surface = self.surface()
+        surface.native_fallback = None
+        surface.recovery_count = 1
+        replacement = SimpleNamespace(evaluate_javascript=AsyncMock(return_value='Transfer details replacement'))
+        async def old_page(script):
+            surface.web = replacement
+            return 'Transfer details retired page'
+        retired = surface.web = SimpleNamespace(evaluate_javascript=AsyncMock(side_effect=old_page))
+        result = await wait_for_transfer_surface(surface, timeout=1)
+        self.assertEqual(result['renderer'], 'web')
+        retired.evaluate_javascript.assert_awaited_once()
+        replacement.evaluate_javascript.assert_awaited_once()
+
+    async def test_native_recovery_retains_stall_signal_and_requires_visible_proof(self):
+        from mobile_build.native_tests.tests.logisticsmobile import web_checks
+        surface = self.surface()
+        fallback, surface.native_fallback = surface.native_fallback, None
+        surface.ready = False
+        def recovered():
+            surface.native_fallback, surface.ready = fallback, True
+        asyncio.get_running_loop().call_later(.01, recovered)
+        with patch.object(web_checks, 'TRANSFER_DIAGNOSTIC_DELAY', 0), patch.object(
+                web_checks.sys, 'platform', 'ios'), patch('builtins.print') as output:
+            result = await wait_for_transfer_surface(surface, timeout=1)
+        self.assertEqual(result['renderer'], 'native')
+        lines = [call.args[0] for call in output.call_args_list]
+        self.assertTrue(lines[0].startswith('LOGISTICS_NATIVE_WEBVIEW_STALL='))
+        self.assertTrue(lines[-1].startswith('LOGISTICS_NATIVE_TRANSFER_SURFACE='))
+
+    async def test_wrong_native_model_does_not_pass_after_recovery(self):
+        surface = self.surface()
+        surface.native_fallback.metrics._impl.native.text = 'Files: 99'
+        with self.assertRaisesRegex(RuntimeError, 'bounded recovery'):
+            await wait_for_transfer_surface(surface, timeout=.01)
