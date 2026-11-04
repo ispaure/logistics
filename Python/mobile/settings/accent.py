@@ -1,7 +1,7 @@
 """Native hue/saturation controls with transient preview and release-to-save."""
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN
 
 from .forms import SettingsLabel
 from ..appearance import accessible_name, surface, refresh_appearance
@@ -16,12 +16,6 @@ class AccentControls(toga.Box):
         self.app = app
         self._dragging = False
         self.add(SettingsLabel('Accent color', style=Pack(font_weight='bold', margin_bottom=12)))
-        self.preview = surface(toga.Box(style=Pack(direction=ROW, margin_bottom=12)), radius=12)
-        self.preview.add(surface(toga.Label('Workspaces', style=Pack(flex=1, margin=12)),
-                                 radius=0, background='transparent', foreground='muted'))
-        self.selected = toga.Label('Documents', style=Pack(flex=1, margin=12, font_weight='bold'))
-        self.preview.add(self.selected)
-        self.add(self.preview)
         self.hue_label = SettingsLabel('Hue')
         self.hue = toga.Slider(min=0, max=359,
             value=float(app.preferences.values['accent_hue']), style=Pack(height=64))
@@ -38,12 +32,8 @@ class AccentControls(toga.Box):
             slider.on_press = self.begin_drag
             slider.on_change = self.changed
             slider.on_release = self.save
-        self.add(SettingsLabel('Release to save. The same color is used in light and dark appearance.',
-                               style=Pack(font_size=12, margin_bottom=8)))
-        self.add(surface(toga.Button('Reset to blue', on_press=self.reset, style=Pack(height=48)),
+        self.add(surface(toga.Button('Reset to Default Accent Color', on_press=self.reset, style=Pack(height=48)),
                          foreground='accent'))
-        self.add(SettingsLabel('Colors tabs, selections and controls. File, folder and workspace lock icons keep their colors.',
-                               style=Pack(font_size=12, margin_top=8)))
         self.preview_color()
 
     def update_labels(self):
@@ -57,7 +47,7 @@ class AccentControls(toga.Box):
         self.draw_spectrum(width=self._spectrum_width)
         light, dark = accent_colors(self.hue.value, self.saturation.value)
         # The filled tracks and thumbs preview the exact same opaque accent
-        # as the selected tab, even before the saved app color changes.
+        # as app controls, even before the saved app color changes.
         backend = type(self.app._impl).__module__
         for slider in (self.hue, self.saturation):
             slider._accent_preview = (light, dark)
@@ -71,15 +61,6 @@ class AccentControls(toga.Box):
                 slider._impl.native.setProgressTintList(tint)
             else:
                 style_slider(slider)
-        from ..palette import eink_enabled, android_palette, DARK
-        backend = type(self.app._impl).__module__
-        if backend.startswith('toga_iOS.'):
-            from commonUtils.ui.native.appearance import DynamicAppleColors
-            self._preview_colors = DynamicAppleColors(lambda is_dark: {'accent': dark if is_dark else light})
-            self.selected._impl.native.textColor = self._preview_colors.color('accent')
-        else:
-            # Android palette tracks application configuration, including E Ink.
-            self.selected.style.color = '#000000' if eink_enabled() else dark if android_palette() is DARK else light
 
     def begin_drag(self, widget=None, **kwargs):
         self._dragging = True
