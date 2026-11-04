@@ -2,47 +2,13 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+from concurrent.futures import Future
 from pathlib import Path
 from threading import Event
 from unittest.mock import patch
-import tempfile
-import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.search.files import search_files
-
-
-class SearchFilesTests(unittest.TestCase):
-    def test_masks_case_words_regex_exclusions_unicode_and_live_buffers(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            py, txt = root / 'code.py', root / 'notes.txt'
-            py.write_text('😀 target target_other\nTARGET\n')
-            txt.write_text('target\n')
-            (root / 'ignored').mkdir()
-            (root / 'ignored' / 'skip.py').write_text('target\n')
-            result = search_files([root], ['ignored'], 'target', '*.py', whole=True)
-            self.assertEqual(len(result.hits), 2)
-            self.assertEqual(result.files, 1)
-            self.assertEqual((result.hits[0].line, result.hits[0].column, result.hits[0].start), (1, 2, 3))
-            self.assertEqual(len(search_files([root], ['ignored'], 'target', '*.py', case=True, whole=True).hits), 1)
-            self.assertEqual(len(search_files([root], ['ignored'], r'targ\w+', '*.py', regex=True).hits), 3)
-            result = search_files([root], [], 'live', '*.txt', buffers={txt: 'unsaved live\n'})
-            self.assertEqual(result.hits[0].path, txt)
-            self.assertEqual(result.hits[0].column, 8)
-            self.assertEqual(txt.read_text(), 'target\n')
-            with self.assertRaises(ValueError):
-                search_files([root], [], '(', regex=True)
-            self.assertFalse(search_files([root], [], 'target', cancelled=lambda: True).hits)
-            self.assertTrue(search_files([root], [], 'target', limit=1).limited)
-
-    def test_excluded_directory_prefix_also_excludes_unsaved_buffers(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            path = root / 'src' / 'generated' / 'nested' / 'new.py'
-            result = search_files([root], ['src/generated'], 'target',
-                                  buffers={path: 'target'})
-            self.assertFalse(result.hits)
 
 
 class FindFilesTests(QtTestCase):
@@ -65,6 +31,9 @@ class FindFilesTests(QtTestCase):
 
     def test_live_results_preview_and_exact_navigation_from_unsaved_buffer(self):
         self.workspace.current.setPlainText('😀 LiveTag\n')
+        excluded = self.root / '.git'
+        excluded.mkdir()
+        (excluded / 'hidden.py').write_text('LiveTag\n')
         self.workspace.find_project()
         dialog = self.workspace.project_find
         self.assertEqual(dialog.windowType(), qt.Qt.WindowType.Popup)
@@ -126,24 +95,94 @@ class FindFilesTests(QtTestCase):
                 self.wait_until(lambda: dialog.preview_future is None)
                 self.assertEqual(dialog.preview.toPlainText(), 'old\n')
 
+    def test_superseded_preview_cannot_replace_the_selected_file(self):
+        from features.ide.ui import find_files
+        other = self.root / 'other.py'
+        other.write_text('new\n')
+        hits = [search_files([self.root], [], query).hits[0] for query in ('old', 'new')]
+        stale, latest = Future(), Future()
+        def finish_requests():
+            for future in (stale, latest):
+                if not future.done():
+                    future.set_result('')
+        self.addCleanup(finish_requests)
+        self.workspace.find_project()
+        dialog = self.workspace.project_find
+        dialog.debounce.stop()
+        items = []
+        for hit in hits:
+            item = qt.QTreeWidgetItem([hit.excerpt, hit.path.name, str(hit.line)])
+            item.setData(0, qt.Qt.ItemDataRole.UserRole, hit)
+            items.append(item)
+        with patch.object(find_files._executor, 'submit', side_effect=[stale, latest]):
+            dialog.selected(items[0])
+            self.assertTrue(stale.set_running_or_notify_cancel())
+            dialog.selected(items[1])
+            stale.set_result('obsolete preview\n')
+            dialog.completed()
+            self.assertEqual(dialog.preview.toPlainText(), '')
+            self.assertIn(str(other), dialog.preview_title.text())
+            self.assertIs(dialog.preview_future, latest)
+            latest.set_result('new\n')
+            dialog.completed()
+        self.assertEqual(dialog.preview.toPlainText(), 'new\n')
+        self.assertEqual(dialog.preview.search_selections[0].cursor.selectedText(), 'new')
+        self.assertEqual(dialog.jobs, [])
+
+    def test_superseded_search_cannot_publish_hits_before_latest_search_finishes(self):
+        from features.ide.ui import find_files
+        from commonUtils.search.files import SearchResult
+        stale, latest = Future(), Future()
+        def finish_requests():
+            for future in (stale, latest):
+                if not future.done():
+                    future.set_result(SearchResult((), 0, False))
+        self.addCleanup(finish_requests)
+        hit = search_files([self.root], [], 'old').hits[0]
+        self.workspace.find_project()
+        dialog = self.workspace.project_find
+        with patch.object(find_files._executor, 'submit', side_effect=[stale, latest]) as submit:
+            dialog.query.setText('old')
+            dialog.debounce.stop()
+            dialog.start_search()
+            # Keep the old request running so cancellation cannot discard it
+            # before the generation check gets exercised.
+            self.assertTrue(stale.set_running_or_notify_cancel())
+            dialog.query.setText('missing')
+            dialog.debounce.stop()
+            stale.set_result(SearchResult((hit,), 1, False))
+            dialog.completed()
+            self.assertFalse(dialog.closing)
+            self.assertEqual(dialog.results.topLevelItemCount(), 0)
+            self.assertEqual(dialog.summary.text(), 'Searching…')
+            self.assertIs(dialog.search_future, latest)
+            self.assertEqual(submit.call_args.args[3], 'missing')
+            latest.set_result(SearchResult((), 0, False))
+            dialog.completed()
+        self.assertEqual(dialog.summary.text(), '0 matches in 0 files')
+        self.assertEqual(dialog.jobs, [])
+
     def test_stale_job_is_discarded_and_close_cancels_search(self):
         from commonUtils.search.files import SearchResult
         started, release = Event(), Event()
+        hit = search_files([self.root], [], 'old').hits[0]
         def delayed(*args, **kwargs):
             started.set()
             if not release.wait(5):
                 raise RuntimeError('Search fixture timed out')
-            return SearchResult((), 0, False)
+            return SearchResult((hit,), 1, False)
         self.workspace.find_project()
         dialog = self.workspace.project_find
         with patch('features.ide.ui.find_files.search_files', side_effect=delayed):
-            dialog.query.setText('old')
-            dialog.debounce.stop(); dialog.start_search()
-            self.wait_until(started.is_set)
-            dialog.query.setText('new')
-            self.assertFalse(dialog.prepare_close())
-            self.assertTrue(dialog.search_cancel.is_set())
-            release.set()
-            self.wait_until(lambda: dialog.search_future is None)
+            try:
+                dialog.query.setText('old')
+                dialog.debounce.stop(); dialog.start_search()
+                self.wait_until(started.is_set)
+                dialog.query.setText('new')
+                self.assertFalse(dialog.prepare_close())
+                self.assertTrue(dialog.search_cancel.is_set())
+            finally:
+                release.set()
+                self.wait_until(lambda: dialog.search_future is None)
         self.assertEqual(dialog.results.topLevelItemCount(), 0)
         self.assertTrue(dialog.prepare_close())

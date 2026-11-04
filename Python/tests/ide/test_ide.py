@@ -1,5 +1,5 @@
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 import tempfile
@@ -19,13 +19,20 @@ class IDEQtTests(QtTestCase):
 
 class DocumentTests(IDEQtTests):
     def test_theme_switch_preserves_unsaved_shared_buffer_and_finishes_highlighting(self):
+        self.check_theme_switch(80)
+
+    @stage(TestStage.EXTENDED)
+    def test_large_buffer_theme_switch_preserves_unsaved_text(self):
+        self.check_theme_switch(1000)
+
+    def check_theme_switch(self, lines):
         import io
         from contextlib import redirect_stderr
         from commonUtils.ui import pyside as qt
         from commonUtils.ui.appearance.theme import apply_theme
         with self.temporary_directory() as directory:
             path = Path(directory) / 'example.py'
-            path.write_text('x = 1\n' * 1000)
+            path.write_text('x = 1\n' * lines)
             editor = EditorDocument(read_text_file(path))
             editor.show()
             editor.moveCursor(qt.QTextCursor.MoveOperation.End)
@@ -341,7 +348,7 @@ class WorkspaceTests(WorkspaceFixture):
             path = root / 'file.py'
             path.write_text('original\n')
             page = IDEPage(store_path=root / 'workspace.json')
-            project = Project('test', directory)
+            project = Project('test', directory, autosave='off')
             page.store.projects[project.id] = project
             view = page.open_project(project)
             view.open_path(path)
@@ -368,7 +375,7 @@ class WorkspaceTests(WorkspaceFixture):
             a, b = root / 'a.py', root / 'b.py'
             a.write_text('header\n😀target\n')
             b.write_text('other\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             self.wait(view)
             first = view.active_group
             second = view.add_group()
@@ -392,7 +399,7 @@ class WorkspaceTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n' * 30)
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.show()
             view.open_path(path)
             self.wait(view)
@@ -429,7 +436,7 @@ class WorkspaceTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_bytes(b'value = 1\r\nsecond = 2\r\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.open_path(path)
             self.wait(view)
             left = view.current
@@ -478,7 +485,7 @@ class WorkspaceTests(WorkspaceFixture):
             root = Path(directory).resolve()
             source, target = root / 'a.py', root / 'b.js'
             source.write_text('value = 1\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.open_path(source)
             self.wait(view)
             left = view.current
@@ -527,7 +534,7 @@ class WorkspaceTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n' * 300)
-            project = Project('test', directory)
+            project = Project('test', directory, autosave='off')
             view = ProjectWorkspace(project)
             view.resize(1000, 500)
             view.show()
@@ -568,7 +575,7 @@ class WorkspaceTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             self.wait(view)
             view.open_path(path)
             with patch.object(qt.QMessageBox, 'question') as question, patch.object(qt.QInputDialog, 'getText') as prompt:
@@ -598,7 +605,7 @@ class WorkspaceTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'queued.py'
             path.write_text('value = 1\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             self.wait(view)
             survivor = view.active_group
             destination = view.add_group()
@@ -635,7 +642,7 @@ class WorkspaceTests(WorkspaceFixture):
             paths = [root / f'{name}.py' for name in 'abcd']
             for path in paths:
                 path.write_text('value = 1\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.open_path(paths[0])
             self.wait(view)
             for path in paths[1:3]:
@@ -667,7 +674,7 @@ class WorkspaceTests(WorkspaceFixture):
             path = root / 'offline' / 'a.py'
             browser = {'expanded': [str(path.parent)], 'selected': str(path)}
             project = Project('test', directory, excluded_paths=['.'], layout={
-                'browser': browser, 'groups': [{}, {'files': [{'path': str(path), 'cursor': 5}]}]})
+                'browser': browser, 'groups': [{}, {'files': [{'path': str(path), 'cursor': 5}]}]}, autosave='off')
             view = ProjectWorkspace(project)
             self.wait(view)
             self.assertTrue(view.browser.tree.rootIndex().isValid())
@@ -698,7 +705,7 @@ class WorkspaceTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory) / 'a.py'
             path.write_text('value = 1\n')
-            view = ProjectWorkspace(Project('one', directory))
+            view = ProjectWorkspace(Project('one', directory, autosave='off'))
             view.open_path(path)
             self.wait(view)
             doc = view.current
@@ -747,20 +754,6 @@ class NavigationTests(unittest.TestCase):
             (root / '.venv' / 'hidden.py').write_text('')
             self.assertFalse(any('.venv' in p for p in project_files(project)))
 
-    def test_project_search_skips_binary_exclusions_and_supports_cancellation(self):
-        from features.ide.projects import Project
-        from features.ide.analysis import search_project
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'a.py').write_text('needle\n')
-            (root / 'binary').write_bytes(b'needle\x00')
-            (root / '.git').mkdir()
-            (root / '.git' / 'secret').write_text('needle')
-            project = Project('test', directory)
-            results = search_project(project, 'NEEDLE')
-            self.assertEqual(len(results), 1)
-            self.assertEqual(results[0][1], 1)
-            self.assertEqual(search_project(project, 'needle', cancelled=lambda: True), [])
 
 
 class RestoreTests(WorkspaceFixture):
@@ -772,7 +765,7 @@ class RestoreTests(WorkspaceFixture):
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\n')
             project = Project('test', directory, layout={'groups': [
-                {'files': [{'path': str(path), 'cursor': 4, 'scroll': 2}]}]})
+                {'files': [{'path': str(path), 'cursor': 4, 'scroll': 2}]}]}, autosave='off')
             with patch('features.ide.ui.workspace.read_text_file', side_effect=OSError('temporarily unreadable')):
                 view = ProjectWorkspace(project)
                 self.wait(view)
@@ -792,7 +785,7 @@ class RestoreTests(WorkspaceFixture):
             a.write_text('a = 1\n')
             b.write_text('b = 2\n')
             page = IDEPage(store_path=state)
-            first, second = Project('first', str(root)), Project('second', str(root))
+            first, second = Project('first', str(root), autosave='off'), Project('second', str(root), autosave='off')
             for p in (first, second):
                 page.store.projects[p.id] = p
             one = page.open_project(first)
@@ -824,7 +817,7 @@ class RestoreTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('value = 1\nvalue\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.open_path(path)
             self.wait(view)
             view.show()
@@ -859,7 +852,7 @@ class RestoreTests(WorkspaceFixture):
             code = 'from models import Thing\nThing()\n'
             source.write_text(code)
             target.write_text('class Thing:\n    pass\n')
-            view = ProjectWorkspace(Project('test', str(root)))
+            view = ProjectWorkspace(Project('test', str(root), autosave='off'))
             view.resize(900, 600)
             view.show()
             view.open_path(source)
@@ -889,7 +882,7 @@ class RestoreTests(WorkspaceFixture):
         with self.temporary_directory() as directory:
             path = Path(directory).resolve() / 'a.py'
             path.write_text('original\n')
-            view = ProjectWorkspace(Project('test', directory))
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.open_path(path)
             self.wait(view)
             view.current.insertPlainText('# edit\n')

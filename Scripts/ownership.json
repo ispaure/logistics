@@ -153,7 +153,8 @@
       "guide": "docs/features/ide/development/development.md",
       "tests": {
         "desktop": [
-          "test_ide*.py"
+          "test_ide*.py",
+          "test_editor_changes.py"
         ]
       }
     },
