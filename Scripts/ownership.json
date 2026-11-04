@@ -43,7 +43,6 @@
       "tests": {
         "desktop": [
           "test_books*.py",
-          "test_document_preparation.py",
           "test_reading_feature.py",
           "test_reading_parity.py"
         ],
@@ -346,7 +345,8 @@
       "tests": {
         "desktop": [
           "test_text_editor*.py",
-          "test_editor*.py"
+          "test_editor*.py",
+          "test_document_launchers.py"
         ],
         "mobile": [
           "test_editor_picker.py",
@@ -381,6 +381,7 @@
         "desktop": [
           "test_feature_registry.py",
           "test_feature_runtime.py",
+          "test_feature_group_transactions.py",
           "test_architecture_contracts.py",
           "test_document_architecture.py"
         ]
@@ -398,6 +399,7 @@
           "test_notes_library_hosting.py",
           "test_reader_host_integration.py",
           "test_document_workspace.py",
+          "test_document_catalog_ordering.py",
           "test_folder_controller.py",
           "test_folder_sources_ui.py"
         ]
@@ -416,6 +418,7 @@
         "desktop": [
           "test_document_protection.py",
           "test_document_storage*.py",
+          "test_document_preparation.py",
           "test_desktop_video_privacy.py",
           "test_mobile_packaging.py"
         ],

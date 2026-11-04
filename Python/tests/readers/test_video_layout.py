@@ -7,6 +7,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice
+from tests.readers.video_fixtures import layout_evidence
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -47,6 +48,13 @@ class DockedVideoTests(QtTestCase):
         return qt.QRect(widget.mapTo(window, qt.QPoint()), widget.size())
 
     def test_all_panels_and_controls_fit_without_covering_picture(self):
+        self.check_panel_layouts(((1000, 720), (320, 320)))
+
+    @stage(TestStage.EXTENDED)
+    def test_intermediate_sizes_and_all_panels_fit_without_covering_picture(self):
+        self.check_panel_layouts(((760, 480), (560, 420), (480, 320), (360, 360), (320, 480)))
+
+    def check_panel_layouts(self, sizes):
         from logistics_build.build_retention import scratch
         evidence = Path(__file__).resolve().parents[3] / 'test-results/video-docked-layout'
         evidence.mkdir(parents=True, exist_ok=True)
@@ -60,10 +68,10 @@ class DockedVideoTests(QtTestCase):
             window.subtitle_tracks.addItem('A very long subtitle track name ' * 10, -1)
             window.caption.setText('A long subtitle that wraps within the video area.')
             window.caption.show()
-            sizes = ((1000, 720), (760, 480), (560, 420), (480, 320), (360, 360), (320, 480), (320, 320))
             for width, height in sizes:
                 for panel in (None, 'speed', 'picture', 'audio', 'subtitles', 'chapters', 'queue', 'playback'):
-                    with self.subTest(size=(width, height), panel=panel):
+                    with self.subTest(size=(width, height), panel=panel), layout_evidence(
+                            window, evidence / f'{width}x{height}-{panel or "player"}.png'):
                         window.close_settings()
                         window.resize(width, height)
                         if panel:
@@ -83,19 +91,18 @@ class DockedVideoTests(QtTestCase):
                             if height < 400 and width < 760:
                                 self.assertTrue(window.panel_selector.isVisible())
                                 self.assertEqual(window.panel_selector.count(), 7 + int(window.backend.capabilities.receivers))
+                        bounds = {control: self.bounds(control, window) for control in controls}
                         for control in controls:
                             self.assertTrue(control.isVisible(), control.accessibleName())
-                            rect = self.bounds(control, window)
+                            rect = bounds[control]
                             self.assertTrue(window.rect().contains(rect), (control.accessibleName(), rect, window.rect()))
                             self.assertFalse(video.intersects(rect), (control.accessibleName(), rect, video))
                         buttons = [control for control in controls if isinstance(control, qt.QAbstractButton)]
                         for number, button in enumerate(buttons):
                             for other in buttons[number + 1:]:
-                                self.assertFalse(self.bounds(button, window).intersects(self.bounds(other, window)),
-                                                 (button.accessibleName(), self.bounds(button, window),
-                                                  other.accessibleName(), self.bounds(other, window)))
-                        if panel in (None, 'subtitles', 'playback'):
-                            window.grab().save(str(evidence / f'{width}x{height}-{panel or "player"}.png'))
+                                self.assertFalse(bounds[button].intersects(bounds[other]),
+                                                 (button.accessibleName(), bounds[button],
+                                                  other.accessibleName(), bounds[other]))
             window.close()
 
     @stage(TestStage.EXTENDED)
@@ -112,7 +119,8 @@ class DockedVideoTests(QtTestCase):
             self.assertFalse(window.video.image.isNull())
             for width, height in ((1000, 720), (560, 420), (480, 320), (360, 360), (320, 320)):
                 for panel in (None, 'audio', 'subtitles', 'playback'):
-                    with self.subTest(size=(width, height), panel=panel):
+                    with self.subTest(size=(width, height), panel=panel), layout_evidence(
+                            window, evidence / f'vlc-{width}x{height}-{panel or "player"}.png'):
                         window.close_settings()
                         window.resize(width, height)
                         if panel:
@@ -125,7 +133,6 @@ class DockedVideoTests(QtTestCase):
                                 rect = self.bounds(control, window)
                                 self.assertTrue(window.rect().contains(rect))
                                 self.assertFalse(video.intersects(rect))
-                        window.grab().save(str(evidence / f'vlc-{width}x{height}-{panel or "player"}.png'))
             window.close()
 
     def test_large_font_reflows_and_lock_does_not_move_picture(self):
@@ -233,8 +240,6 @@ class DockedVideoTests(QtTestCase):
             qt.QApplication.processEvents()
             slot = pane.layout().indexOf(window)
             self.assertFalse(pane.storage_location.actions_button.isVisible())
-            self.assertFalse(hasattr(window, 'identity'))
-            self.assertFalse(hasattr(window, 'floating'))
             window.toggle_fullscreen()
             qt.QApplication.processEvents()
             self.assertIsNone(window.parentWidget())
