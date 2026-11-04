@@ -1,8 +1,9 @@
 # Obsidian documentation
 
-Choose a guide for the task you want to complete.
+The Obsidian feature finds local vaults and launches the external Obsidian
+application on Windows, macOS and Linux. Reading and editing those notes inside
+Logistics belongs to the separate [Notes Library](../notes_library/notes_library.md).
 
-## Further reading
-
-- [Obsidian Feature](development/development.md)
-- [Open Obsidian vaults](user/user.md)
+- [Open Obsidian vaults on desktop](user/user.md)
+- [Obsidian notes on mobile](user_mobile/user_mobile.md)
+- [Implementation and validation](development/development.md)
