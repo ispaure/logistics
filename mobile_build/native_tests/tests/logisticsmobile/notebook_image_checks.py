@@ -83,11 +83,22 @@ class ImageWorkflow:
         await self.evaluate(HELPERS)
         await self.unlock()
         assert len(self.editor().notebook.page(0).images) == 1
-        await self.action("$('capture').click();$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
+        await self.evaluate("(()=>{window.imageQAOriginalBackground=$('pdfBackground').src;const c=document.createElement('canvas');c.width=100;c.height=50;const g=c.getContext('2d');g.fillStyle='#e64c26';g.fillRect(0,0,100,50);$('pdfBackground').src=c.toDataURL();return true})()")
+        await self.wait("$('pdfBackground').complete && $('pdfBackground').naturalWidth===100", 'Wide background did not decode')
+        await self.action("if(mode!=='capture')$('capture').click();$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
+        await self.evaluate("window.qaClip=null;imageQA.clipPixels().then(p=>window.qaClip=p);true")
+        await self.wait('window.qaClip!==null', 'Wide-background capture did not decode')
+        letterbox=await self.js('return window.qaClip.pixels[0]')
+        assert all(v>245 for v in letterbox[:3]) and letterbox[3]==255, letterbox
+        await self.evaluate("$('pdfBackground').src=window.imageQAOriginalBackground;true")
+        await self.wait("$('pdfBackground').complete && $('pdfBackground').naturalWidth!==100", 'PDF background restore did not decode')
+        self.cases.append('capture preserves displayed background aspect ratio and letterboxing')
+        await self.action("if(mode!=='capture')$('capture').click();$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
         await self.evaluate("window.qaClip=null;imageQA.clipPixels().then(p=>window.qaClip=p);true")
         await self.wait('window.qaClip!==null', 'Clipboard PNG did not decode')
         clip = await self.js('return window.qaClip')
-        assert (clip['width'],clip['height']) == (400,320), clip
+        # Pointer coordinates round through each WebView's viewport scale.
+        assert abs(clip['width']-400)<=1 and abs(clip['height']-320)<=1, clip
         red, green, ink, outside = clip['pixels']
         assert red[0]>180 and red[1]<120 and red[3]==255, clip
         assert green[1]>140 and green[0]<100 and green[3]==255, clip
