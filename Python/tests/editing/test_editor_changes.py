@@ -5,7 +5,6 @@ TEST_STAGE = TestStage.REGRESSION
 import subprocess
 import shutil
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from threading import Event
@@ -34,8 +33,9 @@ class BaselineTests(unittest.TestCase):
                     patch('features.git.runner.shutil.which', side_effect=lambda name: executable if name == executable else None):
                 snapshot = read_text_file(path)
                 changes, label = compare(snapshot, snapshot.text)
-            self.assertEqual(changes[0].kind, 'modify')
             self.assertIn('Git index', label)
+            self.assertTrue(changes, label)
+            self.assertEqual(changes[0].kind, 'modify')
 
     def test_unregistered_repo_index_refresh_and_missing_git_fallback(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -48,9 +48,23 @@ class BaselineTests(unittest.TestCase):
             git('add', 'file.txt')
             path.write_text('edited\n')
             snapshot = read_text_file(path)
-            changes, label = compare(snapshot, snapshot.text)
-            self.assertEqual(changes[0].kind, 'modify')
+            from itertools import cycle
+            from commonUtils.integrations.wrappers.cmdShellWrapper import capture
+            enter = capture.ProcessSupervisor.__enter__
+            def completed_before_poll(supervisor):
+                result = enter(supervisor)
+                supervisor.child.wait(timeout=10)
+                return result
+            # Each Git read has finished, but its supervisor resumes beyond the
+            # three-second budget. This must still use Git, not silently fall
+            # back to the unchanged saved-file snapshot and produce no diff.
+            clock = cycle((0, 4))
+            with patch.object(capture.ProcessSupervisor, '__enter__', completed_before_poll), \
+                    patch.object(capture, 'monotonic', side_effect=lambda: next(clock)):
+                changes, label = compare(snapshot, snapshot.text)
             self.assertIn('Git index', label)
+            self.assertTrue(changes, label)
+            self.assertEqual(changes[0].kind, 'modify')
             git('add', 'file.txt')
             self.assertFalse(compare(snapshot, snapshot.text)[0])
             with patch('features.git.editor_baseline.index_baseline', side_effect=OSError('missing')):
@@ -58,6 +72,8 @@ class BaselineTests(unittest.TestCase):
             new = root / 'new.txt'
             new.write_text('new\n')
             changes, label = compare(read_text_file(new), 'new\n')
+            self.assertIn('Git index', label)
+            self.assertTrue(changes, label)
             self.assertEqual(changes[0].kind, 'add')
 
     def test_worktree_discovery_and_index_are_local_to_file(self):
@@ -81,21 +97,34 @@ class BaselineTests(unittest.TestCase):
             self.assertEqual(git(root, 'show', ':a.txt').stdout, b'base\n')
 
 
+class ProjectStoreTests(unittest.TestCase):
+    def test_autosave_mode_roundtrips_project_store(self):
+        from features.ide.projects import ProjectStore
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        path = Path(directory) / 'workspace.json'
+        store = ProjectStore(path)
+        project = Project('Test', directory, autosave='off')
+        store.projects[project.id] = project
+        store.save()
+        self.assertEqual(ProjectStore(path).projects[project.id].autosave, 'off')
+        legacy = {'id': 'old', 'name': 'Old', 'root_path': directory}
+        self.assertEqual(Project.from_dict(legacy).autosave, 'after_delay')
+        with self.assertRaises(ValueError):
+            Project.from_dict(dict(legacy, autosave='invalid'))
+
+
 class AutoSaveTests(QtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def until(self, predicate):
-        deadline = time.monotonic() + 8
-        while not predicate():
-            self.app.processEvents()
+        def diagnostic():
             autosave = getattr(getattr(getattr(self, 'doc', None), 'buffer', None), 'autosave', None)
-            self.assertLess(time.monotonic(), deadline,
-                f'Autosave busy={getattr(autosave, "busy", None)}, error={getattr(autosave, "error", None)}, '
+            return (f'Autosave busy={getattr(autosave, "busy", None)}, error={getattr(autosave, "error", None)}, '
                 f'timer={autosave.timer.isActive() if autosave else None}, '
                 f'workspace worker={bool(getattr(getattr(self, "view", None), "worker", None))}')
-            time.sleep(.005)
+        self.wait_until(predicate, timeout=8, message=diagnostic)
 
     def setUp(self):
         self.directory = self.temporary_directory()
@@ -106,6 +135,8 @@ class AutoSaveTests(QtTestCase):
         self.until(lambda: not self.view.worker and not self.view.queue)
         self.doc = self.view.current
         self.addCleanup(self.cleanup_view)
+        self.assertEqual(self.doc.buffer.autosave.timer.interval(), 1000)
+        self.doc.buffer.autosave.timer.setInterval(20)
 
     def cleanup_view(self):
         self.until(lambda: not self.view.worker and not self.view.queue)
@@ -134,6 +165,7 @@ class AutoSaveTests(QtTestCase):
         self.assertEqual(self.path.read_bytes(), b'original\r\n')
 
     def test_saved_git_changes_keep_markers_until_staged(self):
+        self.doc.buffer.markers.refresh_timer.setInterval(100)
         root = str(self.path.parent)
         def git(*args):
             subprocess.run(['git', '-C', root, *args], check=True, capture_output=True)
@@ -184,19 +216,6 @@ class AutoSaveTests(QtTestCase):
         self.assertEqual(self.path.read_bytes(), b'first original\r\n')
         self.until(lambda: not self.doc.document().isModified())
         self.assertEqual(self.path.read_bytes(), b'first second original\r\n')
-
-    def test_autosave_mode_roundtrips_project_store(self):
-        from features.ide.projects import ProjectStore
-        path = Path(self.directory.name) / 'workspace.json'
-        store = ProjectStore(path)
-        self.view.project.autosave = 'off'
-        store.projects[self.view.project.id] = self.view.project
-        store.save()
-        self.assertEqual(ProjectStore(path).projects[self.view.project.id].autosave, 'off')
-        legacy = {'id': 'old', 'name': 'Old', 'root_path': self.directory.name}
-        self.assertEqual(Project.from_dict(legacy).autosave, 'after_delay')
-        with self.assertRaises(ValueError):
-            Project.from_dict(dict(legacy, autosave='invalid'))
 
     def test_format_only_revision_during_save_does_not_leave_text_dirty(self):
         from features.ide.ui.autosave import write_snapshot

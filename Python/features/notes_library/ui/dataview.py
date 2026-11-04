@@ -77,6 +77,7 @@ class DesktopViews(qt.QObject):
         self.deadline.stop()
         self.polling = False
         if self.page is not None:
+            self.page.setVisible(False)
             self.page.triggerAction(self.page.WebAction.Stop)
             self.page.deleteLater()
             self.page = None
@@ -118,6 +119,9 @@ class DesktopViews(qt.QObject):
         self.page.loadFinished.connect(loaded)
         self.deadline.start()
         self.page.setHtml(worker_policy('<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'none\';"><body></body>'))
+        # Apply after setHtml initializes the underlying page. This viewless
+        # page performs foreground work; hidden pages throttle worker messages.
+        self.page.setVisible(True)
 
     def poll(self):
         if self.page is None or self.polling or self.progress.busy:
