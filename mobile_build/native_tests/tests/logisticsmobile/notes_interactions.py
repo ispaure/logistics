@@ -1,5 +1,6 @@
 """Native coordinate dispatch and copy acceptance shared by the drawer probe."""
 from commonUtils.testing.stages import TestStage
+from .notes_tree_helpers import row_paths, native_row_control
 
 import asyncio
 from io import BytesIO
@@ -91,14 +92,14 @@ class NotesInteractionChecks:
             for number in (1, 2):
                 owner.sidebar.show_sidebar()
                 await asyncio.sleep(.4)
-                def source_row():
-                    return next((row for row in owner.rows.children if any(
-                        getattr(child, 'vault_path', None) == source for child in row.children)), None)
-                await self.wait_for(lambda: source_row() is not None,
+                await self.wait_for(lambda: source in row_paths(owner),
                     f'Missing published {storage} row {source}; notice={owner.notice.text}')
-                row = source_row()
-                menu = row.children[-1]
-                assert (menu.style.width, menu.style.height) == (48, 48)
+                menu = await native_row_control(owner, source, 'actions')
+                if self.apple_probe:
+                    assert abs(float(menu.bounds.size.width) - 48) < .1, menu.bounds
+                else:
+                    density = menu.getResources().getDisplayMetrics().density
+                    assert menu.getWidth() == round(48 * density), menu.getWidth()
                 before = owner.path
                 choices = []
                 async def choose(dialog):
@@ -107,7 +108,7 @@ class NotesInteractionChecks:
                 with patch.object(owner.view.window, 'dialog', new=choose):
                     # Both edges lie outside the visible dots. Hit the real native
                     # hierarchy, so filename overlap or parent clipping fails here.
-                    await self.touch_native(menu._impl.native, fraction=.05 if number == 1 else .95)
+                    await self.touch_native(menu, fraction=.05 if number == 1 else .95)
                     await self.wait_for(lambda: getattr(owner, 'file_action_view', None) is not None, 'Menu edge did not open Copy')
                 assert 'copy' in choices
                 assert owner.path == before, 'Menu tap opened the adjacent filename'
