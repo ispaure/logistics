@@ -283,7 +283,7 @@
         "desktop": [
           "test_rclone*.py",
           "test_localcrypt*.py",
-          "test_local_crypt.py",
+          "test_local_crypt*.py",
           "test_remote_browser.py",
           "test_credential*.py",
           "test_review_session.py",

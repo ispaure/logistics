@@ -1,7 +1,9 @@
 """Synthetic local rclone cloud/crypt fixture: never uses user accounts."""
 from contextlib import contextmanager, ExitStack
 from io import BytesIO
+from functools import lru_cache
 import os
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -16,8 +18,26 @@ from features.rclone.transfers import sync
 from features.rclone import storage
 
 
+@lru_cache(maxsize=4)
+def obscured_password(binary):
+    return run_bytes([str(binary), 'obscure', 'synthetic-crypt-password']).decode().strip()
+
+
+@lru_cache(maxsize=1)
+def fixture_assets():
+    image = BytesIO()
+    Image.new('RGB', (24, 32), 'red').save(image, 'PNG')
+    archives = []
+    for name, password in [('plain.cbz', None), ('encrypted.cbz', 'synthetic-archive-password')]:
+        output = BytesIO()
+        with open_archive(output, 'w', password=password) as archive:
+            archive.writestr('page.png', image.getvalue())
+        archives.append((name, output.getvalue()))
+    return image.getvalue(), tuple(archives)
+
+
 @contextmanager
-def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None):
+def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None, pull=True):
     root = Path(root).resolve()
     plain, cloud = root / 'plain', root / 'cloud'
     plain.mkdir()
@@ -25,13 +45,11 @@ def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None):
     original = b'# Private fixture\n\nOriginal note.\n\n![page](page.png)\n'
     (plain / 'note.md').write_bytes(original)
     (plain / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=synthetic-archive-password\n')
-    image = BytesIO()
-    Image.new('RGB', (24, 32), 'red').save(image, 'PNG')
-    (plain / 'page.png').write_bytes(image.getvalue())
-    for name, password in [('plain.cbz', None), ('encrypted.cbz', 'synthetic-archive-password')]:
-        with open_archive(plain / name, 'w', password=password) as archive:
-            archive.writestr('page.png', image.getvalue())
-    obscured = run_bytes([str(binary), 'obscure', 'synthetic-crypt-password']).decode().strip()
+    image, archives = fixture_assets()
+    (plain / 'page.png').write_bytes(image)
+    for name, data in archives:
+        (plain / name).write_bytes(data)
+    obscured = obscured_password(str(binary))
     package = root / 'Accounts.zip'
     with open_archive(package, 'w', password='synthetic-package-password') as archive:
         archive.writestr('Cloud.txt', '[Cloud]\ntype=local\n')
@@ -52,12 +70,18 @@ def crypt_fixture(root, binary, *, crypt_settings=None, state_password=None):
         patches.enter_context(patch.object(actions.config, 'LogisticsConfig', return_value=SimpleNamespace(server_path=root / 'Server', path_remote_local=root / 'Server/Local')))
         patches.enter_context(patch.object(sync, 'rclone_sync', side_effect=transfer))
         patches.enter_context(patch.object(sync.executable, 'ensure_rclone', return_value=binary))
-        assert actions.pull_encrypted_copy('Secret', context)
         item = copy_mapping.connection(context, 'Secret')
+        if pull:
+            assert actions.pull_encrypted_copy('Secret', context)
+        else:
+            # Reader/editor tests need real ciphertext and an independent mapping,
+            # not another transfer review. Transfer tests keep the real pull path.
+            item.publish()
+            shutil.copytree(cloud, item.data, dirs_exist_ok=True)
         provider = local_crypt.CryptResources(item, binary=binary)
         try:
             yield SimpleNamespace(root=root, plain=plain, cloud=cloud, package=package, context=context,
-                                  item=item, provider=provider, original=original, image=image.getvalue())
+                                  item=item, provider=provider, original=original, image=image)
         finally:
             provider.close()
             session.forget(context)
