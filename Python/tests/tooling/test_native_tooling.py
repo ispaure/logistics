@@ -158,11 +158,30 @@ class NativeToolingTests(unittest.TestCase):
             self.assertFalse(owner.provision(self.root)['applicable'])
 
     def test_bootstrap_hook_uses_owned_mobile_child_and_guarded_runner(self):
-        with patch.object(bootstrap, 'run', return_value='{}') as run, \
-                patch.object(bootstrap, '_MUTATION', NS(get=lambda: dict(value=dict(nonce='fixture-nonce')))):
-            bootstrap.repair_native(self.root)
-        self.assertEqual(run.call_args.args[0], [self.mobile, self.root / 'logistics_build/native_tooling.py', '--root', self.root, '--owner-nonce', 'fixture-nonce'])
-        self.assertEqual(run.call_args.kwargs['cwd'], self.root)
+        capability = bootstrap.private(self.root) / 'native-setup-owner.json'
+        # Real updates own this guard before delegating repair. It creates the
+        # parent on every OS, even where POSIX mutation intent is unavailable.
+        with bootstrap.mutation_guard(self.root):
+            for platform in ('posix', 'nt'):
+                with self.subTest(platform=platform):
+                    operating_system = NS(**vars(os))
+                    operating_system.name = platform
+                    mobile = self.root / 'mobile_build/.venv' / (
+                        'Scripts/python.exe' if platform == 'nt' else 'bin/python')
+                    mobile.parent.mkdir(parents=True, exist_ok=True)
+                    mobile.touch()
+                    def child(*args, **kwargs):
+                        if platform == 'nt':
+                            self.assertEqual(json.loads(capability.read_text()), dict(
+                                schema=1, root=str(self.root), nonce='fixture-nonce'))
+                        return '{}'
+                    with patch.object(bootstrap, 'os', operating_system), \
+                            patch.object(bootstrap, 'run', side_effect=child) as run, \
+                            patch.object(bootstrap, '_MUTATION', NS(get=lambda: dict(value=dict(nonce='fixture-nonce')))):
+                        bootstrap.repair_native(self.root)
+                    self.assertEqual(run.call_args.args[0], [mobile, self.root / 'logistics_build/native_tooling.py', '--root', self.root, '--owner-nonce', 'fixture-nonce'])
+                    self.assertEqual(run.call_args.kwargs['cwd'], self.root)
+                    self.assertFalse(capability.exists())
 
     def test_go_probe_disables_network_telemetry_and_rejects_wrong_version(self):
         go = self.work / 'go'; go.touch()
