@@ -22,6 +22,7 @@
     "documents/entry_icons.py",
     "documents/file_preview.py",
     "documents/history_controls.py",
+    "documents/library_action_icons.py",
     "documents/limits.py",
     "documents/locations.py",
     "documents/markdown.py",
