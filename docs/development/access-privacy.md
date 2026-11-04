@@ -237,11 +237,34 @@ Continuity calls or acoustic zero-leakage guarantees.
 
 ## Mobile resume form layout
 
-The resume form uses the entire available height as a vertical scroll viewport.
-An unpainted body insets the rounded card from the viewport; the card is capped
-at 560 logical pixels and adapts to narrow windows. Credential names and status
-messages wrap using the shared settings text fitter. Layout subscriptions refit
+The rounded resume card stays within the available viewport, capped at 560
+logical pixels wide and 520 high. Its form scrolls inside an inset viewport, so
+landscape and software-keyboard layouts preserve all four card corners. Credential
+names and status messages wrap using the shared settings text fitter. Layout subscriptions refit
 on window changes, and the iOS replacement root retains its safe-area callback.
-Host regression tests cover compact/wide bounds, long labels, root restoration,
-safe-area forwarding and password verification. Native keyboard/rotation and
-corner appearance still require device acceptance.
+Android measures the native visible frame independently of the toolkit root
+minimum height; a lock-only global-layout listener refits during IME changes and
+is removed on unlock or disposal. The inner scroll has no toolkit minimum height.
+Very short viewports reduce vertical gutters while keeping at least 48 logical
+pixels available for a scrolling control.
+Host regression tests cover compact/wide and 96-point keyboard bounds, long
+labels, root restoration, safe-area forwarding and password verification.
+The native lockscreen probe exercises the real resume form with native field
+input, portrait and both landscape orientations, rotation with the software
+keyboard open, wrong-password rejection, scrolling to Unlock, navigation
+restoration and keyboard dismissal. It retains full-screen keyboard captures
+and geometry reports outside the documentation wiki, and removes its disposable
+devices. Android acknowledges the Activity configuration/display rotation because
+the ordinary navigation root is detached while locked.
+
+Run from the repository root using the mobile build environment:
+
+```sh
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools ios --output test-results/lockscreen-ios
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools android --android-image 'system-images;android-35;google_apis;arm64-v8a' --output test-results/lockscreen-android
+```
+
+The Android image option selects an explicitly installed manager-supported
+image without changing the saved project profile. The complete Android scenario
+has a ten-minute budget for startup and system screenshots; individual keyboard,
+rotation and unlock assertions retain their own shorter limits.
