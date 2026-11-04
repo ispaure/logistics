@@ -190,8 +190,34 @@ networking, cancellation and recovery checks.
 `python3 dev.py test-owner lm` includes `test_mobile_chat.py` for portable
 URL, transport, cancellation and storage contracts, plus the mobile inventory,
 transcript DOM, deferred-save, UI and on-device provider tests. The browser check additionally
-needs Node, Playwright and its Chromium installation; dummy-backend host passes
-do not establish native device behavior.
+needs Node and Playwright, plus either Playwright's Chromium installation or an
+existing Chrome executable supplied through `LOGISTICS_CHROME`. Dummy-backend
+host passes do not establish native device behavior.
+
+On macOS/Linux, run `sh Scripts/run_chat_dom.sh` from the repository root. It uses
+Node on `PATH`, or the existing Codex bundled runtime when available, and locates
+that runtime's Playwright package if `NODE_PATH` is unset. On macOS it can use
+installed Chrome unless `LOGISTICS_CHROME` or `PLAYWRIGHT_BROWSERS_PATH` is set.
+It configures only the test process; it does not install packages or change shell
+profiles. Explicit environment overrides take precedence.
+
+For tools installed outside the shell's search path, set `LOGISTICS_NODE` to
+the Node executable and `NODE_PATH` to the directory containing the `playwright`
+package. These overrides can be scoped to a single invocation:
+
+```sh
+LOGISTICS_NODE=/path/to/node \
+NODE_PATH=/path/to/node_modules \
+LOGISTICS_CHROME='/path/to/Google Chrome' \
+python3 dev.py test mobile test_chat_dom.py
+```
+
+Omit `LOGISTICS_CHROME` to use Playwright's downloaded Chromium instead; keep
+`PLAYWRIGHT_BROWSERS_PATH` explicit during both installation and execution, as
+described in the [host test guide](../../../development/testing.md). The test
+uses a disposable browser profile and blocks page network requests. The host
+must allow browser subprocesses to launch; a sandbox launch failure is not DOM
+regression evidence.
 
 ## Code mode and optional direct edits
 
