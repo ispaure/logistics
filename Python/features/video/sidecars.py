@@ -6,19 +6,30 @@ from .playback import SubtitleContent
 from .subtitles import MAX_SUBTITLE
 
 
-def discover_sidecars(content, *, cancelled=lambda: False, extensions=None):
+def discover_sidecars(content, *, cancelled=lambda: False, extensions=None, preferred="", entries=None):
     """Return retained resources; the caller must close every returned resource."""
     extensions = SubtitleContent.extensions if extensions is None else extensions
     folder, _, name = content.path.rpartition('/')
     stem = PurePosixPath(name).stem
     result = []
     try:
-        for row in content.provider.list(folder)[:10000]:
+        rows = (content.provider.list(folder) if entries is None else entries)[:10000]
+        if preferred:
+            # Keep a selected same-source subtitle across video/folder renames.
+            candidate = next((row['path'] for row in rows
+                              if row['name'] == PurePosixPath(preferred).name), preferred)
+            rows = [dict(name=PurePosixPath(candidate).name, path=candidate, directory=False), *rows]
+        seen = set()
+        for row in rows:
             if cancelled() or len(result) >= 32:
                 break
             candidate = str(row['name'])
+            if row['path'] in seen:
+                continue
+            seen.add(row['path'])
             if (row['directory'] or PurePosixPath(candidate).suffix.lower() not in extensions
-                    or not (PurePosixPath(candidate).stem == stem or candidate.startswith(stem + '.'))):
+                    or not (preferred and PurePosixPath(candidate).name == PurePosixPath(preferred).name
+                            or PurePosixPath(candidate).stem == stem or candidate.startswith(stem + '.'))):
                 continue
             subtitle = None
             try:

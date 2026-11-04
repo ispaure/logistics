@@ -91,6 +91,7 @@ public final class VideoPlayer {
         }
     };
     final Handler handler = new Handler(Looper.getMainLooper());
+    String pendingSubtitleURL;
     private final JSONArray subtitles;
     private final ArrayList<RendererDiscoverer> discoverers = new ArrayList<>();
     private final ArrayList<RendererItem> renderers = new ArrayList<>();
@@ -582,7 +583,11 @@ public final class VideoPlayer {
     }
     public void showSubtitleBrowser(String json) { if (!done) tools.browser(json); }
     public void showCachedRanges(String json) { if (!done && allowed(false)) tools.cached(json); }
-    public void attachSubtitleURL(String url) { if (allowed(false)) player.addSlave(Media.Slave.Type.Subtitle, Uri.parse(url), true); }
+    public void attachSubtitleURL(String url) {
+        pendingSubtitleURL = url;
+        if (allowed(false) && player.isPlaying() && player.addSlave(Media.Slave.Type.Subtitle, Uri.parse(url), true))
+            pendingSubtitleURL = null;
+    }
     void reloadPlaybackOptions() {
         if (done) return;
         boolean requested = playRequested;
@@ -784,20 +789,22 @@ public final class VideoPlayer {
         if (!allowed(false)) return;
         ArrayList<String> labels = new ArrayList<>();
         ArrayList<Runnable> actions = new ArrayList<>();
-        if (subtitlesOnly) { labels.add("Subtitles off"); actions.add(() -> player.setSpuTrack(-1)); }
+        if (subtitlesOnly) { labels.add("Subtitles off"); actions.add(() -> { player.setSpuTrack(-1); tools.setting("subtitle_track", -1); }); }
         MediaPlayer.TrackDescription[] audio = player.getAudioTracks();
         if (!subtitlesOnly && audio != null) for (MediaPlayer.TrackDescription track : audio) {
-            labels.add((player.getAudioTrack() == track.id ? "✓ " : "") + trackLabel(track, false)); actions.add(() -> player.setAudioTrack(track.id));
+            labels.add((player.getAudioTrack() == track.id ? "✓ " : "") + trackLabel(track, false)); actions.add(() -> { player.setAudioTrack(track.id); tools.setting("audio_track", track.id); });
         }
         MediaPlayer.TrackDescription[] text = player.getSpuTracks();
         if (subtitlesOnly && text != null) for (MediaPlayer.TrackDescription track : text) {
-            labels.add((player.getSpuTrack() == track.id ? "✓ " : "") + trackLabel(track, true)); actions.add(() -> player.setSpuTrack(track.id));
+            labels.add((player.getSpuTrack() == track.id ? "✓ " : "") + trackLabel(track, true)); actions.add(() -> { player.setSpuTrack(track.id); tools.setting("subtitle_track", track.id); });
         }
         for (int index = 0; subtitlesOnly && index < subtitles.length(); index++) {
             final int selected = index;
             labels.add("External: " + subtitles.optJSONObject(index).optString("name"));
-            actions.add(() -> player.addSlave(Media.Slave.Type.Subtitle,
-                Uri.parse(subtitles.optJSONObject(selected).optString("url")), true));
+            actions.add(() -> {
+                player.addSlave(Media.Slave.Type.Subtitle, Uri.parse(subtitles.optJSONObject(selected).optString("url")), true);
+                tools.emit("subtitleSelect", subtitles.optJSONObject(selected).optString("name"));
+            });
         }
         openDialog = new AlertDialog.Builder(activity).setTitle(subtitlesOnly ? "Subtitles" : "Audio tracks")
             .setItems(labels.toArray(new String[0]), (dialog, index) -> {

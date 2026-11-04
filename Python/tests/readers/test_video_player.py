@@ -22,6 +22,81 @@ from features.video.transport import VideoTransport, byte_range
 
 
 class VideoContracts(unittest.TestCase):
+    def test_selected_sidecar_is_restored_after_video_folder_move(self):
+        from features.video.sidecars import discover_sidecars
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'renamed.mp4').write_bytes(b'movie')
+            (root / 'captions.srt').write_text('1\n00:00:01,000 --> 00:00:02,000\nHi\n')
+            content = VideoContent(LocalFiles(root), 'renamed.mp4')
+            try:
+                subtitles = discover_sidecars(content, preferred='oldfolder/captions.srt')
+                try:
+                    self.assertEqual([item.path for item in subtitles], ['captions.srt'])
+                finally:
+                    for item in subtitles:
+                        item.close()
+            finally:
+                content.close()
+
+    def test_legacy_local_position_and_defaults_migrate_to_content_record(self):
+        from dataclasses import asdict
+        from hashlib import sha256
+        import json
+        from features.video.session import PlaybackSettings
+        from services.documents.video_settings import SettingsStore, VideoSettingsStore
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'movie.mp4').write_bytes(b'legacy movie')
+            provider = LocalFiles(root)
+            content = VideoContent(provider, 'movie.mp4')
+            self.addCleanup(content.close)
+            cache = root / 'state'
+            cache.mkdir()
+            key = sha256(json.dumps([provider.storage_id, provider.storage_namespace, content.path]).encode()).hexdigest()
+            (cache / (key + '.json')).write_text(json.dumps(dict(schema=1,
+                revision=json.dumps(content.source.expected), position=1234, generation='')))
+            SettingsStore(cache).save(asdict(PlaybackSettings(rate=1.5)))
+            progress = VideoProgress(content, cache)
+            self.assertEqual(progress.load(), 1234)
+            self.assertEqual(VideoSettingsStore(progress, cache).load().rate, 1.5)
+            progress.save(5678)
+            restored = VideoProgress(content, cache)
+            self.assertEqual(restored.load(), 5678)
+            self.assertEqual(restored.settings.rate, 1.5)
+
+    def test_local_settings_and_position_follow_moves_and_survive_completion(self):
+        from dataclasses import asdict
+        from features.video.session import PlaybackSettings
+        from services.documents.video_settings import VideoSettingsStore
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            movie = root / 'movie.mp4'
+            movie.write_bytes(b'video data' * 100)
+            content = VideoContent(LocalFiles(root), movie.name)
+            progress = VideoProgress(content, root / 'state')
+            progress.load()
+            preferences = PlaybackSettings(rate=1.5, aspect='fill', audio_track=2, subtitle_track=-1)
+            VideoSettingsStore(progress, root / 'state').save(asdict(preferences))
+            progress.save(12345)
+            content.close()
+            target = root / 'subfolder'
+            target.mkdir()
+            movie.rename(target / 'renamed.mp4')
+            moved = VideoContent(LocalFiles(target), 'renamed.mp4')
+            try:
+                restored = VideoProgress(moved, root / 'state')
+                self.assertEqual(restored.load(), 12345)
+                self.assertEqual(restored.settings, preferences)
+                restored.save(99999, completed=True)
+                reopened = VideoProgress(moved, root / 'state')
+                self.assertEqual(reopened.load(), 0)
+                self.assertEqual(reopened.settings, preferences)
+                self.assertFalse((root / 'state' / 'playback-settings.json').exists())
+            finally:
+                moved.close()
+
+
     def test_real_localcrypt_video_ranges_and_encrypted_resume(self):
         from features.rclone import executable, session
         from tests.local_crypt_fixture import crypt_fixture
@@ -43,10 +118,13 @@ class VideoContracts(unittest.TestCase):
                     stream.seek(len(raw) - 100)
                     self.assertEqual(stream.read(100), raw[-100:])
                 state = VideoProgress(content, Path(directory) / 'public-cache')
+                from features.video.session import PlaybackSettings
+                state.settings = PlaybackSettings(rate=1.25, aspect='fill', subtitle_track=-1)
                 state.duration = 90000
                 state.save(24680)
                 self.assertEqual(state.load(), 24680)
                 self.assertEqual(state.duration, 90000)
+                self.assertEqual(state.settings.rate, 1.25)
                 state.save(13579)
                 self.assertEqual(state.load(), 13579)
                 encrypted = state.credential_state.root / (state.credential_state.binding() + '.zip')
