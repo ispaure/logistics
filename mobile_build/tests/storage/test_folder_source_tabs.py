@@ -26,6 +26,34 @@ class FolderSourceTabTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_native_review_uses_dedicated_managed_folder_route(self):
+        from mobile_build.tests.support.app import mobile_app
+        from mobile_build.native_tests.tests.logisticsmobile.ui_review import open_review_folder_from_shared_files
+        from services.documents.locations import collection_path
+        from unittest.mock import patch
+
+        for shared in (False, True):
+            with self.subTest(shared_documents=shared), TemporaryDirectory() as root, \
+                    patch.dict(_shared_local_roots), mobile_app(root=Path(root) / 'private') as app:
+                if shared:
+                    documents = Path(root) / 'Documents'
+                    documents.mkdir()
+                    use_shared_local(app.private_root, documents)
+                    (documents / 'Shared note.txt').write_text('Shared sibling')
+                folder = collection_path(app.private_root) / 'UI Review'
+                folder.mkdir(parents=True)
+                (folder / 'Meeting notes.md').write_text('# Meeting notes')
+                app.show_cloud(present=False)
+                app.show_locations()
+                app.folder_source_buttons['Local'].on_press()
+                app.folder_local_buttons['Others'].on_press()
+                app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
+                if shared:
+                    self.assertIn('Shared note.txt', [entry.label for entry in app.file_browser.entries])
+                app.loop.run_until_complete(open_review_folder_from_shared_files(app))
+                self.assertEqual(app.file_provider.root, collection_path(app.private_root))
+                self.assertEqual(app.file_path, 'UI Review')
+
     def test_open_workspace_retains_selection_until_return_to_overview(self):
         app = self.app
         (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
