@@ -28,3 +28,23 @@ Review records identities and hashes without changing files. Apply rechecks the
 conflict and original before deleting the identical copy. Unique edits, missing
 originals, ambiguous names and changed files remain. The dialog retains results
 and runs scanning/deletion on owned workers with cooperative cancellation.
+
+## Platform and validation boundary
+
+The feature contributes desktop folder sources and a Qt workflow; it has no
+mobile adapter or mobile source manifest. See [mobile scope](../user_mobile/user_mobile.md).
+Detection reads `%APPDATA%/Dropbox/info.json` or `%LOCALAPPDATA%/Dropbox/info.json`
+on Windows, and `~/.dropbox/info.json` on macOS/Linux. It uses the first existing
+candidate and retains only configured roots that exist as directories.
+
+`ui/dialogs.py` owns review invalidation when the path or recursion changes.
+`review_conflicts` skips symbolic-link candidates, captures lstat identities and
+compares SHA-256 hashes. Apply rechecks both identities and hashes before unlinking
+the copy. This is a best-effort filesystem recheck, not an atomic transaction
+with Dropbox's sync client.
+
+`Python/tests/integrations/test_dropbox.py` covers deletion of an identical copy,
+preservation of unique content, and changes to either file after review. These
+local-file fixtures do not verify a real Dropbox account, OS source discovery or
+service-side recovery. The November 4 documentation audit read source/tests only;
+it did not rerun tests or establish native acceptance.
