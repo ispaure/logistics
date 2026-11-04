@@ -21,7 +21,7 @@ from features.blender.addons import scanning as addons
 from features.blender.installation.install import (MARKER, extract_dmg, extract_tar, install_release,
                                      installed, installation_lock, remove_installation)
 from features.blender.presets.manager import BlenderManager, preset_name
-from features.blender.installation.releases import Release, load_releases
+from features.blender.installation.releases import Release, load_releases, release_config_paths, version_from_path
 
 
 def release(version='4.5.1', format='zip', digest='0' * 64):
@@ -61,6 +61,7 @@ class BlenderManagerTests(unittest.TestCase):
         return response
 
     def test_catalog_has_exact_releases_and_platform_specific_hashes(self):
+        self.assertEqual([version_from_path(path) for path in release_config_paths()], ['5.2.2', '4.5.1'])
         hashes = set()
         for platform in ('windows-x64', 'windows-arm64', 'linux-x64', 'macos-arm64'):
             builds = load_releases(platform=platform)
@@ -301,6 +302,23 @@ class BlenderManagerTests(unittest.TestCase):
             rows, message = addons.inspect_addons(self.manager, self.release, 'Default', timeout=-1)
         process.kill.assert_called_once()
         process.wait.assert_called_once()
+        self.assertEqual(rows, [])
+        self.assertIn('timed out', message)
+
+    def test_inventory_timeout_after_wait_kills_and_reaps_child(self):
+        self.manager.create_preset(self.release, 'Default')
+        self._mark_installed()
+        process = Mock()
+        process.poll.return_value = None
+        process.wait.side_effect = [subprocess.TimeoutExpired('blender', .1), None]
+        with patch('features.blender.addons.scanning.subprocess.Popen', return_value=process), \
+                patch('features.blender.addons.scanning.monotonic', side_effect=[100, 100.05, 101]):
+            rows, message = addons.inspect_addons(self.manager, self.release, 'Default', timeout=.5)
+        self.assertEqual(process.wait.call_args_list[0].kwargs, {'timeout': .1})
+        self.assertEqual(process.wait.call_count, 2)
+        self.assertEqual(process.wait.call_args_list[1].args, ())
+        self.assertEqual(process.wait.call_args_list[1].kwargs, {})
+        process.kill.assert_called_once()
         self.assertEqual(rows, [])
         self.assertIn('timed out', message)
 
