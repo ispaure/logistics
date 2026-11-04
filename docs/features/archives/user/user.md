@@ -1,8 +1,8 @@
 # Archive manager
 
-Browse, preview, create and extract archives without unpacking them just to inspect
-their contents. Open **Documents → Archives**, or open a supported archive from
-File Browser. Enable **Archives** in Settings to use its launch and editing actions.
+On desktop, browse, preview, create and extract archives without unpacking them
+just to inspect their contents. Open **Documents → Archives**, or open a supported
+archive from File Browser. Enable **Archives** in Settings to use its launch and editing actions.
 
 ## Explore an archive
 
@@ -32,7 +32,9 @@ comic contents. These actions also appear in the Comics library.
 
 Each archive opens as a retained document, hosted by the application's document
 workspace when available or in a standalone window. Reopening an already open
-archive reveals it. Multiple archives can remain open. Successful operations refresh the originating browser.
+archive reveals it. Multiple archives can remain open. Detached documents retain
+their session and toolbar; **Bring back** reattaches them. Successful workspace
+operations refresh the originating browser.
 Disabling Archives removes its actions and activation; existing windows and jobs
 can finish. Passive archive information remains a shared file-browser capability.
 
@@ -50,7 +52,9 @@ passwords as described below.
 **Remove selected entries…** removes files or whole folder subtrees after a
 confirmation. Editing rebuilds and verifies the ZIP before saving. Added names
 cannot silently replace existing entries. Mixed encrypted/plain ZIPs cannot be
-edited; their existing protection policy is preserved. TAR archives are browsable
+edited. Other ZIP edits preserve the existing protection policy. Edits replace
+the archive after verification and have no Undo or automatic backup: keep a copy
+before removing entries you may need again. TAR archives are browsable
 and extractable; edit controls are available for ZIP and CBZ.
 
 ## Extract and check
@@ -124,7 +128,8 @@ selected folder (or an ancestor):
 archive_password = your-password
 ```
 
-The nearest section wins. An empty password in that section stops inheritance.
+The nearest `[LogisticsZIP]` section wins. An empty or missing `archive_password`
+in that section stops inheritance; a `[DEFAULT]` value does not supply it.
 Keep real passwords private: the INI stores them as plain text. An entered password
 is not saved automatically. Different configured passwords require separate ZIPs.
 ZIP member names are visible without a password; reading file contents requires
@@ -135,6 +140,8 @@ an application that supports WinZip AES.
 **Cancel ZIP creation**, Escape or closing requests cancellation. The dialog waits
 for the worker to stop, discards incomplete output and leaves sources intact.
 A completed ZIP remains successful if cancellation arrives after publication.
+If an operation is already running, finish or cancel it before starting another.
+An invalid archive path leaves the current archive open and shows an error.
 If creation fails, read the dialog's explanation, check the output location,
 permissions and available disk space, then retry.
 
@@ -142,11 +149,5 @@ For encrypting CBZ contents in place, use the [Comics guide](../../comics/user/u
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
-
-
-
-Use **Documents → Archives** to open another archive. Each archive retains its
-session and toolbar while open, including when detached; **Bring back** reattaches
-it. ZIP edits replace the archive after verification and have no Undo or automatic
-backup. Keep a copy before removing entries you may need again.
+See [Using Logistics](../../../user/user.md) for navigation and settings, and
+[Archives on mobile](../user_mobile/user_mobile.md) for the mobile boundary.
