@@ -1,4 +1,5 @@
 """Compact preference rows and offline installed-build information."""
+import asyncio
 import json
 from pathlib import Path
 import sys
@@ -199,18 +200,39 @@ class SettingsCategories:
         from ..documentation_ui import show_documentation
         box.add(page_button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(app),
                             style=Pack(height=48)))
+        box.add(page_button('About', on_press=self.show_about, style=Pack(height=48)))
         return box
 
+    def show_about(self, widget=None, **kwargs):
+        app = self.app
+        if not app.checkpoint():
+            return
+        navigation = app.settings_navigation
+        navigation.fit_detail('About')
+        view = navigation.options['About']
+        navigation.detach(view)
+        app.show_view(view, checkpoint=False, destination='settings', route='settings-about', title='About')
 
     def about(self):
         app = self.app
         box = self.category('About')
-        app.build_version_label = toga.Label(build_information(app.version),
+        label = app.build_version_label = SettingsLabel(
+            (app.version or 'Development build') + '\nLoading build information…',
             style=Pack(font_size=12, color='#808080'))
+        box.add(label)
+
+        async def load_information():
+            try:
+                text = await asyncio.to_thread(build_information, app.version)
+            except Exception:
+                # Keep About usable even if an old/malformed payload cannot be read.
+                text = (app.version or 'Development build') + '\nBuild information unavailable.'
+            label.text = text
+
+        app.build_information_task = app.loop.create_task(load_information())
         from .licenses import show_licenses
         box.add(page_button('Open-source licenses', on_press=lambda widget, **kw: show_licenses(app),
                             style=Pack(height=48)))
-        box.add(app.build_version_label)
         return box
 
 
