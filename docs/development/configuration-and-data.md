@@ -61,8 +61,8 @@ responsibility of collection access; reconnecting is not an integrity check.
 commonUtils owns shared code family and point size (11 by default) in
 `ui/settings.ini [Styling]`, layered with persistent personal overrides.
 Production Text Editor, IDE, Git and Markdown code use the QApplication-owned
-styling controller. `features.code_font` retains a compatibility entry point for
-explicit preferences-path consumers. Appearance changes preserve document text,
+styling controller. Text Editor preferences retain explicit preferences-path
+loading for isolated consumers. Appearance changes preserve document text,
 modified flags and recovery data.
 
 Stable feature IDs, workflow IDs, configuration keys and public compatibility
