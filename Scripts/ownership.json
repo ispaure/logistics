@@ -190,12 +190,13 @@
       "guide": "docs/features/lm/development/development.md",
       "tests": {
         "desktop": [
-          "test_lm*.py"
+          "test_lm*.py",
+          "test_mobile_chat.py"
         ],
         "mobile": [
-          "test_chat_ui.py",
           "test_chat*.py",
-          "test_deferred_chat.py"
+          "test_deferred_chat.py",
+          "test_on_device.py"
         ]
       },
       "mobile_manifest": "Python/features/lm/mobile_sources.json"
