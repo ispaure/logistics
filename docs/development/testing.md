@@ -180,6 +180,27 @@ environment; normal ordering is deterministic without timing history. Bridge Go
 tests run by stage with native Go fail-fast support; they currently report outcomes
 and gated stages on the console rather than the Python JSON timing schema.
 
+### Focused resource, Git and tooling checks
+
+LocalCrypt workflows are split across `Python/tests/resources/test_local_crypt*.py`;
+real transfer cases keep their transfer setup, while reader/editor fixtures copy
+independent ciphertext into a published mapping. Cached fixture assets contain
+only immutable synthetic bytes; credentials, providers and mutable repositories
+remain independent per case. Git UI workflows use `test_git_ui*.py` with copied
+repository templates; watcher tests live in `test_git_watchers.py`.
+
+The daily profile keeps the standard encrypted rename and batching modes. The
+alternate encryption-mode matrices and exhaustive documentation-viewer sweeps use
+`EXTENDED`; run `--profile full` to include them. Packaged startup keeps empty
+and populated storage in daily coverage; its Help-navigation journey is extended. The small smoke subset of the
+execution-policy tests checks stage gating, classification rejection and missing
+evidence. Other runner scenarios remain regression coverage.
+
+Run `python3 dev.py architecture` for the live-tree boundary gate. Architecture
+unit tests exercise checker fixtures and policy declarations without repeating
+that complete scan. Completed testcase records are saved incrementally, so an
+isolated-file timeout retains earlier outcomes while marking coverage incomplete.
+
 ### Shared-library test matrix
 
 Use the same entry point for commonUtils:
@@ -395,7 +416,7 @@ the map does not invent individual maintainer assignments.
 | Feature infrastructure | `Python/tests/application/test_feature_registry.py`, `test_feature_preferences.py`, `test_settings_page.py` |
 | Desktop shell/documents | `Python/tests/application/test_main_window_navigation.py`, `test_document_hosting.py`, `test_notes_library_hosting.py`, `test_reader_host_integration.py`, `Python/tests/application/test_document_workspace.py` |
 | LM conversation lifecycle and presentation | `Python/tests/chat/test_lm_session.py`, `test_lm_ui.py`, `test_lm_appearance.py` |
-| Git history, search, preview and job ownership | `Python/tests/version_control/test_git_ui.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
+| Git history, search, preview and job ownership | `Python/tests/version_control/test_git_ui*.py`, `test_git_watchers.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
 | Blender presentation and operation lifecycle | `Python/tests/blender/test_blender_page.py`, `test_blender_settings.py`, `test_blender_library.py` |
 | Mobile Open/Save As and file management | `mobile_build/tests/documents/test_editor_picker.py`, `test_files_ui.py`, `test_private_sessions.py` |
 | Mobile saved imports and window ownership | `mobile_build/tests/documents/test_saved_files.py`, `test_window_owners.py`, `test_workspace_ui.py` |

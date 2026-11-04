@@ -1,6 +1,6 @@
 """Real desktop help widgets open the migrated guides and scoped file trees."""
 
-from commonUtils.testing.stages import TestStage
+from commonUtils.testing.stages import TestStage, stage
 
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
@@ -37,6 +37,7 @@ class DocumentationViewerTests(QtTestCase):
         self.assertIsNotNone(item)
         self.assertEqual(item.data(0, qt.Qt.ItemDataRole.UserRole), path.resolve())
 
+    @stage(TestStage.EXTENDED)
     def test_every_feature_help_button_opens_real_viewer_and_owned_tree(self):
         owners = sorted(p for p in (ROOT / 'Python/features').iterdir()
                         if not p.is_symlink() and (ROOT / 'docs/features' / p.name / 'user/user.md').is_file())
@@ -57,6 +58,17 @@ class DocumentationViewerTests(QtTestCase):
                 panel.deleteLater()
                 self.app.processEvents()
 
+    def test_feature_help_button_opens_owned_page_in_root_wiki(self):
+        with patch.object(registry, 'get_settings', return_value=[]):
+            panel = FeatureSettingsPanel(SimpleNamespace(name='git', label='Git', enabled=False, available=True))
+            before = set(_windows)
+            panel.guide_button.click()
+            window = (set(_windows) - before).pop()
+            self.assert_scope(window.viewer, ROOT / 'docs/features/git/user/user.md', ROOT / 'docs')
+            window.close()
+            panel.close()
+            panel.deleteLater()
+
     def test_header_menu_browser_and_bulk_help_open_their_real_scopes(self):
         from types import MethodType
         from desktop.header_menus import HeaderMenus
@@ -69,39 +81,42 @@ class DocumentationViewerTests(QtTestCase):
         states = [SimpleNamespace(name=p.name, label=p.name)
                   for p in (ROOT / 'Python/features').iterdir()
                   if not p.is_symlink() and (ROOT / 'docs/features' / p.name / 'user/user.md').is_file()]
-        with patch.object(registry, 'get_feature_states', return_value=states):
-            HeaderMenus.update_guides(harness)
         expected = {'Logistics Guide': ROOT / 'docs/user/user.md',
                     'Bulk Rename Guide': ROOT / 'docs/features/bulk_rename/user/user.md'}
         expected.update({state.label: ROOT / 'docs/features' / state.name / 'user/user.md'
                          for state in states})
-        for action in menu.actions():
-            with self.subTest(menu=action.text()):
-                before = set(_windows)
-                action.trigger()
-                opened = set(_windows) - before
-                self.assertEqual(len(opened), 1)
-                window = opened.pop()
-                page = expected.pop(action.text())
-                self.assert_scope(window.viewer, page, ROOT / 'docs')
-                window.close()
+        # Verify every route, but render one representative header action.
+        # The exhaustive feature-button render sweep remains extended coverage.
+        with patch('services.documentation.open_guide') as open_guide:
+            with patch.object(registry, 'get_feature_states', return_value=states):
+                HeaderMenus.update_guides(harness)
+            for action in menu.actions():
+                with self.subTest(menu=action.text()):
+                    action.trigger()
+                    self.assertEqual(open_guide.call_args.args[0], expected.pop(action.text()))
+                    self.assertIs(open_guide.call_args.kwargs['parent'], host)
         self.assertFalse(expected)
+        with patch.object(registry, 'get_feature_states', return_value=states):
+            HeaderMenus.update_guides(harness)
+        before = set(_windows)
+        menu.actions()[0].trigger()
+        window = (set(_windows) - before).pop()
+        self.assert_scope(window.viewer, ROOT / 'docs/user/user.md', ROOT / 'docs')
+        window.close()
         before = set(_windows)
         BrowserMenus.guide(SimpleNamespace(view=host))
         window = (set(_windows) - before).pop()
         self.assert_scope(window.viewer, ROOT / 'docs/user/files-and-documents.md', ROOT / 'docs')
         window.close()
         bulk = BulkRenameWindow(self.temporary_directory().name)
-        self.wait_until(lambda: bulk.renamer._generation > 0 and not bulk.renamer.progress.busy,
-                        message="Bulk Rename fixture scan did not finish")
         help_menu = next(action.menu() for action in bulk.menuBar().actions() if action.text() == 'Help')
         before = set(_windows)
         help_menu.actions()[0].trigger()
         window = (set(_windows) - before).pop()
-        scope = ROOT / 'docs/features/bulk_rename'
-        self.assert_scope(window.viewer, scope / 'user/user.md', ROOT / 'docs')
+        self.assert_scope(window.viewer, ROOT / 'docs/features/bulk_rename/user/user.md', ROOT / 'docs')
         window.close(); bulk.close(); host.close()
 
+    @stage(TestStage.EXTENDED)
     def test_real_folder_rows_open_landings_and_up_history_keep_scope(self):
         scopes = [ROOT / 'docs']
         for scope in scopes:

@@ -108,6 +108,8 @@ class TimedResult(unittest.TextTestResult):
         self.report.data['tests'].append(dict(
             self._timing, duration_seconds=perf_counter() - self._started,
             finished_at=timestamp()))
+        if getattr(self.report, 'checkpoint_cases', False):
+            self.report.save()
         self._timing = None
         self.status['completed'] += 1
         self.status.update(test='between tests / class or module fixtures', started=monotonic())
