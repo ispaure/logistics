@@ -1615,3 +1615,11 @@ repeated paste across pages, lasso clipping, cancellation and password gating.
 These host/mock checks do not establish browser pixels, native mobile file
 choosers, physical touch/stylus behavior or reMarkable firmware acceptance. No
 device deployment is part of this validation; native acceptance remains pending.
+
+The image clipboard records the stable `page_id` and exact native source corners.
+Cross-page image Copy/Cut preserves those corners independently of viewport zoom
+and scroll; same-page center placement remains separate. Image keyboard handlers
+run only in Capture mode so the stroke Select clipboard can own its shortcuts.
+Session PDF-unlock caching compares exact encrypted contents, since structural
+recovery publication replaces unchanged member byte objects. Changed PDF bytes
+still invalidate the cached decrypted rendering and require their own password.
