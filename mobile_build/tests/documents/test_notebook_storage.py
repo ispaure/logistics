@@ -141,6 +141,104 @@ class NotebookStorageTests(unittest.TestCase):
         with self.provider.open(resource.path) as stream:
             self.assertEqual(Notebook.read(stream.read()).name, 'External')
 
+    def test_quit_without_saving_drops_recovery_edits_on_file_and_key_reopen(self):
+        panel = self.create(private=False)
+        source = panel.document.resource.provider.root / panel.document.resource.path
+        key = panel.key
+        for by_key in (False, True):
+            with self.subTest(by_key=by_key):
+                if by_key:
+                    self.assertTrue(self.run_async(open_notebook(self.app, path=source)))
+                    panel = self.app.notebook_panel
+                original = source.read_bytes()
+                saved_strokes = len(Notebook.read(original).page(0).strokes)
+                self.stroke(panel)
+                with patch.object(self.app.main_window, 'dialog', AsyncMock(return_value='discard')):
+                    self.assertTrue(self.app.request_close_session(panel.session.id))
+                    tasks = list(self.app._document_close_tasks.values())
+                    for task in tasks:
+                        self.run_async(task)
+                self.assertNotIn(panel.session.id, self.app.workspace.sessions)
+                self.assertEqual(source.read_bytes(), original)
+                self.assertTrue(self.run_async(open_notebook(self.app, **({'key': key} if by_key else {'path': source}))))
+                reopened = self.app.notebook_panel
+                self.assertFalse(reopened.document.dirty)
+                self.assertEqual(len(reopened.editor.notebook.page(0).strokes), saved_strokes)
+                self.assertTrue(self.app.close_session(reopened.session.id))
+
+    def test_discard_after_save_keeps_saved_strokes(self):
+        panel = self.create(private=False)
+        self.stroke(panel)
+        self.run_async(panel.perform({'op': 'save'}))
+        source = panel.document.resource.provider.root / panel.document.resource.path
+        saved = source.read_bytes()
+        self.stroke(panel)
+        self.assertTrue(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertEqual(source.read_bytes(), saved)
+        self.assertTrue(self.run_async(open_notebook(self.app, path=source)))
+        self.assertEqual(len(self.app.notebook_panel.editor.notebook.page(0).strokes), 1)
+
+    def test_discard_recovery_failure_keeps_session_and_dirty_draft(self):
+        panel = self.create(private=False)
+        self.stroke(panel)
+        document = panel.document
+        with patch.object(document.recovery, 'save', side_effect=OSError('disk busy')):
+            self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertIn(panel.session.id, self.app.workspace.sessions)
+        self.assertTrue(document.dirty)
+        self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)
+        self.assertEqual(len(document.recovery.open(document.key).page(0).strokes), 1)
+        self.assertIn('disk busy', panel.status.text)
+        self.assertTrue(self.app.close_session(panel.session.id, choice='discard'))
+
+    def test_discard_never_overwrites_an_external_source_change(self):
+        panel = self.create(private=False)
+        self.stroke(panel)
+        source = panel.document.resource.provider.root / panel.document.resource.path
+        external = Notebook.new('External version').to_bytes()
+        source.write_bytes(external)
+        self.assertTrue(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertEqual(source.read_bytes(), external)
+        self.assertTrue(self.run_async(open_notebook(self.app, path=source)))
+        self.assertEqual(self.app.notebook_panel.editor.notebook.name, 'External version')
+        self.assertFalse(self.app.notebook_panel.document.dirty)
+
+    def test_discard_does_not_erase_another_windows_recovery_edits(self):
+        from features.notebooks.editor import Editor
+        panel = self.create(private=False)
+        self.stroke(panel)
+        document = panel.document
+        other = document.recovery.open(document.key)
+        Editor(other, lambda book: document.recovery.save(document.key, book)).apply(
+            dict(op='rename', name='Other window draft'))
+        self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertIn('another window', panel.status.text)
+        self.assertEqual(document.recovery.open(document.key).name, 'Other window draft')
+        self.assertTrue(document.dirty)
+
+    def test_failed_discard_binding_keeps_draft_editable_and_retryable(self):
+        panel = self.create(private=False)
+        self.stroke(panel)
+        document = panel.document
+        with patch.object(document, 'changed', side_effect=OSError('binding busy')):
+            self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertTrue(document.dirty)
+        self.stroke(panel)
+        self.assertEqual(len(document.recovery.open(document.key).page(0).strokes), 2)
+        self.assertTrue(self.app.close_session(panel.session.id, choice='discard'))
+
+    def test_private_discard_keeps_saved_ciphertext_and_reopens_without_edits(self):
+        panel = self.create()
+        resource = panel.document.resource
+        source = resource.provider._physical(resource.path)
+        original = source.read_bytes()
+        self.stroke(panel)
+        self.assertTrue(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertEqual(source.read_bytes(), original)
+        reopened = DocumentResource(self.provider, resource.path, max_bytes=MAX_ARCHIVE)
+        self.assertTrue(self.run_async(open_notebook(self.app, resource=reopened)))
+        self.assertEqual(len(self.app.notebook_panel.editor.notebook.page(0).strokes), 0)
+
     def test_ordinary_save_updates_source_and_recovery_reopen_retains_binding(self):
         panel = self.create(private=False)
         self.stroke(panel)
