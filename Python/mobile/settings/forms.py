@@ -197,7 +197,7 @@ def connection_group(rows):
     return group_rows(result)
 
 
-def connection_disclosure(title, children):
+def connection_disclosure(title, children, *, on_toggle=None):
     """Retain form values while advanced controls are out of the layout."""
     from ..appearance import surface, list_button
     def changed(box):
@@ -207,6 +207,8 @@ def connection_disclosure(title, children):
                 parent.reflow()
                 break
             parent = parent.parent
+        if on_toggle is not None:
+            on_toggle(box)
     def style(button):
         return surface(list_button(button), radius=0, background='transparent',
                        foreground='accent', outlined=False, eink_outlined=False)
