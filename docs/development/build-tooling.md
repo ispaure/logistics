@@ -180,3 +180,22 @@ Use the [current ownership map](build-deployment-audit.md) to decide whether a
 change is manager infrastructure, a commonUtils mechanism or application policy.
 There is no second Logistics build/deployment UI. Root `Scripts/` keeps the
 machine-used `.bat` files and contributor inspection/setup tools.
+
+## Android runtime evidence transport
+
+The hosted CPython Android runtime gate uses the manager's fresh disposable AVD
+and passes its verified serial to the pinned testbed with `--connected`.
+`mobile.smoke --result-file` atomically retains the actual completed report before
+printing the existing stdout marker. The helper retrieves that unique app-private
+receipt while the emulator is still running, binds it to the staged source, and
+uses the unchanged runtime verifier for the full declared inventory and zero skips.
+A Gradle pass alone, missing receipt, failed report, or nonzero driver exit fails
+the gate. This avoids losing a completed report when upstream logcat attachment
+misses the app process; it does not establish a pass without native test evidence.
+
+The retained diagnostics include original testbed stdout, the recovered receipt,
+Gradle Android XML/report artifacts and best-effort logcat/owned-emulator logs.
+The SDK retires the AVD before the Logistics scratch owner removes its workspace.
+A cleanup failure preserves the owned workspace and reports its path for recovery.
+Portable receipt tests verify this transport contract; a fresh hosted native run
+is still required to establish Linux/Android acceptance after changing it.
