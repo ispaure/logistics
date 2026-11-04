@@ -384,20 +384,33 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                     verify_native_transfer_fallback(surface)
 
     def test_android_native_attachment_and_text_values_are_required(self):
-        surface = self.surface()
-        fallback = surface.native_fallback
-        implementation = type('AndroidFixture', (), {'__module__': 'toga_android.widgets.box'})
-        impl = implementation()
-        impl.native = SimpleNamespace(isAttachedToWindow=lambda: True, getVisibility=lambda: 0,
-            isShown=lambda: True, getWidth=lambda: 320, getHeight=lambda: 480)
-        fallback._impl = impl
-        for widget in (fallback.title, fallback.paths, fallback.status, fallback.metrics):
-            value = widget.text
-            widget._impl.native = SimpleNamespace(getText=lambda value=value: SimpleNamespace(toString=lambda: value))
-        self.assertEqual(verify_native_transfer_fallback(surface)['renderer'], 'native')
-        impl.native.isAttachedToWindow = lambda: False
-        with self.assertRaisesRegex(AssertionError, 'detached'):
-            verify_native_transfer_fallback(surface)
+        for representation in ('python-string', 'java-charsequence'):
+            with self.subTest(representation=representation):
+                surface = self.surface()
+                fallback = surface.native_fallback
+                implementation = type('AndroidFixture', (), {'__module__': 'toga_android.widgets.box'})
+                impl = implementation()
+                impl.native = SimpleNamespace(isAttachedToWindow=lambda: True, getVisibility=lambda: 0,
+                    isShown=lambda: True, getWidth=lambda: 320, getHeight=lambda: 480)
+                fallback._impl = impl
+                def text_result(value):
+                    return (value if representation == 'python-string'
+                            else SimpleNamespace(toString=lambda: value))
+                for widget in (fallback.title, fallback.paths, fallback.status, fallback.metrics):
+                    value = widget.text
+                    widget._impl.native = SimpleNamespace(getText=lambda value=value: text_result(value))
+                # Read actual native text, including characters that must never
+                # be stripped or normalized, rather than cached widget.text.
+                surface.model['workspace'] = 'Current Δ\u200btransfer '
+                fallback.title._impl.native.getText = lambda: text_result(surface.model['workspace'])
+                self.assertEqual(verify_native_transfer_fallback(surface)['renderer'], 'native')
+                fallback.paths._impl.native.getText = lambda: text_result('Source: stale\nDestination: old')
+                with self.assertRaisesRegex(AssertionError, 'endpoints are stale'):
+                    verify_native_transfer_fallback(surface)
+                self.assertEqual(fallback.paths.text, 'Source: Local/current\nDestination: Remote:')
+                impl.native.isAttachedToWindow = lambda: False
+                with self.assertRaisesRegex(AssertionError, 'detached'):
+                    verify_native_transfer_fallback(surface)
 
     def test_native_review_requires_current_rows_and_paging_controls(self):
         surface = self.surface()
