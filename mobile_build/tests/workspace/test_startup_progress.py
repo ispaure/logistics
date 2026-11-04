@@ -120,7 +120,7 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         image.setImageDrawable.assert_called_once_with(None)
         self.assertTrue(cover.future.cancelled())
 
-    async def test_android_cover_waits_for_measured_reflow_and_clean_draw(self):
+    async def test_android_cover_waits_for_measured_reflow_and_stable_draw(self):
         root, content = Mock(), Mock()
         for native in (root, content):
             native.getWidth.return_value = 0
@@ -140,11 +140,8 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         root.isLayoutRequested.return_value = True
         cover.before_draw()
         self.assertFalse(cover.future.done())
-        root.isLayoutRequested.return_value = False
-        cover.before_draw()
         app.resize_workspace.assert_called_once_with()
         app.navigation.refresh.assert_called_once_with()
-        self.assertFalse(cover.future.done())
         # A rail resize before the next draw must reflow again under the cover.
         content.getWidth.return_value = 810
         cover.before_draw()
@@ -152,6 +149,24 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(cover.future.done())
         cover.before_draw()
         self.assertTrue(cover.future.result())
+
+    async def test_persistent_toga_layout_request_does_not_strand_a_measured_workspace(self):
+        root, content = Mock(), Mock()
+        for native in (root, content):
+            native.getWidth.return_value = 1079
+            native.getHeight.return_value = 2071
+            native.isLayoutRequested.return_value = True
+        app = SimpleNamespace(navigation=SimpleNamespace(
+            _impl=SimpleNamespace(native=root, native_content=content), refresh=Mock()),
+            resize_workspace=Mock())
+        cover = object.__new__(AndroidStartupCover)
+        cover.app, cover.parent, cover.geometry = app, Mock(), None
+        cover.future = asyncio.get_running_loop().create_future()
+        cover.before_draw()
+        self.assertFalse(cover.future.done())
+        cover.before_draw()
+        self.assertTrue(cover.future.result())
+        app.resize_workspace.assert_called_once_with()
 
     async def test_startup_stays_cancellable_until_workspace_is_revealed(self):
         ready = asyncio.Event()
