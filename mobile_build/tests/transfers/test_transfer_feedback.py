@@ -3,7 +3,6 @@
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
-TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -15,8 +14,69 @@ from mobile.app import LogisticsMobile
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 from mobile_build.tests.support.readers import RemoteClient
 
+TEST_STAGE = TestStage.REGRESSION
+
 
 class TransferFeedbackTests(TestCase):
+    def test_download_handoff_keeps_workspaces_usable_during_and_after_transfer(self):
+        import asyncio
+        from threading import Event
+        from types import SimpleNamespace
+        from commonUtils.runtime.operations import check_cancelled
+        from features.rclone.mobile.remote_downloads import RemoteDownload
+        from features.rclone.transfers.mobile.models import TransferOutcome
+
+        app = self.app
+        async def exercise(outcome):
+            started, release = Event(), Event()
+            app.show_locations()
+            source = toga.Box()
+            app.show_view(source, destination='files', route='remote-browser', title='Source')
+            retained = app.routes.body('files')
+            picker = app.editor_picker()
+            await picker.show_destination('download.txt', RemoteDownload(
+                SimpleNamespace(remote='Fixture'), 'download.txt', False))
+            def work(*args, **kwargs):
+                started.set()
+                if not release.wait(5):
+                    raise RuntimeError('Download fixture timed out')
+                check_cancelled(args[3])
+                if outcome == 'failed':
+                    raise OSError('Connection lost')
+                return TransferOutcome('download', status='complete')
+            with patch.object(RemoteDownload, 'execute', side_effect=work), \
+                    patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+                task = asyncio.create_task(picker.complete_destination())
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 5))
+                    self.assertTrue(app.transfer_busy)
+                    self.assertTrue(app.routes.back())
+                    # Previously Back exposed the cleared, disabled picker;
+                    # tab switches retained that unusable Workspaces screen.
+                    self.assertIs(app.routes.body('files'), retained)
+                    self.assertIn(source, retained.children)
+                    app.routes.return_to('home')
+                    app.routes.return_to('files')
+                    self.assertIs(app.routes.body('files'), retained)
+                    self.assertIsNone(picker.panel)
+                    self.assertIsNone(picker._work)
+                    self.assertTrue(await app.show_files(local_root=True))
+                    if outcome == 'cancelled':
+                        app.cancel_mirror_transfer()
+                finally:
+                    release.set()
+                    result = await task
+                self.assertEqual(result, outcome == 'complete')
+            self.assertFalse(app.transfer_busy)
+            self.assertFalse(app.cloud_busy)
+            self.assertNotIn('text-destination', [s[0] for s in app.routes.screens['files']])
+            app.show_locations()
+            self.assertTrue(all(button.enabled for button in app.folder_source_buttons.values()))
+            self.assertTrue(await app.show_files(local_root=True))
+        for outcome in ('complete', 'failed', 'cancelled'):
+            with self.subTest(outcome=outcome):
+                app.loop.run_until_complete(exercise(outcome))
+
     def test_rclone_sleep_lease_survives_cancel_until_worker_retires(self):
         import asyncio
         from threading import Event
