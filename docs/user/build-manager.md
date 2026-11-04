@@ -158,6 +158,36 @@ interpreter used for Logistics tooling:
 mobile_build/.venv/bin/python -m logistics_build.install_build_manager /path/to/build-deployment-manager
 ```
 
+### Project tooling readiness and repair
+
+The manager's **Project tooling** status checks the declared manager pin in both
+Logistics-owned environments before loading the project adapter. It remains
+available when the SDK package is missing. Set up the desktop and mobile
+environments first, then explicitly choose **Update project tooling** to install
+the exact revision from `build-manager-dependency.json` in both environments.
+The terminal equivalent is:
+
+```sh
+python3 logistics_build/tooling_bootstrap.py status
+python3 logistics_build/tooling_bootstrap.py update --confirmed
+```
+
+Repair uses an owned immutable checkout below
+`mobile_build/.tools/build-manager/tooling/`; it never pulls or resets a developer
+checkout. Installed package source, clean Git revision and initialized submodule
+pins are verified. A borrowed/global interpreter or linked environment is rejected.
+Credentials are not part of readiness output. Active workflow locks block repair.
+
+A successful explicit repair enrolls this checkout for restoration after future
+`dev.py setup` environment synchronization. Other users remain unenrolled and
+never install build tooling merely by launching Logistics. Exact dependency
+synchronization remains enabled; restoration reapplies the reviewed project's
+manager pin after synchronization, under the same workflow exclusion lock.
+The optional shared-launcher `environment_sync_wrapper` contract uses this same
+stdlib wrapper and returns before launching the app. It requires a shared launcher
+revision supporting that option; older launchers still require explicit repair.
+An Ally-owned environment is never a project-tooling installation destination.
+
 The manager requires adapter API 1. Missing/incompatible installations stop with a
 setup error. Generic contracts run via `python -m build_manager.contracts` from
 the installed manager checkout; project contracts remain here. Existing plans
