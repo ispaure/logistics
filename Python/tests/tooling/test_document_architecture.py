@@ -106,6 +106,45 @@ class DocumentArchitectureTests(unittest.TestCase):
         self.write("from io import BytesIO\nfrom zipfile import ZipFile\noutput = BytesIO()\nwith ZipFile(output, 'w') as archive:\n archive.writestr('data', b'bytes')")
         self.assertEqual(self.errors(), [])
 
+    def test_exact_typed_memory_codec_parameters_are_allowed(self):
+        self.write("""from features.notebooks._vendor.rmscene.tagged_block_reader import TaggedBlockReader as Reader
+from features.notebooks._vendor.rmscene.tagged_block_writer import TaggedBlockWriter as Writer
+
+def decode(reader: Reader):
+    data = reader.data
+    return data.read_bytes(16)
+
+def encode(writer: Writer):
+    writer.data.write_bytes(b'quad')
+""")
+        self.assertEqual(self.errors(), [])
+
+    def test_codec_annotation_does_not_allow_files_or_unknown_receivers(self):
+        prefix = """from features.notebooks._vendor.rmscene.tagged_block_reader import TaggedBlockReader as Reader
+from features.notebooks._vendor.rmscene.tagged_block_writer import TaggedBlockWriter as Writer
+from pathlib import Path
+"""
+        cases = [
+            ('def parse(reader: Reader, path):\n path.read_bytes()', 'raw-method:read_bytes'),
+            ("def parse(reader: Reader):\n Path('file').write_bytes(b'bytes')", 'raw-method:write_bytes'),
+            ('def parse(reader: Reader, file):\n file.read_bytes()', 'raw-method:read_bytes'),
+            ('def parse(reader: Reader):\n reader.read_bytes()', 'raw-method:read_bytes'),
+            ('def parse(reader: Reader):\n reader.other.read_bytes()', 'raw-method:read_bytes'),
+            ("def parse(reader: Reader):\n reader.data.write_bytes(b'bytes')", 'raw-method:write_bytes'),
+            ('def parse(writer: Writer):\n writer.data.read_bytes()', 'raw-method:read_bytes'),
+            ('def parse(reader: Reader, path):\n reader=path\n reader.data.read_bytes()', 'raw-method:read_bytes'),
+            ('def parse(reader: Reader):\n def nested(reader):\n  reader.data.read_bytes()', 'raw-method:read_bytes'),
+            ('def parse(reader):\n reader.data.read_bytes()', 'raw-method:read_bytes'),
+            ('class Reader: pass\ndef parse(reader: Reader):\n reader.data.read_bytes()', 'raw-method:read_bytes'),
+            ('def Reader(): pass\ndef parse(reader: Reader):\n reader.data.read_bytes()', 'raw-method:read_bytes'),
+            ('def parse(reader: str):\n reader.data.read_bytes()', 'raw-method:read_bytes'),
+            ("def parse(reader: Reader):\n getattr(reader.data,'read_bytes')(16)", 'raw-method:read_bytes'),
+            ("def parse(reader: Reader):\n open('file','rb').read()", 'raw-call:open'),
+        ]
+        for body, operation in cases:
+            with self.subTest(body=body):
+                self.rejected(prefix + body, operation)
+
     def test_shared_policy_storage_and_generic_streams_are_allowed(self):
         self.write('''from services.documents.storage import DocumentResource, DocumentPolicy, document_writable, publish_document_stream, read_local_bytes
 
