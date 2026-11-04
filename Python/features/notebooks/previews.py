@@ -2,7 +2,7 @@
 import base64
 import math
 
-from .brushes import PALETTE
+from .brushes import PALETTE, NATIVE_HIGHLIGHTS
 from .ink import WIDTH, HEIGHT
 
 BATCH = 16
@@ -27,8 +27,9 @@ def page_previews(book, start):
                 points = [*points, stroke.points[-1]]
             color = PALETTE.get(stroke.color, '#000000')
             opacity = 1
-            if stroke.color_rgba:
-                r, g, b, a = stroke.color_rgba
+            rgba = stroke.color_rgba or (NATIVE_HIGHLIGHTS.get(stroke.color) if stroke.tool == 18 else None)
+            if rgba:
+                r, g, b, a = rgba
                 color, opacity = f'#{r:02x}{g:02x}{b:02x}', a / 255
             geometry = 'M' + ' L'.join(f'{p[0]:.1f},{p[1]:.1f}' for p in points)
             if len(points) == 1:
