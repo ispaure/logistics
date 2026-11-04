@@ -42,7 +42,7 @@ def enroll(root, kind, location):
             path = Path(location).absolute()
             if path.parent != root / 'mobile_build/build':
                 raise ValueError('Choose a legacy direct child of mobile_build/build.')
-            return dict(path=str(enroll_output(path.name, root)), retention_days=7)
+            return dict(path=str(enroll_output(path.name, root)), retention_days=5)
         if kind == 'directory':
             requested = Path(location).expanduser().absolute()
             if linked(requested):
@@ -61,7 +61,7 @@ def enroll(root, kind, location):
             token = uuid4().hex
             save_json(marker, dict(schema=1, project=str(root), path=str(path), token=token))
             data['directories'][str(path)] = token
-            result = dict(path=str(path), retention_days=7)
+            result = dict(path=str(path), retention_days=5)
         elif kind == 'simulator':
             from build_manager.apple_simulators import AppleSimulators
             UUID(location)

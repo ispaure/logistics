@@ -88,7 +88,7 @@ build path or temporary device, give it an explicit cleanup lifecycle and report
 any leftovers; do not leave SDK/AVD copies in global temporary storage.
 
 Automatic retention keeps three newest provider builds plus those used within
-one day; source snapshots keep three newest plus those used within seven days,
+one day; source snapshots keep three newest plus those used within five days,
 subject to a 24 GiB soft budget and one-hour grace period. Recipe-owned device-build
 workspaces keep three newest per platform plus one day, with 12 GiB per platform.
 Metadata-identified Xcode project caches keep three newest eligible entries plus
