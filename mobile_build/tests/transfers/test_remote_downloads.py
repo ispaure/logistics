@@ -91,6 +91,26 @@ class RemoteDownloadTests(unittest.TestCase):
 
 
 class RemoteDownloadPickerTests(unittest.TestCase):
+    def test_transfer_back_returns_to_retained_source_folder(self):
+        import toga
+        app = create_app(self)
+        app.show_cloud(present=False)
+        source = toga.Box()
+        app.show_view(source, destination='files', route='remote-browser', title='Source folder')
+        retained = app.routes.body('files')
+        async def start(app, destination, target):
+            app.show_view(toga.Box(), route='transfers', title='Transfer')
+            return True
+        request = NS(kind='download', title='Download locally', primary='Download here', complete=start)
+        picker = app.editor_picker()
+        app.loop.run_until_complete(picker.show_destination('note.txt', request))
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+            self.assertTrue(app.loop.run_until_complete(picker.complete_destination()))
+        self.assertNotIn('text-destination', [s[0] for s in app.routes.screens['files']])
+        self.assertTrue(app.routes.back())
+        self.assertIs(app.routes.body('files'), retained)
+        self.assertIn(source, retained.children)
+
     def test_destination_picker_offers_local_received_and_unlocked_crypt(self):
         app=create_app(self)
         app.show_cloud(present=False)

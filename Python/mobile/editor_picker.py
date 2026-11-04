@@ -875,6 +875,15 @@ class EditorPicker:
             destination = provider.reopen() if hasattr(provider, 'reopen') else provider
             owned = destination is not provider
             self._finish_work(work)
+            # The transfer owns the next screen. Retire the completed form so
+            # native Back returns to the retained source folder and viewport.
+            route_destination = self.app.native_host.state.destination
+            screens = self.app.routes.screens[route_destination]
+            picker_index = next((i for i, screen in enumerate(screens)
+                                 if screen[0] == 'text-destination'), None)
+            if picker_index is not None:
+                self.app.routes.trim(route_destination, picker_index)
+                self.app.routes.render(route_destination)
             self.clear()
             return await operation.destination_action.complete(self.app, destination, target)
         except Exception as error:
