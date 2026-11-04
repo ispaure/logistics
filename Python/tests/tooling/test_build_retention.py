@@ -11,11 +11,56 @@ import unittest
 import sys
 from unittest.mock import patch
 
-from logistics_build.build_retention import clean, enroll_output, scratch, storage_inventory
+from logistics_build.build_retention import (clean, compiler_cache, compiler_cache_group,
+                                            COMPILER_CACHE_MARKER, enroll_output, scratch, storage_inventory)
 from build_manager.retention import lease
 
 
 class BuildRetentionTests(unittest.TestCase):
+    def test_compiler_cache_reuses_data_and_rejects_unowned_or_linked_paths(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with compiler_cache('notebook-codec', root) as path:
+                (path / 'compiled').write_bytes(b'reusable')
+            with compiler_cache('notebook-codec', root) as reused:
+                self.assertEqual(reused, path)
+                self.assertEqual((reused / 'compiled').read_bytes(), b'reusable')
+            parent = path.parent
+            (parent / 'unowned').mkdir()
+            (parent / 'linked').symlink_to(path, target_is_directory=True)
+            for name in ('../escape', '.hidden', 'unowned', 'linked'):
+                with self.assertRaises(ValueError), compiler_cache(name, root):
+                    self.fail('Unowned cache was accepted')
+            rows = storage_inventory(root)
+            self.assertTrue(any(row['group'] == 'Probe compiler caches' and row['name'] == path.name
+                                for row in rows))
+
+    def test_compiler_cache_retention_preserves_active_and_pinned_caches(self):
+        from build_manager.retention import prune_cache_groups
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            spec = compiler_cache_group(root)
+            spec['last_used'] = lambda p: (p / COMPILER_CACHE_MARKER).stat().st_mtime
+
+            def prune():
+                return prune_cache_groups([spec], age_days=1, max_bytes=12 * 1024 ** 3,
+                                          grace_days=1/24, apply=True)
+
+            with compiler_cache('notebook-codec', root) as path:
+                os.utime(path / COMPILER_CACHE_MARKER, (1, 1))
+                os.utime(path, (1, 1))
+                self.assertEqual(prune(), [])
+            # Releasing an active cache refreshes access even after a failed run.
+            self.assertEqual(prune(), [])
+            (path / '.keep').touch()
+            os.utime(path / COMPILER_CACHE_MARKER, (1, 1))
+            os.utime(path, (1, 1))
+            self.assertEqual(prune(), [])
+            (path / '.keep').unlink()
+            os.utime(path, (1, 1))
+            self.assertEqual(prune(), [str(path)])
+            self.assertFalse(path.exists())
+
     def test_five_day_window_expires_six_day_outputs_and_preserves_four_day_outputs(self):
         import time
         for snapshots in (False, True):
