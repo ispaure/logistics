@@ -827,14 +827,73 @@ The mobile source manifest includes the codec and notebook modules explicitly.
 
 ## Validation scope and remaining gates
 
+Notebook regression coverage retains a 256-checkpoint boundary test for the
+historical one-byte author limit, plus the separate saturated legacy-author
+fixture. The eraser index compares exact cut geometry against full scanning and
+checks candidate reduction by counted sweep accesses rather than host timing.
+The optional browser probes share event-aware JavaScript waits. The view probe
+checks computed preview filtering both enabled and disabled while preserving
+model/browser state; the memory probe skips layout-settling waits between strokes
+that leave page geometry unchanged. Layout-changing actions and compositor
+captures retain their settling delays. These host probes do not establish physical
+stylus latency.
+
+The save/reopen/edit journey is a `SMOKE` case. The compact indexed eraser
+oracle and candidate-count check run in the daily profile; the complete seeded
+path/mode/radius matrix remains `EXTENDED` and runs in the full profile. No
+archive compatibility or recovery regression was retired. The existing isolated
+runner also supports selecting this folder directly:
+
+```sh
+PYTHONPATH=Python:. QT_QPA_PLATFORM=offscreen .venv/bin/python Python/tests/run_regressions.py Python/tests/notebooks --isolate-modules --profile daily
+PYTHONPATH=Python:. QT_QPA_PLATFORM=offscreen .venv/bin/python Python/tests/run_regressions.py Python/tests/notebooks --isolate-modules --profile full
+```
+
+Standalone probes are outside `test*.py` discovery. The platform probe's default
+`--profile core` preserves the existing five checks. Explicit `--profile full`
+also schedules template controls, mobile UI and folded laptop layout, PDF
+annotation, encrypted Save/Save As, generated storage acceptance with killed
+writers, and independent decoding. Storage acceptance runs before the Go reader
+and hands its legacy/modern archives to it. Storage and codec work runs once
+when comparing renderers; renderer-sensitive checks run in each requested mode.
+Repeated `--probe NAME` options select individual checks instead of the profile.
+
+```sh
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_platform_probe.py --profile full --output test-results/notebook-native
+```
+
+Full native acceptance requires a desktop display, the configured rclone binary
+and Go (discovered on PATH or in the existing mobile toolchain, or supplied with
+`--go`). Python/native runtimes and rclone must already be installed. Go may
+download pinned modules into the managed cache. The probes do not deploy physical
+devices. The stress probe enforces the unchanged 80 ms frame-gap guard by default. Explicit
+`--latency-mode diagnostic` records the same pass/fail measurement without
+failing functional acceptance, for noisy hosts; the report identifies that mode.
+
+The memory probe additionally samples current summed RSS for its host and
+descendants, including WebEngine renderer processes. Summed RSS can count shared
+resident pages more than once; it is separate from host peak RSS and bitmap
+budgets. After a warm editor remount, six further complete remounts must preserve
+saved native ink. Optional `--max-process-tree-mib` and
+`--max-remount-growth-mib` enforce finite positive limits selected for a controlled
+host; omitting them collects memory evidence without claiming a memory-budget
+pass. Both options are forwarded by the platform probe. PID/parent/RSS counters
+contain no command-line or document content. The process-tree accounting and
+probe selection/failure contracts have portable host regressions; native OS
+counter paths still require acceptance on the relevant platform.
+
 Focused synthetic tests cover native brush/color/pressure fields, geometry,
 erase/movement/undo/redo, page operations, opaque preservation, archive rejection,
 failed writes, recovery and command origin/order. Wire-field checks supplement
 readback through the upstream codec. The optional
 `Python/tests/notebooks/independent_codec_probe.py` cross-checks synthetic archives
-with the pinned MIT-licensed remarquee v0.0.14 Go reader, including all eight
-brush IDs, multi-page ordering and erased-stroke tombstones. Its downloaded
-modules and caches use manager scratch storage and are removed after the check. Host mobile tests cover destination order,
+with the pinned MIT-licensed remarquee v0.0.14 Go reader, including all declared
+brush IDs, multi-page ordering and erased-stroke tombstones. The checker is built
+once per invocation. Downloaded modules and compiler outputs
+reuse the leased `notebook-codec` cache under the build manager private root;
+that cache shares the compiler group’s 12 GiB budget, one-day age limit and
+one-hour grace period, with active locks and explicit pins protected. Synthetic
+archives, the checker executable and its Go workspace remain disposable scratch. Host mobile tests cover destination order,
 retained notebook state and importing without modifying originals. Native checks
 exercise the actual WebView bridge, native ink export and on-device recovery.
 

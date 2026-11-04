@@ -2,6 +2,7 @@
 import argparse
 from hashlib import sha256
 import json
+import math
 from pathlib import Path
 import platform
 
@@ -13,6 +14,7 @@ from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.storage import NotebookDocument
 from Python.tests.notebooks.notebook_desktop_stress_probe import Probe
 from mobile_build.native_tests.tests.logisticsmobile.notebook_memory_checks import INSTALL, ink_signature, recovery_history_stats
+from tests.notebooks.process_memory import process_tree_memory
 
 
 def peak_rss_bytes():
@@ -42,11 +44,21 @@ def peak_rss_bytes():
     return value if platform.system() == 'Darwin' else value * 1024
 
 
-def main(output):
+def main(output, *, max_process_tree_mib=None, max_remount_growth_mib=None):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     app = qt.QApplication.instance() or qt.QApplication([])
-    report = dict(success=False, platform=platform.system(), surfaces=[], raster=[], samples=[])
+    report = dict(success=False, platform=platform.system(), surfaces=[], raster=[], samples=[], remounts=[],
+                  memory_limits=dict(process_tree_mib=max_process_tree_mib, remount_growth_mib=max_remount_growth_mib))
+    def memory_sample():
+        sample = process_tree_memory()
+        renderer = int(probe.panel.web.page().renderProcessPid())
+        assert renderer > 0 and renderer in {row['pid'] for row in sample['processes']}, \
+            ('Live WebEngine renderer missing from memory sample', renderer, sample)
+        sample['renderer_pid'] = renderer
+        if max_process_tree_mib is not None:
+            assert sample['rss_bytes'] <= max_process_tree_mib * 1024 ** 2, sample
+        return sample
     with scratch() as root:
         probe = Probe(root)
         try:
@@ -75,7 +87,7 @@ def main(output):
                         probe.js(f'memoryProbe.stroke({tool},{ordinal % 3 + 1})')
                         probe.wait(lambda: probe.js('memoryProbe.done'), 'timed pen samples')
                         assert probe.js('memoryProbe.error') is None
-                        probe.idle()
+                        probe.idle(layout=False)
                     surface = probe.js('memoryProbe.surface()')
                     assert surface['width'] * surface['height'] <= 16 * 1024 * 1024
                     report['surfaces'].append(dict(zoom=zoom, page=index + 1, **surface))
@@ -85,6 +97,7 @@ def main(output):
                     assert stats['retained_strokes'] == stats['visible_strokes'], stats
                     assert stats['retained_native_blocks'] == stats['visible_strokes'], stats
                     (output / 'desktop-memory-progress.json').write_text(json.dumps(report, indent=2))
+                report['samples'][-1]['process_tree'] = memory_sample()
                 if zoom in ('page', '2'):
                     probe.js('memoryProbe.raster()')
                     probe.wait(lambda: probe.js('memoryProbe.rasterDone'), 'zoom raster round trip')
@@ -116,12 +129,30 @@ def main(output):
             destination = output / 'desktop-memory.rmdoc'
             destination.write_bytes(book.to_bytes())
             assert ink_signature(Notebook.read(destination.read_bytes())) == expected
+            history = recovery_history_stats(probe.panel.editor)
+            # Recreate the complete workspace/WebEngine view, rather than only
+            # changing pages in a retained editor. Warm one remount before the
+            # baseline; report current RSS, including Chromium descendants.
+            for index in range(7):
+                probe.close()
+                qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+                probe = Probe(root)
+                probe.panel.open_resource(NotebookDocument(Notebook.read(destination.read_bytes())))
+                probe.ready()
+                assert ink_signature(probe.panel.editor.notebook) == expected
+                sample = memory_sample()
+                report['remounts'].append(dict(remount=index, **sample))
+                growth = sample['rss_bytes'] - report['remounts'][0]['rss_bytes']
+                if max_remount_growth_mib is not None:
+                    assert growth <= max_remount_growth_mib * 1024 ** 2, dict(growth_bytes=growth, **sample)
+                (output / 'desktop-memory-progress.json').write_text(json.dumps(report, indent=2))
             probe.panel.web.grab().save(str(output / 'desktop-memory.png'))
             report.update(success=True, strokes_per_page=counts, source_unchanged_until_save=True,
                           native_mouse_page_two=True, page_switches_preserve_ink=True, saved_native_ink_identical=True,
                           recovery_enabled=True, recovery_reopened_ink_identical=True,
                           undo_redo_steps=36, undo_redo_ink_and_raster_identical=True,
-                          history=recovery_history_stats(probe.panel.editor))
+                          history=history,
+                          remount_growth_bytes=report['remounts'][-1]['rss_bytes'] - report['remounts'][0]['rss_bytes'])
         finally:
             probe.close()
             app.processEvents()
@@ -131,4 +162,13 @@ def main(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    main(parser.parse_args().output)
+    parser.add_argument('--max-process-tree-mib', type=float,
+                        help='Optional current RSS ceiling for the probe and its renderer descendants on a controlled host.')
+    parser.add_argument('--max-remount-growth-mib', type=float,
+                        help='Optional RSS growth ceiling after a warm remount; six further remounts retain exact saved ink.')
+    args = parser.parse_args()
+    for value in (args.max_process_tree_mib, args.max_remount_growth_mib):
+        if value is not None and (not math.isfinite(value) or value <= 0):
+            parser.error('Memory limits must be finite and positive')
+    main(args.output, max_process_tree_mib=args.max_process_tree_mib,
+         max_remount_growth_mib=args.max_remount_growth_mib)
