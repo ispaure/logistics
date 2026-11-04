@@ -8,6 +8,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import time
 import traceback
 from uuid import uuid4
 
@@ -136,6 +137,11 @@ async def exercise(app):
 class NativeCheckApp(LogisticsMobile):
     def startup(self):
         print('LOGISTICS_NATIVE_STARTUP', flush=True)
+        if get_os() is OS.IOS:
+            import mobile
+            source = json.loads(Path(mobile.__file__).with_name('source.json').read_text())
+            print('LOGISTICS_NATIVE_PROCESS=' + json.dumps(dict(pid=os.getpid(), started_ns=time.time_ns(),
+                source={key: source.get(key) for key in ('logistics_commit', 'commonUtils_commit', 'source_sha256')})), flush=True)
         if get_os() is OS.ANDROID:
             from .startup_trace import install as install_startup_trace
             install_startup_trace(self)

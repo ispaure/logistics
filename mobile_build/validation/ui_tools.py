@@ -147,7 +147,7 @@ def simulator_report(device, started_ns, *, diagnostics=None):
         diagnostics.mkdir(exist_ok=True)
         # Fatal native crashes cannot write the final JSON. Capture their stack
         # before returning, and never leave the previous device's result here.
-        for name in ('cached.json', 'error.txt', 'fault.log', 'timings.json', 'webview-counts.json'):
+        for name in ('cached.json', 'error.txt', 'fault.log', 'timings.json', 'webview-counts.json', 'rotation-failure.json'):
             target = diagnostics / ('ios-native-ui-' + name)
             target.unlink(missing_ok=True)
             source = path.with_name('logistics-native-ui-' + name) if name != 'cached.json' else path
@@ -332,7 +332,13 @@ def _progress(path, stopped):
                 if stopped.wait(.1):
                     return
                 continue
-            if 'LOGISTICS_NATIVE_CASE=' in line:
+            if path.name.startswith('ios-') and 'LOGISTICS_NATIVE_PROCESS=' in line:
+                try:
+                    from mobile_build.validation.ios_failure_diagnostics import record_process
+                    record_process(path.parent, json.loads(line.split('LOGISTICS_NATIVE_PROCESS=', 1)[1]))
+                except Exception:
+                    pass  # Diagnostic observers must not stop checkpoint/RPC progress.
+            elif 'LOGISTICS_NATIVE_CASE=' in line:
                 log(Severity.INFO, 'Native checkpoint', line.split('LOGISTICS_NATIVE_CASE=',1)[1].strip())
             elif 'LOGISTICS_NATIVE_DETAIL=' in line:
                 log(Severity.INFO, 'Native detail', line.split('LOGISTICS_NATIVE_DETAIL=',1)[1].strip())
@@ -364,7 +370,9 @@ def clear_run_reports(logs, target):
         '.json', '-local.json', '-stdout.json', '-cached.json',
         '-error.txt', '-fault.log', '-timings.json')]
     if target == 'ios':
-        names.append('ios-report-transport.json')
+        names.extend(('ios-report-transport.json', 'ios-native-ui-process.json',
+                      'ios-original-process-diagnostics.json', 'ios-original-process.sample.txt',
+                      'ios-native-ui-rotation-failure.json'))
     for name in names:
         (logs / name).unlink(missing_ok=True)
 
@@ -403,8 +411,10 @@ def _run_once(target, device, *, local=False, require_independent_windows=False,
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
     if target == 'ios':
+        manifest_path = Path('payload/source.json')
+        source = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
         (logs / 'ios-native-ui-device.json').write_text(json.dumps(dict(
-            device=device, started_ns=started_ns)) + '\n')
+            device=device, started_ns=started_ns, source=source)) + '\n')
     # Include cold startup, installation, all native cases and the visual audit.
     # Software-rendered Android audits need the published 40-minute budget.
     # iOS also exercises the added rotation matrix; allow 30 minutes per device.
@@ -616,33 +626,39 @@ def cleanup_owned_ios_device(lease, *, client=None):
 
 
 def ios_diagnostics():
-    """Preserve startup stderr and crash reports after a failed native gate."""
+    """Capture original owned process/crash evidence without replaying the app."""
     logs = Path('logs').resolve()
     logs.mkdir(exist_ok=True)
     receipt = logs / 'ios-native-ui-device.json'
-    owned = logs / 'ios-native-ui-owned.json'
-    recorded = json.loads(receipt.read_text()) if receipt.is_file() else (
-        json.loads(owned.read_text()) if owned.is_file() else {})
-    device = recorded.get('device') or ios_device()
-    if recorded.get('started_ns'):
-        simulator_report(device, recorded['started_ns'], diagnostics=logs)
-    command = ['xcrun', 'simctl', 'spawn', device, 'log', 'show', '--last', '10m',
-               '--style', 'compact', '--predicate',
-               'process == "Logistics Mobile" OR eventMessage CONTAINS "io.github.ispaure.logisticsmobile"']
-    with (logs / 'ios-system.log').open('w') as output:
-        try:
-            subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=60, check=False)
-        except subprocess.TimeoutExpired:
-            output.write('\nSimulator log collection timed out.\n')
-    # This diagnostic replay never counts as a passing test. Native constructor
-    # failures can write directly to fd 2 before Python's OS logging exists.
     try:
-        result = subprocess.run(['xcrun', 'simctl', 'launch',
-            '--stdout=' + str(logs / 'ios-launch.stdout'), '--stderr=' + str(logs / 'ios-launch.stderr'),
-            device, 'io.github.ispaure.logisticsmobile'], capture_output=True, timeout=60)
-        (logs / 'ios-launch.result').write_bytes(result.stdout + result.stderr)
-    except subprocess.TimeoutExpired:
-        (logs / 'ios-launch.result').write_text('Diagnostic launch timed out.')
+        recorded = json.loads(receipt.read_text()) if receipt.is_file() else {}
+        if not isinstance(recorded, dict):
+            recorded = {}
+    except (OSError, ValueError):
+        recorded = {}
+    device = recorded.get('device')
+    from mobile_build.validation.ios_failure_diagnostics import owned_run, sample_original
+    try:
+        owned_run(logs)
+        owned = True
+    except (OSError, ValueError, KeyError, TypeError):
+        owned = False
+    if owned and device:
+        if recorded.get('started_ns'):
+            try:
+                simulator_report(device, recorded['started_ns'], diagnostics=logs)
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                (logs / 'ios-cache-capture.json').write_text(json.dumps(dict(
+                    status='unavailable', error=type(error).__name__)) + '\n')
+        command = ['xcrun', 'simctl', 'spawn', device, 'log', 'show', '--last', '10m',
+                   '--style', 'compact', '--predicate',
+                   'process == "Logistics Mobile" OR eventMessage CONTAINS "io.github.ispaure.logisticsmobile"']
+        with (logs / 'ios-system.log').open('w') as output:
+            try:
+                subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=60, check=False)
+            except subprocess.TimeoutExpired:
+                output.write('\nSimulator log collection timed out.\n')
+    sample_original(logs)
     for name, command in (
             ('host-memory.txt', ['sysctl', 'hw.memsize', 'hw.ncpu']),
             ('host-vm.txt', ['vm_stat'])):
@@ -653,9 +669,17 @@ def ios_diagnostics():
     (logs / 'host-webkit-processes.txt').write_text('\n'.join(line for line in processes.stdout.splitlines()
         if any(name in line for name in ('WebKit', 'Simulator', 'Logistics Mobile'))))
     for source in (Path.home() / 'Library/Logs/DiagnosticReports').glob('*.ips'):
-        if source.stat().st_size <= 10 * 1024 * 1024:
+        if (source.stat().st_size <= 10 * 1024 * 1024
+                and source.stat().st_mtime_ns >= recorded.get('started_ns', time.time_ns())):
             header = source.read_text(errors='replace')[:8192]
-            if 'logistics' in header.lower():
+            identity_path = logs / 'ios-native-ui-process.json'
+            identity = json.loads(identity_path.read_text()) if identity_path.exists() else {}
+            try:
+                crash = json.loads('\n'.join(source.read_text().splitlines()[1:]))
+            except ValueError:
+                continue
+            if ('logistics' in header.lower() and identity.get('pid')
+                    and crash.get('pid', crash.get('procPid')) == identity['pid']):
                 shutil.copyfile(source, logs / source.name)
 
 

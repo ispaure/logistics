@@ -286,6 +286,80 @@ def assert_control_bounds(rect, window, label, *, bottom_extension=0):
     assert rect.origin.y + rect.size.height <= size.height - safe.bottom + bottom_extension + 1, details
 
 
+def rotation_failure_snapshot(app, *, panel, cycle, orientation):
+    """Synchronous failure-only observations; never change the failed operation."""
+    import time
+    import threading
+    def value(owner, name):
+        try:
+            result = getattr(owner, name)
+            return result() if callable(result) else result
+        except Exception:
+            return None
+    def view(native):
+        if native is None:
+            return None
+        layer = value(native, 'layer')
+        presented = value(layer, 'presentationLayer')
+        return dict(class_name=str(value(native, 'className')), attached=value(native, 'window') is not None,
+                    hidden=value(native, 'isHidden'), bounds=str(value(native, 'bounds')),
+                    model_frame=str(value(layer, 'frame')), presentation_frame=str(value(presented, 'frame')),
+                    has_animations=bool(value(layer, 'animationKeys')))
+    def controller(native):
+        if native is None:
+            return None
+        coordinator = value(native, 'transitionCoordinator')
+        modal = value(native, 'presentedViewController')
+        return dict(class_name=str(value(native, 'className')), view=view(value(native, 'viewIfLoaded')),
+                    transition_active=coordinator is not None,
+                    transition_animated=value(coordinator, 'isAnimated'),
+                    transition_interactive=value(coordinator, 'isInteractive'),
+                    modal_present=modal is not None, modal_class=str(value(modal, 'className')),
+                    being_presented=value(native, 'isBeingPresented'), being_dismissed=value(native, 'isBeingDismissed'))
+    window = app.main_window._impl.native
+    privacy = getattr(app, 'screen_privacy', None)
+    adapter = app.native_host.adapter
+    destination = app.native_host.state.destination
+    scene = value(window, 'windowScene')
+    result = dict(schema=1, captured_ns=time.time_ns(), monotonic=time.monotonic(),
+                  main_thread=threading.current_thread() is threading.main_thread(),
+                  scene_attached=scene is not None,
+                  panel=panel, cycle=cycle, requested_orientation=orientation,
+                  interface_orientation=value(scene, 'interfaceOrientation'),
+                  scene_active=value(scene, 'activationState') == 0,
+                  window=view(window),
+                  controllers=[controller(value(window, 'rootViewController')),
+                               controller(adapter.content_controller(destination)),
+                               controller(adapter.navigation_for(destination))],
+                  privacy={key: bool(getattr(privacy, key, False))
+                           for key in ('inactive', 'resume_locked', 'disposed', 'interrupted')},
+                  privacy_shield=view(getattr(privacy, 'shield', None)))
+    path = Path(app.paths.cache) / 'logistics-native-ui-rotation-failure.json'
+    text = json.dumps(result)
+    if len(text.encode()) > 16384:
+        raise ValueError('Rotation failure snapshot exceeded its bounded budget')
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(text + '\n')
+    temporary.replace(path)
+    print('LOGISTICS_NATIVE_ROTATION_FAILURE=' + text, flush=True)
+    return result
+
+
+async def rotate_panel(app, *, panel, cycle, orientation):
+    """Keep original deadline/exception even when the observer itself fails."""
+    from .timings import measure
+    try:
+        await measure(app, 'rotation-request', rotate(app, orientation),
+                      panel=panel, orientation=orientation, cycle=cycle)
+    except AssertionError:
+        try:
+            if sys.platform == 'ios':
+                rotation_failure_snapshot(app, panel=panel, cycle=cycle, orientation=orientation)
+        except Exception:
+            pass
+        raise
+
+
 async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
     samples = []
     captured = set()
@@ -298,8 +372,7 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
         expected = panel_state(app)
         for cycle in range(cycles):
             for orientation in ('portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait'):
-                await measure(app, 'rotation-request', rotate(app, orientation),
-                              panel=name, orientation=orientation, cycle=cycle)
+                await rotate_panel(app, panel=name, orientation=orientation, cycle=cycle)
                 controls = await measure(app, 'rotation-control-settle', settled_visible_controls(app),
                                          panel=name, orientation=orientation, cycle=cycle)
                 if name == 'notes-library':
