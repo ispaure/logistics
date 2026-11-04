@@ -24,7 +24,7 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-RUN_FIELDS={'testing.manager_source','testing.reuse_verified_results','devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.ios_provisioning','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+RUN_FIELDS={'devices.availability','testing.manager_source','testing.reuse_verified_results','devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.ios_provisioning','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
 
 
 def run_values(values):
@@ -32,6 +32,8 @@ def run_values(values):
     if not isinstance(values,dict) or set(values)-RUN_FIELDS or any(not isinstance(v,str) or len(v)>20000 for v in values.values()):
         raise ValueError('Only declared non-secret run choices can be changed for one run.')
     result = dict(values)
+    if result.get('devices.availability', 'bounded') not in {'bounded', 'wait'}:
+        raise ValueError('Choose Try once or Wait until reachable for device availability.')
     if result.get('devices.ios_provisioning', 'existing') not in {'existing', 'update'}:
         raise ValueError('Choose existing iOS signing assets or explicitly authorize provisioning updates.')
     if result.get('testing.manager_source', 'pinned') not in {'pinned', 'working-tree-local'}:

@@ -144,6 +144,11 @@ class LogisticsProject:
         from logistics_build.manager_journeys import make_journey
         return make_journey(self, dict(schema=1, goal=goal, platforms=platforms, destinations=destinations), **options)
 
+    def retained_delivery_plan(self, run_directory, destinations, run_overrides=None):
+        """Prepare a separately reviewed device delivery from this project's saved run."""
+        from logistics_build.retained_devices import make_plan
+        return make_plan(self, run_directory, destinations, run_overrides)
+
     def make_plan(self, operation, target, backend, **options):
         from dataclasses import replace
         started = time.monotonic()
