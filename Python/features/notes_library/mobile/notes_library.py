@@ -155,9 +155,21 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         )
         self.speech.button.enabled = False
         self.link_rows = toga.Box(style=Pack(direction=COLUMN))
+        self.backlink_rows = toga.Box(style=Pack(direction=COLUMN))
+        self.links_tab = 'outgoing'
+        self.links_scroll = toga.ScrollContainer(content=self.link_rows, horizontal=False, style=Pack(flex=1))
+        self.link_tab_buttons = {}
+        tabs = toga.Box(style=Pack(direction=ROW))
+        for key, title in (('outgoing', 'Outgoing links'), ('incoming', 'Backlinks')):
+            def select(widget=None, key=key, **kwargs):
+                self.select_links_tab(key)
+            button = toga.Button(title, on_press=select, style=Pack(flex=1, height=48))
+            self.link_tab_buttons[key] = button
+            tabs.add(button)
+        self.select_links_tab('outgoing')
         self.links = toga.Box(children=[
             toga.Label('Links', style=Pack(font_size=20, font_weight='bold')),
-            toga.ScrollContainer(content=self.link_rows, horizontal=False, style=Pack(flex=1)),
+            tabs, self.links_scroll,
         ], style=Pack(direction=COLUMN, flex=1, margin=12))
         self.links_generation = 0
         self.links_refresh_task = None
@@ -850,6 +862,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.sidebar.show(side)
         if side == 'links':
             self.link_rows.clear()
+            self.backlink_rows.clear()
             self.links_refresh_task = self.host.loop.create_task(self.show_links(refresh=True))
         self.host.render()
 
@@ -906,6 +919,30 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if self.sidebar.side == 'links':
             self.links_refresh_task = self.host.loop.create_task(self.show_links(refresh=True))
 
+    def select_links_tab(self, key):
+        self.links_tab = key
+        self.links_scroll.content = self.link_rows if key == 'outgoing' else self.backlink_rows
+        for name, button in self.link_tab_buttons.items():
+            button.enabled = name != key
+
+    def render_link_rows(self, rows, result, key):
+        rows.clear()
+        title = 'Outgoing links' if key == 'outgoing' else 'Backlinks'
+        rows.add(toga.Label(f'{title} ({len(result[key])})', style=Pack(font_weight='bold')))
+        if not result[key]:
+            rows.add(toga.Label('No ' + title.lower() + '.'))
+        for target in result[key]:
+            async def choose(widget=None, target=target, **kwargs):
+                await self.open_note(target)
+            label = str(PurePosixPath(target).relative_to(self.root or '.'))
+            rows.add(self.host.list_button(toga.Button(label, on_press=choose, style=Pack(height=48))))
+        if key == 'outgoing':
+            rows.add(toga.Label(f"{result['words']:,} words · {result['characters']:,} characters"))
+            if result['unresolved']:
+                rows.add(toga.Label('Unresolved links', style=Pack(font_weight='bold')))
+                for target in result['unresolved']:
+                    rows.add(toga.Label(target))
+
     async def show_links(self, widget=None, *, refresh=False, toggle=True, **kwargs):
         if not self.valid():
             return
@@ -918,6 +955,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return
         self.sidebar.show_links()
         self.link_rows.clear()
+        self.backlink_rows.clear()
         if self.path is None:
             self.link_rows.add(toga.Label('Open a note to see its connections.'))
             return
@@ -927,41 +965,34 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.links_generation += 1
         generation, path = self.links_generation, self.path
         cancelled = lambda: not self.valid() or generation != self.links_generation
-        self.link_rows.add(toga.Label('Finding local connections…'))
+        self.link_rows.add(toga.Label('Loading outgoing links…'))
+        self.backlink_rows.add(toga.Label('Finding backlinks…'))
         spinner = toga.ActivityIndicator()
-        self.link_rows.add(spinner)
+        self.backlink_rows.add(spinner)
         spinner.start()
+        rows = self.link_rows
         try:
-            from features.notes_library.notes_links import connections
+            from features.notes_library.notes_links import connections, outgoing_connections
+            result = await asyncio.to_thread(outgoing_connections, self.library, path,
+                cancelled=cancelled, visible=self.host.folder_visible)
+            if cancelled():
+                return
+            self.render_link_rows(self.link_rows, result, 'outgoing')
+            rows = self.backlink_rows
             result = await asyncio.to_thread(connections, self.library, path,
                 cancelled=cancelled, visible=self.host.folder_visible)
             if cancelled():
                 return
-            self.link_rows.clear()
-            self.link_rows.add(toga.Label(PurePosixPath(path).name),
-                toga.Label(f"{result['words']:,} words · {result['characters']:,} characters",
-                           style=Pack(font_size=12, margin_bottom=12)))
-            for key, title in (('incoming', 'Backlinks'), ('outgoing', 'Outgoing links')):
-                self.link_rows.add(toga.Label(f'{title} ({len(result[key])})',
-                    style=Pack(font_weight='bold', margin_top=12)))
-                if not result[key]:
-                    self.link_rows.add(toga.Label('No ' + title.lower() + '.'))
-                for target in result[key]:
-                    async def choose(widget=None, target=target, **kwargs):
-                        await self.open_note(target)
-                    label = str(PurePosixPath(target).relative_to(self.root or '.'))
-                    self.link_rows.add(self.host.list_button(toga.Button(label,
-                        on_press=choose, style=Pack(height=48))))
-            if result['unresolved']:
-                self.link_rows.add(toga.Label('Unresolved links', style=Pack(font_weight='bold', margin_top=12)))
-                for target in result['unresolved']:
-                    self.link_rows.add(toga.Label(target))
+            self.render_link_rows(self.backlink_rows, result, 'incoming')
         except OperationCancelled:
             pass
         except (OSError, ValueError, UnicodeError) as error:
             if not cancelled():
-                self.link_rows.clear()
-                self.link_rows.add(toga.Label(fill(str(error)[:180], width=30)))
+                rows.clear()
+                rows.add(toga.Label(fill(str(error)[:180], width=30)))
+                if rows is self.link_rows:
+                    self.backlink_rows.clear()
+                    self.backlink_rows.add(toga.Label('Connections unavailable.'))
         finally:
             spinner.stop()
             self.sidebar.refresh_gestures()

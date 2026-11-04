@@ -382,6 +382,7 @@ class TabbedNotesLibrary(NotesLibraryWindow):
             button.setEnabled(False)
         self.cancel_connections()
         self.links_tree.clear()
+        self.backlinks_tree.clear()
 
     def clear_content(self):
         if self.document_tabs is not None:
