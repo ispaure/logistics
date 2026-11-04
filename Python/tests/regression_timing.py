@@ -165,3 +165,7 @@ class TimedResult(unittest.TextTestResult):
     def _detail(self, test, message):
         row = self._timing if getattr(self, '_timing', None) is not None else self.report.data['tests'][-1]
         row['message'] = row.get('message', '') + message
+        if getattr(self, '_timing', None) is None and getattr(self.report, 'checkpoint_cases', False):
+            # Fixture errors have no startTest/stopTest pair. Keep their complete
+            # diagnostic even if module teardown subsequently stalls.
+            self.report.save()

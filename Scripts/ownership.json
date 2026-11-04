@@ -381,6 +381,7 @@
         "desktop": [
           "test_feature_registry.py",
           "test_feature_runtime.py",
+          "test_optional_feature_discovery.py",
           "test_feature_group_transactions.py",
           "test_architecture_contracts.py",
           "test_portable_imports.py",
@@ -402,7 +403,8 @@
           "test_document_workspace.py",
           "test_document_catalog_ordering.py",
           "test_folder_controller.py",
-          "test_folder_sources_ui.py"
+          "test_folder_sources_ui.py",
+          "test_folder_entry_identity.py"
         ]
       }
     },
