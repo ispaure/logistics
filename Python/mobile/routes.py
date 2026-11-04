@@ -96,6 +96,34 @@ class MobileRoutes(Routes):
                 if view.parent is not None:
                     view.parent.remove(view)
 
+    def retire_destination_picker(self, destination):
+        """Retire an earlier form without losing folders opened above it."""
+        screens = self.screens[destination]
+        removed = [screen for screen in screens if screen[0] == 'text-destination']
+        if not removed:
+            return
+        retained = [screen for screen in screens if screen[0] != 'text-destination']
+        changing = self.changing
+        self.changing = True
+        try:
+            if self.apple:
+                adapter = self.host.adapter
+                root = adapter.containers[self.host.destinations.index(destination)][1]
+                adapter.navigation_for(destination).setViewControllers(
+                    [root, *(pane.controller for _, _, pane in retained)], animated=False)
+            screens[:] = retained
+            self.host.state.routes[destination] = [route for route, _, _ in retained]
+            for _, _, pane in removed:
+                if pane is not None:
+                    self.host.adapter.release_pane(pane)
+        finally:
+            self.changing = changing
+        self.origins.pop((destination, 'text-destination'), None)
+        self.folders.forget(destination, 'text-destination')
+        if any(self._selection_returns.get(destination) is panel for _, panel, _ in removed):
+            self._selection_returns[destination] = self.body(destination)
+        self.render(destination)
+
     def trim(self, destination, count, *, native=True):
         library = getattr(self.app, 'vault_browser', None)
         action_view = getattr(library, 'file_action_view', None)
