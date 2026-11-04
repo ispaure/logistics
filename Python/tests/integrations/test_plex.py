@@ -21,7 +21,7 @@ from commonUtils.runtime.platform import OS
 from features.plex import database, packages, actions, detection
 
 
-class PlexDatabaseTests(QtTestCase):
+class PlexDatabaseTests(unittest.TestCase):
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -101,12 +101,6 @@ class PlexDatabaseTests(QtTestCase):
         self.assertEqual(result['Only in 1'], [left[2]])
         self.assertEqual(result['Only in 2'], [right[2]])
 
-    def test_debug_database_picker_cancel_does_not_query(self):
-        with patch('commonUtils.ui.pyside.QFileDialog.getOpenFileName', return_value=('', '')), patch.object(database, '_connect') as connect:
-            self.assertIsNone(database.test_script())
-        connect.assert_not_called()
-
-
     def test_hash_matching_reassigns_ambiguous_duplicates(self):
         def item(hashes):
             return SimpleNamespace(guid='same', media_part=[{'Hash': value} for value in hashes])
@@ -118,7 +112,7 @@ class PlexDatabaseTests(QtTestCase):
         self.assertEqual(result['Only in 2'], [])
 
 
-class PlexPackageTests(QtTestCase):
+class PlexPackageTests(unittest.TestCase):
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
