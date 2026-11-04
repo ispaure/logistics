@@ -151,7 +151,7 @@ class ReceivedFilesTests(TestCase):
         self.assertEqual(choices['All files']['kind'], 'shared-local')
         self.assertEqual(choices['Received Files']['kind'], 'inbox')
         app.loop.run_until_complete(app.show_files(location=('Shared files', '')))
-        self.assertFalse(app.file_rows)
+        self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Received Files'})
         picker = app.ordinary_file_roots()['Shared files']
         self.assertIn('Received Files', [row['name'] for row in picker.list()])
         self.assertTrue((received / 'shared.txt').is_file())

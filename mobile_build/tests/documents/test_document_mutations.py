@@ -232,6 +232,11 @@ class DocumentMutationTests(unittest.TestCase):
         from urllib.parse import quote
         owner = self.open('first.md', b'# Original\n')
         workflow = owner._provider_markdown
+        async def prepare_editor():
+            await workflow.choose_mode('Formatted')
+            if workflow.pending is not None:
+                await workflow.pending
+        self.run_async(prepare_editor())
         formatted = workflow.formatted
         self.assertIsNotNone(formatted)
         formatted.navigate(None, formatted.bridge + '?text=' + quote('# First draft\n'))
