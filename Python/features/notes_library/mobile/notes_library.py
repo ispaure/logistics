@@ -367,8 +367,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self._breadcrumb_key = None
             return
         folders = breadcrumb_folders(self.root, self.path)
-        if not folders:
-            folders = [self.root]
+        if self.root not in folders:
+            folders.insert(0, self.root)
         entries = [(PurePosixPath(folder).name or self.library_title,
                     self.folder_pages.get(folder), folder) for folder in folders]
         key = (tuple(entries), self._breadcrumb_width)
