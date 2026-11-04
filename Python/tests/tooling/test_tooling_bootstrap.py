@@ -10,6 +10,7 @@ import subprocess
 import sys
 import signal
 import time
+import uuid
 from tempfile import TemporaryDirectory
 from unittest import TestCase, skipUnless
 from unittest.mock import Mock, patch
@@ -29,6 +30,192 @@ class ToolingBootstrapTests(TestCase):
         for _, _, interpreter in tooling.environments(self.root):
             interpreter.parent.mkdir(parents=True, exist_ok=True)
             interpreter.touch()
+
+    def write_intent(self, **changes):
+        value = dict(schema=1, root=str(self.root), nonce=str(uuid.uuid4()),
+                     boot_id=str(uuid.uuid4()), mode='sync', groups=[])
+        value.update(changes)
+        path = tooling.intent_path(self.root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value))
+        return value
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_healthy_unenrolled_sync_retires_groups_and_clears_its_intent(self):
+        with tooling.environment_sync(self.root):
+            self.assertEqual(tooling.read_intent(self.root)['mode'], 'sync')
+            tooling.run_command([sys.executable, '-c', 'pass'], check=True)
+        self.assertFalse(tooling.intent_path(self.root).exists())
+        self.assertFalse(tooling.enrolled(self.root))
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_nonce_mismatch_or_unverified_operation_cannot_clear_intent(self):
+        with self.assertRaises(tooling.BootstrapError):
+            with tooling.mutation_guard(self.root), tooling.mutation_intent(self.root, 'sync'):
+                current = tooling.read_intent(self.root)
+                with self.assertRaises(tooling.BootstrapError):
+                    tooling.clear_intent(self.root, current['nonce'])
+                replacement = dict(current, nonce=str(uuid.uuid4()))
+                tooling.atomic_json(tooling.intent_path(self.root), replacement)
+        self.assertEqual(tooling.read_intent(self.root)['nonce'], replacement['nonce'])
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_linked_or_malformed_intent_blocks_without_following_or_installing(self):
+        path = tooling.intent_path(self.root)
+        path.parent.mkdir(parents=True)
+        outside = self.root / 'outside'
+        outside.write_text('preserve')
+        path.symlink_to(outside)
+        for linked in (True, False):
+            with self.subTest(linked=linked), patch.object(tooling, 'run_command') as run:
+                with self.assertRaises(tooling.BootstrapError):
+                    with tooling.environment_sync(self.root):
+                        run(['uv', 'sync'])
+                run.assert_not_called()
+            if linked:
+                self.assertEqual(outside.read_text(), 'preserve')
+                path.unlink()
+                path.write_text('{invalid')
+        report = tooling.handle(self.root, 'tooling_status', {})
+        self.assertEqual(report['reason'], 'unfinished_mutation')
+        self.assertNotIn('outside', report['message'])
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_only_verified_boot_change_allows_confirmed_repair_to_clear(self):
+        self.target_environments()
+        previous = self.write_intent()
+        with patch.object(tooling, 'boot_identity', return_value=previous['boot_id']), \
+                patch.object(tooling, '_repair_locked') as repair:
+            with self.assertRaises(tooling.BootstrapError):
+                tooling.update(self.root, confirmed=True)
+            repair.assert_not_called()
+        with patch.object(tooling, 'boot_identity', side_effect=tooling.BootstrapError('boot_identity')), \
+                patch.object(tooling, '_repair_locked') as repair:
+            with self.assertRaises(tooling.BootstrapError):
+                tooling.update(self.root, confirmed=True)
+            repair.assert_not_called()
+        new_boot = str(uuid.uuid4())
+        with patch.object(tooling, 'boot_identity', return_value=new_boot), \
+                patch.object(tooling, '_repair_locked', side_effect=tooling.BootstrapError('verification')):
+            with self.assertRaises(tooling.BootstrapError):
+                tooling.update(self.root, confirmed=True)
+        remaining = tooling.read_intent(self.root)
+        self.assertEqual(remaining['recovery_nonce'], previous['nonce'])
+        self.assertEqual(remaining['boot_id'], new_boot)
+        # Failed verification stays unresolved; another boot and successful repair are required.
+        with patch.object(tooling, 'boot_identity', return_value=str(uuid.uuid4())), \
+                patch.object(tooling, '_repair_locked', return_value=dict(ready=True)) as repair:
+            self.assertEqual(tooling.update(self.root, confirmed=True), dict(ready=True))
+            repair.assert_called_once()
+        self.assertFalse(tooling.intent_path(self.root).exists())
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_failed_group_retirement_preserves_intent_even_after_successful_command(self):
+        original = tooling._retire
+        def retire(process):
+            original(process)
+            return False
+        with patch.object(tooling, '_retire', side_effect=retire):
+            with self.assertRaises(tooling.BootstrapError):
+                with tooling.environment_sync(self.root):
+                    tooling.run_command([sys.executable, '-c', 'pass'], check=True)
+        self.assertIsNotNone(tooling.read_intent(self.root))
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_failed_uv_with_verified_cleanup_allows_same_boot_explicit_repair(self):
+        with self.assertRaises(subprocess.CalledProcessError):
+            with tooling.environment_sync(self.root):
+                tooling.run_command([sys.executable, '-c', 'raise SystemExit(7)'], check=True)
+        previous = tooling.read_intent(self.root)
+        self.assertEqual(previous['cleanup'], tooling.cleanup_proof(previous))
+        self.target_environments()
+        with patch.object(tooling, 'boot_identity', return_value=previous['boot_id']), \
+                patch.object(tooling, '_repair_locked', return_value=dict(ready=True)) as repair:
+            self.assertEqual(tooling.update(self.root, confirmed=True), dict(ready=True))
+            repair.assert_called_once()
+        self.assertFalse(tooling.intent_path(self.root).exists())
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_uncertain_constructor_never_emits_cleanup_proof(self):
+        with patch.object(tooling.subprocess, 'Popen', side_effect=OSError('uncertain launch')), \
+                patch.object(tooling, 'boot_identity', return_value=str(uuid.uuid4())):
+            with self.assertRaises(OSError):
+                with tooling.environment_sync(self.root):
+                    tooling.run_command(['fixture-installer'])
+        previous = tooling.read_intent(self.root)
+        self.assertNotIn('cleanup', previous)
+        self.target_environments()
+        with patch.object(tooling, 'boot_identity', return_value=previous['boot_id']), \
+                patch.object(tooling, '_repair_locked') as repair:
+            with self.assertRaises(tooling.BootstrapError):
+                tooling.update(self.root, confirmed=True)
+            repair.assert_not_called()
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_cleanup_exception_cannot_emit_verified_receipt(self):
+        original = tooling._retire
+        def interrupted_cleanup(process):
+            original(process)
+            raise subprocess.TimeoutExpired(process.args, 2)
+        with patch.object(tooling, '_retire', side_effect=interrupted_cleanup):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                with tooling.environment_sync(self.root):
+                    tooling.run_command([sys.executable, '-c', 'pass'], check=True)
+        self.assertNotIn('cleanup', tooling.read_intent(self.root))
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_malformed_or_wrong_nonce_cleanup_proof_fails_closed(self):
+        previous = self.write_intent()
+        previous['cleanup'] = dict(nonce=str(uuid.uuid4()), boot_id=previous['boot_id'], groups=[])
+        tooling.intent_path(self.root).write_text(json.dumps(previous))
+        with self.assertRaises(tooling.BootstrapError):
+            tooling.read_intent(self.root)
+        self.assertEqual(tooling.status(self.root)['reason'], 'unfinished_mutation')
+
+    @skipUnless(os.name == 'posix', 'POSIX durable mutation recovery')
+    def test_abrupt_kill_leaves_mutating_grandchild_and_blocks_new_updater(self):
+        marker, identity = self.root / 'writes', self.root / 'identity'
+        grandchild = ('import os,signal,sys,time; from pathlib import Path; '
+                      'signal.signal(signal.SIGTERM,signal.SIG_IGN); '
+                      'Path(sys.argv[2]).write_text(str(os.getpgrp())); '
+                      'f=open(sys.argv[1],"a",buffering=1); '
+                      '\nwhile True: f.write("x"); f.flush(); time.sleep(.01)')
+        installer = ('import subprocess,sys,time; subprocess.Popen([sys.executable,"-c",'
+                     + repr(grandchild) + ',sys.argv[1],sys.argv[2]]); time.sleep(60)')
+        driver = ('from logistics_build import tooling_bootstrap as t; import sys; from pathlib import Path; '
+                  '\nwith t.environment_sync(Path(sys.argv[1])): '
+                  't.run_command([sys.executable,"-c",' + repr(installer) + ',sys.argv[2],sys.argv[3]])')
+        owner = subprocess.Popen([sys.executable, '-c', driver, str(self.root), str(marker), str(identity)],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            deadline = time.monotonic() + 5
+            while not identity.exists() and time.monotonic() < deadline:
+                time.sleep(.02)
+            self.assertTrue(identity.exists())
+            owner.kill()  # Only this fixture updater; its independently owned group survives.
+            owner.wait(timeout=3)
+            count = marker.stat().st_size
+            self.assertGreater(count, 0)
+            time.sleep(.1)
+            self.assertGreater(marker.stat().st_size, count)
+            with tooling.file_lock(tooling.lock_path(self.root)):
+                pass  # A free advisory lock is deliberately insufficient.
+            self.target_environments()
+            with patch.object(tooling, '_repair_locked') as repair:
+                with self.assertRaises(tooling.BootstrapError):
+                    tooling.update(self.root, confirmed=True)
+                repair.assert_not_called()
+            self.assertEqual(tooling.handle(self.root, 'tooling_status', {})['reason'], 'unfinished_mutation')
+        finally:
+            if owner.poll() is None:
+                owner.kill()
+                owner.wait(timeout=3)
+            if identity.exists():
+                try:
+                    os.killpg(int(identity.read_text()), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        self.assertTrue(tooling.intent_path(self.root).exists())
 
     def test_stdlib_bridge_readiness_works_with_no_sdk_and_ignores_gui_checkout(self):
         repo = Path(tooling.__file__).resolve().parents[1]
@@ -287,7 +474,7 @@ class ToolingBootstrapTests(TestCase):
                       'signal.signal(signal.SIGTERM,signal.SIG_IGN); '
                       'Path(sys.argv[2]).write_text(str(os.getpgrp())+":"+str(os.getsid(0))); '
                       'f=open(sys.argv[1],"a",buffering=1); '
-                      '\nwhile True: f.write("x"); time.sleep(.01)')
+                      '\nwhile True: f.write("x"); f.flush(); time.sleep(.01)')
         parent = ('import subprocess,sys; subprocess.Popen([sys.executable,"-c",'
                   + repr(grandchild) + ',sys.argv[1],sys.argv[2]])')
         started = time.monotonic()
@@ -300,6 +487,7 @@ class ToolingBootstrapTests(TestCase):
             self.assertEqual(sid, os.getsid(0))  # Never escape the SDK's session.
             self.assertNotEqual(pgid, os.getpgrp())
             count = marker.stat().st_size
+            self.assertGreater(count, 0)
             time.sleep(.15)
             self.assertEqual(marker.stat().st_size, count)
         finally:
@@ -317,7 +505,7 @@ class ToolingBootstrapTests(TestCase):
                  'signal.signal(signal.SIGTERM,signal.SIG_IGN); '
                  'Path(sys.argv[2]).write_text(str(os.getpgrp())); '
                  'f=open(sys.argv[1],"a",buffering=1); '
-                 '\nwhile True: f.write("x"); time.sleep(.01)')
+                 '\nwhile True: f.write("x"); f.flush(); time.sleep(.01)')
         driver = ('from logistics_build import tooling_bootstrap as t; import sys; '
                   'from pathlib import Path; '
                   '\nwith t.environment_sync(Path(sys.argv[1])): '
