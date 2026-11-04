@@ -228,6 +228,9 @@ def main():
         return 0
     report = TimingReport(args.report or default_report(args.directory), args.directory,
                           args.pattern, args.isolate_modules, args.junit)
+    # Only isolated children need per-case checkpoints for the parent's file
+    # timeout. Avoid repeatedly rewriting a large standalone suite report.
+    report.checkpoint_cases = args.timing_child
     report.data['include_patterns'] = args.include_pattern
     report.data.update(order=args.order, seed=args.seed)
     report.save()
