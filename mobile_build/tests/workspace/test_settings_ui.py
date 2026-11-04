@@ -119,7 +119,7 @@ class SettingsUITests(unittest.TestCase):
                 patch.object(app._impl, 'native', Mock(), create=True), \
                 patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
             show_licenses(app)
-        collect.assert_called_once_with(native_inventory=inventory)
+        collect.assert_called_once_with(platform='android', native_inventory=inventory)
         java.jclass.assert_called_once_with('java.util.Scanner')
         scanner.close.assert_called_once_with()
 
@@ -135,9 +135,17 @@ class SettingsUITests(unittest.TestCase):
                 patch.object(app._impl, 'native', Mock(), create=True), \
                 patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
             view = show_licenses(app)
-        collect.assert_called_once_with(native_inventory=None)
+        collect.assert_called_once_with(platform='android', native_inventory=None)
         self.assertIsNotNone(view)
         scanner.close.assert_called_once_with()
+
+    def test_ios_notice_collector_uses_mobile_dependency_set(self):
+        from mobile.settings.licenses import show_licenses
+        app = self.make_app()
+        with patch('mobile.settings.licenses.get_current_platform', return_value='iOS'), \
+                patch('mobile.settings.licenses.installed_notices', return_value=[]) as collect:
+            show_licenses(app)
+        collect.assert_called_once_with(platform='ios', native_inventory=None)
 
     def test_about_license_navigation_search_and_native_back(self):
         import toga
