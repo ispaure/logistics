@@ -91,3 +91,22 @@ class BrowserActionSheetTests(unittest.TestCase):
         self.menu.dispose()
         alert.alertControllerWithTitle.return_value.dismissViewControllerAnimated.assert_called_once_with(
             False, completion=None)
+
+    def test_ios_title_hold_accepts_method_getters_in_nested_native_views(self):
+        self.backend('toga_iOS.widgets.detailedlist')
+        self.menu.location = 'Vault:Note.md'
+        label = Mock(text=self.filename)
+        container = Mock()
+        container.isKindOfClass.return_value = False
+        container.subviews.return_value = [label]
+        alert, actions = Mock(), Mock()
+        alert.alertControllerWithTitle.return_value.view.subviews.return_value = [container]
+        self.browser._list_rows = {}
+        self.browser._app.main_window._impl.native.rootViewController.presentedViewController = None
+        bridge = NS(ObjCClass=lambda name: {'UIAlertController': alert, 'UIAlertAction': actions, 'UILabel': object}[name],
+                    Block=lambda callback, *args: callback, objc_id=object)
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}), patch('mobile.document_location.bind_apple_hold') as hold:
+            self.menu.show()
+        self.assertIs(hold.call_args.args[1], label)
+        alert.alertControllerWithTitle.return_value.view.subviews.assert_called_once_with()
+        container.subviews.assert_called_once_with()
