@@ -27,9 +27,13 @@ before creating a decrypted copy. Save or explicitly discard unsaved private
 edits before closing or locking credentials. Cloud locations remain read-only.
 
 The document fills the editor viewport. A small floating strip at the top provides the
-current brush, **Erase**, **Select / move**, **Undo**, **Redo** and **…** in one row,
-including on narrow phones. Android’s canvas X shares that row; iOS retains its
-native X. The **…** button opens an anchored **Notebook actions** dropdown. There
+current brush, **Erase**, **Select / move**, **Undo** and **Redo** in one row,
+including on narrow phones. Android’s canvas X and **…** share that row. On
+iOS, the native toolbar provides X, **Pages Overview** (page thumbnails),
+**Page template and layers**, **View and input**, and **Notebook actions**.
+UIKit places these actions in Duo’s side rail when applicable and may collect
+extra actions in overflow when space is limited. Android’s **…** opens the
+anchored **Notebook actions** dropdown. There
 are no permanent title, save-status or page-navigation rows. Choose
 **Notebook actions → Hide tools** to
 leave only a **Show tools** button on the canvas (the native iOS X stays available); showing the tools again preserves your brush,
@@ -75,7 +79,7 @@ turn pages until lifted. **Hide tools** also hides the zoom bar.
 Deletion asks before removing the source file and recovery draft, or an unsaved
 draft without a source. Cancelling keeps the document editable. A source changed
 elsewhere must be reopened before deletion.
-Save status appears in the dropdown; errors also appear as dismissible messages
+On Android, save status appears in the dropdown. Errors appear as dismissible messages
 above the document.
 Grayscale approximates monochrome readability while retaining export colors; it
 does not emulate a specific older screen or certify firmware compatibility.
