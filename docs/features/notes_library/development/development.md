@@ -626,31 +626,31 @@ emulators, swapping or excess external host CPU reject the window. Rejected
 attempts remain in evidence. Targets are below one second cold and half a second
 repeated, plus at least fourfold median improvement. Native controls, recycling,
 body-read prohibition and private-row retirement are checked separately. These
-targets passed in the single controlled device run below; additional-device and
-reverse-order confirmation have not run.
+targets passed in both controlled device runs below, including reversed order.
 
-On November 4, 2026, source `303f8b28` with commonUtils `d44cfd4e` completed one
-isolated API 36 ARM64/SwiftShader pass, using the same APK for both renderers.
-All eight windows had five eligible pre-intervals and passed the during-window
-load checks; none was rejected. Time runs from folder-toggle initiation to the
+On November 4, 2026, source `303f8b28` with commonUtils `d44cfd4e` completed two
+isolated API 36 ARM64/SwiftShader passes on fresh disposable devices. Both used
+identical APK bytes: the first ran legacy then recycled, and the second reversed
+that order. All sixteen windows had five eligible pre-intervals and passed the
+during-window load checks; none was rejected. Time runs from folder-toggle initiation to the
 first native `onDraw` callback after complete publication, rather than to Python
 publication completion. It does not measure physical display presentation.
 
-| Storage / expansion | Per-entry rows | Recycled rows |
+| Storage / expansion | Per-entry median | Recycled median |
 | --- | ---: | ---: |
-| Local / cold | 426 ms | 42 ms |
-| Local / repeated | 381 ms | 7 ms |
-| LocalCrypt / cold | 410 ms | 34 ms |
-| LocalCrypt / repeated | 378 ms | 13 ms |
+| Local / cold | 418 ms | 42 ms |
+| Local / repeated | 376 ms | 9 ms |
+| LocalCrypt / cold | 417 ms | 38 ms |
+| LocalCrypt / repeated | 376 ms | 13 ms |
 
 The per-entry renderer created 95 Toga buttons per expansion and spent
 310–329 ms constructing rows. The recycled renderer created no Toga buttons
 during expansion, spent 3–4 ms projecting records, and displayed 14 native cells
 for the 45 records. This supports widget construction as the remaining
-bottleneck. These are single samples per case in baseline-first order, rather
-than a multi-device result or a Samsung S8 measurement. The owned emulator and
-scratch workspace were removed; the read-only benchmark APK was retained as
-local test evidence for a later reverse-order run.
+bottleneck. The four median comparisons improved by 9.8–43.8 times; every recycled
+sample was below the cold/repeated limits. This is a two-emulator synthetic-fixture
+result, rather than a Samsung S8 measurement. Both owned emulators and scratch
+workspaces were removed; the read-only benchmark APK remains local test evidence.
 
 The separate `tests.logisticsmobile.notes_rows_functional_probe` entry point uses
 the isolated `io.github.ispaure.logisticsnotebookqa` package without load gates or
@@ -926,6 +926,7 @@ scope, rather than a new passing result for the current checkout.
   `test_notes_library_panels.py`: search scopes, calendar, save-before-move,
   guarded callbacks and drawer/form return behavior.
 
-Android recycled-tree functional and single-device controlled latency acceptance
+Android recycled-tree functional and two-device controlled latency acceptance
 are recorded above, separately from earlier panel probes. Additional-device,
-reverse-order and physical drag/drop acceptance remain pending.
+physical Samsung S8 and physical drag/drop behavior have not been certified by
+these probes.
