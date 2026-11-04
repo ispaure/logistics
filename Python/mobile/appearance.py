@@ -101,7 +101,7 @@ def action_button(button, *, destructive=False):
     button.action_role = 'destructive' if destructive else 'primary'
     button._impl._action_role = button.action_role
     _widgets.add(button._impl)
-    return surface(button, radius=8, foreground='destructive' if destructive else 'text', outlined=False)
+    return surface(button, radius=8, foreground='destructive' if destructive else 'accent', outlined=False)
 
 
 def outline_command(impl):
