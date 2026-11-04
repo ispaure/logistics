@@ -107,7 +107,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | [IDE](docs/features/ide/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
 | [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server or [supported on-device mobile models](docs/features/lm/user_mobile/conversations.md#on-device-models), paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
 | [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
-| [Notebooks](docs/features/notebooks/user/user.md) | Create and edit .rmdoc notebooks with native ink, image cutouts and arrangement, password-protected PDF backgrounds, and per-page templates (experimental) |
+| [Notebooks](docs/features/notebooks/user/user.md) | Create and edit .rmdoc notebooks with native ink, lasso stroke editing, image cutouts and arrangement, password-protected PDF backgrounds, and per-page templates (experimental) |
 | [PDF Reader](docs/features/pdf/user/user.md) | Read and search PDFs on desktop and mobile, jump to pages, swipe vertically, and duplicate a PDF as an annotatable .rmdoc beside it |
 | [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](docs/features/images/user/user.md) | View images with previous/next file navigation, compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |
