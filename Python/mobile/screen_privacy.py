@@ -167,6 +167,9 @@ class ScreenPrivacy:
         # Invalidate outstanding authentication before invoking any of them.
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         self.prepare_native_protection()
+        if self.sensitive():
+            from .privacy_effects import dismiss_floating_panels
+            dismiss_floating_panels(self.app)
         output = getattr(self.app, 'audio_output', None)
         if output is not None:
             output.invalidate(pause=False)  # Reject dialogs without stopping permitted background speech.
@@ -349,6 +352,8 @@ class ScreenPrivacy:
         """Replace the entire navigation root; routes may update safely behind it."""
         locked = any(gate.locked for gate in gates)
         if locked:
+            from .privacy_effects import dismiss_floating_panels
+            dismiss_floating_panels(self.app)
             from .comic_feedback import clear as clear_comic_feedback
             clear_comic_feedback(self.app)
             from features.books.mobile.media_controls import enforce_privacy
