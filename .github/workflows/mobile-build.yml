@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: mobile-build-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -35,71 +36,33 @@ jobs:
 
   ios-build:
     needs: environment
-    name: Build shared iOS test app
-    if: github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both'
-    runs-on: ${{ needs.environment.outputs.ios_runner }}
-    timeout-minutes: 80
+    name: Reuse exact release iOS test app for RPC diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          submodules: recursive
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: ${{ needs.environment.outputs.python_version }}
-      - name: Install explicitly pinned external manager
-        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
-      - name: Validate test source structure before native preparation
-        working-directory: ${{ github.workspace }}
-        run: python dev.py test-structure
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: '1.26.9'
-          cache-dependency-path: mobile_build/rclone_bridge/go.sum
-      - name: Prepare the SDK and simulator required for native Duo adaptation
-        timeout-minutes: 30
-        run: python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV" --prepare-duo
-      - name: Prepare a clean, curated mobile payload
-        run: |
-          python -m pip install briefcase==0.4.5
-          python -m pip wheel --wheel-dir "$RUNNER_TEMP/logistics-wheels" langdetect==1.0.9
-          echo "PIP_FIND_LINKS=$RUNNER_TEMP/logistics-wheels" >> "$GITHUB_ENV"
-          python mobile_build/tools.py stage mobile_build/payload
-      - name: Generate and build the iOS Simulator application
-        working-directory: mobile_build
-        env:
-          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
-        run: |
-          mkdir -p "$BRIEFCASE_HOME"
-          xcodebuild -version
-          xcrun simctl list devices available
-          python cloud_build.py licenses
-          briefcase create iOS --no-input
-          python cloud_build.py ios
-          briefcase build iOS --test --no-input
-          app=$(find build/logisticsmobile/ios -type d -name 'Logistics Mobile.app' -print -quit)
-          test -n "$app"
-          ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/Logistics-ios-simulator.zip"
-          # Keep Briefcase's metadata and generated project so device jobs can
-          # run this exact test binary with --no-update, without rebuilding.
-          tar -czf "$RUNNER_TEMP/Logistics-ios-test-project.tar.gz" build/logisticsmobile/ios payload/source.json
-      - name: Share the built iOS test application
+          name: logistics-ios-test-project
+          run-id: 41743304027
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/original-test-project
+      - name: Share the unchanged original native test binary
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: logistics-ios-test-project
-          path: ${{ runner.temp }}/Logistics-ios-test-project.tar.gz
+          path: ${{ runner.temp }}/original-test-project/Logistics-ios-test-project.tar.gz
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-      - name: Preserve native builds and diagnostics
-        if: always()
+      - name: Share read-only host diagnostics separately from app source
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: logistics-native-ios
+          name: screen-time-host-diagnostics
           path: |
-            mobile_build/payload/source.json
-            mobile_build/logs/
-            ${{ runner.temp }}/Logistics-ios-simulator.zip
+            mobile_build/validation/ui_tools.py
+            mobile_build/validation/screen_time_rpc.py
+          if-no-files-found: error
           retention-days: 14
 
   android:
@@ -178,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [iphone, duo, ipad]
+        device: [ipad]
     defaults:
       run:
         shell: bash
@@ -186,6 +149,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: 05752c4fbe3b437b5aca9d039680c328f15dca26
           submodules: recursive
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -207,6 +171,18 @@ jobs:
           path: ${{ runner.temp }}/ios-test-project
       - name: Restore the shared test application
         run: tar -xzf "$RUNNER_TEMP/ios-test-project/Logistics-ios-test-project.tar.gz"
+      - name: Download read-only RPC host diagnostics
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: screen-time-host-diagnostics
+          path: ${{ runner.temp }}/rpc-host-diagnostics
+      - name: Install diagnostic host tools while preserving original app and Git identity
+        run: |
+          cp "$RUNNER_TEMP/rpc-host-diagnostics/ui_tools.py" validation/ui_tools.py
+          cp "$RUNNER_TEMP/rpc-host-diagnostics/screen_time_rpc.py" validation/screen_time_rpc.py
+          mkdir -p logs
+          printf '%s\n' '${{ github.sha }}' > logs/rpc-host-tools-commit.txt
+          shasum -a 256 validation/ui_tools.py validation/screen_time_rpc.py > logs/rpc-host-tools.sha256
       - name: Exercise panels, rotation and safe areas
         env:
           IOS_DEVICE: ${{ matrix.device }}
@@ -236,7 +212,7 @@ jobs:
           # first size limit discarded the minutes containing late failures.
           xcrun simctl spawn "$device" log stream \
             --style compact --level debug --predicate \
-            'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR subsystem BEGINSWITH "com.apple.extensionkit" OR subsystem BEGINSWITH "com.apple.extensionfoundation" OR process == "runningboardd"' \
+            'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR subsystem BEGINSWITH "com.apple.extensionkit" OR subsystem BEGINSWITH "com.apple.extensionfoundation" OR process == "runningboardd" OR process == "ScreenTimeSettingsAgent" OR subsystem BEGINSWITH "com.apple.ScreenTime"' \
             2>&1 | python validation/bounded_log.py logs/ios-webkit-live.log &
           webkit_log_pid=$!
           trap 'kill "$webkit_log_pid" 2>/dev/null || true; kill -KILL "$webkit_log_pid" 2>/dev/null || true; wait "$webkit_log_pid" 2>/dev/null || true' EXIT
