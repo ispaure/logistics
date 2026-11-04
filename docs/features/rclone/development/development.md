@@ -145,3 +145,19 @@ credential change, cancellation and owned cleanup. Native `TestDownload*` fixtur
 cover the wire request, single-item scope, crypt sources/encrypted destinations and
 rejection of changed identities or nonempty staging. Portable checks do not replace
 physical-device interaction with an actual network share.
+
+## Adjacent integrations
+
+The [Dropbox feature](../../dropbox/development/development.md) discovers desktop
+Dropbox-client folders and reviews local conflicting copies. Rclone remotes use
+their own credential and transfer workflow; loading one does not configure that
+Dropbox-client integration.
+
+[FUSE](../../fuse/development/development.md) contributes an optional desktop
+mount action for saved credential contexts. Its detached mount lifetime and
+platform drivers are separate from integrated transfer jobs and resource leases.
+Mobile uses the embedded bridge and offers no FUSE mounts.
+
+The November 4 documentation audit reviewed source and existing tests only.
+No CLI, bridge, Qt or native-device validation was rerun during the release hold;
+current acceptance remains limited to the separately recorded test scopes.

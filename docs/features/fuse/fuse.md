@@ -6,3 +6,5 @@ Choose a guide for the task you want to complete.
 
 - [FUSE Feature](development/development.md)
 - [Open a mounted remote folder](user/user.md)
+
+- [FUSE on mobile](user_mobile/user_mobile.md)
