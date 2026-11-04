@@ -45,7 +45,6 @@ class SettingsCategories:
         box.add(switch_row(app, 'Close saved documents on restart', app.clear_documents_choice,
             'Close documents with no unsaved changes when the app restarts. Files and drafts are kept. '
             'The last active document stays open if Restore last document is on.'))
-        box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=app.reload_preferences, style=Pack(height=48)))
         box.add(SettingsLabel('Reread the preferences file after editing or repairing it outside the app. '
                               'Changes made in Settings are already saved.'))
