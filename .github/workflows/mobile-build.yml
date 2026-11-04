@@ -12,6 +12,14 @@ on:
         type: choice
         default: both
         options: [android, ios, both]
+      ipad_view_lifetime_diagnostic:
+        description: Diagnostic only; full original 43a suite with native view lifetime tracing
+        type: boolean
+        default: false
+      diagnostic_source_run:
+        description: Original 43a workflow run containing logistics-native-ios
+        type: string
+        default: '41819543378'
       ios_object_diagnostics:
         description: Diagnose native object lifetimes in disposable iOS test apps
         type: boolean
@@ -24,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: mobile-build-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -36,7 +45,7 @@ jobs:
   ios-build:
     needs: environment
     name: Build shared iOS test app
-    if: github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both'
+    if: ${{ !inputs.ipad_view_lifetime_diagnostic && (github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both') }}
     runs-on: ${{ needs.environment.outputs.ios_runner }}
     timeout-minutes: 80
     steps:
@@ -105,7 +114,7 @@ jobs:
   android:
     needs: environment
     name: Build shared Android test app
-    if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
+    if: ${{ !inputs.ipad_view_lifetime_diagnostic && (github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both') }}
     runs-on: ${{ needs.environment.outputs.android_runner }}
     timeout-minutes: 60
     env:
@@ -190,7 +199,7 @@ jobs:
   android-ui:
     name: Validate Android
     needs: [environment, android]
-    if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
+    if: ${{ !inputs.ipad_view_lifetime_diagnostic && (github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both') }}
     runs-on: ${{ needs.environment.outputs.android_runner }}
     timeout-minutes: 50
     steps:
@@ -254,7 +263,7 @@ jobs:
   ios-ui:
     name: Validate iOS ${{ matrix.device }}
     needs: [environment, ios-build]
-    if: github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both'
+    if: ${{ !inputs.ipad_view_lifetime_diagnostic && (github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both') }}
     runs-on: ${{ needs.environment.outputs.ios_runner }}
     # Preserve the existing setup/diagnostics budget plus one complete
     # 30-minute native attempt for evidenced Swift-worker startup recovery.
@@ -341,10 +350,58 @@ jobs:
             mobile_build/logs/
           retention-days: 14
 
+  ipad-view-lifetime-diagnostic:
+    name: Diagnostic only — original 43a iPad view lifetimes
+    needs: environment
+    if: github.event_name == 'workflow_dispatch' && inputs.ipad_view_lifetime_diagnostic
+    runs-on: ${{ needs.environment.outputs.ios_runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 43a4591ae41694747ba2af73b4ee18ff2b66fa4f
+          path: test-results/ipad-lifetime-baseline
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: ${{ needs.environment.outputs.python_version }}
+      - name: Install this diagnostic branch's pinned manager
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/ipad-diagnostic-manager"
+      - name: Select the required simulator SDK
+        run: python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: logistics-native-ios
+          run-id: ${{ inputs.diagnostic_source_run }}
+          github-token: ${{ github.token }}
+          path: test-results/ipad-lifetime-artifact
+      - name: Run the original full suite with diagnostic-only native observation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DIAGNOSTIC_SOURCE_RUN: ${{ inputs.diagnostic_source_run }}
+        run: |
+          PYTHONPATH=Python:. python -m logistics_build.ipad_lifetime_diagnostic --root "$GITHUB_WORKSPACE" --baseline "$GITHUB_WORKSPACE/test-results/ipad-lifetime-baseline" --artifact "$GITHUB_WORKSPACE/test-results/ipad-lifetime-artifact" --source-run "$DIAGNOSTIC_SOURCE_RUN" --output "$GITHUB_WORKSPACE/test-results/ipad-lifetime-evidence"
+      - name: Verify removal of the owned diagnostic simulator
+        if: always()
+        run: PYTHONPATH=Python:. python -m logistics_build.ipad_lifetime_diagnostic --cleanup-only --output "$GITHUB_WORKSPACE/test-results/ipad-lifetime-evidence"
+      - name: Preserve diagnostic evidence; never release acceptance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: ipad-view-lifetime-diagnostic-${{ github.sha }}-${{ github.run_attempt }}
+          path: test-results/ipad-lifetime-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
   native-gate:
     name: Require every selected native check
     needs: [ios-build, ios-ui, android, android-ui]
-    if: always()
+    if: ${{ always() && !inputs.ipad_view_lifetime_diagnostic }}
     runs-on: ubuntu-latest
     steps:
       - name: Reject failed, cancelled or required skipped checks
