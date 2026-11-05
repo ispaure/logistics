@@ -150,7 +150,7 @@ class NotebookPanel:
 
     def state(self):
         state = document_state(self.editor, self.document)
-        state['native_close'] = False  # The unified canvas always owns its visible Close.
+        state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_actions'] = hasattr(self, 'native_actions')
         state['native_pen'] = self.pen_input is not None
         state['frame_batched_ink'] = sys.platform == 'ios'
@@ -202,9 +202,6 @@ class NotebookPanel:
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
             self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables(),
             paper_preview=self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'))
-        changed = getattr(self.view, '_notebook_chrome_changed', None)
-        if changed is not None:
-            changed()
 
     async def canvas_loaded(self, widget=None, **kwargs):
         if widget is not self.web:
@@ -466,9 +463,6 @@ class NotebookPanel:
                 native.removeAllViews()
                 native.destroy()
         self.web = None
-        changed = getattr(self.view, '_notebook_chrome_changed', None)
-        if changed is not None:
-            changed()
 
     def dispose(self):
         self.closed = True
