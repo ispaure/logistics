@@ -143,14 +143,25 @@ their existing locations only for that selected build, never copied into Git.
 
 ## Validation and local outputs
 
-Generic contracts are in the external manager checkout's `tests/`; Logistics
+Generic contracts are in the external manager checkout's `Python/tests/`; Logistics
 integration contracts are in `Python/tests/tooling` and `mobile_build/tests/tooling`.
 The tests exercise
 real harmless subprocesses and Qt-to-CLI execution, failure, timeout, cancellation,
 workspace conflicts, source privacy, allocation and controlled provider transport.
 They do not substitute for the local platform backends' native acceptance.
-`python dev.py lint` covers Logistics-owned source. Desktop plans run the installed
-manager's tests through `python -m build_manager.contracts`.
+`python dev.py lint` covers Logistics-owned source. Full Logistics desktop plans
+keep the complete `Python/tests` inventory, including the adapter, journey,
+Executor, artifact review, retained delivery and tooling-bootstrap integration
+contracts in `Python/tests/tooling`. Mobile host plans also keep the complete
+`mobile_build/tests` inventory. Exact dependency-pin and source verification
+remain required.
+
+The manager's complete generic self-test suite belongs to SDK qualification,
+including its standalone GUI fixtures. Run `python -m build_manager.contracts`
+explicitly with the SDK's owning interpreter when qualifying SDK changes; it is
+not an implicit Logistics release phase. This separates test ownership without
+turning an SDK failure into a pass or removing Logistics integration coverage.
+Older prepared runs retain their original required phases and results.
 
 Counters and source workspaces stay under ignored
 `mobile_build/.tools/build-manager/`. The standalone manager supplies its private
@@ -167,7 +178,7 @@ its Python, OS, architecture and package versions before copying source. The
 setup phase loads native Qt and provisions/verifies the pinned rclone executable;
 full local runs require the genuine LocalCrypt fixtures rather than silently
 skipping them. The remaining phases are the canonical shared/app regressions,
-full historical compression parity, manager contracts and release-tooling tests.
+full historical compression parity and release-tooling tests.
 Source-plan preparation and environment setup are timed separately from tests.
 
 The GitHub option dispatches the macOS selector in the platform-check workflow.
@@ -237,7 +248,7 @@ with Python 3.12.2 AMD64 under x64 emulation; results identify both architecture
 and do not claim native ARM Python or equivalence to hosted x64 hardware.
 
 The complete plan runs native Windows startup, shared/application regressions,
-compression parity, generic manager contracts and release-tooling checks.
+compression parity and release-tooling checks.
 An explicit `shared:test_filename.py` focused pattern selects shared contracts;
 ordinary filename patterns select application contracts. Source transfer retains
 Git history and verifies its digest; reports retain actual process exit codes.

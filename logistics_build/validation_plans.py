@@ -18,12 +18,11 @@ def desktop_checks(system, results, root=None):
                   for row in rows)
     checks.extend([
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
-        ('manager-contracts', ['-m', 'build_manager.contracts'], 600),
     ])
     if system == 'Windows':
-        # The measured full Windows inventory needs ~1900s/650s respectively.
+        # The measured full Windows Logistics inventory needs about 1900s.
         # Keep smoke gates and all other platforms on their declared budgets.
-        minimums = {'logistics': 2100, 'manager-contracts': 780}
+        minimums = {'logistics': 2100}
         checks = [(name, argv, max(timeout, minimums.get(name, 0)))
                   for name, argv, timeout in checks]
     return checks
@@ -42,7 +41,7 @@ SUITES = {
     'release-tooling': dict(owner='.github/scripts', platforms=['macos', 'fedora', 'windows'],
                            entry='python -m unittest discover -s .github/scripts', kind='packaging', required=True),
     'manager': dict(owner='external build-deployment-manager', platforms=['macos', 'fedora', 'windows'],
-                    entry='python -m build_manager.contracts', kind='contracts', required=True),
+                    entry='python -m build_manager.contracts', kind='contracts', required=False),
     'native-ios': dict(owner='mobile_build/native_tests', platforms=['ios'],
                        entry='mobile_build/validation/ui_tools.py', kind='native', required=True,
                        devices=['iphone', 'duo', 'ipad'], build_once=True,
