@@ -195,8 +195,10 @@ class NativePrerequisiteTests(unittest.TestCase):
         binary=self.root/'tools';binary.mkdir()
         (binary/'briefcase.py').write_text('print("0.4.5")\n')
         (binary/'pip.py').write_text('print("pip 26.3 from fixture")\n')
-        go=binary/'go'
-        go.write_text('#!/bin/sh\necho "go version go1.26.9 fixture/fixture"\n');go.chmod(0o755)
+        go=binary/('go.cmd' if os.name == 'nt' else 'go')
+        go.write_text('@echo go version go1.26.9 fixture/fixture\n' if os.name == 'nt' else
+                      '#!/bin/sh\necho "go version go1.26.9 fixture/fixture"\n')
+        go.chmod(0o755)
         marker=self.root/'host-effect'
         env=dict(PATH=str(binary),PYTHONPATH=os.pathsep.join((str(binary),str(ROOT),str(ROOT/'Python'))),
                  PIP_FIND_LINKS=str(self.root/'missing-wheelhouse'),PYTHONDONTWRITEBYTECODE='1')
