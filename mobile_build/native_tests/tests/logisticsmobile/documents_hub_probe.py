@@ -28,13 +28,18 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
         from mobile.incoming_files import inbox_path
         from .sync_status_probe import control_frame
         root = collection_path(self.private_root)
-        (root / 'Projects/One/Two/Notes/.obsidian').mkdir(parents=True, exist_ok=True)
-        (root / 'Projects/One/Two/Notes/QA unique note.md').write_text('# Filename search fixture')
+        (root / 'Projects/Notes/.obsidian').mkdir(parents=True, exist_ok=True)
+        note = root / 'Projects/Notes/One/Two/QA unique note.md'
+        note.parent.mkdir(parents=True)
+        note.write_text('# Filename search fixture')
         (root / 'No match.txt').write_text('QA unique')
         inbox_path(self.private_root).mkdir(parents=True, exist_ok=True)
         (inbox_path(self.private_root) / 'QA unique received.txt').write_text('Received')
         (root / 'Graphic novels').mkdir(exist_ok=True)
         (root / 'remoteConfig.ini').write_text('[LogisticsComics]\nlibraries = Graphic novels\n')
+        if self.routes.apple:
+            from .toolbar_conventions_probe import native_geometry
+            await self.check_retained_toolbar_rotation(report, native_geometry)
         self.home_unlock_candidates = lambda: [('synthetic', dict(zip='Synthetic.zip'))]
         report['samples'] = []
         for orientation in ('portrait', 'landscape-left'):
@@ -54,7 +59,6 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
                 assert not self.routes.screens[destination]
                 await capture_window(self, Path(self.paths.cache) / f'documents-hub-{orientation}-{destination}.png')
                 if self.routes.apple:
-                    from .toolbar_conventions_probe import native_geometry
                     geometry = native_geometry(self)
                     unlock = [item for item in geometry['items'] if item['label'] == 'Unlock LocalCrypt']
                     assert len(unlock) == 1, geometry
@@ -110,6 +114,36 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
         report['pose'] = pose_snapshot(self)
         report['cases'].extend(['filename_only_local_and_received', 'direct_notes_and_comics_lists',
                                 'shared_unlock_placement', 'no_documents_hamburger', 'unlock_disappears'])
+
+    async def check_retained_toolbar_rotation(self, report, native_geometry):
+        commands = {'Open document', 'New document', 'Search documents',
+                    'Document actions', 'Unlock LocalCrypt'}
+        samples = report['retained_toolbar_rotation'] = []
+        for unlock in (True, False):
+            self.home_unlock_candidates = lambda unlock=unlock: [('synthetic', dict(zip='Synthetic.zip'))] if unlock else []
+            self.show_documents_hub()
+            for name in ('Libraries', 'Open', 'Recent', 'Saved'):
+                self.document_view_buttons[name].on_press()
+                selected = self.document_results.children[0]
+                portrait = None
+                for orientation in ('portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait'):
+                    await rotate(self, orientation, settle=.5)
+                    assert self.documents_view == name and self.document_results.children[0] is selected
+                    geometry = native_geometry(self)
+                    items = [item for item in geometry['items'] if item['label'] in commands]
+                    sample = dict(tab=name, unlock=unlock, orientation=orientation, geometry=geometry)
+                    samples.append(sample)
+                    frames = {item['label']: item['frame'] for item in items}
+                    assert frames and len(frames) == len(items), sample
+                    assert ('Unlock LocalCrypt' in frames) == unlock, sample
+                    if orientation == 'portrait':
+                        if portrait is None:
+                            portrait = frames
+                        else:
+                            assert frames.keys() == portrait.keys(), sample
+                            for label, frame in frames.items():
+                                assert abs(frame[1] - portrait[label][1]) <= 2, (portrait, sample)
+        report['cases'].append('retained_documents_toolbar_portrait_return')
 
 
 def main():

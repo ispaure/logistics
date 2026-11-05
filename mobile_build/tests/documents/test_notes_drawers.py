@@ -94,11 +94,17 @@ class NotesDrawerTests(unittest.TestCase):
         from mobile.notes_discovery import fit_discovery_status
         from mobile.layout_participants import LayoutFrame
         async def exercise():
-            with patch.object(self.app, 'feature_enabled', return_value=True):
-                self.app.show_documents_hub()
-                self.app.document_view_buttons['Libraries'].on_press()
+            self.app.show_documents_hub()
+            self.app.document_view_buttons['Libraries'].on_press()
+            await self.app._notes_discovery_task
+            notes = self.app.document_notes_list
+            self.assertFalse(any(getattr(child, 'text', '') for child in notes.children[1:]))
+            with patch.object(self.app, 'home_unlock_candidates',
+                              return_value=[('fixture', {'crypt_remotes': ['Encrypted']})]):
+                from mobile.notes_discovery import populate
+                populate(self.app, notes, title='Notes', refresh=False)
                 await self.app._notes_discovery_task
-            status = self.app.document_notes_list.children[2]
+            status = notes.children[1]
             original = status._settings_source_text
             self.assertIn('Unlock LocalCrypt', original)
             fit_discovery_status(status, LayoutFrame(300, lambda destination: 240))

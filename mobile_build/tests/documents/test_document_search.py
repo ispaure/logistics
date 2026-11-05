@@ -209,6 +209,22 @@ class LocalDocumentSearchTests(TestCase):
         self.assertFalse(any(getattr(w, 'text', '') in ('Refresh libraries', 'Open Books & Comics library')
                              for w in widgets(app.document_libraries_list)))
 
+    def test_encrypted_notes_library_displays_its_nested_name_once(self):
+        app = self.app
+        root = app.private_root / 'encrypted-discovery-fixture'
+        (root / 'Projects/Vault/.obsidian').mkdir(parents=True)
+        with (patch.object(app, 'existing_crypt_locations', return_value={'LocalCrypt: Vault': 'Vault'}),
+              patch('features.rclone.localcrypt.mobile.resources.encrypted_storage',
+                    side_effect=lambda *args, **kwargs: LocalFiles(root))):
+            app.show_documents_hub()
+            app.document_view_buttons['Libraries'].on_press()
+            app.loop.run_until_complete(app._notes_discovery_task)
+        rows = app.document_notes_list.children[1]
+        button, = rows.children
+        self.assertEqual(button.text, 'Vault')
+        self.assertIn('LocalCrypt: Vault / Projects', button.accessible_name)
+        self.assertIn(('storage_unlocked', 'Encrypted library, unlocked'), button.leading_icons)
+
     def test_unlock_is_last_header_action_and_returns_to_each_origin(self):
         app = self.app
         app.show_cloud(present=False)

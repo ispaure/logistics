@@ -261,6 +261,7 @@ def start_receiving(app):
                     status = getattr(app, 'incoming_notice', None)
                     if status is not None:
                         status.text = app.incoming_status
+                        status.style.display = 'pack'
                     provider = getattr(app, 'file_provider', None)
                     root = getattr(provider, 'root', None)
                     shown = Path(root) / getattr(app, 'file_path', '') if root is not None else None

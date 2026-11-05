@@ -59,6 +59,8 @@ class FolderSourceTabTests(unittest.TestCase):
         (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
         app.show_locations()
         app.loop.run_until_complete(app.folder_buttons['Received Files'].on_press())
+        self.assertEqual(app.incoming_notice.text, '')
+        self.assertEqual(app.incoming_notice.style.display, 'none')
         selected = app.folder_buttons['Received Files']
         self.assertTrue(selected._workspace_selected)
         self.assertEqual(selected.style.font_weight, 'bold')

@@ -224,6 +224,19 @@ class FolderHubUI:
             value=selected if selected in self.folder_credentials else 'All',
             style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
         self.folder_credential.on_change = self.change_folder_credential
+        accessible_name(self.folder_credential, 'Credential filter')
+        if type(self.folder_credential._impl).__module__.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass, CGRect
+            native = self.folder_credential._impl.native
+            image = ObjCClass('UIImage').systemImageNamed('chevron.down')
+            accessory = ObjCClass('UIImageView').alloc().initWithImage(image)
+            accessory.frame = CGRect((0, 0), (32, 20))
+            accessory.contentMode = 4  # UIViewContentModeCenter
+            accessory.tintColor = ObjCClass('UIColor').secondaryLabelColor()
+            accessory.isAccessibilityElement = False
+            native.rightView = accessory
+            native.rightViewMode = 3  # UITextFieldViewModeAlways
+            native.accessibilityHint = 'Opens the list of credentials'
         self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT), flex=1))
         toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
@@ -246,8 +259,9 @@ class FolderHubUI:
         self.folder_picker_header = toga.Box(style=Pack(direction=COLUMN))
         self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
-        self.app.incoming_notice = FittedLabel(getattr(self.app, 'incoming_status',
-            'Files shared from other apps appear in Received Files.'), style=Pack(font_size=12, margin_top=4))
+        incoming = getattr(self.app, 'incoming_status', '')
+        self.app.incoming_notice = FittedLabel(incoming,
+            style=Pack(display='pack' if incoming else 'none', font_size=12, margin_top=4))
         self.folder_source_tabs.style.flex = 1
         self.folder_source_tabs.style.margin_bottom = 0
         self.app._files_status_row = toga.Box(children=[self.folder_source_tabs],
@@ -297,7 +311,12 @@ class FolderHubUI:
             self.folder_credential.on_change = self.change_folder_credential
         self.folder_all_choices = choices
         self.folder_picker_choices = choices
-        selected = self.folder_credentials.get(self.selected_folder_credential())
+        credential = self.selected_folder_credential()
+        if type(self.folder_credential._impl).__module__.startswith('toga_android.'):
+            # Android's native spinner supplies the arrow. Name the current
+            # value explicitly because the content description labels the spinner.
+            accessible_name(self.folder_credential, f'Credential filter: {credential}')
+        selected = self.folder_credentials.get(credential)
         local_group = self.folder_local_group if self.folder_source == 'Local' else None
         visible = source_choices(choices, self.folder_source, network_remotes, local_group=local_group)
         if self.folder_source == 'Local':
