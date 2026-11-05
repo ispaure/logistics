@@ -796,6 +796,14 @@ def hosted_validation(client, values, args, cancelled):
         operation = os.environ.get('BUILD_MANAGER_OPERATION_ID', '')
         if not operation:
             raise ValueError('Dispatch requires the owning manager operation identity.')
+        if not args.no_test_reuse:
+            from logistics_build.hosted_run_intake import intake
+            adopted = intake(client, getattr(args, 'root', Path(__file__).resolve().parents[1]), expected)
+            if adopted is not None:
+                adopted['operation_id'] = operation
+                save_json(receipt, adopted)
+                print(json.dumps(adopted), flush=True)
+                return 0
         run = client.dispatch(args.workflow, args.ref, args.commit, inputs, confirmed=True)
         if type(run) is not int or run <= 0:
             raise ValueError('Dispatch acceptance has no run identity; review it without dispatching again.')
@@ -807,6 +815,18 @@ def hosted_validation(client, values, args, cancelled):
     if not receipt.is_file() or receipt.stat().st_size > 1024 * 1024:
         raise ValueError('Original hosted acceptance receipt is missing or invalid.')
     accepted = json.loads(receipt.read_text())
+    if (args.observation_receipt is None or args.observation_receipt.is_symlink()
+            or args.observation_receipt.resolve() == receipt.resolve()):
+        raise ValueError('Hosted observation requires a separate result receipt.')
+    if isinstance(accepted, dict) and accepted.get('schema') == 2:
+        if args.no_test_reuse:
+            raise ValueError('Fresh validation cannot adopt an automatic hosted run.')
+        from logistics_build.hosted_run_intake import observe
+        result = observe(client, accepted, getattr(args, 'root', Path(__file__).resolve().parents[1]), expected, cancelled,
+                         progress=lambda value: print(json.dumps(value), flush=True))
+        save_json(args.observation_receipt, dict(schema=2, provider='github',
+            operation_id=accepted['operation_id'], **result, **expected))
+        return 0
     if (not isinstance(accepted, dict) or accepted.get('schema') != 1
             or accepted.get('provider') != 'github' or accepted.get('status') != 'queued'
             or type(accepted.get('run_id')) is not int or accepted['run_id'] <= 0

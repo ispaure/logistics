@@ -6,14 +6,21 @@ from pathlib import Path
 import re
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
-REQUIRED = {
-    'validate': ('.github/workflows/archive-platform-checks.yml',
-                 {'static', 'macos', 'windows', 'Fedora desktop'}),
-    'mobile-build': ('.github/workflows/mobile-build.yml',
-                     {'Build shared iOS test app', 'Build shared Android test app', 'Validate Android', 'Validate iOS iphone',
-                      'Validate iOS duo', 'Validate iOS ipad', 'Require every selected native check'}),
-    'mobile-runtime': ('.github/workflows/mobile-runtime.yml', {'ios', 'android'}),
-}
+# The evidence job does not check out submodules or install project dependencies.
+# Load the shared stdlib policy without executing logistics_build.__init__.
+import importlib.util
+
+
+def source_module(name, relative):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[2] / relative)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_policy = source_module('logistics_hosted_requirements', 'logistics_build/hosted_requirements.py')
+REQUIRED, complete_family_jobs = _policy.REQUIRED, _policy.complete_family_jobs
+
 
 
 def select(request, repository, commit, *, now=None, max_age=timedelta(hours=24), reuse_allowed=True):
@@ -32,18 +39,12 @@ def select(request, repository, commit, *, now=None, max_age=timedelta(hours=24)
                     or run.get('head_repository', {}).get('full_name') != repository):
                 continue
             jobs = request('/actions/runs/' + str(run['id']) + '/jobs?filter=latest&per_page=100')['jobs']
-            by_name = {job['name']: job for job in jobs}
-            if not required.issubset(by_name):
-                continue
-            selected = [by_name[name] for name in required]
-            if any(job.get('status') != 'completed' or job.get('conclusion') != 'success'
-                   or not job.get('completed_at') for job in selected):
-                continue
-            dates = [datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00')) for job in selected]
-            if any(date > now or now - date > max_age for date in dates):
+            try:
+                proof = complete_family_jobs(jobs, family, now=now, max_age=max_age)
+            except (ValueError, KeyError, TypeError):
                 continue
             result[family] = dict(run_id=run['id'], url=run['html_url'], workflow=workflow,
-                                  commit=commit, jobs=sorted(required), oldest_completed_at=min(dates).isoformat())
+                                  commit=commit, **proof)
             break
     return result
 
@@ -69,10 +70,8 @@ def main():
             raise ValueError('Evidence response exceeds the inspection budget.')
         return json.loads(raw)
     try:
-        import sys
-        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-        from logistics_build.release_test_evidence import reuse_disabled
-        evidence = select(request, repository, commit, reuse_allowed=not reuse_disabled(Path.cwd()))
+        policy = source_module('logistics_release_test_evidence', 'logistics_build/release_test_evidence.py')
+        evidence = select(request, repository, commit, reuse_allowed=not policy.reuse_disabled(Path.cwd()))
     except (OSError, ValueError, KeyError, TypeError):
         # An unavailable or malformed proof cannot skip tests.
         evidence = {}
