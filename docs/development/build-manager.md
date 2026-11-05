@@ -940,3 +940,23 @@ Automatic runs are shared evidence. Cancelling or timing out a local observer
 leaves them running and retains their saved identity. Original manager-dispatched
 runs retain their existing receipt, resume and cancellation behavior. This
 coalescing does not remove any selected platform validation or delivery review.
+
+
+### Explicit guest SDK source readiness
+
+Before VM admission, explicit manager sources must contain the selected project's
+exact manager and commonUtils commits. For an existing project-owned tooling cache
+with matching ownership proof, the adapter can refill missing Git objects from the
+actual installed, verified project-pinned SDK checkout. This is a bounded local
+file-protocol transfer: it does not fetch from a remote, change HEADs, reset source,
+install an environment or rewrite the selected profile. A successful repair is
+recorded in the platform plan's `guest_source_readiness` source field and an
+`objects-restored` diagnostic. Source readiness is checked again before transfer.
+
+Arbitrary developer checkouts, dirty caches, linked/external Git metadata and
+working-tree-local overlays are never automatically repaired. Removed or
+unrecognized cache trees fail with the declared revision, selected checkout and
+setup guidance. Clear an obsolete explicit source to use the ordinary published-pin
+guest installation, or update tooling through its owner. These checks preserve
+normal Git object and ownership boundaries; they do not guarantee remote network
+availability or repair unrelated guest prerequisites.
