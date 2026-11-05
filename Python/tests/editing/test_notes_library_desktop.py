@@ -34,7 +34,9 @@ class NotesLibraryDesktopTests(QtTestCase):
     def run(self, result=None):
         # A failed Save/assertion must not become an unattended dialog in cleanup.
         # Keep these guards around QtTestCase.run, which owns all widget cleanup.
-        if self._testMethodName != 'test_saved_note_refreshes_content_matches_and_visible_connections':
+        if self._testMethodName not in (
+                'test_saved_note_refreshes_content_matches_and_visible_connections',
+                'test_held_note_publication_keeps_pending_until_real_save_and_refresh_complete'):
             return super().run(result)
         from contextlib import ExitStack
         import faulthandler
@@ -834,12 +836,90 @@ class NotesLibraryDesktopTests(QtTestCase):
             window.viewer.set_edit_mode('source')
             window.viewer.editor.selectAll()
             window.viewer.editor.insertPlainText('# Changed\n\n[[Other]]')
+            def save_state():
+                return dict(document_saving=window.document_saving,
+                    save_pending=window.viewer.document_state.save_pending,
+                    progress=window.progress.busy, search=window.aux.busy,
+                    connections=window.connections_progress.busy,
+                    modified=window.viewer.is_modified, status=window.viewer.status.text(),
+                    worker_error=window.progress._result[1],
+                    disk=(root / 'Home.md').read_text())
+            # Keep this original, unheld save path: a control delay must not hide
+            # the actual publication or callback ordering exercised here.
             window.viewer.save_document()
-            self.wait_until(lambda: not window.progress.busy and not window.aux.busy and not window.connections_progress.busy)
-            self.assertEqual(window.search_rows, [])
+            self.wait_until(lambda: not window.document_saving and not window.progress.busy
+                and not window.aux.busy and not window.connections_progress.busy,
+                message=lambda: str(save_state()))
+            self.assertEqual((root / 'Home.md').read_text(), '# Changed\n\n[[Other]]', save_state())
+            self.assertEqual(window.progress._result[1], '', save_state())
+            self.assertFalse(window.viewer.document_state.save_pending, save_state())
+            self.assertFalse(window.viewer.is_modified, save_state())
+            self.assertEqual(window.search_rows, [], save_state())
             self.assertEqual(window.links_tree.topLevelItem(1).text(0), 'Outgoing links (1)')
             self.assertEqual(window.links_tree.topLevelItem(2).text(0), 'Unresolved links (0)')
-            window.close()
+            close_state = save_state()
+            self.assertTrue(window.close(), close_state)
+
+    def test_held_note_publication_keeps_pending_until_real_save_and_refresh_complete(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            (root / 'Home.md').write_text('# Needle\n\n[[Missing]]')
+            (root / 'Other.md').write_text('# Other')
+            window = self.open_library(root)
+            window.search.setText('needle')
+            window.filter()
+            self.wait_until(lambda: not window.aux.busy)
+            self.assertEqual([row['path'] for row in window.search_rows], ['Home.md'])
+            window.open_note('Home.md')
+            self.wait_until(lambda: not window.progress.busy)
+            window.toggle_links()
+            self.wait_until(lambda: not window.connections_progress.busy)
+            self.assertEqual(window.links_tree.topLevelItem(2).text(0), 'Unresolved links (1)')
+            window.viewer.set_editing(True)
+            window.viewer.set_edit_mode('source')
+            window.viewer.editor.selectAll()
+            window.viewer.editor.insertPlainText('# Changed\n\n[[Other]]')
+            from threading import Event
+            entered, release = Event(), Event()
+            replace_created = window.provider.replace_created
+            def delayed_replace(*args, **kwargs):
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError('The controlled note publication was not released')
+                return replace_created(*args, **kwargs)
+            def save_state():
+                return dict(document_saving=window.document_saving,
+                    save_pending=window.viewer.document_state.save_pending,
+                    progress=window.progress.busy, search=window.aux.busy,
+                    connections=window.connections_progress.busy,
+                    modified=window.viewer.is_modified, status=window.viewer.status.text(),
+                    worker_error=window.progress._result[1],
+                    disk=(root / 'Home.md').read_text())
+            with patch.object(window.provider, 'replace_created', side_effect=delayed_replace):
+                try:
+                    self.assertFalse(window.viewer.save_document())  # Pending, not completed.
+                    self.wait_until(entered.is_set, message=lambda: str(save_state()))
+                    self.assertTrue(window.document_saving, save_state())
+                    self.assertTrue(window.viewer.document_state.save_pending, save_state())
+                    self.assertTrue(window.viewer.is_modified, save_state())
+                    # A genuine blocked LocalFiles write also keeps the old fence
+                    # false; do not mislabel this as a reproduced idle-fence race.
+                    self.assertFalse(not window.progress.busy and not window.aux.busy
+                                     and not window.connections_progress.busy, save_state())
+                    self.assertEqual((root / 'Home.md').read_text(), '# Needle\n\n[[Missing]]')
+                finally:
+                    release.set()
+                self.wait_until(lambda: not window.document_saving and not window.progress.busy
+                    and not window.aux.busy and not window.connections_progress.busy,
+                    message=lambda: str(save_state()))
+            self.assertEqual((root / 'Home.md').read_text(), '# Changed\n\n[[Other]]', save_state())
+            self.assertFalse(window.viewer.document_state.save_pending, save_state())
+            self.assertFalse(window.viewer.is_modified, save_state())
+            self.assertEqual(window.search_rows, [], save_state())
+            self.assertEqual(window.links_tree.topLevelItem(1).text(0), 'Outgoing links (1)')
+            self.assertEqual(window.links_tree.topLevelItem(2).text(0), 'Unresolved links (0)')
+            close_state = save_state()
+            self.assertTrue(window.close(), close_state)
 
     def test_failed_mutation_resumes_search_and_connections(self):
         from commonUtils.search.providers import search_resources
