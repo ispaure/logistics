@@ -41,6 +41,8 @@ class SettingsNavigationTests(unittest.TestCase):
                 app.save_chat_configuration()
                 self.assertEqual(app.native_host.state.destination, 'settings')
                 self.assertEqual(app.routes.screens['settings'][-1][0], 'chat-settings')
+                expected = [nav.sidebar, app.chat_config_view] if width >= 640 else [app.chat_config_view]
+                self.assertEqual(list(app.body.children), expected)
                 app.chat_url.value = 'http://127.0.0.1:1234'
                 app.chat_model.value = 'example-model'
                 with patch('features.lm.mobile.ui.ChatClient') as client:
@@ -181,12 +183,34 @@ class SettingsNavigationTests(unittest.TestCase):
         app.show_view(nested, destination='settings', route='settings-nested', title='Saved books')
         self.width.return_value = 900
         app.resize_workspace()
-        self.assertIs(app.body.children[0], nested)
+        self.assertEqual(list(app.body.children), [nav.sidebar, nested])
         self.assertEqual(len(app.routes.screens['settings']), 2)
+        self.width.return_value = 390
+        app.resize_workspace()
+        self.assertEqual(list(app.body.children), [nested])
+        self.width.return_value = 900
+        app.resize_workspace()
+        self.assertEqual(list(app.body.children), [nav.sidebar, nested])
         app.routes.back()
         self.assertFalse(app.routes.screens['settings'])
         self.assertEqual(list(app.body.children), [nav])
         self.assertEqual(list(nav.detail.children), [nav.options['Books & Comics']])
+
+    def test_wide_child_can_switch_categories_with_one_sidebar(self):
+        app, nav = self.app, self.nav
+        self.width.return_value = 900
+        nav.reflow()
+        nav.choose('Reset')
+        app.show_app_reset()
+        self.assertIs(app.body.children[0], nav.sidebar)
+        self.assertFalse(app.reset_button.enabled)
+        app.reset_phrase.value = 'ERASE'
+        self.assertTrue(app.reset_button.enabled)
+        nav.buttons['Text'].on_press()
+        self.assertEqual(list(app.body.children), [nav])
+        self.assertEqual(list(nav.children), [nav.sidebar, nav.detail])
+        self.assertIs(nav.detail.children[0], nav.options['Text'])
+        self.assertFalse(app.routes.screens['settings'])
 
     def test_duo_landscape_seam_splits_the_panes_and_unfolded_width_keeps_them(self):
         nav = self.nav

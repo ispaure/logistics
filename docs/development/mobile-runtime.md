@@ -950,8 +950,10 @@ checkout's native tools and prepared wheel inputs first. This is focused local
 acceptance, rather than the complete native release suite. `--retain-build` is
 for managed build retries with explicit pin/workspace cleanup afterward.
 
-Reload preferences explicitly rebuilds category factories; ordinary visits reuse
-their controls. Saving preferences reads only the controls already constructed,
+Ordinary visits reuse category controls. Feature selection rebuilds the
+factories, retaining the selected category while it remains available. The
+visible Settings route hosts the same category list on wide screens. Compact
+allocations use the destination's Back stack. Saving preferences reads only the controls already constructed,
 preserving preference values belonging to unopened categories.
 Restore/clear-on-restart switches do not rebuild the unrelated Documents list;
 font changes retain their existing editor/overview refresh.

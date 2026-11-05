@@ -275,8 +275,7 @@ On Android and iOS, folders whose names start with `Legacy-` are hidden in Works
 file browsers and library shortcuts by default, including Local, Remote and
 LocalCrypt folders. Settings → Workspaces → **Show Legacy** changes visibility
 for the current session only and resets to off when the app starts.
-**Reload preferences** keeps the current session choice. Files with that
-prefix remain visible when their parent folders are visible.
+Files with that prefix remain visible when their parent folders are visible.
 
 The same **Show Legacy** switch also hides credential/ZIP choices whose
 names start with `Legacy` (case-insensitive, no dash required), including retained

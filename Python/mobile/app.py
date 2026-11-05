@@ -523,14 +523,14 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             return
         for overlay in tuple(getattr(self, '_speech_overlays', ())):
             overlay.reposition()
+        if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
+            self.settings_navigation.reflow()
         self.adaptive.render()
         if getattr(self, '_focus_navigation_active', False):
             from .reader_chrome import sync_document_tabs
             sync_document_tabs(self, self.body, fullscreen=self._reader_chrome_hidden)
         from .fold_layout import sync_epub_geometry
         sync_epub_geometry(self)
-        if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
-            self.settings_navigation.reflow()
         from .layout_participants import LayoutFrame, participants
         participants(self).reflow(LayoutFrame(self.main_window.size.width, self.adaptive.content_width))
         from .layout_events import notify_layout
@@ -769,7 +769,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 box.add(toga.Button(title, on_press=command, style=Pack(height=48)))
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
-    def show_settings(self, widget=None, *, present=True, rebuild=False, **kwargs):
+    def show_settings(self, widget=None, *, present=True, rebuild=False, preserve_category=False, **kwargs):
         from .settings.navigation import SettingsNavigation
         from .settings.categories import settings_sections
         from .appearance import batch_surfaces
@@ -779,7 +779,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             if rebuild or not hasattr(self, 'settings_navigation'):
                 for name in ('font_choice', 'markdown_font_size_choice', 'text_font_size_choice', 'epub_font_size_choice', 'markdown_justify_choice', 'epub_justify_choice', 'restore_choice', 'clear_documents_choice'):
                     self.__dict__.pop(name, None)
+                previous = getattr(self, 'settings_navigation', None)
                 self.settings_navigation = SettingsNavigation(self, settings_sections(self))
+                if preserve_category and previous is not None:
+                    self.settings_navigation.restore_selection(previous)
             # Fit before mounting to avoid repeatedly laying out visible rows.
             self.settings_navigation.reflow()
         if present:
@@ -809,7 +812,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if not save_boolean_switch(self.preferences, widget, 'seasonal_snow', self.change_seasonal_snow, self.settings_status):
             return
         self.seasonal_snow.refresh()
-        self.settings_status.text = 'Seasonal snow saved on this device.'
+        self.settings_status.text = ''
 
     def change_android_eink(self, widget, **kwargs):
         from .settings.forms import save_boolean_switch
@@ -819,7 +822,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         configure_android_eink(self)
         self.refresh_native_theme()
         self.seasonal_snow.refresh()
-        self.settings_status.text = 'High contrast / E Ink saved on this device.'
+        self.settings_status.text = ''
 
     def change_session_speech(self, widget, **kwargs):
         from .settings.forms import save_boolean_switch
@@ -827,7 +830,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             return
         from features.books.mobile.media_controls import settings_changed
         settings_changed(self)
-        self.settings_status.text = 'Lock-screen speech preference saved on this device.'
+        self.settings_status.text = ''
 
     def save_preferences(self, widget=None, **kwargs):
         try:
@@ -852,7 +855,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             if (tuple(self.preferences.values[key] for key in FONT_KEYS) != previous_fonts
                     or tuple(self.preferences.values[key] for key in alignment_keys) != previous_alignment):
                 refresh(self)
-            self.settings_status.text = 'Preferences saved on this device.'
+            self.settings_status.text = ''
         except (OSError, ValueError) as error:
             self.settings_status.text = str(error)
 

@@ -378,9 +378,16 @@ class ScreenPrivacy:
                 prepare_picker_input(self.lock_confirmation.field)
                 self.lock_status = SettingsLabel('', style=Pack(margin_top=12))
                 self.lock_button = action_button(toga.Button('Unlock', on_press=self.unlock, style=Pack(height=48, margin_top=16)))
-                self.lock_fields = toga.Box(children=[self.lock_icon, self.lock_title, self.lock_hint,
+                self.lock_fields = toga.Box(children=[self.lock_title, self.lock_hint,
                     self.lock_credential, self.lock_password, self.lock_button, self.lock_status],
+                    style=Pack(direction=COLUMN, flex=1))
+                self.lock_layout = toga.Box(children=[self.lock_icon, self.lock_fields],
                     style=Pack(direction=COLUMN, margin=12))
+                backend = type(self.lock_icon._impl).__module__
+                if backend.startswith('toga_iOS.'):
+                    self.lock_icon._impl.native.isAccessibilityElement = False
+                elif backend.startswith('toga_android.'):
+                    self.lock_icon._impl.native.setImportantForAccessibility(2)  # NO
                 # The rounded surface stays inside the viewport; only its
                 # form scrolls, preserving all corners on short/IME layouts.
                 class LockFormScroll(toga.ScrollContainer):
@@ -388,7 +395,7 @@ class ScreenPrivacy:
                     # Toga's ordinary 100-point scrolling-widget minimum.
                     _MIN_HEIGHT = 0
                 self.lock_scroll = LockFormScroll(horizontal=False,
-                    content=self.lock_fields, style=Pack(flex=1, margin=12))
+                    content=self.lock_layout, style=Pack(flex=1, margin=12))
                 self.lock_card = surface(toga.Box(children=[self.lock_scroll],
                     style=Pack(direction=COLUMN)), radius=20)
                 self.lock_body = toga.Box(children=[self.lock_card],
@@ -463,7 +470,23 @@ class ScreenPrivacy:
         card_height = max(72, min(520, height - 2 * margin))
         if self.lock_card.style.height != card_height:
             self.lock_card.style.height = card_height
-        fit_section(self.lock_fields, max(24, card_width - 24))
+        from toga.style.pack import COLUMN, ROW, CENTER
+        wide = card_width >= 500
+        direction = ROW if wide else COLUMN
+        if self.lock_layout.style.direction != direction:
+            self.lock_layout.remove(self.lock_icon)
+            self.lock_layout.insert(1 if wide else 0, self.lock_icon)
+            self.lock_layout.style.direction = direction
+            self.lock_icon.style.margin_left = 20 if wide else 0
+            self.lock_icon.style.margin_bottom = 0 if wide else 12
+            self.lock_icon.style.font_size = 64 if wide else 40
+            if wide:
+                self.lock_layout.style.align_items = CENTER
+                self.lock_icon.style.width = 88
+            else:
+                del self.lock_layout.style.align_items
+                del self.lock_icon.style.width
+        fit_section(self.lock_fields, max(24, card_width - 48 - (108 if wide else 0)))
 
     def android_lock_viewport(self):
         # A fixed card is also the toolkit root's minimum height. Measure the

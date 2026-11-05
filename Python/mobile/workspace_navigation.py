@@ -262,8 +262,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         window = getattr(self.app, '_main_window', None)
         return window.size.width if window is not None else 0
 
-    def content_width(self, destination, *, margin=24):
-        """Measure the native allocation, never a child-driven minimum width."""
+    def content_width(self, destination, *, margin=24, full=False):
+        """Measure the native allocation or its visible Settings detail pane."""
         available = self.width()
         adapter = self.app.native_host.adapter
         if adapter is not None and hasattr(adapter, 'navigation'):
@@ -278,6 +278,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
               and adapter.impl.native_navigationview.getVisibility() != 8):
             density = self.app._impl.native.getResources().getDisplayMetrics().density
             available -= float(adapter.impl.native_navigationview.getWidth()) / density
+        if not full and destination == 'settings':
+            settings = getattr(self.app, 'settings_navigation', None)
+            if settings is not None and self.app.routes.screens['settings']:
+                available = min(available, settings.detail_width)
         return max(1, int(available) - margin)
 
     def prepare(self, view, destination, route=None, root=False):
@@ -434,8 +438,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             from .action_menu import refresh_document_menus
             refresh_document_menus(self.app)
             self.selection.retire_unavailable(self.session_view)
-            body = self.app.routes.body(destination)
-            view = body.children[0] if body.children else None
+            target = destination or self.app.native_host.state.destination
+            body = self.app.routes.body(target)
+            # Settings child routes keep the original page after the category pane.
+            view = body.children[-1 if target == 'settings' else 0] if body.children else None
             frame = getattr(view, '_workspace_frame', None)
             from .fold_layout import division, has_fold
             fold = division(self.app, frame.row) if frame is not None else None

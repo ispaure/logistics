@@ -20,8 +20,8 @@ NOTE_FONT_SIZE = toga_font_size(CAPTION_TEXT)
 
 
 def fit_text(control, width):
-    if isinstance(control.parent, PasswordInput):
-        return  # The password control owns its compact native eye button.
+    if isinstance(control.parent, PasswordInput) or getattr(control.parent, '_settings_size_row', False):
+        return  # Fixed-size icons have their own fit and accessible name.
     from ..appearance import list_button
     return _forms.fit_text(control, width, style_button=list_button)
 
@@ -51,10 +51,11 @@ def disclosure(button):
     return _forms.disclosure(button, apple_color=apple_color)
 
 
-def page_button(text, **kwargs):
+def page_button(text, *, destructive=False, **kwargs):
     """Declare navigation independently of the button label or punctuation."""
     button = toga.Button(text, **kwargs)
     button._settings_opens_page = True
+    button._settings_destructive = destructive
     return button
 
 
@@ -82,7 +83,8 @@ def settings_presentation(section):
         if isinstance(child, toga.Button):
             child.style.height = 52
             child._settings_row = True
-            surface(child, radius=0, background='transparent', foreground='accent',
+            foreground = 'destructive' if getattr(child, '_settings_destructive', False) else 'accent'
+            surface(child, radius=0, background='transparent', foreground=foreground,
                     outlined=False, eink_outlined=False)
             if getattr(child, '_settings_opens_page', False):
                 disclosure(child)
