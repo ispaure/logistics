@@ -90,7 +90,7 @@ def check_toolbar_layout(view, js, wait, output):
 def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolbar_only=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    app = qt.QApplication.instance() or qt.QApplication([])
+    _app = qt.QApplication.instance() or qt.QApplication([])  # Retain Qt ownership for the probe.
     with scratch() as root:
         repository = Repository(root / 'notebooks')
         book = Notebook.new('Field notes')
@@ -136,6 +136,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         view.loadFinished.connect(loaded.append)
         initial_state = editor.state()
         initial_state['native_actions'] = native_only
+        initial_state['native_close'] = native_only
         view.setHtml(mobile_editor_html(initial_state, bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
@@ -161,6 +162,40 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             assert js("mode==='ink' && $('mobileSheet').hidden")
         if native_only:
             assert js("document.querySelector('[aria-label=\"Notebook actions\"]').hidden")
+            # The native strip must invoke the real mobile handlers, including
+            # popup toggle/dismissal; counter-only dispatcher tests cannot prove it.
+            state = json.loads(js("window.notebookNativeTools(null)"))
+            assert set(state) == {'pen', 'erase', 'select', 'undo', 'redo'}
+            assert js("document.body.classList.contains('native-drawing-tools')")
+            native_anchor = json.dumps(dict(name='pen', anchor=[220, -48, 44, 48]))
+            js('window.notebookNativeTools(' + native_anchor + ')')
+            assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'brush'")
+            js('window.notebookNativeTools(' + native_anchor + ')')
+            assert js("$('mobileSheet').hidden"), 'Rapid native brush tap must close its popup'
+            js('window.notebookNativeTools(' + native_anchor + ')')
+            js('window.notebookNativeTools(' + json.dumps(dict(name='select', anchor=[310, -48, 44, 48])) + ')')
+            assert js("$('mobileSheet').hidden && mode==='select'"), 'Native Select must dismiss brush popup'
+            eraser_anchor = json.dumps(dict(name='erase', anchor=[265, -48, 44, 48]))
+            js('window.notebookNativeTools(' + eraser_anchor + ')')
+            assert js("$('eraserDialog').open")
+            js('window.notebookNativeTools(' + eraser_anchor + ')')
+            assert js("!$('eraserDialog').open"), 'Rapid native eraser tap must close its popup'
+            js("window.notebookNativeTools(null);active=42")
+            before_lease = js("JSON.stringify($('paperWrap').getBoundingClientRect().toJSON())")
+            QTest.qWait(1800)
+            assert js("document.body.classList.contains('native-drawing-tools')"), 'Lease cannot move canvas during pen contact'
+            assert js("JSON.stringify($('paperWrap').getBoundingClientRect().toJSON())") == before_lease
+            js("active=null")
+            wait(lambda: js("!document.body.classList.contains('native-drawing-tools')"))
+            assert js("window.notebookPortraitBand(true)"), 'Actual native host flags must enable compact portrait CSS'
+            compact = json.loads(js("JSON.stringify(document.querySelector('header').getBoundingClientRect().toJSON())"))
+            assert compact['width'] <= 256 and compact['height'] >= 48 and compact['top'] == 4, compact
+            js("window.notebookNativeAction('hide-tools')")
+            assert js("getComputedStyle(document.body,'::before').height") == '48px'
+            assert js("$('viewport').getBoundingClientRect().top") >= 48
+            assert js("$('restoreTools').getBoundingClientRect().width") >= 44
+            js("$('restoreTools').click();window.notebookPortraitBand(false)")
+            assert not js("document.body.classList.contains('notebook-portrait-band')")
             js("window.notebookNativeAction('pages')")
             wait(lambda: js("document.querySelectorAll('.page-previews button').length === 1"))
             assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'pages'")
@@ -182,7 +217,9 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             QTest.qWait(150)
             view.grab().save(str(output / 'native-pages.png'))
             (output / 'native-result.json').write_text(json.dumps(dict(success=True,
-                thumbnails=True, layers=True, view=True, queued_add_page=True, pen_contact_guard=True)))
+                thumbnails=True, layers=True, view=True, queued_add_page=True, pen_contact_guard=True,
+                native_drawing_tools=True, original_popup_double_tap=True, native_select_dismisses_popup=True,
+                active_contact_geometry_stable=True, compact_portrait_hidden_clearance=True)))
             view.close()
             view.deleteLater()
             qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)

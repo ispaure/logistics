@@ -43,7 +43,11 @@ stays above the paper instead of covering handwriting. Swipe the drawing strip
 horizontally on narrow phones to reach every tool. Android's **Close (X)** and
 **Notebook actions (… )** share that row. iOS/iPadOS retains the native notebook
 title, Close, page overview, template/layers, view/input and actions controls;
-Duo places these in its side rail when applicable. Choose **Notebook actions →
+Duo places these in its side rail when applicable. In wide landscape layouts with
+a native content title row, the five drawing tools sit alongside that title.
+When the measured portrait status area leaves a clear column, the drawing row
+sits closer to the native controls. Narrow or obstructed layouts keep the stacked
+arrangement. Choose **Notebook actions →
 Hide tools** to leave **Show tools** on the canvas; showing tools again preserves
 your brush, color, width and view. The native iOS Close remains available.
 
