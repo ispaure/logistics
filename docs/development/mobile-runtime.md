@@ -635,7 +635,7 @@ uses UIKit's occlusion regions across the available reader width for top
 clearance when that API is available. This avoids retaining a rectangular status
 inset belonging to the side controls; older systems retain their window-safe
 top inset. Fullscreen hides the row; returning to a horizontal navigation bar moves
-the title back to UIKit. Only a horizontal footer’s passive caption may extend
+the title back to UIKit unless the measured [edge-column native header](mobile-workspace-navigation.md#system-occlusion-clearance) can retain every control safely. Only a horizontal footer’s passive caption may extend
 toward the home indicator.
 The inset calculation finds the mounted title inside the container being laid
 out, including before the selected route switches to that reader. A stale

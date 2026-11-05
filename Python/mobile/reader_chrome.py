@@ -41,7 +41,12 @@ def sync_comic_chrome(app, view, *, destination=None):
         navigation = app.adaptive.secondary
     elif adapter is not None and hasattr(adapter, 'navigation'):
         navigation = adapter.navigation_for(destination)
-    app.native_host.chrome.set_hidden(hidden, navigation=navigation)
+    def projected_header(widget):
+        return (getattr(widget, '_reader_top_band_state', None) is not None
+                or any(projected_header(child) for child in widget.children))
+    # A measured native content header replaces only redundant navigation
+    # presentation; it does not request fullscreen or remove document controls.
+    app.native_host.chrome.set_hidden(hidden or projected_header(view), navigation=navigation)
     sync_document_tabs(app, view, fullscreen=hidden, destination=destination)
     from .ios_reader_chrome import sync
     sync(app)
