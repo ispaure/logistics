@@ -192,7 +192,7 @@ def mount_apple_title(view, controller, title):
         tools.close()
     bounds = controller.view.bounds.size
     available = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
-    gutters = (32 if edge else 16) + 112 if controls else (32 if edge else 216)
+    gutters = (32 if edge else 16) + 56 * len(controls) if controls else (32 if edge else 216)
     width = max(44, available - gutters)
     state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width, compact_tools)
     changed = getattr(view, '_document_title_state', None) != state
@@ -238,7 +238,7 @@ def mount_apple_title(view, controller, title):
                 for button in controls:
                     if button.parent is not None:
                         button.parent.remove(button)
-                header.add(controls[0], header._title_content, controls[1])
+                header.add(*controls[:-1], header._title_content, controls[-1])
         if controls:
             header._title_content.style.height = max(48, storage_title_height(state[1]))
         if controller.navigationItem.titleView != header._empty_bar_title:

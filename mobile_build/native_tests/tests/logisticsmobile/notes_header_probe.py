@@ -24,7 +24,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
     async def probe(self):
         from rubicon.objc import CGPoint
         output = Path(self.paths.cache)
-        report = dict(success=False, samples=[])
+        report = dict(success=False, samples=[], native_breadcrumb_swipes=False)
+        drive_touches = (output / 'drive-notes-touches').exists()
         owner = None
         try:
             root = output / 'Art'
@@ -37,6 +38,13 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 '# Character Art Team\n\nProducer: Diane Guillemont\n\n'
                 'Lead Character Artist: Chad Emond\n\n## Pages\n\n[[../Home]]\n\n'
                 '## Naming conventions\n\nKeep shared files organized by project.\n')
+            deep = folder
+            for name in ('Illustrations and environments', 'Reference images for production',
+                         'Character outlines and colour palettes', 'Works in progress for this release'):
+                deep /= name
+            deep.mkdir(parents=True)
+            deep_note = deep / 'Deeply nested.md'
+            deep_note.write_text('# Deeply nested')
             owner = await open_vault(self, LocalFiles(root), '', 'files')
             for orientation in ('portrait', 'landscape-left', 'portrait'):
                 await rotate(self, orientation, settle=.5)
@@ -60,7 +68,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 assert hit == root_button, 'Beginning of breadcrumb path is unreachable'
                 scroll.horizontal_position = scroll.max_horizontal_position
                 await asyncio.sleep(.35)
-                for button in (owner.menu, owner.links_button, *owner.breadcrumbs.children):
+                for button in (owner.close_button, owner.menu, owner.links_button, *owner.breadcrumbs.children):
                     if not hasattr(button, 'on_press') or not button.enabled:
                         continue
                     native = button._impl.native
@@ -80,9 +88,38 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 title = owner.view._document_title_view
                 title_frame = title.convertRect(title.bounds, toView=window)
                 article_frame = owner.web._impl.native.convertRect(owner.web._impl.native.bounds, toView=window)
+                for button in (owner.close_button, owner.menu, owner.links_button):
+                    control = button._impl.native
+                    rect = control.convertRect(control.bounds, toView=window)
+                    midpoint = rect.origin.y + rect.size.height / 2
+                    assert title_frame.origin.y <= midpoint <= title_frame.origin.y + title_frame.size.height
                 assert title_frame.origin.y + title_frame.size.height <= article_frame.origin.y
                 assert header.parent is (owner.article if owner.sidebar.expanded else owner.view)
                 await capture_window(self, output / ('notes-reading-' + orientation + '.png'))
+                if drive_touches:
+                    assert await owner.open_note(deep_note.relative_to(root).as_posix())
+                    await asyncio.sleep(.6)
+                    assert scroll.max_horizontal_position > 20
+                    self.assert_breadcrumb_end(owner)
+                    for direction in (1, -1):
+                        before = scroll.horizontal_position
+                        await self.real_swipe(owner, direction, strip=scroll)
+                        assert (before - scroll.horizontal_position) * direction > 5, (
+                            direction, before, scroll.horizontal_position)
+                        assert owner.sidebar.side is None, ('Breadcrumb swipe opened a drawer', direction, owner.sidebar.side)
+                    for _ in range(100):
+                        if await owner.web.evaluate_javascript(
+                                'window.notesDrawersBase===' + json.dumps(owner.base)
+                                + ' && document.readyState==="complete"'):
+                            break
+                        await asyncio.sleep(.05)
+                    else:
+                        raise AssertionError('Document swipe handlers did not load')
+                    await self.real_swipe(owner, -1)
+                    assert owner.sidebar.side == 'links', 'Intentional article swipe did not open Links'
+                    owner.sidebar.show_detail()
+                    owner.sidebar.finish_dismissals()
+                    assert await owner.open_note('3D Character Art/3D Character Art.md')
                 evidence = output / 'viewer-layout'
                 evidence.mkdir(exist_ok=True)
                 owner.sidebar.show_sidebar()
@@ -119,6 +156,14 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await asyncio.sleep(.3)
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
                     title_width=float(title_frame.size.width), document_width=float(article_frame.size.width)))
+            owner.close_button._impl.native.sendActionsForControlEvents(1 << 6)
+            for _ in range(100):
+                if not owner.valid():
+                    break
+                await asyncio.sleep(.05)
+            else:
+                raise AssertionError('Inline Close did not dismiss the library')
+            report['native_breadcrumb_swipes'] = drive_touches
             report['success'] = True
         except Exception:
             report['error'] = traceback.format_exc()

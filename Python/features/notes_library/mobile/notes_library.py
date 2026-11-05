@@ -23,6 +23,7 @@ from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.search.names import natural_name_key, search_terms
 from commonUtils.search.providers import search_resources, SearchResult
 from commonUtils.ui.native.adaptive import allocated_width
+from commonUtils.ui.native.appearance import accessible_name
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,7 @@ class NotesHost:
     tree_rows: Callable = lambda owner: None
 
 
-from .library_panels import LibraryPanels, CONTROL_FONT
+from .library_panels import CAPTION_FONT, CONTROL_FONT, LibraryPanels
 from .library_opening import LibraryDocuments
 
 
@@ -163,7 +164,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.links_scroll = toga.ScrollContainer(content=self.link_rows, horizontal=False, style=Pack(flex=1))
         self.link_tab_buttons = {}
         tabs = toga.Box(style=Pack(direction=ROW))
-        for key, title in (('outgoing', 'Outgoing links'), ('incoming', 'Backlinks')):
+        for key, title in (('outgoing', 'Out'), ('incoming', 'Back')):
             def select(widget=None, key=key, **kwargs):
                 self.select_links_tab(key)
             button = toga.Button(title, on_press=select, style=Pack(flex=1, height=48))
@@ -171,7 +172,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             tabs.add(button)
         self.select_links_tab('outgoing')
         self.links = toga.Box(children=[
-            toga.Label('Links', style=Pack(font_size=20, font_weight='bold')),
+            toga.Label('Links', style=Pack(font_size=20, font_weight='bold', text_align=CENTER)),
             tabs, self.links_scroll,
         ], style=Pack(direction=COLUMN, flex=1, margin=12))
         self.links_generation = 0
@@ -275,18 +276,19 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 button.parent.remove(button)
             self.secondary.add(button)
         self.view.insert(1, self.secondary)
-        self.breadcrumbs = toga.Box(style=Pack(direction=ROW))
+        self.breadcrumbs = toga.Box(style=Pack(direction=ROW, justify_content=CENTER))
         from .breadcrumbs import BreadcrumbScroll
         self.breadcrumb_scroll = BreadcrumbScroll(content=self.breadcrumbs, horizontal=True,
             vertical=False, style=Pack(flex=1, height=44))
         self.secondary.insert(2, self.breadcrumb_scroll)
+        self.sidebar.breadcrumb_scroll = self.breadcrumb_scroll
         self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
         self._breadcrumb_key = None
         self._breadcrumb_width = 320
         # Keep the library identity between its pane controls, including when
         # UIKit moves the remaining reader actions to a vertical edge.
         if host.apple:
-            self.view._document_title_controls = (self.menu, self.links_button)
+            self.view._document_title_controls = (self.close_button, self.menu, self.links_button)
         self.view._native_reader_buttons = self.native_note_buttons
         self.sidebar.on_change = self.refresh_chrome
         welcome_body = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
@@ -325,6 +327,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return
         if hasattr(self, 'open_card'):
             self.open_card.style.display = NONE if self.sidebar.sidebar_open or self.sidebar.expanded else PACK
+        available = getattr(self, '_notes_available', 320)
+        self._breadcrumb_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
+        self.welcome_content.style.width = min(360, max(0, self._breadcrumb_width - 48))
         left, right = self.host.toolbar_insets(self.secondary)
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
@@ -334,6 +339,10 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         header = getattr(self.view, '_document_title_header', None)
         parent = self.article if self.sidebar.expanded else self.view
         self.view._document_title_parent = parent
+        if not self.host.apple and self.toolbar.children and self.toolbar.parent is not parent:
+            if self.toolbar.parent is not None:
+                self.toolbar.parent.remove(self.toolbar)
+            parent.insert(0, self.toolbar)
         if header is not None and (header.parent is not parent or parent.children[0] is not header):
             if header.parent is not None:
                 header.parent.remove(header)
@@ -440,18 +449,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.sidebar.reflow(available)
         if self.sidebar.expanded and getattr(self, '_document_return_side', None) == 'files':
             self._document_return_side = None
-        self._breadcrumb_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
-        self.welcome_content.style.width = min(360, max(0, self._breadcrumb_width - 48))
-        # Compact browsing still needs its menu while the article is hidden.
-        # Wide layouts keep document commands over their own article pane.
-        parent = self.article if self.sidebar.expanded else self.view
-        if not self.host.apple and self.toolbar.parent is not parent:
-            if self.toolbar.parent is not None:
-                self.toolbar.parent.remove(self.toolbar)
-            parent.insert(0, self.toolbar)
+        self._notes_available = available
         for state in self._row_panels.values():
             state['rows'].style.width = max(0, self.sidebar.policy.sidebar_width - 24)
-        self.menu.enabled = not self.sidebar.expanded
         self.refresh_chrome()
 
     def refresh_reader_actions(self):
@@ -1002,9 +1002,14 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
     def select_links_tab(self, key):
         self.links_tab = key
-        self.links_scroll.content = self.link_rows if key == 'outgoing' else self.backlink_rows
+        rows = self.link_rows if key == 'outgoing' else self.backlink_rows
+        if self.links_scroll.content is not rows:
+            self.links_scroll.content = rows
         for name, button in self.link_tab_buttons.items():
-            button.enabled = name != key
+            selected = name == key
+            self.host.tab_style(button, selected)
+            label = 'Outgoing links' if name == 'outgoing' else 'Backlinks'
+            accessible_name(button, label + (' selected' if selected else ''))
 
     def render_link_rows(self, rows, result, key):
         rows.clear()
@@ -1012,13 +1017,21 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         rows.add(toga.Label(f'{title} ({len(result[key])})', style=Pack(font_weight='bold')))
         if not result[key]:
             rows.add(toga.Label('No ' + title.lower() + '.'))
+        names = Counter(PurePosixPath(target).name.casefold() for target in result[key])
         for target in result[key]:
             async def choose(widget=None, target=target, **kwargs):
                 await self.open_note(target)
-            label = str(PurePosixPath(target).relative_to(self.root or '.'))
-            rows.add(self.host.list_button(toga.Button(label, on_press=choose, style=Pack(height=48))))
+            relative = PurePosixPath(target).relative_to(self.root or '.')
+            button = self.host.list_button(toga.Button(relative.name, on_press=choose, style=Pack(height=48)))
+            accessible_name(button, str(relative))
+            rows.add(button)
+            if names[relative.name.casefold()] > 1:
+                parent = str(relative.parent) if relative.parent != PurePosixPath('.') else 'Library root'
+                hint = toga.Label(parent, style=Pack(font_size=CAPTION_FONT, margin_left=12, margin_bottom=6))
+                self.host.presentation.surface(hint, radius=0, foreground='muted', background='transparent',
+                                               outlined=False)
+                rows.add(hint)
         if key == 'outgoing':
-            rows.add(toga.Label(f"{result['words']:,} words · {result['characters']:,} characters"))
             if result['unresolved']:
                 rows.add(toga.Label('Unresolved links', style=Pack(font_weight='bold')))
                 for target in result['unresolved']:

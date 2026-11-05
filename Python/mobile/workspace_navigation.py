@@ -150,20 +150,18 @@ def sync_reader_toolbar(app, view, destination=None):
     app._reader_title_controller = controller
     close = getattr(view, '_reader_close_button', None)
     if close is not None:
-        detach(close)
-        close.app, close.window = app, app.main_window
         frame = getattr(view, '_workspace_frame', None)
         menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
-        leading = [close]
-        if menu is not None and menu not in getattr(view, '_document_title_controls', ()):
-            detach(menu)
-            menu.app, menu.window = app, app.main_window
-            leading.append(menu)
+        title_controls = getattr(view, '_document_title_controls', ())
+        leading = [button for button in (close, menu) if button is not None and button not in title_controls]
+        for button in leading:
+            detach(button)
+            button.app, button.window = app, app.main_window
         leading_state = (action_state(leading), occlusions)
         if projections.get((key, 'leading')) != leading_state:
             mount_leading(controller, leading, replaces_back=True)
             projections[key, 'leading'] = leading_state
-        close._native_reader_close_item = close._ios_action_item
+        close._native_reader_close_item = close._ios_action_item if close in leading else None
 
 
 class WorkspaceNavigation(AdaptiveWorkspace):
@@ -244,7 +242,12 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             'leftBarButtonItems', 'rightBarButtonItems', 'leadingItemGroups', 'trailingItemGroups'))
         actions = actions or any(getattr(item, name, None) is not None for name in (
             'pinnedTrailingGroup', 'additionalOverflowItems'))
-        hidden = not (nested or actions)
+        close = getattr(view, '_reader_close_button', None)
+        inline_close = close is not None and close in getattr(view, '_document_title_controls', ())
+        if inline_close:
+            from .document_location import side_title_header
+            inline_close = side_title_header(view) is not None
+        hidden = not (actions or getattr(item, 'prompt', None) or (nested and not inline_close))
         if bool(navigation.isNavigationBarHidden()) != hidden:
             navigation.setNavigationBarHidden(hidden, animated=False)
 

@@ -15,6 +15,8 @@ class NotesDrawers:
         self.policy = SimpleNamespace(sidebar_width=320, gap=0)
         self.overlay = None
         self.side = None
+        self.wide = False
+        self.wide_files_open = True
         self.gestures = []
         self.opening_gestures = []
         self.retiring = []
@@ -33,19 +35,8 @@ class NotesDrawers:
     def reflow(self, width):
         from .notes_gestures import install_opening_swipes
         install_opening_swipes(self)
-        expanded = width >= 840  # 320 for Files, at least 520 for the document.
-        if expanded != self.expanded:
-            # Detach a floating Files panel before mounting it in the layout.
-            if self.side == 'files':
-                self.show_detail()
-                self.finish_dismissals()
-            self.expanded = expanded
-            if expanded:
-                self.sidebar.style.flex = 0
-                self.view.insert(0, self.sidebar)
-            else:
-                self.view.remove(self.sidebar)
-                self.sidebar.style.flex = 1
+        self.wide = width >= 840  # 320 for Files, at least 520 for the document.
+        self.layout_files()
         # The host passes the document width minus its 24-unit inset. Leave
         # at least 44 units opposite the drawer for outside dismissal.
         self.policy.sidebar_width = min(320, max(1, width - 32))
@@ -54,8 +45,30 @@ class NotesDrawers:
         if self.overlay is not None:
             self.overlay.reposition()
 
+    def layout_files(self):
+        expanded = self.wide and self.wide_files_open
+        if expanded == self.expanded:
+            return
+        if self.side == 'files':
+            self.show_detail()
+            self.finish_dismissals()
+        self.expanded = expanded
+        if expanded:
+            self.sidebar.style.flex = 0
+            self.view.insert(0, self.sidebar)
+        else:
+            self.view.remove(self.sidebar)
+            self.sidebar.style.flex = 1
+
     def toggle(self, widget=None, **kwargs):
-        self.show_detail() if self.side == 'files' else self.show_sidebar()
+        if self.expanded:
+            self.wide_files_open = False
+            self.layout_files()
+            self.on_change()
+        elif self.side == 'files':
+            self.show_detail()
+        else:
+            self.show_sidebar()
 
     def show_sidebar(self):
         self.show('files')
@@ -68,8 +81,11 @@ class NotesDrawers:
         if privacy is not None and privacy.sensitive() and (
                 privacy.inactive or privacy.interrupted or privacy.captured or privacy.resume_locked):
             return
-        if side == 'files' and self.expanded:
+        if side == 'files' and self.wide:
             self.show_detail()
+            self.wide_files_open = True
+            self.layout_files()
+            self.on_change()
             return
         if self.side == side:
             return

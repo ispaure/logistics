@@ -36,6 +36,12 @@ def install_opening_swipes(owner):
                     size = article.bounds.size
                     if not (0 <= point.x < size.width and 0 <= point.y < size.height):
                         return False
+                    strip = getattr(current, 'breadcrumb_scroll', None)
+                    if strip is not None and strip.parent is not None:
+                        viewport = strip._impl.native
+                        if native_value(viewport.window) is not None and not viewport.hidden:
+                            if viewport.pointInside(touch.locationInView(viewport), withEvent=None):
+                                return False
                     view = native_value(touch.view)
                     while view is not None:
                         # HTML owns document swipes so nested table scrolling,
@@ -64,11 +70,16 @@ def install_opening_swipes(owner):
         target = _apple_target.alloc().init()
         target.owner = ref(owner)
         window = owner.app.main_window._impl.native
+        strip = getattr(owner, 'breadcrumb_scroll', None)
         for direction in (1, 2):
             gesture = ObjCClass('UISwipeGestureRecognizer').alloc().initWithTarget(target, action=SEL('swipe:'))
             gesture.direction = direction
             gesture.delegate = target
             gesture.cancelsTouchesInView = False
+            if strip is not None:
+                # UIKit can allow both simultaneous recognizers to succeed on
+                # the Duo display. The strip's pan must win this competition.
+                gesture.requireGestureRecognizerToFail(strip._impl.native.panGestureRecognizer)
             window.addGestureRecognizer(gesture)
             owner.opening_gestures.append((window, gesture, target))
     elif backend.startswith('toga_android.'):

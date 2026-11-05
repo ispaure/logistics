@@ -210,7 +210,12 @@ class NotesDrawerTests(unittest.TestCase):
             owner.reflow(900)
             with self.subTest('welcome action with pinned Files'):
                 self.assertEqual(owner.open_card.style.display, NONE)
-                self.assertFalse(owner.menu.enabled)
+                self.assertTrue(owner.menu.enabled)
+                owner.menu.on_press()
+                self.assertFalse(owner.sidebar.expanded)
+                self.assertEqual(owner.open_card.style.display, PACK)
+                owner.menu.on_press()
+                self.assertTrue(owner.sidebar.expanded)
             owner.reflow(390)
             self.assertEqual(owner.open_card.style.display, PACK)
             self.assertTrue(owner.menu.enabled)
@@ -269,7 +274,8 @@ class NotesDrawerTests(unittest.TestCase):
             await owner.show_links()
             self.assertEqual(owner.path, 'Vault/Home.md')
             self.assertEqual(owner.link_rows.children[0].text, 'Outgoing links (1)')
-            self.assertIn('Projects/Plan.MD', [getattr(w, 'text', '') for w in owner.link_rows.children])
+            self.assertEqual(owner.link_rows.children[1].text, 'Plan.MD')
+            self.assertEqual(owner.link_rows.children[1].accessible_name, 'Projects/Plan.MD')
             owner.link_tab_buttons['incoming'].on_press()
             self.assertEqual(owner.backlink_rows.children[0].text, 'Backlinks (0)')
             await owner.open_note('Vault/Projects/Plan.MD')
@@ -288,7 +294,26 @@ class NotesDrawerTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
-    def test_ios_window_swipes_defer_web_content_to_document_handler(self):
+    def test_link_rows_keep_duplicate_names_distinguishable_and_open_the_exact_target(self):
+        from toga import Button
+        (self.vault / 'Plan.MD').write_text('# Root plan')
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            targets = ['Vault/Plan.MD', 'Vault/Projects/Plan.MD']
+            owner.render_link_rows(owner.link_rows, dict(outgoing=targets, unresolved=[]), 'outgoing')
+            labels = [row.text for row in owner.link_rows.children]
+            self.assertEqual(labels, ['Outgoing links (2)', 'Plan.MD', 'Library root', 'Plan.MD', 'Projects'])
+            buttons = [row for row in owner.link_rows.children if isinstance(row, Button)]
+            self.assertEqual([row.accessible_name for row in buttons], ['Plan.MD', 'Projects/Plan.MD'])
+            self.assertEqual(owner.link_tab_buttons['outgoing'].text, 'Out')
+            self.assertEqual(owner.link_tab_buttons['incoming'].accessible_name, 'Backlinks')
+            for button, path in zip(buttons, targets):
+                await button.on_press()
+                self.assertEqual(owner.path, path)
+            owner.dispose()
+        self.run_async(exercise())
+
+    def test_ios_window_swipes_defer_to_breadcrumbs_and_web_content(self):
         from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
         class NSObject:
             def __init_subclass__(cls, **kwargs):
@@ -315,6 +340,9 @@ class NotesDrawerTests(unittest.TestCase):
         owner.detail = SimpleNamespace(_impl=type('Impl', (), {
             '__module__':'toga_iOS.widgets.box', 'native':native})())
         owner.opening_gestures, owner.retiring, owner.side = [], [], None
+        strip = SimpleNamespace(window=native.window, hidden=False, pointInside=Mock(return_value=False),
+                                panGestureRecognizer=object())
+        owner.breadcrumb_scroll = SimpleNamespace(parent=object(), _impl=SimpleNamespace(native=strip))
         gesture_class, window = Mock(), Mock()
         owner.app = SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
         modules = {'rubicon.objc': SimpleNamespace(
@@ -324,10 +352,14 @@ class NotesDrawerTests(unittest.TestCase):
         with patch.dict('sys.modules', modules), patch('mobile.notes_gestures._apple_target', None):
             install_opening_swipes(owner)
             for _, gesture, delegate in owner.opening_gestures:
+                gesture.requireGestureRecognizerToFail.assert_called_with(strip.panGestureRecognizer)
                 touch = SimpleNamespace(view=child,
                     locationInView=lambda view: SimpleNamespace(x=100, y=100))
                 self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
                 touch.view = plain
+                strip.pointInside.return_value = True
+                self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
+                strip.pointInside.return_value = False
                 self.assertTrue(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
                 owner.opening_swipes_enabled = lambda: False
                 self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))

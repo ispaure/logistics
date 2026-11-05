@@ -139,14 +139,15 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
     def on_running(self):
         start_native_check(self, type(self).probe)
 
-    async def real_swipe(self, owner, direction):
+    async def real_swipe(self, owner, direction, *, strip=None):
         output = Path(self.paths.cache)
-        native = owner.article._impl.native
+        native = (strip if strip is not None else owner.article)._impl.native
         frame = native.convertRect(native.bounds, toView=self.main_window._impl.native)
-        y = float(frame.origin.y + frame.size.height * .75)
+        y = float(frame.origin.y + frame.size.height * (.5 if strip is not None else .75))
         center = float(frame.origin.x + frame.size.width / 2)
+        half_span = min(65, float(frame.size.width) * .4)
         (output / 'notes-touch-request.json').write_text(json.dumps(
-            dict(points=[center - direction * 65, y, center + direction * 65, y])))
+            dict(points=[center - direction * half_span, y, center + direction * half_span, y])))
         for _ in range(200):
             done = output / 'notes-touch-done'
             if done.exists():
