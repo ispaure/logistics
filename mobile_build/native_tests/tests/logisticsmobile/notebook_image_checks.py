@@ -32,6 +32,34 @@ HELPERS = r'''window.imageQA = {
   pixel(p) {return [...ctx.getImageData(Math.floor(p[0]*canvas.width/state.width),Math.floor(p[1]*canvas.height/state.height),1,1).data]},
   snapshot() {return {index:state.index,images:state.images.map(p=>({id:p.id,corners:p.corners})),order:state.scene_order,
     strokes:state.strokes.map(s=>s.id),status:$('status').textContent,locked:state.password_required}},
+  captureDiagnostic() {
+    const bg=$('pdfBackground'), roi=imageClipboard.sourceCorners;
+    const left=Math.min(...roi.map(p=>p[0])), top=Math.min(...roi.map(p=>p[1]));
+    const b=state.pdf_paper || {x:0,y:0,width:state.width,height:state.height};
+    const fit=Math.min(b.width/bg.naturalWidth,b.height/bg.naturalHeight);
+    const w=bg.naturalWidth*fit,h=bg.naturalHeight*fit;
+    const box={x:b.x+(b.width-w)/2,y:b.y+(b.height-h)/2,width:w,height:h};
+    const point=[left+100*imageClipboard.width/window.qaClip.width,
+                 top+150*imageClipboard.height/window.qaClip.height];
+    let direct;
+    try {
+      const c=document.createElement('canvas');c.width=c.height=1;
+      const g=c.getContext('2d');g.fillStyle='white';g.fillRect(0,0,1,1);
+      g.drawImage(bg,box.x-point[0],box.y-point[1],box.width,box.height);
+      direct=[...g.getImageData(0,0,1,1).data];
+    } catch(e) { direct={error:e.name}; }
+    const decode=window.imageQACaptureDecodeProof={available:typeof bg.decode==='function',requested:false,settled:false,ready:false};
+    const snapshot={complete:bg.complete,naturalWidth:bg.naturalWidth,naturalHeight:bg.naturalHeight,
+      pdf_paper:state.pdf_paper || null,width:state.width,height:state.height,
+      clip_roi:roi,clip_size:[imageClipboard.width,imageClipboard.height],
+      background_fit:box,document_sample:point,direct_background_sample:direct,
+      sources:{original:window.imageQAOriginalBackground,current:bg.currentSrc||bg.src,clipboard:imageClipboard.src},
+      decode_before_diagnostic_request:{...decode},latched_pixels_before_diagnostics:true,
+      current_src_empty:!bg.currentSrc,latched_clip:window.qaClip};
+    // This is AFTER the failed pixel value was latched. Never retry the capture.
+    if(decode.available){decode.requested=true;bg.decode().then(()=>{decode.settled=true;decode.ready=true;},e=>{decode.settled=true;decode.error=e.name;});}
+    return snapshot;
+  },
   async clipPixels() {
     const img=new Image();img.src=imageClipboard.src;await img.decode();
     const c=document.createElement('canvas');c.width=img.width;c.height=img.height;
@@ -39,6 +67,32 @@ HELPERS = r'''window.imageQA = {
     return {width:c.width,height:c.height,pixels:[[100,150],[250,170],[100,70],[390,310]].map(p=>[...g.getImageData(...p,1,1).data])};
   }
 };true'''
+
+
+def write_capture_diagnostic(output, label, snapshot):
+    """Retain only this synthetic fixture's bounded data PNGs and scalar metadata."""
+    import base64
+    from hashlib import sha256
+    if label not in ('Local', 'LocalCrypt'):
+        raise ValueError('Unknown image QA provider label.')
+    metadata = dict(snapshot)
+    sources = metadata.pop('sources')
+    metadata['source_hashes'] = {}
+    for name in ('original', 'current', 'clipboard'):
+        source = sources[name]
+        if not isinstance(source, str) or len(source) > 24 * 1024 * 1024:
+            raise ValueError('Invalid or oversized image QA source.')
+        metadata['source_hashes'][name] = dict(src_sha256=sha256(source.encode()).hexdigest(), src_bytes=len(source))
+        prefix = 'data:image/png;base64,'
+        if not source.startswith(prefix):
+            metadata['source_hashes'][name]['png'] = False
+            continue
+        data = base64.b64decode(source[len(prefix):], validate=True)
+        if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValueError('Invalid image QA PNG signature.')
+        metadata['source_hashes'][name].update(png=True, png_sha256=sha256(data).hexdigest())
+        (output / (label+'-capture-failure-'+name+'.png')).write_bytes(data)
+    (output / (label+'-capture-failure.json')).write_text(json.dumps(metadata, indent=2))
 
 
 def signature(book):
@@ -50,10 +104,11 @@ def signature(book):
 
 
 class ImageWorkflow:
-    def __init__(self, evaluate, editor, capture, progress=None):
+    def __init__(self, evaluate, editor, capture, progress=None, diagnostic=None):
         self.evaluate, self.editor, self.capture = evaluate, editor, capture
         self.cases = []
         self.progress = progress
+        self.diagnostic = diagnostic
 
     async def js(self, expression):
         # A JSON result has the same shape in Qt, Android WebView and WKWebView.
@@ -98,6 +153,23 @@ class ImageWorkflow:
         await self.wait("!state.password_required && $('pdfBackground').complete && $('pdfBackground').naturalWidth>0", 'Protected PDF did not render')
         self.cases.append('wrong password, retry, cleared password input, native protected-PDF raster')
 
+    async def verify_capture(self, clip):
+        red, green, ink, outside = clip['pixels']
+        try:
+            assert red[0]>180 and red[1]<120 and red[3]==255, clip
+            assert green[1]>140 and green[0]<100 and green[3]==255, clip
+            assert ink[0]<red[0]-40 and ink[3]==255 and outside[3]==0, clip
+        except AssertionError as primary:
+            try:
+                snapshot = await self.js('return imageQA.captureDiagnostic()')
+                await self.capture('capture-failure')
+                snapshot['decode_after_capture'] = await self.js('return window.imageQACaptureDecodeProof')
+                if self.diagnostic is not None:
+                    self.diagnostic(snapshot)
+            except BaseException as error:
+                primary.add_note('Capture diagnostics failed: ' + type(error).__name__)
+            raise
+
     async def run(self):
         await self.idle()
         await self.evaluate(HELPERS)
@@ -119,10 +191,7 @@ class ImageWorkflow:
         clip = await self.js('return window.qaClip')
         # Pointer coordinates round through each WebView's viewport scale.
         assert abs(clip['width']-400)<=1 and abs(clip['height']-320)<=1, clip
-        red, green, ink, outside = clip['pixels']
-        assert red[0]>180 and red[1]<120 and red[3]==255, clip
-        assert green[1]>140 and green[0]<100 and green[3]==255, clip
-        assert ink[0]<red[0]-40 and ink[3]==255 and outside[3]==0, clip
+        await self.verify_capture(clip)
         self.cases.append('lasso PNG includes PDF, ink and image pixels; outside lasso transparent')
         await self.capture('captured')
         await self.action("$('pasteImage').click()")
@@ -426,7 +495,8 @@ async def exercise_notebook_images(app, *, output=None):
                 report['wait_state'] = dict(snapshot, phase=report['phase'],
                     panel_closed=panel.closed, canvas_ready=getattr(panel,'_canvas_ready',False),
                     private_closed=getattr(panel.web,'private_closed',None))
-            workflow=ImageWorkflow(evaluate,lambda:panel.editor,capture,progress=readiness)
+            workflow=ImageWorkflow(evaluate,lambda:panel.editor,capture,progress=readiness,
+                diagnostic=lambda snapshot:write_capture_diagnostic(output,label,snapshot))
             await workflow.idle()
             backend=verify_native_image_view(panel,provider)
             report['phase']=label+':capture-transform-arrange'

@@ -3,6 +3,7 @@ import asyncio
 import json
 import unittest
 from types import SimpleNamespace as NS
+from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 from features.notebooks.mobile.native_tools import NativeDrawingTools, TOOLS
 from commonUtils.testing.stages import TestStage
@@ -17,6 +18,7 @@ class Panel:
 class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.panel = Panel()
+        self.panel.app = NS(presentation=NS(surface=unittest.mock.Mock()))
         self.panel.web = object()
         self.manager = NativeDrawingTools(self.panel)
         self.enterContext(patch.object(self.manager, 'visible', return_value=True))
@@ -64,7 +66,7 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_dom_state_controls_enabled_and_selection_without_changing_model(self):
         self.manager.query = AsyncMock(return_value=json.dumps(self.state))
-        with patch('mobile.appearance.surface') as surface:
+        with patch.object(self.panel.app.presentation, 'surface') as surface:
             await self.manager.refresh()
         self.assertTrue(self.manager.buttons['undo'].enabled)
         self.assertFalse(self.manager.buttons['redo'].enabled)
@@ -94,7 +96,7 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         self.manager.query.assert_not_awaited()
         self.manager.lock.release()
-        with patch('mobile.appearance.surface'):
+        with patch.object(self.panel.app.presentation, 'surface'):
             await task
         self.manager.query.assert_awaited_once_with('window.notebookNativeTools?.({"name": "undo", "anchor": [100, -48, 44, 48]})')
 
@@ -176,7 +178,7 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         new_buttons = {name:NS(enabled=False) for name in TOOLS}
         self.manager.buttons = new_buttons
         result.set_result(json.dumps(self.state))
-        with patch('mobile.appearance.surface') as surface:
+        with patch.object(self.panel.app.presentation, 'surface') as surface:
             await task
         surface.assert_not_called()
         self.assertTrue(all(not button.enabled for button in new_buttons.values()))
@@ -200,7 +202,7 @@ class NativeToolsMountTests(unittest.TestCase):
         panel.view.add(header)
         manager = NativeDrawingTools(panel)
         with patch.object(panel.app.main_window._impl, 'native', window, create=True), \
-                patch('mobile.fold_layout.division', return_value=None):
+                patch.object(panel.app, '_presentation', replace(panel.app.presentation, fold_division=lambda web:None)):
             manager.mount(header, controller)
         self.assertEqual(len(manager.buttons), 5)
         self.assertEqual([button.style.width for button in manager.buttons.values()], [44] * 5)
@@ -229,7 +231,32 @@ class NativeToolsMountTests(unittest.TestCase):
                 safeAreaInsets=NS(left=0,right=0)))
             window=NS(bounds=NS(size=NS(width=width,height=height)))
             with patch.object(panel.app.main_window._impl,'native',window,create=True), \
-                    patch('mobile.fold_layout.division',return_value=None):
+                    patch.object(panel.app, '_presentation', replace(panel.app.presentation, fold_division=lambda web:None)):
                 manager.mount(header,controller)
             self.assertIsNone(manager.task)
             self.assertIsNone(manager.strip)
+
+
+class NotebookPresentationBoundaryTests(unittest.TestCase):
+    def test_host_retirement_callback_and_standalone_default(self):
+        from dataclasses import fields
+        from services.mobile_presentation import MobilePresentation
+        from mobile_build.tests.support.app import create_app
+        from features.notebooks.mobile.panel import NotebookPanel
+        app = create_app(self)
+        panel = NotebookPanel(app, library=False)
+        panel.view._notebook_dom_toolbar_contract = (48, 256)
+        panel.view._notebook_dom_ready = 'old-canvas'
+        panel.view._notebook_dom_epoch = 1
+        panel.retire_canvas()
+        self.assertIsNone(panel.view._notebook_dom_ready)
+        self.assertEqual(panel.view._notebook_dom_epoch, 2)
+        callback = unittest.mock.Mock()
+        with patch.object(app, '_presentation', replace(app.presentation, reset_reader_layout=callback)):
+            panel.retire_canvas()
+        callback.assert_called_once_with(panel.view)
+        standalone = MobilePresentation(**{field.name:getattr(app.presentation, field.name)
+            for field in fields(MobilePresentation) if field.name != 'reset_reader_layout'})
+        self.assertIsNone(standalone.reset_reader_layout(panel.view))
+        self.assertEqual(panel.view._notebook_dom_epoch, 2)
+        panel.dispose()

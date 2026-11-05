@@ -206,6 +206,9 @@ def _mount_reader(self, view, controls, comic, neighbors):
     else:
         header = controls[0]
     view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
+    previous_footer = getattr(view, 'page_footer', None)
+    if previous_footer is not None:
+        previous_footer.dispose()
     view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page,
                                   status=view.crypt_title if comic else None,
                                   unit='chapter' if view.crypt_reader.book is not None else 'page',
