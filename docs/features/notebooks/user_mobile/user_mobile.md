@@ -12,6 +12,7 @@ enter its name, choose **First page template** and its template size, then choos
 **LocalCrypt** location. Open existing `.rmdoc` files from the file browser,
 including Workspaces. The editor opens above the current screen. **Close document (X)** uses the shared
 save/discard guard and returns to Home. Android and iOS/iPadOS have one X in the
+editor: iOS/iPadOS keeps the native Close and title, while Android uses the
 canvas toolbar. There is no separate Notebooks tab.
 
 **Save** writes edits to the selected notebook. **Save As** uses the shared
@@ -36,15 +37,15 @@ strokes while preserving corners, pressure changes and stroke width within small
 bounds. Calligraphy retains every sample. Opening or saving existing handwriting
 does not reduce its points; the live pen preview is unchanged.
 
-The document fills the area beneath one compact toolbar. The current brush,
-**Erase**, **Select / move**, **Undo** and **Redo** share a row with **Close (X)**
-and **Notebook actions (… )**. The toolbar stays above the paper instead of
-covering handwriting. Swipe the drawing strip horizontally on narrow phones to
-reach every tool. **Notebook actions** opens page thumbnails, templates and
-layers, view/input settings, saving and document commands. There are no permanent
-title, save-status or page-navigation rows. Choose **Notebook actions → Hide tools**
-to leave only **Show tools** on the canvas; showing tools again preserves your
-brush, color, width and view.
+The document fills the area beneath a compact drawing toolbar containing the
+current brush, **Erase**, **Select / move**, **Undo** and **Redo**. The toolbar
+stays above the paper instead of covering handwriting. Swipe the drawing strip
+horizontally on narrow phones to reach every tool. Android's **Close (X)** and
+**Notebook actions (… )** share that row. iOS/iPadOS retains the native notebook
+title, Close, page overview, template/layers, view/input and actions controls;
+Duo places these in its side rail when applicable. Choose **Notebook actions →
+Hide tools** to leave **Show tools** on the canvas; showing tools again preserves
+your brush, color, width and view. The native iOS Close remains available.
 
 In iPhone Duo laptop posture, the upper screen keeps brushes, stroke widths,
 colors, view/input settings and layers open in a scrollable tool area. The lower
