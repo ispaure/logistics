@@ -23,6 +23,11 @@ class NotebookResponseTimeout(TimeoutError):
     """Only a response-only JavaScript wait exceeded its deadline."""
 
 
+def _input_true(value):
+    # Pinned Rubicon maps NSNumber BOOL encoded as char to Python int0/int1.
+    return value is True or type(value) is int and value == 1
+
+
 def _consume_input_result(future):
     try:
         future.result()
@@ -212,7 +217,7 @@ class NotebookPanel:
                     raise
                 except Exception as error:
                     raise ValueError('Notebook input is unavailable; your draft remains open.') from error
-                if idle is True and not self.native_input_pending and not self.busy:
+                if _input_true(idle) and not self.native_input_pending and not self.busy:
                     return
             await asyncio.sleep(min(.02, remaining))
         raise TimeoutError('Finishing pen input. Try again after the current stroke is saved.')
@@ -229,7 +234,7 @@ class NotebookPanel:
             window.notebookNativeAction('save');
             return queue[0]?.op==='save';
         })()"""), timeout)
-        if admitted is not True:
+        if not _input_true(admitted):
             raise ValueError('Finish the current stroke and try Save again. Your draft remains open.')
         if self.closed or self.web is not web or self.bridge is not canvas or not canvas.active:
             raise ValueError('The notebook canvas changed during Save; your draft remains open.')
@@ -380,7 +385,7 @@ class NotebookPanel:
                             'queue.slice(1).some(action => action.op === "stroke" || action.op === "erase")'), 1))
                     except Exception:
                         pending = True
-                if pending is True or self.native_input_pending:
+                if _input_true(pending) or self.native_input_pending:
                     # A non-error ack preserves queued strokes; notebookUpdate's
                     # error path clears the queue and must not be used here.
                     self.busy = False

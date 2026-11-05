@@ -630,3 +630,33 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
                 for future in (late_ack,late_idle):
                     if not future.done():future.set_result(True)
                 for worker in workers:await worker
+
+
+class NativeBooleanInteropTests(unittest.IsolatedAsyncioTestCase):
+    async def test_host_save_accepts_native_char_booleans_for_idle_and_admission(self):
+        from unittest.mock import AsyncMock
+        from features.notebooks.mobile import panel as module
+        panel = module.NotebookPanel.__new__(module.NotebookPanel)
+        panel.web = NS(evaluate_javascript=AsyncMock(side_effect=[1, 1, 1]))
+        panel.bridge = NS(active=True)
+        panel.closed = panel.busy = False
+        panel.pen_input = NS(owns_native_transport=True, pending=False)
+        panel.document = NS(dirty=False)
+        with patch.object(module, 'native_backend', return_value='toga_iOS.widgets.webview'):
+            self.assertTrue(await panel.save_from_view(timeout=.1))
+        self.assertEqual(panel.web.evaluate_javascript.await_count, 3)
+        self.assertIn("queue[0]?.op==='save'", panel.web.evaluate_javascript.await_args_list[1].args[0])
+
+    async def test_truthy_non_boolean_idle_never_authorizes_host_save(self):
+        from unittest.mock import AsyncMock
+        from features.notebooks.mobile import panel as module
+        panel = module.NotebookPanel.__new__(module.NotebookPanel)
+        panel.web = NS(evaluate_javascript=AsyncMock(return_value='true'))
+        panel.bridge = NS(active=True)
+        panel.closed = panel.busy = False
+        panel.pen_input = NS(owns_native_transport=True, pending=False)
+        panel.document = NS(dirty=False)
+        with patch.object(module, 'native_backend', return_value='toga_iOS.widgets.webview'):
+            with self.assertRaises(TimeoutError):
+                await panel.save_from_view(timeout=.03)
+        self.assertTrue(all("notebookNativeAction" not in call.args[0] for call in panel.web.evaluate_javascript.await_args_list))
