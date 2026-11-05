@@ -12,7 +12,7 @@ from Scripts.architecture import ROOT, check, feature_edges, portable_sources, r
 
 class ArchitectureTests(unittest.TestCase):
     def test_mobile_feature_adapters_do_not_import_application_host(self):
-        for owner in ('rclone', 'lm', 'text_editor', 'notes_library'):
+        for owner in ('rclone', 'lm', 'text_editor', 'notes_library', 'notebooks'):
             for path in (ROOT / 'Python/features' / owner).rglob('*.py'):
                 if 'mobile' not in path.relative_to(ROOT / 'Python/features').parts:
                     continue

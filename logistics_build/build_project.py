@@ -72,8 +72,8 @@ class LogisticsProject:
         for name, value in values.items():
             kind = ('bool' if isinstance(value, bool) else
                     'int' if isinstance(value, int) else
-                    'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'tools.manager_checkout', 'vm.shared_host'} else
-                    'reference' if name.endswith('reference') or name.startswith('signing.') or name.endswith('_python') else 'text')
+                    'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'tools.manager_checkout', 'tools.node_modules', 'vm.shared_host'} else
+                    'reference' if name.endswith('reference') or name.startswith('signing.') or name.endswith('_python') or name in {'tools.node', 'tools.chrome'} else 'text')
             rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded or name in reserved or name in {'android.image', 'android.model'})
             if name in reserved:
                 rows[name]['origin'] += '; legacy reserved field, not used by isolated local backends'
@@ -182,7 +182,7 @@ class LogisticsProject:
                    for key in ('fingerprint', 'logistics_commit', 'commonUtils_commit')):
                 raise ValueError('Native validation and preparation must use the exact same source.')
             host_python = validation.source.get('effective_settings', {}).get('values', {}).get('tools.desktop_python', str(self.interpreter))
-            validation = with_host_gates(validation, host_python)
+            validation = with_host_gates(validation, host_python, release=True)
             gate = acceptance_phase(validation, target)
             # Required native/runtime gates and owned cleanup precede signing.
             plan = replace(plan, phases=(*validation.phases, gate,
@@ -199,7 +199,7 @@ class LogisticsProject:
             if target not in {'ios', 'android'} or operation != 'Test':
                 raise ValueError('Release validation applies only to complete mobile tests.')
             host_python = plan.source['effective_settings']['values']['tools.desktop_python']
-            plan = with_host_gates(plan, host_python)
+            plan = with_host_gates(plan, host_python, release=True)
             gate = acceptance_phase(plan, target)
             plan = replace(plan, phases=(*plan.phases, gate))
         elif target in {'ios', 'android'} and operation == 'Test' and not suite and not options.get('pattern') and backend != 'GitHub':
@@ -296,6 +296,8 @@ class LogisticsProject:
         env = dict(PYTHONPATH=os.pathsep.join((str(snapshot), str(snapshot / 'Python'))),
                    QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1',
                    LOGISTICS_MANAGER_ACCOUNT_DEFAULTS=os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
+        from logistics_build.browser_tooling import environment as browser_environment
+        env.update(browser_environment(options, root=snapshot))
         python = options['tools.desktop_python']
         if target in ('macos','linux','windows'):
             if platform.system() != expected_system:
@@ -482,8 +484,9 @@ class LogisticsProject:
         python = options['tools.mobile_python']
         base = (python,'-m','logistics_build.android_backend')
         common = ('--root',str(snapshot),'--workspace',str(device))
+        apk = snapshot/'mobile_build/build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk'
         phases = [Phase('android-build',(*base,'build',*common,'--result',str(run/'build.json')),str(snapshot),
-                        timeout=3600,environment=env,kind='build',artifacts=(str(run/'build.json'),))]
+                        timeout=3600,environment=env,kind='build',artifacts=(str(run/'build.json'),str(apk)))]
         source = dict(source, sdk=str(sdk),java=str(java),abi=abi,image=options['android.image'],
                       device_lifecycle='owned disposable accelerated ARM AVD; preserve physical and existing emulator data')
         if operation=='Test':

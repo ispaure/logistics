@@ -34,6 +34,7 @@ def defaults(root):
         'tools.mobile_python': str(root / '.venv/bin/python'),
         'tools.xcode': '', 'tools.android_sdk': '', 'tools.java': '',
         'tools.manager_checkout': '',
+        'tools.node': '', 'tools.node_modules': '', 'tools.chrome': '',
         'ios.iphone': '', 'ios.duo': '', 'ios.ipad': '', 'android.avd': '',
         'android.image': 'system-images;android-36;google_apis;arm64-v8a', 'android.model': 'pixel_9',
         'vm.fedora': '', 'vm.windows': '',
@@ -61,6 +62,7 @@ VARIABLES = {
     'firebase.group': 'LOGISTICS_FIREBASE_GROUP',
     'tools.android_sdk': 'ANDROID_HOME', 'tools.java': 'JAVA_HOME',
     'tools.xcode': 'DEVELOPER_DIR',
+    'tools.node': 'LOGISTICS_NODE', 'tools.node_modules': 'NODE_PATH', 'tools.chrome': 'LOGISTICS_CHROME',
 }
 
 

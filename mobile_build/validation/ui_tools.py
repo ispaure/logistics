@@ -150,7 +150,7 @@ def simulator_report(device, started_ns, *, diagnostics=None):
         diagnostics.mkdir(exist_ok=True)
         # Fatal native crashes cannot write the final JSON. Capture their stack
         # before returning, and never leave the previous device's result here.
-        for name in ('cached.json', 'error.txt', 'fault.log', 'timings.json', 'webview-counts.json', 'rotation-failure.json'):
+        for name in ('cached.json', 'error.txt', 'fault.log', 'timings.json', 'webview-counts.json', 'rotation-failure.json', 'reader-edge-timers.json'):
             target = diagnostics / ('ios-native-ui-' + name)
             target.unlink(missing_ok=True)
             source = path.with_name('logistics-native-ui-' + name) if name != 'cached.json' else path
@@ -375,7 +375,7 @@ def clear_run_reports(logs, target):
     if target == 'ios':
         names.extend(('ios-report-transport.json', 'ios-native-ui-process.json',
                       'ios-original-process-diagnostics.json', 'ios-original-process.sample.txt',
-                      'ios-native-ui-rotation-failure.json'))
+                      'ios-native-ui-rotation-failure.json', 'ios-native-ui-reader-edge-timers.json'))
     for name in names:
         (logs / name).unlink(missing_ok=True)
 

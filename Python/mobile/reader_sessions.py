@@ -201,6 +201,9 @@ class Readers:
         if not self.app.workspace.close(key, guard=lambda session: True):
             return False
         if owner is not None:
+            footer = getattr(owner, 'page_footer', None)
+            if footer is not None:
+                footer.dispose()
             owner.suspend()
             self.controllers.pop(key, None)
         if self.active is owner:

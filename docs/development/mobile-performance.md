@@ -1,5 +1,20 @@
 # Mobile performance implementation and verification
 
+## Owned reader footer refreshes
+
+Reader footers retain at most one pending edge-width refresh, using the latest
+requested width and a weak owner reference. Hidden or detached controls do not
+queue refreshes. Accepted permanent close and footer replacement dispose the
+layout subscription and pending handle; ordinary suspension preserves reader
+state. Reattached controls request their current width again.
+
+`test_footer_lifetime.py` covers coalescing, latest-width delivery, hidden controls,
+retirement, owner collection and non-native hosts. Native qualification remains
+part of the full manager workflow. Native QA additionally retains bounded timer,
+loop and request-count metadata without document names or content. This is
+lifetime and scheduling hardening, not proof of the cause of a CoreFoundation
+run-loop crash.
+
 ## LocalCrypt comics and idle reader layout — 2026-11-03
 
 Synthetic encrypted comic testing found two independent costs. Native ZIP
