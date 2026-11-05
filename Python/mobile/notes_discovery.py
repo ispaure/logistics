@@ -7,6 +7,7 @@ from features.notes_library.notes import vault_root, operation
 from commonUtils.runtime.operations import check_cancelled, OperationCancelled
 from commonUtils.ui.native.forms import FittedLabel, fit_text
 from commonUtils.ui.native.adaptive import allocated_width
+from .appearance import accessible_name, list_button, surface
 from .control_icons import button_icons
 from .browser_ui import middle_filename
 
@@ -50,13 +51,15 @@ def populate(app, container, *, title='Notes Library', refresh=True):
     if not app.feature_enabled('notes_library'):
         container.add(toga.Label('Notes Library is disabled.'))
         return
+    unlock_hint = FittedLabel('Unlock LocalCrypt to include encrypted libraries.', style=Pack(font_size=12))
     rows = toga.Box(style=Pack(direction='column'))
     status = FittedLabel('Looking for libraries…', style=Pack(font_size=12))
     container.add(rows, status)
     from .layout_participants import participants, LayoutFrame
-    status._layout_subscription = participants(app).register(
-        'notes-discovery-status', status, fit_discovery_status)
-    fit_discovery_status(status, LayoutFrame(app.main_window.size.width, app.adaptive.content_width))
+    layout = participants(app)
+    for key, label in (('notes-discovery-status', status), ('notes-discovery-unlock', unlock_hint)):
+        label._layout_subscription = layout.register(key, label, fit_discovery_status)
+        fit_discovery_status(label, LayoutFrame(app.main_window.size.width, app.adaptive.content_width))
     token = object()
     app._notes_discovery_token = token
     previous = getattr(app, '_notes_discovery_task', None)
@@ -120,10 +123,7 @@ def populate(app, container, *, title='Notes Library', refresh=True):
                 encrypted = label.startswith('LocalCrypt: ')
                 location = label.removeprefix('LocalCrypt: ')
                 caption = PurePosixPath(root).name or location
-                if root and encrypted:
-                    caption += ' · ' + location
                 button = toga.Button(caption, on_press=open_library, style=Pack(height=48))
-                from .appearance import list_button, surface
                 list_button(button)
                 surface(button, radius=0, background='transparent', outlined=False, eink_outlined=False)
                 kinds = [('storage_local', 'On-device library')]
@@ -131,12 +131,17 @@ def populate(app, container, *, title='Notes Library', refresh=True):
                     kinds.append(('storage_unlocked', 'Encrypted library, unlocked'))
                 button_icons(button, kinds)
                 middle_filename(button)
+                # Keep the full source and logical path for same-named libraries.
+                parent = PurePosixPath(root).parent
+                source = f'{label} / {parent}' if parent.parts else label
+                accessible_name(button, f'{caption} · {source}' if root else source)
                 rows.add(button)
             if rows.children:
-                from .appearance import surface
                 surface(rows, radius=16)
-            status.text = ('Some locations could not be checked.' if errors else '' if found
-                           else 'No Notes libraries found. Unlock LocalCrypt to include encrypted libraries.')
+            status.text = 'Some locations could not be checked.' if errors else ''
+            if (not found and app.feature_enabled('rclone')
+                    and any(item.get('crypt_remotes') for _, item in app.home_unlock_candidates())):
+                container.insert(1, unlock_hint)
         except (asyncio.CancelledError, OperationCancelled):
             return
     app._notes_discovery_task = app.loop.create_task(scan())

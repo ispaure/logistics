@@ -14,7 +14,7 @@ from toga.style import Pack
 
 class FolderNoticeTests(unittest.TestCase):
     def test_compact_notice_refits_changed_messages_and_rotation(self):
-        notice = FittedLabel('Files shared from other apps appear in Received Files.', style=Pack(font_size=12))
+        notice = FittedLabel('Some incoming files could not be saved; reopen the app to retry.', style=Pack(font_size=12))
         app = NS(incoming_notice=notice, adaptive=NS(content_width=Mock(return_value=280)))
         reflow_folder_notice(app)
         self.assertIn('\n', notice.text)
