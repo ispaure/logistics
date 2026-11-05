@@ -109,6 +109,7 @@ class MagnifierProbe(LogisticsMobile):
                     def enabled(button):return bool(button.isEnabled())
                     parent = impl.native.superview
                     if callable(parent):parent = parent()
+                    assert more.frame.origin.x + more.bounds.size.width <= less.frame.origin.x
                     for button in (less,more):
                         assert float(button.bounds.size.width) == 33
                         assert float(button.bounds.size.height) == 33
@@ -134,13 +135,10 @@ class MagnifierProbe(LogisticsMobile):
                     assert popup is not None and popup.isShowing() and popup.isSplitTouchEnabled()
                     assert popup.getContentView().getChildCount() == 2
                     less, more = popup.getContentView().getChildAt(0),popup.getContentView().getChildAt(1)
+                    assert more.getRight() <= less.getLeft()
                     self._probe_less = less
                     def click(button):assert button.performClick()
                     def enabled(button):return bool(button.isEnabled())
-                if apple:
-                    assert more.frame.origin.x + more.bounds.size.width <= less.frame.origin.x
-                else:
-                    assert more.getRight() <= less.getLeft()
                 while canvas.magnifier_zoom < 250:click(more)
                 assert not enabled(more) and enabled(less)
                 assert comic.magnifier_zoom == pdf.magnifier_zoom == 250
