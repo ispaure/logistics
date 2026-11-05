@@ -278,7 +278,7 @@ class ResumeLockTests(unittest.TestCase):
         scroll = self.privacy.lock_scroll
         self.assertIsInstance(scroll, toga.ScrollContainer)
         self.assertEqual(scroll._MIN_HEIGHT, 0)
-        self.assertIs(scroll.content, self.privacy.lock_fields)
+        self.assertIs(scroll.content, self.privacy.lock_layout)
         self.assertEqual(self.privacy.lock_card.children, [scroll])
         self.assertEqual(self.privacy.lock_view.children, [self.privacy.lock_body])
         self.assertEqual(scroll.style.flex, 1)
@@ -288,6 +288,9 @@ class ResumeLockTests(unittest.TestCase):
         self.assertIn('\n', self.privacy.lock_credential.text)
         for width, height in ((320, 568), (844, 390), (844, 170), (1200, 900)):
             self.privacy.fit_lock_view(width, height)
+            fields, icon = self.privacy.lock_fields, self.privacy.lock_icon
+            self.assertEqual(self.privacy.lock_layout.children,
+                             [icon, fields] if width < 540 else [fields, icon])
             self.assertLessEqual(self.privacy.lock_card.style.width, width - 40)
             self.assertLessEqual(self.privacy.lock_card.style.width, 560)
             self.assertLessEqual(self.privacy.lock_card.style.height, height - 40)
@@ -309,7 +312,7 @@ class ResumeLockTests(unittest.TestCase):
         self.assertEqual(self.privacy.lock_credential.text, 'Personal.zip\nWork.zip')
         self.unlock('session-password')
         self.assertEqual(self.privacy.lock_credential.text, 'Work.zip')
-        self.assertEqual(self.privacy.lock_hint.text, 'Enter the password for this credential file.')
+        self.assertEqual(self.privacy.lock_hint.text.replace('\n', ' '), 'Enter the password for this credential file.')
         self.assertIs(self.app.main_window.content, self.privacy.lock_view)
         self.unlock('work-password')
         self.assertIs(self.app.main_window.content, self.original)

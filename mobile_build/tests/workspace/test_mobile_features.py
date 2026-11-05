@@ -100,6 +100,31 @@ class MobileFeatureTests(unittest.TestCase):
         self.assertTrue(app.feature_enabled('books'))
         self.assertTrue(app.feature_enabled('comics'))
 
+    def test_disabling_selected_reader_keeps_only_enabled_settings_and_saved_values(self):
+        app = self.app
+        app.preferences.save(epub_font_size='24', magnifier_zoom='230')
+        app.show_settings()
+        app.settings_navigation.choose('EPUB')
+        app.set_feature_enabled('books', False)
+        self.run_async(asyncio.sleep(0))
+        nav = app.settings_navigation
+        self.assertNotIn('EPUB', nav.buttons)
+        self.assertEqual(nav.buttons['Books & Comics'].text, 'PDF')
+        self.assertFalse(nav.detail_requested)
+        self.assertFalse(app.routes.screens['settings'])
+        nav.choose('Books & Comics')
+        self.assertEqual(app.magnifier_choice.value, '230%')
+        app.set_feature_enabled('pdf', False)
+        self.run_async(asyncio.sleep(0))
+        self.assertNotIn('Books & Comics', app.settings_navigation.buttons)
+        app.set_feature_enabled('books', True)
+        self.run_async(asyncio.sleep(0))
+        nav = app.settings_navigation
+        nav.choose('EPUB')
+        self.assertEqual(app.epub_font_size_choice.value, '24')
+        nav.choose('Books & Comics')
+        self.assertEqual(app.magnifier_choice.value, '230%')
+
     def test_legacy_partial_book_selection_can_enable_the_entire_group(self):
         self.app.preferences.save(disabled_features='["comics"]')
         self.app.show_settings()

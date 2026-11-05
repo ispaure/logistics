@@ -8,8 +8,9 @@ from ..audio_output import for_app
 
 def controls(app, box):
     owner = for_app(app)
-    box.add(SettingsLabel('Choose which Bluetooth devices can play session-only video and read-aloud. '
-        'Changing outputs pauses playback. Approving a device does not resume it.'))
+    box.add(SettingsLabel('While session-only protection is active, Bluetooth devices need approval '
+        'to play audio. If Logistics cannot identify the output, playback stays paused. '
+        'Changing outputs pauses playback even on approved devices. After approval, press Play to resume.'))
     current = SettingsLabel('')
     status = SettingsLabel('')
     rows = toga.Box(style=Pack(direction=COLUMN))

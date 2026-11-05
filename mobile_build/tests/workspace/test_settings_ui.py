@@ -493,6 +493,28 @@ class SettingsUITests(unittest.TestCase):
             factory.assert_called_once()
             self.assertLess(len(label.text.splitlines()), len(first.splitlines()))
 
+    def test_each_font_reset_saves_only_its_size_and_restores_on_error(self):
+        from mobile.preferences import DEFAULTS, Preferences
+        app = self.make_app()
+        keys = ('markdown_font_size', 'text_font_size', 'epub_font_size')
+        app.preferences.save(**dict.fromkeys(keys, '23'))
+        app.show_settings()
+        for title, key in zip(('Markdown', 'Text', 'EPUB'), keys, strict=True):
+            app.settings_navigation.choose(title)
+            choice = getattr(app, key + '_choice')
+            reset = choice.parent.children[1]
+            self.assertEqual(reset.accessible_name, f'Reset {title} font size to default')
+            with patch.object(app.preferences, 'save', side_effect=OSError('Save failed')):
+                reset.on_press()
+            self.assertEqual(choice.value, '23')
+            self.assertEqual(app.settings_status.text, 'Save failed')
+            with patch.object(app.preferences, 'save', wraps=app.preferences.save) as save:
+                reset.on_press()
+                save.assert_called_once_with(**{key: DEFAULTS[key]})
+            self.assertEqual(choice.value, DEFAULTS[key])
+        self.assertEqual([Preferences(app.private_root).values[key] for key in keys],
+                         [DEFAULTS[key] for key in keys])
+
     def test_restore_settings_do_not_refresh_unrelated_document_lists(self):
         app = self.make_app()
         with patch.object(app.adaptive, 'content_width', return_value=390):

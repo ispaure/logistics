@@ -169,27 +169,18 @@ and restoring the normal palette; physical BOOX behavior remains unverified.
 
 ## Settings and build information
 
-**Settings → Books & Comics → Comic & PDF magnifier zoom** controls the shared
-hold-to-magnify bubble: 150%, 170%, 190%, 210%, 230%, or 250% (default 190%).
-While holding a fullscreen comic or PDF with one finger, tap **−/+** just outside the bubble’s upper
-left/right corners with another finger to change the same setting. Changes save
-immediately, update open readers and app windows, and survive restarting.
+**Comic & PDF magnifier zoom** in **Settings → Books & Comics** controls the
+shared hold-to-magnify bubble. Choose **150%, 170%, 190%, 210%, 230% or 250%**.
+The default is **190%**. The **−** and **+** buttons on the open magnifier
+change the same setting. Changes save automatically and update open readers.
+If comics are disabled, the category is named **PDF**. If just one reader is
+enabled, the setting is labeled for that reader.
 
-**Settings → Books & Comics → Saved books & comics…** lists every retained
-library import, including copies no longer open or in Recent. It shows the count,
-combined archive/reading-record size and each import's size. Incomplete or unreadable
-records appear under their internal identifier where possible. Local/LocalCrypt
-folders and remote previews held only in RAM are separate from this inventory.
-On iOS these imports live in private app storage and do not appear in Files.
-The inventory identifies these as private reading copies. Older imports may lack
-an original source path; their reader offers **Show cached copy in folder**.
+On wide screens, Settings keeps the categories beside the page you opened.
+On compact screens, use Back to return to the category list.
 
-**Close** in All open keeps the saved file and its progress. To reclaim
-space, use **Delete local copy…**, or **Delete all local copies…** to clear the
-listed saved books and comics with one confirmation. These actions
-close the affected readers and remove their imported archives, reading progress,
-bookmarks and Recent entries; the original source or cloud file is unchanged. Finish reader
-or import operations and close other app windows before deleting a copy.
+Use the reset button next to the font size in **Markdown**, **Text** or **EPUB**
+to restore that format's default size.
 
 On iPhone and iPad, choosing a dropdown option closes its picker immediately.
 
@@ -200,7 +191,7 @@ categories, including
 **Restore last document**, **Close saved documents on restart** and,
 on Android and iOS, **Show Legacy**. Preferences save automatically when changed.
 **Show Legacy** applies immediately for the current session only and resets to off
-when the app starts. Reloading preferences keeps the current session choice.
+when the app starts.
 
 The **About** category in Settings shows muted build information: the app version,
 short source revision and commit time when available, plus the platform and
@@ -370,12 +361,9 @@ rejects automatic desktop settings paths on mobile. This host uses immutable
 in-code defaults and an app-private `preferences.ini`. **Settings** controls the
 editor/preview font size and whether the last selected document is restored.
 Reads do not create the INI; saving does. Invalid files are preserved and defaults
-are used; saving refuses to overwrite them. **Settings → App → Reload preferences** rereads this file and rebuilds Settings.
-Use it after repairing, moving or externally editing the file; changes made in
-Settings are already saved and do not need reloading. Reload is retained as a
-recovery action because saves refuse to overwrite invalid or externally changed
-files. Home remains the launch
-screen; restoring a document makes it ready under Documents.
+are used. After repairing, moving or externally editing the file, fully close
+and reopen Logistics. Home remains the launch screen. Restoring a document
+makes it ready under Documents.
 
 Desktop preferences cannot simply be copied wholesale: filesystem paths,
 external executable locations and desktop-only options need validation or

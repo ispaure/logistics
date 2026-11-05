@@ -85,14 +85,10 @@ def refresh_features(app):
     if enabled(app.preferences, 'lm') and app.native_host.state.destination == 'chat':
         app.show_chat(present=False)
     navigation = getattr(app, 'settings_navigation', None)
-    selected = navigation.selected if navigation is not None else None
-    app.show_settings(present=False, rebuild=True)
-    if selected not in app.settings_navigation.sections:
-        app.routes.trim('settings', 0)
+    if navigation is not None:
+        app.show_settings(present=False, rebuild=True, preserve_category=True)
     if app.native_host.state.destination == 'settings':
-        app.show_settings()
-        if selected in app.settings_navigation.sections:
-            app.settings_navigation.choose(selected)
+        app.routes.render('settings')
     else:
         app.refresh_hub(app.native_host.state.destination)
 

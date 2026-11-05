@@ -11,8 +11,9 @@ def controls(app, box):
     choice = toga.Switch('Skip session password on trusted Wi-Fi',
         value=app.preferences.values['session_trusted_wifi'] == 'true', style=Pack(height=48))
     box.add(switch_row(app, 'Skip session password on trusted Wi-Fi', choice,
-        'Keep session-only credentials unlocked after sleep or switching apps on trusted Wi-Fi. Restarting the app or locking the session still requires your password. '
-        'Network names can be copied, so trust only private networks.'))
+        'Skip the repeat password prompt when you return from sleep or another app on a listed '
+        'network. A password prompt that is already pending still requires your password. '
+        'Network names can be copied, so list only networks you trust.'))
     manage = page_button('Trusted Wi-Fi networks…', enabled=choice.value,
         on_press=lambda widget, **kwargs: show(app), style=Pack(height=48))
     management = toga.Box(style=Pack(direction=COLUMN))

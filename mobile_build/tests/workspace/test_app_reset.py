@@ -152,7 +152,8 @@ class AppResetUITests(unittest.TestCase):
     def test_android_invokes_own_app_clear_data_only_after_confirmation(self):
         self.app.reset_phrase.value = 'ERASE'
         text = ' '.join(str(getattr(child, 'text', '')) for child in self.app.reset_page.children)
-        self.assertIn('app-owned storage folders on SD cards', text)
+        self.assertIn('app-owned storage folders on SD cards', ' '.join(text.split()))
+        self.assertEqual(self.app.reset_button._impl._surface_roles[1], 'destructive')
         with patch('mobile.reset_ui.reset_android') as erase, \
                 patch.object(self.app.main_window, 'dialog', AsyncMock(return_value=True)):
             self.run_reset()
@@ -171,6 +172,7 @@ class AppResetUITests(unittest.TestCase):
         self.app.reset_phrase_changed()
         self.assertFalse(self.app.reset_button.enabled)
         notice = ' '.join(child.text for child in self.app.main_window.content.content.children)
+        notice = ' '.join(notice.split())
         self.assertIn('not been erased yet', notice)
         self.assertIn('Home Screen is not enough', notice)
         with patch('mobile.reset_ui.schedule_reset') as schedule:

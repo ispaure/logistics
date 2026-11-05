@@ -30,8 +30,9 @@ class ResetUI:
             else 'Android erases this app’s data immediately. Reopen Logistics to start fresh.'))
         box.add(SettingsLabel('This cannot be undone. Export anything you need first. Type ERASE to continue.'))
         self.reset_phrase = toga.TextInput(placeholder='ERASE', on_change=self.reset_phrase_changed, style=Pack(height=48))
-        self.reset_button = toga.Button('Erase on next launch…' if ios else 'Erase all app data…',
-            enabled=False, on_press=self.confirm_app_reset, style=Pack(height=48))
+        from .appearance import action_button
+        self.reset_button = action_button(toga.Button('Erase on next launch…' if ios else 'Erase all app data…',
+            enabled=False, on_press=self.confirm_app_reset, style=Pack(height=48)), destructive=True)
         self.reset_status = SettingsLabel('')
         box.add(self.reset_phrase, self.reset_button, self.reset_status)
         for child in box.children:
