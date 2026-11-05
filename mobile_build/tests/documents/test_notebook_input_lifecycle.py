@@ -161,13 +161,33 @@ class PencilInputTraceTests(unittest.IsolatedAsyncioTestCase):
         objc.send_super=lambda *a,**k:events.append('super')
         with patch.dict(sys.modules,{'rubicon.objc':objc}),patch.object(module,'_contact_trace_class',None):
             gesture=module._contact_class()()
-            gesture.trace_owner=SimpleNamespace(record=lambda *a:events.append('observed'))
+            from weakref import ref
+            class Owner:
+                def record(self, *args):
+                    events.append('observed')
+            owner = Owner()
+            gesture.trace_owner=ref(owner)
             gesture.touchesBegan_withEvent_(SimpleNamespace(count=1),None)
             self.assertEqual(events,['observed','super'])
             self.assertFalse(gesture.canPreventGestureRecognizer_(None))
             self.assertFalse(gesture.canBePreventedByGestureRecognizer_(None))
             gesture.touchesEnded_withEvent_(SimpleNamespace(count=1),None)
             self.assertEqual(gesture.state,5)
+            gesture.trace_owner = None
+            gesture.touchesCancelled_withEvent_(SimpleNamespace(count=1),None)
+            self.assertEqual(events[-1], 'super')
+
+    async def test_native_property_does_not_retain_its_python_owner(self):
+        import gc
+        from weakref import ref
+        with TemporaryDirectory() as folder:
+            trace = self.make(folder)
+            owner = ref(trace)
+            self.assertIs(self.gesture.trace_owner(), trace)
+            del trace
+            gc.collect()
+            self.assertIsNone(owner())
+            self.assertIsNone(self.gesture.trace_owner())
 
     def test_attach_failure_is_optional_and_unavailable_report_has_no_exception_content(self):
         with TemporaryDirectory() as folder,patch('builtins.print') as printed:
@@ -187,7 +207,7 @@ class PencilInputTraceTests(unittest.IsolatedAsyncioTestCase):
         factory=SimpleNamespace(alloc=lambda:SimpleNamespace(initWithTarget=lambda *a,**kw:gesture))
         def add(value):
             events.append('attached')
-            value.trace_owner.timer=timer;value.trace_owner.pending=pending
+            value.trace_owner().timer=timer;value.trace_owner().pending=pending
             raise RuntimeError('native add failed after attach')
         native=SimpleNamespace(addGestureRecognizer=add,removeGestureRecognizer=removed.append)
         web=SimpleNamespace(_impl=SimpleNamespace(native=native))
