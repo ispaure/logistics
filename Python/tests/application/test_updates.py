@@ -123,8 +123,7 @@ class UpdateUITests(QtTestCase):
     def test_worker_admission_failure_restores_the_offer_without_closing(self):
         controller, owner = self.controller()
         controller.available = {'branch': 'main', 'commit': 'a' * 40}
-        with patch('commonUtils.ui.tasks.operation_progress.Operation.start',
-                   side_effect=RuntimeError('thread admission denied')), \
+        with patch.object(qt.QThread, 'start', side_effect=RuntimeError('thread admission denied')), \
                 patch('desktop.updater.notify') as notice, \
                 patch.object(owner.dlg, 'close') as close:
             controller.install()
