@@ -17,7 +17,7 @@ from commonUtils.runtime.platform import get_os, OS
 from commonUtils.ui.native.image_canvas import ImageCanvas
 from features.pdf.mobile.canvas import PDFCanvas
 from mobile.app import LogisticsMobile
-from mobile.magnifier import bind
+from mobile.magnifier import LEVELS, bind
 from mobile.preferences import Preferences
 
 
@@ -139,29 +139,33 @@ class MagnifierProbe(LogisticsMobile):
                     self._probe_less = less
                     def click(button):assert button.performClick()
                     def enabled(button):return bool(button.isEnabled())
-                while canvas.magnifier_zoom < 250:click(more)
+                for level in LEVELS[LEVELS.index(canvas.magnifier_zoom) + 1:]:
+                    click(more)
+                    assert canvas.magnifier_zoom == level
                 assert not enabled(more) and enabled(less)
-                assert comic.magnifier_zoom == pdf.magnifier_zoom == 250
-                assert Preferences(self.private_root).values['magnifier_zoom']=='250'
+                assert comic.magnifier_zoom == pdf.magnifier_zoom == LEVELS[-1]
+                assert Preferences(self.private_root).values['magnifier_zoom'] == str(LEVELS[-1])
                 await self.phase(name)
                 if not apple:assert popup.isShowing(), 'Touching lens controls dismissed the magnifier'
-                while canvas.magnifier_zoom > 150:click(less)
+                for level in reversed(LEVELS[:-1]):
+                    click(less)
+                    assert canvas.magnifier_zoom == level
                 assert not enabled(less) and enabled(more)
                 assert comic.magnifier_zoom == pdf.magnifier_zoom == 150
                 click(more)
-                assert comic.magnifier_zoom == pdf.magnifier_zoom == 170
+                assert comic.magnifier_zoom == pdf.magnifier_zoom == LEVELS[1]
                 if apple:
                     assert not hasattr(impl, 'lens_label')
                     impl.hide_magnifier();impl.hold = original_hold
                     assert impl.lens is None
                 else:
-                    assert native.getMagnifierZoom()==170
+                    assert native.getMagnifierZoom() == LEVELS[1]
                     touch(1)
                     assert not popup.isShowing()
                 result[name] = dict(buttons=True,bounds=True,shared=True,persisted=True)
             self.show_settings()
             self.settings_navigation.choose('Books & Comics')
-            self.magnifier_choice.value = '230%'
+            self.magnifier_choice.value = 230
             assert comic.magnifier_zoom == pdf.magnifier_zoom == 230
             assert Preferences(self.private_root).values['magnifier_zoom']=='230'
             for canvas in canvases:

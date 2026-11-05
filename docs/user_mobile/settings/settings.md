@@ -169,12 +169,12 @@ and restoring the normal palette; physical BOOX behavior remains unverified.
 
 ## Settings and build information
 
-**Comic & PDF magnifier zoom** in **Settings → Books & Comics** controls the
-shared hold-to-magnify bubble. Choose **150%, 170%, 190%, 210%, 230% or 250%**.
-The default is **190%**. The **−** and **+** buttons on the open magnifier
-change the same setting. Changes save automatically and update open readers.
-If comics are disabled, the category is named **PDF**. If just one reader is
-enabled, the setting is labeled for that reader.
+The **Comic & PDF magnifier zoom** slider in **Settings → Books & Comics**
+shows the current magnification and moves from **150% to 300%** in 10 percentage
+point steps. The default is **190%**. The **−** and **+** buttons on the open
+magnifier change the same setting. Both controls save automatically and update
+open readers. If comics are disabled, the category is named **PDF**. If just one
+reader is enabled, the slider is labeled for that reader.
 
 On wide screens, Settings keeps the categories beside the page you opened.
 On compact screens, use Back to return to the category list.
