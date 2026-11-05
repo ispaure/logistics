@@ -25,7 +25,8 @@ def _capture_note_open(window, trace):
     try:
         progress = window.progress
         operation = progress.operation
-        valid = operation is not None and isValid(operation)
+        thread = operation.thread if operation is not None else None
+        valid = thread is not None and isValid(thread)
         delivered, delivered_error = progress._result
         state = dict(trace, captured_at=monotonic(), pending_kind=window.pending[0],
             busy=progress.busy, cancelled=progress.cancelled.is_set(), progress=progress.message.text(),
@@ -33,7 +34,7 @@ def _capture_note_open(window, trace):
             delivered_result_type=type(delivered).__name__, delivered_error=delivered_error)
         if valid:
             state.update(running=operation.isRunning(), finished=operation.isFinished(),
-                interruption_requested=operation.isInterruptionRequested(),
+                interruption_requested=thread.isInterruptionRequested(),
                 worker_result_type=type(operation.result).__name__, worker_error=operation.error)
         print('NOTES_OPEN_DEADLINE ' + json.dumps(state, sort_keys=True), file=sys.stderr, flush=True)
     finally:
@@ -297,7 +298,7 @@ class NotesOpenDiagnosticsTests(unittest.TestCase):
                 for callback in tuple(self.callbacks):
                     callback(*args)
         operation = SimpleNamespace(result=None, error=None, isRunning=lambda: False,
-            isFinished=lambda: True, isInterruptionRequested=lambda: False)
+            isFinished=lambda: True, thread=SimpleNamespace(isInterruptionRequested=lambda: False))
         progress = SimpleNamespace(operation=operation, busy=True, cancelled=Event(),
             message=SimpleNamespace(text=lambda: 'Preparing embedded media…'),
             progress_changed=Signal(), _result=(None, ''))
