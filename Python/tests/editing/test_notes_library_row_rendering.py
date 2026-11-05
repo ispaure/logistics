@@ -5,6 +5,7 @@ from pathlib import Path
 from time import perf_counter
 from unittest.mock import patch
 
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.testing.stages import TestStage
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -41,7 +42,7 @@ class DesktopRowRenderingTests(QtTestCase):
                 provider._physical(folder, directory=True).mkdir(parents=True, exist_ok=True)
             data = provider.encrypted_path('note.md').read_bytes()
             for encoded in provider._commands.encode_many(paths):
-                (provider.root / encoded).write_bytes(data)
+                (native_path(provider.root) / encoded).write_bytes(data)
         else:
             for folder in folders:
                 (provider.root / folder).mkdir(parents=True, exist_ok=True)

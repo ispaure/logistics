@@ -33,15 +33,41 @@ class NativeNodePathTests(unittest.TestCase):
         self.selected=browser_environment({'tools.node':str(self.node),'tools.node_modules':str(self.root/'modules'),
             'tools.chrome':str(self.root/'existing-browser')},inherited={'PATH':str(self.ambient)},root=self.snapshot)
 
+    def assert_executable(self,found,expected):
+        self.assertIsNotNone(found)
+        self.assertTrue(Path(found).samefile(expected),(found,str(expected)))
+
     def assert_tools(self,plan):
         self.assertIsNone(shutil.which('node',path=str(self.ambient)))
         for phase in plan.phases:
             with self.subTest(phase=phase.id):
                 selected=phase.environment
-                self.assertEqual(shutil.which('node',path=selected['PATH']),str(self.node))
-                self.assertEqual(shutil.which('go',path=selected['PATH']),str(self.go))
+                for name,expected in (('node',self.node),('go',self.go)):
+                    found=shutil.which(name,path=selected['PATH'])
+                    self.assert_executable(found,expected)
                 self.assertEqual(selected['LOGISTICS_NODE'],str(self.node))
                 self.assertEqual(selected['PATH'].split(os.pathsep)[:2],[str(self.go.parent),str(self.node.parent)])
+
+
+    def test_case_alias_selects_same_executable_but_other_binary_is_rejected(self):
+        # Windows which() can return PATHEXT spelling (.EXE) for an existing
+        # .exe. File identity is the contract, including on case-sensitive hosts.
+        aliases={}
+        for name,expected in (('node',self.node),('go',self.go)):
+            alias=expected.with_name(expected.name.upper())
+            if not alias.exists(): os.link(expected,alias)
+            self.assertTrue(alias.samefile(expected))
+            aliases[name]=str(alias)
+        plan=Mock(phases=[Mock(id='owned',environment=dict(self.selected))])
+        plan.phases[0].environment['PATH']=os.pathsep.join((str(self.go.parent),str(self.node.parent),str(self.ambient)))
+        def resolve(name,*,path):
+            return None if path==str(self.ambient) else aliases[name]
+        with patch.object(shutil,'which',side_effect=resolve): self.assert_tools(plan)
+        for name,expected in (('node',self.node),('go',self.go)):
+            other=self.root/('unselected-'+name)/expected.name
+            other.parent.mkdir();other.touch()
+            with self.subTest(unselected=name),self.assertRaises(AssertionError):
+                self.assert_executable(str(other),expected)
 
     def test_actual_android_planning_preserves_node_and_adds_go_without_ambient_node(self):
         with patch.dict(os.environ,PATH=str(self.ambient)),patch('build_manager.hosts.android_abi',return_value='arm64-v8a'),patch.object(self.project,'backend_options',return_value=('This Mac',)):
