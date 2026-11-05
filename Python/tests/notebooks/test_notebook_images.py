@@ -16,6 +16,62 @@ from features.notebooks.recovery import Repository
 from Python.tests.notebooks.image_fixtures import png_source, paste_action, locked_book
 
 class NotebookImageTests(unittest.TestCase):
+    def test_real_pen_input_paints_before_incremental_stroke_acknowledgement(self):
+        import json
+        from pathlib import Path
+        import shutil
+        import subprocess
+        if not shutil.which('node'):
+            self.skipTest('Node is required for the production input/acknowledgement contract')
+        assets = Path(__file__).resolve().parents[2] / 'features/notebooks/assets'
+        driver = r"""
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const controls=new Map(),events=[];
+const node=()=>({value:'',style:{},classList:{add(){},remove(){},toggle(){}},
+  setAttribute(){},append(){},set innerHTML(value){}});
+const control=id=>{if(!controls.has(id))controls.set(id,node());return controls.get(id)};
+const s={console,events,$:control,document:{body:node(),createElement:node},
+  canvas:{style:{},getBoundingClientRect:()=>({left:0,top:0,width:1404,height:1872})},
+  state:{width:1404,height:1872,index:0,count:1,strokes:[],native_pen:false},
+  mode:'ink',active:null,last:null,start:null,points:[],pan:null,selected:new Set(),
+  touchContacts:new Map(),penContactActive:false,continuousInk:true,frameBatchedInk:false,
+  viewportResizePending:false,deferredUpdate:null,pendingInk:null,queue:[],busy:false,
+  bridge:'notebook://contract/',seq:0,pageSwipe:false,
+  chosenInk:()=>({tool:17,color:0,width:3,layer:'L'}),
+  brushFor:()=>({family:'fineliner'}),brushOptions(){},
+  notePenContact(value){s.penContactActive=value},penTouchBlocked:()=>false,
+  cancelTouchZoom(){},flushPreview(){if(s.points.length)events.push('paint')},
+  cancelPreview(){},draw(){events.push('draw')},render(){events.push('render')},
+  strokeExpandsPaper:()=>false};
+s.window=s;vm.createContext(s);
+vm.runInContext(fs.readFileSync(process.argv[1]+'/input.js','utf8'),s);
+vm.runInContext(fs.readFileSync(process.argv[1]+'/queue.js','utf8')
+  .replaceAll('__MAX_COMMAND__','100000').replaceAll('__SEND_COMMAND__',"events.push('send')"),s);
+const stroke={id:'S',layer:'L',tool:17,color:0,points:[[670,936,.5,5.25],[730,936,.5,5.25]]};
+// A bare command cannot stand in for visible input: interior ack does not paint.
+s.send({op:'stroke',tool:17,color:0,width:3,points:[[670,936,.5],[730,936,.5]]});
+s.notebookStrokeUpdate(stroke,'Saved');
+assert.deepEqual(events,['send']);assert.equal(s.state.strokes.length,1);
+s.state.strokes=[];events.length=0;
+const event=x=>({pointerId:7,pointerType:'pen',nativePen:true,clientX:x,clientY:936,
+  pressure:.5,preventDefault(){}});
+s.canvas.onpointerdown(event(670));s.canvas.onpointermove(event(730));s.canvas.onpointerup(event(730));
+assert.equal(s.queue.length,1);assert.equal(s.queue[0].op,'stroke');
+assert.equal(s.queue[0].tool,17);assert.equal(s.queue[0].color,0);assert.equal(s.queue[0].layer,'L');
+assert.ok(events.indexOf('paint')>=0&&events.indexOf('paint')<events.indexOf('send'),events);
+const painted=events.filter(value=>value==='paint').length;
+s.notebookStrokeUpdate(stroke,'Saved');
+assert.equal(s.state.strokes.length,1);assert.equal(s.state.strokes[0].id,'S');
+assert.equal(events.filter(value=>value==='paint').length,painted);
+assert.ok(!events.includes('draw')&&!events.includes('render'),events);
+assert.equal(s.queue.length,0);assert.equal(s.busy,false);
+console.log(JSON.stringify({passed:true,bare_command_does_not_paint:true,pen_paints_before_ack:true}));
+"""
+        result = subprocess.run(['node', '-e', driver, str(assets)], capture_output=True,
+                                text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(json.loads(result.stdout)['passed'])
+
     def test_native_png_roundtrip_transforms_unchanged_ink_and_resources(self):
         book = Notebook.new(); editor = Editor(book)
         editor.apply(dict(op='stroke', points=[[40,50,.5],[90,80,.9]]))
