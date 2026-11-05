@@ -264,7 +264,12 @@ class VLCPlayer(qt.QObject):
         if self.media is not None and self.native.play() == 0:
             self.audio.suppress(preserve_pause or self._pending_seek is not None)
             if self._held_position is not None:
-                self.setPosition(self._held_position)
+                # A starvation hold may already equal the paused native clock.
+                # Seeking to that exact position needlessly invalidates frames
+                # and can miss the asynchronous seek acknowledgement window.
+                if (self._pending_seek is not None
+                        or self.native.get_time() != self._held_position):
+                    self.setPosition(self._held_position)
                 self._held_position = None
             self.set_state(self.PlaybackState.PausedState if preserve_pause else self.PlaybackState.PlayingState)
 
