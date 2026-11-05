@@ -227,7 +227,8 @@ by reMarkable. Native exports reference the tablet’s installed lined backgroun
 ## Image cutouts and protected PDFs
 
 Choose **Capture** as a separate drawing mode. Lasso an area of the page to copy
-its visible background, handwriting and images into the editor clipboard. The
+its visible background, handwriting and images into the editor clipboard. PDF
+and template backgrounds retain their displayed proportions and margins. The
 lasso outline and selection handles are excluded. **Paste** places a separate
 image on the active visible layer; paste again on the same page or switch pages
 and paste there. The clipboard lasts until this editor closes. It is separate
