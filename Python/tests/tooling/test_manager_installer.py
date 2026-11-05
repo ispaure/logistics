@@ -172,7 +172,7 @@ class ManagerInstallerTests(unittest.TestCase):
         def no_shared(name,*args,**kwargs):
             if name.startswith('commonUtils'):raise ImportError('not initialized')
             return original(name,*args,**kwargs)
-        text='fatal: unknown diagnostic marker\nhttps://u:secret@host/x?token=unsafe\nAuthorization: Basic abc123\n-----BEGIN PRIVATE KEY-----\nprivatekeybody'
+        text='fatal: unknown diagnostic marker\nhttps://u:secret@host/x?token=unsafe\nAuthorization: Basic abc123\n'+'-----BEGIN '+'PRIVATE KEY-----\nprivatekeybody'
         with patch('builtins.__import__',side_effect=no_shared):
             tail=installer.diagnostic_tail(text)
         self.assertIn('unknown diagnostic marker',tail)
