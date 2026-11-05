@@ -49,7 +49,7 @@ def expected_metadata(tag, *, notes_dir=None):
     if selected.is_symlink() or not stat.S_ISREG(selected.stat().st_mode) or selected.stat().st_size > 65536:
         raise RuntimeError('Reviewed release notes must be a bounded regular file.')
     try:
-        text = selected.read_bytes().decode('utf-8')
+        text = selected.read_bytes().decode('utf-8').replace('\r\n', '\n').replace('\r', '\n')
     except UnicodeError as error:
         raise RuntimeError('Reviewed release notes require UTF-8 text.') from error
     lines = text.splitlines(keepends=True)
@@ -104,7 +104,7 @@ def publish(repo, tag, archive):
             # Only this owned temporary note is normalized; curated sources stay immutable.
             with TemporaryDirectory(prefix='logistics-release-notes-') as temporary:
                 notes = Path(temporary) / 'reviewed.md'
-                notes.write_text(expected['body'], encoding='utf-8')
+                notes.write_bytes(expected['body'].encode('utf-8'))
                 subprocess.run([*command, '--title', expected['name'], '--notes-file', str(notes)], check=True)
             verify_metadata(read_release(repo, tag), expected)
         return
