@@ -41,6 +41,181 @@ class SpeechOverlayTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_old_source_success_or_error_cannot_publish_into_refreshed_session(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        class Unavailable(Engine):
+            backend, ready, error = 'toga_iOS.widgets.webview', False, 'No installed voice.'
+        async def exercise():
+            for fail in (False, True):
+                release = asyncio.Event()
+                async def source():
+                    await release.wait()
+                    if fail:
+                        raise ValueError('Old source failed')
+                    return SimpleNamespace(text='Old passage', language='en'), 0, None
+                first, refreshed = Unavailable(self.app.loop), Engine(self.app.loop)
+                with patch('features.books.mobile.speech_view.NativeSpeech', return_value=refreshed):
+                    panel = ReadAloudPanel(loop=self.app.loop, source=source, on_range=lambda *a:None,
+                        close=lambda *a:None, engine=first, app=self.app)
+                    old = panel.session
+                    pending = asyncio.create_task(panel.play())
+                    try:
+                        await asyncio.sleep(0)
+                        await panel.ready_task  # Actual iOS refresh replaces generation-zero session.
+                        self.assertIsNot(panel.session, old)
+                        status = panel.status.text
+                        release.set()
+                        await pending
+                        with self.subTest(source_error=fail):
+                            self.assertEqual(refreshed.calls, [])
+                            self.assertEqual(panel.status.text, status)
+                            self.assertEqual(panel.session.state, 'stopped')
+                    finally:
+                        release.set()
+                        await pending
+                        panel.dispose()
+        self.run_async(exercise())
+
+    def test_old_language_worker_cannot_publish_into_refreshed_session(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        from threading import Event
+        class Unavailable(Engine):
+            backend, ready, error = 'toga_iOS.widgets.webview', False, 'No installed voice.'
+        started, release = Event(), Event()
+        def language(*args):
+            started.set()
+            if not release.wait(3):
+                raise TimeoutError('Language fixture not released')
+            return 'en'
+        async def source():
+            return SimpleNamespace(text='Old passage', language='en'), 0, None
+        async def exercise():
+            first, refreshed = Unavailable(self.app.loop), Engine(self.app.loop)
+            with patch('features.books.mobile.speech_view.NativeSpeech', return_value=refreshed), \
+                    patch('features.books.mobile.speech_view.passage_language', side_effect=language):
+                panel = ReadAloudPanel(loop=self.app.loop, source=source, on_range=lambda *a:None,
+                    close=lambda *a:None, engine=first, app=self.app)
+                pending = asyncio.create_task(panel.play())
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                    await panel.ready_task
+                    release.set()
+                    await pending
+                    self.assertEqual(refreshed.calls, [])
+                    self.assertEqual(panel.session.state, 'stopped')
+                finally:
+                    release.set()
+                    await pending
+                    panel.dispose()
+        self.run_async(exercise())
+
+    def test_old_continuation_cannot_restart_refreshed_session(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        from unittest.mock import AsyncMock
+        class Unavailable(Engine):
+            backend, ready, error = 'toga_iOS.widgets.webview', False, 'No installed voice.'
+        async def exercise():
+            release = asyncio.Event()
+            async def next_chapter(panel):
+                await release.wait()
+                return True
+            with patch('features.books.mobile.speech_view.NativeSpeech', return_value=Engine(self.app.loop)):
+                panel = ReadAloudPanel(loop=self.app.loop, source=lambda:None, on_range=lambda *a:None,
+                    close=lambda *a:None, engine=Unavailable(self.app.loop), app=self.app, next_chapter=next_chapter)
+                panel.continue_book = True
+                panel.playback.can_start = lambda:True
+                panel.play = AsyncMock()
+                panel.finished()
+                pending = panel.continuation_task
+                try:
+                    await asyncio.sleep(0)
+                    await panel.ready_task
+                    release.set()
+                    await pending
+                    panel.play.assert_not_awaited()
+                finally:
+                    release.set()
+                    await pending
+                    panel.dispose()
+        self.run_async(exercise())
+
+    def test_ios_empty_voice_discovery_refreshes_and_can_play_saved_voice(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        class Unavailable(Engine):
+            backend, ready, error = 'toga_iOS.widgets.webview', False, 'No installed voice.'
+            voices, default_voice = {}, ''
+        class Voices(Engine):
+            voices = {'Offline': None, 'Saved voice': None}
+        self.app.preferences.save(speech_voice='Saved voice')
+        async def source():
+            return SimpleNamespace(text='A short passage.', language='en'), 0, None
+        async def exercise():
+            first, refreshed = Unavailable(self.app.loop), Voices(self.app.loop)
+            with patch('features.books.mobile.speech_view.NativeSpeech', return_value=refreshed) as factory:
+                panel = ReadAloudPanel(loop=self.app.loop, source=source, on_range=lambda *a: None,
+                    close=lambda *a: None, engine=first, app=self.app)
+                try:
+                    await panel.ready_task
+                    self.assertTrue(first.closed)
+                    self.assertTrue(panel.play_button.enabled)
+                    self.assertEqual(panel.voice, 'Saved voice')
+                    await panel.play()
+                    self.assertEqual(refreshed.calls[-1][1], 'Saved voice')
+                    self.assertEqual(panel.session.state, 'speaking')
+                    panel.hide()
+                    panel.show_over(toga.Box())
+                    factory.assert_called_once()
+                finally:
+                    panel.dispose()
+                self.assertTrue(refreshed.closed)
+        self.run_async(exercise())
+
+    def test_ios_refresh_is_bounded_and_failed_panel_retries_on_reopening(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        class Unavailable(Engine):
+            backend, ready, error = 'toga_iOS.widgets.webview', False, 'No installed voice.'
+            voices, default_voice = {}, ''
+        async def exercise():
+            first, second, recovered = Unavailable(self.app.loop), Unavailable(self.app.loop), Engine(self.app.loop)
+            with patch('features.books.mobile.speech_view.NativeSpeech', side_effect=[second, recovered]) as factory:
+                panel = ReadAloudPanel(loop=self.app.loop, source=lambda: None, on_range=lambda *a: None,
+                    close=lambda *a: None, engine=first, app=self.app)
+                try:
+                    await panel.ready_task
+                    factory.assert_called_once()
+                    self.assertFalse(panel.play_button.enabled)
+                    self.assertIn('No installed voice', panel.status.text)
+                    panel.show_over(toga.Box())
+                    retry = panel.ready_task
+                    panel.hide()
+                    panel.show_over(toga.Box())
+                    self.assertIs(panel.ready_task, retry)
+                    await retry
+                    self.assertTrue(second.closed)
+                    self.assertTrue(panel.play_button.enabled)
+                    self.assertEqual(factory.call_count, 2)
+                finally:
+                    panel.dispose()
+        self.run_async(exercise())
+
+    def test_closing_during_ios_refresh_does_not_create_another_engine(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        class Unavailable(Engine):
+            backend, ready, error = 'toga_iOS.widgets.webview', False, 'No installed voice.'
+        async def exercise():
+            first = Unavailable(self.app.loop)
+            with patch('features.books.mobile.speech_view.NativeSpeech') as factory:
+                panel = ReadAloudPanel(loop=self.app.loop, source=lambda: None, on_range=lambda *a: None,
+                    close=lambda *a: None, engine=first, app=self.app)
+                await asyncio.sleep(0)
+                self.assertIn('Refreshing', panel.status.text)
+                panel.dispose()
+                with self.assertRaises(asyncio.CancelledError):
+                    await panel.ready_task
+                factory.assert_not_called()
+                self.assertTrue(first.closed)
+        self.run_async(exercise())
+
     def test_automatic_voice_follows_each_passage_and_reports_missing_language(self):
         from commonUtils.ui.native.speech import NativeSpeech
         from features.books.mobile.speech_view import ReadAloudPanel

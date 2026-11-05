@@ -17,6 +17,7 @@ class Editor:
         self._selection_ids = []
         self._background = (None, None)
         self._unlocked_pdf = None
+        self._locked_pdf = None  # Encrypted source bytes only; never a password.
         self._pdf_geometry = (None, None)
         self._pdf_links = (None, None, [])
 
@@ -78,8 +79,13 @@ class Editor:
         from io import BytesIO
         from pypdf import PdfReader, PdfWriter
         if self.notebook.content.get('fileType') != 'pdf':
+            self._locked_pdf = None
             return None
         data = self.notebook.members[self.notebook.id + '.pdf']
+        if self._locked_pdf is not None and self._locked_pdf != data:
+            self._locked_pdf = None
+        if password is None and self._locked_pdf is not None:
+            return None
         # Structural recovery re-reads unchanged members into fresh byte objects.
         # Keep the session unlock only for identical encrypted PDF contents.
         if self._unlocked_pdf and self._unlocked_pdf[0] == data:
@@ -88,12 +94,15 @@ class Editor:
         enable_aes()
         reader = PdfReader(BytesIO(data))
         if not reader.is_encrypted:
+            self._locked_pdf = None
             self._unlocked_pdf = (data, data)
             return data
         if not reader.decrypt(password if password is not None else ''):
             if password is not None:
                 raise ValueError('Incorrect PDF password. Try again.')
+            self._locked_pdf = data
             return None
+        self._locked_pdf = None
         writer = PdfWriter(clone_from=reader)
         output = BytesIO()
         writer.write(output)

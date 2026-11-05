@@ -330,6 +330,16 @@ passage bounds and preserve pause state. Stop/disposal clear text and word offse
 
 ## System speech controls and privacy
 
+`ReadAloudPanel.wait_ready` retries failed iOS discovery once with a fresh native
+engine after a short asynchronous delay. It disposes the failed session, restores
+the range callback and playback gate, and applies the saved voice to the replacement.
+An unavailable retained panel retries when reopened; concurrent opens share the
+pending readiness task. Disposal cancels pending refresh. Pending passage reads,
+language detection and chapter continuation retain their exact session identity,
+so work from a retired engine cannot enter its replacement. Host regressions in
+`test_speech_overlay.py` cover recovery through playback, bounded failure/reopening
+and cancellation; these do not certify real iOS voice-service availability.
+
 `mobile/media_controls.py` arbitrates one active speech session per process.
 `media_ios.py` uses a playback/spoken-audio AVAudioSession, public MediaPlayer
 remote commands and Now Playing metadata; the host declares the audio

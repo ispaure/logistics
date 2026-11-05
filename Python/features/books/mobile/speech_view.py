@@ -90,6 +90,8 @@ class ReadAloudPanel(toga.Box):
     def show_over(self, owner, *, anchor=None):
         if not self.closed and self.overlay is None:
             self.overlay = self.presentation.overlay(self, owner, anchor=anchor)
+            if self.ready_task.done() and not self.engine.ready:
+                self.ready_task = self.speech_loop.create_task(self.wait_ready())
 
     def hide(self, widget=None, **kwargs):
         if self.overlay is not None:
@@ -130,10 +132,27 @@ class ReadAloudPanel(toga.Box):
             self.overlay.reposition()
 
     async def wait_ready(self):
-        for _ in range(150):
-            if self.engine.ready or self.engine.error or self.closed:
+        for attempt in range(2):
+            for _ in range(150):
+                if self.engine.ready or self.engine.error or self.closed:
+                    break
+                await asyncio.sleep(.1)
+            if (self.closed or self.engine.ready or attempt
+                    or not getattr(self.engine, 'backend', '').startswith('toga_iOS.')):
                 break
-            await asyncio.sleep(.1)
+            # iOS can return an empty voice list while its speech service warms
+            # up. Refresh here just as Settings does, retiring the failed engine
+            # and its callbacks before publishing a replacement.
+            self.set_status('Refreshing installed voices…')
+            await asyncio.sleep(.25)
+            if self.closed:
+                return
+            on_range, can_speak = self.session.on_range, self.session.can_speak
+            self.session.dispose()
+            self.engine = NativeSpeech(self.speech_loop)
+            self.session = SpeechSession(self.engine, on_range=on_range, on_state=self.state)
+            self.session.on_finished = self.finished
+            self.session.can_speak = can_speak
         if self.closed:
             return
         if self.engine.ready:
@@ -176,15 +195,16 @@ class ReadAloudPanel(toga.Box):
             allowed = self.playback.can_start() if continuation else self.playback.request_start()
             if not allowed:
                 return
-        generation = self.session.generation
+        session = self.session
+        generation = session.generation
         try:
             chapter, start, end = await self.source()
         except Exception:
-            if not self.closed and generation == self.session.generation:
+            if not self.closed and self.session is session and generation == session.generation:
                 self.session.stop()
                 self.set_status('Could not read this passage. Try reopening the document.')
             return
-        if not self.closed and generation == self.session.generation:
+        if not self.closed and self.session is session and generation == session.generation:
             if self.playback is not None and not self.playback.can_start():
                 self.session.stop()
                 self.set_status('Unlock the credential session before reading aloud.')
@@ -192,7 +212,7 @@ class ReadAloudPanel(toga.Box):
             # Detection runs off the UI thread and never stores the passage.
             sample = chapter.text.encode('utf-16-le')[start * 2:None if end is None else end * 2].decode('utf-16-le')
             language = await asyncio.to_thread(passage_language, sample, getattr(chapter, 'language', ''))
-            if self.closed or generation != self.session.generation:
+            if self.closed or self.session is not session or generation != session.generation:
                 return
             if self.playback is not None and not self.playback.can_start():
                 self.session.stop()
@@ -209,26 +229,26 @@ class ReadAloudPanel(toga.Box):
 
     def finished(self):
         if not self.closed and self.continue_book and self.next_chapter is not None:
-            generation = self.session.generation
-            self.continuation_task = self.speech_loop.create_task(self.continue_chapter(generation))
+            session = self.session
+            self.continuation_task = self.speech_loop.create_task(self.continue_chapter(session, session.generation))
 
-    async def continue_chapter(self, generation):
+    async def continue_chapter(self, session, generation):
         try:
-            if (self.closed or self.session.generation != generation
+            if (self.closed or self.session is not session or session.generation != generation
                     or (self.playback is not None and not self.playback.can_start())):
                 return
             if self.timer.duration and self.timer.remaining <= 0:
                 self.set_status('Timer finished · Play to start a new timer.')
                 return
             more = await self.next_chapter(self)
-            if self.closed or self.session.generation != generation:
+            if self.closed or self.session is not session or session.generation != generation:
                 return
             if more:
                 await self.play(continuation=True)
             else:
                 self.set_status('Finished book.')
         except Exception:
-            if not self.closed and self.session.generation == generation:
+            if not self.closed and self.session is session and session.generation == generation:
                 self.set_status('Could not open the next chapter. Try reopening the book.')
 
     def pause(self, widget=None, **kwargs):

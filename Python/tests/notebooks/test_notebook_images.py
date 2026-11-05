@@ -194,6 +194,63 @@ console.log(JSON.stringify({passed:true,bare_command_does_not_paint:true,pen_pai
                     self.assertIsNone(Editor(saved).pdf_data())
                     self.assertEqual(len(saved.page(0).images),1)
 
+    def test_locked_pdf_state_classifies_once_across_repeated_render_queries(self):
+        book = locked_book(); editor = Editor(book)
+        original = book.members[book.id + '.pdf']
+        with patch('pypdf.PdfReader', wraps=PdfReader) as readers, patch.object(editor, 'background', return_value=None):
+            for _ in range(3):
+                self.assertTrue(editor.state()['password_required'])
+                self.assertIsNone(editor.pdf_data())
+                self.assertIsNone(editor.pdf_bounds())
+            # Equal encrypted bytes from structural re-reading retain the negative
+            # classification, just like the existing successful session unlock.
+            book.members[book.id + '.pdf'] = bytes(bytearray(original))
+            self.assertTrue(editor.state()['password_required'])
+            self.assertEqual(readers.call_count, 1)
+        self.assertEqual(book.members[book.id + '.pdf'], original)
+
+    def test_locked_pdf_cache_never_suppresses_explicit_password_retries(self):
+        book = locked_book(); editor = Editor(book)
+        original = book.members[book.id + '.pdf']
+        self.assertIsNone(editor.pdf_data())
+        with patch('pypdf.PdfReader', wraps=PdfReader) as readers:
+            for password in ('wrong-first', 'wrong-second'):
+                with self.assertRaisesRegex(ValueError, 'Incorrect PDF password'):
+                    editor.pdf_data(password)
+                self.assertIsNone(editor.pdf_data())
+            self.assertEqual(readers.call_count, 2)
+            self.assertIsNotNone(editor.pdf_data('secret'))
+        self.assertIsNotNone(editor.pdf_data())
+        self.assertEqual(book.members[book.id + '.pdf'], original)
+        self.assertIsNone(Editor(Notebook.read(book.to_bytes())).pdf_data())
+
+    def test_changed_pdf_bytes_invalidate_locked_classification(self):
+        book = locked_book(password='first'); editor = Editor(book)
+        self.assertIsNone(editor.pdf_data())
+        replacement = locked_book(password='second')
+        book.members[book.id + '.pdf'] = replacement.members[replacement.id + '.pdf']
+        with patch('pypdf.PdfReader', wraps=PdfReader) as readers:
+            self.assertIsNone(editor.pdf_data())
+            self.assertEqual(readers.call_count, 1)
+            with self.assertRaisesRegex(ValueError, 'Incorrect PDF password'):
+                editor.pdf_data('first')
+            self.assertIsNotNone(editor.pdf_data('second'))
+
+    def test_explicit_wrong_password_does_not_poison_empty_password_pdf(self):
+        book = locked_book(password=''); editor = Editor(book)
+        with self.assertRaisesRegex(ValueError, 'Incorrect PDF password'):
+            editor.pdf_data('wrong')
+        self.assertIsNotNone(editor.pdf_data())
+
+    def test_pdf_parser_failure_is_not_cached_as_password_lock(self):
+        editor = Editor(locked_book())
+        with patch('pypdf.PdfReader', side_effect=ValueError('parser unavailable')):
+            with self.assertRaisesRegex(ValueError, 'parser unavailable'):
+                editor.pdf_data()
+        with patch('pypdf.PdfReader', wraps=PdfReader) as readers:
+            self.assertIsNone(editor.pdf_data())
+            self.assertEqual(readers.call_count, 1)
+
     def test_system_aes_matches_nist_vectors(self):
         from features.notebooks.pdf_crypto import aes
         key=bytes.fromhex('2b7e151628aed2a6abf7158809cf4f3c')
