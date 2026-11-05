@@ -4,6 +4,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock, PropertyMock, patch
 from commonUtils.testing.stages import TestStage
 from mobile import reader_top_band as band
+from mobile.document_location import mount_apple_title as refresh_native_title, place_title_in_header as refresh_title_in_header
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -151,6 +152,47 @@ class NativeBandOwnershipTests(unittest.TestCase):
             self.assertIsNone(self.app._reader_toolbar_controller)
             self.assertIsNone(self.controller.navigationItem.titleView)
             self.assertNotIn(13,self.app._reader_toolbar_projections)
+
+    def test_real_independent_title_refresh_preserves_active_native_header_owner(self):
+        import toga
+        from toga.style import Pack
+        self.view._workspace_menu_button=toga.Button('Files',style=Pack(width=52,height=52))
+        self.assertTrue(band.project(self.app,self.view,'documents',self.controller))
+        state=self.view._reader_top_band_state
+        header=state['header'];row=header.children[0]
+        frame=NS(controls=[header],top_controls=1)
+        self.view._reading_frame_owner=frame
+        class NativeTitle:
+            def __init__(self):self.superview=None
+            def removeFromSuperview(self):self.superview=None
+        host=NS(bounds=rect(width=240,height=52))
+        host.addSubview=lambda title:setattr(title,'superview',host)
+        title=NativeTitle()
+        self.view._document_storage_status='Updated storage identity'
+        self.controller.navigationItem.titleView=object()  # Stale UIKit title ownership must clear.
+        with patch.object(row._title_content._impl,'native',host,create=True), \
+                patch('mobile.folder_title.storage_title',return_value=title), \
+                patch('mobile.document_location.place_title_in_header',wraps=refresh_title_in_header):
+            refresh_native_title(self.view,self.controller,'Updated native title')
+        self.assertIs(header.parent,self.view)
+        self.assertIs(self.view._document_title_header,header)
+        self.assertEqual(frame.controls,[header])
+        self.assertEqual(frame.top_controls,1)
+        self.assertIsNone(self.controller.navigationItem.titleView)
+        self.assertIs(title.superview,host)
+        self.assertEqual(row.style.height,52)
+        self.assertIs(self.view._reader_top_band_state,state)
+        self.assertTrue(all(button.parent is row for button in state['buttons']))
+
+    def test_identical_signature_on_new_controller_rebuilds_native_owner(self):
+        self.assertTrue(band.project(self.app,self.view,'documents',self.controller))
+        previous=self.view._reader_top_band_state
+        controller=NS(ptr=NS(value=99),view=self.controller.view,navigationItem=NS(title='Retained notebook',titleView=None))
+        self.assertTrue(band.project(self.app,self.view,'documents',controller))
+        self.assertIsNot(self.view._reader_top_band_state,previous)
+        self.assertIs(self.view._reader_top_band_state['controller'],controller)
+        self.assertIsNone(previous['header'].parent)
+        self.assertEqual(self.mount.call_count,2)
 
     def test_fullscreen_and_actionable_error_keep_existing_native_owner(self):
         self.assertTrue(band.project(self.app,self.view,'documents',self.controller))

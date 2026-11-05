@@ -115,7 +115,7 @@ def project(app, view, destination, controller):
     signature = (tuple(sorted(geometry.items())), tuple(id(button) for button in buttons), title,
                  str(view._document_storage_status), tuple(view._document_storage_kinds), margins)
     state = getattr(view, '_reader_top_band_state', None)
-    if state is not None and state['signature'] == signature:
+    if state is not None and state['controller'] == controller and state['signature'] == signature:
         navigation = app.native_host.adapter.navigation_for(destination)
         if not bool(navigation.isNavigationBarHidden()):
             navigation.setNavigationBarHidden(True, animated=False)
