@@ -204,3 +204,13 @@ class NotebookHostStorageTests(unittest.TestCase):
         self.assertEqual(list(view.children), [canvas])
         self.assertFalse(hasattr(view, '_document_title_header'))
         self.assertFalse(hasattr(view, '_document_location_row'))
+
+    def test_embedded_notebook_preserves_notes_library_navigation_ownership(self):
+        native = type('Native', (), {'__module__': 'toga_iOS.fixture'})()
+        panel = SimpleNamespace(view=SimpleNamespace(_impl=native), closed=False,
+            web=object(), editor=object(), _embedded_notes_library=True)
+        with patch('mobile.control_icons.icon_button') as button, patch('toga.Box'):
+            install_notebook_controls(panel)
+        self.assertFalse(panel.view._notebook_canvas_active())
+        self.assertFalse(hasattr(panel.view, '_native_reader_buttons'))
+        button.assert_not_called()
