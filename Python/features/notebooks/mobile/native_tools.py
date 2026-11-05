@@ -18,6 +18,18 @@ class NativeDrawingTools:
         self.pending = {}
         self.epoch = 0
 
+    def wide_phone(self, controller):
+        from .viewport import tablet_viewport
+        panel = self.panel()
+        if panel is None or panel.web is None or tablet_viewport(panel.web) is not False:
+            return False
+        native = controller.view
+        size = native.bounds.size
+        width = float(native.safeAreaLayoutGuide.layoutFrame.size.width)
+        style = panel.view.style
+        return (size.width > size.height
+                and width - style.margin_left - style.margin_right >= 640)
+
     def fits(self, controller):
         panel = self.panel()
         if panel is None or panel.closed or not getattr(panel, '_canvas_ready', False):
@@ -27,6 +39,7 @@ class NativeDrawingTools:
         width = float(native.safeAreaLayoutGuide.layoutFrame.size.width)
         style = panel.view.style
         return (width - style.margin_left - style.margin_right >= MINIMUM_TITLE_WIDTH + STRIP_WIDTH + 16
+                and not self.wide_phone(controller)
                 and 'Accessibility' not in size
                 and not getattr(panel.view, '_reader_fullscreen', False)
                 and panel.app.presentation.fold_division(panel.web) is None)
@@ -118,7 +131,7 @@ class NativeDrawingTools:
 
     async def refresh(self, action=None):
         panel = self.panel()
-        if not self.current() or panel.busy or panel.native_input_pending:
+        if not self.current():
             for button in self.buttons.values():
                 button.enabled = False
             return
@@ -128,13 +141,17 @@ class NativeDrawingTools:
         if self.epoch != epoch or self.web is not web or self.header is not header or not self.current():
             return
         value = json.loads(raw)
+        if value is None:
+            self.strip._impl.native.hidden = True
+            return
+        self.strip._impl.native.hidden = False
         if set(value) != set(TOOLS) or any(set(row) != {'disabled', 'active'}
                 or any(type(item) is not bool for item in row.values()) for row in value.values()):
             raise ValueError('The notebook drawing controls are not ready.')
         surface = panel.app.presentation.surface
         for name, row in value.items():
             button = self.buttons[name]
-            button.enabled = not row['disabled']
+            button.enabled = not (row['disabled'] or panel.busy or panel.native_input_pending)
             surface(button, background='hover' if row['active'] else 'surface', foreground='text')
 
     def anchor(self, name):
@@ -149,7 +166,9 @@ class NativeDrawingTools:
         epoch = self.epoch
         async with self.lock:
             try:
-                if self.epoch == epoch and self.current():
+                panel = self.panel()
+                if (panel is not None and self.epoch == epoch and self.current()
+                        and not panel.busy and not panel.native_input_pending):
                     await self.refresh(dict(name=name, anchor=self.anchor(name)))
             except Exception:
                 if self.epoch == epoch:

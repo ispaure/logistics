@@ -46,9 +46,12 @@ title, Close, page overview, template/layers, view/input and actions controls;
 Duo places these in its side rail when applicable. When the available width
 fits all five drawing tools, the notebook name and location sit to their left
 in the same row. Narrower windows and accessibility text sizes use a separate
-drawing row. The reader accounts for the available space around system activity. Choose **Notebook actions →
-Hide tools** to leave **Show tools** on the canvas; showing tools again preserves
-your brush, color, width and view. The native iOS Close remains available.
+drawing row. In a wide iPhone landscape window, the name sits at the upper
+left and the drawing row offers brush and ink color choices directly. Swipe
+either choice group horizontally to reach more options. The reader accounts
+for space occupied by system activity. Choose **Notebook actions → Hide tools**
+to leave **Show tools** on the canvas. Hiding and restoring tools keeps the
+paper in place and preserves your brush, color and width. The native iOS Close remains available.
 
 In iPhone Duo laptop posture, the upper screen keeps brushes, stroke widths,
 colors, view/input settings and layers open in a scrollable tool area. The lower

@@ -113,10 +113,19 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert choices == dict(open=True, brushes=properties['tools'], selected_focused=True), choices
     await panel.web.evaluate_javascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
     assert await panel.web.evaluate_javascript("document.getElementById('mobileSheet').hidden")
-    await panel.web.evaluate_javascript("document.querySelector('header button[aria-label=\"Notebook actions\"]').click();document.getElementById('hideTools').click()")
-    assert await panel.web.evaluate_javascript("document.body.classList.contains('tools-hidden') && [...document.querySelectorAll('button')].filter(b=>b.getClientRects().length).length===1")
-    await panel.web.evaluate_javascript("document.getElementById('restoreTools').click()")
-    assert await panel.web.evaluate_javascript("!document.body.classList.contains('tools-hidden')")
+    async def paper_frame():
+        return await panel.web.evaluate_javascript("JSON.stringify($('paper').getBoundingClientRect().toJSON())")
+
+    paper = await paper_frame()
+    for _ in range(3):
+        await panel.web.evaluate_javascript("window.notebookNativeAction('hide-tools')")
+        assert await panel.web.evaluate_javascript("""document.body.classList.contains('tools-hidden') &&
+            [...document.querySelectorAll('button')].filter(b =>
+                b.getClientRects().length && getComputedStyle(b).visibility !== 'hidden').length === 1""")
+        assert await paper_frame() == paper, 'Hiding tools moved the notebook canvas'
+        await panel.web.evaluate_javascript("$('restoreTools').click()")
+        assert await panel.web.evaluate_javascript("!document.body.classList.contains('tools-hidden')")
+        assert await paper_frame() == paper, 'Restoring tools moved the notebook canvas'
     from .notebook_pointer_checks import exercise_pointer_input
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:pointer-input')
     pointer_report = await exercise_pointer_input(panel)
