@@ -517,7 +517,7 @@ renderEraserChoices();
     }
   };
 
-  // Native landscape controls invoke these original DOM handlers and read
+  // Native drawing controls invoke these original DOM handlers and read
   // their real state. A short lease restores the DOM toolbar if the host stalls.
   let nativeToolsLease = null, nativeToolAnchor = null;
   window.notebookNativeTools = action => {

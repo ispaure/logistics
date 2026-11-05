@@ -398,8 +398,15 @@ class ViewerLayoutProbe(LogisticsMobile):
                     tabletop = bool(native.tabletop)
                     gap = bottom - controls[1] - controls[3]
                     errors = [] if tabletop or abs(gap) < 2 else ['Video controls retain an extra bottom gap']
+                    prompt = str(native.navigationItem.prompt or '')
+                    if prompt:
+                        if name not in prompt or not str(native.sourceLabel.text or '') in prompt:
+                            errors.append('Compact video identity omits the filename or source')
+                        if native.videoHeader.superview == native.controls:
+                            errors.append('Compact video identity still occupies the bottom deck')
                     row = dict(viewer='video-' + name, orientation=orientation, pose=pose_snapshot(self),
-                        controls=controls, bottom_gap=gap, tabletop=tabletop, errors=errors)
+                        controls=controls, bottom_gap=gap, tabletop=tabletop,
+                        compact_identity=bool(prompt), errors=errors)
                 else:
                     from java import jarray, jint
                     def field(key):

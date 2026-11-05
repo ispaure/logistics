@@ -41,8 +41,8 @@ def storage_title_height(text):
     return 37 if text else 21
 
 
-def storage_title(title, text, kinds, width):
-    """One centered title/subtitle proportion for folders and open documents."""
+def storage_title(title, text, kinds, width, *, leading=False):
+    """Use the same title and subtitle proportions for folders and documents."""
     from rubicon.objc import ObjCClass, CGRect
     from .appearance import apple_color
     from .hub_icons import icon
@@ -53,7 +53,7 @@ def storage_title(title, text, kinds, width):
     label = apple_title_class().alloc().initWithFrame(CGRect((0, 0), (width, storage_title_height(None))))
     label.text = title
     label.font = ObjCClass('UIFont').systemFontOfSize(title_size)
-    label.textAlignment = 1
+    label.textAlignment = 0 if leading else 1
     label.lineBreakMode = 5
     label.textColor = apple_color('text')
     label.autoresizingMask = 2
@@ -68,8 +68,10 @@ def storage_title(title, text, kinds, width):
     scroll.directionalLockEnabled = True
     row = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (width, 15)))
     row.axis, row.alignment, row.spacing = 0, 1, 4
-    leading, trailing = [ObjCClass('UIView').alloc().init() for _ in range(2)]
-    row.addArrangedSubview(leading)
+    trailing = ObjCClass('UIView').alloc().init()
+    if not leading:
+        gutter = ObjCClass('UIView').alloc().init()
+        row.addArrangedSubview(gutter)
     for name, _ in kinds:
         image = icon(name)._impl.native.imageWithRenderingMode(2)
         indicator = ObjCClass('UIImageView').alloc().initWithImage(image)
@@ -86,7 +88,8 @@ def storage_title(title, text, kinds, width):
     subtitle.accessibilityLabel = text
     row.addArrangedSubview(subtitle)
     row.addArrangedSubview(trailing)
-    leading.widthAnchor.constraintEqualToAnchor(trailing.widthAnchor).active = True
+    if not leading:
+        gutter.widthAnchor.constraintEqualToAnchor(trailing.widthAnchor).active = True
     scroll.accessibilityLabel = text
     scroll.addSubview(row)
     # UIKit can shrink a title view after mounting (notably beside Duo's side

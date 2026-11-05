@@ -301,6 +301,10 @@
             void (*invoke)(id, SEL, id) = (void (*)(id, SEL, id))[self methodForSelector:selector]; invoke(self,selector,sender);
         }]];
     }
+    if (self.navigationItem.prompt.length) {
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Document location…"
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self presentVideoLocation]; }]];
+    }
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Start over" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self seekToMilliseconds:0]; }]];
     if (@available(iOS 17.4, *)) {
         BOOL subtitles = [[self playbackOptions][@"pip_subtitles"] boolValue];
@@ -343,15 +347,24 @@
 }
 - (void)showInFolder:(id)sender { [self emitCommand:@"showInFolder" value:@""]; }
 - (void)favouriteFile:(id)sender { [self emitCommand:@"favourite" value:@""]; }
+- (NSString *)compactVideoIdentity {
+    if (!self.sourceLabel.text.length) return self.videoTitle.text;
+    if (!self.videoTitle.text.length) return self.sourceLabel.text;
+    return [NSString stringWithFormat:@"%@ · %@", self.sourceLabel.text, self.videoTitle.text];
+}
 - (void)updateVideoHeader {
     NSDictionary *options = [self playbackOptions];
     self.videoTitle.text = options[@"video_title"] ?: @"";
     self.sourceLabel.text = options[@"source_label"] ?: @"";
     self.sourceIcon.image = [UIImage systemImageNamed:[options[@"source_remote"] boolValue] ? @"cloud" : @"internaldrive"];
     self.sourceIcon.accessibilityLabel = self.sourceLabel.text;
+    if (self.navigationItem.prompt) self.navigationItem.prompt = [self compactVideoIdentity];
 }
 - (void)showVideoLocation:(UILongPressGestureRecognizer *)gesture {
-    if (gesture.state != UIGestureRecognizerStateBegan || ![self canPlay:NO]) return;
+    if (gesture.state == UIGestureRecognizerStateBegan) [self presentVideoLocation];
+}
+- (void)presentVideoLocation {
+    if (![self canPlay:NO]) return;
     UIAlertController *dialog = [UIAlertController alertControllerWithTitle:@"Document location"
         message:[self playbackOptions][@"video_path"] preferredStyle:UIAlertControllerStyleAlert];
     [dialog lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
@@ -445,10 +458,15 @@
     self.cacheStrip.frame = CGRectMake(left, y, MAX(0, right-left), 4);
     [self.seek sendSubviewToBack:self.cacheStrip];
     [self.cacheStrip setNeedsDisplay];
+    BOOL compact = !self.tabletop && (self.view.safeAreaLayoutGuide.layoutFrame.size.width < 500 ||
+        self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact);
+    // UIKit owns the prompt above the Playback group and adjusts its position
+    // with the system bar. Keep the bottom overlay available to the timeline.
+    NSString *prompt = compact ? [self compactVideoIdentity] : nil;
+    if (![prompt isEqualToString:self.navigationItem.prompt] && (prompt || self.navigationItem.prompt))
+        self.navigationItem.prompt = prompt;
     if (self.portraitTabletop) return;
-    if (self.tabletop || self.view.bounds.size.width < 500 ||
-        self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact) {
-        // On narrow or short phone windows keep the title above playback controls, away from navigation actions.
+    if (self.tabletop) {
         // Keep the upper display for video. Identity belongs with the controls
         // on the lower panel, independent of the hidden navigation rail's inset.
         if (self.videoHeader.superview != self.controls) {
@@ -468,17 +486,8 @@
         self.videoHeader.frame = CGRectMake(0, 0, 320, 48);
     }
     UINavigationBar *bar = self.navigationController.navigationBar;
-    if (bar.bounds.size.width > bar.bounds.size.height && self.view.bounds.size.width < 500) {
-        // UIKit omits titleView entirely beside compact transport groups.
-        // Use their remaining top-row gap without moving the native buttons.
-        if (self.videoHeader.superview != self.view) {
-            self.navigationItem.titleView = nil;
-            [self.view addSubview:self.videoHeader];
-        }
-        CGRect barFrame = [bar convertRect:bar.bounds toView:self.view];
-        CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
-        self.videoHeader.frame = CGRectMake(CGRectGetMinX(safe) + 68,
-            CGRectGetMidY(barFrame) - 24, MAX(44, safe.size.width - 304), 48);
+    if (compact) {
+        if (self.navigationItem.titleView == self.videoHeader) self.navigationItem.titleView = nil;
         return;
     }
     if (self.navigationItem.titleView != self.videoHeader) {
