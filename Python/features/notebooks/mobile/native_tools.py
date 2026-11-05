@@ -22,14 +22,13 @@ class NativeDrawingTools:
         if panel is None or panel.closed or not getattr(panel, '_canvas_ready', False):
             self.close()
             return
-        from mobile.fold_layout import division
         native = controller.view
         safe = native.safeAreaInsets
         width = float(native.bounds.size.width - safe.left - safe.right)
         window = panel.app.main_window._impl.native.bounds.size
         if (window.width <= window.height or width < MINIMUM_WIDTH
                 or getattr(panel.view, '_reader_fullscreen', False)
-                or division(panel.app, panel.web) is not None):
+                or panel.app.presentation.fold_division(panel.web) is not None):
             self.close()
             return
         if self.header is header and self.web is panel.web:
@@ -39,7 +38,7 @@ class NativeDrawingTools:
         from toga.style import Pack
         from toga.style.pack import ROW
         from commonUtils.ui.native.icons import IconRenderer, IconSpec
-        from mobile.appearance import surface
+        surface = panel.app.presentation.surface
         renderer = IconRenderer({name: IconSpec(symbol, fallback, ()) for name, symbol, fallback in (
             ('pen', 'pencil.tip', '✎'), ('erase', 'eraser', '▱'), ('select', 'lasso', '◌'),
             ('undo', 'arrow.uturn.backward', '↶'), ('redo', 'arrow.uturn.forward', '↷'))})
@@ -130,7 +129,7 @@ class NativeDrawingTools:
         if set(value) != set(TOOLS) or any(set(row) != {'disabled', 'active'}
                 or any(type(item) is not bool for item in row.values()) for row in value.values()):
             raise ValueError('The notebook drawing controls are not ready.')
-        from mobile.appearance import surface
+        surface = panel.app.presentation.surface
         for name, row in value.items():
             button = self.buttons[name]
             button.enabled = not row['disabled']

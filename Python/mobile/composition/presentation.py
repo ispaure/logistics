@@ -80,6 +80,7 @@ def mobile_presentation(app):
     from mobile.font_scaling import bind, font_size
     from mobile.document_sources import folder_action
     from mobile.fold_layout import reserved_divisions, division
+    from mobile.reader_top_band import reset_notebook_clearance
     from mobile.layout_participants import participants
     from mobile.favourites import favourite_resource
 
@@ -103,6 +104,7 @@ def mobile_presentation(app):
         folder_actions=lambda session: folder_action(app, session),
         reserved_divisions=reserved_divisions,
         fold_division=lambda widget: division(app, widget),
+        reset_reader_layout=reset_notebook_clearance,
         register_layout=lambda *args, **kwargs: participants(app).register(*args, **kwargs),
         favourite_resource=lambda provider, path, **kwargs: favourite_resource(app, provider, path, **kwargs),
     )

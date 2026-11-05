@@ -83,7 +83,9 @@ class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
                 return True
             failure=asyncio.CancelledError('injected timeout cancellation') if cancelled else AssertionError('injected pixel failure')
             class Workflow:
-                def __init__(self,evaluate,editor,capture,progress=None):self.cases=[]
+                def __init__(self,evaluate,editor,capture,progress=None,diagnostic=None):
+                    self.cases=[]
+                    assert diagnostic is None or callable(diagnostic)
                 async def run(self):
                     if not private or app.notebook_panel.document.resource.provider.private:
                         app.notebook_panel.busy=True

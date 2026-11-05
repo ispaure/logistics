@@ -668,8 +668,9 @@ class NotebookPanel:
         tools = getattr(self, 'native_drawing_tools', None)
         if tools is not None:
             tools.close()
-        from mobile.reader_top_band import reset_notebook_clearance
-        reset_notebook_clearance(self.view)
+        reset_layout = getattr(getattr(self.app, 'presentation', None), 'reset_reader_layout', None)
+        if reset_layout is not None:
+            reset_layout(self.view)
         self._portrait_band_query = None
         self._portrait_css_enabled = False
         self._canvas_ready = False

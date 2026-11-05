@@ -233,7 +233,7 @@ class ManagerSuiteTests(unittest.TestCase):
             with patch('build_manager.test_manifest.resolve_test_group_suites', side_effect=lambda root, group: _resolve_suites(ROOT, group)), patch('logistics_build.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
                 plan = project.make_plan('Reviewed Firebase workflow', 'android', 'This Mac')
             rows = {phase.id: phase for phase in plan.phases}
-            host_gates = ('test-structure', 'commonutils.smoke', 'portable-contracts.smoke',
+            host_gates = ('test-structure', 'source-architecture', 'source-toolchain', 'source-hygiene', 'source-lint', 'mobile-browser-prerequisites', 'commonutils.smoke', 'portable-contracts.smoke',
                           'desktop-ui.smoke', 'mobile-host.smoke',
                           'commonutils', 'portable-contracts', 'desktop-ui', 'mobile-host')
             self.assertEqual(rows['release-acceptance'].dependencies, (*host_gates, 'android-native', 'android-runtime', 'native-prerequisites'))

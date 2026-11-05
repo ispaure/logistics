@@ -157,6 +157,9 @@ class ReaderChrome:
                 self.reader_speech_button,
                 self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
+        previous_footer = getattr(self, 'page_footer', None)
+        if previous_footer is not None:
+            previous_footer.dispose()
         self.page_footer = PageFooter(self.previous_page, self.next_page, self.move_book_page,
                                       status=self.book_status if comic else None, unit='page' if comic else 'chapter',
                                       app=self.app, destination=self.presentation_destination)

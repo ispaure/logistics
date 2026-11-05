@@ -167,7 +167,7 @@ def release_evidence(root, target, native, runtime, require_ipad=False):
     return dict(schema=1, status='passed', source=source, target=target, native_reports=list(map(str, native)), runtime_report=str(runtime))
 
 
-def with_host_gates(plan, desktop_python):
+def with_host_gates(plan, desktop_python, *, release=False):
     """Tester release policy requires host contracts/UI as well as native proof."""
     from build_manager import Phase
     first = plan.phases[0]
@@ -179,6 +179,21 @@ def with_host_gates(plan, desktop_python):
     hosts = manifest_phases(first.cwd, 'mobile-host',
         {'desktop': desktop_python, 'mobile': first.argv[0]},
         ('Python/tests/run_regressions.py', '{directory}', '--isolate-modules'), environment=env)
+    from logistics_build.browser_tooling import require_release_browser
+    if release:
+        hosts = require_release_browser(hosts, first, desktop_python, plan.workspace)
+    # Match CI's actual source checks, not just unit tests of their checkers.
+    # Captured sources are real detached Git clones, so hygiene inspects their
+    # exact committed index rather than another checkout or an empty directory.
+    static = tuple(Phase('source-' + name, (str(desktop_python), 'dev.py', name,
+            *(('--python', str(desktop_python)) if name == 'lint' else ())),
+        first.cwd, timeout=120, environment=dict(first.environment), kind='setup', effect='inspect',
+        dependencies=('test-structure',) if any(p.id == 'test-structure' for p in hosts) else (),
+        label='Check source ' + name, description='Existing dev.py source gate used by hosted validation.')
+        for name in ('architecture', 'toolchain', 'hygiene', 'lint'))
+    hosts = (*(p for p in hosts if p.id == 'test-structure'), *static,
+        *(replace(phase, dependencies=tuple(dict.fromkeys((*phase.dependencies,
+            *(gate.id for gate in static))))) for phase in hosts if phase.id != 'test-structure'))
     dependencies = tuple(phase.id for phase in hosts)
     phases = tuple(replace(phase, dependencies=dependencies) if not phase.dependencies and not phase.always else phase
                    for phase in plan.phases)
