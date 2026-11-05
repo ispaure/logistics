@@ -129,11 +129,22 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             panel.privacy_gate = getattr(resource.provider, 'privacy_gate', None)
             from mobile.protection import for_app
             for_app(app).changed()
+        if not await panel.prewarm_pdf() or app.navigation_generation != generation:
+            panel.dispose()
+            return False
         if imports is not None:
             imports.remember(source_path, 'notebook', document.key)
-    except Exception as error:
+    except asyncio.CancelledError:
+        panel.dispose()
         if resource is not None:
             resource.close()
+        raise
+    except Exception as error:
+        panel.dispose()
+        if resource is not None:
+            resource.close()
+        if app.navigation_generation != generation or not app.active_host:
+            return False
         panel.status.text = str(error)
         app.show_view(panel.view, destination=destination, route='notebook-error', title='Notebook')
         return False
@@ -506,7 +517,8 @@ async def notes_editor(app, library, path):
         def dispose(self):
             self.panel.dispose()
 
-    resource = DocumentResource(library.provider, path, max_bytes=MAX_ARCHIVE)
+    provider = library.provider
+    resource = DocumentResource(provider, path, max_bytes=MAX_ARCHIVE)
     panel = LibraryPanel(app, library=False)
     epoch = library.epoch
     try:
@@ -520,7 +532,11 @@ async def notes_editor(app, library, path):
             panel.privacy_gate = getattr(resource.provider, 'privacy_gate', None)
             from mobile.protection import for_app
             for_app(app).changed()
-        panel.open_resource(document)
+        panel.open_resource(document, mount=False)
+        if (not await panel.prewarm_pdf() or not library.valid() or library.epoch != epoch
+                or library.provider is not provider):
+            raise ValueError('Notes Library closed.')
+        panel.mount_canvas()
         return Embedded(panel)
     except BaseException:
         panel.dispose()

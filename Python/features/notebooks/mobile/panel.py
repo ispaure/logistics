@@ -123,13 +123,14 @@ class NotebookPanel:
         if self.busy or self.closed or not self.app.active_host:
             return False
         self.busy = True
+        generation = self.app.navigation_generation
         try:
             book = await asyncio.to_thread(read)
-            if self.closed or not self.app.active_host:
+            if self.closed or not self.app.active_host or self.app.navigation_generation != generation:
                 return False
             if key is None:
                 key = await asyncio.to_thread(self.repository.create, book)
-            if self.closed or not self.app.active_host:
+            if self.closed or not self.app.active_host or self.app.navigation_generation != generation:
                 return False
             if self.document is not None:
                 if key == self.document.key:
@@ -137,7 +138,14 @@ class NotebookPanel:
                 else:
                     self.document.close()
                     self.document = None
-            self.open(book, key, mount=mount)
+            if self.web is not None:
+                self.retire_canvas()
+                self.busy = True
+            self.open(book, key, mount=False)
+            if not await self.prewarm_pdf() or self.app.navigation_generation != generation:
+                return False
+            if mount:
+                self.mount_canvas()
             return True
         except Exception as error:
             if not self.closed and self.app.active_host:
@@ -174,6 +182,31 @@ class NotebookPanel:
         def read():
             return Notebook.read(read_local_bytes(path, max_bytes=MAX_ARCHIVE))
         return await self.load(read)
+
+    async def prewarm_pdf(self):
+        """Classify/decrypt only core PDF bytes on a worker before native mounting.
+
+        The same editor retains the locked/unlocked result. Never render a PDF,
+        touch a widget or persist a password/decrypted document on this worker.
+        """
+        editor = self.editor
+        document = getattr(self, 'document', None)
+        resource = getattr(document, 'resource', None)
+        if editor is None or self.closed or not self.app.active_host:
+            return False
+        if editor.notebook.content.get('fileType') == 'pdf':
+            await asyncio.to_thread(editor.pdf_data)
+            if (self.closed or not self.app.active_host or self.editor is not editor
+                    or getattr(self, 'document', None) is not document
+                    or getattr(document, 'resource', None) is not resource):
+                return False
+            if resource is not None:
+                # Revalidate retained credentials after the long CPU operation.
+                # check() inspects provider metadata; it never rereads PDF bytes.
+                await asyncio.to_thread(resource.check)
+        return (not self.closed and self.app.active_host and self.editor is editor
+                and getattr(self, 'document', None) is document
+                and getattr(document, 'resource', None) is resource)
 
     def open_resource(self, document, *, mount=True):
         self.document = document
