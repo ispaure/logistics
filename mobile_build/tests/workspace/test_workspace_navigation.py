@@ -367,6 +367,55 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
         self.assertIn('archive is damaged', drawer.status.text)
 
+    def test_main_page_action_projection_has_no_duplicate_heading(self):
+        import toga
+        for destination, show in (('home', self.app.show_home), ('files', self.app.show_locations),
+                                  ('documents', self.app.show_documents_hub)):
+            with self.subTest(destination=destination):
+                show()
+                view = self.app.routes.roots[destination].children[0]
+                self.assertEqual(view._ios_toolbar_title, '')
+                header, buttons = view._destination_actions
+                self.assertFalse(any(isinstance(child, toga.Label) for child in header.children))
+                # Existing commands and destination labels remain available.
+                self.assertTrue(buttons)
+                self.assertEqual(self.app.native_host.labels[self.app.native_host.destinations.index(destination)],
+                                 {'home': 'Home', 'files': 'Workspaces', 'documents': 'Documents'}[destination])
+
+    def test_root_native_titles_clear_without_changing_reader_or_nested_titles(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        original = self.app.native_host.adapter
+        item = SimpleNamespace(title='Root heading')
+        bar = Mock(viewControllers=[object()])
+        bar.isNavigationBarHidden.return_value = True
+        self.app.native_host.adapter = SimpleNamespace(navigation=[bar], navigation_for=lambda destination: bar,
+            content_controller=lambda destination: SimpleNamespace(navigationItem=item))
+        try:
+            for destination in self.app.native_host.destinations:
+                with self.subTest(destination=destination):
+                    screens = self.app.routes.screens[destination]
+                    saved = list(screens)
+                    screens.clear()
+                    try:
+                        item.title = 'Root heading'
+                        self.navigation.sync_destination_bar(destination)
+                        self.assertEqual(item.title, '')
+                        screens.append(('reader-fixture', None, None))
+                        item.title = 'My notebook.rmdoc'
+                        self.navigation.sync_destination_bar(destination)
+                        self.assertEqual(item.title, 'My notebook.rmdoc')
+                        screens.clear()
+                        bar.viewControllers = [object(), object()]
+                        item.title = 'Native More route'
+                        self.navigation.sync_destination_bar(destination)
+                        self.assertEqual(item.title, 'Native More route')
+                        bar.viewControllers = [object()]
+                    finally:
+                        screens[:] = saved
+        finally:
+            self.app.native_host.adapter = original
+
     def test_title_only_roots_hide_the_bar_and_nested_routes_restore_it(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
