@@ -169,6 +169,43 @@ class PencilInputTraceTests(unittest.IsolatedAsyncioTestCase):
             gesture.touchesEnded_withEvent_(SimpleNamespace(count=1),None)
             self.assertEqual(gesture.state,5)
 
+    def test_attach_failure_is_optional_and_unavailable_report_has_no_exception_content(self):
+        with TemporaryDirectory() as folder,patch('builtins.print') as printed:
+            output=Path(folder)/'trace.json'
+            with patch('commonUtils.ui.native.text_size.native_backend',return_value='toga_iOS.widgets.webview'),patch.object(module,'PencilInputTrace',side_effect=RuntimeError('PRIVATE DOCUMENT AND PROVIDER')):
+                self.assertIsNone(module.attach_diagnostics(object(),object(),output))
+            result=json.loads(output.read_text())
+            self.assertFalse(result['available'])
+            self.assertEqual(result['reason'],'native-observer-unavailable')
+            self.assertNotIn('PRIVATE',output.read_text())
+            self.assertNotIn('PRIVATE',str(printed.call_args_list))
+
+    def test_partially_attached_observer_is_removed_and_owned_work_cancelled(self):
+        from unittest.mock import Mock
+        timer,pending=Mock(),Mock()
+        gesture=SimpleNamespace();removed=[];events=[]
+        factory=SimpleNamespace(alloc=lambda:SimpleNamespace(initWithTarget=lambda *a,**kw:gesture))
+        def add(value):
+            events.append('attached')
+            value.trace_owner.timer=timer;value.trace_owner.pending=pending
+            raise RuntimeError('native add failed after attach')
+        native=SimpleNamespace(addGestureRecognizer=add,removeGestureRecognizer=removed.append)
+        web=SimpleNamespace(_impl=SimpleNamespace(native=native))
+        objc=ModuleType('rubicon.objc');objc.ns_from_py=lambda value:value
+        with patch.dict(sys.modules,{'rubicon.objc':objc}),patch.object(module,'_contact_class',return_value=factory):
+            with self.assertRaises(RuntimeError):module.PencilInputTrace(web,object(),None)
+        self.assertEqual(events,['attached']);self.assertEqual(removed,[gesture])
+        self.assertIsNone(gesture.trace_owner)
+        timer.cancel.assert_called_once_with();pending.cancel.assert_called_once_with()
+        self.assertIs(web._impl.native,native)
+
+    def test_unsupported_backend_does_not_construct_observer_or_write_receipt(self):
+        with TemporaryDirectory() as folder:
+            output=Path(folder)/'trace.json'
+            with patch('commonUtils.ui.native.text_size.native_backend',return_value='toga_android.widgets.webview'),patch.object(module,'PencilInputTrace') as constructor:
+                self.assertIsNone(module.attach_diagnostics(object(),object(),output))
+            constructor.assert_not_called();self.assertFalse(output.exists())
+
     def test_dom_privacy_projection_drops_unknown_and_content_fields(self):
         result=module._safe_dom_trace(dict(document='SECRET',counts={'title:private':7,'accepted-down:pen':3},
             recent=[dict(kind='accepted-down',type='pen',queued=999,coordinates=[1,2],title='SECRET',trusted=True)]))
