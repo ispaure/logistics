@@ -24,7 +24,8 @@ class NotebookTemplateExportTests(unittest.IsolatedAsyncioTestCase):
         owner = SimpleNamespace(bridge=Bridge(), web=object(), editor=editor,
                                 document=None, view=SimpleNamespace(children=[]),
                                 confirm_export=AsyncMock(return_value=True),
-                                closed=False, busy=False, app=SimpleNamespace(active_host=True))
+                                closed=False, busy=False, native_transport=False,
+                                app=SimpleNamespace(active_host=True))
         copies = []
         async def save(app, name, open_stream):
             self.assertIs(app, owner.app)
@@ -34,6 +35,7 @@ class NotebookTemplateExportTests(unittest.IsolatedAsyncioTestCase):
             return True
         with patch('commonUtils.ui.native.documents.export_stream', side_effect=save):
             await NotebookPanel.perform(owner, dict(op='export'))
+        owner.confirm_export.assert_awaited_once_with()
         self.assertEqual(len(copies), 1)
         exported = Notebook.read(copies[0])
         self.assertEqual(exported.content['fileType'], 'pdf')
