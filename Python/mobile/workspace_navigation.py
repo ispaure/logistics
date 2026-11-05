@@ -79,6 +79,8 @@ def sync_reader_toolbar(app, view, destination=None):
     projections = getattr(app, '_reader_toolbar_projections', None)
     if projections is None:
         projections = app._reader_toolbar_projections = {}
+    from .reader_top_band import project, release_other
+    release_other(app, view)
     controls = getattr(view, '_native_reader_buttons', None)
     if controls is None:
         # Tabs retain their controllers. Clear reader-owned chrome even when a
@@ -97,6 +99,20 @@ def sync_reader_toolbar(app, view, destination=None):
             if getattr(app, '_reader_title_controller', None) == controller:
                 app._reader_title_controller = None
                 app._reader_title_state = None
+        return
+    if project(app, view, destination, controller):
+        band = view._reader_top_band_state
+        title = getattr(view, '_native_reader_title', '')
+        title = str(title() if callable(title) else title or '').replace('\n', ' ')
+        if str(controller.navigationItem.title or '') != title:
+            controller.navigationItem.title = title
+        projections.pop(key, None)
+        projections.pop((key, 'leading'), None)
+        owned.add(key)
+        app._reader_toolbar_controller = controller
+        app._reader_toolbar_state = band['signature']
+        app._reader_toolbar_prompt = (key, None)
+        app._reader_title_controller = controller
         return
     toolbar = view._native_reader_toolbar
     detach(toolbar)
@@ -189,6 +205,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             # A destination label belongs to its tab/rail, not a second heading.
             # Reader and native Back/More controllers retain their own titles.
             item.title = ''
+        if getattr(view, '_reader_top_band_state', None) is not None:
+            if not bool(navigation.isNavigationBarHidden()):
+                navigation.setNavigationBarHidden(True, animated=False)
+            return
         if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
             if not bool(navigation.isNavigationBarHidden()):
                 navigation.setNavigationBarHidden(True, animated=False)

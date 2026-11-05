@@ -104,7 +104,14 @@ def compact_apple_reader(container):
         return False
     changed = False
     from .ios_toolbar import vertical_edge
-    if reader is not None and vertical_edge(getattr(container, 'controller', None)):
+    if reader is not None and getattr(reader, '_reader_top_band_state', None) is not None:
+        # The native header owns actual system-region clearance inside content.
+        origin = container.native.convertRect(container.native.bounds, toView=window).origin
+        top = max(0, -float(origin.y))
+        if abs(container.top_inset - top) > .5:
+            container.top_inset = top
+            changed = True
+    elif reader is not None and vertical_edge(getattr(container, 'controller', None)):
         # A content title can also be retained beside pane buttons on ordinary
         # iPhones/iPads. Their horizontal native actions still occupy the top
         # safe area; only a vertical bar lets the title reclaim that space.
