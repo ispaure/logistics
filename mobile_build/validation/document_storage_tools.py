@@ -23,7 +23,7 @@ BUNDLE = 'io.github.ispaure.logisticsstorageqa'
 QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
-NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'logistics-native-ui-webview-counts.json', 'notes-discovery.png', 'notes-file-hold.png', 'notes-compact-files.png',
+NATIVE_DIAGNOSTICS = ('pdf-edge-left.png', 'pdf-edge-right.png', 'logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'logistics-native-ui-webview-counts.json', 'notes-discovery.png', 'notes-file-hold.png', 'notes-compact-files.png',
                       'logistics-native-ui-fault.log', 'chat-laptop.png', 'reader-space.png', 'notes-landing.png', 'notes-fullscreen.png', 'notes-reading-portrait.png', 'notes-reading-landscape-left.png', 'notes-links-landscape-left.png', 'notes-links-portrait.png', 'notes-files-landscape-left.png', 'notes-files-portrait.png', 'sync-portrait.png', 'sync-landscape-left.png')
 
 SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
