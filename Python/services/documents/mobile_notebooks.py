@@ -333,10 +333,12 @@ def sync_notebook_chrome(panel):
 def install_notebook_controls(panel):
     """One canvas toolbar; retain a native Close only for a missing canvas."""
     panel.view._notebook_canvas_active = lambda: (
+        not getattr(panel, '_embedded_notes_library', False) and
         not panel.closed and panel.web is not None and panel.editor is not None)
     panel.view._notebook_chrome_changed = lambda: sync_notebook_chrome(panel)
     from commonUtils.ui.native.text_size import native_backend
-    if getattr(panel.view, '_impl', None) is None or not native_backend(panel.view).startswith('toga_iOS.'):
+    if (getattr(panel, '_embedded_notes_library', False) or getattr(panel.view, '_impl', None) is None
+            or not native_backend(panel.view).startswith('toga_iOS.')):
         return
     import toga
     from mobile.control_icons import icon_button
@@ -454,6 +456,8 @@ async def notes_editor(app, library, path):
     from .storage import DocumentResource
 
     class LibraryPanel(NotebookPanel):
+        _embedded_notes_library = True
+
         def state(self):
             state = super().state()
             state.update(native_close=True, notes_library=True, has_source=False, can_delete=False)
