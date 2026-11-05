@@ -148,6 +148,7 @@ async def exercise(app):
     report['notebook_images'] = getattr(app, '_notebook_image_report', None)
     report['navigation'] = locals().get('navigation_proof')
     report['ui_review'] = locals().get('ui_review')
+    report['rotation_failure'] = getattr(app, '_native_rotation_failure', None)
     report['independent_windows_tested'] = app.scene_manager.supported
     report['original_scene_close_tested'] = getattr(app, 'original_scene_close_tested', False)
     report['scene_environment_limit'] = getattr(app, 'scene_environment_limit', '')
