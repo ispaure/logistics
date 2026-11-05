@@ -129,13 +129,15 @@ class ChatUITests(unittest.TestCase):
 
     def test_rotation_header_uses_current_safe_width_instead_of_previous_layout(self):
         app = self.app
-        with patch.object(app.adaptive, 'content_width') as available:
+        app.chat_drawer_open = True
+        with patch.object(app.adaptive, 'content_width') as available, patch.object(app.adaptive, 'width') as window:
             for width in (720, 370, 720, 370):
-                available.return_value = width
+                available.return_value = window.return_value = width
                 app.update_chat_header()
-                menu = 52 if app.chat_menu_button in app.chat_header.children else 0
-                self.assertEqual(app.chat_title.style.width, width - 108 - menu)
-                self.assertEqual(app.chat_model_label.style.width, width - 108 - menu)
+                pane_width = width - (240 + 12 if width >= 640 else 0)
+                self.assertEqual(app.chat_title.style.width, pane_width - 16)
+                self.assertEqual(app.chat_model_label.style.width, pane_width - 16)
+                self.assertIs(app.chat_title.parent.parent, app.chat_transcript_card)
 
     def test_batched_drafts_never_persist_the_session_api_key(self):
         self.app.chat_key.value = 'SESSION-ONLY-API-KEY-SENTINEL'
@@ -298,6 +300,7 @@ class ChatUITests(unittest.TestCase):
             client.assert_not_called()
             show_chat.assert_not_called()
         self.assertIn('Connect & load models', app.chat_config_status.value)
+        self.assertIs(app.chat_config_status_box.parent, app.chat_controller().chat_save_feedback)
 
     def test_conversation_actions_remain_available_during_background_transfers(self):
         app = self.app
@@ -365,7 +368,7 @@ class ChatUITests(unittest.TestCase):
         app = self.app
         self.configure('http://127.0.0.1:1234/v1')
         app.save_chat_configuration()
-        self.assertEqual(app.chat_model_label.text, 'fixture-model')
+        self.assertEqual(app.chat_model_label.text, 'Server · fixture-model')
         app.chat_render_ready = True
         with patch.object(app.chat_transcript, 'evaluate_javascript', new=AsyncMock(return_value=True)) as evaluate:
             app.update_chat_transcript()

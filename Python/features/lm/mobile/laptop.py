@@ -66,8 +66,8 @@ class LaptopChat:
         self.deck = toga.Box(style=Pack(direction=COLUMN))
         self.history = toga.Button('Conversations', on_press=owner.toggle_chat_conversations, style=Pack(flex=1, height=44))
         self.tools = toga.Box(children=[self.history,
-            toga.Button('New chat', on_press=owner.new_chat, style=Pack(flex=1, height=44)),
-            toga.Button('Model & settings', on_press=owner.show_chat_configuration, style=Pack(flex=1, height=44))],
+            owner.presentation.icon_button('compose', 'New conversation', on_press=owner.new_chat),
+            owner.presentation.icon_button('preferences', 'Chat settings', on_press=owner.show_chat_configuration)],
             style=Pack(direction=ROW, margin_bottom=8))
 
     def reflow(self, owner):
@@ -95,6 +95,7 @@ class LaptopChat:
             owner.chat_drawer_open = False
         self.prompt_height = prompt
         owner.chat_workspace.style.direction = COLUMN
+        owner.chat_messages.style.margin_left = 0
         owner.chat_transcript_card.style.flex = 0
         owner.chat_transcript_card.style.height = upper
         self.gap.style.height = gap

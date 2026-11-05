@@ -79,7 +79,7 @@ class ChatKeyboardProbe(LogisticsMobile):
                 assert data['chat_prompt'][3] <= data['visible_bottom'], 'Composer hidden by keyboard'
                 assert data['chat_send'][3] <= data['chat_composer'][3], 'Send escaped composer'
                 assert data['chat_composer'][3] <= data['bar'][1], 'Composer overlaps navigation'
-                assert data['chat_title'][2] <= data['chat_header_actions'][0], 'Title overlaps actions'
+                assert data['chat_title'][1] >= data['chat_header_actions'][3], 'Title overlaps actions'
                 assert data['chat_transcript'][3] <= data['chat_composer'][1], 'Transcript overlaps composer'
                 assert data['chat_prompt'][2] <= data['chat_send'][0], 'Draft overlaps send'
                 manager.hideSoftInputFromWindow(self.chat_prompt._impl.native.getWindowToken(), 0)

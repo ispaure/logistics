@@ -135,7 +135,9 @@ class ToolbarProbe(LogisticsMobile):
             assert self.chat_current is not None
             self.show_chat_configuration()
             sample = await self.record('chat-settings')
-            assert sample['pinned'] == ['Save & return to chat'], sample
+            assert not sample['pinned'], sample
+            chat = self.chat_controller()
+            assert chat.chat_config_save.parent is chat.chat_config_content
             self.show_home()
             from .fixtures import choose_creation_type
             await choose_creation_type(self, 'txt')

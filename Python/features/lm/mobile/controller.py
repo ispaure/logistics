@@ -109,7 +109,6 @@ class ChatController(ChatUI):
         "chat_model_label",
         "chat_models",
         "chat_native_menu",
-        "chat_new",
         "chat_profile",
         "chat_profile_original",
         "chat_prompt",
