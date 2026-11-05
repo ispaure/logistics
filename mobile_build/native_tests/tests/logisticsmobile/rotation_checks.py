@@ -161,6 +161,107 @@ def safe_geometry(app):
     return result
 
 
+def epub_width_snapshot(app):
+    """Content-free native/layout facts; no refresh, script, or style mutation."""
+    result = {}
+    def scalar(value):
+        return value if value is None or isinstance(value, (bool, int, float)) else type(value).__name__
+    def rect(value):
+        return [float(value.origin.x), float(value.origin.y), float(value.size.width), float(value.size.height)]
+    owner = getattr(getattr(app, 'private_sessions', None), 'active', None) or app
+    panel = getattr(owner, 'provider_epub_view', None)
+    widgets = [('root', app.body.children[0]), ('content', getattr(owner, 'crypt_content', None)),
+               ('panel', panel), ('web', getattr(panel, 'webview', None))]
+    result['window_bounds'] = rect(app.main_window._impl.native.bounds)
+    result['toga_window_width'] = float(app.main_window.size.width)
+    for role, widget in widgets:
+        if widget is None:
+            continue
+        try:
+            native = widget._impl.native
+            container = getattr(widget._impl, 'container', None)
+            result[role] = dict(style_width=scalar(widget.style.width),
+                layout={key: scalar(getattr(widget.layout, key, None)) for key in
+                        ('width', 'content_width', 'min_width', 'min_content_width')},
+                native_frame=rect(native.frame), native_bounds=rect(native.bounds),
+                window_rect=rect(native.convertRect(native.bounds, toView=app.main_window._impl.native)),
+                container_width=scalar(getattr(container, 'width', None)),
+                container_bounds=rect(container.native.bounds) if container is not None else None)
+        except Exception as error:
+            result[role] = dict(observer_error=type(error).__name__)
+    result['sidebar_expanded'] = getattr(getattr(panel, 'sidebar', None), 'expanded', None)
+    task = getattr(owner, '_provider_width_task', None)
+    result['watcher'] = dict(present=task is not None,
+        same_panel=getattr(owner, '_provider_width_panel', None) is panel)
+    if task is not None:
+        result['watcher'].update(done=task.done(), cancelled=task.cancelled(),
+            stack=[frame.f_code.co_name for frame in task.get_stack(limit=4)])
+        if task.done() and not task.cancelled():
+            error = task.exception()
+            result['watcher']['error_class'] = type(error).__name__ if error is not None else None
+    return result
+
+
+async def observe_epub_width_failure(app, *, panel, cycle, orientation):
+    """Failure-only observations; never repair or accept the failed layout."""
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    report = dict(panel=panel, cycle=cycle, orientation=orientation, samples=[])
+    try:
+        native = rotation_failure_snapshot(app, panel=panel, cycle=cycle, orientation=orientation)
+    except Exception as error:
+        native = dict(schema=1, panel=panel, cycle=cycle, requested_orientation=orientation,
+                      native_observer_error=type(error).__name__)
+    path = Path(app.paths.cache) / 'logistics-native-ui-rotation-failure.json'
+    def persist():
+        native['reader_width'] = report
+        text = json.dumps(native)
+        if len(text.encode()) > 16384 and len(report['samples']) > 2:
+            report['samples'] = [report['samples'][0], report['samples'][-1]]
+            report['truncated'] = True
+            text = json.dumps(native)
+        if len(text.encode()) > 16384:
+            raise ValueError('Rotation width diagnostics exceeded bounded budget')
+        app._native_rotation_failure = native  # Existing cached result/chunk transport.
+        temporary = path.with_suffix('.tmp')
+        temporary.write_text(text + '\n')
+        temporary.replace(path)
+    def capture(stage):
+        report['samples'].append(dict(stage=stage, elapsed=loop.time()-started,
+                                      **epub_width_snapshot(app)))
+        persist()
+    try:
+        capture('latched-failure')
+        signal = getattr(app, '_reader_layout_signal', None)
+        changed = signal.waiter(initial=False) if signal is not None else None
+        turn = loop.create_future()
+        loop.call_soon(lambda: None if turn.done() else turn.set_result(None))
+        await turn
+        capture('next-loop-turn')
+        while changed is not None and len(report['samples']) < 4:
+            remaining = CONTROL_SETTLE_TIMEOUT - (loop.time()-started)
+            if remaining <= 0:
+                break
+            try:
+                await asyncio.wait_for(changed(), timeout=remaining)
+            except asyncio.TimeoutError:
+                capture('observation-budget-ended')
+                break
+            capture('native-layout-notification')
+    finally:
+        persist()
+        print('LOGISTICS_EPUB_WIDTH_FAILURE=' + json.dumps(native), flush=True)
+
+
+async def capture_epub_width_failure(app, *, panel, cycle, orientation):
+    """Observation failures/cancellation must not replace the latched assertion."""
+    if sys.platform == 'ios' and panel == 'provider-epub':
+        try:
+            await observe_epub_width_failure(app, panel=panel, cycle=cycle, orientation=orientation)
+        except BaseException as error:
+            print('LOGISTICS_EPUB_WIDTH_OBSERVER_ERROR=' + type(error).__name__, flush=True)
+
+
 def promoted_controls(widget):
     """Resolve both retained action lists and dynamic toolbar providers."""
     for field in ('title_actions', '_ios_toolbar_buttons', '_ios_toolbar_leading'):
@@ -240,6 +341,15 @@ async def settled_visible_controls(app):
     """Wait briefly for UIKit's rotation morph, retaining strict final bounds."""
     return await wait_for_assertion(lambda: assert_visible_controls(app),
                                     timeout=CONTROL_SETTLE_TIMEOUT)
+
+
+async def settled_rotation_layout(app):
+    """Controls and content must pass together within one animation budget."""
+    def ready():
+        controls = assert_visible_controls(app)
+        safe_geometry(app)
+        return controls
+    return await wait_for_assertion(ready, timeout=CONTROL_SETTLE_TIMEOUT)
 
 
 async def assert_welcome_actions_reachable(app):
@@ -373,15 +483,23 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
         for cycle in range(cycles):
             for orientation in ('portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait'):
                 await rotate_panel(app, panel=name, orientation=orientation, cycle=cycle)
-                controls = await measure(app, 'rotation-control-settle', settled_visible_controls(app),
-                                         panel=name, orientation=orientation, cycle=cycle)
+                try:
+                    controls = await measure(app, 'rotation-control-settle', settled_rotation_layout(app),
+                                             panel=name, orientation=orientation, cycle=cycle)
+                except AssertionError:
+                    await capture_epub_width_failure(app, panel=name, cycle=cycle, orientation=orientation)
+                    raise
                 if name == 'notes-library':
                     await assert_welcome_actions_reachable(app)
                 actual = panel_state(app)
                 assert actual == expected, (name, orientation, expected, actual)
-                with section(app, 'rotation-geometry', panel=name, orientation=orientation, cycle=cycle):
-                    sample = dict(panel=name, cycle=cycle, orientation=orientation,
-                                  pose=pose_snapshot(app), **safe_geometry(app))
+                try:
+                    with section(app, 'rotation-geometry', panel=name, orientation=orientation, cycle=cycle):
+                        sample = dict(panel=name, cycle=cycle, orientation=orientation,
+                                      pose=pose_snapshot(app), **safe_geometry(app))
+                except AssertionError:
+                    await capture_epub_width_failure(app, panel=name, cycle=cycle, orientation=orientation)
+                    raise
                 sample['fixed_controls'] = controls
                 if sys.platform == 'ios' and name in ('folder', 'nested-folder', 'home-file-picker'):
                     assert sample['fixed_controls'] >= 1, ('No mounted controls audited', name)
