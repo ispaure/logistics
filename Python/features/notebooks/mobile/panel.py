@@ -266,6 +266,10 @@ class NotebookPanel:
         resource = self.document.resource if self.document else None
         self.web = document_webview(resource, on_navigation_starting=self.navigate,
                                     on_webview_load=self.canvas_loaded, style=Pack(flex=1))
+        if native_backend(self.web).startswith('toga_iOS.'):
+            # The host reserves system/header clearance. A second WK inset
+            # moves the canvas and breaks window-to-DOM pen coordinates.
+            self.web._impl.native.scrollView.contentInsetAdjustmentBehavior = 2  # never
         self._fold_subscription = self.app.presentation.register_layout(('notebook-fold', id(self)), self,
             lambda owner, frame: owner.refresh_fold())
         self._fold_signature = ()

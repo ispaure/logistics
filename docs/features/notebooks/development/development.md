@@ -622,6 +622,10 @@ The acknowledgement is tied to the canvas, bridge and geometry epoch. A measured
 row guarantees at least 48 pixels of clearance; Hide tools retains a noninteractive
 spacer so the paper cannot move beneath the status area. Other readers and
 unsupported geometry retain their previous spacing.
+The notebook-owned iOS WebView disables additional automatic scroll insets
+before attachment, matching the host-owned clearance and native pen coordinate
+space. Native acceptance records the adjusted inset and content offset; DOM
+rectangles alone cannot prove the rendered window position.
 
 In sufficiently wide landscape content-title rows, the iOS notebook host mounts
 five native drawing targets alongside the retained title. These invoke the
