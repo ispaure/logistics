@@ -117,6 +117,8 @@ at the end of an overflowing path. `features/notes_library/mobile/breadcrumbs.py
 controls. It defers initial scrolling until native viewport/content measurements
 agree with the current layout; retries are bounded and cancelled for obsolete
 paths or disposal. Once positioned, ordinary user scrolling is left alone.
+Short paths are centered in the strip. A touch that starts inside the strip
+belongs to the strip in either direction, including at its scroll limits.
 Android breadcrumb buttons use the measured typeface and explicit spacing rather
 than native button insets, so their labels remain intact inside the scrollable path.
 Folder breadcrumbs open a landing page when present, otherwise reveal the folder
@@ -124,19 +126,22 @@ in Files. Files retains its separate rule that only landing-page names are
 underlined. Closing or locking the library clears the displayed path.
 
 Apple and Android keep note history, edit/view and Note actions in the content
-row beside breadcrumbs. Read-only libraries omit edit/view. Files and Links remain
-in the title row; Android's native title bar reserves only the actual control
-counts at its logical start/end. The content row follows the document pane, so
+row beside breadcrumbs. Read-only libraries omit edit/view. Close, Files,
+the filename and Links share the title row. Wide Files panes can be collapsed
+with the same Files toggle. Links shows Out and Back tabs with full accessibility
+labels. Resolved rows display the filename with a folder caption for duplicate
+names and keep the complete target for opening and accessibility. The content row follows the document pane, so
 expanding Files does not place note commands over the file list.
-The Apple content title reclaims the navigation strip only when the native bar
-is vertical. Horizontal bars retain their full safe inset so native actions
-cannot cover the title's Files and Links controls.
+On Apple, the content title takes the place of an empty navigation bar when
+it owns Close. Native prompts and actions keep their bar space.
 
 `python -m mobile_build.validation.document_storage_tools ios --probe notes-header` exercises
 native note history and edit/view handlers, live action menus, header hit tests,
 long titles and portrait/landscape rotation. `--family all` includes iPhone,
 iPad and the Duo closed/open/partial postures with the reviewed `--duoctl`
-helper. It uses isolated QA applications and disposable simulators.
+helper. With that helper, the Duo probe also sends native touches in both
+directions across a long breadcrumb and checks that both drawers stay closed.
+It uses isolated QA applications and disposable simulators.
 
 `python -m mobile_build.validation.document_storage_tools android --probe android-header`
 checks Notes and Settings → Help together on a disposable 360-dp phone viewport;

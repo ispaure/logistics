@@ -136,8 +136,8 @@ class DocumentLocationTests(unittest.TestCase):
     def test_library_pane_controls_surround_title_across_bar_orientations(self):
         view = toga.Box()
         view._document_path = lambda: 'Library'
-        left, right = toga.Button('Files'), toga.Button('Links')
-        view._document_title_controls = (left, right)
+        close, left, right = (toga.Button(text) for text in ('Close', 'Files', 'Links'))
+        view._document_title_controls = (close, left, right)
         controller = NS(view=NS(bounds=NS(size=NS(width=466))), navigationItem=NS(titleView=None))
         with patch('mobile.folder_title.storage_title', return_value=object()) as make, \
                 patch('mobile.ios_toolbar.vertical_edge', return_value=2) as edge, \
@@ -148,7 +148,7 @@ class DocumentLocationTests(unittest.TestCase):
                 edge.return_value = orientation
                 mount_apple_title(view, controller, 'A long library name')
                 header = view._document_title_header
-                self.assertEqual(list(header.children), [left, header._title_content, right])
+                self.assertEqual(list(header.children), [close, left, header._title_content, right])
                 self.assertIs(view.children[0], header)
                 self.assertGreaterEqual(header._title_content.style.height, 48)
                 self.assertIs(controller.navigationItem.titleView, header._empty_bar_title)

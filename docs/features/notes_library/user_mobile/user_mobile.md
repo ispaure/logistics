@@ -58,9 +58,9 @@ that folder when it has no page. The filename appears in the title; hold the
 title to see its full location.
 
 On iPhone, iPad and Android, previous/next note, edit/view and Note actions stay
-in the content row below the title, beside the breadcrumb. On Apple platforms,
-Files and Links stay beside the document title, including Duo layouts. In wide
-layouts, note controls follow the document pane when Files is visible alongside it.
+in the content row below the title, beside the breadcrumb. Close, Files and
+Links share the filename row, including in Duo layouts. In wide layouts, note
+controls follow the document pane when Files is visible alongside it.
 
 
 ## Notes Library and Documentation Library
@@ -93,8 +93,9 @@ The first mobile header row contains Close, the left-pane button, the filename,
 and the right-pane button. Note history, edit/view and the actions menu are on a
 second row, hidden during folder browsing. Back and Forward sit on the left;
 edit/view and the actions menu sit on the right. The folder breadcrumb fills the
-space between them. It initially shows the end of the path; swipe horizontally
-to reach and open any earlier folder, including the library root. Single-line wiki headings such as
+space between them. Short paths are centered. Long paths start at the end.
+Swipe either way on the strip to scroll between folders without opening a
+side panel. Single-line wiki headings such as
 `# [[Tech]]` and wiki aliases are editable in formatted mode and keep their syntax.
 Other protected constructs remain available in Source editing.
 
@@ -129,9 +130,10 @@ On narrow screens, **Files** opens over the full-width document. Use the
 upper-left Files button or swipe right across the document to browse; swipe left
 in the drawer or tap outside it to return to reading. Choose a note to close the
 drawer. The upper-right Links button, or a left swipe across the document,
-opens **Backlinks** and **Outgoing links**. Swipe right in that drawer to
-close it. At 864 usable points of library width or more, the library panel stays
-beside the document; Links always opens on demand. Resizing preserves the current
+opens Links. Choose **Out** for outgoing links or **Back** for backlinks.
+Swipe right in that drawer to close it. At 864 usable points of library width
+or more, Files opens beside the document and its toggle collapses the pane.
+Links opens on demand. Resizing preserves the current
 note and the selected panel tab.
 Touches that start inside Markdown tables scroll the table without opening either
 side panel. Selected text and zoomed pages retain their ordinary gestures.
@@ -194,7 +196,8 @@ Opening a Markdown document shows a full-pane **Opening document…** screen wit
 **Cancel**. Cancelling keeps the current document and ignores late loading results.
 
 Connections are scanned locally when opening Links, with progress feedback,
-clickable note paths, unresolved links and word/character counts. Scans are
+clickable filenames and unresolved links. When multiple links have the same
+filename, their folder names distinguish them. Scans are
 cancelled when the panel closes or the library locks. The scan is limited to
 5,000 notes, 10,000 entries and 64 MiB; an exceeded limit shows an error instead
 of incomplete backlinks. No plaintext index is saved. Hidden configuration is

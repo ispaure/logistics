@@ -449,6 +449,31 @@ class WorkspaceNavigationTests(unittest.TestCase):
         finally:
             self.app.native_host.adapter = original
 
+    def test_inline_reader_close_reclaims_empty_native_bar(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        import toga
+
+        header = toga.Box(children=[toga.Button('Close')])
+        view = toga.Box(children=[header])
+        view._reader_close_button = header.children[0]
+        view._document_title_controls = (view._reader_close_button,)
+        view._document_title_header = header
+        item = SimpleNamespace(hidesBackButton=True)
+        bar = Mock(viewControllers=[object(), object()])
+        bar.isNavigationBarHidden.return_value = False
+        adapter = SimpleNamespace(navigation=[bar], navigation_for=lambda destination: bar,
+            content_controller=lambda destination: SimpleNamespace(navigationItem=item))
+        with patch.object(self.app.native_host, 'adapter', adapter), \
+                patch.object(self.app.routes, 'body', return_value=SimpleNamespace(children=[view])):
+            self.navigation.sync_destination_bar('files')
+            bar.setNavigationBarHidden.assert_called_once_with(True, animated=False)
+            bar.isNavigationBarHidden.return_value = True
+            bar.setNavigationBarHidden.reset_mock()
+            item.prompt = 'Save failed'
+            self.navigation.sync_destination_bar('files')
+            bar.setNavigationBarHidden.assert_called_once_with(False, animated=False)
+
     def test_ipad_sidebar_coalesces_native_bar_layout_until_the_route_returns(self):
         from types import SimpleNamespace
         host = self.app.native_host

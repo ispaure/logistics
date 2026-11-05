@@ -303,7 +303,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
             (cache / 'notes-keyboard').touch()
         # duoctl rejects non-Duo models even when passed an explicit UUID.
         drive_notes = (duoctl is not None and family == 'iPhone Duo'
-                       and entry_point.endswith(('.notes_drawers_probe', '.notebook_link_probe', '.notebook_native_pen_probe')))
+                       and entry_point.endswith(('.notes_drawers_probe', '.notes_header_probe', '.notebook_link_probe', '.notebook_native_pen_probe')))
         if drive_notes:
             (cache / 'drive-notes-touches').touch()
             if entry_point.endswith('.notebook_link_probe'):

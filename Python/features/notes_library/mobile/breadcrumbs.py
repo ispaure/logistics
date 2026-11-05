@@ -13,6 +13,9 @@ class BreadcrumbScroll(toga.ScrollContainer):
         self._end_generation = 0
         self._needs_end = False
         super().__init__(*args, **kwargs)
+        if type(self._impl).__module__.startswith('toga_iOS.'):
+            # Keep ownership of horizontal drags even when the path fits.
+            self._impl.native.alwaysBounceHorizontal = True
 
     def cancel_pending_end(self):
         self._end_generation += 1
