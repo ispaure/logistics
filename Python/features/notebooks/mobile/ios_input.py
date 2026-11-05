@@ -148,13 +148,36 @@ class PencilInputTrace:
         self.dirty = False
         self.query = None
         self.last_report = float('-inf')
-        self.gesture = _contact_class().alloc().initWithTarget(None, action=None)
-        self.gesture.trace_owner = self
-        self.gesture.allowedTouchTypes = ns_from_py([2])
-        self.gesture.cancelsTouchesInView = False
-        self.gesture.delaysTouchesBegan = False
-        self.gesture.delaysTouchesEnded = False
-        self.native.addGestureRecognizer(self.gesture)
+        self.gesture = None
+        try:
+            self.gesture = _contact_class().alloc().initWithTarget(None, action=None)
+            self.gesture.trace_owner = self
+            self.gesture.allowedTouchTypes = ns_from_py([2])
+            self.gesture.cancelsTouchesInView = False
+            self.gesture.delaysTouchesBegan = False
+            self.gesture.delaysTouchesEnded = False
+            self.native.addGestureRecognizer(self.gesture)
+        except Exception:
+            # addGestureRecognizer may attach and then fail. Retire only this
+            # observer, including work a synchronous callback may have scheduled.
+            self.closed = True
+            for handle in (self.timer,self.pending):
+                if handle is not None:
+                    try:
+                        handle.cancel()
+                    except Exception:
+                        pass
+            if self.gesture is not None:
+                try:
+                    self.gesture.trace_owner = None
+                except Exception:
+                    pass
+                try:
+                    self.native.removeGestureRecognizer(self.gesture)
+                except Exception:
+                    pass
+            self.timer = self.pending = self.web = self.native = None
+            raise
 
     def record(self, kind, count):
         if self.closed:
@@ -257,10 +280,26 @@ def _consume_trace_result(future):
 
 
 def attach_diagnostics(web, loop, output):
-    from commonUtils.ui.native.text_size import native_backend
-    if not native_backend(web).startswith('toga_iOS.'):
+    try:
+        from commonUtils.ui.native.text_size import native_backend
+        if not native_backend(web).startswith('toga_iOS.'):
+            return None
+        return PencilInputTrace(web,loop,output)
+    except Exception:
+        # Observation is optional. Never block a notebook or serialize an
+        # exception string that could contain document/provider information.
+        unavailable = dict(schema=1,diagnostic_only=True,available=False,
+                           reason='native-observer-unavailable')
+        try:
+            from commonUtils.persistence import atomic_write_json
+            atomic_write_json(output,unavailable)
+        except Exception:
+            pass
+        try:
+            print('LOGISTICS_NOTEBOOK_INPUT_UNAVAILABLE='+json.dumps(unavailable),flush=True)
+        except Exception:
+            pass
         return None
-    return PencilInputTrace(web,loop,output)
 
 
 def _safe_dom_trace(value):
