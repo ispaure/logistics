@@ -19,6 +19,31 @@ from ..protocol import document_state, stroke_script, ink_patch_script, update_s
 from .surface import mobile_editor_html
 
 
+class NotebookResponseTimeout(TimeoutError):
+    """Only a response-only JavaScript wait exceeded its deadline."""
+
+
+def _consume_input_result(future):
+    try:
+        future.result()
+    except BaseException:
+        pass
+
+
+async def _bounded_input_result(awaitable, timeout):
+    # Never cancel Toga's native JavaScript future: a late UIKit completion may
+    # still arrive. Retain only its exception consumer after our bounded wait.
+    query = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait((query,), timeout=max(0, timeout))
+        if not done:
+            raise TimeoutError('Finishing pen input. Try again after the current stroke is saved.')
+        return query.result()
+    finally:
+        if not query.done():
+            query.add_done_callback(_consume_input_result)
+
+
 class NotebookPanel:
     def __init__(self, app, *, library=True):
         self.app = app
@@ -152,11 +177,68 @@ class NotebookPanel:
         state = document_state(self.editor, self.document)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_actions'] = hasattr(self, 'native_actions')
-        state['native_pen'] = self.pen_input is not None
+        state['native_pen'] = self.pen_input is not None and bool(getattr(self.pen_input, 'enabled', True))
+        if self.pen_input is not None and isinstance(getattr(self.pen_input, 'view_id', None), str):
+            state['native_pen_nonce'] = self.pen_input.view_id
         state['frame_batched_ink'] = sys.platform == 'ios'
         from .viewport import tablet_viewport
         state['tablet'] = tablet_viewport(self.web)
         return state
+
+    @property
+    def native_transport(self):
+        return getattr(self.pen_input, 'owns_native_transport', False) is True
+
+    @property
+    def native_input_pending(self):
+        return self.native_transport and bool(self.pen_input.pending)
+
+    async def flush_input(self, *, timeout=4):
+        """Lifecycle barrier only; never called from a busy JS command."""
+        web, canvas = self.web, self.bridge
+        if web is None or not native_backend(web).startswith(('toga_iOS.', 'toga_android.')):
+            return
+        deadline = asyncio.get_running_loop().time() + timeout
+        for _ in range(200):
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise TimeoutError('Finishing pen input. Try again after the current stroke is saved.')
+            if self.closed or self.web is not web or self.bridge is not canvas or not canvas.active:
+                raise ValueError('The notebook canvas is no longer active.')
+            if not self.native_input_pending:
+                try:
+                    idle = await _bounded_input_result(web.evaluate_javascript('window.notebookIdle?.() === true'), remaining)
+                except TimeoutError:
+                    raise
+                except Exception as error:
+                    raise ValueError('Notebook input is unavailable; your draft remains open.') from error
+                if idle is True and not self.native_input_pending and not self.busy:
+                    return
+            await asyncio.sleep(min(.02, remaining))
+        raise TimeoutError('Finishing pen input. Try again after the current stroke is saved.')
+
+    async def save_from_view(self, *, timeout=4):
+        """Host Save enters the JS queue; it never manufactures an action ACK."""
+        await self.flush_input(timeout=timeout)
+        web, canvas = self.web, self.bridge
+        if web is None or self.closed or not canvas.active:
+            raise ValueError('The notebook canvas is unavailable; your draft remains open.')
+        admitted = await _bounded_input_result(web.evaluate_javascript("""(()=>{
+            if(typeof window.notebookIdle!=='function' || !window.notebookIdle() ||
+               typeof window.notebookNativeAction!=='function')return false;
+            window.notebookNativeAction('save');
+            return queue[0]?.op==='save';
+        })()"""), timeout)
+        if admitted is not True:
+            raise ValueError('Finish the current stroke and try Save again. Your draft remains open.')
+        if self.closed or self.web is not web or self.bridge is not canvas or not canvas.active:
+            raise ValueError('The notebook canvas changed during Save; your draft remains open.')
+        # This waits on native/JS idle only. The separately dispatched Save
+        # worker is never cancelled if admission/completion remains unconfirmed.
+        await self.flush_input(timeout=timeout)
+        if self.closed or self.web is not web or self.bridge is not canvas or not canvas.active:
+            raise ValueError('The notebook canvas changed during Save; your draft remains open.')
+        return self.document is not None and not self.document.dirty and not self.native_input_pending and not self.busy
 
     def open(self, book, key, *, mount=True):
         if self.document is not None and self.document.book is not book:
@@ -187,9 +269,6 @@ class NotebookPanel:
                 self.web._impl.native, self.boox_refresh)
         from .ios_input import attach
         self.pencil_hover = attach(self.web)
-        from .ios_input import attach_diagnostics
-        self.pencil_input_trace = attach_diagnostics(self.web,self.app.loop,
-            Path(self.app.private_root)/'notebook-input-diagnostics.json')
         location = getattr(self.view, '_document_location_row', None)
         restore_location = location is not None and location.parent is self.view
         header = getattr(self.view, '_document_title_header', None)
@@ -199,6 +278,18 @@ class NotebookPanel:
         self.view.add(self.web)
         if restore_location:
             self.view.insert(0, location)
+        if native_backend(self.web).startswith('toga_iOS.'):
+            from .ios_native_pen import attach as attach_native_pen
+            self.pen_input = attach_native_pen(self.web, window=self.app.main_window._impl.native,
+                window_owner=self.app.main_window)
+            if self.pen_input is not None:
+                self.pen_input.start_reporting(self.app.loop, Path(self.app.private_root) / 'notebook-input-diagnostics.json')
+            if self.pen_input is None:
+                # The compiled producer never installs a Python contact observer.
+                # Ordinary DOM fallback retains its existing paired diagnostics.
+                from .ios_input import attach_diagnostics
+                self.pencil_input_trace = attach_diagnostics(self.web, self.app.loop,
+                    Path(self.app.private_root) / 'notebook-input-diagnostics.json')
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
             self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables(),
             paper_preview=self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'))
@@ -240,6 +331,31 @@ class NotebookPanel:
             self.app.loop.create_task(self.perform(action, canvas=self.bridge))
         return False
 
+    async def _respond(self, web, script, canvas, *, timeout=4, release_busy=True):
+        """A response-only wait follows completed worker work, never an active write."""
+        if release_busy:
+            self.busy = False
+        try:
+            result = await _bounded_input_result(web.evaluate_javascript(script), timeout)
+        except TimeoutError as error:
+            raise NotebookResponseTimeout(str(error)) from error
+        if canvas is not self.bridge or not canvas.active or self.closed or self.web is not web:
+            raise RetiredCanvas()
+        return result
+
+    def _native_notice(self, message):
+        status = getattr(self, 'status', None)
+        if status is not None:
+            status.text = message
+            self.view._native_reader_status = status
+            render = getattr(getattr(self.app, 'adaptive', None), 'render', None)
+            if render is not None:
+                render()
+
+    def _response_unavailable(self):
+        # Do not retry an ACK: JS may have executed while its completion stalled.
+        self._native_notice('Could not update the notebook display. Your draft is retained; Close can save or discard it.')
+
     async def perform(self, action, *, canvas=None):
         canvas = canvas or self.bridge
         if canvas is not self.bridge or not canvas.active:
@@ -248,18 +364,38 @@ class NotebookPanel:
         error = ''
         web, editor = self.web, self.editor
         previous_ink = list(editor.notebook.page(editor.index).strokes) if action.get('op') == 'erase' else None
+        ack_dispatched = False
+        async def respond(script, *, acknowledges=False, release_busy=True):
+            nonlocal ack_dispatched
+            if acknowledges:
+                ack_dispatched = True
+            return await self._respond(web, script, canvas, release_busy=release_busy)
         try:
             op = validate_action(action)
+            if op in {'save', 'save-as', 'export'} and self.native_transport:
+                pending = self.native_input_pending
+                if not pending:
+                    try:
+                        pending = await canvas.wait(_bounded_input_result(web.evaluate_javascript(
+                            'queue.slice(1).some(action => action.op === "stroke" || action.op === "erase")'), 1))
+                    except Exception:
+                        pending = True
+                if pending is True or self.native_input_pending:
+                    # A non-error ack preserves queued strokes; notebookUpdate's
+                    # error path clears the queue and must not be used here.
+                    self.busy = False
+                    script = update_script(self.state(), '') + ";document.getElementById('status').textContent='Finishing pen input; try again.'"
+                    await respond(script, acknowledges=True)
+                    return
             if op == 'page-previews':
-                import json
                 from ..previews import page_previews
                 previews = await canvas.wait(asyncio.to_thread(page_previews, editor.notebook, action['start']))
-                await canvas.wait(web.evaluate_javascript('window.notebookPagePreviews(' + json.dumps(previews) + ')'))
+                await respond('window.notebookPagePreviews(' + json.dumps(previews) + ')')
             if op == 'library':
                 # Release the JS queue before native guards. Cancel/Keep editing
                 # must leave a usable canvas, and queued ink precedes this action.
                 self.busy = False
-                await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+                await respond(update_script(self.state(), ''), acknowledges=True)
             if op == 'document-location':
                 from services.documents.mobile_notebooks import notebook_location
                 window = self.view.window
@@ -277,7 +413,7 @@ class NotebookPanel:
                 if hasattr(self, 'session'):
                     # Match the other document editors: close with their normal
                     # save/discard guard, then return to the Home overview.
-                    self.busy = False
+                    # The first ACK may already have dispatched a new worker.
                     self.app.__dict__.setdefault('_reader_returns', {})[self.session.id] = ('home', None, False)
                     self.app.request_reader_close(self.session.id)
                 else:
@@ -287,31 +423,31 @@ class NotebookPanel:
                 if not await canvas.wait(self.app.main_window.dialog(toga.ConfirmDialog(
                         'Delete this page?', 'This removes the current page. Undo is available.'))):
                     self.busy = False
-                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+                    await respond(update_script(self.state(), ''), acknowledges=True)
                     return
             if op == 'save':
                 if self.document is not None and self.document.resource is not None:
                     await canvas.wait(asyncio.to_thread(self.document.save))
                 else:
-                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+                    await respond(update_script(self.state(), ''), acknowledges=True)
                     picker = self.app.editor_picker()
                     await canvas.wait(picker.show_notebook_destination(self))
                     if getattr(self.document, 'source_unavailable', False):
                         picker.save_as_status.value = 'The original file is unavailable or changed. Choose a new location to save your retained draft.'
                     return
             elif op == 'save-as':
-                await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+                await respond(update_script(self.state(), ''), acknowledges=True)
                 await canvas.wait(self.app.editor_picker().show_notebook_destination(self))
                 return
             elif op == 'transfer':
                 if not await canvas.wait(self.confirm_export()):
-                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), 'Cancelled.')))
+                    await respond(update_script(self.state(), 'Cancelled.'), acknowledges=True)
                     return
                 self.transfer_panel()
                 return
             elif op == 'export':
                 if not await canvas.wait(self.confirm_export()):
-                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), 'Cancelled.')))
+                    await respond(update_script(self.state(), 'Cancelled.'), acknowledges=True)
                     return
                 from commonUtils.ui.native.documents import export_stream
                 from ..remarkable_export import export_rmdoc
@@ -328,20 +464,31 @@ class NotebookPanel:
                     self.app.adaptive.render()
         except asyncio.CancelledError:
             if (canvas is self.bridge and canvas.active and not self.closed
-                    and self.app.active_host and self.web is web):
+                    and self.app.active_host and self.web is web and not ack_dispatched):
                 try:
+                    self.busy = False
+                    ack_dispatched = True
                     message = ('Deletion interrupted. Retry Delete or use Save As.'
                                if action.get('op') == 'delete-file' else 'Action interrupted. Your notebook remains open.')
-                    await asyncio.shield(web.evaluate_javascript(update_script(self.state(), message)))
+                    await asyncio.shield(_bounded_input_result(web.evaluate_javascript(update_script(self.state(), message)), 4))
                 except (Exception, asyncio.CancelledError):
                     pass
             raise
         except RetiredCanvas:
             return
+        except NotebookResponseTimeout:
+            if canvas is not self.bridge or not canvas.active or self.closed or self.web is not web:
+                return
+            self._response_unavailable()
+            if ack_dispatched:
+                return
+            # Page-preview callbacks do not acknowledge the action queue. Send
+            # its one ordinary final ACK below; never duplicate an earlier ACK.
         except Exception as failure:
             error = str(failure)
         finally:
-            if canvas is self.bridge:
+            # After its ACK, this action no longer owns a later queued worker.
+            if canvas is self.bridge and not ack_dispatched:
                 self.busy = False
         if canvas is not self.bridge or not canvas.active:
             return
@@ -353,10 +500,36 @@ class NotebookPanel:
                     script = stroke_script(editor, self.document)
                 elif action['op'] == 'erase' and not error:
                     script = ink_patch_script(editor, self.document, previous_ink)
+                elif error and action['op'] in {'save', 'save-as', 'export'}:
+                    # These operations do not mutate ink. An error ACK would
+                    # clear strokes queued while their I/O was active.
+                    label = 'Could not export: ' if action['op'] == 'export' else 'Save failed: '
+                    message = label + error
+                    self._native_notice(message)
+                    status_script = 'document.getElementById("status").textContent=' + json.dumps(message)
+                    if ack_dispatched:
+                        # Save As already released its queue before the picker.
+                        # Report the failure without consuming the next stroke
+                        # or changing the busy state of its active worker.
+                        await respond(status_script, release_busy=False)
+                        return
+                    script = update_script(self.state(), '') + ';' + status_script
                 else:
                     script = update_script(self.state(), error)
-                await web.evaluate_javascript(script)
+                await respond(script, acknowledges=True)
+            except RetiredCanvas:
+                return
+            except NotebookResponseTimeout:
+                if (canvas is self.bridge and canvas.active and not self.closed and self.web is web
+                        and not (error and action['op'] in {'save', 'save-as', 'export'})):
+                    self._response_unavailable()
             except Exception as failure:
+                if action['op'] in {'save', 'save-as', 'export'}:
+                    # A failed display response cannot justify dropping ink
+                    # queued during I/O. Keep the native error/Close path live.
+                    if not error and not self.closed and self.web is web:
+                        self._response_unavailable()
+                    return
                 if not self.closed and self.web is web:
                     if self.document is not None and self.document.recovery is None:
                         self.retire_canvas()

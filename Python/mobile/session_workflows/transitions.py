@@ -80,7 +80,7 @@ class SessionTransitions:
             return False
         return host.checkpoint()
 
-    def request_close_session(self, key, *, _markdown_flushed=False):
+    def request_close_session(self, key, *, _markdown_flushed=False, _notebook_flushed=False, _notebook_unflushed=False):
         host = self.host
         library = getattr(host, 'vault_browser', None)
         if (not _markdown_flushed and library is not None and library.session is not None
@@ -129,11 +129,37 @@ class SessionTransitions:
         if book is not None and host.book_edits_dirty(book):
             return host.request_book_close(book)
         notebook = getattr(host, '_notebook_views', {}).get(key)
-        if notebook is not None and notebook.document is not None and notebook.document.dirty:
+        if notebook is not None and not _notebook_flushed and getattr(notebook, 'native_transport', False):
+            if getattr(notebook, '_native_close_task', None) is None:
+                token = host.workspace.token(key)
+                async def flush_notebook_then_close():
+                    try:
+                        await notebook.flush_input()
+                        if host.active_host and host.workspace.accepts(token):
+                            self.request_close_session(key, _notebook_flushed=True)
+                    except (OSError, ValueError, TimeoutError):
+                        if not notebook.closed and host.active_host and host.workspace.accepts(token):
+                            # A stalled WebView must not trap the user before the
+                            # explicit Save/Discard/Cancel decision.
+                            self.request_close_session(key, _notebook_flushed=True, _notebook_unflushed=True)
+                    finally:
+                        notebook._native_close_task = None
+                notebook._native_close_task = host.loop.create_task(flush_notebook_then_close())
+            return True
+        if notebook is not None and notebook.document is not None and (notebook.document.dirty
+                or _notebook_unflushed or getattr(notebook, 'native_input_pending', False)):
             async def save_notebook():
-                await notebook.perform({'op': 'save'})
-                if not notebook.document.dirty:
-                    host.close_session(key)
+                try:
+                    if getattr(notebook, 'native_transport', False):
+                        if not await notebook.save_from_view():
+                            return
+                    else:
+                        await notebook.perform({'op': 'save'})
+                    if not notebook.document.dirty and not getattr(notebook, 'native_input_pending', False):
+                        host.close_session(key)
+                except (OSError, ValueError, TimeoutError) as error:
+                    from services.documents.mobile_notebooks import show_notebook_close_error
+                    show_notebook_close_error(host, notebook, error)
             return host.document_close_dialog(key, notebook.editor.notebook.name,
                 lambda: host.loop.create_task(save_notebook()),
                 lambda: host.close_session(key, choice='discard'))

@@ -181,7 +181,7 @@ def notebook_location(panel):
 
 def close_notebook(app, key, choice, *, leaving_reader=False):
     panel = panels(app).get(key)
-    if panel is not None and panel.busy:
+    if panel is not None and (panel.busy or (choice != 'discard' and getattr(panel, 'native_input_pending', False))):
         return False
     if panel is not None and panel.document is not None and panel.document.dirty:
         if choice == 'save':
@@ -297,7 +297,7 @@ def prepare_notebook_lock(app, *, discard=False):
                if panel.document is not None and panel.document.resource is not None
                and not panel.document.resource.policy.persistent]
     for panel in private:
-        if panel.busy or (panel.document.dirty and not discard):
+        if panel.busy or ((panel.document.dirty or getattr(panel, 'native_input_pending', False)) and not discard):
             present(app, panel)
             return False
     for panel in private:
@@ -316,7 +316,15 @@ def install_notebook_controls(panel):
 
     def action(name):
         async def invoke(widget=None, **kwargs):
-            if panel.closed or not panel.app.active_host or panel.web is None:
+            if panel.closed or not panel.app.active_host:
+                return
+            if name == 'library' and hasattr(panel, 'session'):
+                # Native Close must remain usable when the WebView cannot answer.
+                # The session owner flushes boundedly and presents Save/Discard/Cancel.
+                panel.app.__dict__.setdefault('_reader_returns', {})[panel.session.id] = ('home', None, False)
+                panel.app.request_reader_close(panel.session.id)
+                return
+            if panel.web is None:
                 return
             await panel.web.evaluate_javascript('window.notebookNativeAction?.(' + json.dumps(name) + ')')
         return invoke
@@ -469,11 +477,14 @@ async def notes_editor(app, library, path):
             self.panel, self.view = panel, panel.view
         @property
         def dirty(self):
-            return self.panel.document.dirty
+            return self.panel.document.dirty or self.panel.native_input_pending
         @property
         def busy(self):
             return self.panel.busy
         async def flush(self):
+            if getattr(self.panel, 'native_transport', False):
+                await self.panel.flush_input()
+                return
             from commonUtils.ui.native.text_size import native_backend
             if self.panel.web is not None and native_backend(self.panel.web).startswith(('toga_iOS.', 'toga_android.')):
                 for _ in range(100):
@@ -484,6 +495,8 @@ async def notes_editor(app, library, path):
                     await asyncio.sleep(.02)
                 raise ValueError('Finish the current stroke and try again.')
         async def save(self):
+            if getattr(self.panel, 'native_transport', False):
+                return await self.panel.save_from_view()
             await self.flush()
             await self.panel.perform({'op': 'save'})
             return not self.dirty
