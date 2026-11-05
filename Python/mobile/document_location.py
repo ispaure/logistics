@@ -105,7 +105,7 @@ def place_title_in_header(header, title, subtitle):
     # UIKit may have compressed this view in a previous navigation bar.
     # Reserve its designed height before attaching or reusing it in the reader.
     content = getattr(header, '_title_content', header)
-    height = max(48, storage_title_height(subtitle)) if content is not header else storage_title_height(subtitle)
+    height = max(48, storage_title_height(subtitle), content.style.height or 0) if content is not header else storage_title_height(subtitle)
     if header.style.height != height:
         header.style.height = height
     host = content._impl.native
@@ -177,6 +177,11 @@ def mount_apple_title(view, controller, title):
     if not hasattr(view, '_document_storage_status') and not hasattr(view, '_document_path'):
         controller.navigationItem.titleView = None
         return
+    band = getattr(view, '_reader_top_band_state', None)
+    if band is not None and band['controller'] != controller:
+        from .reader_top_band import restore
+        restore(view)
+        band = None
     from .folder_title import storage_title, storage_title_height
     from .ios_toolbar import vertical_edge
     edge = vertical_edge(controller)
@@ -193,6 +198,25 @@ def mount_apple_title(view, controller, title):
             bind_apple_hold(view, view._document_title_view)
         view._document_title_state = state
     remove_location_row(view)
+    if band is not None:
+        # Title refresh also runs independently of toolbar projection. The
+        # active content owner stays authoritative until project() retires it.
+        header = band['header']
+        row = header.children[0]
+        view._document_title_header = header
+        if controller.navigationItem.titleView is not None:
+            controller.navigationItem.titleView = None
+        frame = getattr(view, '_reading_frame_owner', None)
+        if frame is not None and header not in frame.controls:
+            frame.controls.insert(0, header)
+            frame.top_controls += 1
+        if not getattr(view, '_reader_fullscreen', False):
+            if header.parent is not view:
+                if header.parent is not None:
+                    header.parent.remove(header)
+                view.insert(0, header)
+            place_title_in_header(row, view._document_title_view, state[1])
+        return
     header = getattr(view, '_document_title_header', None)
     was_mounted = side_title_header(view) is not None
     frame = getattr(view, '_reading_frame_owner', None)
