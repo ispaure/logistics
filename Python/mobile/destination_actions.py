@@ -63,7 +63,9 @@ def prepare(app, view, destination):
     view._ios_toolbar_buttons = apple_actions
     view._ios_toolbar_leading = []
     view._ios_toolbar_overflow = False
-    view._ios_toolbar_title = {'home': 'Home', 'files': 'Workspaces', 'documents': 'Documents'}[destination]
+    # Destination tabs/rail already identify these main pages. Keep their
+    # actions without spending title space repeating the selected tab label.
+    view._ios_toolbar_title = ''
     view._ios_toolbar_hidden = [header]
     view.insert(0, header)
     refresh(app, view)

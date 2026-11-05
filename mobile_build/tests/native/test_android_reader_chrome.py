@@ -44,6 +44,15 @@ def widget():
 
 
 class AndroidReaderChromeTests(unittest.TestCase):
+    def test_all_main_destinations_hide_title_only_bar_without_touching_labels(self):
+        for destination in ('home', 'files', 'documents', 'chat', 'settings'):
+            with self.subTest(destination=destination):
+                self.bar.reset_mock()
+                sync(self.app, NS(), destination)
+                self.bar.hide.assert_called_once()
+                self.bar.show.assert_not_called()
+                self.bar.setTitle.assert_not_called()
+
     def test_startup_before_native_adapter_is_installed(self):
         self.app.native_host.adapter = None
         sync(self.app, self.view, 'documents')

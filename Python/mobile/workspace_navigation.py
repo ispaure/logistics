@@ -183,6 +183,12 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         item = adapter.content_controller(destination).navigationItem
         body = self.app.routes.body(destination)
         view = body.children[0] if body is not None and body.children else None
+        nested = (bool(self.app.routes.screens[destination])
+                  or len(list(navigation.viewControllers)) > 1)
+        if not nested and not hasattr(view, '_native_reader_buttons') and getattr(item, 'title', None):
+            # A destination label belongs to its tab/rail, not a second heading.
+            # Reader and native Back/More controllers retain their own titles.
+            item.title = ''
         if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
             if not bool(navigation.isNavigationBarHidden()):
                 navigation.setNavigationBarHidden(True, animated=False)
@@ -193,8 +199,6 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             'leftBarButtonItems', 'rightBarButtonItems', 'leadingItemGroups', 'trailingItemGroups'))
         actions = actions or any(getattr(item, name, None) is not None for name in (
             'pinnedTrailingGroup', 'additionalOverflowItems'))
-        nested = (bool(self.app.routes.screens[destination])
-                  or len(list(navigation.viewControllers)) > 1)
         hidden = not (nested or actions)
         if bool(navigation.isNavigationBarHidden()) != hidden:
             navigation.setNavigationBarHidden(hidden, animated=False)
