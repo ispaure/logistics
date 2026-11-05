@@ -55,6 +55,8 @@ def verify(checkout, project, *, pinned_source=False):
 def archive(checkout, project, kind, *, working_tree=None):
     from build_manager.dependency_sources import archive as source_archive
     from logistics_build.build_retention import scratch
+    from logistics_build.guest_source_readiness import before_transfer
+    before_transfer(project, checkout, working_tree=working_tree)
     with scratch(Path(project)) as workspace:
         return source_archive(checkout, dependency_pin(project), kind, workspace, **({"working_tree": working_tree} if working_tree else {}))
 

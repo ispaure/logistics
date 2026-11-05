@@ -34,7 +34,7 @@ class GuestManagerTests(unittest.TestCase):
         self.addCleanup(capture.stop)
         self.folder = TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
-        self.root = Path(self.folder.name)
+        self.root = Path(self.folder.name).resolve()
         self.manager = self.root/'manager'
         self.shared = self.manager/'Python/commonUtils'
         self.shared.mkdir(parents=True)
@@ -51,7 +51,7 @@ class GuestManagerTests(unittest.TestCase):
         self.command(self.manager, 'update-index', '--add', '--cacheinfo', '160000,'+shared+',Python/commonUtils')
         self.commit(self.manager)
         self.pin = self.command(self.manager, 'rev-parse', 'HEAD')
-        (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(revision=self.pin)))
+        (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(schema=1,adapter_api=1,repository='https://github.com/fixture/manager.git',revision=self.pin)))
 
     def command(self, root, *args):
         return subprocess.check_output(['git','-C',str(root),*args],text=True,stderr=subprocess.PIPE).strip()
@@ -76,9 +76,9 @@ class GuestManagerTests(unittest.TestCase):
         self.assertEqual(list((self.project/'test-results/build-scratch').glob('run-*')),[])
 
     def test_wrong_pin_and_modified_tracked_source_are_rejected(self):
-        (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(revision='0'*40)))
+        (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(schema=1,adapter_api=1,repository='https://github.com/fixture/manager.git',revision='0'*40)))
         with self.assertRaisesRegex(ValueError,'dependency pin'): verify(self.manager,self.project)
-        (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(revision=self.pin)))
+        (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(schema=1,adapter_api=1,repository='https://github.com/fixture/manager.git',revision=self.pin)))
         (self.manager/'public.py').write_text('changed')
         with self.assertRaisesRegex(ValueError,'Commit manager'): verify(self.manager,self.project)
 
@@ -115,7 +115,7 @@ class GuestManagerTests(unittest.TestCase):
         self.command(self.manager, 'add', 'Python/build_manager')
         self.commit(self.manager)
         pin = self.command(self.manager, 'rev-parse', 'HEAD')
-        (self.project / 'build-manager-dependency.json').write_text(json.dumps(dict(revision=pin)))
+        (self.project / 'build-manager-dependency.json').write_text(json.dumps(dict(schema=1,adapter_api=1,repository='https://github.com/fixture/manager.git',revision=pin)))
         environment = self.root / 'environment'
         # Relocatable Linux Python keeps its shared library beside the original
         # executable; copying only that binary breaks the interpreter itself.
@@ -132,7 +132,7 @@ class GuestManagerTests(unittest.TestCase):
         env = dict(os.environ, PYTHONPATH=str(repository))
         result = subprocess.run(command, cwd=self.root, env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        (self.project / 'build-manager-dependency.json').write_text(json.dumps(dict(revision='0' * 40)))
+        (self.project / 'build-manager-dependency.json').write_text(json.dumps(dict(schema=1,adapter_api=1,repository='https://github.com/fixture/manager.git',revision='0' * 40)))
         denied = subprocess.run(command, cwd=self.root, env=env, capture_output=True, text=True)
         self.assertNotEqual(denied.returncode, 0)
         self.assertIn('dependency pin', denied.stderr)
