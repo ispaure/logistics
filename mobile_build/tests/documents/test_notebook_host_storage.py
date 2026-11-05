@@ -164,7 +164,9 @@ class NotebookHostStorageTests(unittest.TestCase):
 
     def test_ios_chrome_exposes_native_shortcuts_and_preserves_canvas_queue(self):
         native = type('Native', (), {'__module__': 'toga_iOS.fixture'})()
-        panel = SimpleNamespace(view=SimpleNamespace(_impl=native), closed=False,
+        class Panel(SimpleNamespace):
+            pass  # Match real notebook owners, which support native-tool weakrefs.
+        panel = Panel(view=SimpleNamespace(_impl=native), closed=False,
             app=SimpleNamespace(active_host=True), web=Mock(evaluate_javascript=AsyncMock()))
         controls = []
         def button(icon, label, **kwargs):

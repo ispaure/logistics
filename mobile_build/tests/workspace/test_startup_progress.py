@@ -23,12 +23,13 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
     async def test_native_running_callback_waits_for_ready_and_receives_app(self):
         running = AsyncMock()
         screen = SimpleNamespace(reveal_workspace=AsyncMock(), view=object(), show_step=Mock(), hide_chrome=Mock(), progress=SimpleNamespace(value=0))
-        app = SimpleNamespace(loop=asyncio.get_running_loop(), on_running=running,
+        app = SimpleNamespace(backend_name='toga_dummy.app', loop=asyncio.get_running_loop(), on_running=running,
             _startup_steps=lambda: iter(STEPS), _startup_in_progress=True, resize_workspace=Mock())
         window = Mock()
         with patch('mobile.startup.StartupScreen', return_value=screen), \
-                patch('mobile.startup.toga.MainWindow', return_value=window):
+                patch('mobile.startup.toga.MainWindow', return_value=window) as constructor:
             begin_startup(app)
+        constructor.assert_called_once_with(title='Logisticks', content=screen.view)
         window.show.assert_called_once_with()
         running.assert_not_called()
         await app.on_running(app)
