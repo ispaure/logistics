@@ -482,14 +482,24 @@ class ReviewDialogTests(QtTestCase):
         dialog.details.setCurrentItem(dialog.details.topLevelItem(0))
         self.assertEqual(dialog.inspector_labels['destination'].text(), 'Local cleanup: /local')
         dialog.filter.setCurrentIndex(0)
+        def search_state():
+            return dict(field=dialog.search.text(), query=dialog.projection.query,
+                filter=dialog.filter.currentData(), rows=dialog.details.topLevelItemCount(),
+                empty=dialog.empty.text(), timers=[dict(active=timer.isActive(),
+                    remaining_ms=timer.remainingTime(), interval_ms=timer.interval())
+                    for timer in dialog.search.findChildren(qt.QTimer)])
         dialog.search.setText('DOCS/NEW')
-        from PySide6.QtTest import QTest
-        QTest.qWait(400)
+        self.wait_until(lambda: dialog.projection.query == 'DOCS/NEW'
+            and dialog.details.topLevelItemCount() == 1
+            and dialog.details.topLevelItem(0).toolTip(1) == 'docs/new.md',
+            message=lambda: str(search_state()))
         self.assertEqual(dialog.details.topLevelItemCount(), 1)
         self.assertEqual(dialog.details.topLevelItem(0).toolTip(1), 'docs/new.md')
         dialog.search.setText('missing')
-        from PySide6.QtTest import QTest
-        QTest.qWait(400)
+        self.wait_until(lambda: dialog.projection.query == 'missing'
+            and dialog.details.topLevelItemCount() == 0
+            and dialog.empty.text() == 'No matching changes.',
+            message=lambda: str(search_state()))
         self.assertEqual(dialog.empty.text(), 'No matching changes.')
         dialog.reject()
         dialog.deleteLater()
