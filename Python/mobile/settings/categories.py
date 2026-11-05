@@ -188,9 +188,7 @@ class SettingsCategories:
         from ..magnifier import setting
         comics, pdf = (enabled(app.preferences, feature) for feature in ('comics', 'pdf'))
         reader = 'Comic & PDF' if comics and pdf else 'Comic' if comics else 'PDF'
-        box.add(toga.Label(reader + ' magnifier zoom'))
-        app.magnifier_choice = setting(app)
-        box.add(app.magnifier_choice)
+        box.add(setting(app, reader + ' magnifier zoom'))
         box.add(SettingsLabel('While holding the magnifier, tap − or + to change its zoom.'))
         return box
 

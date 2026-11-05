@@ -5,6 +5,7 @@ from pathlib import Path
 
 from commonUtils.formats.iniType import INIFile
 from commonUtils.persistence import atomic_write_bytes
+from .magnifier import LEVELS, RANGE_ERROR
 
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
 
@@ -110,8 +111,8 @@ class Preferences:
             raise ValueError('Invalid reader appearance preference.')
         validate_reading(values)
         validate_camera(values)
-        if values['magnifier_zoom'] not in {str(value) for value in range(150, 251, 20)}:
-            raise ValueError('Choose magnifier zoom from 150–250%, in 20% steps.')
+        if values['magnifier_zoom'] not in {str(value) for value in LEVELS}:
+            raise ValueError(RANGE_ERROR)
         for key in ('epub_volume_pages', 'comic_volume_pages'):
             if values[key] not in {'true', 'false'}:
                 raise ValueError('Invalid volume-button page preference.')

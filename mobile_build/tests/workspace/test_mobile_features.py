@@ -113,7 +113,7 @@ class MobileFeatureTests(unittest.TestCase):
         self.assertFalse(nav.detail_requested)
         self.assertFalse(app.routes.screens['settings'])
         nav.choose('Books & Comics')
-        self.assertEqual(app.magnifier_choice.value, '230%')
+        self.assertEqual(app.magnifier_choice.value, 230)
         app.set_feature_enabled('pdf', False)
         self.run_async(asyncio.sleep(0))
         self.assertNotIn('Books & Comics', app.settings_navigation.buttons)
@@ -123,7 +123,7 @@ class MobileFeatureTests(unittest.TestCase):
         nav.choose('EPUB')
         self.assertEqual(app.epub_font_size_choice.value, '24')
         nav.choose('Books & Comics')
-        self.assertEqual(app.magnifier_choice.value, '230%')
+        self.assertEqual(app.magnifier_choice.value, 230)
 
     def test_legacy_partial_book_selection_can_enable_the_entire_group(self):
         self.app.preferences.save(disabled_features='["comics"]')
