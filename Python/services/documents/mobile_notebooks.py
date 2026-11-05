@@ -349,6 +349,9 @@ def install_notebook_controls(panel):
     buttons.append(more)
     panel.view._native_reader_toolbar = toga.Box(children=buttons)
     panel.view._native_reader_buttons = lambda: buttons
+    from features.notebooks.mobile.native_tools import NativeDrawingTools
+    panel.native_drawing_tools = NativeDrawingTools(panel)
+    panel.view._native_drawing_tools = panel.native_drawing_tools
 
 
 async def show_notebook_in_folder(panel):

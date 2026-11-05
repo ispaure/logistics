@@ -65,6 +65,7 @@ class NotebookPanel:
         self.busy = False
         self.closed = False
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        self.view._notebook_dom_toolbar_contract = (48, 256)
         from services.documents.mobile_notebooks import install_notebook_controls
         install_notebook_controls(self)
         self._release_protection = app.protection.register(self, self.privacy_gates)
@@ -180,6 +181,8 @@ class NotebookPanel:
 
     def state(self):
         state = document_state(self.editor, self.document)
+        band = getattr(self.view, '_reader_top_band_state', None)
+        state['native_top_band'] = bool(band is not None and band.get('notebook_candidate') is not None)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_actions'] = hasattr(self, 'native_actions')
         state['native_pen'] = self.pen_input is not None and bool(getattr(self.pen_input, 'enabled', True))
@@ -304,14 +307,44 @@ class NotebookPanel:
             return
         self._canvas_ready = True
         self._fold_signature = ()
+        if getattr(self, 'native_drawing_tools', None) is not None:
+            self.app.adaptive.render()
         self.refresh_fold()
 
     def refresh_fold(self):
         if self.web is None or not getattr(self, '_canvas_ready', False) or getattr(self, '_fold_pending', None) is not None:
             return
         web = self.web
+        bridge = self.bridge
         async def update():
             try:
+                band = getattr(self.view, '_reader_top_band_state', None)
+                candidate = band.get('notebook_candidate') if band is not None else None
+                ready = getattr(self.view, '_notebook_dom_ready', None)
+                needs_update = candidate != ready or (candidate is None and getattr(self, '_portrait_css_enabled', False))
+                query = getattr(self, '_portrait_band_query', None)
+                if needs_update and (query is None or query.done()):
+                    query = self._portrait_band_query = asyncio.ensure_future(web.evaluate_javascript(
+                        'window.notebookPortraitBand?.(' + json.dumps(candidate is not None) + ')'))
+                    try:
+                        enabled = _input_true(await _bounded_input_result(query, 1))
+                    except Exception:
+                        enabled = False
+                    if self.web is not web or self.bridge is not bridge or self.closed:
+                        return
+                    current = getattr(self.view, '_reader_top_band_state', None)
+                    current_candidate = current.get('notebook_candidate') if current is not None else None
+                    if current_candidate == candidate and (candidate is None or candidate[0] == getattr(self.view, '_notebook_dom_epoch', 0)):
+                        self._portrait_css_enabled = enabled
+                        acknowledged = candidate if enabled else None
+                        if ready != acknowledged:
+                            self.view._notebook_dom_ready = acknowledged
+                            self.app.adaptive.render()
+                    else:
+                        # Retirement/rotation invalidates this acknowledgement,
+                        # even if the same numeric geometry later reappears.
+                        self.app.adaptive.render()
+                        self.app.loop.call_soon(self.refresh_fold)
                 region = self.app.presentation.fold_division(web)
                 geometry = None
                 if region is not None and not region.vertical:
@@ -595,6 +628,13 @@ class NotebookPanel:
         self.view.add(toga.ScrollContainer(content=box, horizontal=False, style=Pack(flex=1)))
 
     def retire_canvas(self):
+        tools = getattr(self, 'native_drawing_tools', None)
+        if tools is not None:
+            tools.close()
+        from mobile.reader_top_band import reset_notebook_clearance
+        reset_notebook_clearance(self.view)
+        self._portrait_band_query = None
+        self._portrait_css_enabled = False
         self._canvas_ready = False
         subscription = getattr(self, '_fold_subscription', None)
         if subscription is not None:

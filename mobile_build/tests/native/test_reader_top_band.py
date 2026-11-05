@@ -34,7 +34,6 @@ class BandGeometryTests(unittest.TestCase):
 
 class NativeBandContentInsetsTests(unittest.TestCase):
     def test_native_header_reserves_clock_inside_content_without_negative_window_origin(self):
-        import sys
         from mobile.reader_edges import compact_apple_reader
         for origin_y, expected in ((0,0),(-20,20)):
             with self.subTest(origin_y=origin_y):
@@ -101,6 +100,15 @@ class NativeBandOwnershipTests(unittest.TestCase):
         self.assertTrue(band.project(self.app,self.view,'documents',self.controller))
         self.assertIs(self.view._reader_top_band_state,state)
         self.mount.assert_called_once()
+
+    def test_epub_contents_stays_next_to_close_before_title(self):
+        import toga
+        from toga.style import Pack
+        menu = toga.Button('Contents', on_press=Mock(), style=Pack(width=52, height=52))
+        self.view._workspace_menu_button = menu
+        self.assertTrue(band.project(self.app, self.view, 'documents', self.controller))
+        row = self.view._reader_top_band_state['header'].children[0]
+        self.assertEqual(list(row.children), [self.buttons[0], menu, row._title_content, *self.buttons[1:]])
 
     def test_vertical_rotation_and_new_route_restore_owned_header_and_controls(self):
         import toga
@@ -202,3 +210,45 @@ class NativeBandOwnershipTests(unittest.TestCase):
         self.view._native_reader_status=NS(text='Save failed: retained error')
         self.assertFalse(band.project(self.app,self.view,'documents',self.controller))
         self.assertIsNone(self.view._reader_top_band_state)
+
+
+class NotebookClearanceTests(unittest.TestCase):
+    def test_verified_column_and_all_state_clearance(self):
+        regions=((535,0,134,82),)
+        geometry=band.free_top_band(regions,669,82,316)
+        value=band.notebook_geometry(geometry,regions,(48,256))
+        self.assertEqual(value['reserve'],60)
+        self.assertGreaterEqual(value['reserve']+value['content_clearance'],geometry['reserve'])
+        detached=regions+((535,100,134,30),)
+        full=band.free_top_band(detached,669,82,316)
+        self.assertEqual(band.notebook_geometry(full,detached,(48,256))['reserve'],90)
+
+    def test_ambiguous_width_offset_margins_and_detached_center_decline(self):
+        regions=((316,0,134,82),)
+        geometry=band.free_top_band(regions,450,82,316)
+        self.assertIsNone(band.notebook_geometry(geometry,regions,(48,256)))
+        regions=((535,0,134,82),)
+        geometry=band.free_top_band(regions,669,82,316)
+        for kwargs in ({'contract':None},{'origin_x':2},{'margins':(1,0,0)}):
+            args=dict(contract=(48,256));args.update(kwargs)
+            self.assertIsNone(band.notebook_geometry(geometry,regions,**args))
+        self.assertIsNone(band.notebook_geometry(geometry,regions+((300,100,40,30),),(48,256)))
+
+
+class NotebookNativeProjectionTests(NativeBandOwnershipTests):
+    def test_compacts_only_after_current_canvas_readiness_and_retirement_invalidates(self):
+        self.view._notebook_dom_toolbar_contract=(48,256)
+        band.project(self.app,self.view,'documents',self.controller)
+        first=self.view._reader_top_band_state
+        token=first['notebook_candidate']
+        self.assertIsNotNone(token)
+        self.assertEqual(first['header'].style.height,90)
+        self.view._notebook_dom_ready=token
+        band.project(self.app,self.view,'documents',self.controller)
+        self.assertEqual(self.view._reader_top_band_state['header'].style.height,60)
+        self.assertEqual(self.view._reader_top_band_state['buttons'],self.buttons)
+        band.restore(self.view)
+        self.assertIsNone(self.view._notebook_dom_ready)
+        band.project(self.app,self.view,'documents',self.controller)
+        self.assertEqual(self.view._reader_top_band_state['header'].style.height,90)
+        self.assertNotEqual(token,self.view._reader_top_band_state['notebook_candidate'])

@@ -185,6 +185,9 @@ def mount_apple_title(view, controller, title):
     from .folder_title import storage_title, storage_title_height
     from .ios_toolbar import vertical_edge
     edge = vertical_edge(controller)
+    tools = getattr(view, '_native_drawing_tools', None)
+    if tools is not None and not edge:
+        tools.close()
     bounds = controller.view.bounds.size
     available = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
     controls = getattr(view, '_document_title_controls', ())
@@ -245,6 +248,8 @@ def mount_apple_title(view, controller, title):
         if not getattr(view, '_reader_fullscreen', False):
             if not was_mounted:
                 getattr(view, '_document_title_parent', view).insert(0, header)
+            if tools is not None and not controls:
+                tools.mount(header, controller)
             place_title_in_header(header, view._document_title_view, state[1])
         elif was_mounted:
             header.parent.remove(header)
