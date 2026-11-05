@@ -746,8 +746,13 @@ class HubDocumentTests(unittest.TestCase):
         app.loop.run_until_complete(recent.children[0].children[0].on_press())
         self.assertIs(app.editor_view, owner)
         self.assertEqual(app.editor.value, '# Current draft\nStill unsaved')
+        responses = app.main_window._impl.dialog_responses
+        responses['QuestionDialog'] = ['cancel']
         app.session_closer(owner.session.id)()
+        app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(responses['QuestionDialog'], [], 'Expected unsaved-draft prompt was not presented')
         self.assertIn(owner.session.id, app.workspace.sessions)
+        self.assertEqual(app.editor.value, '# Current draft\nStill unsaved')
         app.preferences.save(document_card_overview='true')
         self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
 

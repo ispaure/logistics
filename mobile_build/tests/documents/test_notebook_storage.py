@@ -4,6 +4,7 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -183,7 +184,11 @@ class NotebookStorageTests(unittest.TestCase):
         self.stroke(panel)
         document = panel.document
         with patch.object(document.recovery, 'save', side_effect=OSError('disk busy')):
+            responses = self.app.main_window._impl.dialog_responses
+            responses['ErrorDialog'] = [None]
             self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+            self.run_async(asyncio.sleep(0))
+            self.assertEqual(responses['ErrorDialog'], [], 'Expected close error was not presented')
         self.assertIn(panel.session.id, self.app.workspace.sessions)
         self.assertTrue(document.dirty)
         self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)
@@ -211,7 +216,11 @@ class NotebookStorageTests(unittest.TestCase):
         other = document.recovery.open(document.key)
         Editor(other, lambda book: document.recovery.save(document.key, book)).apply(
             dict(op='rename', name='Other window draft'))
+        responses = self.app.main_window._impl.dialog_responses
+        responses['ErrorDialog'] = [None]
         self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+        self.run_async(asyncio.sleep(0))
+        self.assertEqual(responses['ErrorDialog'], [], 'Expected close error was not presented')
         self.assertIn('another window', panel.status.text)
         self.assertEqual(document.recovery.open(document.key).name, 'Other window draft')
         self.assertTrue(document.dirty)
@@ -221,7 +230,11 @@ class NotebookStorageTests(unittest.TestCase):
         self.stroke(panel)
         document = panel.document
         with patch.object(document, 'changed', side_effect=OSError('binding busy')):
+            responses = self.app.main_window._impl.dialog_responses
+            responses['ErrorDialog'] = [None]
             self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+            self.run_async(asyncio.sleep(0))
+            self.assertEqual(responses['ErrorDialog'], [], 'Expected close error was not presented')
         self.assertTrue(document.dirty)
         self.stroke(panel)
         self.assertEqual(len(document.recovery.open(document.key).page(0).strokes), 2)
@@ -431,7 +444,6 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertNotIn(replacement, panel.view.children)
 
     def test_explicit_orphan_discard_removes_only_observed_draft_and_references(self):
-        from services.documents.mobile_storage import notebook_binding
         from mobile.resource_imports import ResourceImports
         panel = self.create(private=False)
         self.stroke(panel)
