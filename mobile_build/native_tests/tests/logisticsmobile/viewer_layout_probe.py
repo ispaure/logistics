@@ -399,8 +399,11 @@ class ViewerLayoutProbe(LogisticsMobile):
                     gap = bottom - controls[1] - controls[3]
                     errors = [] if tabletop or abs(gap) < 2 else ['Video controls retain an extra bottom gap']
                     prompt = str(native.navigationItem.prompt or '')
-                    if prompt:
-                        if name not in prompt or not str(native.sourceLabel.text or '') in prompt:
+                    compact = not tabletop and (view.safeAreaLayoutGuide.layoutFrame.size.width < 500
+                        or int(native.traitCollection.verticalSizeClass) == 1)
+                    if compact:
+                        source = str(native.sourceLabel.text or '')
+                        if name not in prompt or (source and source not in prompt):
                             errors.append('Compact video identity omits the filename or source')
                         if native.videoHeader.superview == native.controls:
                             errors.append('Compact video identity still occupies the bottom deck')
