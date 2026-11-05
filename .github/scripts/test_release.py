@@ -315,6 +315,20 @@ class PublishTests(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(RuntimeError):
                 publishing.expected_metadata('v0.2.0-alpha.6', notes_dir=directory)
 
+    def test_reviewed_line_endings_have_one_canonical_body(self):
+        directory = Path(self.temp.name)
+        source = directory / 'v0.2.0-alpha.5.md'
+        canonical = '# Reviewed title\n\nUsers’ JSON is data.\nReviewed execution conditions remain intact.\n'
+        for ending in ('\n', '\r\n', '\r'):
+            raw = canonical.replace('\n', ending).encode('utf-8')
+            source.write_bytes(raw)
+            with self.subTest(ending=repr(ending)):
+                exact = publishing.expected_metadata('v0.2.0-alpha.5', notes_dir=directory)
+                later = publishing.expected_metadata('v0.2.0-alpha.6', notes_dir=directory)
+                self.assertEqual(exact, dict(name='Reviewed title', body=canonical))
+                self.assertEqual(later['body'], canonical.replace('Reviewed title', 'Logistics 0.2.0-alpha.6', 1))
+                self.assertEqual(source.read_bytes(), raw)
+
     def test_creation_reads_normalized_reviewed_file_and_verifies_remote_body(self):
         directory = Path(self.temp.name)
         original = '# Previous title\n\nReviewed JSON disclosure.\n'
@@ -324,12 +338,13 @@ class PublishTests(unittest.TestCase):
         def gh(args, **options):
             if args[:3] == ['gh', 'release', 'create']:
                 path = Path(args[args.index('--notes-file') + 1])
-                observed.append((path, path.read_text()))
+                observed.append((path, path.read_bytes()))
                 return None
             return self.response(**expected) if observed else self.response(404)
         with patch.object(publishing, 'NOTES_DIR', directory), patch('publish_release.subprocess.run', side_effect=gh):
             publishing.publish('owner/repo', 'v0.2.0-alpha.6', self.archive)
-        self.assertEqual(observed[0][1], expected['body'])
+        self.assertEqual(observed[0][1], expected['body'].encode('utf-8'))
+        self.assertNotIn(b'\r', observed[0][1])
         self.assertFalse(observed[0][0].exists())
         self.assertEqual((directory / 'v0.2.0-alpha.5.md').read_text(), original)
 
