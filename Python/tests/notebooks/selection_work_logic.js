@@ -3,12 +3,31 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 
 function checkSelectionGestures(source, inputSource = '', linksSource = '', imagesSource = '') {
-  const controls = new Map(), commands = [], listeners = new Map(), paints = [];
+  const controls = new Map(), commands = [], paints = [];
+  function eventTarget() {
+    const listeners = new Map();
+    return {
+      addEventListener(name, callback) {
+        if (!listeners.has(name)) listeners.set(name, []);
+        if (!listeners.get(name).includes(callback)) listeners.get(name).push(callback);
+      },
+      dispatchEvent(event) {for (const callback of listeners.get(event.type) || []) callback(event)}
+    };
+  }
+  // Browser EventTargets keep ordered listener lists separately per target.
+  const targetA = eventTarget(), targetB = eventTarget(), observed = [];
+  const first = () => observed.push('first');
+  targetA.addEventListener('shared', first); targetA.addEventListener('shared', first);
+  targetA.addEventListener('shared', () => observed.push('second'));
+  targetB.addEventListener('shared', () => observed.push('other-target'));
+  targetA.dispatchEvent({type:'shared'});
+  assert.deepEqual(observed, ['first', 'second']);
+  targetB.dispatchEvent({type:'shared'});
+  assert.deepEqual(observed, ['first', 'second', 'other-target']);
   function node() {
-    return {set id(value) {controls.set(value, this)}, style: {}, dataset: {}, checked: false,
+    return {...eventTarget(), set id(value) {controls.set(value, this)}, style: {}, dataset: {}, checked: false,
       classList: {add() {}, remove() {}, toggle() {}, contains() {return false}},
       append() {}, appendChild() {}, insertBefore() {}, setAttribute() {},
-      addEventListener(name, callback) {listeners.set(name, callback)},
       getBoundingClientRect() {return {left: 0, top: 0, width: 1404, height: 1872}},
       set innerHTML(html) {for (const match of html.matchAll(/id="([^"]+)"/g)) controls.set(match[1], node())}};
   }
@@ -21,10 +40,8 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
     onpointercancel() {}, onlostpointercapture() {}};
   for (const id of ['viewport', 'paperWrap', 'inkLayers', 'erase', 'select', 'tool', 'status', 'layer', 'finger', 'capture']) controls.set(id, node());
   controls.get('layer').value = 'L';
-  const document = {body: node(), head: node(), createElement: node, elementFromPoint() {return canvas},
-    querySelector(selector) {return selector==='header'?node():null}, addEventListener(name, callback) {
-      if (!listeners.has(name)) listeners.set(name, []); listeners.get(name).push(callback)
-    }};
+  const document = {...eventTarget(), body: node(), head: node(), createElement: node, elementFromPoint() {return canvas},
+    querySelector(selector) {return selector==='header'?node():null}};
   document.body.classList.contains = value => value === 'notebook-mobile';
   const sandbox = {console, document, Image: class {constructor() {this.complete=true;this.naturalWidth=16}}, navigator: {platform: 'iPhone'}, canvas, ctx, Map, Set, Math, performance: {now: () => 1000},
     innerWidth: 1404, innerHeight: 1872,
@@ -41,7 +58,7 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
     notePenContact() {}, cancelTouchZoom() {}, flushUpdate() {}, cancelPreview() {}, flushPreview() {},
     send(command) {commands.push(command)}, chosenInk: () => ({tool: 17, color: 0, width: 2}),
     window: {notebookUpdate(next) {sandbox.state = next}},
-    addEventListener(name, callback) {listeners.set(name, callback)}, setTimeout, clearTimeout};
+    ...eventTarget(), setTimeout, clearTimeout};
   sandbox.window = sandbox;
   sandbox.notebookUpdate = next => {sandbox.state = next};
   vm.createContext(sandbox);
@@ -53,6 +70,9 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   const plain = value => JSON.parse(JSON.stringify(value));
   const event = (x, y, pointerType = 'touch') => ({pointerId: 7, pointerType,
     nativePen: true, clientX: x, clientY: y, pressure: .5, preventDefault() {}});
+  canvas.dispatchEvent({...event(0,0,'pen'),type:'pointerdown'});
+  assert.equal(sandbox.logisticsInputTrace().counts['delivered-pointerdown:pen'],1,
+    'Actual input diagnostic listeners remain independently registered on the canvas');
   const stroke = (id, points, layer = 'L') => ({id, layer, tool: 17, color: 0,
     points: points.map(([x,y,w=2]) => [x,y,.5,w])});
   const polygon = [[80,80],[320,80],[320,320],[80,320]];
@@ -157,7 +177,7 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
     run("imageClipboard={src:'data:image/png;base64,synthetic',width:100,height:80}");
     sandbox.state.stroke_clipboard=true;
     const key=letter=>({key:letter,ctrlKey:true,target:{tagName:'BODY'},preventDefault(){}});
-    const dispatch=letter=>{for(const listener of listeners.get('keydown')||[])listener(key(letter))};
+    const dispatch=letter=>document.dispatchEvent({...key(letter),type:'keydown'});
     let before=commands.length;
     sandbox.mode='select';dispatch('v');
     assert.equal(commands.length,before+1,'Select paste must issue exactly one command despite both clipboards');
