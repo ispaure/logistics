@@ -947,8 +947,10 @@ coalescing does not remove any selected platform validation or delivery review.
 
 ### Explicit guest SDK source readiness
 
-Before VM admission, explicit manager sources must contain the selected project's
-exact manager and commonUtils commits. For an existing project-owned tooling cache
+Before VM setup or start, explicit manager sources must contain the selected
+project's exact manager and commonUtils commits. Read-only lookup of an existing
+guest in the inventory happens first; an unavailable guest does not materialize
+a source snapshot or repair the SDK cache. For an existing project-owned tooling cache
 with matching ownership proof, the adapter can refill missing Git objects from the
 actual installed, verified project-pinned SDK checkout. This is a bounded local
 file-protocol transfer: it does not fetch from a remote, change HEADs, reset source,

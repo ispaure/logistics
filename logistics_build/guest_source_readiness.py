@@ -108,7 +108,7 @@ def available(checkout,revision):
 
 
 def ensure(root,snapshot,checkout,source):
-    """Return before VM admission; only missing objects may change on repair."""
+    """Return before VM setup/start; only missing objects may change on repair."""
     if not checkout or source.get('run_overrides',{}).get('testing.manager_source')=='working-tree-local':
         return dict(status='not-needed')
     root=Path(root).resolve();checkout=Path(os.path.abspath(Path(checkout).expanduser()))
