@@ -5,6 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import json
 import os
+import plistlib
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -399,7 +400,7 @@ class ManagerDeviceTests(unittest.TestCase):
         with patch.object(tools,'archive_fingerprint',return_value='different'):
             with self.assertRaises(ValueError):packages.checked_archive(state)
 
-    def test_ios_installs_extracted_reviewed_app_on_only_selected_udid_and_cleans_extraction(self):
+    def check_ios_install_readback(self, apps=None, error=None):
         from mobile_build.deployment import device_tools as ios
         identity = dict(bundle_id=devices.BUNDLE, team_id='ABCDEFGHIJ')
         config = self.mobile / '.device.json'
@@ -408,17 +409,54 @@ class ManagerDeviceTests(unittest.TestCase):
                     targets=[dict(id='udid-1', connection='udid-1', name='iPhone')])
         self.report.write_text(json.dumps(data)); self.env['BUILD_MANAGER_APPROVED_ARTIFACTS'] = json.dumps([
             dict(original_path=str(self.report.resolve()), sha256=file_sha256(self.report))])
+        expected = dict(bundleIdentifier=devices.BUNDLE, version='0.2.0', bundleVersion='202611043')
         def extract(command, **kwargs):
-            (Path(command[-1]) / 'Logistics Mobile.app').mkdir()
+            app = Path(command[-1]) / 'Logistics Mobile.app'; app.mkdir()
+            (app / 'Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier=devices.BUNDLE,
+                CFBundleShortVersionString='0.2.0', CFBundleVersion='202611043')))
+        responses = [{'devices': []}, {'installed': True}, error if error is not None else {'apps': apps}]
         with patch.dict(os.environ, self.env), patch.object(ios, 'installed', return_value=[]), \
                 patch.object(ios, 'choose', return_value=('/fake/xcode','sdk')), \
-                patch.object(ios, 'device_json', side_effect=[{'devices':[]}, {'installed':True}]) as native, \
+                patch.object(ios, 'device_json', side_effect=responses) as native, \
                 patch.object(ios, 'select_device', return_value=({},'udid-1',{})), \
                 patch.object(ios, 'validate_app', return_value=identity), patch('subprocess.run', side_effect=extract):
-            result = devices.install(self.report, 'udid-1', self.receipt)
+            try:
+                result = devices.install(self.report, 'udid-1', self.receipt)
+            finally:
+                self.assertEqual(native.call_args_list[1].args[0][:5],
+                                 ['device','install','app','--device','udid-1'])
+                self.assertEqual(native.call_args_list[2].args[0],
+                                 ['device','info','apps','--device','udid-1'])
+                self.assertFalse(list(self.root.glob('install-*')))
+        self.assertEqual(result['installed_identity'], dict(device='udid-1', **expected))
+        return result
+
+    def test_ios_installs_and_reads_back_exact_package_on_only_selected_udid(self):
+        result = self.check_ios_install_readback([dict(bundleIdentifier=devices.BUNDLE,
+            version='0.2.0', bundleVersion='202611043')])
         self.assertEqual(result['device'], 'udid-1')
-        self.assertEqual(native.call_args_list[-1].args[0][:5], ['device','install','app','--device','udid-1'])
-        self.assertFalse(list(self.root.glob('install-*')))
+        self.assertEqual(json.loads(self.receipt.read_text())['installed_identity'], result['installed_identity'])
+
+    def test_ios_missing_duplicate_wrong_version_build_or_malformed_readback_never_reports_installed(self):
+        expected = dict(bundleIdentifier=devices.BUNDLE, version='0.2.0', bundleVersion='202611043')
+        for apps in ([], [expected, expected], [dict(expected, version='0.1.0')],
+                     [dict(expected, bundleVersion='202611042')], [dict(expected, bundleIdentifier='other')],
+                     None, ['malformed']):
+            with self.subTest(apps=apps):
+                attempt = self.receipt.with_suffix('.attempt.json')
+                attempt.unlink(missing_ok=True)
+                with self.assertRaisesRegex(RuntimeError, 'installation is unverified'):
+                    self.check_ios_install_readback(apps)
+                self.assertFalse(self.receipt.exists())
+                self.assertEqual(json.loads(attempt.read_text())['status'], 'unknown')
+
+    def test_ios_postinstall_query_failure_preserves_primary_and_unresolved_attempt(self):
+        primary = RuntimeError('device became locked after install')
+        with self.assertRaises(RuntimeError) as caught:
+            self.check_ios_install_readback(error=primary)
+        self.assertIs(caught.exception, primary)
+        self.assertFalse(self.receipt.exists())
+        self.assertEqual(json.loads(self.receipt.with_suffix('.attempt.json').read_text())['status'], 'unknown')
 
     def test_ios_preparation_builds_generic_target_without_contacting_or_registering_devices(self):
         from mobile_build.deployment import device_tools as ios

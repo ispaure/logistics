@@ -463,6 +463,18 @@ def ready(recipe, digest, device):
     print('Selected device is available: ' + device, flush=True)
 
 
+def ios_install_readback(ios, env, device, expected):
+    """Read the exact selected device after installation; never alter app data."""
+    result = ios.device_json(['device', 'info', 'apps', '--device', device], env)
+    apps = result.get('apps') if isinstance(result, dict) else None
+    if not isinstance(apps, list) or any(not isinstance(row, dict) for row in apps):
+        raise RuntimeError('Installed iOS app inventory is malformed; installation is unverified.')
+    matches = [row for row in apps if row.get('bundleIdentifier') == BUNDLE]
+    if len(matches) != 1 or any(matches[0].get(key) != value for key, value in expected.items()):
+        raise RuntimeError('Installed iOS bundle/version/build differs from the reviewed package; installation is unverified.')
+    return dict(device=device, **{key: matches[0][key] for key in expected})
+
+
 def install(report, device, receipt):
     from logistics_build.distribute_prepared import reviewed
     data = reviewed(report)
@@ -497,6 +509,12 @@ def install(report, device, receipt):
             app = extracted / 'Logistics Mobile.app'
             if ios.validate_app(app, data['identity']['team_id'], udid, build_number=data.get('build_number')) != data['identity']:
                 raise ValueError('Reviewed iOS signing identity changed.')
+            info = plistlib.loads((app / 'Info.plist').read_bytes())
+            expected_installed = dict(bundleIdentifier=info.get('CFBundleIdentifier'),
+                version=info.get('CFBundleShortVersionString'), bundleVersion=info.get('CFBundleVersion'))
+            if expected_installed['bundleIdentifier'] != BUNDLE or any(
+                    not isinstance(value, str) or not value for value in expected_installed.values()):
+                raise ValueError('Reviewed iOS app has incomplete bundle/version/build metadata.')
         except BaseException:
             shutil.rmtree(extracted); raise
         perform = lambda: ios.device_json(['device', 'install', 'app', '--device', device, str(app)], env)
@@ -509,6 +527,8 @@ def install(report, device, receipt):
         result = dict(schema=1, status='installed', device=device, name=target['name'],
             platform=data['platform'], bundle_id=BUNDLE, package_sha256=data['package_sha256'],
             source=data['source'], operation=os.environ.get('BUILD_MANAGER_OPERATION_ID'))
+        if data['platform'] == 'ios':
+            result['installed_identity'] = ios_install_readback(ios, env, udid, expected_installed)
         save_json(receipt, result); return result
     finally:
         if data['platform'] == 'ios':shutil.rmtree(extracted)
