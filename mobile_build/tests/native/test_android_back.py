@@ -326,8 +326,13 @@ class AndroidBackTests(unittest.TestCase):
             self.assertTrue(self.routes.system_back())
             self.assertIsNone(owner.search.box.parent)
         self.assertEqual(owner.editor.value, 'Keep my draft')
+        responses = app.main_window._impl.dialog_responses
+        responses['QuestionDialog'] = ['cancel']
         self.assertTrue(self.routes.system_back())
+        self.settle()
+        self.assertEqual(responses['QuestionDialog'], [], 'Expected unsaved-draft prompt was not presented')
         self.assertIn(owner.session.id, app.workspace.sessions)
+        self.assertEqual(owner.editor.value, 'Keep my draft')
 
     def test_chat_drawer_back_keeps_conversation_and_unsent_text(self):
         app = self.app
