@@ -5,6 +5,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from .categories import display_title
+from .titles import show_body_title
 from .forms import settings_presentation, fit_section, disclosure, group_rows
 
 
@@ -112,6 +113,7 @@ class SettingsNavigation(toga.Box):
             on_open()
         self.detach(view)
         if self.wide:
+            show_body_title(view)
             routes = self.owner.routes
             if routes.screens['settings']:
                 routes.trim('settings', 0)
@@ -235,6 +237,7 @@ class SettingsNavigation(toga.Box):
             if self.detail_requested and not any(screen[0] == 'settings-category' for screen in screens):
                 view = self.options[self.selected]
                 if view.parent is not self.detail:
+                    show_body_title(view)
                     self.detach(view)
                     for child in list(self.detail.children):
                         self.detail.remove(child)

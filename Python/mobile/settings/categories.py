@@ -24,9 +24,9 @@ class SettingsCategories:
         self.app = app
 
     def category(self, title):
-        from ..hub_ui import heading
+        from .titles import page_title
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(heading(title))
+        box.add(page_title(title))
         return box
 
 

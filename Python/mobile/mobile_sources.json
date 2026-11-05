@@ -161,6 +161,7 @@
     "settings/navigation.py",
     "settings/reader_history.py",
     "settings/speech.py",
+    "settings/titles.py",
     "settings/trusted_wifi.py",
     "smoke.py",
     "snow.py",

@@ -29,13 +29,13 @@ class SavedFilesController:
         self.saved_files_message = ''
 
     def show_saved_files(self, widget=None, **kwargs):
-        from .hub_ui import heading
+        from .settings.titles import page_title
         store = self.reader_manager().catalog.library_store
         items, failures = store.stored_files()
         total = sum(item['size'] for item in items)
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Button('Back to Settings', on_press=self.show_settings, style=Pack(height=48)))
-        box.add(heading('Saved books & comics'))
+        box.add(page_title('Saved books & comics'))
         self.saved_files_summary = toga.Label(f'{len(items)} saved file(s) · {stored_size(total)}',
                                              style=Pack(font_size=18, margin_bottom=8))
         box.add(self.saved_files_summary)

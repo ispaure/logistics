@@ -98,6 +98,31 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertIs(app.show_legacy_choice.parent.parent.parent, nav.sections['Workspaces'])
         self.assertEqual(app.text_font_size_choice.value, '24')
 
+    def test_matching_route_title_removes_the_heading_row_until_it_is_needed(self):
+        from mobile.settings.titles import sync_route_title
+
+        app, nav = self.app, self.nav
+        nav.choose('Text')
+        section = nav.sections['Text']
+        heading, controls = section.children[:2]
+        nested = toga.Box(children=[toga.Label('Different information')])
+        with patch('mobile.settings.titles.bar_shows_title', return_value=True) as shown:
+            sync_route_title(nav.options['Text'], None, None)
+            self.assertIsNone(heading.parent)
+            self.assertIs(section.children[0], controls)
+            shown.assert_called_once_with(None, None, 'Text')
+            sync_route_title(nested, None, None)
+            self.assertEqual(nested.children[0].text, 'Different information')
+        with patch('mobile.settings.titles.bar_shows_title', return_value=False):
+            sync_route_title(nav.options['Text'], None, None)
+            self.assertIs(section.children[0], heading)
+        with patch('mobile.settings.titles.bar_shows_title', return_value=True):
+            sync_route_title(nav.options['Text'], None, None)
+        self.width.return_value = 900
+        app.resize_workspace()
+        self.assertIs(nav.options['Text'].parent, nav.detail)
+        self.assertIs(section.children[0], heading)
+
     def test_repeated_rotation_from_category_list_does_not_open_default_options(self):
         app, nav = self.app, self.nav
         for width in (900, 390, 900, 390, 900, 390):
