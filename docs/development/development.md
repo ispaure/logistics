@@ -65,6 +65,7 @@ Read only the contracts relevant to your change. Feature-specific implementation
 | Mobile payload manifests and portable imports | [Mobile preparation](mobile-preparation.md) |
 | Mobile file/conversation drawers and paired panes | [Workspace navigation](mobile-workspace-navigation.md) |
 | iPhone Duo button placement and panel acceptance plan | [iPhone Duo UI brief](iphone-duo-ui-brief.md) |
+| November 5 annotated screenshot feedback, split into five implementation chats | [iPhone Duo feedback plan](iphone-duo-feedback-plan.md) |
 | Native phone/Watch widgets and Shortcuts actions | [Shortcut value widgets](shortcut-widgets.md) |
 | Mobile build/deployment reference | [Mobile launchers](mobile-launchers.md) |
 | Offline license inventories, artifact collectors and unresolved publisher notices | [Open-source notices](open-source-notices.md) |
