@@ -13,10 +13,49 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from features.notebooks.canvas import editor_html
 from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
+from features.notebooks.remarkable_export import export_rmdoc
 from features.notebooks.protocol import update_script, stroke_script
 from features.notebooks.templates import FORM_TEMPLATES, CATALOG
 from logistics_build.build_retention import scratch
 from tests.notebooks.webengine_driver import javascript, wait_until
+
+
+def pdf_highlighter(view, desktop):
+    book = Notebook.new('PDF highlighter order')
+    editor = Editor(book)
+    editor.apply(dict(op='template', name='Logistics Restaurant review', format='pro', visible=True))
+    # The first writing rule is at y=173. Cross it with native yellow, with
+    # black ink below the highlight in scene order and white ink above it.
+    for tool, color, points in (
+        (17, 0, [[600, 150, .5], [600, 200, .5]]),
+        (18, 13, [[500, 173, .5], [900, 173, .5]]),
+        (17, 2, [[800, 150, .5], [800, 200, .5]]),
+    ):
+        editor.apply(dict(op='stroke', tool=tool, color=color, width=3, points=points))
+    source_ink = book.page(0).to_bytes()
+    reopened = Notebook.read(export_rmdoc(book))
+    assert reopened.content['fileType'] == 'pdf'
+    assert reopened.page(0).to_bytes() == source_ink
+    view.setHtml(editor_html(Editor(reopened).state(), 'logistics-notebook://pdf-highlight/',
+                             console_bridge=True, desktop=desktop, mobile=not desktop, paper_preview=False))
+    wait_until(lambda: javascript(view, "typeof state !== 'undefined' && state.name === 'PDF highlighter order' && "
+                                  "!!$('pdfBackground').naturalWidth"))
+    pixels = json.loads(javascript(view, r"""(()=>{
+      draw();
+      function pixel(x,y){
+        return [...ctx.getImageData(Math.floor(x*canvas.width/state.width),
+                                    Math.floor(y*canvas.height/state.height),1,1).data];
+      }
+      const plain = pixel(700, 166);
+      const rule = [171,172,173,174,175].map(y=>pixel(700,y)).reduce((a,b)=>a[0]<b[0]?a:b);
+      const black = pixel(600,173), white = pixel(800,173);
+      return JSON.stringify({plain,rule,black,white});
+    })()"""))
+    plain, rule, black, white = (pixels[key] for key in ('plain', 'rule', 'black', 'white'))
+    assert plain[0] >= 245 and plain[2] <= 130, pixels
+    assert rule[0] < plain[0] - 10 and rule[2] < plain[2] - 5, pixels
+    assert max(black[:3]) <= 20 and min(white[:3]) >= 235, pixels
+    return pixels
 
 
 def main(output):
@@ -29,6 +68,16 @@ def main(output):
 
     with scratch():
         for desktop in (True, False):
+            pdf_view = QWebEngineView()
+            pdf_view.resize(1200 if desktop else 390, 900 if desktop else 844)
+            pdf_view.show()
+            try:
+                highlight = pdf_highlighter(pdf_view, desktop)
+                pdf_view.grab().save(str(output / f'pdf-highlight-{"desktop" if desktop else "mobile"}.png'))
+            finally:
+                pdf_view.close()
+                pdf_view.deleteLater()
+                qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
             book = Notebook.new('Template validation')
             editor = Editor(book)
             view = QWebEngineView()
@@ -188,6 +237,7 @@ def main(output):
                 parent = next(i for i, p in enumerate(book.pages) if p.id == parent_id)
                 assert book.pages[parent].template == 'Logistics Cornell notes Move', 'Changed another page template'
                 assert book.page(parent).to_bytes() == parent_ink, 'Changed another page handwriting'
+                report['pdf_highlighter'] = highlight
                 reports.append(report)
             finally:
                 view.close()

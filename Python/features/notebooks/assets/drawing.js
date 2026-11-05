@@ -313,7 +313,7 @@ function line(s, target = ctx) {
   target.globalAlpha = alpha;
   if (brush.texture) target.fillStyle = target.strokeStyle = grain(target, rgb, family === 'mechanical');
   if (family === 'highlighter') {
-    target.globalCompositeOperation = 'darken';
+    target.globalCompositeOperation = 'multiply';
     target.lineCap = 'butt'
   }
   if (family === 'shader') {
@@ -366,7 +366,7 @@ function commitDraft(tool) {
       family = brushFor(tool).family;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = family === 'highlighter' ? 'darken' : family === 'shader' ? 'multiply' : 'source-over';
+    ctx.globalCompositeOperation = ['highlighter', 'shader'].includes(family) ? 'multiply' : 'source-over';
     // Keep pen-up work bounded to painted pixels, instead of replaying the
     // complete stroke or compositing an entire transparent page.
     ctx.drawImage(draft, left, top, right - left, bottom - top, left, top, right - left, bottom - top);
@@ -421,7 +421,7 @@ function preview(samples) {
       rgb,
       alpha
     } = inkColor(nativeColor(tool, color));
-  draft.style.mixBlendMode = family === 'highlighter' ? 'darken' : family === 'shader' ? 'multiply' : 'normal';
+  draft.style.mixBlendMode = ['highlighter', 'shader'].includes(family) ? 'multiply' : 'normal';
   maskCtx.save();
   maskCtx.fillStyle = maskCtx.strokeStyle = 'white';
   maskCtx.lineCap = family === 'highlighter' ? 'butt' : 'round';
