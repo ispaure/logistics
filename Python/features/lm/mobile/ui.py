@@ -164,8 +164,11 @@ class ChatUI:
         accessible_name(self.chat_model, 'Exact model ID')
         self.chat_provider_content = toga.Box(style=Pack(direction=COLUMN, gap=8))
         self.chat_config_content = toga.Box(style=Pack(direction=COLUMN, margin=16, gap=8))
+        self.chat_config_title = label('Chat settings', heading=True)
+        self.chat_config_title.style.margin_top = 0
+        self.chat_config_title._settings_page_title = 'Chat settings'
         if not self.routes.apple:
-            self.chat_config_content.add(self.chat_config_back, label('Chat settings', heading=True))
+            self.chat_config_content.add(self.chat_config_back, self.chat_config_title)
         if len(choices) > 1:
             self.chat_config_content.add(label('Provider', heading=True), group(field('Model provider', self.chat_provider)))
         self.chat_config_content.add(self.chat_provider_content, self.chat_save_feedback, self.chat_config_save)
@@ -441,6 +444,12 @@ class ChatUI:
             self.show_chat(present=False)
         self.chat_config_destination = destination
         self.chat_config_back.text = 'Back to LM Chat' if destination == 'settings' else 'Back to conversation'
+        if self.routes.apple:
+            title = self.chat_config_title
+            if destination == 'settings' and title.parent is None:
+                self.chat_config_content.insert(0, title)
+            elif destination != 'settings' and title.parent is self.chat_config_content:
+                self.chat_config_content.remove(title)
         self.show_view(self.chat_config_view, destination=destination, route='chat-settings', title='Chat settings')
         self.fit_chat_configuration()
 

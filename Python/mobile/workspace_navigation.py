@@ -219,7 +219,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 or getattr(self.app, '_reader_chrome_hidden', False)):
             return
         navigation = adapter.navigation_for(destination)
-        item = adapter.content_controller(destination).navigationItem
+        controller = adapter.content_controller(destination)
+        item = controller.navigationItem
         body = self.app.routes.body(destination)
         view = body.children[0] if body is not None and body.children else None
         nested = (bool(self.app.routes.screens[destination])
@@ -250,6 +251,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         hidden = not (actions or getattr(item, 'prompt', None) or (nested and not inline_close))
         if bool(navigation.isNavigationBarHidden()) != hidden:
             navigation.setNavigationBarHidden(hidden, animated=False)
+        if destination == 'settings' and nested and body.children:
+            from .settings.titles import sync_route_title
+            sync_route_title(body.children[-1], navigation, controller)
 
     def uninstall(self):
         self._pending_destination_bar = None

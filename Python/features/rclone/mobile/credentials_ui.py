@@ -542,7 +542,8 @@ class CredentialWorkflow:
             async def forget(widget=None, **kwargs):
                 await self.forget_package(name)
             self.package_forget = toga.Button('Forget this credential package', on_press=forget, style=Pack(height=48))
-            box = self.package_view = ui.settings.page('', '', [
+            title = self.package_title(name)
+            box = self.package_view = ui.settings.page(title, '', [
                 self.package_status, ui.settings.field('Package password', password),
                 cloud.credential_unlock_button, status,
                 ui.settings.heading('Loaded remotes'), self.package_remotes_box,
@@ -551,13 +552,13 @@ class CredentialWorkflow:
             if key is None:
                 status.text = 'Select the original credential ZIP to unlock this package again.'
             self.refresh_package_remotes()
-            cloud.show_view(box, destination=destination, route='credential-package', title=self.package_title(name))
+            cloud.show_view(box, destination=destination, route='credential-package', title=title)
         else:
             box = ui.settings.page('Unlock credential ZIP', 'Your ZIP password is never saved.', [
                 *([selector] if selector is not None else []),
                 selected_note, password, cloud.credential_unlock_button, status,
                 toga.Button('Cancel', on_press=lambda widget, **kw: cloud.routes.back(), style=Pack(height=44))])
-            if cloud.show_view(box, destination=destination, route='unlock-credential', title='Unlock credential'):
+            if cloud.show_view(box, destination=destination, route='unlock-credential', title='Unlock credential ZIP'):
                 password.focus()
 
     async def restore_cloud(self, widget=None, *, initial=False, **kwargs):

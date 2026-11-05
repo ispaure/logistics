@@ -52,8 +52,9 @@ def controls(app, box):
 
 
 def show(app):
+    from .titles import page_title
     box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-    box.add(SettingsLabel('Trusted Wi-Fi networks', style=Pack(font_size=22)))
+    box.add(page_title('Trusted Wi-Fi networks'))
     box.add(SettingsLabel('Add networks where your unlocked session can stay unlocked. '
         'Other networks and cellular still require your session password. Names must match exactly, including case and spaces.'))
     status = SettingsLabel('')

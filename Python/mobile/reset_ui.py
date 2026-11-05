@@ -13,13 +13,14 @@ def is_ios(app):
 
 class ResetUI:
     def show_app_reset(self, widget=None, **kwargs):
+        from .settings.titles import page_title
         app = self.app
         ios = is_ios(app)
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         self.reset_page = box
         from .layout_participants import participants, reflow_settings_section
         participants(self.app).register('reset_page', box, reflow_settings_section)
-        box.add(SettingsLabel('Erase all app data', style=Pack(font_size=22)))
+        box.add(page_title('Erase all app data'))
         box.add(SettingsLabel('Deletes private documents and unsaved drafts, imported books, chat, saved credentials and device keys, settings, transfer mappings, reading progress, metadata and caches.'))
         box.add(SettingsLabel('Also deletes every file in On My iPhone / iPad → Logisticks, including Local and files you added in Files.' if ios
             else 'Also deletes internal Local and LocalCrypt files and app-owned storage folders on SD cards. Android closes the app and resets its permissions.'))
@@ -40,7 +41,7 @@ class ResetUI:
                 child.style.margin_bottom = 12
         fit_section(box, max(280, app.adaptive.content_width('settings')))
         app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
-                      destination='settings', route='app-reset', title='Erase app data')
+                      destination='settings', route='app-reset', title='Erase all app data')
 
     def reset_phrase_changed(self, widget=None, **kwargs):
         if hasattr(self, 'reset_button'):

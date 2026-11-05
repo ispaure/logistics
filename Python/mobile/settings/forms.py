@@ -221,9 +221,10 @@ class ConnectionSettingsPage(toga.ScrollContainer):
     """Grouped connection forms share Settings colours and fit native phone labels."""
     def __init__(self, app, title, subtitle, children):
         from ..appearance import surface
+        from .titles import page_title
         self.owner = app
         content = toga.Box(children=[
-            *([SettingsLabel(title, style=Pack(font_size=27, font_weight='bold', margin_bottom=8))] if title else []),
+            *([page_title(title)] if title else []),
             *([connection_note(subtitle)] if subtitle else []), *children],
                            style=Pack(direction=COLUMN, margin=20))
         surface(content, radius=0, background='settings_background', outlined=False, eink_outlined=False)

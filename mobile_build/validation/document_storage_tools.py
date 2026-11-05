@@ -67,7 +67,7 @@ def diagnostics(entry_point):
             f'chat-settings-{pose}-{panel}.png' for pose in ('portrait', 'landscape-left')
             for panel in ('server', 'limits', 'device'))
     if entry_point.endswith('.mobile_feedback_probe'):
-        return NATIVE_DIAGNOSTICS + tuple(f'feedback-{name}.png' for name in ('notes-portrait', 'notes-landscape-left', 'help', 'more', 'about-loading', 'about-ready', 'licenses'))
+        return NATIVE_DIAGNOSTICS + tuple(f'feedback-{name}.png' for name in ('notes-portrait', 'notes-landscape-left', 'help', 'more', 'about-loading', 'about-ready', 'licenses', 'licenses-landscape'))
     if entry_point.endswith('.documents_hub_probe'):
         return NATIVE_DIAGNOSTICS + tuple(f'documents-hub-{orientation}-{panel}.png'
             for orientation in ('portrait', 'landscape-left')

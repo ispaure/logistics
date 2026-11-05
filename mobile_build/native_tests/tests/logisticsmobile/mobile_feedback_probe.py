@@ -126,7 +126,23 @@ class FeedbackProbe(LogisticsMobile):
             nav = self.settings_navigation
             tap(nav.buttons['Help'])
             await asyncio.sleep(.3)
+            def check_title(view, *, category_in_detail=False):
+                from mobile.settings.titles import bar_shows_title, title_slot
+                content, (_, label) = title_slot(view)
+                in_bar = False
+                if not android and not category_in_detail:
+                    adapter = self.native_host.adapter
+                    navigation = adapter.navigation_for('settings')
+                    in_bar = bar_shows_title(navigation, adapter.content_controller('settings'),
+                                             label._settings_page_title)
+                assert (label.parent is content) != in_bar, label._settings_page_title
+                if in_bar:
+                    assert label not in content.children
+                return in_bar
+
+            help_view = nav.options['Help']
             help_page = nav.sections['Help']
+            report['settings_titles'] = {'help_portrait': check_title(help_view, category_in_detail=nav.wide)}
             entries = [w for w in descendants(help_page) if isinstance(w, toga.Button)]
             assert entries[0].text == 'Mobile documentation', [w.text for w in entries]
             await capture_window(self, output / 'feedback-help.png')
@@ -160,7 +176,7 @@ class FeedbackProbe(LogisticsMobile):
                 assert 'Loading build information' in self.build_version_label.text
                 await capture_window(self, output / 'feedback-about-loading.png')
                 self.routes.back()
-                assert nav.options['Help'] in self.routes.body('settings').children
+                assert help_view.parent is (nav.detail if nav.wide else self.routes.body('settings'))
                 release.set()
                 await asyncio.wait_for(self.build_information_task, 15)
             finally:
@@ -174,6 +190,7 @@ class FeedbackProbe(LogisticsMobile):
             assert labels.index(self.build_version_label) < labels.index(license_button)
             platform_label = 'Platform: Android' if android else 'Platform: iOS / iPadOS'
             assert platform_label in self.build_version_label.text and 'Source:' in self.build_version_label.text, self.build_version_label.text
+            report['settings_titles']['about_portrait'] = check_title(nav.options['About'])
             await capture_window(self, output / 'feedback-about-ready.png')
             license_started = time.monotonic()
             tap(license_button)
@@ -183,11 +200,19 @@ class FeedbackProbe(LogisticsMobile):
             await until(lambda: frame(license_view)[2] > 0 and frame(license_view)[3] > 0,
                         'License page did not acquire native bounds')
             await asyncio.sleep(.3)
+            report['settings_titles']['licenses_portrait'] = check_title(license_view.children[-1])
             await capture_window(self, output / 'feedback-licenses.png')
+            await rotate(self, 'landscape-left', settle=.5)
+            report['settings_titles']['licenses_landscape'] = check_title(license_view.children[-1])
+            await capture_window(self, output / 'feedback-licenses-landscape.png')
             self.routes.back()
             assert self.routes.screens['settings'][-1][0] == 'settings-about'
+            await asyncio.sleep(.3)
+            report['settings_titles']['about_after_back'] = check_title(nav.options['About'])
             self.routes.back()
-            assert nav.options['Help'] in self.routes.body('settings').children
+            await asyncio.sleep(.3)
+            report['settings_titles']['help_after_back'] = check_title(help_view, category_in_detail=nav.wide)
+            assert help_view.parent is (nav.detail if nav.wide else self.routes.body('settings'))
             report['items']['19'] = dict(immediate_feedback=True, back_while_loading=True,
                 build_before_licenses=True, installed_build=self.build_version_label.text, license_back=True,
                 license_open_seconds=time.monotonic() - license_started)

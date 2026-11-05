@@ -8,6 +8,7 @@ from toga.style.pack import COLUMN
 
 from services.open_source import installed_notices, Notice
 from .forms import SettingsLabel, page_button, fit_section, settings_presentation
+from .titles import page_title
 
 
 def show_licenses(app, widget=None, **kwargs):
@@ -35,9 +36,11 @@ def show_licenses(app, widget=None, **kwargs):
     rows = toga.Box(style=Pack(direction=COLUMN))
 
     def show_notice(notice):
-        text = toga.MultilineTextInput(value=notice.content, readonly=True, style=Pack(flex=1))
-        app.show_view(toga.Box(children=[text], style=Pack(direction=COLUMN, flex=1)),
-                      destination='settings', route='open-source-notice', title=notice.title)
+        title = notice.title
+        details = notice.content.removeprefix(title).removeprefix('\n\n')
+        text = toga.MultilineTextInput(value=details, readonly=True, style=Pack(flex=1))
+        app.show_view(toga.Box(children=[page_title(title), text], style=Pack(direction=COLUMN, flex=1)),
+                      destination='settings', route='open-source-notice', title=title)
 
     shown = 20
 
@@ -66,7 +69,7 @@ def show_licenses(app, widget=None, **kwargs):
         render_notices()
 
     search = toga.TextInput(placeholder='Search components', on_change=DebouncedCallback(filter_notices))
-    body = toga.Box(children=[SettingsLabel('Open-source licenses', style=Pack(font_size=22)),
+    body = toga.Box(children=[page_title('Open-source licenses'),
         SettingsLabel('Licenses and notices for this app and its installed components. Available offline.'),
         search, rows], style=Pack(direction=COLUMN, margin=12))
     filter_notices()
