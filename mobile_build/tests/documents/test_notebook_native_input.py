@@ -282,7 +282,9 @@ class NativeNotebookCloseFactoryTests(unittest.TestCase):
         session = app.workspace.open('notebook', 'f' * 32, 'notebook')
         query = app.loop.create_future()
         web = NS(evaluate_javascript=Mock(return_value=query))
-        panel = NS(app=app, view=toga.Box(), web=web, session=session, busy=False,
+        class Panel(NS):
+            pass  # Real notebook owners support the native strip's weak reference.
+        panel = Panel(app=app, view=toga.Box(), web=web, session=session, busy=False,
             native_transport=True, native_input_pending=True, closed=False,
             editor=NS(notebook=NS(name='Retained draft')),
             document=NS(dirty=False,recovery_deleted=False,resource=None),

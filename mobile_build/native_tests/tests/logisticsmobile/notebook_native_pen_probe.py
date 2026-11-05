@@ -214,13 +214,20 @@ async def geometry(app, panel, orientation, output, index):
         width:innerWidth,height:innerHeight,paper:canvas.getBoundingClientRect().toJSON(),
         viewport:$('viewport').getBoundingClientRect().toJSON(),
         header:document.querySelector('header').getBoundingClientRect().toJSON()})"""))
-    paper_top = float(rect.origin.y) + dom['paper']['top'] * float(rect.size.width) / dom['width']
+    scroll = native_value(native.scrollView)
+    inset = native_value(scroll.adjustedContentInset)
+    offset = native_value(scroll.contentOffset)
+    # DOM coordinates begin inside WK's scroll content, not its outer frame.
+    paper_top = float(rect.origin.y) + dom['paper']['top'] * float(rect.size.width) / dom['width'] - float(offset.y)
+    assert int(native_value(scroll.contentInsetAdjustmentBehavior)) == 2
+    assert abs(float(inset.top)) < .5 and abs(float(offset.y)) < .5, 'WK added a second top clearance'
     status_bottom = float(status.origin.y + status.size.height)
     band = getattr(panel.view, '_reader_top_band_state', None)
     record = dict(orientation=orientation,window=[float(size.width),float(size.height)],
         status_bottom=status_bottom,paper_window_top=paper_top,dom=dom,
         webview=[float(rect.origin.x),float(rect.origin.y),float(rect.size.width),float(rect.size.height)],
-        content_header=band is not None)
+        content_header=band is not None,
+        native_scroll=dict(adjusted_top=float(inset.top), offset_y=float(offset.y)))
     if orientation == 'portrait' and os.environ.get('LOGISTICS_NATIVE_PEN_EXPECT_OPEN') == '1':
         assert [round(size.width),round(size.height)] == [669,951], record
         assert band is not None, record
