@@ -29,16 +29,16 @@ class ValidationPlanTests(unittest.TestCase):
             windows = desktop_checks('Windows', Path('reports'))
             linux = desktop_checks('Linux', Path('reports'))
         self.assertEqual([p[0] for p in posix], ['test-structure', 'commonutils.smoke', 'logistics.smoke',
-                         'commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
-        self.assertEqual([p[2] for p in posix], [120, 1800, 1800, 1800, 1800, 600, 600])
+                         'commonutils', 'logistics', 'compression-parity'])
+        self.assertEqual([p[2] for p in posix], [120, 1800, 1800, 1800, 1800, 600])
         self.assertEqual(linux, posix)
         windows_full = [windows[0], *windows[2:]]
         self.assertEqual([(name, command) for name, command, _ in windows_full],
                          [(name, command) for name, command, _ in posix])
         self.assertEqual([timeout for _, _, timeout in windows_full],
-                         [120, 1800, 1800, 1800, 2100, 600, 780])
+                         [120, 1800, 1800, 1800, 2100, 600])
         self.assertEqual({name for (name, _, timeout), (_, _, previous) in zip(windows_full, posix)
-                          if timeout != previous}, {'logistics', 'manager-contracts'})
+                          if timeout != previous}, {'logistics'})
         from tests.runner_settings import ISOLATED_FILE_TIMEOUT
         self.assertEqual(ISOLATED_FILE_TIMEOUT, 300)
         self.assertEqual(windows[1], ('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
@@ -57,7 +57,36 @@ class ValidationPlanTests(unittest.TestCase):
         budgets = {name: timeout for name, _, timeout in checks}
         self.assertEqual(budgets['logistics'], 2400)
         self.assertEqual(budgets['logistics.smoke'], 2400)
-        self.assertEqual(budgets['manager-contracts'], 780)
+        self.assertNotIn('manager-contracts', budgets)
+
+    def test_full_logistics_gates_keep_consumer_contracts_without_implicit_sdk_self_tests(self):
+        root = Path(__file__).resolve().parents[3]
+        manifest = __import__('json').loads((root / 'build-tests.json').read_text())
+        rows = [dict(row, timeout=row.get('timeout', 1800),
+                     directory=(row.get('owner', '') + '/' + row['directory']).lstrip('/'))
+                for row in manifest['suites'] if 'desktop' in row['groups']]
+        with patch('build_manager.test_manifest.discover', return_value=rows):
+            for system in ('Darwin', 'Linux', 'Windows'):
+                with self.subTest(system=system):
+                    checks = desktop_checks(system, Path('reports'))
+                    commands = {name: command for name, command, _ in checks}
+                    self.assertEqual(commands['commonutils'],
+                        ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'])
+                    # Full Python/tests includes the project-owned tooling subtree:
+                    # adapter/journey/Executor, retained artifacts and bootstrap tests.
+                    self.assertEqual(commands['logistics'],
+                        ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'])
+                    self.assertIn('test-structure', commands)
+                    self.assertIn('compression-parity', commands)
+                    self.assertFalse(any('build_manager.contracts' in argv for argv in commands.values()))
+                    if system == 'Windows':
+                        self.assertIn('windows-native-ui', commands)
+        suites = {row['name']: row for row in inventory(root)['suites']}
+        self.assertFalse(suites['manager']['required'])
+        self.assertEqual(suites['manager']['entry'], 'python -m build_manager.contracts')
+        for name in ('shared-host', 'static', 'desktop', 'mobile-host', 'release-tooling',
+                     'native-ios', 'native-android', 'runtime'):
+            self.assertTrue(suites[name]['required'], name)
 
     def test_compression_retries_get_fresh_attempts_and_preserve_previous_evidence(self):
         import importlib.util
