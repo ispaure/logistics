@@ -976,3 +976,45 @@ setup guidance. Clear an obsolete explicit source to use the ordinary published-
 guest installation, or update tooling through its owner. These checks preserve
 normal Git object and ownership boundaries; they do not guarantee remote network
 availability or repair unrelated guest prerequisites.
+
+## Retained source-publication recovery
+
+New GitHub Release plans include a stable reviewed publication owner and an atomic
+operation receipt. Before changing a branch or tag, the adapter checks that the
+selected manager provides the exact-attempt and bounded recovery APIs. A missing
+API stops the new path before any external effect; the older basic release path
+remains available with its original existing-tag rejection.
+
+The receipt binds the repository, tag, source commit, commonUtils gitlink and
+reviewed owner. Tag creation and push intent are saved before those writes. An
+existing tag can resume only with matching ownership proof and the exact original
+tag object/source; the adapter never moves an existing tag. Older unjournaled
+operations and a different tag at the same commit require explicit manual
+reconciliation, rather than adoption into a new plan.
+
+On resume, the adapter checks any existing public ZIP against its digest and
+source/dependency manifests before attempting recovery. Reviewed notes come from
+the selected source commit through the publisher's shared policy. Metadata repair
+changes only the title and body, then verifies that release ID, draft/prerelease
+state and asset identities remain unchanged. An in-progress draft or missing ZIP
+is observed without creating another release, uploading another asset or publishing
+the draft.
+
+A valid ZIP alone does not pass a release. Completion also requires exact-attempt
+job evidence for successful `evidence`, `package` and `publish` jobs, with every
+visible job terminal and no failed jobs. This project-specific witness is bound
+to the reviewed release workflow's hash: `package` depends on the selected fresh
+or independently verified reused gates, and `publish` depends on `package`.
+Changing that DAG requires reviewing and updating the witness. A stale queued
+aggregate can therefore be reported honestly alongside proven terminal publication,
+without treating a partially populated job list as success.
+
+One automatic failed-jobs rerun is permitted only for a proven artifact-service
+finalization failure: the exact artifact step, successful preceding steps and
+bounded provider log evidence must agree. A cancelled or timed-out job alone is
+insufficient, and product-test failures are never automatically retried. Rerun
+intent is persisted before the single POST. An ambiguous response is reconciled
+using GET requests for that exact next attempt; resume never repeats an unknown
+POST. Observation timeout/cancellation retains the operation for later observation
+and does not cancel or dispatch another hosted workflow. Previous plans, results
+and tester-delivery receipts remain unchanged.
