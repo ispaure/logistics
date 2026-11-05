@@ -2,7 +2,6 @@
 from dataclasses import dataclass, replace
 import json
 from pathlib import Path
-import re
 import sys
 from uuid import uuid4
 
@@ -24,7 +23,7 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-RUN_FIELDS={'devices.availability','testing.manager_source','testing.reuse_verified_results','devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.ios_provisioning','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+RUN_FIELDS={'devices.availability','testing.manager_source','testing.reuse_verified_results','testing.github_validation','devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.ios_provisioning','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
 
 
 def run_values(values):
@@ -40,6 +39,8 @@ def run_values(values):
         raise ValueError('Choose pinned or working-tree-local manager source for local tests.')
     if result.get('testing.reuse_verified_results', 'on') not in {'on', 'off'}:
         raise ValueError('Choose On or Off for verified test reuse.')
+    if result.get('testing.github_validation', 'on') not in {'on', 'off'}:
+        raise ValueError('Choose On or Off for GitHub release validation.')
     if result.get('devices.android_signing', 'debug') not in {'debug', 'beta'}:
         raise ValueError('Choose Debug or the existing Beta key for Android device signing.')
     if 'testers.message' in result:

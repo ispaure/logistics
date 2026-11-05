@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 from threading import Event
 import unittest
@@ -139,7 +140,7 @@ class PublicationRecoveryTests(unittest.TestCase):
     def seed(self, **changes):
         binding = dict(repository=self.client.repository, root=str(self.root.resolve()), tag=self.tag,
             commit=self.commit, commonUtils_commit=self.dependency, owner=self.token,
-            reuse_test_results=True, workflow='.github/workflows/release.yml')
+            reuse_test_results=True, github_validation='on', workflow='.github/workflows/release.yml')
         value = dict(schema=1, binding=binding, status='tag-pushed', tag_object=self.tag_object, reruns=[], run_id=77, attempt=1)
         value.update(changes)
         self.receipt.write_text(json.dumps(value))
@@ -149,6 +150,54 @@ class PublicationRecoveryTests(unittest.TestCase):
         return owner._owned_release_source(self.root, self.client, self.tag, self.commit, Event(),
             receipt=self.receipt, owner=self.token, reuse_test_results=True,
             published_commit=True, timeout=.2, poll=.001, **kwargs)
+
+    def test_release_plan_hosted_policy_defaults_on_and_off_is_explicit(self):
+        from logistics_build.manager_journeys import run_values
+        project = object.__new__(owner.LogisticsProject)
+        project.root, project.interpreter = self.root, Path(sys.executable)
+        for choice in (None, 'on', 'off'):
+            with self.subTest(choice=choice):
+                overrides = {} if choice is None else run_values({'testing.github_validation': choice})
+                source = dict(dirty=False, logistics_commit=self.commit, run_overrides=overrides)
+                plan = project.github_plan('Release', 'macos', source, self.root / 'plan', {}, 'HEAD', self.tag)
+                self.assertEqual(len(plan.phases), 1)  # Advanced Release has no local test phases.
+                self.assertEqual(plan.source['github_validation'], choice or 'on')
+                self.assertEqual('--skip-hosted-validation' in plan.phases[0].argv, choice == 'off')
+                self.assertIn('--operation-receipt', plan.phases[0].argv)
+                self.assertIn('--publication-owner', plan.phases[0].argv)
+        with self.assertRaisesRegex(ValueError, 'GitHub release validation'):
+            run_values({'testing.github_validation': 'skip'})
+        descriptor = json.loads((Path(owner.__file__).parents[1] / 'build-project.json').read_text())
+        field = next(row for row in descriptor['run_fields'] if row['id'] == 'testing.github_validation')
+        self.assertEqual(field['default'], 'on')
+        self.assertEqual(set(field['options']), {'on', 'off'})
+
+    def test_policy_cannot_change_on_owned_resume_and_legacy_bypass_needs_journal(self):
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            self.run_owned(github_validation='off')
+        with self.assertRaisesRegex(ValueError, 'requires its reviewed publication journal'):
+            owner.release_source(self.root, self.client, self.tag, self.commit, Event(), skip_hosted_validation=True)
+        self.assertFalse(self.client.posts)
+
+    def test_fresh_off_tag_records_marker_and_receipt_mode(self):
+        self.receipt.unlink()
+        self.git('tag', '-d', self.tag)
+        self.client.tag_exists = False
+        run = subprocess.run
+        def command(argv, **kwargs):
+            if argv[:2] == ['git', 'push']:
+                record = json.loads(self.receipt.read_text())
+                self.assertEqual(record['binding']['github_validation'], 'off')
+                self.tag_object = self.git('rev-parse', 'refs/tags/' + self.tag)
+                contents = self.git('for-each-ref', '--format=%(contents)', 'refs/tags/' + self.tag)
+                self.assertIn('Build-Manager-Hosted-Validation: off', contents)
+                self.assertIn('Build-Manager-Publication: ' + self.token, contents)
+                self.client.tag_exists = True
+                return subprocess.CompletedProcess(argv, 0)
+            return run(argv, **kwargs)
+        with patch.object(owner.subprocess, 'run', side_effect=command):
+            self.assertEqual(self.run_owned(github_validation='off'), 0)
+        self.assertFalse(self.client.posts)
 
     def test_cli_capability_preflight_also_precedes_optional_evidence_publish(self):
         argv = ['build_project', 'release', '--root', str(self.root), '--tag', self.tag,
@@ -213,6 +262,8 @@ class PublicationRecoveryTests(unittest.TestCase):
                 self.assertEqual(record['status'], 'tag-push-intent')
                 self.tag_object = self.git('rev-parse', 'refs/tags/' + self.tag)
                 self.assertEqual(record['tag_object'], self.tag_object)
+                self.assertEqual(record['binding']['github_validation'], 'on')
+                self.assertNotIn('Build-Manager-Hosted-Validation:', self.git('for-each-ref', '--format=%(contents)', 'refs/tags/' + self.tag))
                 self.client.tag_exists = True
                 pushes.append(argv)
                 return subprocess.CompletedProcess(argv, 0)

@@ -343,6 +343,11 @@ class LogisticsProject:
                 raise ValueError('Choose an explicit release channel/tag, separate from app version and mobile build numbers.')
             command = (str(self.interpreter), '-m', 'logistics_build.build_project', 'release', '--tag', release_tag,
                        '--commit', source['logistics_commit'], '--root', str(self.root))
+            validation = source.get('run_overrides', {}).get('testing.github_validation', 'on')
+            if validation not in {'on', 'off'}:
+                raise ValueError('Choose On or Off for GitHub release validation.')
+            if validation == 'off':
+                command += ('--skip-hosted-validation',)
             owner = uuid4().hex
             command += ('--operation-receipt', str(workspace / 'remote' / ('release-' + owner + '.json')),
                         '--publication-owner', owner)
@@ -350,7 +355,7 @@ class LogisticsProject:
                 command += ('--published-commit',)
             if source.get('run_overrides', {}).get('testing.reuse_verified_results') == 'off':
                 command += ('--no-test-reuse',)
-            return Plan('Logistics', operation, dict(source, release_tag=release_tag),
+            return Plan('Logistics', operation, dict(source, release_tag=release_tag, github_validation=validation),
                         (Phase('release-source-and-gates', command, str(self.root), timeout=14400,
                                kind='publication', effect='publish', provider='github'),),
                         str(workspace), backend='GitHub', effect='publish')
@@ -724,6 +729,8 @@ def main():
     parser.add_argument('--test-evidence-request', type=Path)
     parser.add_argument('--test-evidence-sha256')
     parser.add_argument('--no-test-reuse', action='store_true')
+    parser.add_argument('--skip-hosted-validation', action='store_true',
+                        help='Explicit reviewed GitHub source-publication bypass; local workflow gates remain unchanged.')
     parser.add_argument('--published-commit', action='store_true',
                         help='Tag an exact commit already published on GitHub without pushing development branches.')
     args = parser.parse_args()
@@ -767,6 +774,8 @@ def main():
         result = client.wait(run, args.commit, timeout=13800, cancelled=cancelled,
                              progress=lambda value: print(json.dumps(value), flush=True))
         return int(result.get('status') != 'completed')
+    if args.skip_hosted_validation and args.operation_receipt is None:
+        raise ValueError('Hosted validation bypass requires its reviewed publication journal and owner.')
     if args.operation_receipt is not None:
         _publication_capabilities(client)  # Also precedes optional Git-notes export.
         if (not re.fullmatch(r'[a-f0-9]{40}', args.commit or '')
@@ -792,7 +801,8 @@ def main():
             print('Local evidence export unavailable or rejected; hosted checks independently verify any existing proof.', flush=True)
     return release_source(args.root, client, args.tag, args.commit, cancelled,
                           reuse_test_results=not args.no_test_reuse, published_commit=args.published_commit,
-                          operation_receipt=args.operation_receipt, publication_owner=args.publication_owner)
+                          operation_receipt=args.operation_receipt, publication_owner=args.publication_owner,
+                          skip_hosted_validation=args.skip_hosted_validation)
 
 
 def hosted_validation(client, values, args, cancelled):
@@ -885,8 +895,8 @@ def github_client(values, root):
 
 
 # The terminal witness below is valid only for this reviewed release DAG:
-# package requires all selected/reused gates; publish requires package success.
-_RELEASE_DAG_SHA256 = '2b1c38429423b557f5a222587c7158999e93d5eed3833d69d1af037b5bcf004b'
+# package requires selected gates or explicit owned bypass; publish requires package success.
+_RELEASE_DAG_SHA256 = 'f1f91bfb9d5185fe0344c481e53224ac78e83cbf204cc0a46f83b881438fd35c'
 
 
 def _publication_capabilities(client):
@@ -1011,7 +1021,7 @@ def _publication_asset(root, client, tag, commit, dependency, cancelled):
 
 
 def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owner,
-                          reuse_test_results, published_commit, timeout=13600, poll=15):
+                          reuse_test_results, published_commit, github_validation='on', timeout=13600, poll=15):
     """One retained publication operation; only its exact immutable tag may resume."""
     from build_manager.locking import workspace_lock
     from build_manager.profiles import save_json
@@ -1020,6 +1030,8 @@ def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owne
     _publication_capabilities(client)  # Before ANY tag, branch or provider write.
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (timeout, poll)):
         raise ValueError('Publication observation timeout and poll must be finite and positive.')
+    if github_validation not in {'on', 'off'}:
+        raise ValueError('Choose On or Off for GitHub release validation.')
     if not re.fullmatch(r'[a-f0-9]{40}', commit or ''):
         raise ValueError('Publication requires an exact reviewed commit.')
     if cancelled.is_set():
@@ -1035,6 +1047,7 @@ def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owne
     dependency = shared_entry[2]
     binding = dict(repository=client.repository, root=str(root), tag=tag, commit=commit,
                    commonUtils_commit=dependency, owner=owner, reuse_test_results=reuse_test_results,
+                   github_validation=github_validation,
                    workflow='.github/workflows/release.yml')
     with workspace_lock(receipt.with_suffix('.lock')):
         saved = json.loads(receipt.read_text()) if receipt.exists() else None
@@ -1079,6 +1092,8 @@ def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owne
             message = 'Logistics source release\n\nBuild-Manager-Publication: ' + owner
             if not reuse_test_results:
                 message += '\nBuild-Manager-Reuse: off'
+            if github_validation == 'off':
+                message += '\nBuild-Manager-Hosted-Validation: off'
             # Local tags are adopted only after our prior durable create intent,
             # exact owner annotation and source prove this operation created them.
             local = subprocess.run(['git', 'rev-parse', '--verify', 'refs/tags/' + tag], cwd=root, capture_output=True, text=True, timeout=30)
@@ -1138,6 +1153,7 @@ def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owne
                 asset = current_asset
                 check_cancel()
                 save(status='verified', proof=dict(run_id=run_id, run_attempt=attempt,
+                    github_validation=github_validation, hosted_validation_skipped=github_validation == 'off',
                     aggregate_status=observed.get('status'), jobs=[{k: row.get(k) for k in ('id', 'name', 'status', 'conclusion')} for row in jobs], **asset))
                 print(json.dumps(dict(tag=tag, commit=commit, **saved['proof'])), flush=True)
                 return 0
@@ -1159,12 +1175,15 @@ def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owne
         raise TimeoutError('Owned release remains unverified; resume this exact receipt/tag without repeating publication.')
 
 
-def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True, published_commit=False, operation_receipt=None, publication_owner=None):
+def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True, published_commit=False, operation_receipt=None, publication_owner=None, skip_hosted_validation=False):
     if not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', tag or ''):
         raise ValueError('Select an explicit supported release tag.')
     if operation_receipt is not None:
         return _owned_release_source(root, client, tag, commit, cancelled, receipt=operation_receipt,
-            owner=publication_owner, reuse_test_results=reuse_test_results, published_commit=published_commit)
+            owner=publication_owner, reuse_test_results=reuse_test_results, published_commit=published_commit,
+            github_validation='off' if skip_hosted_validation else 'on')
+    if skip_hosted_validation:
+        raise ValueError('Hosted validation bypass requires its reviewed publication journal and owner.')
     if published_commit:
         if (not re.fullmatch(r'[0-9a-f]{40}', commit or '')
                 or client.request('GET', client.base + '/commits/' + commit).get('sha') != commit):
