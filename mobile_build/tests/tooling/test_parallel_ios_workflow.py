@@ -208,6 +208,8 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
                 for proofs in itertools.product((False, True), repeat=3):
                     names = ('validate', 'mobile-build', 'mobile-runtime')
                     outputs = {name: 'true' if proof else 'false' for name, proof in zip(names, proofs)}
+                    # This exhaustive oracle models the normal, required-validation policy.
+                    outputs['hosted-skip'] = 'false'
                     needs = Needs({name: SimpleNamespace(result=result) for name, result in zip(names, results)})
                     needs['evidence'] = SimpleNamespace(result=evidence_status, outputs=Needs(outputs))
                     expected = (not cancelled and evidence_status == 'success' and all(
