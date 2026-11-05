@@ -131,6 +131,7 @@
     "reader_chrome.py",
     "reader_controls.py",
     "reader_edges.py",
+    "reader_top_band.py",
     "reader_host.py",
     "reader_lifecycle.py",
     "reader_memory.py",

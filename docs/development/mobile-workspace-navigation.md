@@ -1759,6 +1759,22 @@ Multiple activities and closed/open display changes invalidate layout;
 shrinking regions release the extra inset without accumulating padding. No device
 model or fixed Dynamic Island height determines placement.
 
+`reader_top_band` can project storage-backed reader chrome into a native content
+header when a measured, tall system region occupies one edge and leaves enough
+width for every existing Close/menu/action target and the storage title. It keeps
+the original native controls, handlers and title renderer; it does not replace
+them with HTML or drop commands to fit. Missing, centered, full-width, short or
+insufficient geometry retains the normal navigation presentation. Existing Notes
+Library pane headers and main destination pages keep their own owners.
+
+The header reserves clearance below the complete system cluster before full-width
+reader content starts. Rotation, fullscreen, errors requiring a native prompt and
+route changes restore the previous title/control owner and invalidate native
+projection caches. Content margins can be canceled for the header; window safe
+areas are never made negative. Host tests cover eligibility and ownership; native
+acceptance must additionally verify mounted title/control frames, touch targets,
+system-region clearance and restoration in the actual display posture.
+
 Host checks cover column intersection, two activities, growth/shrink and inset
 ownership. Native toolbar acceptance checks actual accessible action frames against
 reserved regions; physical-device Live Activity transitions require device testing.
