@@ -475,7 +475,7 @@ class LogisticsProject:
         if not options['tools.android_sdk'] or not options['tools.java'] or not (java/'bin/java').is_file():
             raise ValueError('Configure an explicit complete Android SDK and Java17 JDK in Settings.')
         env = dict(env, ANDROID_HOME=str(sdk), ANDROID_SDK_ROOT=str(sdk), JAVA_HOME=str(java),
-                   PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+os.environ.get('PATH',''),
+                   PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+env.get('PATH',os.environ.get('PATH','')),
                    PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'), GRADLE_OPTS='-Dorg.gradle.daemon=false')
         if options['tools.xcode']:
             env['DEVELOPER_DIR'] = options['tools.xcode']
@@ -519,7 +519,7 @@ class LogisticsProject:
         environments = load_environments(snapshot)
         if options['tools.xcode']:
             env['DEVELOPER_DIR'] = options['tools.xcode']
-        env.update(PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+os.environ.get('PATH',''),
+        env.update(PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+env.get('PATH',os.environ.get('PATH','')),
                    PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'))
         client = AppleSimulators(env)
         from mobile_build.select_ios_sdk import choose
@@ -583,7 +583,7 @@ class LogisticsProject:
                 raise ValueError('Local iOS development builds require macOS.')
             if pattern:
                 raise ValueError('A development build does not select test filenames.')
-            env = dict(env, PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+os.environ.get('PATH',''),
+            env = dict(env, PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+env.get('PATH',os.environ.get('PATH','')),
                        PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'))
             if options['tools.xcode']:
                 env['DEVELOPER_DIR'] = options['tools.xcode']
@@ -619,7 +619,7 @@ class LogisticsProject:
                 env.update(ANDROID_HOME=options['tools.android_sdk'], ANDROID_SDK_ROOT=options['tools.android_sdk'])
             if options['tools.java']:
                 env['JAVA_HOME'] = options['tools.java']
-            env['PATH'] = str(self.mobile / '.tools/go/bin') + os.pathsep + os.environ.get('PATH', '')
+            env['PATH'] = str(self.mobile / '.tools/go/bin') + os.pathsep + env.get('PATH', os.environ.get('PATH', ''))
             env['PIP_FIND_LINKS'] = str(self.mobile / '.tools/release-wheels')
             module = 'testflight_deploy' if target == 'ios' else 'firebase_deploy'
             arguments = ['--prepare-only'] if target == 'ios' else ['--build-only']
