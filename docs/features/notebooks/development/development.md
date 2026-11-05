@@ -615,6 +615,25 @@ and leave the background inert while open. The floating dock remains compact in
 portrait and landscape; drawing actions have at least 44 × 44 CSS-pixel targets.
 The mobile source manifest includes both presentation and icon modules.
 
+On eligible iOS corner-status layouts, the native projection retains its full
+clearance until the current canvas acknowledges the compact portrait CSS.
+The acknowledgement is tied to the canvas, bridge and geometry epoch. A measured
+256-pixel tool column must avoid every reserved system region. The compact DOM
+row guarantees at least 48 pixels of clearance; Hide tools retains a noninteractive
+spacer so the paper cannot move beneath the status area. Other readers and
+unsupported geometry retain their previous spacing.
+
+In sufficiently wide landscape content-title rows, the iOS notebook host mounts
+five native drawing targets alongside the retained title. These invoke the
+original brush, eraser, selection, Undo and Redo handlers; they do not own another
+editing model. The DOM toolbar hides only while the native strip renews its
+lease. Recovery waits for current contacts and queued edits to finish before
+changing paper geometry. Native queries are bounded, serialized per canvas and
+never cancel an outstanding WebKit completion. Retirement rejects stale state
+and restores the ordinary toolbar. The real-browser native probe checks popup
+double taps, dismissal when selecting another tool and stable paper geometry
+while a contact is held.
+
 The close button, drawing tools and notebook actions share one floating row.
 Spacing contracts down to 320 CSS pixels while retaining 44 × 44 targets.
 Hide tools lives in the notebook actions dropdown; iOS hides the canvas close

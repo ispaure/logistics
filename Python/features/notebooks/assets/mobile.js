@@ -42,6 +42,13 @@ renderEraserChoices();
     return ids[id] || $(id)
   }
   header.className = 'mobile-head';
+  window.notebookPortraitBand = enabled => {
+    const usable = enabled === true && !!state.native_close && !!state.native_actions &&
+      !document.body.classList.contains('native-drawing-tools');
+    document.body.classList.toggle('notebook-portrait-band', usable);
+    return usable
+  };
+  window.notebookPortraitBand(!!state.native_top_band);
   if (state.native_close) command('library').hidden = true;
   let more = makeButton('more', 'Notebook actions', e => sheet.hidden ? openSheet('document', e.currentTarget) : closeSheet());
   more.hidden = !!state.native_actions;
@@ -510,6 +517,49 @@ renderEraserChoices();
     }
   };
 
+  // Native landscape controls invoke these original DOM handlers and read
+  // their real state. A short lease restores the DOM toolbar if the host stalls.
+  let nativeToolsLease = null, nativeToolAnchor = null;
+  window.notebookNativeTools = action => {
+    clearTimeout(nativeToolsLease);
+    const restoreTools = () => {
+      // Keep paper geometry stable until every current contact/queued edit retires.
+      if (active !== null || busy || queue.length) {
+        nativeToolsLease = setTimeout(restoreTools, 100);
+        return;
+      }
+      const changed = document.body.classList.contains('native-drawing-tools');
+      document.body.classList.remove('native-drawing-tools');
+      if (changed) resize();
+    };
+    if (action === false) { restoreTools(); return null; }
+    if (document.body.classList.contains('tools-hidden')) { restoreTools(); return null; }
+    if (active !== null || busy) {
+      restoreTools();
+      return JSON.stringify(Object.fromEntries(['pen','erase','select','undo','redo'].map(name =>
+        [name, {disabled:true, active:false}])));
+    }
+    const controls = {pen:brushToggle, erase:control('erase'), select:control('select'),
+                      undo:control('undo'), redo:control('redo')};
+    if (action !== null) {
+      if (!action || !Object.hasOwn(controls, action.name) || !Array.isArray(action.anchor)
+          || action.anchor.length !== 4 || !action.anchor.every(Number.isFinite)
+          || action.anchor[2] < 44 || action.anchor[3] < 44) throw new Error('Unknown native drawing tool');
+      const target = controls[action.name], [x,y,width,height] = action.anchor;
+      nativeToolAnchor = {left:x, top:y, right:x+width, bottom:y+height, width, height};
+      try {
+        if (!target.disabled && !header.inert && !dock.inert) { dismissToolPanels(target); target.click(); }
+      } finally { nativeToolAnchor = null; }
+    }
+    const changed = !document.body.classList.contains('native-drawing-tools');
+    document.body.classList.add('native-drawing-tools');
+    if (changed) resize();
+    nativeToolsLease = setTimeout(restoreTools, 1500);
+    return JSON.stringify(Object.fromEntries(Object.entries(controls).map(([name, button]) =>
+      [name, {disabled:!!(button.disabled || header.inert || dock.inert || active !== null || busy),
+              active:button.getAttribute('aria-pressed') === 'true'}])));
+  };
+
   function closeSheet(restoreFocus = true) {
     cancelTitleHold();
     sheet.hidden = backdrop.hidden = true;
@@ -520,7 +570,7 @@ renderEraserChoices();
     restore.inert = false;
     zoomControls.inert = false;
     $('viewport').inert = false;
-    if (!restoreFocus) return;
+    if (!restoreFocus || document.body.classList.contains('native-drawing-tools')) return;
     if (returnFocus && returnFocus.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
     else document.querySelector('header button[aria-label="Notebook actions"]').focus()
   }
@@ -528,8 +578,8 @@ renderEraserChoices();
 
   // Floating tool panels leave the initiating outside pointer event untouched.
   function positionPanel(panel, opener) {
-    const anchor = opener.getBoundingClientRect();
-    panel.style.top = Math.min(anchor.bottom + 8, innerHeight - 64) + 'px';
+    const anchor = nativeToolAnchor || opener.getBoundingClientRect();
+    panel.style.top = Math.max(8, Math.min(anchor.bottom + 8, innerHeight - 64)) + 'px';
     panel.style.left = Math.max(8, Math.min(anchor.left, innerWidth - panel.getBoundingClientRect().width - 8)) + 'px'
   }
   $('closeEraser').hidden = true;

@@ -64,3 +64,10 @@ body.notebook-laptop #mobileBackdrop{bottom:calc(100% - var(--fold-top))}
 @media(max-width:600px){#laptopTools{grid-template-columns:1fr}}
 
 .mobile-tools .icon{width:44px;padding:6px}.notebook-mobile .capture-tools{top:max(64px,calc(env(safe-area-inset-top) + 56px));right:8px}.notebook-mobile.tools-hidden .capture-tools{display:none}
+
+/* Only an acknowledged live native landscape strip owns the drawing row. */
+body.native-drawing-tools header.mobile-head{display:none}
+/* Only an acknowledged native portrait band may borrow this DOM clearance. */
+body.notebook-portrait-band header.mobile-head{max-width:min(256px,calc(100% - 8px));min-height:48px;margin-top:4px}
+body.notebook-portrait-band.tools-hidden:not(.native-drawing-tools)::before{content:"";display:block;flex:0 0 48px;height:48px;pointer-events:none}
+body.notebook-portrait-band #restoreTools{top:4px;left:50%;right:auto;transform:translateX(-50%);max-width:256px}
