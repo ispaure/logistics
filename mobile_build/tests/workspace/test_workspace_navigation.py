@@ -449,6 +449,39 @@ class WorkspaceNavigationTests(unittest.TestCase):
         finally:
             self.app.native_host.adapter = original
 
+    def test_ipad_sidebar_coalesces_native_bar_layout_until_the_route_returns(self):
+        from types import SimpleNamespace
+        host = self.app.native_host
+        adapter = host.adapter
+        destination = host.state.destination
+        other = next(item for item in host.destinations if item != destination)
+        host.adapter = SimpleNamespace(sidebar_used=True)
+        try:
+            with patch.object(self.app.loop, 'call_soon') as schedule, \
+                    patch.object(self.navigation, 'sync_destination_bar') as apply:
+                self.navigation.update_destination_bar(destination)
+                self.navigation.update_destination_bar(other)
+                self.navigation.update_destination_bar(destination)
+                schedule.assert_called_once()
+                apply.assert_not_called()
+                schedule.call_args.args[0]()
+                apply.assert_called_once_with(destination)
+
+                apply.reset_mock()
+                self.navigation.update_destination_bar(destination)
+                host.state.select(other)
+                schedule.call_args.args[0]()
+                apply.assert_not_called()
+
+                host.state.select(destination)
+                self.navigation.update_destination_bar(destination)
+                host.adapter = SimpleNamespace(sidebar_used=True)
+                schedule.call_args.args[0]()
+                apply.assert_not_called()
+        finally:
+            host.state.select(destination)
+            host.adapter = adapter
+
     def test_root_bars_keep_actions_native_back_and_fullscreen_ownership(self):
         from types import SimpleNamespace
         from unittest.mock import Mock

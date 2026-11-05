@@ -175,6 +175,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         self.selection = WorkspaceSelection()
         self.rendering = False
         self.last_layout = None
+        self._pending_destination_bar = None
 
     @property
     def pinned(self):
@@ -188,6 +189,30 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         # Both Apple and Android use the same measured content split, inside
         # their existing native navigation controller, including compact Back.
         self.render()
+
+    def update_destination_bar(self, destination):
+        host = self.app.native_host
+        adapter = host.adapter
+        if not getattr(adapter, 'sidebar_used', False):
+            self.sync_destination_bar(destination)
+            return
+        if host.state.destination != destination:
+            return
+        # The iPad sidebar can deliver a folder selection while UIKit is
+        # mounting the pushed controller. Showing the bar performs layout
+        # synchronously, so let that native transition unwind first.
+        if self._pending_destination_bar is None:
+            self.app.loop.call_soon(self._flush_destination_bar)
+        self._pending_destination_bar = adapter, destination
+
+    def _flush_destination_bar(self):
+        pending, self._pending_destination_bar = self._pending_destination_bar, None
+        if pending is None:
+            return
+        adapter, destination = pending
+        host = self.app.native_host
+        if host.adapter is adapter and host.state.destination == destination:
+            self.sync_destination_bar(destination)
 
     def sync_destination_bar(self, destination):
         """Reclaim title-only root bars after the screen mounts its actions."""
@@ -224,6 +249,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             navigation.setNavigationBarHidden(hidden, animated=False)
 
     def uninstall(self):
+        self._pending_destination_bar = None
         columns = getattr(self, 'file_columns', None)
         if columns is not None:
             columns.close()
@@ -465,7 +491,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 sync_screen(self.app, view, destination or self.app.native_host.state.destination)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
-            self.sync_destination_bar(destination or self.app.native_host.state.destination)
+            self.update_destination_bar(destination or self.app.native_host.state.destination)
             from .appearance import reserve_navigation
             reserve_navigation(self.app)
             if hasattr(self.app, 'home_sections'):
