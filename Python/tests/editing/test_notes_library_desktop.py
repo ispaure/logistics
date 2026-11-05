@@ -31,6 +31,29 @@ class PrivateFiles(RemoteFiles):
 
 
 class NotesLibraryDesktopTests(QtTestCase):
+    def run(self, result=None):
+        # A failed Save/assertion must not become an unattended dialog in cleanup.
+        # Keep these guards around QtTestCase.run, which owns all widget cleanup.
+        if self._testMethodName != 'test_saved_note_refreshes_content_matches_and_visible_connections':
+            return super().run(result)
+        from contextlib import ExitStack
+        import faulthandler
+        import sys
+        def unexpected(name):
+            def fail(*args, **kwargs):
+                raise AssertionError('Unexpected native dialog in saved-note refresh test: ' + name)
+            return fail
+        with ExitStack() as scope:
+            for owner, name in ((qt.QMessageBox, 'warning'), (qt.QMessageBox, 'question'),
+                                (qt.QMessageBox, 'critical'), (qt.QFileDialog, 'getSaveFileName')):
+                scope.enter_context(patch.object(owner, name, side_effect=unexpected(name)))
+            # Diagnostic only: never terminates the test or changes its deadline.
+            faulthandler.dump_traceback_later(15, repeat=True, file=sys.stderr)
+            try:
+                return super().run(result)
+            finally:
+                faulthandler.cancel_dump_traceback_later()
+
     def test_move_dialog_browses_library_folders_and_rename_keeps_parent(self):
         from commonUtils.ui.resources.picker import ResourcePicker
         from time import monotonic
