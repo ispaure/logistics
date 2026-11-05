@@ -18,6 +18,10 @@ class NotebookDocument:
         return self.resource is None or self.resource.policy.writable
 
     @property
+    def can_autosave(self):
+        return self.resource is not None and self.resource.policy.persistent and self.writable
+
+    @property
     def deletion_started(self):
         return self.source_deleted or self.recovery_deleted
 

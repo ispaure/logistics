@@ -25,18 +25,23 @@ class LibraryDocuments:
         if self.valid():
             await self.host.show_error(title, str(error))
 
-    async def prepare_leave(self):
+    async def prepare_leave(self, *, save=False):
         editor = self.embedded
         if editor is None:
             return True
-        if editor.busy:
+        if editor.busy and getattr(editor, 'kind', None) != 'notebook':
             self.notice.text = 'Wait for the document operation to finish.'
             return False
         try:
             await editor.flush()
             if not self.valid() or self.embedded is not editor:
                 return False
+            if editor.busy:
+                self.notice.text = 'Wait for the document operation to finish.'
+                return False
             if editor.dirty:
+                if save or getattr(editor, 'autosave_on_leave', False):
+                    return await editor.save() and self.valid() and self.embedded is editor
                 if self.host.confirm is None:
                     return False
                 choice = await self.host.confirm()
