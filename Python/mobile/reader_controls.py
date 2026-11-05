@@ -117,11 +117,71 @@ class ReadingFrame:
         self.widget.style.margin = 0 if immersive and full_page else self.margin
         self.widget._comic_fullscreen = immersive and full_page
         self.widget._reader_fullscreen = immersive
+        if not immersive:
+            for control in self.controls:
+                footer = getattr(control, '_reader_page_footer', None)
+                if footer is not None:
+                    footer.request_edge_refresh()
 
 
 def page_buttons(previous, next_page):
     return (icon_button('back', 'Previous page', on_press=previous),
             icon_button('forward', 'Next page', on_press=next_page))
+
+
+class DeferredFooterEdges:
+    """One owned next-turn refresh; never retain a footer through a timer."""
+    def __init__(self, owner):
+        import weakref
+        self.owner = weakref.ref(owner, self._owner_gone)
+        self.pending = None
+        self.latest = None
+        self.closed = self.delivering = False
+        self.requests = self.deliveries = 0
+
+    def _owner_gone(self, reference):
+        self.close()
+
+    def request(self, available):
+        if self.closed:
+            return
+        self.requests = min(1_000_000, self.requests + 1)
+        self.latest = available
+        owner = self.owner()
+        if owner is None or not owner.edge_refresh_visible():
+            handle, self.pending = self.pending, None
+            if handle is not None:
+                handle.cancel()
+            return
+        if self.pending is not None or self.delivering:
+            return
+        owner.edge_timer_diagnostic('before-schedule', self)
+        self.pending = owner._layout_app.loop.call_soon(self.deliver)
+
+    def deliver(self):
+        self.pending = None
+        owner = self.owner()
+        if self.closed or owner is None or not owner.edge_refresh_visible():
+            return
+        available = self.latest
+        owner.edge_timer_diagnostic('before-deliver', self)
+        self.delivering = True
+        self.deliveries = min(1_000_000, self.deliveries + 1)
+        try:
+            owner.refresh_edges(available)
+        finally:
+            self.delivering = False
+        if not self.closed and self.latest != available:
+            self.request(self.latest)
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        handle, self.pending = self.pending, None
+        if handle is not None:
+            handle.cancel()
+        self.owner = lambda: None
 
 
 class PageFooter:
@@ -133,6 +193,8 @@ class PageFooter:
         self.status = status
         self.unit = unit
         self._layout_app, self._layout_destination = app, destination
+        self._edge_refresh = DeferredFooterEdges(self)
+        self._edge_subscription = None
         self.count, self.rtl = 0, False
         self.book_boundaries = None
         self.book_seek = None
@@ -174,11 +236,77 @@ class PageFooter:
         if app is not None:
             from .layout_participants import participants
             self._edge_subscription = participants(app).register(('reader-progress', id(self)), self,
-                lambda owner, frame: app.loop.call_soon(owner.refresh_edges,
+                lambda owner, frame: owner.request_edge_refresh(
                     frame.content_width(destination, margin=0)), order=30)
         from .reader_progress import style_slider
         style_slider(self.slider)
         self.sync(comic=False, count=0, index=0)
+
+    def edge_refresh_visible(self):
+        app = self._layout_app
+        if app is None or not getattr(app, 'active_host', True) or self.widget.parent is None:
+            return False
+        from commonUtils.ui.native.text_size import native_backend
+        backend = native_backend(self.widget)
+        if backend.startswith('toga_iOS.'):
+            native = self.widget._impl.native
+            from commonUtils.ui.native.keyboard import native_value
+            if native_value(native.window) is None:
+                return False
+            while native is not None:
+                if bool(native_value(native.isHidden)) or float(native_value(native.alpha)) <= 0:
+                    return False
+                native = native_value(native.superview)
+        elif backend.startswith('toga_android.'):
+            return bool(self.widget._impl.native.isShown())
+        return True
+
+    def request_edge_refresh(self, available=None):
+        if self._layout_app is not None:
+            if available is None:
+                available = self._layout_app.adaptive.content_width(self._layout_destination, margin=0)
+            self._edge_refresh.request(available)
+
+    def edge_timer_diagnostic(self, stage, deferred):
+        app = self._layout_app
+        if app is None or getattr(app, '_native_suite_timings', None) is None:
+            return  # This collector exists only in the owning native QA app.
+        try:
+            import json
+            import threading
+            import time
+            from pathlib import Path
+            from commonUtils.persistence import atomic_write_json
+            now = time.monotonic()
+            state = app.__dict__.setdefault('_reader_edge_timer_qa', dict(recent=[], emitted=0, last=0))
+            if now - state['last'] < .25:
+                return
+            state['last'] = now
+            loop = app.loop
+            pointer = getattr(getattr(loop, '_cfrunloop', None), 'value', None)
+            row = dict(stage=stage,at=now,loop_type=type(loop).__name__[:64],
+                loop_running=loop.is_running(),loop_closed=loop.is_closed(),
+                main_thread=threading.current_thread() is threading.main_thread(),
+                cf_loop=pointer if type(pointer) is int else None,
+                native_timer_count=len(getattr(loop, '_timers', ())),
+                footer_requests=deferred.requests,footer_deliveries=deferred.deliveries,
+                pending=deferred.pending is not None,retired=deferred.closed)
+            state['recent'] = (state['recent'] + [row])[-24:]
+            atomic_write_json(Path(app.paths.cache)/'logistics-native-ui-reader-edge-timers.json',
+                              dict(schema=1,diagnostic_only=True,recent=state['recent']))
+            if state['emitted'] < 128:
+                print('LOGISTICS_READER_EDGE_TIMER='+json.dumps(row),flush=True)
+                state['emitted'] += 1
+        except Exception:
+            pass  # Observing the scheduler must never replace a layout result.
+
+    def dispose(self):
+        self._edge_refresh.close()
+        self.edge_timer_diagnostic('retired', self._edge_refresh)
+        if self._edge_subscription is not None:
+            self._edge_subscription.dispose()
+            self._edge_subscription = None
+        self._layout_app = None
 
     def refresh_edges(self, available=None):
         from .reader_edges import refresh_progress_edges
@@ -231,7 +359,7 @@ class PageFooter:
         else:
             self.set_progress_text(progress, f'{self.unit.title()} {progress}')
         if self._layout_app is not None:
-            self._layout_app.loop.call_soon(self.refresh_edges,
+            self.request_edge_refresh(
                 self._layout_app.adaptive.content_width(self._layout_destination, margin=0))
 
     def set_progress_text(self, text, label):

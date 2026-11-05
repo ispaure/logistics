@@ -248,6 +248,32 @@ and test execution. The platform workflow sets this path during installation and
 persists it through `GITHUB_ENV` so later fixture subprocesses can find browser
 tooling after application caches are isolated.
 
+Full local mobile release journeys require browser tooling before their host tests.
+In the build manager's project settings, select **Node**, **Node modules** (the
+existing `node_modules` directory containing Playwright), and optionally **Chrome**
+(an existing Chromium-compatible executable). Leaving Chrome empty selects
+Playwright's installed Chromium. Node can also be discovered on `PATH`.
+`LOGISTICS_NODE`, `NODE_PATH` and `LOGISTICS_CHROME` remain supported environment
+inputs to the same settings owner. These are machine-local settings; do not add
+personal executable paths to tracked project configuration.
+
+Preparation captures the selected tool paths, including the resolved Playwright
+browser path, in the plan environment and identity. The release prerequisite
+checks existing executable files and Node/Playwright metadata before host tests;
+it never installs packages, downloads browsers or launches a browser. The DOM
+cases themselves validate browser behavior. Missing tooling blocks a full mobile
+release with setup guidance. Ordinary developer suites retain their optional
+browser skips; saving these settings does not change their test policy.
+
+The build manager's full local mobile validation runs the existing `dev.py`
+architecture, toolchain, hygiene and lint commands before host suites and native
+builds. These are the same source checks required by the hosted platform workflow;
+unit tests for the checkers do not substitute for checking the selected source.
+They run in the captured Git source checkout with the selected desktop Python.
+A failed source check blocks dependent validation and packaging while owned cleanup
+retains its normal completion behavior. Focused developer commands keep their
+existing scope.
+
 ### Test timing and maintenance
 
 Generic host/native test mechanisms and defaults live in `commonUtils.testing`;

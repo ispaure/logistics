@@ -37,6 +37,9 @@ class ProviderDocumentSession:
         if self.closed:
             return
         owner = self.owner
+        footer = getattr(getattr(owner, 'crypt_view', None), 'page_footer', None)
+        if footer is not None:
+            footer.dispose()
         progress = getattr(owner, '_provider_progress', None)
         if progress is not None:
             progress.close()

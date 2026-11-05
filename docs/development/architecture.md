@@ -51,6 +51,8 @@ The generic `desktop` package owns only application-level presentation:
 - Generic workflow dispatch.
 - Shared UI primitives that are not feature-specific.
 
+Mobile features use the injected `MobilePresentation` contract for shell surface styling, fold geometry and reader-layout retirement. The mobile composition root binds those callbacks; feature adapters do not import the application layout owners.
+
 ## Startup and refresh
 
 `Python/mobile` is a separate Toga entry point packaged from curated
