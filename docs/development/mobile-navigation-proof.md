@@ -231,10 +231,10 @@ release-note validation, so the recorded application revision remains explicit.
 Earlier lifecycle reports remain evidence for the revisions they exercised.
 The physical-device and minimum-runtime limitations above still apply.
 
-The release publisher optionally uses a tag-specific Markdown file in
-`.github/release-notes/` for the release title and description; otherwise it keeps
-generated notes. Existing releases/assets retain their no-overwrite protection,
-and the validation/build/runtime gates still precede publication.
+The release publisher uses reviewed Markdown under `.github/release-notes/`
+within the version/channel boundaries described in [releasing](releasing.md).
+Existing assets retain their no-overwrite protection, and validation/build/runtime
+gates still precede publication. Metadata reconciliation preserves draft state.
 
 ## Guided remote copies
 

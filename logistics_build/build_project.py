@@ -343,12 +343,16 @@ class LogisticsProject:
                 raise ValueError('Choose an explicit release channel/tag, separate from app version and mobile build numbers.')
             command = (str(self.interpreter), '-m', 'logistics_build.build_project', 'release', '--tag', release_tag,
                        '--commit', source['logistics_commit'], '--root', str(self.root))
+            owner = uuid4().hex
+            command += ('--operation-receipt', str(workspace / 'remote' / ('release-' + owner + '.json')),
+                        '--publication-owner', owner)
             if re.fullmatch(r'[0-9a-f]{40}', revision):
                 command += ('--published-commit',)
             if source.get('run_overrides', {}).get('testing.reuse_verified_results') == 'off':
                 command += ('--no-test-reuse',)
             return Plan('Logistics', operation, dict(source, release_tag=release_tag),
-                        (Phase('release-source-and-gates', command, str(self.root), timeout=14400),),
+                        (Phase('release-source-and-gates', command, str(self.root), timeout=14400,
+                               kind='publication', effect='publish', provider='github'),),
                         str(workspace), backend='GitHub', effect='publish')
         if operation not in ('Test', 'Build'):
             raise ValueError('Tester preparation uses the local verified signing/build tools, not a generic hosted dispatch.')
@@ -713,6 +717,7 @@ def main():
     parser.add_argument('--ref')
     parser.add_argument('--commit')
     parser.add_argument('--operation-receipt', type=Path)
+    parser.add_argument('--publication-owner')
     parser.add_argument('--observation-receipt', type=Path)
     parser.add_argument('--workflow')
     parser.add_argument('--tag')
@@ -762,14 +767,23 @@ def main():
         result = client.wait(run, args.commit, timeout=13800, cancelled=cancelled,
                              progress=lambda value: print(json.dumps(value), flush=True))
         return int(result.get('status') != 'completed')
-    if not args.published_commit and (git(args.root, 'status', '--porcelain') or git(args.root, 'rev-parse', 'HEAD') != args.commit):
+    if args.operation_receipt is not None:
+        _publication_capabilities(client)  # Also precedes optional Git-notes export.
+        if (not re.fullmatch(r'[a-f0-9]{40}', args.commit or '')
+                or not re.fullmatch(r'[a-f0-9]{32}', args.publication_owner or '')
+                or not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', args.tag or '')):
+            raise ValueError('Owned release requires its exact reviewed source, owner and tag.')
+    owned_resume = args.operation_receipt is not None and args.operation_receipt.exists()
+    if not args.published_commit and not owned_resume and (git(args.root, 'status', '--porcelain') or git(args.root, 'rev-parse', 'HEAD') != args.commit):
         raise ValueError('Commit intended source before requesting a release.')
-    if args.test_evidence_request and not args.no_test_reuse and not args.published_commit:
+    if args.test_evidence_request and not args.no_test_reuse and not args.published_commit and not owned_resume:
         from logistics_build.release_test_evidence import prepare_export, publish_note
         try:
             proof = prepare_export(args.root, client.repository, args.test_evidence_request,
                                    args.test_evidence_sha256)
             if proof:
+                if cancelled.is_set():
+                    raise RuntimeError('Release cancelled before evidence publication.')
                 publish_note(args.root, proof, args.test_evidence_request.with_name('published-evidence.json'))
                 print('Signed local test evidence published; hosted suites independently check equivalence.', flush=True)
             else:
@@ -777,7 +791,8 @@ def main():
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RuntimeError):
             print('Local evidence export unavailable or rejected; hosted checks independently verify any existing proof.', flush=True)
     return release_source(args.root, client, args.tag, args.commit, cancelled,
-                          reuse_test_results=not args.no_test_reuse, published_commit=args.published_commit)
+                          reuse_test_results=not args.no_test_reuse, published_commit=args.published_commit,
+                          operation_receipt=args.operation_receipt, publication_owner=args.publication_owner)
 
 
 def hosted_validation(client, values, args, cancelled):
@@ -869,9 +884,287 @@ def github_client(values, root):
     return GitHub(values['github.repository'],token)
 
 
-def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True, published_commit=False):
+# The terminal witness below is valid only for this reviewed release DAG:
+# package requires all selected/reused gates; publish requires package success.
+_RELEASE_DAG_SHA256 = '2b1c38429423b557f5a222587c7158999e93d5eed3833d69d1af037b5bcf004b'
+
+
+def _publication_capabilities(client):
+    required = ('get', 'attempt', 'rerun_failed', 'reconcile_rerun', 'job_log')
+    if any(not callable(getattr(client, name, None)) for name in required):
+        raise RuntimeError('Pinned build-manager lacks owned publication recovery APIs; '
+                           'qualify and publish its update before preparing this release. No external effect was attempted.')
+
+
+def _publication_get(client, path, cancelled):
+    try:
+        return client.get(path, cancelled=cancelled)
+    except RuntimeError as error:
+        if getattr(error, 'status', None) == 404:
+            return None
+        raise
+
+
+def _publication_jobs(client, run_id, attempt, cancelled):
+    rows = []
+    for page in range(1, 21):
+        result = _publication_get(client, client.base + f'/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100&page={page}', cancelled)
+        if not isinstance(result, dict) or not isinstance(result.get('jobs'), list):
+            raise ValueError('Exact-attempt job evidence is unavailable.')
+        batch = result['jobs']
+        rows.extend(batch)
+        if len(batch) < 100:
+            if len({row['id'] for row in rows}) != len(rows):
+                raise ValueError('Duplicate exact-attempt job evidence.')
+            return rows
+    raise ValueError('Exact-attempt job inventory exceeds its bound.')
+
+
+def _publication_terminal(root, commit, jobs):
+    import hashlib
+    workflow = subprocess.check_output(['git', 'show', commit + ':.github/workflows/release.yml'], cwd=root, timeout=30)
+    if hashlib.sha256(workflow).hexdigest() != _RELEASE_DAG_SHA256:
+        raise ValueError('Release DAG changed; review its terminal publication witness before recovery.')
+    if not jobs or any(row.get('status') != 'completed' or row.get('conclusion') not in {'success', 'skipped'} for row in jobs):
+        return False
+    for name in ('evidence', 'package', 'publish'):
+        matches = [row for row in jobs if row.get('name') == name]
+        if len(matches) != 1 or matches[0].get('conclusion') != 'success':
+            return False
+    return True
+
+
+def _publication_transient(client, jobs):
+    """Only proven artifact-service failure, never failed app/test/setup code."""
+    failed = [row for row in jobs if row.get('conclusion') not in {'success', 'skipped'}]
+    if not failed or any(row.get('status') != 'completed' for row in jobs):
+        return False
+    for job in failed:
+        if job.get('name') not in {'evidence', 'package', 'publish'} or job.get('conclusion') not in {'failure', 'timed_out', 'cancelled'}:
+            return False
+        steps = [step for step in job.get('steps', []) if not step.get('name', '').startswith(('Post ', 'Complete job'))]
+        bad = [step for step in steps if step.get('conclusion') not in {'success', 'skipped'}]
+        if len(bad) != 1 or not re.search(r'actions/(?:upload|download)-artifact@', bad[0].get('name', '')):
+            return False
+        # A prior failed selector, test or package step must never be retried as infrastructure.
+        number = bad[0].get('number', 0)
+        if any(step.get('conclusion') != 'success' for step in steps if step.get('number', 0) < number):
+            return False
+        text = client.job_log(job['id'], max_bytes=1024 * 1024, timeout=30)
+        if not isinstance(text, str) or not re.search(r'Finaliz(?:ing|e).*artifact|artifact.*finaliz', text, re.I):
+            return False
+        if not (re.search(r'Unexpected token.*(?:<!DOCTYPE|<html)|<!DOCTYPE.*not valid JSON', text, re.I | re.S)
+                or re.search(r'(?:HTTP|status(?: code)?)\s*[:=]?\s*(?:429|502|503|504)\b', text, re.I)):
+            return False
+    return True
+
+
+def _publication_metadata(root, commit, tag, release, client, cancelled):
+    """Use the publisher's single policy, reading notes from the captured source."""
+    import importlib.util
+    from logistics_build.build_retention import scratch
+    spec = importlib.util.spec_from_file_location('logistics_release_notes_policy', root / '.github/scripts/publish_release.py')
+    policy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(policy)
+    with scratch(root) as work:
+        notes = work / 'notes'
+        notes.mkdir()
+        names = git(root, 'ls-tree', '-r', '--name-only', commit, '.github/release-notes').splitlines()
+        for name in names:
+            if Path(name).parent.as_posix() != '.github/release-notes' or not name.endswith('.md'):
+                continue
+            (notes / Path(name).name).write_bytes(subprocess.check_output(['git', 'show', commit + ':' + name], cwd=root, timeout=30))
+        expected = policy.expected_metadata(tag, notes_dir=notes)
+    if expected is None:
+        return release
+    try:
+        policy.verify_metadata(release, expected)
+    except RuntimeError:
+        if cancelled.is_set():
+            raise RuntimeError('Notes reconciliation cancelled before metadata update.')
+        # Metadata repair is idempotent; never change publication state or assets.
+        before = (release['id'], release['draft'], release['prerelease'], policy.asset_identities(release))
+        client.request('PATCH', client.base + '/releases/' + str(release['id']), expected)
+        current = _publication_get(client, client.base + '/releases/' + str(release['id']), cancelled)
+        after = (current['id'], current['draft'], current['prerelease'], policy.asset_identities(current))
+        if after != before:
+            raise RuntimeError('Release identity, state or assets changed during notes reconciliation.')
+        policy.verify_metadata(current, expected)
+        return current
+    return release
+
+
+def _publication_asset(root, client, tag, commit, dependency, cancelled):
+    release = _publication_get(client, client.base + '/releases/tags/' + tag, cancelled)
+    if release is None:
+        return None
+    channel = tag.split('-')[1].split('.')[0]
+    assets = [row for row in release.get('assets', []) if row.get('name') == 'release.zip']
+    if release.get('tag_name') != tag or release.get('prerelease') != (channel in {'alpha', 'beta'}) or len(assets) > 1:
+        raise RuntimeError('Existing release differs from the reviewed publication identity or channel.')
+    if release.get('draft') or not assets:
+        return None  # Observe an owned in-progress release; never publish a draft or upload another ZIP.
+    from logistics_build.release_verification import verify_asset
+    verified = verify_asset(assets[0], commit, dependency, cancelled, tag=tag)
+    release = _publication_metadata(root, commit, tag, release, client, cancelled)
+    return dict(release=release['html_url'], release_id=release['id'], asset_id=assets[0]['id'], verified=verified)
+
+
+def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owner,
+                          reuse_test_results, published_commit, timeout=13600, poll=15):
+    """One retained publication operation; only its exact immutable tag may resume."""
+    from build_manager.locking import workspace_lock
+    from build_manager.profiles import save_json
+    from urllib.parse import quote
+    import math
+    _publication_capabilities(client)  # Before ANY tag, branch or provider write.
+    if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (timeout, poll)):
+        raise ValueError('Publication observation timeout and poll must be finite and positive.')
+    if not re.fullmatch(r'[a-f0-9]{40}', commit or ''):
+        raise ValueError('Publication requires an exact reviewed commit.')
+    if cancelled.is_set():
+        raise RuntimeError('Publication observation was cancelled before any external effect.')
+    if not re.fullmatch(r'[a-f0-9]{32}', owner or ''):
+        raise ValueError('Publication requires its reviewed operation owner token.')
+    root, receipt = Path(root).resolve(), Path(receipt)
+    if receipt.is_symlink() or any(path.is_symlink() for path in receipt.parents):
+        raise ValueError('Publication receipt refuses linked paths.')
+    shared_entry = git(root, 'ls-tree', commit, 'Python/commonUtils').split()
+    if len(shared_entry) < 3 or shared_entry[:2] != ['160000', 'commit'] or not re.fullmatch(r'[a-f0-9]{40}', shared_entry[2]):
+        raise ValueError('Reviewed release requires its exact commonUtils gitlink.')
+    dependency = shared_entry[2]
+    binding = dict(repository=client.repository, root=str(root), tag=tag, commit=commit,
+                   commonUtils_commit=dependency, owner=owner, reuse_test_results=reuse_test_results,
+                   workflow='.github/workflows/release.yml')
+    with workspace_lock(receipt.with_suffix('.lock')):
+        saved = json.loads(receipt.read_text()) if receipt.exists() else None
+        if saved is not None and (saved.get('schema') != 1 or saved.get('binding') != binding):
+            raise ValueError('Publication receipt differs from the reviewed owner/source/tag/dependency.')
+        tag_path = client.base + '/git/ref/tags/' + quote(tag, safe='')
+        remote = _publication_get(client, tag_path, cancelled)
+        if saved is None:
+            if remote is not None:
+                raise ValueError('Release tag already exists without this operation ownership proof; it will never be moved.')
+            saved = dict(schema=1, binding=binding, status='prepared', reruns=[])
+        def check_cancel():
+            if cancelled.is_set():
+                raise RuntimeError('Owned publication cancelled before external effect or completion.')
+        def save(**values):
+            saved.update(values)
+            save_json(receipt, saved)
+        if remote is not None:
+            if (saved.get('status') == 'prepared' or saved.get('tag_object') != remote.get('object', {}).get('sha')
+                    or client.resolve_ref('refs/tags/' + tag) != commit):
+                raise ValueError('Existing release tag is unowned, moved or mismatched.')
+        else:
+            if saved.get('status') not in {'prepared', 'branch-push-intent', 'tag-create-intent', 'tag-push-intent'}:
+                raise ValueError('Previously observed owned tag disappeared; do not recreate it automatically.')
+            if published_commit or saved['status'] in {'tag-create-intent', 'tag-push-intent'}:
+                if _publication_get(client, client.base + '/commits/' + commit, cancelled).get('sha') != commit:
+                    raise ValueError('Reviewed release source is not published.')
+            else:
+                if git(root, 'status', '--porcelain') or git(root, 'rev-parse', 'HEAD') != commit:
+                    raise ValueError('Commit intended source before requesting a release.')
+                shared = root / 'Python/commonUtils'
+                if git(shared, 'status', '--porcelain'):
+                    raise ValueError('Commit intended shared changes first.')
+                branch = git(shared, 'branch', '--show-current')
+                if not branch:
+                    raise ValueError('Select the intended shared publication branch.')
+                save(status='branch-push-intent')
+                check_cancel()
+                subprocess.run(['git', 'push', 'origin', branch], cwd=shared, check=True, timeout=120)
+                check_cancel()
+                subprocess.run(['git', 'push', 'origin', commit + ':refs/heads/' + tag.split('-')[1].split('.')[0]], cwd=root, check=True, timeout=120)
+            message = 'Logistics source release\n\nBuild-Manager-Publication: ' + owner
+            if not reuse_test_results:
+                message += '\nBuild-Manager-Reuse: off'
+            # Local tags are adopted only after our prior durable create intent,
+            # exact owner annotation and source prove this operation created them.
+            local = subprocess.run(['git', 'rev-parse', '--verify', 'refs/tags/' + tag], cwd=root, capture_output=True, text=True, timeout=30)
+            if local.returncode == 0:
+                if saved.get('status') not in {'tag-create-intent', 'tag-push-intent'} or git(root, 'for-each-ref', '--format=%(contents)', 'refs/tags/' + tag) != message:
+                    raise ValueError('Local release tag has no matching retained creation intent.')
+                if git(root, 'rev-parse', tag + '^{commit}') != commit:
+                    raise ValueError('Local owned tag identifies another source.')
+            else:
+                save(status='tag-create-intent')
+                check_cancel()
+                subprocess.run(['git', 'tag', '-a', tag, commit, '-m', message], cwd=root, check=True, timeout=30)
+            save(status='tag-push-intent', tag_object=git(root, 'rev-parse', 'refs/tags/' + tag))
+            check_cancel()
+            subprocess.run(['git', 'push', 'origin', 'refs/tags/' + tag], cwd=root, check=True, timeout=120)
+            remote = _publication_get(client, tag_path, cancelled)
+            if remote is None or remote['object']['sha'] != saved['tag_object'] or client.resolve_ref('refs/tags/' + tag) != commit:
+                raise RuntimeError('Tag push outcome is unverified; resume this operation, never create another tag.')
+            save(status='tag-pushed')
+        deadline = time.monotonic() + timeout
+        asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
+        terminal_asset_deadline = None
+        while time.monotonic() < deadline and not cancelled.is_set():
+            if not saved.get('run_id'):
+                runs = _publication_get(client, client.base + '/actions/runs?event=push&head_sha=' + commit + '&per_page=100', cancelled)
+                candidates = [row for row in runs['workflow_runs'] if row.get('head_sha') == commit
+                              and row.get('head_branch') == tag and row.get('path', '').split('@')[0] == binding['workflow']]
+                if len(candidates) > 1:
+                    raise ValueError('More than one release run identifies this immutable tag.')
+                if not candidates:
+                    cancelled.wait(min(5, poll))
+                    continue
+                save(run_id=candidates[0]['id'], attempt=candidates[0].get('run_attempt', 1))
+            run_id, attempt = saved['run_id'], saved['attempt']
+            if saved['reruns'] and saved['reruns'][-1]['status'] == 'intent':
+                accepted = client.reconcile_rerun(run_id, commit, expected_attempt=saved['reruns'][-1]['from_attempt'],
+                    expected_ref='refs/tags/' + tag, expected_workflow=binding['workflow'], cancelled=cancelled)
+                saved['reruns'][-1].update(status='accepted', attempt=accepted['run_attempt'])
+                save(attempt=accepted['run_attempt'])
+                attempt = saved['attempt']
+            observed = client.attempt(run_id, attempt, commit, expected_ref='refs/tags/' + tag,
+                                      expected_workflow=binding['workflow'])
+            jobs = _publication_jobs(client, run_id, attempt, cancelled)
+            witness = _publication_terminal(root, commit, jobs)
+            if asset is None:
+                asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
+            if witness and asset is None:
+                terminal_asset_deadline = terminal_asset_deadline or min(deadline, time.monotonic() + 60)
+                if time.monotonic() >= terminal_asset_deadline:
+                    raise RuntimeError('Terminal publish succeeded without a visible verified release ZIP; resume observation, never upload again.')
+            if witness and asset is not None:
+                # Gate observation can outlive the first download. Confirm the
+                # currently published bytes/identity before recording completion.
+                current_asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
+                if current_asset is None or current_asset != asset:
+                    raise RuntimeError('Published release or verified asset changed during gate observation; inspect the owned operation.')
+                asset = current_asset
+                check_cancel()
+                save(status='verified', proof=dict(run_id=run_id, run_attempt=attempt,
+                    aggregate_status=observed.get('status'), jobs=[{k: row.get(k) for k in ('id', 'name', 'status', 'conclusion')} for row in jobs], **asset))
+                print(json.dumps(dict(tag=tag, commit=commit, **saved['proof'])), flush=True)
+                return 0
+            failed = jobs and all(row.get('status') == 'completed' for row in jobs) and any(row.get('conclusion') not in {'success', 'skipped'} for row in jobs)
+            if failed:
+                if saved['reruns'] or not _publication_transient(client, jobs):
+                    save(status='failed', failed_attempt=attempt)
+                    raise RuntimeError('Required release jobs failed; no automatic product-test retry is permitted.')
+                saved['reruns'].append(dict(status='intent', from_attempt=attempt))
+                save(status='rerun-intent')  # Persist BEFORE the one irreversible POST.
+                check_cancel()
+                accepted = client.rerun_failed(run_id, commit, expected_attempt=attempt,
+                    expected_ref='refs/tags/' + tag, expected_workflow=binding['workflow'], confirmed=True, cancelled=cancelled)
+                saved['reruns'][-1].update(status='accepted', attempt=accepted['run_attempt'])
+                save(attempt=accepted['run_attempt'])
+                continue
+            cancelled.wait(poll)
+        save(status='observation-stopped')
+        raise TimeoutError('Owned release remains unverified; resume this exact receipt/tag without repeating publication.')
+
+
+def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True, published_commit=False, operation_receipt=None, publication_owner=None):
     if not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', tag or ''):
         raise ValueError('Select an explicit supported release tag.')
+    if operation_receipt is not None:
+        return _owned_release_source(root, client, tag, commit, cancelled, receipt=operation_receipt,
+            owner=publication_owner, reuse_test_results=reuse_test_results, published_commit=published_commit)
     if published_commit:
         if (not re.fullmatch(r'[0-9a-f]{40}', commit or '')
                 or client.request('GET', client.base + '/commits/' + commit).get('sha') != commit):

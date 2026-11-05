@@ -202,9 +202,9 @@ class PublishTests(unittest.TestCase):
         self.archive = Path(self.temp.name) / 'release.zip'
         self.archive.write_bytes(b'fixture')
 
-    def response(self, status=200, assets=()):
+    def response(self, status=200, assets=(), **metadata):
         return subprocess.CompletedProcess([], 0 if status == 200 else 1,
-            f'HTTP/2.0 {status} Status\n\n' + json.dumps({'assets': list(assets)}), 'error')
+            f'HTTP/2.0 {status} Status\n\n' + json.dumps(dict(assets=list(assets), **metadata)), 'error')
 
     def test_missing_release_creates_with_notes_and_tag_verification(self):
         with patch('publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
@@ -216,28 +216,39 @@ class PublishTests(unittest.TestCase):
 
     def test_alpha_beta_tags_publish_as_prereleases(self):
         for tag in ('v1.0.0-alpha.2', 'v1.0.0-beta.1'):
-            with patch('publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
+            notes_dir = Path(self.temp.name)
+            text = '# Reviewed title\n\nReviewed description.\n'
+            (notes_dir / (tag + '.md')).write_text(text)
+            with patch.object(publishing, 'NOTES_DIR', notes_dir), patch('publish_release.subprocess.run',
+                    side_effect=[self.response(404), None, self.response(name='Reviewed title', body=text)]) as gh:
                 publishing.publish('owner/repo', tag, self.archive)
-            self.assertIn('--prerelease', gh.call_args.args[0])
+            self.assertIn('--prerelease', gh.call_args_list[1].args[0])
 
     def test_tag_specific_notes_set_numbered_title_without_bypassing_verification(self):
         notes_dir = Path(self.temp.name)
         notes = notes_dir / 'v1.0.0-alpha.3.md'
         notes.write_text('# Phase 0 Part 4: Validated mobile foundation\n\nRelease description.\n')
         with patch.object(publishing, 'NOTES_DIR', notes_dir), patch(
-                'publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
+                'publish_release.subprocess.run', side_effect=[self.response(404), None,
+                    self.response(name='Phase 0 Part 4: Validated mobile foundation', body=notes.read_text())]) as gh:
             publishing.publish('owner/repo', 'v1.0.0-alpha.3', self.archive)
-        args = gh.call_args.args[0]
+        args = gh.call_args_list[1].args[0]
         self.assertEqual(args[args.index('--title') + 1], 'Phase 0 Part 4: Validated mobile foundation')
-        self.assertEqual(args[args.index('--notes-file') + 1], str(notes))
+        self.assertIn('--notes-file', args)
+        self.assertEqual(notes.read_text(), '# Phase 0 Part 4: Validated mobile foundation\n\nRelease description.\n')
         self.assertIn('--verify-tag', args)
         self.assertIn('--prerelease', args)
         self.assertNotIn('--generate-notes', args)
 
     def test_numbered_main_tags_publish_as_stable(self):
-        with patch('publish_release.subprocess.run', side_effect=[self.response(404), None]) as gh:
+        notes_dir = Path(self.temp.name)
+        text = '# Stable reviewed title\n\nReviewed description.\n'
+        (notes_dir / 'v0.1.0.md').write_text(text)
+        expected = dict(name='Logistics 0.1.0-main.01', body=text.replace('Stable reviewed title', 'Logistics 0.1.0-main.01'))
+        with patch.object(publishing, 'NOTES_DIR', notes_dir), patch('publish_release.subprocess.run',
+                side_effect=[self.response(404), None, self.response(**expected)]) as gh:
             publishing.publish('owner/repo', 'v0.1.0-main.01', self.archive)
-        self.assertNotIn('--prerelease', gh.call_args.args[0])
+        self.assertNotIn('--prerelease', gh.call_args_list[1].args[0])
 
     def test_empty_tag_notes_abort_before_creating_a_release(self):
         notes_dir = Path(self.temp.name)
@@ -260,6 +271,136 @@ class PublishTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'refusing to overwrite'):
                 publishing.publish('owner/repo', 'v1.0', self.archive)
             self.assertEqual(gh.call_count, 1)
+
+    def test_alpha6_inherits_only_latest_lower_alpha_reviewed_description(self):
+        directory = Path(self.temp.name)
+        for name, description in [('v0.2.0-alpha.2', 'older'), ('v0.2.0-alpha.5', 'Reviewed DataView disclosure'),
+                                  ('v0.2.0-alpha.7', 'future'), ('v0.2.0-beta.5', 'other channel'),
+                                  ('v0.3.0-alpha.5', 'other version')]:
+            (directory / (name + '.md')).write_text('# ' + name + '\n\n' + description + '\n')
+        expected = publishing.expected_metadata('v0.2.0-alpha.6', notes_dir=directory)
+        self.assertEqual(expected, dict(name='Logistics 0.2.0-alpha.6',
+            body='# Logistics 0.2.0-alpha.6\n\nReviewed DataView disclosure\n'))
+        (directory / 'v0.2.0-alpha.6.md').write_text('# Exact reviewed title\n\nExact reviewed description\n')
+        self.assertEqual(publishing.expected_metadata('v0.2.0-alpha.6', notes_dir=directory)['name'], 'Exact reviewed title')
+
+    def test_reviewed_policy_never_crosses_version_channel_or_future_number(self):
+        directory = Path(self.temp.name)
+        (directory / 'v0.2.0-alpha.5.md').write_text('# Reviewed\n\nDescription\n')
+        for tag in ('v0.3.0-alpha.6', 'v0.2.0-beta.6', 'v0.2.0-main.6', 'v0.2.0-alpha.4'):
+            with self.subTest(tag=tag), self.assertRaisesRegex(RuntimeError, 'Missing reviewed'):
+                publishing.expected_metadata(tag, notes_dir=directory)
+
+    def test_stable_main_uses_same_version_base_and_retains_complete_description(self):
+        directory = Path(self.temp.name)
+        (directory / 'v0.2.0.md').write_text('# Stable title\n\nThe users own JSON runs only under reviewed conditions.\n')
+        value = publishing.expected_metadata('v0.2.0-main.1', notes_dir=directory)
+        self.assertEqual(value['name'], 'Logistics 0.2.0-main.1')
+        self.assertIn('The users own JSON runs only under reviewed conditions.', value['body'])
+
+    def test_actual_reviewed_alpha5_content_is_preserved_for_alpha6(self):
+        source = publishing.NOTES_DIR / 'v0.2.0-alpha.5.md'
+        original = source.read_text()
+        expected = publishing.expected_metadata('v0.2.0-alpha.6')
+        self.assertEqual(expected['body'].partition('\n')[2], original.partition('\n')[2])
+        self.assertIn('dataviewjs', expected['body'])
+        self.assertIn('JSON itself is not executable code.', expected['body'])
+        self.assertEqual(source.read_text(), original)
+
+    def test_malformed_newest_or_exact_notes_never_fall_back_silently(self):
+        directory = Path(self.temp.name)
+        (directory / 'v0.2.0-alpha.1.md').write_text('# Valid\n\nReviewed description\n')
+        for text in ('', 'No markdown title\n\nDescription', '# Title only\n', '# Title\n\nBad\0description'):
+            (directory / 'v0.2.0-alpha.5.md').write_text(text)
+            with self.subTest(text=text), self.assertRaises(RuntimeError):
+                publishing.expected_metadata('v0.2.0-alpha.6', notes_dir=directory)
+
+    def test_creation_reads_normalized_reviewed_file_and_verifies_remote_body(self):
+        directory = Path(self.temp.name)
+        original = '# Previous title\n\nReviewed JSON disclosure.\n'
+        (directory / 'v0.2.0-alpha.5.md').write_text(original)
+        expected = dict(name='Logistics 0.2.0-alpha.6', body=original.replace('Previous title', 'Logistics 0.2.0-alpha.6'))
+        observed = []
+        def gh(args, **options):
+            if args[:3] == ['gh', 'release', 'create']:
+                path = Path(args[args.index('--notes-file') + 1])
+                observed.append((path, path.read_text()))
+                return None
+            return self.response(**expected) if observed else self.response(404)
+        with patch.object(publishing, 'NOTES_DIR', directory), patch('publish_release.subprocess.run', side_effect=gh):
+            publishing.publish('owner/repo', 'v0.2.0-alpha.6', self.archive)
+        self.assertEqual(observed[0][1], expected['body'])
+        self.assertFalse(observed[0][0].exists())
+        self.assertEqual((directory / 'v0.2.0-alpha.5.md').read_text(), original)
+
+    def test_malformed_exact_file_cannot_use_valid_lower_notes(self):
+        directory = Path(self.temp.name)
+        (directory / 'v0.2.0-alpha.5.md').write_text('# Valid\n\nDescription\n')
+        (directory / 'v0.2.0-alpha.6.md').write_text('')
+        with self.assertRaisesRegex(RuntimeError, 'require a title'):
+            publishing.expected_metadata('v0.2.0-alpha.6', notes_dir=directory)
+
+    def test_metadata_reconciliation_state_change_blocks_asset_upload(self):
+        directory = Path(self.temp.name)
+        text = '# Reviewed\n\nReviewed disclosure.\n'
+        (directory / 'v0.2.0-alpha.6.md').write_text(text)
+        for changed in (dict(draft=False, assets=[]), dict(draft=True, assets=[{'name': 'foreign'}])):
+            with self.subTest(changed=changed), patch.object(publishing, 'NOTES_DIR', directory), patch(
+                    'publish_release.subprocess.run', side_effect=[self.response(id=4, draft=True, name='Wrong', body='wrong'),
+                        None, self.response(id=4, name='Reviewed', body=text, **changed)]) as gh:
+                with self.assertRaisesRegex(RuntimeError, 'state/assets changed'):
+                    publishing.publish('owner/repo', 'v0.2.0-alpha.6', self.archive)
+            self.assertEqual(gh.call_count, 3)
+
+    def test_existing_wrong_body_is_reconciled_without_touching_assets_or_draft(self):
+        directory = Path(self.temp.name)
+        text = '# Reviewed\n\nUsers own reviewed JSON disclosure.\n'
+        (directory / 'v0.2.0-alpha.6.md').write_text(text)
+        unchanged = dict(id=41, draft=True, prerelease=True)
+        assets = [{'name': 'release.zip', 'id': 77, 'size': 900}]
+        with patch.object(publishing, 'NOTES_DIR', directory), patch('publish_release.subprocess.run',
+                side_effect=[self.response(assets=assets, name='Wrong', body='Generated', **unchanged), None,
+                             self.response(assets=assets, name='Reviewed', body=text, **unchanged)]) as gh:
+            with self.assertRaisesRegex(RuntimeError, 'refusing to overwrite'):
+                publishing.publish('owner/repo', 'v0.2.0-alpha.6', self.archive)
+        self.assertEqual(gh.call_count, 3)
+        self.assertEqual(gh.call_args_list[1].args[0],
+            ['gh', 'api', '--method', 'PATCH', 'repos/owner/repo/releases/41', '--input', '-'])
+        self.assertEqual(json.loads(gh.call_args_list[1].kwargs['input']), dict(name='Reviewed', body=text))
+        self.assertFalse(any('upload' in call.args[0] or '--clobber' in call.args[0] for call in gh.call_args_list))
+
+    def test_concurrent_download_counter_change_does_not_look_like_asset_replacement(self):
+        directory = Path(self.temp.name)
+        text = '# Reviewed\n\nReviewed disclosure.\n'
+        (directory / 'v0.2.0-alpha.6.md').write_text(text)
+        asset = dict(id=77, name='release.zip', size=900, digest='sha256:fixed')
+        with patch.object(publishing, 'NOTES_DIR', directory), patch('publish_release.subprocess.run', side_effect=[
+                self.response(id=4, name='Wrong', body='wrong', assets=[dict(asset, download_count=1)]), None,
+                self.response(id=4, name='Reviewed', body=text, assets=[dict(asset, download_count=2)])]) as gh:
+            with self.assertRaisesRegex(RuntimeError, 'refusing to overwrite'):
+                publishing.publish('owner/repo', 'v0.2.0-alpha.6', self.archive)
+        self.assertEqual(gh.call_count, 3)
+
+    def test_metadata_readback_mismatch_blocks_upload(self):
+        directory = Path(self.temp.name)
+        text = '# Reviewed\n\nReviewed disclosure.\n'
+        (directory / 'v0.2.0-alpha.6.md').write_text(text)
+        with patch.object(publishing, 'NOTES_DIR', directory), patch('publish_release.subprocess.run',
+                side_effect=[self.response(id=4, name='Wrong', body='wrong'), None,
+                             self.response(id=4, name='Reviewed', body='still wrong')]) as gh:
+            with self.assertRaisesRegex(RuntimeError, 'does not match'):
+                publishing.publish('owner/repo', 'v0.2.0-alpha.6', self.archive)
+        self.assertEqual(gh.call_count, 3)
+
+    def test_matching_existing_notes_do_not_patch_or_replace_asset(self):
+        directory = Path(self.temp.name)
+        text = '# Reviewed\n\nReviewed disclosure.\n'
+        (directory / 'v0.2.0-alpha.6.md').write_text(text)
+        with patch.object(publishing, 'NOTES_DIR', directory), patch('publish_release.subprocess.run',
+                return_value=self.response(assets=[{'name': 'release.zip'}], name='Reviewed', body=text)) as gh:
+            with self.assertRaisesRegex(RuntimeError, 'refusing to overwrite'):
+                publishing.publish('owner/repo', 'v0.2.0-alpha.6', self.archive)
+        self.assertEqual(gh.call_count, 1)
 
     def test_auth_and_network_errors_never_create_release(self):
         for response in [self.response(403), subprocess.CompletedProcess([], 1, '', 'network error')]:

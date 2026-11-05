@@ -8,7 +8,7 @@ Existing launchers, dependencies and installation steps stay unchanged.
 
 Maintainers: commit and push submodule changes first, then commit and push the
 updated submodule reference, project changes and release workflow. Tag that
-published commit to create a release with automatic notes:
+published commit to create a release with reviewed notes:
 
 ```sh
 git tag v1.0.0
@@ -24,9 +24,20 @@ has advanced the checkout. Newer working edits and local evidence from that
 checkout are excluded; the tagged commit's hosted gates still apply.
 Packaging uses tracked files, excludes Git metadata and development caches, and
 preserves script permissions. Existing releases can receive a missing
-`release.zip`; an existing asset is never overwritten. Existing notes and draft
-state are preserved, so a draft left by a failed publish may need manual
-publication after a successful retry. Use a new version tag for corrected assets.
+`release.zip`; an existing asset is never overwritten. The publisher reconciles
+only the reviewed title and description and verifies their readback. It preserves
+draft/prerelease state and assets: a draft still needs explicit publication. Use a
+new version tag for corrected assets.
+
+Three-part version tags require reviewed Markdown in `.github/release-notes/`.
+An exact tag file wins. Otherwise alpha/beta/main numbered tags use the latest
+strictly lower numbered notes for the same version and channel; `main.N` may use
+that version's `vX.Y.Z.md` when no earlier main notes exist. Only the first heading
+is normalized to the new tag; the reviewed description, including the conditions
+under which users' own DataView JSON executes, is retained in full. Missing,
+malformed or ambiguous notes stop publication instead of generating an unreviewed
+description. Notes never cross version/channel boundaries or come from a future
+number. Historical non-three-part tags retain their generated-notes fallback.
 
 Windows `.bat` and `.cmd` files are packaged with CRLF line endings on every build
 host. Installation-manifest hashes describe those packaged bytes. Windows CI runs
