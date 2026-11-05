@@ -63,6 +63,8 @@
     "assets/theme.css",
     "assets/viewport.js",
     "assets/touch_navigation.js",
-    "assets/zoom.js"
+    "assets/zoom.js",
+    "mobile/ios_native_pen.py",
+    "mobile/ios/NotebookInputWindow.m"
   ]
 }

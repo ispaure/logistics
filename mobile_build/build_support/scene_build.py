@@ -29,9 +29,14 @@ def configure(project):
     shutil.copyfile(source, support / source.name)
     awake = Path(__file__).resolve().parents[2] / 'Python/mobile/ios/ScreenAwake.m'
     shutil.copyfile(awake, support / awake.name)
+    pencil = Path(__file__).resolve().parents[2] / 'Python/features/notebooks/mobile/ios/NotebookInputWindow.m'
+    shutil.copyfile(pencil, support / pencil.name)
+    pencil_include = '#import \"../Support/NotebookInputWindow.m\"'
     include = '#import "../Support/ScrollingTitle.m"'
     previous = launcher.read_text()
     text = previous
+    if pencil_include not in text:
+        text = pencil_include + '\n' + text
     awake_include = '#import "../Support/ScreenAwake.m"'
     if awake_include not in text:
         text = awake_include + '\n' + text

@@ -275,7 +275,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.navigation = self.native_host.root
         self.body = self.routes.body()
         if not hasattr(self, '_startup_window'):
-            self.main_window = getattr(self, 'window_class', toga.MainWindow)(title='Logistics', content=self.navigation)
+            from .ios_notebook_window import main_window_class
+            window_class = getattr(self, 'window_class', None) or main_window_class(self)
+            self.main_window = window_class(title='Logistics', content=self.navigation)
         self.main_window.on_lose_focus = self.checkpoint
         self.main_window.on_resize = self.resize_workspace
         if not hasattr(self, 'scene_manager'):

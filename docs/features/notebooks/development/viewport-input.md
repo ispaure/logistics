@@ -109,3 +109,45 @@ These checks do not certify physical hinge reporting, OS palm classification,
 Pencil hover range, optical latency or stylus behavior on an actual tablet.
 Current test results must be bound to the source and packaged native input code;
 an older Android QA package does not validate a changed `NotebookInput` class.
+
+## Native iOS Pencil transport
+
+The project-owned `LogisticsNotebookInputWindow` captures Pencil contacts in its own
+`UIWindow` event handler before forwarding through normal window dispatch,
+independently of browser PointerEvents. Every system event is forwarded exactly
+once. It leaves native controls, fingers and normal system gestures in charge.
+Only an explicitly bound notebook WKWebView receives transient ink packets.
+The named Toga factory returns an actual pinned `MainWindow` backend; existing
+navigation containers and the scene backend's overrides remain unchanged.
+Missing native support or an unsupported Toga constructor keeps ordinary DOM
+input. A compiled binding is established before initial HTML publication, using
+a fresh canvas nonce; queued packets cannot target a replacement document.
+The normal iOS notebook release check requires the compiled window, enabled
+binding and matching canvas nonce on initial open and reload. DOM fallback
+preserves usability but does not satisfy that release check.
+
+Native WK requests are serialized and bounded. Coalesced points retain order;
+retirement, focus loss and overflow discard unsubmitted starts and cancel only
+the contact already submitted. One native completion timer belongs to each
+binding. Fixed native counters expose capture, dispatch, completion, timeouts
+and queue depth without contact coordinates, document identity or Python work
+per contact. A bounded three-second private diagnostic receipt refreshes observer,
+canvas and window lifetime identities, while permitting only one outstanding DOM
+query. Window-aggregate native counters and current-canvas DOM counters retain
+explicitly different scopes; they are not advertised as one-to-one contact totals.
+A hung DOM query does not cancel its native future or stop native counter refresh.
+Compiled input does not install the older Python contact observer.
+
+Pressure defaults to finite positive UIKit force divided by maximum force;
+zero or unsupported values use visible constant pressure. This is event-payload
+handling, not Pencil model detection. View and input offers an explicit
+constant-pressure choice for the open canvas, including known USB-C Pencils.
+Save retries acknowledge without clearing queued strokes. Normal Close and
+embedded save flush native transport before checking JavaScript idle; an
+explicit discard may intentionally retire unsubmitted input.
+
+The native synthetic transport fixture covers twenty rapid one-point contacts,
+FIFO delivery, force/coalescing, admission, cancellation, overflow and stale
+nonces. It does not establish physical digitizer delivery or prove that the
+reported physical rapid-tap loss has been resolved. A full app probe separately
+checks Toga construction, model/checkpoint delivery and close/reopen behavior.

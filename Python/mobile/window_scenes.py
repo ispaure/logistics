@@ -140,11 +140,14 @@ class SceneManager:
         from rubicon.objc import ObjCClass, ObjCProtocol, objc_method, objc_property
         from toga_iOS.app import PythonAppDelegate
         from toga_iOS.window import MainWindow
+        from .ios_notebook_window import initialize_backend
         import toga
         from toga.types import Size
         manager = self
 
         class SceneBackend(MainWindow):
+            def __init__(self, interface, title, position, size):
+                initialize_backend(self, interface, title, position, size)
             def set_app(self, app):
                 pass
             def get_size(self):

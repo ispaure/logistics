@@ -175,6 +175,7 @@
     "window_scenes.py",
     "workspace.py",
     "workspace_navigation.py",
-    "workspace_policy.py"
+    "workspace_policy.py",
+    "ios_notebook_window.py"
   ]
 }
