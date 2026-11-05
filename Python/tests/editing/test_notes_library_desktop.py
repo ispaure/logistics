@@ -667,7 +667,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save) as prompt:
                 window.move_entry('Drawing.rmdoc', 'Moved.rmdoc')
                 self.wait_until(lambda: not window.canvas.busy and not window.progress.busy)
-                self.assertEqual(prompt.call_count, 1)
+                prompt.assert_not_called()
             self.assertFalse((root / 'Drawing.rmdoc').exists())
             self.assertEqual(len(Notebook.read((root / 'Moved.rmdoc').read_bytes()).pages), 2)
             self.assertEqual(window.history[window.index], 'Moved.rmdoc')
@@ -720,10 +720,11 @@ class NotesLibraryDesktopTests(QtTestCase):
             window.open_note('Drawing.rmdoc')
             self.wait_until(lambda: not window.progress.busy)
             window.canvas.perform({'op': 'add-page'})
-            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save), \
+            with patch.object(qt.QMessageBox, 'question') as prompt, \
                     patch('services.documents.storage.DocumentResource.save', side_effect=OSError('Disk full')):
                 window.close()
                 self.wait_until(lambda: not window.canvas.busy)
+                prompt.assert_not_called()
             self.assertTrue(isValid(window))
             self.assertFalse(window.pending_close)
             self.assertTrue(window.canvas.document.dirty)
@@ -1159,17 +1160,15 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertEqual(document_location(window), (root / 'Drawing.rmdoc', provider))
             window.canvas.perform({'op': 'add-page'})
             self.assertTrue(window.canvas.document.dirty)
-            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
-                window.open_note('Home.md')
-            self.assertEqual(window.history, ['Drawing.rmdoc'])
             self.assertTrue(window.save_drawing.isVisible())
             window.save_drawing.click()
             self.wait_until(lambda: not window.canvas.busy)
             self.assertEqual(len(Notebook.read((root / 'Drawing.rmdoc').read_bytes()).pages), 2)
             window.canvas.perform({'op': 'add-page'})
-            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Save):
+            with patch.object(qt.QMessageBox, 'question') as prompt:
                 window.open_note('Home.md')
-            self.wait_until(lambda: not window.canvas.busy and not window.progress.busy)
+                self.wait_until(lambda: not window.canvas.busy and not window.progress.busy)
+                prompt.assert_not_called()
             self.assertEqual(len(Notebook.read((root / 'Drawing.rmdoc').read_bytes()).pages), 3)
             self.assertIs(window.document_stack.currentWidget(), window.viewer)
             window.close()

@@ -253,9 +253,16 @@ outside the panel to close it. That first gesture erases immediately. Both types
 layers and support Undo/Redo. The selected type and size remain active while
 you work in that editor.
 
+## Saving from Notes Library
+
+Writable notebooks on persistent storage save when you open another document or
+close the library. A failed save keeps the drawing open so you can retry. Session-only
+storage still asks before leaving a dirty drawing. For writable notebooks, use
+**Note actions → Save and Close** to save pending edits and close the library.
+
 ## Paper Pro preview
 
-A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Toggle it in **Settings → Features → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
+A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Turn it off for vivid display colors in **Settings → Features → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
 
 Logistics draws its own template previews and custom layouts. Native lined options
 are labeled reMarkable compatible; Logistics is not affiliated with or endorsed

@@ -522,6 +522,48 @@ class NotesLibraryTests(unittest.TestCase):
             owner.close()
         self.run_async(exercise())
 
+    def test_notebook_saves_before_navigation_and_keeps_failed_draft(self):
+        from unittest.mock import AsyncMock, patch
+        from mobile.obsidian import open_vault
+        from features.notebooks.notebook import Notebook
+
+        path = self.vault / 'Drawing.rmdoc'
+        path.write_bytes(Notebook.new('Drawing').to_bytes())
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertTrue(await owner.open_note('Vault/Drawing.rmdoc'))
+            editor = owner.embedded
+            editor.panel.editor.apply({'op': 'add-page'})
+            self.assertTrue(editor.dirty)
+            with patch.object(editor.panel.document.resource, 'save', side_effect=OSError('Disk full')):
+                self.assertFalse(await owner.open_note('Vault/Home.md'))
+                self.assertIs(owner.embedded, editor)
+                self.assertTrue(editor.dirty)
+                self.assertEqual(len(Notebook.read(path.read_bytes()).pages), 1)
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            self.assertEqual(len(Notebook.read(path.read_bytes()).pages), 2)
+
+            self.assertTrue(await owner.open_note('Vault/Drawing.rmdoc'))
+            editor = owner.embedded
+            with patch.object(editor, 'save', new_callable=AsyncMock) as save, patch.object(owner, 'close') as close:
+                await owner.save_and_close_notebook()
+                save.assert_not_awaited()
+                close.assert_called_once()
+                close.reset_mock()
+                editor.panel.editor.apply({'op': 'add-page'})
+                save.return_value = False
+                await owner.save_and_close_notebook()
+                save.assert_awaited_once()
+                close.assert_not_called()
+            with patch.object(owner, 'close') as close:
+                await owner.save_and_close_notebook()
+                close.assert_called_once()
+            self.assertEqual(len(Notebook.read(path.read_bytes()).pages), 3)
+            owner.close()
+
+        self.run_async(exercise())
+
     def test_json_and_view_scripts_use_embedded_code_input_and_preserve_source_bytes(self):
         from dataclasses import replace
         from unittest.mock import AsyncMock

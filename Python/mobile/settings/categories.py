@@ -79,13 +79,13 @@ class SettingsCategories:
         feature_controls(self.app, box)
         if not enabled(self.app.preferences, 'notebooks'):
             return box
-        preview = toga.Switch('Notebooks: Paper Pro colors',
+        preview = toga.Switch('Notebooks: muted Paper Pro colors',
             value=self.app.preferences.values['notebook_paper_preview'] == 'true',
             style=Pack(height=48))
         preview.on_change = lambda widget, **kw: self.app.preferences.save(
             notebook_paper_preview='true' if widget.value else 'false')
         box.add(switch_row(self.app, 'Notebook preview', preview,
-            'Approximate the muted colors of Paper Pro / Paper Pro Move. Reopen notebooks to apply. Saved ink is unchanged.'))
+            'Turn off for vivid colors. Reopen notebooks to apply. This preview leaves saved ink colors unchanged.'))
         return box
 
 

@@ -485,6 +485,7 @@ async def notes_editor(app, library, path):
             return await super().perform(action, **options)
 
     class Embedded:
+        kind = 'notebook'
         owns_document_swipes = True
 
         def __init__(self, panel):
@@ -495,21 +496,21 @@ async def notes_editor(app, library, path):
         @property
         def busy(self):
             return self.panel.busy
+
+        @property
+        def writable(self):
+            return self.panel.document.writable
+
+        @property
+        def autosave_on_leave(self):
+            return self.panel.document.can_autosave
+
         async def flush(self):
-            if getattr(self.panel, 'native_transport', False):
-                await self.panel.flush_input()
-                return
+            await self.panel.flush_input()
+
+        async def save(self, widget=None, **kwargs):
             from commonUtils.ui.native.text_size import native_backend
             if self.panel.web is not None and native_backend(self.panel.web).startswith(('toga_iOS.', 'toga_android.')):
-                for _ in range(100):
-                    if await self.panel.web.evaluate_javascript('window.notebookIdle?.() === true'):
-                        return
-                    if self.panel.closed or not library.valid():
-                        raise ValueError('Notes Library closed.')
-                    await asyncio.sleep(.02)
-                raise ValueError('Finish the current stroke and try again.')
-        async def save(self):
-            if getattr(self.panel, 'native_transport', False):
                 return await self.panel.save_from_view()
             await self.flush()
             await self.panel.perform({'op': 'save'})

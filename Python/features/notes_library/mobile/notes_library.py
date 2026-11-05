@@ -467,6 +467,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if self.embedded is not None:
             if self.library.writable and getattr(self.embedded, 'kind', None) != 'file':
                 actions.append(('Save', self.embedded.save))
+            if getattr(self.embedded, 'kind', None) == 'notebook':
+                if self.embedded.writable:
+                    actions.append(('✓ Save and Close', self.save_and_close_notebook))
+                else:
+                    actions.append(('Close document', self.close))
             if getattr(self.embedded, 'kind', None) == 'markdown':
                 actions.extend([('Formatted editing', self.embedded.choose_mode),
                     ('Source editing', lambda: self.embedded.choose_mode(False)),
@@ -966,6 +971,12 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
     def close(self, widget=None, **kwargs):
         if self.session is not None:
             return self.host.close_session(self.session.id)
+
+    async def save_and_close_notebook(self, widget=None, **kwargs):
+        editor = self.embedded
+        if (getattr(editor, 'kind', None) == 'notebook' and editor.writable
+                and await self.prepare_leave(save=True) and self.embedded is editor):
+            return self.close()
 
     async def browse_parent(self, widget=None, **kwargs):
         if self.path is not None:

@@ -218,9 +218,16 @@ change its size or switch to **Erase whole strokes**. Both types respect hidden
 layers and support Undo/Redo. The selected type and size remain active while
 you work in that editor.
 
+## Saving from Notes Library
+
+Writable notebooks on persistent storage save when you navigate away or close
+the library. If saving fails, the notebook stays open with its draft. For
+session-only storage, Notes Library asks what to do before leaving a dirty
+notebook.
+
 ## Paper Pro preview
 
-A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Toggle it in **Settings → Notebooks → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
+A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Turn it off for vivid display colors in **Settings → Notebooks → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
 
 Logistics draws its own template previews and custom layouts. Native lined options
 are labeled reMarkable compatible; Logistics is not affiliated with or endorsed

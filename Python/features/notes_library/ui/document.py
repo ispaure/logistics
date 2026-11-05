@@ -389,6 +389,9 @@ class DocumentPresentation:
         if self.canvas.busy:
             return False
         if self.canvas.document is not None and self.canvas.document.dirty:
+            if self.canvas.document.can_autosave:
+                self.canvas.save_document()
+                return False
             answer = qt.QMessageBox.question(self, 'Unsaved document changes', 'Save changes before leaving?',
                 qt.QMessageBox.StandardButton.Save | qt.QMessageBox.StandardButton.Discard | qt.QMessageBox.StandardButton.Cancel,
                 qt.QMessageBox.StandardButton.Cancel)
@@ -525,7 +528,10 @@ class DocumentPresentation:
                     super().saved(document, error)
                     if error:
                         owner.pending_close = False
-                    owner.resume_after_save(error)
+                    if owner.pending_close:
+                        owner.close()
+                    else:
+                        owner.resume_after_save(error)
             self.canvas = LibraryCanvas(self, library=False)
             self.document_stack.addWidget(self.canvas)
         else:
