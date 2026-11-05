@@ -363,6 +363,23 @@ renderEraserChoices();
   let fingerLabel = document.createElement('label');
   fingerLabel.append(control('finger'), document.createTextNode('Draw with finger'));
   vp.append(fingerLabel);
+  const constantPressure = document.createElement('input');
+  constantPressure.type = 'checkbox';
+  constantPressure.id = 'constantPenPressure';
+  constantPressure.checked = constantPenPressure;
+  constantPressure.onchange = () => {
+    if (active !== null || busy) {
+      constantPressure.checked = constantPenPressure;
+      return
+    }
+    constantPenPressure = constantPressure.checked
+  };
+  const constantPressureLabel = document.createElement('label');
+  constantPressureLabel.append(constantPressure, document.createTextNode('Constant stylus pressure (this open document)'));
+  vp.append(constantPressureLabel);
+  const constantPressureHint = document.createElement('p');
+  constantPressureHint.textContent = 'For pens without pressure sensitivity, including Apple Pencil (USB-C). Pressure stays fixed while enabled.';
+  vp.append(constantPressureHint);
   let grayLabel = document.createElement('label');
   grayLabel.append(control('grayscale'), document.createTextNode('Grayscale preview'));
   vp.append(grayLabel);

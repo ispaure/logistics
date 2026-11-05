@@ -1,7 +1,9 @@
+let constantPenPressure = false;
 // Bounded content-free input diagnostics: no coordinates, labels or stroke data.
 const inputTraceCounts = Object.create(null), inputTraceRing = [];
 const inputTraceViewId = (()=>{
   try {
+    if (state.native_pen && /^[0-9a-f]{32}$/.test(state.native_pen_nonce || '')) return state.native_pen_nonce;
     const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
     return [...bytes].map(value=>value.toString(16).padStart(2,'0')).join('');
   } catch (_) { return null } // Unknown lifetime must never look like a stable ID.
@@ -32,7 +34,7 @@ function sample(event, bounds) {
 }
 
 function coord(e, r = canvas.getBoundingClientRect()) {
-  return [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), e.pointerType === 'pen' ? Math.max(0, Math.min(1, e.pressure)) : .5]
+  return [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), e.pointerType === 'pen' ? (constantPenPressure ? .5 : Math.max(0, Math.min(1, e.pressure))) : .5]
 }
 
 function distance(p, a, b) {
@@ -78,7 +80,7 @@ canvas.onpointerdown = e => {
     beginPan(e);
     return
   }
-  if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke'))) || state.warning || state.read_only || state.password_required) {inputTrace('reject-locked-or-busy',e);return}
+  if ((busy && !(continuousInk && mode === 'ink' && queue.length < 64 && queue.every(a => a.op === 'stroke' || (e.nativePen && ['save', 'save-as', 'export', 'library'].includes(a.op))))) || state.warning || state.read_only || state.password_required) {inputTrace('reject-locked-or-busy',e);return}
   if (e.pointerType === 'pen') {
     notePenContact(true);
     pan = null;
@@ -220,6 +222,11 @@ canvas.onpointercancel = e => finish(e, true);
 canvas.onlostpointercapture = e => finish(e, true);
 // Android supplies every MotionEvent history point, even when WebView omits
 // getCoalescedEvents(). Coordinates are relative to the current native WebView.
+let nativePenContact = null;
+window.logisticsNativePenReset = () => {
+  if (nativePenContact && active === nativePenContact.pointerId) finish(nativePenContact, true);
+  nativePenContact = null
+};
 window.logisticsNativePen = (action, id, samples, width, height) => {
   if (!state.native_pen || !width || !height || !samples.length) return;
   const event = sample => ({pointerId: id + 100000, pointerType: 'pen', nativePen: true,
@@ -228,8 +235,12 @@ window.logisticsNativePen = (action, id, samples, width, height) => {
   let lastEvent = event(samples[samples.length - 1]);
   if (action === 'down') {
     if (document.elementFromPoint(lastEvent.clientX, lastEvent.clientY) !== canvas) return;
-    canvas.onpointerdown(lastEvent)
-  } else if (action === 'cancel') finish(lastEvent, true);
+    canvas.onpointerdown(lastEvent);
+    if (active === lastEvent.pointerId) nativePenContact = lastEvent
+  } else if (action === 'cancel') {
+    finish(lastEvent, true);
+    if (nativePenContact?.pointerId === lastEvent.pointerId) nativePenContact = null
+  }
   else {
     if (action === 'up') {
       if (samples.length > 1) {
@@ -237,10 +248,12 @@ window.logisticsNativePen = (action, id, samples, width, height) => {
         historical.getCoalescedEvents = () => samples.slice(0, -2).map(event);
         canvas.onpointermove(historical)
       }
-      finish(lastEvent)
+      finish(lastEvent);
+      if (nativePenContact?.pointerId === lastEvent.pointerId) nativePenContact = null
     } else {
       lastEvent.getCoalescedEvents = () => samples.slice(0, -1).map(event);
-      canvas.onpointermove(lastEvent)
+      canvas.onpointermove(lastEvent);
+      if (active === lastEvent.pointerId) nativePenContact = lastEvent
     }
   }
 };

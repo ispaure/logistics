@@ -182,7 +182,8 @@ async def restore_cloud_in_background(app):
 def begin_startup(app):
     app.active_host = False
     app.startup_screen = StartupScreen()
-    app._startup_window = app.main_window = toga.MainWindow(title='Logisticks', content=app.startup_screen.view)
+    from .ios_notebook_window import main_window_class
+    app._startup_window = app.main_window = main_window_class(app)(title='Logisticks', content=app.startup_screen.view)
     app.main_window.show()
     app.startup_screen.hide_chrome(app)
     running = app.on_running

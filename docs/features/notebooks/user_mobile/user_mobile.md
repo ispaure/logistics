@@ -72,7 +72,15 @@ remain visible in high-contrast mode and while grayscale document preview is on.
 Open **Notebook actions** for **Pages Overview**, **Layers** (the **Page template
 and layers** panel), saving, Save As, export,
 **Show in folder** for a saved source and **Delete document…**. **View and input…**
-contains zoom, **Grayscale preview** and **Draw with finger**. Rename saved files
+contains zoom, **Grayscale preview**, **Draw with finger** and **Constant stylus
+pressure (this open document)**. Enable constant pressure for a pen without
+pressure sensitivity, including Apple Pencil (USB-C). The choice applies only
+while this document stays open; reopening restores pressure-sensitive input.
+It cannot change during a stroke or a pending action. If Save reports
+**Finishing pen input; try again**, wait for the pending ink and choose Save
+again. Close waits briefly for pending input before offering Save or Quit without saving.
+If the canvas is unresponsive, the same decision remains available; Quit without
+saving intentionally discards unsubmitted ink. Rename saved files
 from the file browser; an open notebook follows its renamed source and retains
 unsaved ink. **Layers** selects
 the visible layer to draw on, shows or hides layers, and adds a named layer.
