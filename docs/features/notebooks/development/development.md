@@ -1685,6 +1685,14 @@ run only in Capture mode so the stroke Select clipboard can own its shortcuts.
 Session PDF-unlock caching compares exact encrypted contents, since structural
 recovery publication replaces unchanged member byte objects. Changed PDF bytes
 still invalidate the cached decrypted rendering and require their own password.
+Implicit empty-password failures are also cached against the exact encrypted
+bytes, so repeated state/geometry reads do not repeat expensive password checks.
+Explicit password submissions bypass that negative cache. Mobile async open
+paths classify PDF bytes on a worker using the editor that will be mounted,
+then revalidate resource credentials and navigation ownership before mounting.
+The worker does not render, access widgets or persist decrypted data.
+`test_notebook_pdf_prewarm.py` covers loop responsiveness, stale navigation,
+resource expiry and editor replacement during this handoff.
 
 ## Internal page links
 
