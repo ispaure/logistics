@@ -400,12 +400,12 @@ class LogisticsProject:
         selector = options['vm.fedora_container_host'] if options['vm.fedora_mode'] == 'container-on-ubuntu' else options['vm.fedora']
         if not selector:
             raise ValueError('No Fedora test machine is configured. Open Setup → Test machines to create or recover the dedicated Linux machine, then reopen Project settings and Save. Container mode requires its own explicit host.')
+        guest = client.selected(selector)  # Existing read-only inventory; no VM start.
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, source['selection'], expected=source)
         from logistics_build.guest_source_readiness import ensure
         source['guest_source_readiness'] = ensure(self.root, snapshot, options['tools.manager_checkout'], source)
         local_manager = self.local_manager_test_arguments(source)
-        guest = client.selected(selector)
         results = workspace / ('fedora-' + uuid4().hex)
         command = (str(self.interpreter), '-m', 'logistics_build.vm_backend', '--vm', guest['uuid'],
             '--snapshot', str(snapshot), '--results', str(results), '--distribution', 'fedora',
@@ -436,12 +436,12 @@ class LogisticsProject:
         from build_manager.parallels import Parallels
         if not options['vm.windows']:
             raise ValueError('No Windows test machine is configured. Open Setup → Test machines to create or recover the dedicated Windows machine, then reopen Project settings and Save.')
+        guest = Parallels().selected(options['vm.windows'])  # Read-only inventory.
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, source['selection'], expected=source)
         from logistics_build.guest_source_readiness import ensure
         source['guest_source_readiness'] = ensure(self.root, snapshot, options['tools.manager_checkout'], source)
         local_manager = self.local_manager_test_arguments(source)
-        guest = Parallels().selected(options['vm.windows'])
         results = workspace / ('windows-' + uuid4().hex)
         command = (str(self.interpreter), '-m', 'logistics_build.windows_backend', '--vm', guest['uuid'],
                    '--snapshot', str(snapshot), '--results', str(results), '--source-identity', json.dumps(source))
