@@ -179,9 +179,39 @@ class HostedRunIntakeTests(unittest.TestCase):
                 owner.observe(GitHub('fixture/repo',transport=self.transport),dict(receipt,**changes),ROOT,self.expected,Event())
         self.assertFalse(self.calls)
 
-    def test_reviewed_push_contract_matches_all_current_workflow_bytes(self):
+    def test_reviewed_push_contract_matches_all_committed_workflow_blobs(self):
         for workflow,policy in PUSH_DEFAULTS.items():
-            self.assertEqual(hashlib.sha256((ROOT/'.github/workflows'/workflow).read_bytes()).hexdigest(),policy['sha256'])
+            blob=subprocess.check_output(['git','-C',str(ROOT),'show',SHA+':.github/workflows/'+workflow])
+            self.assertEqual(hashlib.sha256(blob).hexdigest(),policy['sha256'])
+
+    def test_crlf_checkout_does_not_change_exact_committed_workflow_contract(self):
+        workflow='archive-platform-checks.yml'
+        relative='.github/workflows/'+workflow
+        blob=subprocess.check_output(['git','-C',str(ROOT),'show',SHA+':'+relative])
+        project=self.root/'crlf-checkout'
+        file=project/relative
+        file.parent.mkdir(parents=True)
+        def git(*args):
+            return subprocess.check_output(['git','-C',str(project),*args],stderr=subprocess.PIPE)
+        git('init','--quiet')
+        git('config','core.autocrlf','false')
+        file.write_bytes(blob)
+        git('add',relative)
+        git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--quiet','-m','fixture')
+        revision=git('rev-parse','HEAD').decode().strip()
+        file.write_bytes(blob.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))
+        self.assertNotEqual(hashlib.sha256(file.read_bytes()).hexdigest(),PUSH_DEFAULTS[workflow]['sha256'])
+        expected=dict(self.expected,expected_commit=revision)
+        policy=owner.contract(project,expected)
+        self.assertEqual(policy['workflow_sha256'],PUSH_DEFAULTS[workflow]['sha256'])
+        # A real source change is still rejected even if the working copy is restored.
+        file.write_bytes(blob+b'\n# unreviewed source change\n')
+        git('add',relative)
+        git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--quiet','-m','changed source')
+        changed=git('rev-parse','HEAD').decode().strip()
+        file.write_bytes(blob)
+        with self.assertRaisesRegex(ValueError,'Automatic push defaults changed'):
+            owner.contract(project,dict(expected,expected_commit=changed))
 
     def test_attempt_change_on_second_sdk_poll_is_rejected_without_mutation(self):
         receipt=self.adopted();observations=[]
