@@ -8,6 +8,10 @@ import traceback
 from .notebook_probe import NotebookProbe
 from .web_checks import wait_for_text
 
+from commonUtils.testing.stages import TestStage
+
+TEST_STAGE = TestStage.REGRESSION
+
 
 async def ready(predicate, description, seconds=30):
     from time import monotonic
