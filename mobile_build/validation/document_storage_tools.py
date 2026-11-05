@@ -342,7 +342,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 (cache / 'notes-touch-done').touch()
             if result_name == 'logistics-native-ui-result.json' and time.monotonic() >= next_progress:
                 next_progress = time.monotonic() + 30
-                timings = cache / NATIVE_DIAGNOSTICS[0]
+                timings = cache / 'logistics-native-ui-timings.json'
                 if timings.exists():
                     value = json.loads(timings.read_text())
                     summary = value['summary']

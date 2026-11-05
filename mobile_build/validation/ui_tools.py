@@ -3,6 +3,8 @@ import argparse
 import base64
 import importlib.util
 import io
+import hashlib
+import tarfile
 import zipfile
 import json
 import os
@@ -10,11 +12,12 @@ from pathlib import Path
 import plistlib
 import re
 import signal
+import stat
 import shutil
 import subprocess
 import sys
 import time
-from threading import Event, Thread
+from threading import Event, Thread, Timer
 
 PREFIX = 'LOGISTICS_NATIVE_UI_RESULT='
 REPO = Path(__file__).resolve().parents[2]
@@ -377,9 +380,180 @@ def clear_run_reports(logs, target):
         (logs / name).unlink(missing_ok=True)
 
 
-def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
-    operation = lambda: _run_once(target, device, local=local,
-        require_independent_windows=require_independent_windows, require_duo=require_duo, no_update=no_update)
+
+# Only these native-suite artifacts may cross the disposable-device boundary.
+NATIVE_EVIDENCE = ('pdf-edge-left.png', 'pdf-edge-right.png') + tuple(
+    f'notebook-image-evidence/{provider}-{phase}{suffix}.png'
+    for provider in ('Local', 'LocalCrypt')
+    for phase in ('captured', 'transformed', 'arranged', 'second-page', 'cut-pasted', 'reopened')
+    for suffix in ('', '-canvas')) + tuple(
+    f'notebook-image-evidence/{provider}-saved.rmdoc' for provider in ('Local', 'LocalCrypt'))
+EVIDENCE_FILE_LIMIT = 4 * 1024 * 1024
+EVIDENCE_TOTAL_LIMIT = 32 * 1024 * 1024
+
+
+def retain_native_evidence(entries, output, started_ns):
+    """Validate the entire bounded stream before writing any artifact."""
+    saved = {}
+    total = 0
+    for name, modified_ns, regular, size, read in entries:
+        if (name not in NATIVE_EVIDENCE or name in saved or not regular
+                or not 0 <= size <= EVIDENCE_FILE_LIMIT):
+            raise ValueError('Invalid native evidence member: ' + name)
+        if modified_ns < started_ns - 1_000_000_000:
+            continue  # tar timestamps have one-second resolution
+        total += size
+        if len(saved) >= len(NATIVE_EVIDENCE) or total > EVIDENCE_TOTAL_LIMIT:
+            raise ValueError('Native evidence exceeds retention bounds.')
+        content = read(size + 1)
+        if len(content) != size:
+            raise ValueError('Truncated or oversized native evidence: ' + name)
+        saved[name] = (content, modified_ns)
+    output = Path(output)
+    if output.is_symlink() or output.parent.is_symlink():
+        raise ValueError('Native evidence destination is a symlink.')
+    output.mkdir(parents=True, exist_ok=True)
+    if (output / 'manifest.json').is_symlink():
+        raise ValueError('Native evidence manifest is a symlink.')
+    for old in output.iterdir():
+        if old.is_symlink() or not old.is_file():
+            raise ValueError('Unexpected native evidence destination member.')
+        if old.name == 'manifest.json' or old.name in {name.replace('/', '--') for name in NATIVE_EVIDENCE}:
+            old.unlink()
+        else:
+            raise ValueError('Unexpected native evidence destination file.')
+    manifest = []
+    for name, (content, modified_ns) in saved.items():
+        # Flatten the fixed allowlist; never extract archive paths or links.
+        path = output / name.replace('/', '--')
+        if path.is_symlink():
+            raise ValueError('Native evidence destination is a symlink.')
+        path.write_bytes(content)
+        manifest.append(dict(name=name, file=path.name, bytes=len(content),
+                             modified_ns=modified_ns, sha256=hashlib.sha256(content).hexdigest()))
+    (output / 'manifest.json').write_text(json.dumps(dict(artifacts=manifest), indent=2) + '\n')
+    return manifest
+
+
+def retain_native_cache(cache, output, started_ns):
+    cache = Path(cache)
+    if cache.is_symlink():
+        raise ValueError('Native cache is a symlink.')
+    def entries():
+        for name in NATIVE_EVIDENCE:
+            path = cache / name
+            if path.parent.is_symlink() or path.is_symlink():
+                raise ValueError('Native evidence source is a symlink.')
+            if path.exists():
+                info = path.stat()
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError('Native evidence source is not a regular file.')
+                with path.open('rb') as stream:
+                    yield name, info.st_mtime_ns, path.is_file(), info.st_size, stream.read
+    return retain_native_evidence(entries(), output, started_ns)
+
+
+def retain_native_tar(stream, output, started_ns):
+    def entries():
+        with tarfile.open(fileobj=stream, mode='r|') as archive:
+            count = 0
+            for item in archive:
+                count += 1
+                if count > len(NATIVE_EVIDENCE) + 1:
+                    raise ValueError('Too many native evidence archive members.')
+                if item.isdir() and item.name.rstrip('/') == 'notebook-image-evidence':
+                    continue
+                if not item.isfile() or item.name not in NATIVE_EVIDENCE:
+                    raise ValueError('Invalid native evidence archive member.')
+                content = archive.extractfile(item)
+                yield item.name, int(item.mtime * 1e9), True, item.size, content.read
+    return retain_native_evidence(entries(), output, started_ns)
+
+
+def collect_owned_android_evidence(emulator, record, device, started_ns, logs):
+    """Require the manager's live lease; never discover or select a device."""
+    if record.get('serial') != device or json.loads(emulator.marker.read_text()) != record:
+        raise ValueError('Native evidence device does not match its owned lease.')
+    emulator.verify(record)
+    command = [str(emulator.adb), '-s', device, 'exec-out', 'run-as',
+               'io.github.ispaure.logisticsmobile', 'tar', '-C', 'cache', '-cf', '-',
+               'pdf-edge-left.png', 'pdf-edge-right.png', 'notebook-image-evidence']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                               env=emulator.environment)
+    timer = Timer(30, process.kill)
+    timer.start()
+    try:
+        result = retain_native_tar(process.stdout, Path(logs) / 'android-native-ui-evidence', started_ns)
+        code = process.wait(timeout=5)
+        # tar may report absent optional diagnostics, but must have a valid archive.
+        if code not in (0, 1):
+            raise RuntimeError('Native evidence transfer failed.')
+        return result
+    finally:
+        timer.cancel()
+        process.stdout.close()
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=5)
+
+
+def collect_owned_ios_evidence(device, started_ns, logs):
+    lease = Path(logs) / 'ios-native-ui-owned.json'
+    if not lease.exists():
+        return None  # local manager must supply its explicit lease-bound callback
+    owner = json.loads(lease.read_text())
+    if (owner.get('device') != device or owner.get('removed')
+            or not str(owner.get('name', '')).startswith('Logistics Native Gate ')):
+        raise ValueError('Native evidence simulator does not match its owned lease.')
+    from build_manager.apple_simulators import AppleSimulators
+    if AppleSimulators().matching(device, owner['name']) is None:
+        raise ValueError('Owned native evidence simulator is unavailable.')
+    return collect_leased_ios_evidence(AppleSimulators(), lease, owner, device, started_ns, logs)
+
+
+def collect_leased_ios_evidence(client, lease, owner, device, started_ns, logs):
+    """The caller supplies its exact created lease and owning simulator client."""
+    if (owner.get('device') != device or owner.get('removed')
+            or json.loads(Path(lease).read_text()) != owner
+            or client.matching(device, owner['name']) is None):
+        raise ValueError('Native evidence simulator does not match its live lease.')
+    cache = subprocess.check_output(['xcrun', 'simctl', 'get_app_container', device,
+        'io.github.ispaure.logisticsmobile', 'data'], text=True, timeout=30).strip()
+    if not cache:
+        raise ValueError('Owned native application container is unavailable.')
+    return retain_native_cache(Path(cache) / 'Library/Caches',
+                               Path(logs) / 'ios-native-ui-evidence', started_ns)
+
+
+def finish_native_evidence(collector, device, started_ns, logs, primary=None):
+    try:
+        return collector(device, started_ns, logs)
+    except Exception as error:
+        if primary is None:
+            raise
+        primary.add_note('Native evidence collection also failed: ' + repr(error))
+        try:
+            (Path(logs) / 'native-evidence-error.json').write_text(
+                json.dumps(dict(error=repr(error))) + '\n')
+        except OSError:
+            pass
+
+
+def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False,
+        evidence_collector=None):
+    def operation():
+        started_ns = time.time_ns()
+        primary = None
+        try:
+            return _run_once(target, device, local=local,
+                require_independent_windows=require_independent_windows, require_duo=require_duo, no_update=no_update)
+        except BaseException as error:
+            primary = error
+            raise
+        finally:
+            collector = evidence_collector or (collect_owned_ios_evidence if target == 'ios' else None)
+            if collector is not None:
+                finish_native_evidence(collector, device, started_ns, Path('logs'), primary)
     if target == 'ios' and no_update and not local and os.environ.get('GITHUB_ACTIONS') == 'true':
         from mobile_build.validation.ios_startup_recovery import run as recover_startup
         return recover_startup(operation, device, tools=sys.modules[__name__])

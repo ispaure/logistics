@@ -78,15 +78,19 @@ def main():
     if args.action=='runtime':
         from logistics_build.mobile_runtime import test
         return test(args.root,args.runtime_cache,record['serial'],args.result)
-    from mobile_build.validation.ui_tools import run
+    from mobile_build.validation.ui_tools import run, collect_owned_android_evidence
     os.chdir(args.root/'mobile_build')
     try:
-        report=run('android',record['serial'],local=True,no_update=True)
+        report=run('android',record['serial'],local=True,no_update=True,
+                   evidence_collector=lambda device, started_ns, logs: collect_owned_android_evidence(
+                       emulator, record, device, started_ns, logs))
         args.result.write_text(json.dumps(report,indent=2)+'\n')
     finally:
         import shutil
         for log in (args.root/'mobile_build/logs').glob('android-*'):
             if log.is_file():shutil.copy2(log,args.result.parent/log.name)
+            elif log.name == 'android-native-ui-evidence' and log.is_dir():
+                shutil.copytree(log,args.result.parent/log.name,dirs_exist_ok=True)
 
 
 if __name__=='__main__':main()
