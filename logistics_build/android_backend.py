@@ -22,6 +22,45 @@ def sdk_build_identity():
     return dict(root=str(sdk),packages={str(path.relative_to(sdk)):checksum(path) for path in sorted(files)})
 
 
+def retain_test_apk(apk, destination, expected):
+    """Publish exact validated bytes outside Gradle's replaceable outputs."""
+    import shutil
+    import tempfile
+    apk, destination = Path(apk), Path(destination)
+    if destination.is_symlink():
+        raise ValueError('Retained Android test APK must not be linked.')
+    if destination.exists():
+        if checksum(destination) != expected or checksum(apk) != expected:
+            raise ValueError('Retained Android test APK differs from this build.')
+        return destination
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=destination.parent, prefix='.test-apk-', delete=False) as stream:
+            temporary = Path(stream.name)
+            with apk.open('rb') as source:
+                shutil.copyfileobj(source, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if checksum(temporary) != expected or checksum(apk) != expected:
+            raise ValueError('Android test APK changed while retaining validated bytes.')
+        os.replace(temporary, destination)
+        return destination
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def verify_test_apk(root, report):
+    """The native runner must consume the same bytes as the durable evidence."""
+    mutable = Path(root)/'mobile_build/build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk'
+    retained = Path(report['apk'])
+    if (not retained.is_file() or not mutable.is_file()
+            or checksum(retained) != report['apk_sha256'] or checksum(mutable) != report['apk_sha256']):
+        raise ValueError('Native Android test APK differs from retained build evidence.')
+    return report['apk_sha256']
+
+
 def build(root, output):
     mobile=root/'mobile_build'
     apk=mobile/'build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk'
@@ -43,7 +82,9 @@ def build(root, output):
     from mobile_build.validation.ui_tools import verify_prebuilt_android
     os.chdir(mobile);verify_prebuilt_android()
     key['sdk']=sdk_build_identity()
-    value=dict(key=key,apk=str(apk),apk_sha256=checksum(apk),reused=reused,seconds=time.monotonic()-started,status='passed')
+    digest=checksum(apk)
+    retained=retain_test_apk(apk,output.parent/'validated-test.apk',digest)
+    value=dict(key=key,apk=str(retained),built_apk=str(apk),apk_sha256=digest,reused=reused,seconds=time.monotonic()-started,status='passed')
     record.write_text(json.dumps(value,indent=2)+'\n');output.parent.mkdir(parents=True,exist_ok=True);output.write_text(json.dumps(value,indent=2)+'\n')
 
 
@@ -80,10 +121,13 @@ def main():
         return test(args.root,args.runtime_cache,record['serial'],args.result)
     from mobile_build.validation.ui_tools import run, collect_owned_android_evidence
     os.chdir(args.root/'mobile_build')
+    binding=json.loads((args.result.parent/'build.json').read_text())
+    verify_test_apk(args.root,binding)
     try:
         report=run('android',record['serial'],local=True,no_update=True,
                    evidence_collector=lambda device, started_ns, logs: collect_owned_android_evidence(
                        emulator, record, device, started_ns, logs))
+        report['tested_apk_sha256']=verify_test_apk(args.root,binding)
         args.result.write_text(json.dumps(report,indent=2)+'\n')
     finally:
         import shutil

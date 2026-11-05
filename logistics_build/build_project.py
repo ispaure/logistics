@@ -488,7 +488,7 @@ class LogisticsProject:
         python = options['tools.mobile_python']
         base = (python,'-m','logistics_build.android_backend')
         common = ('--root',str(snapshot),'--workspace',str(device))
-        apk = snapshot/'mobile_build/build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk'
+        apk = run/'validated-test.apk'
         phases = [Phase('android-build',(*base,'build',*common,'--result',str(run/'build.json')),str(snapshot),
                         timeout=3600,environment=env,kind='build',artifacts=(str(run/'build.json'),str(apk)))]
         source = dict(source, sdk=str(sdk),java=str(java),abi=abi,image=options['android.image'],
