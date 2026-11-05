@@ -189,7 +189,8 @@ a simulator cannot certify writing latency, palm rejection or tablet editability
 
 Open **Notebook actions → Layers**, or **Pages Overview → Page template…**, to
 select the current page's template, Paper Pro or Paper Pro Move
-template format, and background visibility. The catalog includes lined paper,
+template format where distinct versions exist, and background visibility. The format
+selector is hidden for Blank, repeating lined/grid/dot paper and imported templates. The catalog includes lined paper,
 grids, dots, restaurant reviews, meeting notes, daily plans, checklists, Cornell
 notes and weekly plans. Edits use the same
 Save, recovery and Undo/Redo behavior as desktop. New pages inserted after the current page inherit its template, size and
@@ -217,7 +218,9 @@ Portrait iPads and the wide opened Duo show the whole **Paper Pro** page.
 Landscape fits the full page width across the display; laptop mode fits the
 page width across its writing area. Zooming in from the default Move view exposes
 the surrounding page while keeping the viewed paper position. Choose a manual
-**Paper view** in Layers to override the framing until Reset or a page change.
+**Paper view** in Layers to use the same framing across all pages of the open
+document. Page changes and Reset zoom retain this choice; reopening restores
+automatic framing. Template changes do not change Paper view.
 See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes)
 for line counts, saved-format versus viewing choices and reMarkable compatibility.
 

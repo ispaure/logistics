@@ -26,7 +26,7 @@ function templateControls() {
   const panel = $('templateControls');
   if (!panel || $('pageTemplate')) return;
   panel.innerHTML = '<strong>Current page template</strong><p id="templateDescription" class="hint"></p><label>Page template <select id="pageTemplate" aria-label="Page template"></select></label>' +
-    '<label>Template format <select id="templateFormat" aria-label="Template format"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
+    '<label id="templateFormatControl">Template format <select id="templateFormat" aria-label="Template format"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
     '<label><input id="templateVisible" type="checkbox"> Show template</label>' +
     '<label>Paper view <select id="paperView" aria-label="Paper view"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>' +
     '<p id="templateCompatibility" class="hint"></p>' +
@@ -37,20 +37,12 @@ function templateControls() {
       format: $('templateFormat').value, visible: $('templateVisible').checked})
   };
   for (const id of ['pageTemplate', 'templateFormat', 'templateVisible']) $(id).onchange = apply;
-  $('templateFormat').onchange = () => {
-    if (active !== null || busy) { render(); return }
-    defaultViewportZoom = false;
-    resetViewportPosition = true;
-    paperView = $('templateFormat').value;
-    $('paperView').value = paperView;
-    apply()
-  };
   $('paperView').value = paperView;
   $('paperView').onchange = () => {
     if (active !== null) { $('paperView').value = paperView; return }
     defaultViewportZoom = false;
     resetViewportPosition = true;
-    paperView = $('paperView').value;
+    documentPaperView = paperView = $('paperView').value;
     resize();
   }
 }
@@ -59,7 +51,7 @@ function paperBounds() {
   // Automatic phone framing magnifies the centered Move-width region without
   // cropping the rest of the native page. Stroke-dependent crop edges cannot
   // then clamp scrolling before that region reaches the viewport center.
-  if (defaultViewportZoom && mobileViewport() && paperView === 'move')
+  if (documentPaperView === null && defaultViewportZoom && mobileViewport() && paperView === 'move')
     return {x: 0, y: 0, width: state.width, height: state.height};
   if (state.pdf_paper) {
     const b = state.pdf_paper;
@@ -93,7 +85,9 @@ function render() {
     $('templateVisible').checked = state.template_settings?.visible !== false;
     const disabled = state.read_only || !state.template_editable || !Object.prototype.hasOwnProperty.call(state.templates || {}, name) || state.template_available === false;
     $('pageTemplate').disabled = state.read_only || !state.template_editable;
-    $('templateFormat').disabled = disabled || !name.startsWith('Logistics ');
+    const hasFormats = (state.template_formats || []).includes(name);
+    $('templateFormatControl').hidden = !hasFormats || !state.template_editable || state.template_available === false;
+    $('templateFormat').disabled = disabled || !hasFormats;
     $('templateVisible').disabled = disabled;
     $('templateExportHint').hidden = !state.template_editable || !(name.startsWith('Logistics ') || (name !== 'Blank' && !$('templateVisible').checked));
   }
@@ -138,7 +132,7 @@ function resize() {
     style = getComputedStyle(viewport);
   const bounds = paperBounds();
   displayedPaperBounds = bounds;
-  const fitWidth = defaultViewportZoom && mobileViewport() && paperView === 'move' ?
+  const fitWidth = documentPaperView === null && defaultViewportZoom && mobileViewport() && paperView === 'move' ?
     (state.move_paper || {width: 821}).width : bounds.width;
   let fit = Math.max(.1, (viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / fitWidth);
   let zoom = $('zoom').value,

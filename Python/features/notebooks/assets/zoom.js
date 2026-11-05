@@ -1,5 +1,6 @@
 // All zoom paths resize the paper, never the toolbar or the document geometry.
 const minZoom = .1, maxZoom = 4;
+let documentPaperView = null;
 let appliedZoom = $('zoom').value;
 let defaultViewportZoom = true, viewportZoomMemory = null, resetViewportPosition = true;
 function mobileViewport() {
@@ -48,6 +49,10 @@ function prepareViewportZoom() {
   const previous = changed && !defaultViewportZoom && !['page', 'fit'].includes($('zoom').value) ? viewportZoomMemory : null;
   if (defaultViewportZoom) {
     const choice = defaultViewportChoice();
+    if (documentPaperView !== null) {
+      choice.view = documentPaperView;
+      if (documentPaperView === 'move') choice.zoom = 'fit';
+    }
     if (paperView !== choice.view || changed) resetViewportPosition = true;
     paperView = choice.view;
     if ($('paperView')) $('paperView').value = paperView;
@@ -108,7 +113,7 @@ function setZoom(value, anchor = null, paperPoint = null) {
   // Move is the default phone framing, not a permanent crop. Once the user
   // magnifies that framing, make the full native paper available for panning;
   // the old paper anchor below keeps the viewed area in the same place.
-  if (defaultViewportZoom && mobileViewport() && !['page', 'fit'].includes(value)) {
+  if (documentPaperView === null && defaultViewportZoom && mobileViewport() && !['page', 'fit'].includes(value)) {
     paperView = 'pro';
     if ($('paperView')) $('paperView').value = paperView
   }
