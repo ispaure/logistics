@@ -934,3 +934,110 @@ class IgnoredNativeCallbackTests(unittest.TestCase):
                             "TypeError: cannot create weak reference to 'NoneType' object\n")
             with self.assertRaisesRegex(ValueError, 'Unhandled native app error'):
                 ui_tools.verify_native_diagnostics(path)
+
+
+class NativeEvidenceRetentionTests(unittest.TestCase):
+    def test_fixed_files_fresh_only_manifest_and_old_output_removed(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory); cache = root/'cache'; cache.mkdir()
+            fresh = cache/'pdf-edge-left.png'; fresh.write_bytes(b'png')
+            old = cache/'pdf-edge-right.png'; old.write_bytes(b'old')
+            ui_tools.os.utime(old, ns=(1, 1))
+            output = root/'output'; output.mkdir()
+            (output/'pdf-edge-right.png').write_bytes(b'previous-run')
+            result = ui_tools.retain_native_cache(cache, output, fresh.stat().st_mtime_ns)
+            self.assertEqual([row['name'] for row in result], ['pdf-edge-left.png'])
+            self.assertEqual(result[0]['sha256'], ui_tools.hashlib.sha256(b'png').hexdigest())
+            self.assertFalse((output/'pdf-edge-right.png').exists())
+            self.assertEqual(json.loads((output/'manifest.json').read_text())['artifacts'], result)
+
+    def test_symlink_source_and_destination_rejected(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory); cache = root/'cache'; cache.mkdir()
+            secret = root/'secret'; secret.write_bytes(b'preserve')
+            (cache/'pdf-edge-left.png').symlink_to(secret)
+            with self.assertRaises(ValueError):
+                ui_tools.retain_native_cache(cache, root/'out', 0)
+            output = root/'output'; output.symlink_to(cache, target_is_directory=True)
+            with self.assertRaises(ValueError):
+                ui_tools.retain_native_evidence([], output, 0)
+            self.assertEqual(secret.read_bytes(), b'preserve')
+
+    def test_archive_traversal_links_duplicate_oversize_rejected_before_write(self):
+        import io
+        import tarfile
+        for name, kind, size in (('../secret', tarfile.REGTYPE, 1),
+                ('pdf-edge-left.png', tarfile.SYMTYPE, 0),
+                ('pdf-edge-left.png', tarfile.REGTYPE, ui_tools.EVIDENCE_FILE_LIMIT+1)):
+            with self.subTest(name=name, kind=kind, size=size), TemporaryDirectory() as directory:
+                data = io.BytesIO()
+                with tarfile.open(fileobj=data, mode='w') as archive:
+                    item = tarfile.TarInfo(name); item.type = kind; item.size = size
+                    archive.addfile(item, io.BytesIO(b'x'*size) if kind == tarfile.REGTYPE else None)
+                data.seek(0)
+                with self.assertRaises(ValueError):
+                    ui_tools.retain_native_tar(data, Path(directory)/'out', 0)
+                self.assertFalse((Path(directory)/'out').exists())
+        entry = ('pdf-edge-left.png', 1, True, 1, lambda count: b'x')
+        with TemporaryDirectory() as directory, self.assertRaises(ValueError):
+            ui_tools.retain_native_evidence([entry, entry], Path(directory)/'out', 0)
+
+    def test_total_and_short_read_bounds(self):
+        with TemporaryDirectory() as directory:
+            entry = ('pdf-edge-left.png', 1, True, 2, lambda count: b'x')
+            with self.assertRaises(ValueError):
+                ui_tools.retain_native_evidence([entry], Path(directory)/'out', 0)
+            entries = [(name, 1, True, 2, lambda count: b'xx') for name in ui_tools.NATIVE_EVIDENCE[:2]]
+            with patch.object(ui_tools, 'EVIDENCE_TOTAL_LIMIT', 3), self.assertRaises(ValueError):
+                ui_tools.retain_native_evidence(entries, Path(directory)/'out', 0)
+
+    def test_owned_android_mismatch_never_contacts_adb(self):
+        with TemporaryDirectory() as directory:
+            marker = Path(directory)/'lease.json'; record = dict(serial='owned')
+            marker.write_text(json.dumps(record)); emulator = SimpleNamespace(marker=marker, verify=Mock())
+            with patch.object(ui_tools.subprocess, 'Popen') as launch, self.assertRaises(ValueError):
+                ui_tools.collect_owned_android_evidence(emulator, record, 'other', 0, directory)
+            launch.assert_not_called(); emulator.verify.assert_not_called()
+
+    def test_owned_ios_lease_and_matching_required_before_container_read(self):
+        with TemporaryDirectory() as directory:
+            lease = Path(directory)/'lease'; owner = dict(device='owned', name='created')
+            lease.write_text(json.dumps(owner)); client = Mock()
+            client.matching.return_value = None
+            with patch.object(ui_tools.subprocess, 'check_output') as command, self.assertRaises(ValueError):
+                ui_tools.collect_leased_ios_evidence(client, lease, owner, 'owned', 0, directory)
+            command.assert_not_called()
+            cache = Path(directory)/'container/Library/Caches'; cache.mkdir(parents=True)
+            (cache/'pdf-edge-left.png').write_bytes(b'actual')
+            client.matching.return_value = dict(udid='owned')
+            with patch.object(ui_tools.subprocess, 'check_output', return_value=str(cache.parents[1])) as command:
+                result = ui_tools.collect_leased_ios_evidence(client, lease, owner, 'owned', 0, directory)
+            self.assertEqual(result[0]['name'], 'pdf-edge-left.png')
+            self.assertEqual(command.call_args.args[0][3:5], ['owned', 'io.github.ispaure.logisticsmobile'])
+
+    def test_primary_exception_preserved_and_collection_only_failure_raises(self):
+        failure = RuntimeError('native failed'); secondary = ValueError('collection failed')
+        collector = Mock(side_effect=secondary)
+        with TemporaryDirectory() as directory:
+            ui_tools.finish_native_evidence(collector, 'owned', 0, directory, failure)
+            self.assertIn('collection failed', failure.__notes__[0])
+            self.assertTrue((Path(directory)/'native-evidence-error.json').exists())
+            with self.assertRaises(ValueError) as raised:
+                ui_tools.finish_native_evidence(collector, 'owned', 0, directory)
+            self.assertIs(raised.exception, secondary)
+
+    def test_run_collects_after_body_before_return_and_preserves_body_error(self):
+        calls = []; collector = Mock(side_effect=lambda *args: calls.append('collect'))
+        with patch.object(ui_tools, '_run_once', side_effect=lambda *args, **kwargs: calls.append('body') or {'passed': True}):
+            result = ui_tools.run('android', 'owned', local=True, evidence_collector=collector)
+        self.assertEqual(calls, ['body', 'collect']); self.assertTrue(result['passed'])
+        primary = RuntimeError('body')
+        with patch.object(ui_tools, '_run_once', side_effect=primary):
+            with self.assertRaises(RuntimeError) as raised:
+                ui_tools.run('android', 'owned', local=True, evidence_collector=collector)
+        self.assertIs(raised.exception, primary)
+
+    def test_progress_timings_uses_literal_not_diagnostic_position(self):
+        source = (REPO/'mobile_build/validation/document_storage_tools.py').read_text()
+        self.assertIn("timings = cache / 'logistics-native-ui-timings.json'", source)
+        self.assertNotIn('cache / NATIVE_DIAGNOSTICS[0]', source)
