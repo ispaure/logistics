@@ -19,6 +19,82 @@ async def ready(predicate, description, seconds=30):
     raise AssertionError(description)
 
 
+def native_pointer(value):
+    """Native ownership uses an address, never Python proxy equality."""
+    from commonUtils.ui.native.keyboard import native_value
+    value = native_value(value)
+    address = getattr(getattr(value, 'ptr', None), 'value', None)
+    return address if type(address) is int and address > 0 else None
+
+
+def same_native(left, right):
+    address = native_pointer(left)
+    return address is not None and address == native_pointer(right)
+
+
+def assert_native_owner(actual, expected, label):
+    assert same_native(actual, expected), dict(ownership=label,
+        actual_pointer=native_pointer(actual), expected_pointer=native_pointer(expected))
+
+
+def title_diagnostic(app, panel, row, title, same):
+    from commonUtils.ui.native.keyboard import native_value
+    controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
+    window = app.main_window._impl.native
+    def item(value):
+        value = native_value(value)
+        if value is None:
+            return None
+        rect = value.convertRect(value.bounds, toView=controller.view)
+        return dict(pointer=int(value.ptr.value),class_name=str(value.objc_class.name),
+            rect=[float(rect.origin.x),float(rect.origin.y),float(rect.size.width),float(rect.size.height)],
+            attached=same_native(value.window, window))
+    intended = row._title_content._impl.native
+    actual = native_value(title.superview)
+    chain = []
+    current = title
+    for _ in range(8):
+        if current is None:
+            break
+        chain.append(item(current))
+        current = native_value(current.superview)
+    return dict(equality_result=same,title=item(title),actual_parent=item(actual),
+        intended_host=item(intended),pointer_equal=(actual is not None and actual.ptr.value == intended.ptr.value),
+        mounted_title=item(getattr(row,'_mounted_title',None)),
+        title_chain=chain,row=item(row._impl.native),header=item(panel.view._document_title_header._impl.native),
+        navigation_title_view=item(controller.navigationItem.titleView),
+        session_matches_current=(app.notebook_panel is panel),
+        logical_title_host_parent_is_row=(row._title_content.parent is row))
+
+
+async def record_title_before_assert(app, panel, row, title, same):
+    # Latch the original comparison BEFORE any observer IO/await. Failure-only
+    # capture cannot repair the condition and accidentally turn this into PASS.
+    if same:
+        return
+    number = getattr(app,'_qa_title_snapshot_number',0)
+    app._qa_title_snapshot_number = number + 1
+    output = Path(app.paths.cache)/'notebook-ui'
+    output.mkdir(exist_ok=True)
+    name = 'strict-title-' + str(number).zfill(2)
+    record = dict(index=number,original_equality=same,stage=getattr(app,'_qa_title_stage','unknown'))
+    try:
+        record['diagnostic'] = title_diagnostic(app,panel,row,title,same)
+    except Exception:
+        record['observer_error'] = traceback.format_exc()
+    try:
+        if not same:
+            from .fixtures import capture_window
+            await capture_window(app,output/(name+'.png'))
+            record['screenshot'] = name+'.png'
+    except Exception:
+        record['capture_error'] = traceback.format_exc()
+    try:
+        (output/(name+'.json')).write_text(json.dumps(record,indent=2))
+    except Exception:
+        pass
+
+
 async def mounted(app, panel):
     from rubicon.objc import ObjCClass
     from toga_iOS.window import MainWindow
@@ -27,7 +103,7 @@ async def mounted(app, panel):
     window = app.main_window._impl.native
     assert window.isKindOfClass(ObjCClass('LogisticsNotebookInputWindow'))
     await wait_for_text(panel.web, 'Notebook')
-    assert native_value(panel.web._impl.native.window) == window
+    assert_native_owner(panel.web._impl.native.window, window, 'notebook WebView window')
     assert panel.pen_input is not None and panel.pen_input.enabled
     reporter = panel.pen_input.reporter
     assert reporter is not None and not reporter.closed
@@ -61,16 +137,18 @@ async def mounted(app, panel):
     band = getattr(panel.view, '_reader_top_band_state', None)
     if band is not None:
         controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
-        assert band['controller'] == controller
-        assert app._reader_toolbar_controller == controller
+        assert_native_owner(band['controller'], controller, 'current reader controller')
+        assert_native_owner(app._reader_toolbar_controller, controller, 'toolbar controller')
         assert str(controller.navigationItem.title) == panel.view._native_reader_title()
         header = band['header']
         assert panel.view._document_title_header is header and header.parent is not None
         row = header.children[0]
-        assert native_value(row._impl.native.window) == window
+        assert_native_owner(row._impl.native.window, window, 'header row window')
         title = panel.view._document_title_view
-        assert title.superview == row._title_content._impl.native
-        assert native_value(title.window) == window
+        same_title_parent = same_native(title.superview, row._title_content._impl.native)
+        await record_title_before_assert(app,panel,row,title,same_title_parent)
+        assert same_title_parent, 'Original title parent assertion failed; see notebook-ui/strict-title-* evidence'
+        assert_native_owner(title.window, window, 'native title window')
         title_rect = title.convertRect(title.bounds, toView=controller.view)
         geometry = band['geometry']
         assert title_rect.size.width >= 44 and title_rect.size.height > 0
@@ -80,8 +158,12 @@ async def mounted(app, panel):
         assert title_rect.origin.y + title_rect.size.height <= geometry['row_height'] + 1
         for control in controls:
             native = control._impl.native
-            assert native.isDescendantOfView(row._impl.native)
-            assert native_value(native.window) == window and not native.hidden
+            # Pinned Toga flattens logical child widgets into one native container.
+            assert control.parent is row
+            assert control._impl.container is row._impl.container
+            assert_native_owner(native.superview, row._impl.container.native, 'flattened button container')
+            assert_native_owner(native.window, window, 'header button window')
+            assert not native.hidden
             bounds = native.convertRect(native.bounds, toView=controller.view)
             assert bounds.size.width >= 44 and bounds.size.height >= 44
             geometry = band['geometry']
@@ -91,7 +173,7 @@ async def mounted(app, panel):
             assert bounds.origin.x + bounds.size.width <= geometry['right'] + 1
     else:
         controller = app._reader_toolbar_controller
-        assert native_value(controller.view.window) == window
+        assert_native_owner(controller.view.window, window, 'ordinary reader controller window')
         assert str(controller.navigationItem.title) == panel.view._native_reader_title()
         nav = controller.navigationItem
         items = list(nav.leftBarButtonItems or ()) + list(nav.rightBarButtonItems or ())
@@ -111,7 +193,7 @@ async def mounted(app, panel):
                 assert native_value(control._impl.native.menu) is not None
                 continue
             item = getattr(control, '_ios_action_item', None)
-            assert item is not None and item in items, 'Notebook native action is not mounted'
+            assert item is not None and any(same_native(item, mounted) for mounted in items), 'Notebook native action is not mounted'
             assert native_value(item.target) is not None
     assert panel.view._reader_close_button.enabled
     return dict(compiled_window=True, actual_toga_backend=True, attached_feed=True,
@@ -145,6 +227,30 @@ async def geometry(app, panel, orientation, output, index):
         assert status_bottom <= paper_top < 206, record
     if orientation == 'landscape-left':
         assert band is None, record
+        tools = panel.native_drawing_tools
+        assert tools.current() and len(tools.buttons) == 5, 'Landscape title/tool row did not mount'
+        title = panel.view._document_title_view
+        assert_native_owner(title.superview, tools.header._title_content._impl.native, 'landscape title host')
+        title_rect = title.convertRect(title.bounds, toView=window)
+        targets = []
+        for button in tools.buttons.values():
+            native_button = button._impl.native
+            assert_native_owner(native_button.window, window, 'landscape drawing target window')
+            bounds = native_button.convertRect(native_button.bounds, toView=window)
+            assert bounds.size.width >= 44 and bounds.size.height >= 44
+            assert bounds.origin.x >= title_rect.origin.x + title_rect.size.width - 1
+            assert abs(bounds.origin.y - title_rect.origin.y) <= 1
+            assert bounds.origin.x + bounds.size.width <= size.width + 1
+            targets.append([float(bounds.origin.x),float(bounds.origin.y),float(bounds.size.width),float(bounds.size.height)])
+        for _ in range(60):
+            hidden = await panel.web.evaluate_javascript("document.body.classList.contains('native-drawing-tools') && document.querySelector('header').getBoundingClientRect().height===0")
+            if hidden is True or type(hidden) is int and hidden == 1:
+                break
+            await asyncio.sleep(.05)
+        else:
+            raise AssertionError('Mounted native tools did not replace the DOM toolbar')
+        record['native_drawing_targets'] = targets
+        record['title_and_tools_same_row'] = True
     await capture_window(app, output / ('native-pencil-' + str(index) + '-' + orientation + '.png'))
     return record
 
@@ -176,6 +282,7 @@ class NativePencilProbe(NotebookProbe):
             assert await picker.browser_editor_folder(row)
             await picker.confirm_editor_file()
             panel = app.notebook_panel
+            app._qa_title_stage='initial-created'
             result['mount'] = await mounted(app, panel)
             before = len(panel.editor.notebook.page(0).strokes)
             # Real production logisticsNativePen -> DOM handler -> native URI bridge
@@ -213,6 +320,7 @@ class NativePencilProbe(NotebookProbe):
             from features.notebooks.mobile.documents import open_notebook
             assert await open_notebook(app, key=key)
             reopened = app.notebook_panel
+            app._qa_title_stage='saved-closed-reopened'
             result['reopen'] = await mounted(app, reopened)
             assert len(reopened.editor.notebook.page(0).strokes) == before + 20
             from .rotation_checks import rotate
@@ -221,6 +329,7 @@ class NativePencilProbe(NotebookProbe):
             result['rotation_geometry'] = []
             for index, orientation in enumerate(('portrait', 'landscape-left', 'portrait')):
                 await rotate(app, orientation)
+                app._qa_title_stage='post-reopen-rotation-'+str(index)+'-'+orientation
                 result['rotation_geometry'].append(dict(index=index,
                     mount=await mounted(app, reopened),
                     geometry=await geometry(app, reopened, orientation, captures, index)))
@@ -232,7 +341,7 @@ class NativePencilProbe(NotebookProbe):
                 assert getattr(reopened.view, '_reader_top_band_state', None) is not None
                 close = reopened.view._reader_close_button._impl.native
                 window = native_value(close.window)
-                assert window == app.main_window._impl.native
+                assert_native_owner(window, app.main_window._impl.native, 'real Close tap window')
                 rect = close.convertRect(close.bounds, toView=window)
                 point = [float(rect.origin.x + rect.size.width / 2),
                          float(rect.origin.y + rect.size.height / 2)]

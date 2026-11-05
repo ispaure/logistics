@@ -34,7 +34,38 @@ def free_top_band(regions, width, safe_top, required_width, *, row_height=60):
     return dict(left=left, right=right, width=width, row_height=row_height, reserve=reserve)
 
 
-def restore(view):
+def notebook_geometry(geometry, regions, contract, *, origin_x=0, margins=(0, 0, 0)):
+    """Contract-backed DOM clearance, only in a wholly unoccluded tool column."""
+    if contract != (48, 256) or abs(origin_x) > .5 or any(margins):
+        return None
+    width = geometry['width']
+    left, right = (width - 256) / 2, (width + 256) / 2
+    if left < geometry['left'] + 8 or right > geometry['right'] - 8:
+        return None
+    # Check every measured region, not only the first native row. Detached
+    # activity bubbles may cross the DOM toolbar farther down the screen.
+    if any(w > 0 and h > 0 and x < right + 8 and x + w > left - 8
+           for x, y, w, h in regions):
+        return None
+    return dict(geometry, reserve=max(geometry['row_height'], geometry['reserve'] - 48),
+                full_reserve=geometry['reserve'], content_clearance=48, toolbar_max_width=256)
+
+
+def reset_notebook_clearance(view):
+    if getattr(view, '_notebook_dom_toolbar_contract', None) != (48, 256):
+        return
+    view._notebook_dom_ready = None
+    view._notebook_dom_epoch = getattr(view, '_notebook_dom_epoch', 0) + 1
+    state = getattr(view, '_reader_top_band_state', None)
+    if state is not None and 'full_reserve' in state['geometry']:
+        geometry = dict(state['geometry'], reserve=state['geometry']['full_reserve'])
+        state['header'].style.height = geometry['reserve']
+        state['geometry'] = geometry
+
+
+def restore(view, *, preserve_content=False):
+    if not preserve_content:
+        reset_notebook_clearance(view)
     state = getattr(view, '_reader_top_band_state', None)
     if state is None:
         return
@@ -103,7 +134,8 @@ def project(app, view, destination, controller):
         return False
     row_height = max(48, *(height for width, height in sizes)) + 12
     width = float(native.bounds.size.width)
-    geometry = free_top_band(system_occlusions(controller), width,
+    regions = system_occlusions(controller)
+    geometry = free_top_band(regions, width,
                              float(native_value(window.safeAreaInsets).top),
                              sum(size[0] for size in sizes) + 44 + 32, row_height=row_height)
     if geometry is None:
@@ -112,15 +144,20 @@ def project(app, view, destination, controller):
     title = getattr(view, '_native_reader_title', '')
     title = str(title() if callable(title) else title or controller.navigationItem.title or '').replace('\n', ' ')
     margins = tuple(float(getattr(view.style, 'margin_' + side) or 0) for side in ('top', 'right', 'left'))
+    candidate = notebook_geometry(geometry, regions, getattr(view, '_notebook_dom_toolbar_contract', None),
+                                  origin_x=float(origin.x), margins=margins)
+    candidate_token = (getattr(view, '_notebook_dom_epoch', 0), tuple(sorted(candidate.items()))) if candidate is not None else None
+    if candidate_token is not None and getattr(view, '_notebook_dom_ready', None) == candidate_token:
+        geometry = candidate
     signature = (tuple(sorted(geometry.items())), tuple(id(button) for button in buttons), title,
-                 str(view._document_storage_status), tuple(view._document_storage_kinds), margins)
+                 str(view._document_storage_status), tuple(view._document_storage_kinds), margins, candidate_token)
     state = getattr(view, '_reader_top_band_state', None)
     if state is not None and state['controller'] == controller and state['signature'] == signature:
         navigation = app.native_host.adapter.navigation_for(destination)
         if not bool(navigation.isNavigationBarHidden()):
             navigation.setNavigationBarHidden(True, animated=False)
         return True
-    restore(view)
+    restore(view, preserve_content=True)
     toolbar = view._native_reader_toolbar
     for widget in (toolbar, *getattr(view, '_native_reader_hidden', ())):
         if widget.parent is not None:
@@ -146,12 +183,13 @@ def project(app, view, destination, controller):
     # Native/window safe-area insets are never made negative or rewritten.
     header = toga.Box(children=[row], style=Pack(direction=COLUMN, height=geometry['reserve'],
         margin_top=-margins[0], margin_right=-margins[1], margin_left=-margins[2]))
+    leading_count = 1 + (menu is not None)
     for index, button in enumerate(buttons):
         if button.parent is not None:
             button.parent.remove(button)
         button.app, button.window = app, app.main_window
         row.add(button)
-        if index == 0:
+        if index + 1 == leading_count:
             row.add(title_host)
     row._title_content = title_host
     place_title_in_header(row, view._document_title_view, view._document_storage_status)
@@ -166,7 +204,7 @@ def project(app, view, destination, controller):
     controller_key = pointer.value if pointer is not None else id(controller)
     view._reader_top_band_state = dict(header=header, previous_header=previous,
         signature=signature, buttons=buttons, geometry=geometry, controller=controller,
-        controller_key=controller_key, owner_app=weakref.ref(app))
+        controller_key=controller_key, owner_app=weakref.ref(app), notebook_candidate=candidate_token)
     app._reader_top_band_view = weakref.ref(view)
     navigation = app.native_host.adapter.navigation_for(destination)
     if not bool(navigation.isNavigationBarHidden()):
