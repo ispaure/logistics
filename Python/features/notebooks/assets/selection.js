@@ -155,7 +155,7 @@ function selectionCommand(op) {
 $('copyStrokes').onclick=()=>selectionCommand('copy-strokes');
 $('cutStrokes').onclick=()=>selectionCommand('cut-strokes');
 $('deleteStrokes').onclick=()=>selectionCommand('erase');
-pasteStrokes.onclick=()=>{if(!selectionLocked()&&active===null&&state.stroke_clipboard)send({op:'paste-strokes'})};
+pasteStrokes.onclick=()=>{if(!selectionLocked()&&active===null&&state.stroke_clipboard)send({op:'paste-strokes',single_use:document.body.classList.contains('notebook-mobile')})};
 function selectionDown(e) {
   e.preventDefault();
   if(selectionLocked()||(e.pointerType==='touch'&&penTouchBlocked())||(state.native_pen&&e.pointerType==='pen'&&e.isTrusted&&!e.nativePen))return;

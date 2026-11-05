@@ -74,6 +74,15 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             imported = imports.find(source_path)
             if key is None and imported is not None and imported['provider'] == 'notebook':
                 key = imported['resource']
+                # Import identities are resolved after the initial key lookup.
+                # Reuse the live owner rather than replacing its RAM draft/undo.
+                existing = next((owner for owner in panels(app).values()
+                                 if owner.key == key and not owner.closed), None)
+                if existing is not None:
+                    resource.close()
+                    panel.dispose()
+                    present(app, existing, destination=destination)
+                    return True
                 previous, binding = restore_notebook_resource(recovery, key)
                 if previous is not None:
                     previous.close()
@@ -106,6 +115,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             document = NotebookDocument(book, resource=active_resource, recovery=recovery, key=key,
                                          changed=remember_notebook_resource)
             document.dirty = bool(binding and binding.get('dirty'))
+            document.source_unavailable = bool(binding and active_resource is None)
             remember_notebook_resource(document)
             return document
         import asyncio
@@ -142,8 +152,7 @@ def present(app, panel, *, destination=None):
     app.workspace.activate(session.id)
     if not session.transient:
         app.recent_documents.remember(session)
-    from mobile.document_location import install_document_location
-    install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
+    clear_notebook_native_rows(panel.view)
     panel.view._native_reader_title = lambda: panel.editor.notebook.name if panel.editor is not None else ''
     panel.view._document_path = lambda: notebook_location(panel)
     app.show_view(panel.view, destination=destination, route='notebook:' + session.id,
@@ -183,8 +192,17 @@ def close_notebook(app, key, choice, *, leaving_reader=False):
             try:
                 panel.document.discard()
             except (OSError, ValueError, KeyError) as error:
-                panel.status.text = 'Could not discard; edits retained: ' + str(error)
+                show_notebook_close_error(app, panel, error)
                 return False
+    if panel is not None and panel.document is not None and panel.document.recovery_deleted and panel.document.resource is None:
+        try:
+            from mobile.resource_imports import ResourceImports
+            from services.documents.locations import collection_path
+            app.recent_documents.forget('notebook', panel.key)
+            ResourceImports(app.private_root, collection_root=collection_path(app.private_root)).forget('notebook', panel.key)
+        except (OSError, ValueError, KeyError) as error:
+            show_notebook_close_error(app, panel, error)
+            return False
     app.workspace.close(key, guard=lambda session: True)
     panels(app).pop(key, None)
     if panel is not None:
@@ -193,6 +211,16 @@ def close_notebook(app, key, choice, *, leaving_reader=False):
     app.reader_closed(key)
     app.refresh_document_list()
     return True
+
+
+def show_notebook_close_error(app, panel, error):
+    """A native close prompt must not leave failures in a detached status label."""
+    import toga
+    message = 'Could not close the notebook. Your draft is retained. ' + str(error)
+    panel.status.text = message
+    async def explain():
+        await app.main_window.dialog(toga.ErrorDialog('Notebook could not close', message))
+    app.loop.create_task(explain())
 
 
 async def retarget_notebook(app, panel, resource):
@@ -276,42 +304,48 @@ def prepare_notebook_lock(app, *, discard=False):
     return True
 
 
+def clear_notebook_native_rows(view):
+    """Notebook metadata is in its action sheet, never a second paper header."""
+    from mobile.document_location import remove_location_row
+    remove_location_row(view)
+    header = getattr(view, '_document_title_header', None)
+    if header is not None:
+        if header.parent is not None:
+            header.parent.remove(header)
+        frame = getattr(view, '_reading_frame_owner', None)
+        if frame is not None and header in frame.controls:
+            frame.controls.remove(header)
+            frame.top_controls -= 1
+    for name in ('_document_location_row', '_document_title_header', '_document_title_view', '_document_title_state'):
+        if hasattr(view, name):
+            delattr(view, name)
+
+
+def sync_notebook_chrome(panel):
+    clear_notebook_native_rows(panel.view)
+    if not getattr(panel.app, 'active_host', False):
+        return
+    render = getattr(getattr(panel.app, 'adaptive', None), 'render', None)
+    if callable(render):
+        render()
+
+
 def install_notebook_controls(panel):
-    """Native reader chrome is host composition, independent of the canvas."""
-    if not type(panel.view._impl).__module__.startswith('toga_iOS.'):
+    """One canvas toolbar; retain a native Close only for a missing canvas."""
+    panel.view._notebook_canvas_active = lambda: (
+        not panel.closed and panel.web is not None and panel.editor is not None)
+    panel.view._notebook_chrome_changed = lambda: sync_notebook_chrome(panel)
+    from commonUtils.ui.native.text_size import native_backend
+    if getattr(panel.view, '_impl', None) is None or not native_backend(panel.view).startswith('toga_iOS.'):
         return
     import toga
     from mobile.control_icons import icon_button
-    import json
-    from mobile.action_menu import FeatureCommands
-
-    def action(name):
-        async def invoke(widget=None, **kwargs):
-            if panel.closed or not panel.app.active_host or panel.web is None:
-                return
-            await panel.web.evaluate_javascript('window.notebookNativeAction?.(' + json.dumps(name) + ')')
-        return invoke
-
-    close = action('library')
+    def close(widget=None, **kwargs):
+        if not panel.closed and panel.app.active_host and hasattr(panel, 'session'):
+            return panel.app.request_reader_close(panel.session.id)
     panel.view._reader_close_button = icon_button('close', 'Close document', on_press=close)
-    buttons = [icon_button(icon, label, on_press=action(name)) for icon, label, name in (
-        ('contents', 'Pages Overview', 'pages'),
-        ('notes_links', 'Page template and layers', 'layers'),
-        ('appearance', 'View and input', 'view'),
-    )]
-    more = icon_button('more', 'Notebook actions')
-    panel.native_actions = FeatureCommands(more, panel.app, [
-        (label, action(name)) for label, name in (
-            ('Pages Overview', 'pages'), ('Page template and layers', 'layers'),
-            ('View and input…', 'view'), ('Save', 'save'), ('Save As…', 'save-as'),
-            ('Export .rmdoc', 'export'), ('Show in folder', 'show-in-folder'),
-            ('Document location', 'document-location'), ('Hide tools', 'hide-tools'),
-            ('Add page', 'add-page'), ('Close document', 'library'),
-            ('Delete document…', 'delete-file'),
-        )], action('document'))
-    buttons.append(more)
-    panel.view._native_reader_toolbar = toga.Box(children=buttons)
-    panel.view._native_reader_buttons = lambda: buttons
+    panel.view._native_reader_toolbar = toga.Box()
+    panel.view._native_reader_buttons = lambda: ()
 
 
 async def show_notebook_in_folder(panel):

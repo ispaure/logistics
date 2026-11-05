@@ -68,7 +68,7 @@ def check_toolbar_layout(view, js, wait, output):
         })())"""))
         assert not dimensions['overflow'], dimensions
         assert 0 <= dimensions['header']['left'] and dimensions['header']['right'] <= width, dimensions
-        assert len(dimensions['buttons']) == 6, dimensions
+        assert len(dimensions['buttons']) == 5, dimensions
         assert all(row['rect']['width'] >= 44 and row['rect']['height'] >= 44
                    for row in dimensions['buttons']), dimensions
         reachable = json.loads(js("""JSON.stringify([...document.querySelectorAll('.mobile-tools button')].map(b=>{
@@ -152,6 +152,13 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             return
         if not (native_only or laptop_only or palm_only):
             toolbar_reports = check_toolbar_layout(view, js, wait, output)
+            assert js("!document.querySelector('.mobile-tools #capture') && !!document.querySelector('.mobile-tools #select')")
+            js("window.notebookNativeAction('view')")
+            assert js("$('capture').getClientRects().length>0 && $('mobileSheet').contains($('capture'))")
+            js("$('capture').click()")
+            assert js("mode==='capture' && $('mobileSheet').hidden")
+            js("window.notebookNativeAction('view');$('capture').click()")
+            assert js("mode==='ink' && $('mobileSheet').hidden")
         if native_only:
             assert js("document.querySelector('[aria-label=\"Notebook actions\"]').hidden")
             js("window.notebookNativeAction('pages')")
@@ -182,17 +189,25 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             return
         if laptop_only:
             from mobile_build.native_tests.tests.logisticsmobile.notebook_laptop_checks import LAPTOP_CHECKS
+            assert js("$('zoomControls').hidden"), 'Zoom feedback must start hidden'
             reports = []
             for width, height in [(466, 678), (951, 669), (820, 1180)]:
                 view.resize(width, height)
                 js('window.notebookFold([.48,.52])')
                 QTest.qWait(150)
+                viewport_before = json.loads(js("JSON.stringify($('viewport').getBoundingClientRect().toJSON())"))
+                js('zoomBy(1.2)')
+                assert not js("$('zoomControls').hidden"), 'Actual zoom did not reveal feedback'
+                assert json.loads(js("JSON.stringify($('viewport').getBoundingClientRect().toJSON())")) == viewport_before
                 reports.append(json.loads(js(LAPTOP_CHECKS)))
+                wait(lambda: js("$('zoomControls').hidden"))
+                assert json.loads(js("JSON.stringify($('viewport').getBoundingClientRect().toJSON())")) == viewport_before
+                reports[-1]['zoom_auto_hidden_without_viewport_shift'] = True
                 QTest.qWait(150)
                 view.grab().save(str(output / f'laptop-{width}x{height}.png'))
                 js('window.notebookFold(null)')
                 QTest.qWait(100)
-                assert js("$('laptopTools').hidden && $('viewport').clientHeight===innerHeight"), js(
+                assert js("$('laptopTools').hidden && $('viewport').getBoundingClientRect().top>=document.querySelector('header').getBoundingClientRect().bottom && $('viewport').getBoundingClientRect().bottom===innerHeight"), js(
                     "JSON.stringify({hidden:$('laptopTools').hidden,classes:document.body.className,viewport:$('viewport').clientHeight,height:innerHeight,body:document.body.getBoundingClientRect().toJSON()})")
                 js("$('brushToggle').click()")
                 js("window.absentFoldProof=null;window.notebookFold(null);requestAnimationFrame(()=>{window.absentFoldProof=JSON.stringify({open:!$('mobileSheet').hidden,focused:document.activeElement.matches('.brush-card[aria-pressed=true]')})})")
@@ -267,7 +282,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         for width, height in [(320, 640), (360, 800), (390, 844), (393, 852), (419, 844), (420, 844), (844, 390), (820, 1180), (1180, 820), (320, 390)]:
             view.resize(width, height)
             QTest.qWait(100)
-            wait(lambda: js("document.getElementById('viewport').clientHeight===innerHeight && document.getElementById('viewport').scrollWidth<=document.getElementById('viewport').clientWidth"))
+            wait(lambda: js("document.getElementById('viewport').getBoundingClientRect().top>=document.querySelector('header').getBoundingClientRect().bottom && document.getElementById('viewport').getBoundingClientRect().bottom===innerHeight && document.getElementById('viewport').scrollWidth<=document.getElementById('viewport').clientWidth"))
             dimensions = json.loads(js('''JSON.stringify({width:innerWidth,height:innerHeight,
                 overflow:document.body.scrollWidth>innerWidth,
                 page:document.getElementById('viewport').clientHeight,
@@ -275,7 +290,9 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                 controlArea:[...document.querySelectorAll('header')].reduce((area,b)=>{let r=b.getBoundingClientRect();return area+r.width*r.height},0)/(innerWidth*innerHeight),
                 targets:[...document.querySelectorAll('.mobile-tools button')].every(b=>b.getBoundingClientRect().width>=44&&b.getBoundingClientRect().height>=44)})'''))
             assert not dimensions['overflow'], dimensions
-            assert dimensions['page'] == height, dimensions
+            assert dimensions['bounds']['top'] >= js("document.querySelector('header').getBoundingClientRect().bottom"), dimensions
+            assert dimensions['bounds']['bottom'] == height, dimensions
+            assert dimensions['page'] >= height - dimensions['bounds']['top'] - 1, dimensions
             assert dimensions['targets'] and dimensions['controlArea'] < .17, dimensions
             reports.append(dimensions)
             chrome = json.loads(js(CHROME_CHECKS))

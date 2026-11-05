@@ -33,3 +33,16 @@ class NotebookViewportTests(unittest.TestCase):
     def test_portable_and_unmounted_webviews_use_geometry_fallback(self):
         self.assertIsNone(tablet_viewport(None))
         self.assertIsNone(tablet_viewport(web('toga_dummy.widgets.webview')))
+
+    def test_private_native_subclasses_keep_device_identity(self):
+        for backend in ('toga_iOS.widgets.webview', 'toga_android.widgets.webview'):
+            native = SimpleNamespace(getResources=lambda: SimpleNamespace(
+                getConfiguration=lambda: SimpleNamespace(smallestScreenWidthDp=700)))
+            ordinary = web(backend, native)
+            secured = type('PrivateBackend', (type(ordinary._impl),),
+                           {'__module__': 'commonUtils.ui.native.private_webview'})()
+            secured.native = native
+            device = SimpleNamespace(currentDevice=SimpleNamespace(userInterfaceIdiom=1))
+            with self.subTest(backend=backend), patch.dict(sys.modules, {
+                    'rubicon.objc': SimpleNamespace(ObjCClass=lambda name: device)}):
+                self.assertTrue(tablet_viewport(SimpleNamespace(_impl=secured)))

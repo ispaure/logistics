@@ -302,6 +302,14 @@
         }]];
     }
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Start over" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self seekToMilliseconds:0]; }]];
+    if (@available(iOS 17.4, *)) {
+        BOOL subtitles = [[self playbackOptions][@"pip_subtitles"] boolValue];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:subtitles ? @"✓ Subtitle PiP (reopen video)" : @"Subtitle PiP (reopen video)"
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                [self setting:@"pip_subtitles" value:@(!subtitles)];
+                [self showStatus:@"Reopen this video to apply the picture-in-picture mode."];
+            }]];
+    }
     BOOL autoNext = [[self playbackOptions][@"autoplay_next"] boolValue];
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:autoNext ? @"✓ Play next automatically" : @"Play next automatically" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"autoplay_next" value:@(!autoNext)]; }]];
     [self presentPlaybackDialog:menu];

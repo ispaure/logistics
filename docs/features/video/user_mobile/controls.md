@@ -68,6 +68,8 @@ baseline installation requested before these additions.
 Picture-in-picture uses ten-second backward/forward actions on Android and the
 system skip controls on iOS. Seeking respects control locking and the source's
 access policy. iOS clamps skips at the start and end and completes no-op requests.
-Android keeps its subtitle surface attached when entering PiP. iOS PiP captions
-remain unavailable with the current VLC sample-buffer output: VLC draws those
-captions in a separate view that the system PiP surface does not include.
+Android keeps its subtitle surface attached when entering PiP. iOS uses classic
+system PiP by default; its video surface does not include VLC subtitle overlays.
+On iOS 17.4 or later, **Playback → Subtitle PiP (reopen video)** enables the
+subtitle compositor for the next time the video opens. Turn it off and reopen
+to return to classic PiP. Changing this preference leaves active playback intact.

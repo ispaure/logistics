@@ -100,9 +100,21 @@ def restore_notebook_resource(recovery, key):
         raise ValueError('Invalid notebook source binding.')
     value = json.loads(path.read_text())
     from pathlib import Path
-    if not Path(value['root']).is_dir():
+    source_root = Path(value['root'])
+    relative = Path(value['path'])
+    if relative.is_absolute() or '..' in relative.parts:
+        raise ValueError('Invalid notebook source path.')
+    from types import SimpleNamespace
+    from mobile.document_sources import local_document_path
+    original = source_root / relative
+    relocated = local_document_path(SimpleNamespace(private_root=Path(recovery.root).parent), original)
+    if relocated != original:
+        source_root = relocated
+        for _ in relative.parts:
+            source_root = source_root.parent
+    if not source_root.is_dir():
         return None, value
-    provider = LocalFiles(value['root'])
+    provider = LocalFiles(source_root)
     return DocumentResource(provider, value['path'], max_bytes=MAX_ARCHIVE), value
 
 

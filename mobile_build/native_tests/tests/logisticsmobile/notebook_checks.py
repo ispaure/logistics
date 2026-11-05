@@ -57,8 +57,11 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert 'too large' in status
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:mobile-controls')
     await panel.web.evaluate_javascript("document.querySelector('#mobileNotice button').click()")
-    sizes = json.loads(await panel.web.evaluate_javascript("JSON.stringify({innerWidth,buttons:[...document.querySelectorAll('.mobile-tools button')].map(b=>({id:b.id,label:b.getAttribute('aria-label'),rect:b.getBoundingClientRect().toJSON()})),body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight,overflow:document.body.scrollWidth>innerWidth,targets:[...document.querySelectorAll('.mobile-tools button')].every(b=>b.getBoundingClientRect().width>=44&&b.getBoundingClientRect().height>=44)})"))
-    assert sizes['page'] >= sizes['body'] * .95 and not sizes['overflow'] and sizes['targets'], sizes
+    sizes = json.loads(await panel.web.evaluate_javascript("JSON.stringify({viewport:document.getElementById('viewport').getBoundingClientRect().toJSON(),toolbar:document.querySelector('header').getBoundingClientRect().toJSON(),innerWidth,buttons:[...document.querySelectorAll('.mobile-tools button')].map(b=>({id:b.id,label:b.getAttribute('aria-label'),rect:b.getBoundingClientRect().toJSON()})),body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight,overflow:document.body.scrollWidth>innerWidth,targets:[...document.querySelectorAll('.mobile-tools button')].every(b=>b.getBoundingClientRect().width>=44&&b.getBoundingClientRect().height>=44)})"))
+    assert (sizes['viewport']['top'] >= sizes['toolbar']['bottom']
+            and abs(sizes['viewport']['bottom'] - sizes['body']) <= 1
+            and sizes['page'] >= sizes['body'] - sizes['viewport']['top'] - 1
+            and not sizes['overflow'] and sizes['targets']), sizes
     await panel.web.evaluate_javascript("document.getElementById('brushToggle').click()")
     choices = json.loads(await panel.web.evaluate_javascript("JSON.stringify({open:!document.getElementById('mobileSheet').hidden,brushes:document.querySelectorAll('.brush-card').length,selected_focused:document.activeElement.matches('.brush-card[aria-pressed=true]')})"))
     assert choices == dict(open=True, brushes=properties['tools'], selected_focused=True), choices

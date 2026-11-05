@@ -319,7 +319,7 @@ async def exercise_document_actions(app):
         await panel.web.evaluate_javascript("send({op:'rename',name:'Dirty menu actions'})")
         await idle()
         choices.append('cancel')
-        if hasattr(panel.view, '_native_reader_buttons'):
+        if panel.state().get('native_close'):
             await panel.view._reader_close_button.on_press()
         else:
             await panel.web.evaluate_javascript("document.querySelector('header button[aria-label=\"Close document\"]').click()")

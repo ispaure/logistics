@@ -94,7 +94,7 @@
 @property(nonatomic, strong) id<VLCPictureInPictureWindowControlling> pipController, captionPiP;
 @property(nonatomic, strong) LGCaptionVideoDrawable *captionDrawable;
 @property(nonatomic, strong) NSMutableArray<VLCRendererDiscoverer *> *discoverers;
-@property(nonatomic) BOOL pipActive;
+@property(nonatomic) BOOL pipActive, subtitlePiPEnabled;
 @property(nonatomic) BOOL casting;
 @property(nonatomic) BOOL retired;
 @property(nonatomic) BOOL retirementComplete;
@@ -386,7 +386,11 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     // Retain automatic fallback for formats the sample-buffer output cannot use.
     self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--stats",
         @"--vout=samplebufferdisplay,any"]];
-    if (@available(iOS 17.4, *)) {
+    self.subtitlePiPEnabled = NO;
+    if (@available(iOS 17.4, *)) self.subtitlePiPEnabled = [[self playbackOptions][@"pip_subtitles"] boolValue];
+    // Snapshot the mode for this player. Changing settings does not replace a
+    // live drawable or switch PiP ownership while playback is in progress.
+    if (self.subtitlePiPEnabled) {
         self.captionDrawable = [LGCaptionVideoDrawable new];
         self.captionDrawable.owner = self;
         self.player.drawable = self.captionDrawable;
@@ -1194,7 +1198,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)pip:(id)sender {
     if (![self canPlay:YES]) return;
-    if (@available(iOS 17.4, *)) {
+    if (self.subtitlePiPEnabled) {
         if (!self.captionPiP) self.captionPiP = LGCreateCaptionPiP(self);
         if (self.captionPiP) [self.captionPiP startPictureInPicture];
         else [self showStatus:@"Picture in picture is unavailable on this device."];

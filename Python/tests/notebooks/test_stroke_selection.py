@@ -144,3 +144,40 @@ class StrokeSelectionTests(unittest.TestCase):
                         {'cx':float('inf')}, {'dy':False}, {'ids':[1]}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 validate_action(dict(op='transform', ids=['a'], dx=0, dy=0) | changes)
+
+    def test_mobile_single_use_paste_consumes_only_confirmed_clipboard_and_copy_rearms(self):
+        editor = self.editor()
+        original = editor.notebook.page(0).strokes[0]
+        editor.apply(dict(op='copy-strokes', ids=[original.id]))
+        editor.apply(dict(op='paste-strokes', single_use=True))
+        self.assertEqual(len(editor.notebook.page(0).strokes), 2)
+        self.assertFalse(editor.state()['stroke_clipboard'])
+        with self.assertRaises(ValueError):
+            editor.apply(dict(op='paste-strokes', single_use=True))
+        self.assertEqual(len(editor.notebook.page(0).strokes), 2)
+        editor.apply(dict(op='copy-strokes', ids=[editor.notebook.page(0).strokes[0].id]))
+        self.assertTrue(editor.state()['stroke_clipboard'])
+        editor.apply(dict(op='paste-strokes', single_use=True))
+        self.assertEqual(len(editor.notebook.page(0).strokes), 3)
+        self.assertFalse(editor.state()['stroke_clipboard'])
+
+    def test_mobile_failed_paste_keeps_clipboard_for_retry_until_checkpoint_succeeds(self):
+        editor = self.editor()
+        editor.apply(dict(op='copy-strokes', ids=[editor.notebook.page(0).strokes[0].id]))
+        before = [stroke.payload() for stroke in editor.notebook.page(0).strokes]
+        def fail(book):
+            raise OSError('synthetic checkpoint failure')
+        editor.checkpoint = fail
+        with self.assertRaisesRegex(OSError, 'checkpoint failure'):
+            editor.apply(dict(op='paste-strokes', single_use=True))
+        self.assertEqual([stroke.payload() for stroke in editor.notebook.page(0).strokes], before)
+        self.assertTrue(editor.state()['stroke_clipboard'])
+        editor.checkpoint = lambda book: None
+        editor.apply(dict(op='paste-strokes', single_use=True))
+        self.assertEqual(len(editor.notebook.page(0).strokes), 2)
+        self.assertFalse(editor.state()['stroke_clipboard'])
+
+    def test_single_use_paste_flag_rejects_nonboolean_values(self):
+        for value in ('true', 1, None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_action(dict(op='paste-strokes', single_use=value))
