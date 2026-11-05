@@ -79,11 +79,24 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert 'too large' in status
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:mobile-controls')
     await panel.web.evaluate_javascript("document.querySelector('#mobileNotice button').click()")
+    tools = getattr(panel, 'native_drawing_tools', None)
+    # A compact iOS row leases the original DOM controls. On other allocations
+    # the WebView itself still owns their geometry.
+    native_tools = await panel.web.evaluate_javascript(
+        "document.body.classList.contains('native-drawing-tools')")
+    if native_tools:
+        assert tools is not None and tools.current()
+        frames = [tools.anchor(name) for name in tools.buttons]
+        assert len(frames) == 5 and all(width >= 44 and height >= 44 for _, _, width, height in frames)
+        assert all(abs(frame[1] - frames[0][1]) <= 1 for frame in frames)
+        title_host = tools.header._title_content._impl.native
+        strip = tools.strip._impl.native
+        assert title_host.frame.origin.x + title_host.frame.size.width <= strip.frame.origin.x + 1
     sizes = json.loads(await panel.web.evaluate_javascript("JSON.stringify({viewport:document.getElementById('viewport').getBoundingClientRect().toJSON(),toolbar:document.querySelector('header').getBoundingClientRect().toJSON(),innerWidth,buttons:[...document.querySelectorAll('.mobile-tools button')].map(b=>({id:b.id,label:b.getAttribute('aria-label'),rect:b.getBoundingClientRect().toJSON()})),body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight,overflow:document.body.scrollWidth>innerWidth,targets:[...document.querySelectorAll('.mobile-tools button')].every(b=>b.getBoundingClientRect().width>=44&&b.getBoundingClientRect().height>=44)})"))
     assert (sizes['viewport']['top'] >= sizes['toolbar']['bottom']
             and abs(sizes['viewport']['bottom'] - sizes['body']) <= 1
             and sizes['page'] >= sizes['body'] - sizes['viewport']['top'] - 1
-            and not sizes['overflow'] and sizes['targets']), sizes
+            and not sizes['overflow'] and (native_tools or sizes['targets'])), sizes
     await panel.web.evaluate_javascript("document.getElementById('brushToggle').click()")
     choices = json.loads(await panel.web.evaluate_javascript("JSON.stringify({open:!document.getElementById('mobileSheet').hidden,brushes:document.querySelectorAll('.brush-card').length,selected_focused:document.activeElement.matches('.brush-card[aria-pressed=true]')})"))
     assert choices == dict(open=True, brushes=properties['tools'], selected_focused=True), choices

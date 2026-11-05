@@ -1,10 +1,11 @@
-"""Landscape drawing targets mirror the live canvas controls, never its model."""
+"""Native drawing targets mirror the live canvas controls, never its model."""
 import asyncio
 import json
 import weakref
 
 TOOLS = ('pen', 'erase', 'select', 'undo', 'redo')
-MINIMUM_WIDTH = 160 + 5 * 44 + 32
+STRIP_WIDTH = len(TOOLS) * 44
+MINIMUM_TITLE_WIDTH = 96
 
 
 class NativeDrawingTools:
@@ -17,21 +18,22 @@ class NativeDrawingTools:
         self.pending = {}
         self.epoch = 0
 
-    def mount(self, header, controller):
+    def fits(self, controller):
         panel = self.panel()
         if panel is None or panel.closed or not getattr(panel, '_canvas_ready', False):
-            self.close()
-            return
+            return False
         native = controller.view
-        safe = native.safeAreaInsets
-        width = float(native.bounds.size.width - safe.left - safe.right)
-        window = panel.app.main_window._impl.native.bounds.size
-        if (window.width <= window.height or width < MINIMUM_WIDTH
-                or getattr(panel.view, '_reader_fullscreen', False)
-                or panel.app.presentation.fold_division(panel.web) is not None):
-            self.close()
-            return
-        if self.header is header and self.web is panel.web:
+        size = str(controller.traitCollection.preferredContentSizeCategory)
+        width = float(native.safeAreaLayoutGuide.layoutFrame.size.width)
+        style = panel.view.style
+        return (width - style.margin_left - style.margin_right >= MINIMUM_TITLE_WIDTH + STRIP_WIDTH + 16
+                and 'Accessibility' not in size
+                and not getattr(panel.view, '_reader_fullscreen', False)
+                and panel.app.presentation.fold_division(panel.web) is None)
+
+    def mount(self, header, controller):
+        panel = self.panel()
+        if self.header is header and self.web is panel.web and self.controller == controller:
             return
         self.close()
         import toga
@@ -46,8 +48,8 @@ class NativeDrawingTools:
         self.controller = controller
         header.style.direction = ROW
         header.style.align_items = 'center'
-        header._title_content = toga.Box(style=Pack(flex=1, height=48))
-        self.strip = toga.Box(style=Pack(direction=ROW, width=220, height=48))
+        header._title_content = toga.Box(style=Pack(flex=1, height=48, margin_left=8, margin_right=8))
+        self.strip = toga.Box(style=Pack(direction=ROW, width=STRIP_WIDTH, height=48))
         for name in TOOLS:
             async def click(widget=None, name=name, **kwargs):
                 await self.activate(name)
@@ -197,7 +199,7 @@ class NativeDrawingTools:
         header, self.header = self.header, None
         if header is not None and hasattr(header, '_title_content'):
             title = getattr(header, '_mounted_title', None)
-            if title is not None:
+            if title is not None and title.superview == header._title_content._impl.native:
                 header._impl.native.addSubview(title)
                 title.frame = header._impl.native.bounds
             for child in list(header.children):

@@ -21,8 +21,9 @@ the side or horizontal bar for the current window, including Duo's exterior and
 interior displays. The timeline overlays the bottom of the screen within the safe area and avoids an active Duo fold.
 The iOS filename occupies the native title area alongside playback controls,
 with centered storage details beneath it and a glass background on iOS 26 or newer.
-In narrow or short landscape windows, the filename moves above the timeline so
-the navigation buttons do not crowd it out.
+In narrow or short iOS windows, the source and filename share a compact line
+above the native playback buttons. Open **Playback → Document location…** for
+the full path.
 The green cached-range strip follows the seek track's endpoints directly beneath it.
 The movie stays centered in the full player surface when controls appear or hide. Android retains its responsive
 48-dp playback buttons.
