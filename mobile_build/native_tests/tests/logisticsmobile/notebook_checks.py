@@ -9,6 +9,25 @@ import json
 from .web_checks import wait_for_text
 
 
+def verify_native_pencil_binding(app, panel, state):
+    """The ordinary release gate must not silently accept iOS DOM fallback."""
+    from commonUtils.ui.native.text_size import native_backend
+    if not native_backend(app).startswith('toga_iOS.'):
+        return
+    from rubicon.objc import ObjCClass
+    from toga_iOS.window import MainWindow
+    from commonUtils.ui.native.keyboard import native_value
+    assert isinstance(app.main_window._impl, MainWindow), 'Expected the pinned iOS window backend (including SceneBackend)'
+    window = app.main_window._impl.native
+    assert window.isKindOfClass(ObjCClass('LogisticsNotebookInputWindow')), 'Compiled native Pencil window is unavailable'
+    assert native_value(panel.web._impl.native.window) == window, 'Notebook WK view is not attached to its owning window'
+    feed = getattr(panel, 'pen_input', None)
+    assert feed is not None and feed.enabled is True, 'Compiled native Pencil binding is unavailable'
+    nonce = state.get('native_nonce')
+    assert isinstance(nonce, str) and len(nonce) == 32 and all(c in '0123456789abcdef' for c in nonce), 'Missing native canvas lifetime'
+    assert state.get('native_pen') is True and nonce == feed.view_id == state.get('input_view'), 'Native feed and canvas nonce disagree'
+
+
 async def exercise_notebooks(app, *, return_to_home=True):
     from features.notebooks.mobile.documents import open_notebook
     from mobile.navigation import DESTINATIONS
@@ -41,14 +60,17 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert app.native_host.state.destination == 'home'
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:initial-web-ready')
     await wait_for_text(panel.web, 'Notebook')
-    result = await panel.web.evaluate_javascript("JSON.stringify({canvas:!!document.getElementById('paper'),pen:typeof PointerEvent,tools:document.getElementById('tool').options.length})")
+    result = await panel.web.evaluate_javascript("JSON.stringify({canvas:!!document.getElementById('paper'),pen:typeof PointerEvent,tools:document.getElementById('tool').options.length,native_pen:state.native_pen,native_nonce:state.native_pen_nonce,input_view:window.logisticsInputTrace?.().view_id})")
     properties = json.loads(result)
     assert properties['canvas'] and properties['pen'] == 'function' and properties['tools'] == len(panel.editor.state()['tools'])
+    verify_native_pencil_binding(app, panel, properties)
     retired = panel.web
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:reload')
     assert await panel.load(lambda: panel.repository.open(panel.key), panel.key)
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:initial-web-ready')
     await wait_for_text(panel.web, 'Notebook')
+    verify_native_pencil_binding(app, panel, json.loads(await panel.web.evaluate_javascript(
+        'JSON.stringify({native_pen:state.native_pen,native_nonce:state.native_pen_nonce,input_view:window.logisticsInputTrace?.().view_id})')))
     assert retired.on_navigation_starting._raw is None
     panel.navigate(retired, panel.bridge.url + '?command=ignored')
     assert panel.bridge.sequence == 0
