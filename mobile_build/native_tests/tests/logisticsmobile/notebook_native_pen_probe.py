@@ -163,7 +163,7 @@ async def mounted(app, panel):
             assert control._impl.container is row._impl.container
             assert_native_owner(native.superview, row._impl.container.native, 'flattened button container')
             assert_native_owner(native.window, window, 'header button window')
-            assert not native.hidden
+            assert not native.isHidden()
             bounds = native.convertRect(native.bounds, toView=controller.view)
             assert bounds.size.width >= 44 and bounds.size.height >= 44
             geometry = band['geometry']
