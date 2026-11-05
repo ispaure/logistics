@@ -719,14 +719,18 @@ format operations without desktop/image packages.
 
 Desktop suite deadlines start with `build-tests.json`. The Windows platform plan
 in `logistics_build/validation_plans.py` gives the full Logistics suite at least
-2,100 seconds and the complete SDK contract group 780 seconds. A measured Windows
-run exhausted 1,800 seconds with four extended modules remaining; the SDK group
-exhausted 600 seconds while entering its penultimate module. These bounded caps
-allow the complete inventories to finish; smoke budgets, other platform budgets
-and all required checks stay unchanged. A larger declared suite budget is never
-shortened. Logistics retains its 300-second per-file deadline; the SDK contracts
-have a finite group deadline rather than per-module deadlines. Hosted job limits
-include room for the complete sequence of declared suites.
+2,100 seconds. A measured Windows run exhausted 1,800 seconds with four extended
+modules remaining. Smoke budgets and other platform budgets stay unchanged; a
+larger declared suite budget is never shortened. Logistics retains its
+300-second per-file deadline. Full project discovery includes its build-manager
+integration contracts, and shared, native, runtime and release-tooling checks
+remain required.
+
+The external SDK's complete generic self-test inventory is separate qualification:
+run `python -m build_manager.contracts` with its owning interpreter. It is not
+selected automatically by a Logistics platform or release plan. Existing prepared
+runs keep their original gates and failure history; this policy applies to new
+plans. See [validation ownership](build-manager.md#validation-and-local-outputs).
 
 Native build prerequisites are prepared separately by explicit **Update project tooling…**
 (or `python -m build_manager.cli tooling --project NAME --update --confirm`) after
