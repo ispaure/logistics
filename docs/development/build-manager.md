@@ -1005,7 +1005,10 @@ job evidence for successful `evidence`, `package` and `publish` jobs, with every
 visible job terminal and no failed jobs. This project-specific witness is bound
 to the reviewed release workflow's hash: `package` depends on the selected fresh
 or independently verified reused gates, and `publish` depends on `package`.
-Changing that DAG requires reviewing and updating the witness. A stale queued
+An explicitly reviewed `testing.github_validation=off` release instead records
+its owned immutable tag bypass; this source-publication result does not claim
+that hosted tests passed. The default remains `on`, and Full local workflow
+gates are unchanged. Changing that DAG requires reviewing and updating the witness. A stale queued
 aggregate can therefore be reported honestly alongside proven terminal publication,
 without treating a partially populated job list as success.
 

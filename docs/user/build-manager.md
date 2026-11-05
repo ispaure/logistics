@@ -35,6 +35,35 @@ The local **Build** action on Android and iOS compiles a development artifact
 without installing or delivering it. Turning testing off in a delivery workflow
 skips checks while retaining the selected build and delivery steps.
 
+## Publish GitHub without testing
+
+For an explicitly requested publication without local tests, choose the advanced
+**Release** operation with the **GitHub** backend. This plans source publication
+rather than the local platform validation journey. It requires the selected clean,
+committed source and retains normal release identity, notes and publication checks.
+It does not build or deliver Firebase, TestFlight or device packages.
+
+**Run GitHub validation** defaults to **On**. Leave it on for the normal hosted
+platform, native and runtime gates. To publish without those hosted tests, turn it
+**Off** for this run and review the resulting plan. The release records that
+validation was explicitly disabled; skipped tests are not reported as passing.
+Turning off hosted validation does not suppress independent push-triggered CI runs
+or change an existing test result.
+
+For a CLI advanced plan, select `--operation Release --target macos --backend
+GitHub` and add `--run-value testing.github_validation=off`. The reviewed
+publication phase carries `--skip-hosted-validation`; the immutable tag records
+`Build-Manager-Hosted-Validation: off`. Publication receipts bind this mode, so a
+resume cannot switch an existing publication between tested and untested modes.
+
+The saved **Full Testing, Release & Build** preset remains the thorough workflow:
+it validates all five selected platforms locally and includes its configured
+release and delivery destinations. The GitHub toggle controls hosted release
+validation, not those local tests. Use advanced **Release → GitHub** for a
+publication-only run, then use the full preset with **Run GitHub validation** back
+**On** for the next thoroughly tested release. Inspect each fresh plan rather than
+assuming a previous run's opt-out has been restored.
+
 ## Settings and identity
 
 Settings use a category menu on the left and retained forms on the right, sharing

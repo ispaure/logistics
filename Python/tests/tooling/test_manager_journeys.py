@@ -5,7 +5,6 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
 import json
-import os
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -338,6 +337,17 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertNotIn('ios.validated', transitive_dependency_ids(plan, step.id))
         self.assertNotIn('android.validated', transitive_dependency_ids(plan, step.id))
         self.assertIn('v1.2.3-alpha.1', plan.journey['destinations']['github']['identity'])
+
+    def test_hosted_bypass_choice_does_not_remove_full_local_validation(self):
+        with patch('logistics_build.build_snapshots.git', side_effect=lambda _, *args: '' if args[0] == 'status' else self.source['logistics_commit']):
+            plan = self.make(platforms=['macos', 'linux', 'windows', 'android', 'ios'],
+                destinations=['github'], release_tag='v1.2.3-alpha.1',
+                run_overrides={'testing.github_validation': 'off'})
+        self.assertEqual(plan.source['run_overrides']['testing.github_validation'], 'off')
+        for target in ('macos', 'linux', 'windows', 'android', 'ios'):
+            self.assertIn(target + '.validated', {phase.id for phase in plan.phases})
+        self.assertEqual({call[1] for call in self.project.calls if call[0] == 'Test'},
+                         {'macos', 'linux', 'windows', 'android', 'ios'})
 
     def test_dirty_source_missing_platform_focused_tests_and_changed_settings_fail_before_delivery(self):
         with self.assertRaisesRegex(ValueError, 'requires: android'):

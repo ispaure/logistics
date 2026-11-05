@@ -533,6 +533,18 @@
   },
   "run_fields": [
     {
+      "id": "testing.github_validation",
+      "label": "GitHub release validation",
+      "kind": "choice",
+      "default": "on",
+      "options": {
+        "on": "On · require hosted validation or verified reuse",
+        "off": "Off · publish without hosted tests (explicit bypass)"
+      },
+      "workflow_option": true,
+      "description": "Only GitHub source releases. Off is recorded in the reviewed plan and immutable tag; it does not disable local validation in a Full workflow."
+    },
+    {
       "id": "testing.reuse_verified_results",
       "label": "Reuse verified test results",
       "kind": "choice",
