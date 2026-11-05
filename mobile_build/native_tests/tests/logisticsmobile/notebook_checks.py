@@ -82,8 +82,19 @@ async def exercise_notebooks(app, *, return_to_home=True):
     tools = getattr(panel, 'native_drawing_tools', None)
     # A compact iOS row leases the original DOM controls. On other allocations
     # the WebView itself still owns their geometry.
-    native_tools = await panel.web.evaluate_javascript(
-        "document.body.classList.contains('native-drawing-tools')")
+    async def native_drawing_row():
+        return await panel.web.evaluate_javascript(
+            "document.body.classList.contains('native-drawing-tools')")
+    native_tools = await native_drawing_row()
+    if tools is not None and getattr(panel.view, '_reader_top_band_state', None) is None:
+        controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
+        if tools.fits(controller):
+            for _ in range(15):
+                if native_tools:
+                    break
+                await asyncio.sleep(.1)
+                native_tools = await native_drawing_row()
+            assert native_tools, 'The allocation fits the notebook tools but the native row did not mount'
     if native_tools:
         assert tools is not None and tools.current()
         frames = [tools.anchor(name) for name in tools.buttons]
