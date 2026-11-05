@@ -93,14 +93,34 @@ class GuestSourceReadinessTests(unittest.TestCase):
         with patch.object(owner.subprocess,'run',side_effect=fail),self.assertRaisesRegex(ValueError,'clear the explicit'):self.repair()
         self.unchanged()
 
-    def test_vm_source_failure_happens_before_guest_admission(self):
+    def test_vm_source_failure_allows_inventory_but_blocks_guest_start(self):
         project=LogisticsProject(self.root);project.private=self.root/'private'
         source=dict(fingerprint='fixture',selection='fixture',run_overrides={})
         options={'tools.manager_checkout':str(self.target),'vm.fedora_mode':'guest','vm.fedora':'fixture','vm.windows':'fixture'}
-        with patch('logistics_build.build_project.materialize'),patch.object(owner,'ensure',side_effect=ValueError('blocked')),patch('build_manager.parallels.Parallels') as provider:
-            for target in ('linux','windows'):
-                with self.assertRaisesRegex(ValueError,'blocked'):project.local_vm_plan('Test',target,dict(source),self.root/'work',options,None)
-            provider.return_value.selected.assert_not_called()
+        for target in ('linux','windows'):
+            with self.subTest(target=target),patch('logistics_build.build_project.materialize') as snapshot,patch.object(owner,'ensure',side_effect=ValueError('blocked')) as ensure,patch('build_manager.parallels.Parallels') as provider:
+                with self.assertRaisesRegex(ValueError,'blocked'):
+                    project.local_vm_plan('Test',target,dict(source),self.root/'work',options,None)
+                provider.return_value.selected.assert_called_once_with('fixture')
+                snapshot.assert_called_once_with(self.root,project.private/'snapshots/fixture','fixture',expected=source)
+                ensure.assert_called_once_with(self.root,project.private/'snapshots/fixture',str(self.target),source)
+                provider.return_value.start.assert_not_called()
+                provider.return_value.execute.assert_not_called()
+                provider.return_value.run_owned.assert_not_called()
+
+    def test_unavailable_guest_inventory_does_not_materialize_or_repair(self):
+        project=LogisticsProject(self.root);project.private=self.root/'private'
+        source=dict(fingerprint='fixture',selection='fixture',run_overrides={})
+        options={'tools.manager_checkout':str(self.target),'vm.fedora_mode':'guest','vm.fedora':'fixture','vm.windows':'fixture'}
+        for target in ('linux','windows'):
+            with self.subTest(target=target),patch('logistics_build.build_project.materialize') as snapshot,patch.object(owner,'ensure') as ensure,patch('build_manager.parallels.Parallels') as provider:
+                provider.return_value.selected.side_effect=ValueError('Guest unavailable')
+                with self.assertRaisesRegex(ValueError,'Guest unavailable'):
+                    project.local_vm_plan('Test',target,dict(source),self.root/'work',options,None)
+                snapshot.assert_not_called()
+                ensure.assert_not_called()
+                provider.return_value.start.assert_not_called()
+                provider.return_value.execute.assert_not_called()
 
     def test_transfer_time_rechecks_same_owned_source_and_local_overlay_bypasses_repair(self):
         self.assertEqual(owner.before_transfer(self.snapshot,self.target)['status'],'objects-restored');self.unchanged()
