@@ -33,7 +33,8 @@ does not reduce its points; the live pen preview is unchanged.
 
 The document fills the editor viewport. A small floating strip at the top provides the
 current brush, **Erase**, **Select / move**, **Undo** and **Redo** in one row,
-including on narrow phones. Android’s canvas X and **…** share that row. On
+including on narrow phones. Swipe the drawing strip horizontally in narrow views
+to reach every tool. Android’s canvas X and **…** share that row. On
 iOS, the native toolbar provides X, **Pages Overview** (page thumbnails),
 **Page template and layers**, **View and input**, and **Notebook actions**.
 UIKit places these actions in Duo’s side rail when applicable and may collect
