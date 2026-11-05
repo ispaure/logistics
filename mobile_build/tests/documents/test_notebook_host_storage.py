@@ -162,35 +162,45 @@ class NotebookHostStorageTests(unittest.TestCase):
             self.assertEqual(show.await_count, 1)
             panel.closed = False
 
-    def test_ios_chrome_exposes_native_shortcuts_and_preserves_canvas_queue(self):
-        native = type('Native', (), {'__module__': 'toga_iOS.fixture'})()
-        panel = SimpleNamespace(view=SimpleNamespace(_impl=native), closed=False,
-            app=SimpleNamespace(active_host=True), web=Mock(evaluate_javascript=AsyncMock()))
-        controls = []
-        def button(icon, label, **kwargs):
-            control = Mock(icon=icon, label=label, **kwargs)
-            controls.append(control)
-            return control
-        with patch('mobile.control_icons.icon_button', side_effect=button), \
-                patch('mobile.action_menu.FeatureCommands') as menu, patch('toga.Box'):
+    def test_notebook_canvas_owns_one_toolbar_without_duplicate_native_actions(self):
+        panel = SimpleNamespace(view=SimpleNamespace(), closed=False, web=object(), editor=object())
+        with patch('mobile.control_icons.icon_button') as button, patch('mobile.action_menu.FeatureCommands') as menu:
             install_notebook_controls(panel)
-        self.assertIs(panel.view._reader_close_button, controls[0])
-        self.assertEqual([b.label for b in panel.view._native_reader_buttons()],
-            ['Pages Overview', 'Page template and layers', 'View and input', 'Notebook actions'])
-        for control, name in zip(controls[:4], ('library', 'pages', 'layers', 'view')):
-            self.run_async(control.on_press())
-            panel.web.evaluate_javascript.assert_awaited_with('window.notebookNativeAction?.("' + name + '")')
-        actions = dict(menu.call_args.args[2])
-        self.run_async(actions['Save']())
-        panel.web.evaluate_javascript.assert_awaited_with('window.notebookNativeAction?.("save")')
-        web = panel.web
-        before = web.evaluate_javascript.await_count
+        button.assert_not_called()
+        menu.assert_not_called()
+        self.assertTrue(panel.view._notebook_canvas_active())
+        self.assertFalse(hasattr(panel.view, '_native_reader_buttons'))
         panel.closed = True
-        self.run_async(actions['Delete document…']())
+        self.assertFalse(panel.view._notebook_canvas_active())
         panel.closed = False
-        panel.app.active_host = False
-        self.run_async(actions['Save']())
-        panel.app.active_host = True
         panel.web = None
-        self.run_async(actions['Save']())
-        self.assertEqual(before, web.evaluate_javascript.await_count)
+        self.assertFalse(panel.view._notebook_canvas_active())
+
+    def test_missing_ios_canvas_keeps_native_close_without_evaluating_javascript(self):
+        native = type('Native', (), {'__module__': 'toga_iOS.fixture'})()
+        close_request = Mock()
+        panel = SimpleNamespace(view=SimpleNamespace(_impl=native), closed=False, web=None,
+            editor=object(), session=SimpleNamespace(id='notebook-session'),
+            app=SimpleNamespace(active_host=True, request_reader_close=close_request))
+        with patch('mobile.control_icons.icon_button') as button, patch('toga.Box'):
+            install_notebook_controls(panel)
+        self.assertFalse(panel.view._notebook_canvas_active())
+        button.call_args.kwargs['on_press']()
+        close_request.assert_called_once_with('notebook-session')
+        self.assertEqual(panel.view._native_reader_buttons(), ())
+        panel.closed = True
+        button.call_args.kwargs['on_press']()
+        self.assertEqual(close_request.call_count, 1)
+
+    def test_notebook_native_rows_retire_only_their_own_header(self):
+        import toga
+        from services.documents.mobile_notebooks import clear_notebook_native_rows
+        view = toga.Box()
+        location, header, canvas = toga.Box(), toga.Box(), toga.Box()
+        view.add(location, header, canvas)
+        view._document_location_row = location
+        view._document_title_header = header
+        clear_notebook_native_rows(view)
+        self.assertEqual(list(view.children), [canvas])
+        self.assertFalse(hasattr(view, '_document_title_header'))
+        self.assertFalse(hasattr(view, '_document_location_row'))

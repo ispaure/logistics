@@ -350,7 +350,7 @@ class EditorPicker:
         ordinary = self.app.ordinary_file_roots(
             include_collections=getattr(destination_action, 'kind', '') != 'download')
         self.editor_storage_roots = ({'All files': ordinary['Shared files'], 'Local': None,
-            'Received Files': ordinary['Received Files']} if creation is not None else {'Local files': None})
+            'Received Files': ordinary['Received Files']} if creation is not None else dict(ordinary))
         if destination_action is not None:
             self.editor_storage_roots = dict(ordinary if getattr(destination_action, 'kind', '') == 'download' else self.app.file_roots)
         if self.app.feature_enabled('rclone'):
@@ -976,13 +976,12 @@ class EditorPicker:
         if self.cloud_busy or self.entering_creation_folder():
             return False
         label, folder = location
-        download = getattr(self.operation.destination_action, 'kind', '') == 'download'
-        if (self.operation.creation is not None and label == 'All files') or (download and label == 'Shared files'):
+        if (self.operation.creation is not None and label == 'All files') or label == 'Shared files':
             # Collection roots have their own providers, just as in Workspaces.
             # In particular, iOS protects the shared Local directory itself.
             from services.documents.locations import collection_path
             from .incoming_files import inbox_path
-            for name, root in (('Local files' if download else 'Local', collection_path(self.app.private_root)),
+            for name, root in (('Local' if self.operation.creation is not None else 'Local files', collection_path(self.app.private_root)),
                                ('Received Files', inbox_path(self.app.private_root))):
                 if folder == root.name or folder.startswith(root.name + '/'):
                     location = name, folder.removeprefix(root.name).lstrip('/')

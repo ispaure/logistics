@@ -83,7 +83,7 @@ class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
                 return True
             failure=asyncio.CancelledError('injected timeout cancellation') if cancelled else AssertionError('injected pixel failure')
             class Workflow:
-                def __init__(self,evaluate,editor,capture):self.cases=[]
+                def __init__(self,evaluate,editor,capture,progress=None):self.cases=[]
                 async def run(self):
                     if not private or app.notebook_panel.document.resource.provider.private:
                         app.notebook_panel.busy=True
@@ -105,6 +105,8 @@ class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
                 context.enter_context(patch('services.documents.mobile_notebooks.close_notebook',close_notebook))
                 context.enter_context(patch('services.documents.mobile_notebooks.panels',lambda app:registry))
                 context.enter_context(patch.object(checks,'ImageWorkflow',Workflow))
+                # Cleanup injection is independent of real native-view qualification.
+                context.enter_context(patch.object(checks,'verify_native_image_view',return_value='toga_android.webview'))
                 context.enter_context(patch('mobile_build.native_tests.tests.logisticsmobile.fixtures.capture_window',AsyncMock()))
                 with self.assertRaises(type(failure)) as raised:
                     await checks.exercise_notebook_images(app)

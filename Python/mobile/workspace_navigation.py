@@ -17,6 +17,14 @@ from .workspace_policy import WorkspaceSelection, session_view
 DESTINATION_LABELS = {key: label for key, label, *_ in DESTINATION_ITEMS}
 
 
+def live_notebook_canvas(view):
+    """Only a mounted notebook canvas replaces the native document title row."""
+    marker = getattr(view, '_notebook_canvas_active', None)
+    if callable(marker) and marker():
+        return True
+    return any(live_notebook_canvas(child) for child in getattr(view, 'children', ())) if view is not None else False
+
+
 def menu_button(callback, label='Browse files'):
     button = toga.Button('☰', on_press=callback, style=Pack(width=52, height=52))
     button._workspace_menu_label = label
@@ -79,7 +87,7 @@ def sync_reader_toolbar(app, view, destination=None):
     projections = getattr(app, '_reader_toolbar_projections', None)
     if projections is None:
         projections = app._reader_toolbar_projections = {}
-    controls = getattr(view, '_native_reader_buttons', None)
+    controls = None if live_notebook_canvas(view) else getattr(view, '_native_reader_buttons', None)
     if controls is None:
         # Tabs retain their controllers. Clear reader-owned chrome even when a
         # different tab was the most recent reader toolbar to be rendered.
@@ -183,6 +191,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         item = adapter.content_controller(destination).navigationItem
         body = self.app.routes.body(destination)
         view = body.children[0] if body is not None and body.children else None
+        if live_notebook_canvas(view):
+            if not bool(navigation.isNavigationBarHidden()):
+                navigation.setNavigationBarHidden(True, animated=False)
+            return
         if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
             if not bool(navigation.isNavigationBarHidden()):
                 navigation.setNavigationBarHidden(True, animated=False)

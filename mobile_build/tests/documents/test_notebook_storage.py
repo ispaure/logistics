@@ -429,3 +429,102 @@ class NotebookStorageTests(unittest.TestCase):
         panel.dispose()
         self.assertIsNone(replacement.parent)
         self.assertNotIn(replacement, panel.view.children)
+
+    def test_explicit_orphan_discard_removes_only_observed_draft_and_references(self):
+        from services.documents.mobile_storage import notebook_binding
+        from mobile.resource_imports import ResourceImports
+        panel = self.create(private=False)
+        self.stroke(panel)
+        key = panel.key
+        resource = panel.document.resource
+        source = resource.provider.root / resource.path
+        original = source.read_bytes()
+        other = panel.document.recovery.create(Notebook.new('Other draft'))
+        resource.close(); panel.document.resource = None
+        self.assertTrue(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertFalse((self.app.private_root / 'notebooks' / key).exists())
+        self.assertTrue((self.app.private_root / 'notebooks' / other).exists())
+        self.assertEqual(source.read_bytes(), original)
+        self.assertFalse(any(row['resource'] == key for row in self.app.recent_documents.items))
+        imports = ResourceImports(self.app.private_root, collection_root=source.parent)
+        self.assertFalse(any(row['resource'] == key for row in imports.items.values()))
+
+    def test_orphan_discard_conflict_keeps_other_window_revision_and_shows_error(self):
+        panel = self.create(private=False)
+        self.stroke(panel)
+        recovery, key = panel.document.recovery, panel.key
+        newer = recovery.open(key); newer.metadata['visibleName'] = 'Newer window'
+        recovery.save(key, newer)
+        resource = panel.document.resource
+        resource.close(); panel.document.resource = None
+        with patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
+            self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+            self.run_async(__import__('asyncio').sleep(0))
+            dialog.assert_awaited_once()
+        self.assertTrue(panel.document.dirty)
+        self.assertEqual(recovery.open(key).name, 'Newer window')
+        self.assertIn('retained', panel.status.text)
+
+    def test_orphan_discard_io_failure_keeps_draft_and_visible_retry_error(self):
+        panel = self.create(private=False); self.stroke(panel)
+        resource = panel.document.resource
+        resource.close(); panel.document.resource = None
+        with patch.object(panel.document.recovery, 'delete', side_effect=OSError('busy')), patch.object(
+                self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
+            self.assertFalse(self.app.close_session(panel.session.id, choice='discard'))
+            self.run_async(__import__('asyncio').sleep(0))
+            dialog.assert_awaited_once()
+        self.assertTrue(panel.document.dirty)
+        self.assertIn(panel.session.id, self.app.workspace.sessions)
+
+    def test_reopening_source_reuses_existing_orphan_owner_and_undo(self):
+        panel = self.create(private=False); self.stroke(panel)
+        resource = panel.document.resource
+        source = resource.provider.root / resource.path
+        undo = list(panel.editor.undo)
+        resource.close(); panel.document.resource = None
+        self.assertTrue(self.run_async(open_notebook(self.app, path=source)))
+        self.assertIs(self.app.notebook_panel, panel)
+        self.assertEqual(panel.editor.undo, undo)
+        self.assertEqual(len(self.app._notebook_views), 1)
+        self.assertTrue(panel.document.dirty)
+
+    def test_owned_ios_source_binding_rebases_without_relaxing_revision(self):
+        import json
+        from services.documents.mobile_storage import notebook_binding
+        panel = self.create(private=False); self.stroke(panel)
+        key, root = panel.key, panel.document.resource.provider.root
+        binding = notebook_binding(panel.document.recovery, key)
+        data = json.loads(binding.read_text())
+        data['root'] = '/var/mobile/Containers/Data/Application/OLD-CONTAINER/Documents'
+        binding.write_text(json.dumps(data))
+        self.assertTrue(self.app.close_session(panel.session.id))
+        with patch('services.documents.locations.shared_documents_path', return_value=root):
+            self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
+        restored = self.app.notebook_panel
+        self.assertIsNotNone(restored.document.resource)
+        self.assertEqual(restored.document.resource.provider.root, root)
+        self.assertTrue(restored.document.dirty)
+        self.run_async(restored.perform({'op':'save'}))
+        self.assertFalse(restored.document.dirty)
+
+    def test_rebased_changed_source_retains_draft_and_requires_save_as(self):
+        import json
+        from services.documents.mobile_storage import notebook_binding
+        panel = self.create(private=False); self.stroke(panel)
+        key, root = panel.key, panel.document.resource.provider.root
+        source = root / panel.document.resource.path
+        binding = notebook_binding(panel.document.recovery, key)
+        data = json.loads(binding.read_text())
+        data['root'] = '/var/mobile/Containers/Data/Application/OLD-CONTAINER/Documents'
+        binding.write_text(json.dumps(data))
+        replacement = Notebook.new('External changed copy').to_bytes()
+        source.write_bytes(replacement)
+        self.assertTrue(self.app.close_session(panel.session.id))
+        with patch('services.documents.locations.shared_documents_path', return_value=root):
+            self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
+        restored = self.app.notebook_panel
+        self.assertIsNone(restored.document.resource)
+        self.assertTrue(restored.document.dirty)
+        self.assertEqual(source.read_bytes(), replacement)
+        self.assertTrue(restored.document.source_unavailable)

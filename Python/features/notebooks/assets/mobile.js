@@ -16,6 +16,7 @@ renderEraserChoices();
 
   function iconButton(button, key, label, caption) {
     button.className = 'icon';
+    button.style.touchAction = 'manipulation';
     button.innerHTML = svg(icons[key] || brushNib(key)) + (caption ? '<small>' + caption + '</small>' : '');
     button.setAttribute('aria-label', label);
     button.title = label;
@@ -69,7 +70,6 @@ renderEraserChoices();
   brushToggle.setAttribute('aria-haspopup', 'dialog');
   brushToggle.setAttribute('aria-expanded', 'false');
   tools.append(brushToggle);
-  tools.append(iconButton(control('capture'), 'select', 'Capture cutouts and arrange images', 'Capture'));
   for (let [id, label] of [
       ['erase', 'Erase'],
       ['select', 'Select'],
@@ -345,6 +345,16 @@ renderEraserChoices();
   legacyName.append(control('notebookName'));
   dp.append(legacyName);
   let vp = panels.view;
+  const captureButton = control('capture'), toggleCapture = captureButton.onclick;
+  captureButton.className = '';
+  captureButton.textContent = 'Capture cutouts and arrange images';
+  captureButton.setAttribute('aria-label', 'Capture cutouts and arrange images');
+  captureButton.onclick = event => {
+    if (active !== null || busy) return;
+    closeSheet(false);
+    toggleCapture(event)
+  };
+  vp.append(captureButton);
   control('zoom').add(new Option('Fit page', 'page'));
   field(vp, 'Zoom', control('zoom'));
   const zoomControls = document.createElement('div');
@@ -380,6 +390,12 @@ renderEraserChoices();
   laptopTools.setAttribute('aria-label', 'Notebook drawing settings');
   laptopTools.hidden = true;
   document.body.append(laptopTools);
+  function measureToolbar() {
+    document.body.style.setProperty('--notebook-toolbar-bottom', header.getBoundingClientRect().bottom + 'px')
+  }
+  new ResizeObserver(measureToolbar).observe(header);
+  window.addEventListener('resize', measureToolbar);
+  measureToolbar();
   let fold = null, foldFrame = null;
   function applyFold() {
     foldFrame = null;

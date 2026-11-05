@@ -202,6 +202,8 @@ class Editor:
                 selection_indexes = list(range(len(ink.strokes), len(ink.strokes) + len(copies)))
                 ink.strokes = [*ink.strokes, *copies]
                 ink.order = [*ink.order, *(s.id for s in copies)]
+                if action.get('single_use') is True:
+                    clipboard = []
                 if ink.images:
                     ink.ordering_dirty = True
             elif op == 'stroke':

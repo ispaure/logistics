@@ -54,7 +54,13 @@ class NotebookDocument:
             self.dirty = False
             return
         if self.resource is None:
-            raise ValueError('The saved notebook is unavailable. Restore its source or use Save As before discarding.')
+            # Explicitly discarding an orphan removes only this observed draft;
+            # never overwrite a different same-named file or another window's edits.
+            self.recovery.delete(self.key, expected=self.book)
+            self.recovery_deleted = True
+            self.dirty = False
+            self.changed(self)
+            return
         revision = self.resource.revision
         try:
             saved = Notebook.read(self.resource.read())

@@ -87,6 +87,17 @@ function restoreViewportZoom(snapshot) {
   viewportZoomMemory = snapshot.memory;
   resize()
 }
+let zoomControlsTimer = null;
+function revealZoomControls() {
+  const controls = $('zoomControls');
+  if (!mobileViewport() || !controls || document.body.classList.contains('tools-hidden')) return;
+  controls.hidden = false;
+  if (zoomControlsTimer !== null) clearTimeout(zoomControlsTimer);
+  zoomControlsTimer = setTimeout(() => {
+    controls.hidden = true;
+    zoomControlsTimer = null
+  }, 3000)
+}
 function updateZoomChrome() {
   appliedZoom = $('zoom').value;
   const scale = canvas.getBoundingClientRect().width / state.width;
@@ -106,6 +117,8 @@ function setZoom(value, anchor = null, paperPoint = null) {
     value = String(Math.round(Math.min(maxZoom, Math.max(minZoom, numeric)) * 10000) / 10000);
   }
   const viewport = $('viewport'), box = viewport.getBoundingClientRect(), before = canvas.getBoundingClientRect();
+  const zoomChanged = ['page', 'fit'].includes(value) ? value !== appliedZoom :
+    Math.abs(Number(value) - before.width / state.width) > .0001;
   const x = anchor?.x ?? box.left + viewport.clientWidth / 2,
     y = anchor?.y ?? box.top + viewport.clientHeight / 2;
   const px = paperPoint?.[0] ?? Math.max(0, Math.min(1, (x - before.left) / before.width)),
@@ -127,7 +140,8 @@ function setZoom(value, anchor = null, paperPoint = null) {
   const after = canvas.getBoundingClientRect();
   viewport.scrollLeft += after.left + px * after.width - x;
   viewport.scrollTop += after.top + py * after.height - y;
-  rememberViewportZoom()
+  rememberViewportZoom();
+  if (zoomChanged) revealZoomControls()
 }
 function zoomBy(factor, anchor = null) {
   setZoom(canvas.getBoundingClientRect().width / state.width * factor, anchor)
@@ -143,7 +157,12 @@ function createZoomControls(container) {
   container.innerHTML = '<button id="zoomOut" type="button" aria-label="Zoom out" title="Zoom out">−</button><output id="zoomLevel" aria-label="Current zoom"></output><button id="zoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button><button id="zoomFit" type="button" title="Reset zoom" aria-label="Reset zoom">Reset</button>';
   $('zoomOut').onclick = () => zoomBy(1 / 1.2);
   $('zoomIn').onclick = () => zoomBy(1.2);
-  $('zoomFit').onclick = () => resetViewportZoom();
+  $('zoomFit').onclick = () => {
+    if (active !== null) return;
+    resetViewportZoom();
+    revealZoomControls()
+  };
+  container.hidden = mobileViewport();
   updateZoomChrome()
 }
 $('zoom').onchange = () => setZoom($('zoom').value);
