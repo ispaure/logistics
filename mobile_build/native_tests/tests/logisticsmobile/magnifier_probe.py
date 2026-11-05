@@ -112,7 +112,7 @@ class MagnifierProbe(LogisticsMobile):
                     for button in (less,more):
                         assert float(button.bounds.size.width) == 33
                         assert float(button.bounds.size.height) == 33
-                        assert float(button.frame.origin.y) >= float(impl.lens.frame.origin.y + impl.lens.frame.size.height - 33)
+                        assert abs(float(button.frame.origin.y) - max(float(rect.origin.y), float(impl.lens.frame.origin.y) - 9)) < .01
                         point = button.convertPoint(CGPoint(16.5,16.5),toView=parent)
                         hit = parent.hitTest(point,withEvent=None)
                         assert hit == button or hit.isDescendantOfView(button), 'Lens button is not touchable'
@@ -137,6 +137,10 @@ class MagnifierProbe(LogisticsMobile):
                     self._probe_less = less
                     def click(button):assert button.performClick()
                     def enabled(button):return bool(button.isEnabled())
+                if apple:
+                    assert more.frame.origin.x + more.bounds.size.width <= less.frame.origin.x
+                else:
+                    assert more.getRight() <= less.getLeft()
                 while canvas.magnifier_zoom < 250:click(more)
                 assert not enabled(more) and enabled(less)
                 assert comic.magnifier_zoom == pdf.magnifier_zoom == 250
