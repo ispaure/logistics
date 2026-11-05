@@ -84,15 +84,73 @@ def main(output):
                 before = editor.snapshot()
                 js(view, "$('paperView').value='pro';$('paperView').dispatchEvent(new Event('change'))")
                 assert before == editor.snapshot() and js(view, 'queue.length===0'), 'View selection mutated notebook'
-                js(view, "paperView='move';resize();window.templateClears=0;window.templateClear=ctx.clearRect;"
-                   "ctx.clearRect=function(...args){window.templateClears++;return window.templateClear.apply(this,args)}")
-                editor.apply(dict(op='stroke', points=[[500, 100, .5], [600, 100, .5]]))
-                js(view, stroke_script(editor, None))
-                assert js(view, 'window.templateClears') == 0, 'Interior ink acknowledgement replayed the page'
-                js(view, 'ctx.clearRect=window.templateClear')
-                editor.apply(dict(op='stroke', points=[[20, 1800, .5], [1380, 1810, .5]]))
-                js(view, update_script(editor.state()))
-                assert js(view, "paperView='move';resize();paperBounds().height>1810&&paperBounds().x<20&&paperBounds().width>1360")
+                # Select the document view through its real control, not just
+                # the derived paperView variable. Drain layout work before
+                # measuring the subsequent incremental acknowledgement.
+                js(view, "$('paperView').value='move';$('paperView').dispatchEvent(new Event('change'))")
+                assert before == editor.snapshot() and js(view,
+                    "documentPaperView==='move'&&paperView==='move'&&$('paperView').value==='move'&&queue.length===0"), 'Move view selection mutated notebook or lost its choice'
+                js(view, r"""(()=>{
+                    window.templateFenceReady=false;window.templateFenceError='';
+                    window.templateFenceFrame=null;
+                    const deadline=performance.now()+14000;
+                    let previous=null,stable=0;
+                    function frame(){
+                        window.templateFenceFrame=null;
+                        const background=$('pdfBackground');
+                        const idle=active===null&&!busy&&!queue.length&&resizeFrame===null&&!viewportResizePending&&
+                            (background.hidden||(background.complete&&background.naturalWidth>0));
+                        const geometry=JSON.stringify([viewportLayoutKey(),canvas.width,canvas.height,
+                            canvas.style.width,canvas.style.height,paperBounds(),paperView,documentPaperView]);
+                        stable=idle?(geometry===previous?stable+1:1):0;previous=geometry;
+                        if(stable>=2){window.templateFenceReady=true;return}
+                        if(performance.now()>=deadline){window.templateFenceError='Viewport did not reach two stable idle frames';return}
+                        window.templateFenceFrame=requestAnimationFrame(frame)
+                    }
+                    window.templateFenceFrame=requestAnimationFrame(frame)
+                })()""")
+                try:
+                    wait(lambda: js(view, 'window.templateFenceReady||!!window.templateFenceError'),
+                         'two stable template viewport frames')
+                    assert js(view, 'window.templateFenceReady'), js(view, 'window.templateFenceError')
+                    js(view, r"""(()=>{
+                        window.templateClears=0;window.templateClearEvents=[];
+                        window.templateClear=ctx.clearRect;
+                        window.templateObservation=()=>({clears:window.templateClears,
+                            events:window.templateClearEvents,paperView,documentPaperView,defaultViewportZoom,
+                            resizeFrame,viewportResizePending,bounds:paperBounds(),layout:viewportLayoutKey(),
+                            backing:[canvas.width,canvas.height],strokes:state.strokes.length});
+                        ctx.clearRect=function(...args){
+                            window.templateClears++;
+                            if(window.templateClearEvents.length<16)
+                                window.templateClearEvents.push({args,stack:new Error('canvas clear').stack,
+                                    paperView,documentPaperView,resizeFrame,viewportResizePending,
+                                    bounds:paperBounds(),layout:viewportLayoutKey()});
+                            return window.templateClear.apply(this,args)
+                        }
+                    })()""")
+                    before_ack=json.loads(js(view,'JSON.stringify(window.templateObservation())'))
+                    editor.apply(dict(op='stroke', points=[[500, 100, .5], [600, 100, .5]]))
+                    js(view, stroke_script(editor, None))
+                    after_ack=json.loads(js(view,'JSON.stringify(window.templateObservation())'))
+                    assert after_ack['clears'] == 0, ('Interior ink acknowledgement replayed the page',
+                                                     dict(before=before_ack,after=after_ack))
+                    assert after_ack['strokes'] == before_ack['strokes']+1, 'Interior acknowledgement was not applied'
+                    # Positive control: a stroke outside the Move crop must
+                    # redraw immediately on the same real incremental contract.
+                    js(view,'window.templateClears=0;window.templateClearEvents=[]')
+                    editor.apply(dict(op='stroke', points=[[20, 1800, .5], [1380, 1810, .5]]))
+                    js(view, stroke_script(editor, None))
+                    expanded=json.loads(js(view,'JSON.stringify(window.templateObservation())'))
+                    assert expanded['clears'] > 0, ('Expanding ink acknowledgement did not redraw',expanded)
+                    assert expanded['bounds']['height']>1810 and expanded['bounds']['x']<20 and expanded['bounds']['width']>1360, expanded
+                    js(view, update_script(editor.state()))
+                    assert js(view, "paperBounds().height>1810&&paperBounds().x<20&&paperBounds().width>1360")
+                    report['interior_ack']=dict(before=before_ack,after=after_ack)
+                    report['expanding_ack']=expanded
+                finally:
+                    js(view, "if(window.templateFenceFrame!==null)cancelAnimationFrame(window.templateFenceFrame);"
+                       "window.templateFenceFrame=null;if(window.templateClear)ctx.clearRect=window.templateClear")
                 editor.apply(dict(op='template', name='P Lines small', format='pro', visible=False))
                 js(view, update_script(editor.state()))
                 assert js(view, "$('pdfBackground').hidden"), 'Hidden template still visible'
