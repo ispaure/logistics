@@ -336,7 +336,10 @@ The displayed plan separates native APK build, pinned runtime preparation,
 emulator readiness, native functional/UI/rotation verification, CPython runtime
 verification and always-run cleanup. Native APK reuse requires the exact source,
 SDK/JDK/configuration and verified test payload/hash. Normal application APKs and
-mismatched payloads cannot be reused. The native suite retains all33cases and
+mismatched payloads cannot be reused. Validation retains an exact test APK in its
+owned device workspace and checks the native runner against those bytes. Later
+Release Gradle cleans can remove compiler outputs without invalidating the
+original and copied validation artifacts required for upload review. The native suite retains all33cases and
 260rotation audits. Its fullscreen geometry includes both system-bar and camera
 cutout safe insets, with the original strict centering and two-pixel bounds.
 
