@@ -342,13 +342,16 @@ class NotesLibraryProbe(LogisticsMobile):
             await self.wait_js(canvas.panel.web, '!!window.notebookIdle && window.notebookIdle()')
             assert set(self.workspace.sessions) == session_ids
             await capture_window(self, evidence / 'notes-remarkable.png')
+            from features.notebooks.notebook import Notebook
+            sketch = root / 'Sketch.rmdoc'
             await canvas.panel.perform({'op': 'add-page'})
             assert canvas.dirty
-            with patch.object(self.main_window, 'dialog', new=AsyncMock(return_value='cancel')):
+            with patch.object(canvas.panel.document.resource, 'save', side_effect=OSError('Test write failure')):
                 assert not await owner.open_note('Home.md')
-            assert owner.embedded is canvas
-            assert await canvas.save()
+            assert owner.embedded is canvas and canvas.dirty
+            assert len(Notebook.read(sketch.read_bytes()).pages) == 1
             assert await owner.open_note('Home.md')
+            assert len(Notebook.read(sketch.read_bytes()).pages) == 2
             with patch.object(self.main_window, 'dialog', new=AsyncMock(return_value='rmdoc')):
                 await owner.new_note()
             await capture_window(self, evidence / 'notes-new-name.png')
