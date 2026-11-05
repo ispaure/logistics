@@ -1,13 +1,13 @@
 # Chat on mobile
 
-On iOS, Conversations, New Conversation and conversation actions use the native
-navigation bar. Eligible controls move to the side on iPhone Duo; extra actions
-join the system overflow menu. Send/Stop stays beside the message field, and the
-conversation sidebar keeps its own settings control.
+Conversations, the compose icon and the Chat settings icon share the leading
+action area. On iOS, these controls use the native navigation bar. Eligible
+controls move to the side on iPhone Duo and extra actions join the system
+overflow menu. Send and Stop stay beside the message field.
 
 In Duo laptop posture, the conversation stays above the hinge. The lower screen
 provides a larger draft area, Send/Stop and direct controls for Conversations,
-New chat and Model & settings. Conversations opens in that lower panel without
+New conversation and Chat settings. Conversations opens in that lower panel without
 replacing the transcript; Back to draft restores the same draft. If the keyboard
 leaves too little room below the hinge, chat uses a compact composer above the
 keyboard and crease. Unfolding restores the normal layout without reloading the
@@ -15,7 +15,7 @@ conversation or clearing the draft.
 
 ## On-device models
 
-Open **Chat → ••• → Model & server settings**, or
+Open **Chat → Chat settings** using the sliders icon, or
 **Settings → LM Chat → Server & generation settings**. The page, Save and Back
 stay in the tab where you opened it. Choose a **Provider**; only that provider's
 controls appear. Opening the page does not contact a provider.
@@ -41,7 +41,7 @@ the system model still enforces its actual context, language and usage limits.
 
 ## LM server chat
 
-Choose **Chat** in the bottom navigation. Open **••• → Model & server settings**, enter your
+Open **Chat settings** in Chat, then enter your
 existing server's address (for example `http://192.168.1.10:1234`) and optional
 session API key. A plain address automatically uses `/v1`; an explicit API path
 is preserved. Tap **Connect & load models** to contact the server and fill the
@@ -64,7 +64,7 @@ These settings, URL and model persist privately. API keys remain in memory for
 this app session and are not written to configuration or conversation fields.
 Re-enter a required key after restarting. Opening chat alone makes no request.
 
-**New chat** at the bottom of the conversation drawer starts a private thread.
+The compose icon starts a private conversation.
 Draft recovery writes are batched briefly while typing and flushed when leaving
 the screen or backgrounding the app. Session API keys remain in memory.
 **Send** streams a text reply and preserves partial progress during generation.
@@ -76,14 +76,11 @@ conversation menu reopens saved conversations. Malformed, oversized or concurren
 are preserved, and saving reports the problem. Export can preserve a current
 valid in-memory copy before reopening a conflicting file.
 
-The chat canvas follows the device’s light/dark theme: white in light mode and
-black in dark mode, including the background while messages load. Messages fade
-into that background at the top as you scroll. On iPad and unfolded Duo, the
-composer stays centered and caps its width for comfortable reading; long header
-titles truncate before reaching the action buttons.
-The header shows the conversation title and configured model. Your messages use
-right-aligned grey bubbles; assistant replies use the full reading width with offline
-Markdown formatting (tables, headings, nested lists, quotes, emphasis and code). Raw HTML is
+Chat uses the shared Logistics light and dark colors. The conversation pane
+header shows the conversation title and configured provider or server model.
+On iPad and unfolded Duo, the composer stays centered and caps its width. Your
+messages use right-aligned bubbles. Assistant replies use the reading width with
+offline Markdown formatting (tables, headings, nested lists, quotes, emphasis and code). Raw HTML is
 escaped and links/images do not load external resources. **Copy** copies a reply's
 displayed text; if the platform declines copying, select the text and use its
 system Copy command. Streaming follows the latest reply only while you are near
@@ -94,7 +91,7 @@ message field, using the same size as notes, Markdown files and documentation.
 Pinching the conversation also updates this shared size.
 
 The native message field grows as you type, up to a bounded height; longer drafts
-scroll inside it. A circular up-arrow sends your message; it becomes a square Stop
+scroll inside it. The up-arrow sends your message; it becomes a square Stop
 control during generation, inside the same rounded composer. The header’s pencil
 button starts a new conversation. On Android phones, the bottom navigation keeps
 its normal height when the keyboard opens. The transcript shrinks and long drafts
@@ -102,8 +99,7 @@ scroll within a smaller message field, keeping the text and Send button above
 the keyboard. On iOS, destination tabs and their reserved spacing disappear
 while the keyboard is open, then return after dismissal. Completed messages omit visible role headings;
 interrupted and incomplete replies keep their status labels. Status appears only for ongoing
-work, feedback or problems. Server/model settings and **Export conversation…**
-are in the **•••** menu. Configuration is scrollable when the keyboard reduces
+work, feedback or problems. **Export conversation…** is in the **•••** menu. Configuration is scrollable when the keyboard reduces
 the available space. Draft storage and text-only request limits are unchanged.
 
 Requests reuse the desktop whole-turn context budget: older completed turns may

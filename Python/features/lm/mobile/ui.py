@@ -1,4 +1,5 @@
 """Native text chat controls; only explicit user actions contact a server."""
+from commonUtils.ui.native.appearance import accessible_name
 from commonUtils.ui.native.password_input import PasswordInput
 import asyncio
 from copy import deepcopy
@@ -6,13 +7,13 @@ import inspect
 import time
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW, END
+from toga.style.pack import CENTER, COLUMN, ROW, END
 
 from features.lm.domain import build_request, conversation, message, validate_settings
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
 from features.lm.mobile.transport import ChatClient, ChatCancelled
 from features.lm.mobile.on_device import MODELS, PROVIDERS, configured, platform_provider, client_for
-from features.lm.mobile.presentation import composer_height, transcript_document, transcript_entries, transcript_update
+from features.lm.mobile.presentation import COMPOSER_BOTTOM_GAP, composer_height, transcript_document, transcript_entries, transcript_update
 
 
 class ChatTranscript(toga.WebView):
@@ -65,13 +66,10 @@ class ChatUI:
         self.chat_url = toga.TextInput(value=self.chat_profile['base_url'],
             placeholder='e.g. http://192.168.1.10:1234', style=Pack(height=48))
         self.chat_key = PasswordInput(placeholder='API key (session only)', style=Pack(height=48))
-        self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Filled after connecting, or enter a model ID', style=Pack(height=48))
+        self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Exact model ID', style=Pack(height=48))
         self.chat_models = toga.Selection(on_change=self.select_chat_model, style=Pack(height=48))
         self.chat_refresh = toga.Button('Connect & load models', on_press=self.refresh_chat_models, style=Pack(height=48))
         self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=48))
-        self.chat_new = self.presentation.surface(toga.Button('New chat', on_press=self.new_chat,
-            style=Pack(height=52, width=148, font_size=17, font_weight='bold')),
-            radius=26, background='chat_background', foreground='text', outlined=True)
         self.transcript.ready = False
         self.transcript.revision = 0
         self.transcript.generation = 0
@@ -82,7 +80,7 @@ class ChatUI:
         self.chat_transcript = ChatTranscript(on_navigation_starting=lambda widget, url, **kw: False,
             on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
         self.presentation.bind_font(self.chat_transcript, 'markdown', web=True)
-        self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
+        self.presentation.surface(self.chat_transcript, radius=0, background='window', outlined=False)
         self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
             placeholder='Message…', style=Pack(flex=1, height=52, margin=4, margin_left=12))
         self.presentation.bind_font(self.chat_prompt, 'markdown')
@@ -111,21 +109,38 @@ class ChatUI:
         self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
-        from commonUtils.ui.native.forms import FittedLabel
+        from commonUtils.ui.native.forms import FittedLabel, group_rows
         def label(text, *, heading=False, field=False):
-            control = FittedLabel(text, style=Pack(font_size=16 if heading else 12,
+            control = FittedLabel(text, style=Pack(font_size=16 if heading else 14 if field else 12,
                 font_weight='bold' if heading else 'normal', margin_top=12 if heading else 4))
             return self.presentation.surface(control, radius=0,
                 foreground='text' if heading or field else 'muted', background='transparent', outlined=False, eink_outlined=False)
 
+        def field(text, control, help_text=None):
+            accessible_name(control, text)
+            children = [label(text, field=True), control]
+            if help_text:
+                children.append(label(help_text))
+            return toga.Box(children=children, style=Pack(direction=COLUMN, gap=4, margin_top=4, margin_bottom=8))
+
+        def group(*rows):
+            return group_rows(rows, surface=self.presentation.surface,
+                              background='settings_group', separator='settings_separator')
+
         self.chat_config_back = toga.Button('Back', on_press=lambda widget, **kw: self.routes.back(), style=Pack(height=48))
-        self.chat_config_save = toga.Button('Save settings', on_press=self.save_chat_configuration, style=Pack(height=48, margin_top=12))
-        self.chat_server_section = toga.Box(children=[
-            label('Server address', field=True), self.chat_url,
-            label('Use your computer’s LAN address. /v1 is added automatically.'),
-            label('API key · optional', field=True), self.chat_key,
-            label('Kept for this session only.')], style=Pack(direction=COLUMN))
+        self.chat_config_save = self.presentation.action_button(toga.Button('Save settings',
+            on_press=self.save_chat_configuration, style=Pack(height=48)))
+        self.chat_server_section = toga.Box(children=[label('Connection', heading=True), group(
+            field('Server address', self.chat_url, 'Enter the server’s address and port. /v1 is added automatically.'),
+            field('API key (optional)', self.chat_key, 'The key is kept for this app session.'),
+        )], style=Pack(direction=COLUMN, gap=8))
         self.chat_device_note = label('')
+        self.chat_device_section = toga.Box(children=[label('On-device model', heading=True), self.chat_device_note],
+                                              style=Pack(direction=COLUMN, gap=8))
+        self.chat_connection_feedback = toga.Box(children=[self.chat_refresh, self.chat_config_status_box],
+            style=Pack(direction=COLUMN))
+        self.chat_connection_actions = group(self.chat_connection_feedback)
+        self.chat_save_feedback = toga.Box(style=Pack(direction=COLUMN))
         self.chat_manual_box = toga.Box(style=Pack(direction=COLUMN))
         self.chat_manual_toggle = toga.Button('Enter model ID manually',
             on_press=self.toggle_chat_manual_model, style=Pack(height=48))
@@ -135,25 +150,30 @@ class ChatUI:
         self.chat_model_choices = toga.Box(style=Pack(direction=COLUMN))
         self.chat_model_hint = label('Connect to load available models, or enter a model ID.')
         self.chat_generation_box = toga.Box(style=Pack(direction=COLUMN))
-        self.chat_generation_fields = toga.Box(children=[
-            label('Context tokens', field=True), self.chat_context,
-            label('Maximum reply tokens', field=True), self.chat_max_tokens], style=Pack(direction=COLUMN))
+        self.chat_generation_fields = toga.Box(children=[group(
+            field('Context tokens', self.chat_context, 'Limits how much conversation history is sent.'),
+            field('Maximum reply tokens', self.chat_max_tokens, 'Limits the length of each reply.'),
+        )], style=Pack(direction=COLUMN))
         self.chat_generation_toggle = toga.Button('Generation limits…',
             on_press=self.toggle_chat_generation, style=Pack(height=48))
-        self.chat_model_section = toga.Box(children=[label('Model', heading=True), self.chat_model_choices,
-            self.chat_manual_toggle, self.chat_manual_box,
-            self.chat_generation_toggle, self.chat_generation_box], style=Pack(direction=COLUMN))
-        self.chat_provider_content = toga.Box(style=Pack(direction=COLUMN))
-        self.chat_config_content = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        self.chat_model_section = toga.Box(children=[label('Model', heading=True),
+            group(self.chat_model_choices, self.chat_manual_toggle, self.chat_manual_box),
+            label('Generation', heading=True), self.chat_generation_toggle, self.chat_generation_box],
+            style=Pack(direction=COLUMN, gap=6))
+        accessible_name(self.chat_models, 'Available models')
+        accessible_name(self.chat_model, 'Exact model ID')
+        self.chat_provider_content = toga.Box(style=Pack(direction=COLUMN, gap=8))
+        self.chat_config_content = toga.Box(style=Pack(direction=COLUMN, margin=16, gap=8))
         if not self.routes.apple:
             self.chat_config_content.add(self.chat_config_back, label('Chat settings', heading=True))
         if len(choices) > 1:
-            self.chat_config_content.add(label('Provider', field=True), self.chat_provider)
-        self.chat_config_content.add(self.chat_provider_content, self.chat_config_save)
+            self.chat_config_content.add(label('Provider', heading=True), group(field('Model provider', self.chat_provider)))
+        self.chat_config_content.add(self.chat_provider_content, self.chat_save_feedback, self.chat_config_save)
         self.chat_config_view = toga.ScrollContainer(horizontal=False,
             content=self.chat_config_content, style=Pack(flex=1))
-        self.presentation.surface(self.chat_config_content, radius=0,
-            background='settings_background', outlined=False, eink_outlined=False)
+        for surface in (self.chat_config_view, self.chat_config_content):
+            self.presentation.surface(surface, radius=0, background='settings_background',
+                                      outlined=False, eink_outlined=False)
         self.presentation.register_layout('chat-settings', self, ChatUI.fit_chat_configuration)
 
         self.select_chat_provider()
@@ -186,46 +206,41 @@ class ChatUI:
         self.chat_conversation_list = self.presentation.summary_list(kind='Conversation',
             icon_kind='chat', on_select=self._select_conversation_row, style=Pack(flex=1))
         self.chat_conversation_buttons = []  # Compatibility; rows are recycled natively.
-        self.chat_drawer_settings = self.presentation.icon_button('preferences' if self.routes.apple else 'more', 'Chat settings', on_press=self.show_chat_configuration)
-        self.chat_sidebar_title = toga.Label('Conversations',
-            style=Pack(font_size=22, font_weight='bold', margin_bottom=20))
-        self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_sidebar_title,
-            self.chat_conversation_list,
-            toga.Box(children=[self.chat_new, toga.Box(style=Pack(flex=1)), self.chat_drawer_settings],
-                     style=Pack(direction=ROW, margin_top=16))],
-            style=Pack(direction=COLUMN, flex=1, margin=16))
+        self.chat_drawer_settings = self.presentation.icon_button('preferences', 'Chat settings',
+            on_press=self.show_chat_configuration)
+        sidebar_title = toga.Label('Conversations', style=Pack(font_size=18, font_weight='bold'))
+        self.chat_sidebar_content = sidebar = toga.Box(children=[sidebar_title, self.chat_conversation_list],
+            style=Pack(direction=COLUMN, flex=1, gap=12, margin=12))
         self.chat_sidebar = self.presentation.surface(toga.Box(children=[sidebar], style=Pack(direction=COLUMN, flex=1)),
-                                    radius=0, background='chat_background', outlined=False)
+            radius=16, background='surface', outlined=True)
         self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
         self.chat_composer = toga.Box(children=[self.chat_prompt, self.chat_send],
-            style=Pack(direction=ROW, align_items=END, margin_top=12, margin_bottom=4))
-        self.presentation.surface(self.chat_composer, radius=30, background='chat_input', outlined=False)
+            style=Pack(direction=ROW, align_items=END, margin_top=6))
+        self.presentation.surface(self.chat_composer, radius=16, background='surface', outlined=True)
         self.chat_setup = self.presentation.action_button(toga.Button('Set up chat', on_press=self.show_chat_configuration,
-                                                    style=Pack(height=48, margin_bottom=8)))
+                                                    style=Pack(height=48)))
         self.chat_setup_box = toga.Box(style=Pack(direction=COLUMN))
-        self.chat_transcript_card = toga.Box(children=[self.chat_transcript], style=Pack(direction=COLUMN, flex=1))
-        self.presentation.surface(self.chat_prompt, radius=22, background='chat_input', foreground='text', outlined=False)
-        self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
-        self.presentation.surface(self.chat_status, radius=0, background='chat_background', foreground='muted', outlined=False)
+        self.chat_conversation_heading = toga.Box(children=[self.chat_title, self.chat_model_label],
+            style=Pack(direction=COLUMN, margin=(4, 8, 6)))
+        self.chat_transcript_card = toga.Box(
+            children=[self.chat_conversation_heading, self.chat_setup_box, self.chat_transcript],
+            style=Pack(direction=COLUMN, flex=1))
+        self.presentation.surface(self.chat_prompt, radius=12, background='surface', foreground='text', outlined=False)
+        self.presentation.surface(self.chat_send, radius=12, background='text', foreground='window', outlined=False)
+        self.presentation.surface(self.chat_status, radius=0, background='window', foreground='muted', outlined=False)
         self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
             style=Pack(direction=COLUMN, flex=1))
         self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
         self.chat_drawer_open = self.adaptive.width() >= 640
-        for control in (self.chat_header_new, self.chat_actions_button):
-            self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=False)
-        self.chat_header_actions = self.presentation.surface(toga.Box(children=[self.chat_header_new, self.chat_actions_button],
-            style=Pack(direction=ROW)), radius=24, background='chat_input', outlined=False)
-        self.chat_header = toga.Box(children=[self.chat_menu_button,
-            toga.Box(children=[self.chat_title, self.chat_model_label], style=Pack(direction=COLUMN, flex=1, margin_left=4)),
-            self.chat_header_actions],
-            style=Pack(direction=ROW, margin_bottom=12))
-        self.chat_view = toga.Box(children=[self.chat_header, self.chat_setup_box, self.chat_workspace],
-            style=Pack(direction=COLUMN, margin=12, flex=1))
-        self.presentation.surface(self.chat_view, radius=0, background='chat_background', outlined=False)
-        # The host mounts screen actions in its native iOS navigation bar.
-        # Content/header/composer ownership remains unchanged on Android.
-        self.chat_view._ios_toolbar_buttons = [self.chat_header_new, self.chat_actions_button]
-        self.chat_view._ios_toolbar_leading = [self.chat_menu_button]
+        leading = [self.chat_menu_button, self.chat_header_new, self.chat_drawer_settings]
+        self.chat_header_actions = toga.Box(children=[*leading, self.chat_actions_button],
+            style=Pack(direction=ROW, align_items=CENTER))
+        self.chat_header = toga.Box(children=[self.chat_header_actions], style=Pack(direction=ROW))
+        self.chat_view = toga.Box(children=[self.chat_header, self.chat_workspace],
+            style=Pack(direction=COLUMN, margin=(12, 12, COMPOSER_BOTTOM_GAP), flex=1))
+        self.presentation.surface(self.chat_view, radius=0, background='window', outlined=False)
+        self.chat_view._ios_toolbar_buttons = [self.chat_actions_button]
+        self.chat_view._ios_toolbar_leading = leading
         self.chat_view._ios_toolbar_hidden = [self.chat_header_actions]
         from .laptop import LaptopChat
         self.laptop = LaptopChat(self)
@@ -245,14 +260,6 @@ class ChatUI:
             self.update_chat_header()
             self.resize_chat_composer()
             return
-        compact_drawer = self.chat_drawer_open and self.adaptive.width() < 640
-        sidebar_children = self.chat_sidebar_content.children
-        if compact_drawer and self.chat_sidebar_title in sidebar_children:
-            self.chat_sidebar_content.remove(self.chat_sidebar_title)
-        elif not compact_drawer and self.chat_sidebar_title not in sidebar_children:
-            self.chat_sidebar_content.insert(0, self.chat_sidebar_title)
-        self.presentation.surface(self.chat_view, radius=0,
-                background='chat_background', outlined=False)
         children = []
         if self.chat_drawer_open:
             children.append(self.chat_sidebar)
@@ -263,14 +270,13 @@ class ChatUI:
                 self.chat_workspace.remove(child)
             self.chat_workspace.add(*children)
         if len(children) == 2:
-            available = self.adaptive.content_width('chat')
-            half = max(1, int(available / 2))
-            self.chat_sidebar.style.width, self.chat_sidebar.style.flex = half, 0
-            self.chat_messages.style.width, self.chat_messages.style.flex = max(1, int(available) - half), 0
+            self.chat_sidebar.style.width = self.chat_sidebar_width()
+            self.chat_sidebar.style.flex = 0
+            self.chat_messages.style.margin_left = 12
         else:
-            for child in children:
-                del child.style.width
-                child.style.flex = 1
+            del self.chat_sidebar.style.width
+            self.chat_sidebar.style.flex = 1
+            self.chat_messages.style.margin_left = 0
         self.sync_chat_navigation()
         self.reserve_chat_navigation()
         self.sync_chat_appearance()
@@ -298,7 +304,6 @@ class ChatUI:
         self.chat_menu_button._workspace_menu_label = (
             'Close conversations' if self.chat_drawer_open else 'Conversations')
         self.chat_menu_button.accessible_name = self.chat_menu_button._workspace_menu_label
-        self.chat_view._ios_toolbar_leading = [self.chat_menu_button]
 
     def reserve_chat_navigation(self):
         """The floating UIKit tab bar can extend above its reported safe inset."""
@@ -311,7 +316,7 @@ class ChatUI:
         tab = adapter.controller.tabBar
         hidden = adapter.tabs_hidden() if hasattr(adapter, 'tabs_hidden') else bool(tab.isHidden())
         if hidden:
-            margin = 12
+            margin = COMPOSER_BOTTOM_GAP
         else:
             window = self.main_window._impl.native
             viewport = container.native.convertRect(container.native.bounds, toView=window)
@@ -328,35 +333,35 @@ class ChatUI:
         viewport = container.native.convertRect(container.native.bounds, toView=window)
         bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
         safe_bottom = float(window.bounds.size.height - window.safeAreaInsets.bottom)
-        margin = max(margin, 12 + max(0, bottom - safe_bottom))
+        margin = max(margin, COMPOSER_BOTTOM_GAP + max(0, bottom - safe_bottom))
         if self.chat_view.style.margin_bottom != margin:
             self.chat_view.style.margin_bottom = margin
 
+    def chat_sidebar_width(self):
+        return min(320, self.adaptive.content_width('chat') // 3)
+
+    def chat_message_width(self):
+        width = self.adaptive.content_width('chat')
+        if self.chat_drawer_open and self.adaptive.width() >= 640 and not self.laptop.active:
+            width -= self.chat_sidebar_width() + 12
+        return width
+
     def update_chat_header(self):
-        sidebar = self.chat_drawer_open and self.adaptive.width() < 640 and not self.laptop.active
         title = (self.state.current or {}).get('title', 'New conversation')
-        # Native ellipsis and explicit bounds stop long titles pushing the
-        # action capsule outside the safe-area allocation on iPad and Duo.
-        available = self.adaptive.content_width('chat')
-        menu_width = 52 if self.chat_menu_button in self.chat_header.children else 0
-        sync_width = sum(child.style.width + child.style.margin_left + child.style.margin_right
-                         for child in self.chat_header.children if getattr(child, '_sync_shortcut', False))
-        actions_width = 96 if self.chat_header_actions in self.chat_header.children else 0
-        title_width = max(24, int(available) - actions_width - menu_width - sync_width - 12)
-        for label in (self.chat_title, self.chat_model_label):
-            if label.style.width != title_width:
-                label.style.width = title_width
-        for label, text in ((self.chat_title, 'Conversations' if sidebar else title),
-                            (self.chat_model_label, '' if sidebar else self.chat_profile.get('model') or 'Set up chat')):
-            if label.text != text:
-                label.text = text
+        model = self.chat_profile.get('model')
+        provider = MODELS.get(self.chat_profile.get('provider'))
+        identity = provider or ('Server · ' + model if model else 'Set up chat')
+        width = max(24, int(self.chat_message_width()) - 16)
+        for label, value in ((self.chat_title, title), (self.chat_model_label, identity)):
+            if label.style.width != width:
+                label.style.width = width
+            if label.text != value:
+                label.text = value
 
     def resize_chat_composer(self):
         if not hasattr(self, 'chat_messages'):
             return
-        width = self.adaptive.content_width('chat')
-        if self.chat_drawer_open and self.adaptive.width() >= 640 and not self.laptop.active:
-            width /= 2
+        width = self.chat_message_width()
         inset = max(0, int((width - 780) / 2))
         self.chat_composer.style.margin_left = self.chat_composer.style.margin_right = inset
         self.chat_status_box.style.margin_left = self.chat_status_box.style.margin_right = inset
@@ -372,9 +377,9 @@ class ChatUI:
         if not self.routes.apple:
             return
         from rubicon.objc import ObjCClass
-        self.presentation.surface(self.routes.roots['chat'], radius=0, background='chat_background', outlined=False)
+        self.presentation.surface(self.routes.roots['chat'], radius=0, background='window', outlined=False)
         navigation = self.native_host.adapter.navigation[self.native_host.destinations.index('chat')]
-        color = self.presentation.apple_color('chat_background')
+        color = self.presentation.apple_color('window')
         navigation.view.backgroundColor = color
         bar = navigation.navigationBar
         if not hasattr(self, 'chat_bar_appearance'):
@@ -387,9 +392,14 @@ class ChatUI:
         bar.compactAppearance = self.chat_bar_appearance
         bar.tintColor = self.presentation.apple_color('text')
 
-    def set_chat_status(self, value):
+    def set_chat_status(self, value, *, validation=False):
+        anchor = self.chat_save_feedback if validation else self.chat_connection_feedback
+        feedback = self.chat_config_status_box
+        if feedback.parent is not anchor:
+            feedback.parent.remove(feedback)
+            anchor.add(feedback)
         for status, box in ((self.chat_status, self.chat_status_box),
-                            (self.chat_config_status, self.chat_config_status_box)):
+                            (self.chat_config_status, feedback)):
             status.value = value
             if value and status not in box.children:
                 box.add(status)
@@ -437,7 +447,11 @@ class ChatUI:
     def fit_chat_configuration(self, frame=None):
         from commonUtils.ui.native.forms import fit_section
         destination = getattr(self, 'chat_config_destination', 'chat')
-        width = self.adaptive.content_width(destination, margin=0)
+        from commonUtils.ui.native.adaptive import allocated_width
+        fallback = self.adaptive.content_width(destination, margin=0)
+        width = allocated_width(self.chat_config_view, fallback)
+        inset = max(16, (int(width) - 680) // 2)
+        self.chat_config_content.style.margin_left = self.chat_config_content.style.margin_right = inset
         fit_section(self.chat_config_content, max(1, width))
 
     def toggle_chat_manual_model(self, widget=None, **kwargs):
@@ -473,7 +487,7 @@ class ChatUI:
             if screens and screens[-1][0] == 'chat-settings':
                 self.routes.back()
         except (OSError, ValueError) as error:
-            self.set_chat_status(str(error))
+            self.set_chat_status(str(error), validation=True)
 
     def refresh_chats(self):
         try:
@@ -681,12 +695,12 @@ class ChatUI:
         self.state.generating = busy and generating
         self.chat_config_save.enabled = not busy
         for control in (self.chat_provider, self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
-                        self.chat_new, self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
+                        self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
                         self.chat_context, self.chat_max_tokens):
             control.enabled = not busy
         self.presentation.apply_icon(self.chat_send, 'stop' if self.state.generating else 'up',
                    'Stop' if self.state.generating else 'Send')
-        self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
+        self.presentation.surface(self.chat_send, radius=24, background='text', foreground='window', outlined=False)
         self.update_chat_readiness()
         self.chat_conversation_list.enabled = not busy
         if not busy:
@@ -729,10 +743,9 @@ class ChatUI:
                                   'Prepare Gemini Nano (may download)' if provider == 'nano' else
                                   'Check on-device availability')
         self.chat_config_save.enabled = not self.state.busy
-        content = [self.chat_server_section] if server else [self.chat_device_note]
+        content = [self.chat_server_section if server else self.chat_device_section, self.chat_connection_actions]
         self.chat_device_note.text = ('Uses the system model. Preparation may download model assets.' if provider == 'nano'
                                       else 'Uses Apple Intelligence. Requires a supported device and a ready system model.')
-        content.extend([self.chat_refresh, self.chat_config_status_box])
         if server:
             content.append(self.chat_model_section)
         if list(self.chat_provider_content.children) != content:

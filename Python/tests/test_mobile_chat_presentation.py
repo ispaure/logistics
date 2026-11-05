@@ -64,12 +64,12 @@ class MobileChatPresentationTests(unittest.TestCase):
 class NavigationClearanceTests(unittest.TestCase):
     def test_floating_bar_and_keyboard_use_actual_overlap(self):
         from features.lm.mobile.presentation import navigation_clearance
-        self.assertEqual(navigation_clearance(116, 840, 790, 64), 62)
-        self.assertEqual(navigation_clearance(116, 546, 496, 64), 62)
-        self.assertEqual(navigation_clearance(116, 546, 790, 64), 12)
-        self.assertEqual(navigation_clearance(116, 546, 0, 64), 12)
-        self.assertEqual(navigation_clearance(82, 778, 204, 574, bar_width=52), 12)
-        self.assertEqual(navigation_clearance(116, 840, 790, 64, bar_width=350), 62)
+        self.assertEqual(navigation_clearance(116, 840, 790, 64), 56)
+        self.assertEqual(navigation_clearance(116, 546, 496, 64), 56)
+        self.assertEqual(navigation_clearance(116, 546, 790, 64), 6)
+        self.assertEqual(navigation_clearance(116, 546, 0, 64), 6)
+        self.assertEqual(navigation_clearance(82, 778, 204, 574, bar_width=52), 6)
+        self.assertEqual(navigation_clearance(116, 840, 790, 64, bar_width=350), 56)
 
 
 if __name__ == '__main__':

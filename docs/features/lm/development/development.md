@@ -9,7 +9,10 @@ native composer. The font binding converts CSS-pixel sizes at the native input
 boundary, reapplies the preference after WebView loads, and propagates settings
 and pinch changes without replacing messages or drafts. Streaming updates read
 the same preference. Markdown heading/code/table proportions match document
-viewers; conversation bubble spacing and interface labels remain chat-specific.
+viewers. Chat uses the shared Logistics surface colors for message cards and
+native controls. The active title and model are inside the message pane, while
+compose and settings share the leading action area. Composer clearance follows
+the actual bottom navigation overlap and keyboard-reduced viewport.
 
 Mobile `laptop.py` retains the existing transcript, draft, primary action and
 history controls while allocating them around active horizontal UIKit reserved
@@ -30,9 +33,10 @@ servers are outside that test's scope.
 Mobile configuration retains its native controls and uses the destination that
 opened it. Cold Settings entry initializes Chat without presenting its tab;
 Save pops only the configuration route. Provider selection mounts either the
-server form or the on-device availability controls. Manual model ID and token
-limits are retained disclosures, and labels reflow through the shared native
-form fitter. Server model choices are restored as values rather than Toga rows.
+server form or the on-device availability controls. Provider, connection,
+model and generation controls use native settings groups. Manual model ID and
+token limits are retained disclosures, and the form fits the available detail
+pane width up to 680 points. Server model choices are restored as values rather than Toga rows.
 
 `test_settings_navigation.py`, `test_chat_ui.py` and `test_on_device.py` cover
 origin, validation, provider switching, empty discovery, busy state and retained

@@ -13,7 +13,7 @@ For on-device chat, check availability or explicitly prepare the model in settin
 before saving. On-device inference does not fall back to a cloud server.
 Apple and server replies stream; Nano currently presents a completed reply.
 
-Start **New chat**, write a message and use **Send**. During generation, **Stop**
+Tap the compose icon, write a message and use **Send**. During generation, **Stop**
 keeps received text. You can write the next draft while a reply arrives. Return
 to the conversation drawer to reopen saved threads. **Export conversation…**
 writes a Markdown copy through the platform picker; export a valid in-memory

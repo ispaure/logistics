@@ -253,7 +253,7 @@ class TransferFeedbackTests(TestCase):
         app.refresh_transfer_status()
         self.assertIsNone(app._home_status_row.parent)
 
-    def test_chat_title_reserves_sync_space_and_restores_it_on_dismissal(self):
+    def test_chat_sync_action_uses_its_own_row_above_the_title(self):
         app = self.app
         app.routes.return_to('chat')
         app.update_chat_header()
@@ -261,9 +261,12 @@ class TransferFeedbackTests(TestCase):
         app.transfer_busy = True
         app.transfer_percentage = 42
         app.refresh_transfer_status()
-        self.assertEqual(app.chat_title.style.width, width - 56)
+        button = app._sync_status_controls['chat'][2]
+        self.assertIs(button.parent, app.chat_header)
+        self.assertEqual(app.chat_title.style.width, width)
         app.transfer_busy = app.transfer_notification = False
         app.refresh_transfer_status()
+        self.assertIsNone(button.parent)
         self.assertEqual(app.chat_title.style.width, width)
 
     def test_settings_refits_category_without_restyling_sync_on_resize(self):
