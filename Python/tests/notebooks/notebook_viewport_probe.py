@@ -171,6 +171,16 @@ def main(output):
             assert abs(value['paper']['width'] - 821) < 1 and abs(value['paper']['x'] - 291.5) < 1, value
             report['explicit_move_view_preserves_crop'] = value
 
+            before_view = editor.snapshot()
+            for index in (1, 0):
+                js(f'send({{op:"page",index:{index}}})')
+                wait_until(lambda: editor.index == index and js('!busy'), 'manual-view page acknowledgement')
+                assert snapshot()['view'] == 'move'
+            js("$('zoomFit').click()")
+            assert snapshot()['view'] == 'move'
+            assert editor.snapshot() == before_view, 'View/navigation changed document'
+            report['document_view_across_pages_and_reset'] = True
+
             load(390, 844, native_actions=True)
             js('setZoom(1.6)')
             previous = snapshot()

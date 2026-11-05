@@ -1620,6 +1620,41 @@ These host/mock checks do not establish browser pixels, native mobile file
 choosers, physical touch/stylus behavior or reMarkable firmware acceptance. No
 device deployment is part of this validation; native acceptance remains pending.
 
+The native image stage uses `exercise_notebook_images(app, output=...)` from
+`notebook_image_checks.py`. The normal suite supplies its required callback to
+`exercise_localcrypt(..., notebook_images=...)` after file-mutation/cross-storage
+checks and before the existing credential clear. The callback owns the 120-second
+stage limit; the normal result requires both Local and the actual native Secret
+LocalCrypt provider. It publishes partial/final evidence through
+`app._notebook_image_report` and `notebook_images` in the normal report. The image
+case is acknowledged only after LocalCrypt's credential clear and browser checks
+also finish. The shared runner propagates failures; the standalone probe's
+exception-reporting application entry is not used as a required subcheck.
+
+The public `notebook-image-fixture.rmdoc` is tracked beside the native checks and
+copied through Briefcase's declared `native_tests/tests` test sources. It contains
+only synthetic red PDF background, green native PNG and black stroke, with public
+password `image-qa-password` and AES-256 encryption. Regenerate/check it on the
+host with `python -m Python.tests.notebooks.native_image_fixture` (explicit
+`--write` to update). Fixed entropy is scoped to that host test generator; no
+runtime crypto is changed. The runner checks its SHA-256 before use. Fixture tests
+verify exact regeneration, wrong/correct passwords, preserved encrypted PDF/native
+objects and the owning workspace's real test-source copy.
+
+The image runner imports no credentials and retains the existing Cloud client and
+generation. Every run owns unique local/crypt directories, panels, recovery keys
+and providers. Its synchronous failure/timeout teardown retires owned canvases,
+closes their sessions/providers, deletes owned recovery/files, restores the prior
+panel, active session, destination and recent history, and records cleanup errors
+without replacing the primary exception. Partial opens are admitted to teardown
+only by their owned provider identity or resolved resource root within the run's
+unique directory; unrelated panels published later remain open. Screenshots and
+saved synthetic copies remain test evidence in the app cache for collection. Host failure-injection tests
+cover Local, LocalCrypt, cancellation and cleanup failure; these prove lifecycle
+contracts, not native rendering or physical touch. The existing native assertions
+retain the real pen-release guard wait and unchanged capture pixel/geometry cases.
+Native runtime acceptance remains pending until a fresh managed suite passes.
+
 The image clipboard records the stable `page_id` and exact native source corners.
 Cross-page image Copy/Cut preserves those corners independently of viewport zoom
 and scroll; same-page center placement remains separate. Image keyboard handlers
