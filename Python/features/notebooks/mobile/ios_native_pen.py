@@ -26,7 +26,7 @@ class NativePencilFeed:
         from commonUtils.ui.native.keyboard import native_value
         binding = native_value(self.window.notebookBindings.objectForKey(self.web._impl.native))
         return binding is not None and (bool(native_value(binding.pending))
-            or int(native_value(binding.packets.count)) > 0
+            or len(binding.packets) > 0
             or native_value(binding.touch) is not None)
 
     def start_reporting(self, loop, output):

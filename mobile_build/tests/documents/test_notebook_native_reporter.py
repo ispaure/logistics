@@ -28,6 +28,24 @@ class Feed:
 
 
 class NativeReporterTests(unittest.IsolatedAsyncioTestCase):
+    def test_pending_uses_sequence_length_without_calling_python_count(self):
+        binding = NS(pending=False, packets=[], touch=None)
+        window = NS(notebookBindings=NS(objectForKey=lambda native: binding))
+        feed = module.NativePencilFeed(NS(_impl=NS(native=object())), window, 'a' * 32)
+        self.assertFalse(feed.pending)
+        binding.packets.append(['down'])
+        self.assertTrue(feed.pending)
+        binding.packets.clear()
+        binding.pending = True
+        self.assertTrue(feed.pending)
+        binding.pending = False
+        binding.touch = object()
+        self.assertTrue(feed.pending)
+        binding.touch = None
+        self.assertFalse(feed.pending)
+        feed.closed = True
+        self.assertFalse(feed.pending)
+
     def output(self):
         return Path(self.enterContext(TemporaryDirectory())) / 'notebook-input-diagnostics.json'
 
