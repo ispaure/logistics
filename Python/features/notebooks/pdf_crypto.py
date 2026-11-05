@@ -15,14 +15,14 @@ def aes(key, data, *, iv=None, decrypt=False):
         return b''
     if sys.platform == 'android' or hasattr(sys, 'getandroidapilevel'):
         from java import jclass, jarray, jbyte
-        array = lambda value: jarray(jbyte)([v if v < 128 else v - 256 for v in value])
+        array = lambda value: jarray(jbyte)(value)
         cipher = jclass('javax.crypto.Cipher').getInstance('AES/' + ('ECB' if iv is None else 'CBC') + '/NoPadding')
         secret = jclass('javax.crypto.spec.SecretKeySpec')(array(key), 'AES')
         if iv is None:
             cipher.init(2 if decrypt else 1, secret)
         else:
             cipher.init(2 if decrypt else 1, secret, jclass('javax.crypto.spec.IvParameterSpec')(array(iv)))
-        return bytes(int(v) & 255 for v in cipher.doFinal(array(data)))
+        return bytes(cipher.doFinal(array(data)))
     if sys.platform in ('ios', 'darwin'):
         return apple_aes(key, data, iv=iv, decrypt=decrypt)
     from Cryptodome.Cipher import AES
