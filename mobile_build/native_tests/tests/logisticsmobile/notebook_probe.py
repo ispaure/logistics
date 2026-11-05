@@ -70,6 +70,19 @@ class NotebookProbe(LogisticsMobile):
                 await rotate(app, orientation)
                 assert signature(panel.editor.notebook) == before_rotation
                 dimensions.append(json.loads(await panel.web.evaluate_javascript('JSON.stringify([innerWidth,innerHeight])')))
+                if orientation == 'landscape-left':
+                    tools = getattr(panel, 'native_drawing_tools', None)
+                    if tools is not None and getattr(panel.view, '_reader_top_band_state', None) is None:
+                        controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
+                        if not tools.wide_phone(controller):
+                            continue
+                        assert panel.view._document_title_state[-1], 'Wide iPhone notebook title is not leading'
+                        rows = json.loads(await panel.web.evaluate_javascript(
+                            "JSON.stringify([...document.querySelectorAll('.quick-choices')].map(row => "
+                            "({width:row.clientWidth, top:row.getBoundingClientRect().top})))"))
+                        assert len(rows) == 2 and all(row['width'] >= 88 for row in rows), rows
+                        assert abs(rows[0]['top'] - rows[1]['top']) < 1, rows
+                        result['landscape_quick_choices'] = rows
             assert dimensions[0][0] < dimensions[0][1] and dimensions[1][0] > dimensions[1][1], dimensions
             result['rotation'] = dimensions
             from .notebook_pointer_checks import exercise_continuous_ink

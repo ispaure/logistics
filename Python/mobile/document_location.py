@@ -188,16 +188,19 @@ def mount_apple_title(view, controller, title):
     tools = getattr(view, '_native_drawing_tools', None)
     controls = getattr(view, '_document_title_controls', ())
     compact_tools = tools is not None and not controls and band is None and tools.fits(controller)
+    wide_notebook = (tools is not None and not controls and band is None
+                     and not getattr(view, '_reader_fullscreen', False) and tools.wide_phone(controller))
+    leading = compact_tools or wide_notebook
     if tools is not None and not compact_tools and tools.header is not None:
         tools.close()
     bounds = controller.view.bounds.size
     available = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
     gutters = (32 if edge else 16) + 56 * len(controls) if controls else (32 if edge else 216)
     width = max(44, available - gutters)
-    state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width, compact_tools)
+    state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width, leading)
     changed = getattr(view, '_document_title_state', None) != state
     if changed:
-        view._document_title_view = storage_title(title, state[1], state[2], width, leading=compact_tools)
+        view._document_title_view = storage_title(title, state[1], state[2], width, leading=leading)
         if hasattr(view, '_document_path'):
             bind_apple_hold(view, view._document_title_view)
         view._document_title_state = state
@@ -224,7 +227,7 @@ def mount_apple_title(view, controller, title):
     header = getattr(view, '_document_title_header', None)
     was_mounted = side_title_header(view) is not None
     frame = getattr(view, '_reading_frame_owner', None)
-    if controls or compact_tools or (edge and (frame is not None or hasattr(view, '_document_path'))):
+    if controls or leading or (edge and (frame is not None or hasattr(view, '_document_path'))):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:

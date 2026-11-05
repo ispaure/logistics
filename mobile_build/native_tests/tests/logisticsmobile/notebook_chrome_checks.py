@@ -8,9 +8,10 @@ CHROME_CHECKS = r'''(()=>{
 function require(value,message){if(!value)throw Error(message)}
 const dock=document.querySelector('.mobile-dock').getBoundingClientRect();
 const back=document.querySelector('header button').getBoundingClientRect();
-const more=document.querySelector('header button[aria-label="Notebook actions"]').getBoundingClientRect();
+const actions=document.querySelector('header button[aria-label="Notebook actions"]');
+const more=actions.getBoundingClientRect();
 require(dock.top<=60,'Drawing buttons are not at the top');
-require(Math.abs(dock.top-more.top)<1&&Math.abs(dock.bottom-more.bottom)<1,'Drawing tools and actions must share one row');
+require(actions.hidden||Math.abs(dock.top-more.top)<1&&Math.abs(dock.bottom-more.bottom)<1,'Drawing tools and actions must share one row');
 const bar=document.querySelector('header').getBoundingClientRect();
 require(bar.left>=0&&bar.right<=innerWidth,'Toolbar exceeds the viewport');
 if(!state.native_close)require(Math.abs(back.top-more.top)<1,'Close must share the toolbar row');
@@ -20,8 +21,8 @@ require(state.native_close||back.left<dock.left,'Close must precede drawing tool
 require(dock.bottom<=back.top||dock.top>=back.bottom||dock.right<=back.left||dock.left>=back.right,'Tools overlap Back');
 require(dock.bottom<=more.top||dock.top>=more.bottom||dock.right<=more.left||dock.left>=more.right,'Tools overlap notebook actions');
 document.getElementById('brushToggle').click();
-document.querySelector('[data-tool="12"]').click();
-document.querySelector('[data-color="6"]').click();
+document.querySelector('.brush-card[data-tool="12"]').click();
+document.querySelector('.swatch[data-color="6"]').click();
 const blue=()=>getComputedStyle(document.querySelector('.swatch[data-color="6"] circle')).fill;
 const writingBlue='rgb('+[1,3,5].map(i=>parseInt(state.palette[6].slice(i,i+2),16)).join(', ')+')';
 require(blue()===writingBlue,'Writing blue does not match the measured notebook palette');
@@ -34,7 +35,7 @@ require(bounds.width>=24&&bounds.height>=24,'Ink color disc collapsed');
 const saved=$('grayscale').checked;$('grayscale').checked=true;$('grayscale').dispatchEvent(new Event('change'));
 require(blue()===writingBlue,'Document grayscale preview removed palette colors');
 $('grayscale').checked=saved;$('grayscale').dispatchEvent(new Event('change'));
-document.querySelector('[data-tool="18"]').click();
+document.querySelector('.brush-card[data-tool="18"]').click();
 require(blue()==='rgb(190, 234, 254)','Highlighter blue does not use its native palette');
 const colors=[...document.querySelectorAll('.swatch')].map(b=>({name:b.getAttribute('aria-label'),fill:getComputedStyle(b.querySelector('circle')).fill}));
 require(colors.length===6&&colors.every(c=>c.fill!=='none'&&c.fill!=='rgba(0, 0, 0, 0)'),'Highlighter swatches were not painted');
@@ -67,7 +68,10 @@ entries[1].hidden=wasHidden;
 const shortcuts=[...document.querySelectorAll('.sheet-shortcuts svg')].map(svg=>{let r=svg.getBoundingClientRect();return {width:r.width,height:r.height}});
 require(shortcuts.length===2&&shortcuts.every(r=>r.width<=24&&r.height<=24&&r.width>0),'Pages/Layers shortcut icons are oversized');
 document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
-require(menu.hidden&&document.activeElement===document.querySelector('header button[aria-label="Notebook actions"]'),'Escape did not close and restore focus');
+const focusTarget = actions.hidden ? $('brushToggle') : actions;
+require(menu.hidden && (focusTarget.getClientRects().length
+  ? document.activeElement === focusTarget
+  : !menu.contains(document.activeElement)), 'Escape did not close and restore focus');
 document.querySelector('header button[aria-label="Notebook actions"]').click();
 $('viewport').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
 require(menu.hidden,'Outside pointer did not dismiss the dropdown');

@@ -59,6 +59,8 @@ renderEraserChoices();
   header.insertBefore(dock, more);
   let tools = document.createElement('div');
   tools.className = 'mobile-tools';
+  if (state.native_actions && state.tablet === false)
+    header.classList.add('phone-writing-tools');
   dock.append(tools);
   let brushToggle = makeButton(17, 'Brush, color and width', () => {
     if (!sheet.hidden && sheet.dataset.panel === 'brush') {
@@ -83,6 +85,15 @@ renderEraserChoices();
       ['undo', 'Undo'],
       ['redo', 'Redo']
     ]) tools.append(iconButton(control(id), id, id === 'select' ? 'Select / move' : label, label));
+  const quickBrushes = document.createElement('div');
+  quickBrushes.className = 'quick-choices';
+  quickBrushes.setAttribute('role', 'group');
+  quickBrushes.setAttribute('aria-label', 'Brushes');
+  const quickColors = document.createElement('div');
+  quickColors.className = 'quick-choices';
+  quickColors.setAttribute('role', 'group');
+  quickColors.setAttribute('aria-label', 'Ink colors');
+  header.append(quickBrushes, quickColors);
   let hideTools = makeButton('hide', 'Hide tools', () => setToolsHidden(true));
   hideTools.id = 'hideTools';
 
@@ -95,7 +106,7 @@ renderEraserChoices();
     if (active !== null) return;
     document.body.classList.toggle('tools-hidden', hidden);
     restore.hidden = !hidden;
-    (hidden ? restore : more).focus()
+    (hidden ? restore : more.hidden ? brushToggle : more).focus({preventScroll: true})
   }
   let pages = document.createElement('div');
   pages.className = 'mobile-pages';
@@ -498,7 +509,7 @@ renderEraserChoices();
     zoomControls.inert = !nonmodal;
     $('viewport').inert = !nonmodal;
     if (menu) documentDropdown.activate();
-    else (floating ? grid.querySelector('[aria-pressed=true]') || grid.firstElementChild : closer).focus()
+    else (floating ? grid.querySelector('[aria-pressed=true]') || grid.firstElementChild : closer).focus({preventScroll: true})
   }
 
   // Native toolbar actions enter the same queue as canvas controls, preserving
@@ -533,9 +544,11 @@ renderEraserChoices();
       if (changed) resize();
     };
     if (action === false) { restoreTools(); return null; }
-    if (document.body.classList.contains('tools-hidden')) { restoreTools(); return null; }
-    if (active !== null || busy) {
-      restoreTools();
+    const hidden = document.body.classList.contains('tools-hidden');
+    if (hidden || active !== null || busy) {
+      // A successful heartbeat still owns this row during an edit or hide.
+      nativeToolsLease = setTimeout(restoreTools, 1500);
+      if (hidden) return JSON.stringify(null);
       return JSON.stringify(Object.fromEntries(['pen','erase','select','undo','redo'].map(name =>
         [name, {disabled:true, active:false}])));
     }
@@ -570,9 +583,15 @@ renderEraserChoices();
     restore.inert = false;
     zoomControls.inert = false;
     $('viewport').inert = false;
-    if (!restoreFocus || document.body.classList.contains('native-drawing-tools')) return;
-    if (returnFocus && returnFocus.isConnected && returnFocus.getClientRects().length) returnFocus.focus();
-    else document.querySelector('header button[aria-label="Notebook actions"]').focus()
+    if (!restoreFocus) return;
+    const fallback = more.hidden ? brushToggle : more;
+    const target = returnFocus?.getClientRects().length ? returnFocus : fallback;
+    if (target.getClientRects().length && getComputedStyle(target).visibility !== 'hidden') {
+      target.focus({preventScroll: true});
+    } else if (sheet.contains(document.activeElement)) {
+      // Native controls live outside WebKit. Retire focus on the closed panel.
+      document.activeElement.blur();
+    }
   }
   backdrop.onclick = () => closeSheet();
 
@@ -705,6 +724,7 @@ renderEraserChoices();
     if (toolSignature !== next) {
       toolSignature = next;
       grid.replaceChildren();
+      quickBrushes.replaceChildren();
       for (let [name, value] of Object.entries(state.tools)) {
         let b = document.createElement('button');
         b.className = 'brush-card';
@@ -721,13 +741,20 @@ renderEraserChoices();
           draw();
           sync()
         };
-        grid.append(b)
+        grid.append(b);
+        const shortcut = b.cloneNode(true);
+        shortcut.className = 'icon';
+        shortcut.title = name;
+        shortcut.querySelector('span').remove();
+        shortcut.onclick = () => { if (active === null && !busy) b.click(); };
+        quickBrushes.append(shortcut)
       }
     }
     const colors = t.value + ':' + JSON.stringify([...c.options].map(o => [o.textContent, o.value]));
     if (colorSignature !== colors) {
       colorSignature = colors;
       swatches.replaceChildren();
+      quickColors.replaceChildren();
       for (let option of c.options) {
         let b = document.createElement('button');
         b.className = 'swatch';
@@ -739,11 +766,15 @@ renderEraserChoices();
           c.value = option.value;
           sync()
         };
-        swatches.append(b)
+        swatches.append(b);
+        const shortcut = b.cloneNode(true);
+        shortcut.className = 'quick-swatch';
+        shortcut.onclick = () => { if (active === null && !busy) b.click(); };
+        quickColors.append(shortcut)
       }
     }
-    for (let b of grid.children) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
-    for (let b of swatches.children) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
+    for (let b of [...grid.children, ...quickBrushes.children]) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
+    for (let b of [...swatches.children, ...quickColors.children]) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
     for (let b of widths.children) {
       let fixed = brushFor(Number(t.value)).fixed_width;
       b.hidden = fixed && b.dataset.width !== '1';
@@ -805,7 +836,7 @@ renderEraserChoices();
   function configure() {
     scheduled = false;
     const r = canvas.getBoundingClientRect(), v = $('viewport').getBoundingClientRect(), ink = chosenInk();
-    const visible = el => el && !el.hidden && getComputedStyle(el).display !== 'none';
+    const visible = el => el && !el.hidden && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
     const overlay = visible($('mobileSheet')) || !!document.querySelector('dialog[open]');
     const paper = $('paperWrap').getBoundingClientRect();
     const rect = [Math.max(0, r.left, v.left, paper.left), Math.max(0, r.top, v.top, paper.top),

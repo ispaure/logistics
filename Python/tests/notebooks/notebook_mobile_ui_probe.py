@@ -137,6 +137,8 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         initial_state = editor.state()
         initial_state['native_actions'] = native_only
         initial_state['native_close'] = native_only
+        if native_only:
+            initial_state['tablet'] = False
         view.setHtml(mobile_editor_html(initial_state, bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
@@ -190,12 +192,30 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             assert js("window.notebookPortraitBand(true)"), 'Actual native host flags must enable compact portrait CSS'
             compact = json.loads(js("JSON.stringify(document.querySelector('header').getBoundingClientRect().toJSON())"))
             assert compact['width'] <= 256 and compact['height'] >= 48 and compact['top'] == 4, compact
+            canvas_top = js("$('paper').getBoundingClientRect().top")
             js("window.notebookNativeAction('hide-tools')")
-            assert js("getComputedStyle(document.body,'::before').height") == '48px'
+            assert js("$('paper').getBoundingClientRect().top") == canvas_top
             assert js("$('viewport').getBoundingClientRect().top") >= 48
             assert js("$('restoreTools').getBoundingClientRect().width") >= 44
             js("$('restoreTools').click();window.notebookPortraitBand(false)")
             assert not js("document.body.classList.contains('notebook-portrait-band')")
+            view.resize(880, 620)
+            wait(lambda: js("innerWidth === 880"))
+            assert js("[...document.querySelectorAll('.quick-choices')].every(row => row.clientWidth >= 88)")
+            js("document.querySelector('.quick-choices [data-tool=\"17\"]').click()")
+            assert js("$('tool').value") == '17'
+            js("document.querySelector('.quick-choices [data-color=\"6\"]').click()")
+            assert js("$('color').value") == '6'
+            canvas_top = js("$('paper').getBoundingClientRect().top")
+            for _ in range(3):
+                js("window.notebookNativeAction('hide-tools')")
+                assert js("$('paper').getBoundingClientRect().top") == canvas_top
+                js("$('restoreTools').click()")
+                assert js("$('paper').getBoundingClientRect().top") == canvas_top
+            view.resize(390, 844)
+            wait(lambda: js("innerWidth === 390"))
+            assert js("[...document.querySelectorAll('.quick-choices')].every(row => !row.clientWidth)")
+
             js("window.notebookNativeAction('pages')")
             wait(lambda: js("document.querySelectorAll('.page-previews button').length === 1"))
             assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'pages'")
@@ -372,10 +392,11 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             assert js("!$('mobileSheet').style.top && !$('mobileSheet').style.left"), 'Tool anchor must not leak into other panels'
             view.grab().save(str(output / f'notebook-{width}x{height}.png'))
             js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+            canvas_top = js("$('paper').getBoundingClientRect().top")
             js("document.querySelector('header button[aria-label=\"Notebook actions\"]').click();document.getElementById('hideTools').click()")
             assert js("document.body.classList.contains('tools-hidden')")
-            assert js("[...document.querySelectorAll('button')].filter(b=>b.getClientRects().length).length") == 1
-            assert js("document.getElementById('viewport').clientHeight") == height
+            assert js("[...document.querySelectorAll('button')].filter(b=>b.getClientRects().length && getComputedStyle(b).visibility!=='hidden').length") == 1
+            assert js("$('paper').getBoundingClientRect().top") == canvas_top
             view.grab().save(str(output / f'focus-{width}x{height}.png'))
             js("document.getElementById('restoreTools').click()")
             assert not js("document.body.classList.contains('tools-hidden')")
@@ -482,7 +503,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         js("document.getElementById('restoreTools').click()")
         (output / 'mobile-ui.json').write_text(json.dumps(dict(status='passed', sizes=reports, toolbar=toolbar_reports,
             brush=12, color=6, real_mouse_input=True, undo=True, redo=True,
-            focus_mode=True, view_preserved=True, full_viewport=True, error_visible=True,
+            focus_mode=True, view_preserved=True, stable_canvas_origin=True, error_visible=True,
             absent_fold_preserves_picker=True,
             pointer=pointer_report,
             input=input_report, native_previews=native_previews, pages=3, thumbnails=True, insert_after_current=True,
