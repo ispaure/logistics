@@ -138,7 +138,12 @@ function captureCutout(path) {
   const surface=document.createElement('canvas'),ratio=Math.min(1,Math.sqrt(4*1024*1024/(width*height)));
   surface.width=Math.max(1,Math.ceil(width*ratio)); surface.height=Math.max(1,Math.ceil(height*ratio));
   const g=surface.getContext('2d');g.scale(ratio,ratio);g.translate(-left,-top);g.beginPath();g.moveTo(...path[0].slice(0,2));for(const p of path.slice(1))g.lineTo(p[0],p[1]);g.closePath();g.clip();g.fillStyle='white';g.fillRect(left,top,width,height);
-  const bg=$('pdfBackground'); if(state.background) { if(!bg.complete || !bg.naturalWidth) { $('status').textContent='Wait for the background to load before capturing.'; return } const b=state.pdf_paper || {x:0,y:0,width:state.width,height:state.height};const fit=Math.min(b.width/bg.naturalWidth,b.height/bg.naturalHeight),w=bg.naturalWidth*fit,h=bg.naturalHeight*fit;g.drawImage(bg,b.x+(b.width-w)/2,b.y+(b.height-h)/2,w,h) }
+  const bg = $('pdfBackground');
+  if (state.background && (!bg.complete || !bg.naturalWidth)) {
+    $('status').textContent = 'Wait for the background to load before capturing.';
+    return;
+  }
+  paintBackground(g, bg);
   const selection=imageSelection; imageSelection=null;const previous=selected;selected=new Set();
   try { for(const p of sceneItems()) if(imageVisible(p)) { if(p.corners) paintPicture(p,g,false);else line(p,g) } } finally { imageSelection=selection;selected=previous }
   imageClipboard={src:boundedPNG(surface),width,height,sourcePageId:imagePageIdentity(),sourceCorners:[[left,top],[left+width,top],[left+width,top+height],[left,top+height]]}; imageRender(); $('status').textContent='Cutout copied. Paste on this page or another page.'

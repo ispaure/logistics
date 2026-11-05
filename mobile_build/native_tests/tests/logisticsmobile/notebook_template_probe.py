@@ -80,7 +80,7 @@ class Probe(LogisticsMobile):
 
     async def save_reopen(self, panel, path):
         from features.notebooks.notebook import Notebook
-        from features.notebooks.mobile.documents import close_notebook, open_notebook
+        from services.documents.mobile_notebooks import close_notebook, open_notebook
         await self.command(panel, dict(op='save'))
         assert not panel.document.dirty
         original = Notebook.read(path.read_bytes())
@@ -99,6 +99,40 @@ class Probe(LogisticsMobile):
         await asyncio.sleep(.3)
         assert [p.template for p in replacement.editor.notebook.pages] == [p.template for p in original.pages]
         return replacement, original
+
+    async def pdf_highlighter(self, directory):
+        from features.notebooks.editor import Editor
+        from features.notebooks.notebook import Notebook
+        from features.notebooks.remarkable_export import export_rmdoc
+        from services.documents.mobile_notebooks import open_notebook
+
+        book = Notebook.new('PDF highlighter')
+        editor = Editor(book)
+        editor.apply(dict(op='template', name='Logistics Restaurant review', format='pro', visible=True))
+        editor.apply(dict(op='stroke', tool=18, color=13, width=1, points=[[500, 173, .5], [900, 173, .5]]))
+        data = export_rmdoc(book)
+        path = directory / 'PDF highlighter.rmdoc'
+        path.write_bytes(data)
+        assert Notebook.read(data).page(0).to_bytes() == book.page(0).to_bytes()
+        assert await open_notebook(self, path=path)
+        panel = self.notebook_panel
+        await self.idle(panel)
+        for _ in range(100):
+            if await panel.web.evaluate_javascript("!!$('pdfBackground').naturalWidth"):
+                break
+            await asyncio.sleep(.05)
+        pixels = json.loads(await panel.web.evaluate_javascript(r"""(()=>{
+          draw();
+          const pixel=y=>[...ctx.getImageData(Math.floor(700*canvas.width/state.width),
+            Math.floor(y*canvas.height/state.height),1,1).data];
+          const rule=[171,172,173,174,175].map(pixel).reduce((a,b)=>a[0]<b[0]?a:b);
+          return JSON.stringify({plain:pixel(166),rule});
+        })()"""))
+        assert pixels['plain'][0] >= 245 and pixels['plain'][2] <= 130, pixels
+        assert pixels['rule'][0] < pixels['plain'][0] - 10 and pixels['rule'][2] < pixels['plain'][2] - 5, pixels
+        await capture_window(self, self.evidence / 'pdf-highlighter.png')
+        (self.evidence / path.name).write_bytes(data)
+        return dict(name='PDF template rule beneath native yellow ink', pixels=pixels)
 
     async def check(self, app):
         self.evidence = Path(self.paths.cache) / 'notebook-ui'
@@ -169,6 +203,7 @@ class Probe(LogisticsMobile):
             (self.evidence / 'custom-move.rmdoc').write_bytes(path.read_bytes())
             report['cases'].append(dict(name='custom Move creation, native replacement, inherited native paper, save/reopen', backend=backend,
                 templates=[p.template for p in saved.pages], ink_counts=[len(saved.page(i).strokes) for i in range(3)]))
+            report['cases'].append(await self.pdf_highlighter(path.parent))
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()

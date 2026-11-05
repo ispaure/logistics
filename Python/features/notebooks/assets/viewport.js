@@ -193,10 +193,28 @@ function previewErase(samples, radius = eraserRadius) {
   ctx.restore()
 }
 
+function paintBackground(target, image = $('pdfBackground')) {
+  if (!state.background || !image.complete || !image.naturalWidth) return;
+  const bounds = state.pdf_paper || {x: 0, y: 0, width: state.width, height: state.height};
+  const scale = Math.min(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight);
+  const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
+  target.drawImage(image, bounds.x + (bounds.width - width) / 2,
+    bounds.y + (bounds.height - height) / 2, width, height);
+}
+
+$('pdfBackground').addEventListener('load', draw);
+
 function draw() {
   if (typeof imageRender === 'function') imageRender();
   clearDraft();
   ctx.clearRect(0, 0, state.width, state.height);
+  // Blend ink with the PDF in scene order. The same image behind the canvas
+  // stays visible through holes made by the temporary eraser preview.
+  if (state.background) {
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, state.width, state.height);
+    paintBackground(ctx);
+  }
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
   for (let s of sceneItems())
     if (visible.has(s.layer)) { if (s.corners) paintPicture(s); else line(s) }
