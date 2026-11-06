@@ -140,7 +140,8 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
                                      if config_path.suffix == '.session' else ''),
             get_remote_names=lambda config_path=config_path: configuration.get_rclone_remote_names(config_path),
             context=config_path,
-            get_local_folders=lambda folders=folders: folders))
+            get_local_folders=lambda folders=folders: folders,
+            get_encrypted_remote_names=lambda path=config_path: configuration.get_crypt_remote_names(path)))
     from models.local_folder import LocalFolder
     from . import session
     for item in links:

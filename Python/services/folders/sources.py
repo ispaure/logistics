@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 
-from features.application import registry
 from features.contributions import LocalFolderSource, RemoteFolderSource
 from models.local_folder import LocalFolder
 from services.folders.entries import get_folder_entries
@@ -44,17 +43,20 @@ class FolderSources:
 def discover_folder_sources(*, remote_providers=None, local_providers=None, cancelled=lambda: False) -> FolderSources:
     """Read each provider once; keep backend-owned context attached to its source."""
 
-    remote_providers = registry.get_remote_folder_sources() if remote_providers is None else remote_providers
-    local_providers = registry.get_local_folder_sources() if local_providers is None else local_providers
+    if remote_providers is None or local_providers is None:
+        from features.application import registry
+
+        if remote_providers is None:
+            remote_providers = registry.get_remote_folder_sources()
+        if local_providers is None:
+            local_providers = registry.get_local_folder_sources()
     remote_sources, local_sources = [], []
     for registered in remote_providers:
         check_cancelled(cancelled)
         for source in registered.contribution.get_sources():
             check_cancelled(cancelled)
-            encrypted = frozenset()
-            if registered.feature_name == 'rclone' and not hasattr(source.context, 'item'):
-                from features.rclone.configuration import get_crypt_remote_names
-                encrypted = frozenset(get_crypt_remote_names(source.context))
+            read_encrypted_names = source.get_encrypted_remote_names
+            encrypted = frozenset(read_encrypted_names()) if read_encrypted_names is not None else frozenset()
             remote_sources.append(RemoteSourceSnapshot(registered.feature_name, registered.contribution.name,
                                                        source, tuple(source.get_remote_names()),
                                                        tuple(source.get_local_folders()) if source.get_local_folders else None, encrypted))
