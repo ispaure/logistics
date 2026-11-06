@@ -111,10 +111,25 @@ def compact_apple_reader(container):
         if abs(container.top_inset - top) > .5:
             container.top_inset = top
             changed = True
-    elif reader is not None and vertical_edge(getattr(container, 'controller', None)):
-        # A content title can also be retained beside pane buttons on ordinary
-        # iPhones/iPads. Their horizontal native actions still occupy the top
-        # safe area; only a vertical bar lets the title reclaim that space.
+    elif reader is not None and (edge := vertical_edge(getattr(container, 'controller', None))):
+        # Notes has interactive rows across the full content width. UIKit can
+        # extend that width beneath the floating rail during a layout pass.
+        if getattr(reader, '_notes_title_controls', ()) and edge in (1, 2):
+            from .ios_reader_chrome import occlusion_geometry
+            width = float(container.native.bounds.size.width)
+            regions = occlusion_geometry(container.native)
+            if edge == 1:
+                inset = max(80, *(x + w for x, _, w, _ in regions if x < width / 4), 0)
+                if container.left_inset < inset:
+                    container.left_inset = inset
+                    changed = True
+            else:
+                inset = max(80, *(width - x for x, _, _, _ in regions if x >= width * .75), 0)
+                if container.right_inset < inset:
+                    container.right_inset = inset
+                    changed = True
+        # Calculate top clearance after excluding the rail so its status
+        # cluster does not push down the Files tabs and document together.
         top = apple_reader_top(container, window)
         if abs(container.top_inset - top) > .5:
             container.top_inset = top

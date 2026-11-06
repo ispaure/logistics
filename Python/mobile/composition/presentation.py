@@ -196,21 +196,6 @@ def notes_host(app):
         source_tab(button, selected)
         accessible_name(button, button.text + (' selected' if selected else ''))
 
-    def toolbar_insets(toolbar):
-        if not app.routes.apple or app.native_host.adapter is None:
-            return 8, 8
-        from mobile.ios_toolbar import vertical_edge, system_occlusions
-        controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
-        if not vertical_edge(controller):
-            return 8, 8
-        width = float(controller.view.bounds.size.width)
-        regions = system_occlusions(controller)
-        # Some side-bar configurations omit button regions during the first layout.
-        # Keep one native touch target plus its system margins clear until reported.
-        left = max((x + w for x, y, w, h in regions if x < width * .25), default=64)
-        right = max((width - x for x, y, w, h in regions if x > width * .75), default=64)
-        return max(8, round(left) + 8), max(8, round(right) + 8)
-
     async def confirm():
         from services.documents.authoring.document_dialogs import DocumentDialog
         return await app.main_window.dialog(DocumentDialog('Save document changes?',
@@ -277,7 +262,7 @@ def notes_host(app):
         tab_style=tab_style,
         open_timing=open_timing if timing_marker.is_file() else None,
         document_editor=lambda library, path: notes_editor(app, library, path),
-        confirm=confirm, choose_type=choose_type, toolbar_insets=toolbar_insets,
+        confirm=confirm, choose_type=choose_type,
         drawers=lambda files, article, links: NotesDrawers(files, article, links, app=app),
         storage=lambda provider: NotesDocumentAccess(provider,
             client=lambda: getattr(app, 'cloud_client', None), active=lambda: app.active_host,
