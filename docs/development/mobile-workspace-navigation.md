@@ -478,8 +478,13 @@ an explicitly supplied compatible shell. System keyboard screenshots are
 captured separately from app-window renders. Evidence is saved before removing
 the QA app and owned simulator.
 
-A complete invocation from the repository root, using the prepared mobile
-environment, is:
+Before a fresh probe build, follow the [pinned wheel setup](mobile-device-deployment.md)
+and export `PIP_FIND_LINKS` in the same shell so Briefcase's
+child installers can find it. The `--family all` matrix needs network access for
+the runner's pinned, hash-checked Duo helper, or an existing reviewed helper passed
+with `--duoctl /absolute/path/to/duoctl`.
+
+Then run from the repository root with the prepared mobile environment:
 
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe creation --family all --output test-results/document-creation

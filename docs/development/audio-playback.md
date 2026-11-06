@@ -111,7 +111,10 @@ for isolated app/device authorization, source freshness, evidence and cleanup.
 
 ## Disposable read-aloud playback acceptance
 
-From the repository root, run the probe with the prepared mobile interpreter.
+Before a fresh probe build, follow the [pinned wheel setup](mobile-device-deployment.md)
+and export `PIP_FIND_LINKS` in the same shell so Briefcase's
+child installers can find it. Then run from the repository root with the prepared
+mobile interpreter.
 
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios \
@@ -120,6 +123,9 @@ mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools 
 
 `--ios-runtime` accepts an installed CoreSimulator
 runtime identifier; combine it with a supported `--family` when comparing OS versions.
+Selecting `--family all` also requires network access for the runner's pinned,
+hash-checked Duo helper, or an existing reviewed helper passed with
+`--duoctl /absolute/path/to/duoctl`.
 The lease records the exact selected runtime and model. Existing devices are only
 read to select a compatible model; the runner creates and removes its own simulator.
 
