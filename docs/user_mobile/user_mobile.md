@@ -33,21 +33,11 @@ replaced by the beta in place. See the
 
 ## Direct remote reading
 
-Open a remote from Workspaces or Remote files. Tap a supported file to open a
-read-only, memory-only reader: small text/Markdown/INI, PNG/JPEG/WebP, EPUB and
-CBZ/ZIP comics. Search filters the current folder only. Unsupported files and
-content beyond the reader limits show a dialog asking you to manually make a
-local copy; opening a file never automatically creates one.
-
-To keep one file or folder offline, open its **••• → Download locally…** menu
-and choose an ordinary or unlocked LocalCrypt destination. See the
-[mobile remote workflow](../features/rclone/user_mobile/workflows.md#mobile-folder-navigation)
-for confirmation, naming and cancellation. Workspaces's managed Pull workflows
-remain available for configured folders. Existing offline copies remain readable and exportable.
-Direct readers show no Save, Save As or metadata-edit controls. Locking or replacing credentials
-retires their contents, including readers opened with session-only credentials.
-See the [rclone guide](../features/rclone/user/user.md#browse-remote-files-directly)
-for limits and desktop behavior.
+Open a remote from Workspaces or Remote files and tap the file you want to
+read or play. Direct opening covers small text, Markdown and INI files,
+PNG/JPEG/WebP images, EPUB books, CBZ/ZIP comics, PDFs and recognized video
+formats. See [Remote and offline files](documents/remote.md#direct-reading)
+for reader limits, playback conditions and how to make an offline copy.
 
 ## Android appearance and E Ink status
 
