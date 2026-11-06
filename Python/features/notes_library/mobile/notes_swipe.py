@@ -8,31 +8,41 @@ def document_swipes(base):
       if(window.notesDrawersInstalled)return; window.notesDrawersInstalled=true;
       let start=null;
       const zoomed=()=>window.visualViewport && window.visualViewport.scale>1.01;
-      document.addEventListener('touchstart', e=>{
-        start=null;
-        if(e.touches.length!==1 || zoomed() || String(getSelection()))return;
-        let t=e.touches[0], el=e.target;
+      const ownsPan=target=>{
+        let el=target;
         while(el && el!==document.body){
           if(el.scrollWidth>el.clientWidth+2 || el.isContentEditable ||
              /^(TABLE|INPUT|TEXTAREA|SELECT|BUTTON|AUDIO|VIDEO)$/.test(el.tagName) ||
-             (el.classList && el.classList.contains('table-scroll')))return;
+             (el.classList && el.classList.contains('table-scroll')))return true;
           el=el.parentElement;
         }
+        return false;
+      };
+      const hitsPan=t=>document.elementFromPoint &&
+        ownsPan(document.elementFromPoint(t.clientX,t.clientY));
+      document.addEventListener('touchstart', e=>{
+        start=null;
+        if(e.touches.length!==1 || zoomed() || String(getSelection()))return;
+        const t=e.touches[0];
+        if(ownsPan(e.target) || hitsPan(t))return;
         start={x:t.clientX,y:t.clientY,time:Date.now()};
       },{passive:true});
       document.addEventListener('touchmove',e=>{
         if(e.touches.length!==1 || zoomed())start=null;
         if(start){
           const t=e.touches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;
-          if(Math.abs(dy)>10 && Math.abs(dx)<Math.abs(dy)*2)start=null;
+          if(hitsPan(t) || (Math.abs(dy)>10 && Math.abs(dx)<Math.abs(dy)*2))start=null;
         }
       },{passive:true});
+      document.addEventListener('scroll',e=>{
+        if(ownsPan(e.target))start=null;
+      },{capture:true,passive:true});
       document.addEventListener('touchcancel',()=>start=null,{passive:true});
       document.addEventListener('touchend',e=>{
         const s=start; start=null;
         if(!s || e.touches.length || !e.changedTouches.length || zoomed() || String(getSelection()))return;
         const t=e.changedTouches[0],dx=t.clientX-s.x,dy=t.clientY-s.y;
-        if(Math.abs(dx)<60 || Math.abs(dx)<Math.abs(dy)*2 || Date.now()-s.time>800)return;
+        if(hitsPan(t) || Math.abs(dx)<60 || Math.abs(dx)<Math.abs(dy)*2 || Date.now()-s.time>800)return;
         location.href=window.notesDrawersBase+(dx>0?'?drawer=files':'?drawer=links');
       },{passive:true});
     })();""".replace('BASE', json.dumps(base))

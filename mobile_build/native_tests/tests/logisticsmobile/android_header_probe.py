@@ -101,15 +101,24 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                         native.getPaddingLeft(), native.getPaddingRight())
                 assert abs(scroll.horizontal_position - scroll.max_horizontal_position) <= 1, (
                     'Initial breadcrumb end', scroll.horizontal_position, scroll.max_horizontal_position)
-                controls = [owner.back_button, owner.forward_button, scroll, owner.edit, owner.reader_actions_button]
-                assert list(owner.secondary.children) == controls
+                controls = [owner.back_button, owner.forward_button, owner.edit, owner.reader_actions_button]
+                if scroll.parent is owner.note_actions_row:
+                    controls.insert(2, scroll)
+                else:
+                    assert scroll.parent is owner.secondary
+                    _, actions_y, _, actions_height = self.native_rect(owner.note_actions_row._impl.native)
+                    _, scroll_y, _, _ = self.native_rect(scroll._impl.native)
+                    assert scroll_y >= actions_y + actions_height - 1
                 row_x, _, row_width, _ = self.native_rect(owner.secondary._impl.native)
                 rects = [self.native_rect(control._impl.native) for control in controls]
                 assert rects[0][0] >= row_x - 1
                 assert rects[-1][0] + rects[-1][2] <= row_x + row_width + 1, ('Clipped actions', rects)
                 for left, right in zip(rects, rects[1:]):
                     assert left[0] + left[2] <= right[0] + 1, ('Overlapping controls', rects)
-                assert rects[2][2] > 0, ('Breadcrumb has no viewport', rects)
+                scroll_width = self.native_rect(scroll._impl.native)[2]
+                assert scroll_width >= 96 * (
+                    scroll._impl.native.getResources().getDisplayMetrics().density) - 1, (
+                    'Breadcrumb viewport too narrow', rects)
                 label = self.native_host.adapter._reader_action_bar_title
                 titles = label.getParent()
                 density = label.getResources().getDisplayMetrics().density
@@ -146,7 +155,7 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 await self.touch_native(owner.breadcrumbs.children[2]._impl.native)
                 await self.wait_for(lambda: owner.path == 'World/World.md', 'Ancestor breadcrumb tap did not open its landing page')
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
-                    title_width=titles.getWidth() / density, breadcrumb_width=rects[2][2] / density,
+                    title_width=titles.getWidth() / density, breadcrumb_width=scroll_width / density,
                     initial_scroll=before, root_swipe=True, root_tap=True, ancestor_tap=True))
             report['success'] = True
         except Exception:

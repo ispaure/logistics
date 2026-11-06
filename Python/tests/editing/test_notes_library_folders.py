@@ -55,6 +55,26 @@ class LibraryFolderTests(unittest.TestCase):
 
 
 class LibrarySearchTests(unittest.TestCase):
+    def test_mobile_search_collapses_only_the_matching_folders_own_landing_note(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Topic').mkdir()
+            (root / 'Topic/Topic.md').write_text('Unique body')
+            (root / 'Topic.md').write_text('Other note')
+            library = NotesLibrary(LocalFiles(root))
+            self.addCleanup(library.close)
+            snapshots = []
+            result = library_files.search(library, 'Topic', include_text=False,
+                collapse_folder_notes=True, progress=snapshots.append)
+            self.assertEqual({row['path']: row.get('page') for row in result.rows},
+                             {'Topic': 'Topic/Topic.md', 'Topic.md': None})
+            self.assertTrue(snapshots)
+            self.assertTrue(all('Topic/Topic.md' not in {row['path'] for row in snapshot.rows}
+                                for snapshot in snapshots))
+            body = library_files.search(library, 'Unique body', include_text=True,
+                                        collapse_folder_notes=True)
+            self.assertEqual([row['path'] for row in body.rows], ['Topic/Topic.md'])
+
     def test_rooted_search_ranks_names_before_bodies_and_name_scope_never_reads_text(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

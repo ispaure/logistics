@@ -343,6 +343,8 @@ class NotesDrawerTests(unittest.TestCase):
         strip = SimpleNamespace(window=native.window, hidden=False, pointInside=Mock(return_value=False),
                                 panGestureRecognizer=object())
         owner.breadcrumb_scroll = SimpleNamespace(parent=object(), _impl=SimpleNamespace(native=strip))
+        document = SimpleNamespace(window=native.window, hidden=False, pointInside=Mock(return_value=False))
+        owner.document_web = SimpleNamespace(parent=object(), _impl=SimpleNamespace(native=document))
         gesture_class, window = Mock(), Mock()
         owner.app = SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
         modules = {'rubicon.objc': SimpleNamespace(
@@ -360,6 +362,9 @@ class NotesDrawerTests(unittest.TestCase):
                 strip.pointInside.return_value = True
                 self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
                 strip.pointInside.return_value = False
+                document.pointInside.return_value = True
+                self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
+                document.pointInside.return_value = False
                 self.assertTrue(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
                 owner.opening_swipes_enabled = lambda: False
                 self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, touch))
@@ -552,6 +557,15 @@ for (const dx of [-90, 90]) {
   assert.equal(swipe(dx, {target:cell}), '');
   const wrapper = {...normal, classList:{contains:name=>name==='table-scroll'}};
   assert.equal(swipe(dx, {target:wrapper}), '');
+  document.elementFromPoint = () => cell;
+  assert.equal(swipe(dx), '');
+  document.elementFromPoint = undefined;
+  assert.equal(swipe(dx, {during:()=>events.scroll({target:wrapper})}), '');
+  assert.equal(swipe(dx, {during:()=>{
+    document.elementFromPoint = () => cell;
+    events.touchmove({touches:[point(180+dx)]});
+    document.elementFromPoint = undefined;
+  }}), '');
 }
 assert.equal(swipe(90, {target:{...normal, isContentEditable:true}}), '');
 assert.equal(swipe(90, {target:{...normal, tagName:'INPUT'}}), '');

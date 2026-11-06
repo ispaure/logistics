@@ -2,12 +2,15 @@
 from pathlib import PurePosixPath
 from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.search.names import natural_name_key
-from commonUtils.search.providers import search_resources
+from commonUtils.search.providers import SearchResult, search_resources
 from services.documents.mutations import delete_document_tree, copy_document_tree, copy_document_sibling
 
 
-def search(library, query, *, include_text, visible=None, cancelled=lambda: False, progress=None):
+def search(library, query, *, include_text, visible=None, cancelled=lambda: False, progress=None,
+           collapse_folder_notes=False):
     """Search the library boundary; hosts own scheduling and progress publication."""
+    folder_pages = {}
+
     def listing(folder, *, cancelled):
         try:
             rows = library.folders(folder, cancelled=cancelled)
@@ -16,12 +19,31 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
                 raise OperationCancelled() from error
             # Unsupported or oversized folders make the result incomplete.
             raise OSError(str(error)) from error
-        return rows if visible is None else [row for row in rows
-            if visible(row['path'], directory=row['directory'])]
+        if visible is not None:
+            rows = [row for row in rows if visible(row['path'], directory=row['directory'])]
+        if collapse_folder_notes and folder != library.root:
+            landing = PurePosixPath(folder).name + '.md'
+            for row in rows:
+                if not row['directory'] and row['name'] == landing:
+                    folder_pages[folder] = row['path']
+                    break
+        return rows
 
-    return search_resources(library.provider, library.root, query, cancelled=cancelled,
+    def project(result):
+        pages = {row['path']: folder_pages[row['path']] for row in result.rows
+                 if row['directory'] and row['path'] in folder_pages}
+        represented = set(pages.values())
+        rows = [dict(row, page=pages[row['path']]) if row['path'] in pages else row
+                for row in result.rows if row['path'] not in represented]
+        return SearchResult(rows, result.scanned, result.complete, result.errors)
+
+    notify = progress
+    if collapse_folder_notes and progress is not None:
+        notify = lambda result: progress(project(result))
+    result = search_resources(library.provider, library.root, query, cancelled=cancelled,
         list_children=listing, read_text=library.read_text if include_text else None,
-        progress=progress)
+        progress=notify)
+    return project(result) if collapse_folder_notes else result
 
 
 def ranked_search_rows(rows):

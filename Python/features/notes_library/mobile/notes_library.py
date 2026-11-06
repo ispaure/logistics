@@ -179,6 +179,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.links_generation = 0
         self.links_refresh_task = None
         self.sidebar = host.drawers(self.tree, self.article, self.links)
+        self.sidebar.document_web = self.web
         self.sidebar.opening_swipes_enabled = lambda: not getattr(self.embedded, 'owns_document_swipes', False)
         self.sidebar.open_links = lambda: host.loop.create_task(self.show_links(toggle=False))
         self.sidebar.on_close = self.cancel_links
@@ -271,17 +272,20 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.reader_actions_button,
             self.links_button,
         ]
-        self.secondary = toga.Box(children=[], style=Pack(direction=ROW, gap=4, margin_left=8, margin_right=8))
+        self.secondary = toga.Box(style=Pack(direction=COLUMN, margin_left=8, margin_right=8))
+        self.note_actions_row = toga.Box(style=Pack(direction=ROW, gap=4))
+        self.note_actions_space = toga.Box(style=Pack(flex=1))
+        self.secondary.add(self.note_actions_row)
         for button in (self.back_button, self.forward_button, self.edit, self.reader_actions_button):
             if button.parent is not None:
                 button.parent.remove(button)
-            self.secondary.add(button)
+            self.note_actions_row.add(button)
         self.view.insert(1, self.secondary)
         self.breadcrumbs = toga.Box(style=Pack(direction=ROW, justify_content=CENTER))
         from .breadcrumbs import BreadcrumbScroll
         self.breadcrumb_scroll = BreadcrumbScroll(content=self.breadcrumbs, horizontal=True,
             vertical=False, style=Pack(flex=1, height=44))
-        self.secondary.insert(2, self.breadcrumb_scroll)
+        self.note_actions_row.insert(2, self.breadcrumb_scroll)
         self.sidebar.breadcrumb_scroll = self.breadcrumb_scroll
         self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
         self._breadcrumb_key = None
@@ -329,14 +333,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if hasattr(self, 'open_card'):
             self.open_card.style.display = NONE if self.sidebar.sidebar_open or self.sidebar.expanded else PACK
         available = getattr(self, '_notes_available', 320)
-        self._breadcrumb_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
-        self.welcome_content.style.width = min(360, max(0, self._breadcrumb_width - 48))
+        article_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
+        self.welcome_content.style.width = min(360, max(0, article_width - 48))
         left, right = self.host.toolbar_insets(self.secondary)
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
         show = self.path is not None and not self.sidebar.sidebar_open
         self.secondary.style.display = PACK if show else NONE
-        self.refresh_breadcrumbs()
         header = getattr(self.view, '_document_title_header', None)
         parent = self.article if self.sidebar.expanded else self.view
         self.view._document_title_parent = parent
@@ -359,9 +362,29 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.secondary.parent.remove(self.secondary)
         editable = not self.path or PurePosixPath(self.path).suffix.lower() in MARKDOWN
         if editable and self.library.writable and self.edit.parent is None:
-            self.secondary.insert(3, self.edit)
-        elif (not editable or not self.library.writable) and self.edit.parent is self.secondary:
-            self.secondary.remove(self.edit)
+            self.note_actions_row.insert(len(self.note_actions_row.children) - 1, self.edit)
+        elif (not editable or not self.library.writable) and self.edit.parent is self.note_actions_row:
+            self.note_actions_row.remove(self.edit)
+        row = self.note_actions_row
+        scroll = self.breadcrumb_scroll
+        space = self.note_actions_space
+        controls_width = sum(button.style.width + row.style.gap for button in row.children
+                             if button is not scroll and button is not space)
+        inline_width = article_width - left - right - controls_width
+        # Give the path its own scrollable row when the actions leave too little room.
+        compact = inline_width < 96
+        self._breadcrumb_width = max(0, article_width - left - right if compact else inline_width)
+        if compact and scroll.parent is row:
+            row.remove(scroll)
+            row.insert(2, space)
+            scroll.style.flex = 0
+            self.secondary.add(scroll)
+        elif not compact and scroll.parent is self.secondary:
+            self.secondary.remove(scroll)
+            row.remove(space)
+            scroll.style.flex = 1
+            row.insert(2, scroll)
+        self.refresh_breadcrumbs()
         if getattr(self, '_edit_chrome', None) != self.editing:
             self._edit_chrome = self.editing
             self.host.presentation.apply_icon(self.edit, 'view' if self.editing else 'edit',
@@ -652,7 +675,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         try:
             def scan():
                 return project(library_files.search(self.library, query, include_text=include_text,
-                    visible=self.host.folder_visible, cancelled=cancelled, progress=progress))
+                    visible=self.host.folder_visible, cancelled=cancelled, progress=progress,
+                    collapse_folder_notes=True))
             result = await asyncio.to_thread(scan)
         except OperationCancelled:
             return
@@ -761,6 +785,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                          if self.host.folder_visible(entry["path"], directory=entry["directory"])]
         else:
             add(self.root)
+        def landing_page(entry):
+            if not entry['directory']:
+                return None
+            return entry.get('page') if searching else self.folder_pages.get(entry['path'])
+
         counts = Counter(PurePosixPath(entry['path']).name.casefold() for entry, _ in flattened) if searching else {}
         def row_label(entry):
             path = entry['path']
@@ -776,10 +805,10 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             'No documents in this folder.' if not flattened else '')
         if getattr(self.rows, 'recycled', False):
             records = [dict(title=row_label(entry), subtitle='', folder=entry['directory'], icon=None,
-                path=entry['path'], page=self.folder_pages.get(entry['path']) if entry['directory'] else None,
+                path=entry['path'], page=landing_page(entry),
                 searching=searching, tree_depth=depth,
                 tree_expanded=(entry['path'] in self.expanded) if entry['directory'] and not searching else None,
-                tree_landing=entry['directory'] and self.folder_pages.get(entry['path']) is not None)
+                tree_landing=landing_page(entry) is not None)
                 for entry, depth in flattened[:self.shown]]
             self.rows.footer(message, len(flattened) > self.shown)
             self.rows.add(*records)
@@ -788,7 +817,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return
         for entry, depth in flattened[: self.shown]:
             path, directory = entry["path"], entry["directory"]
-            page = self.folder_pages.get(path) if directory else None
+            page = landing_page(entry)
 
             async def choose(widget=None, path=path, directory=directory, page=page, **kwargs):
                 if page is not None:
