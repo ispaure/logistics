@@ -855,10 +855,11 @@ class ChatUI:
             data = self.state.current
             session = ConversationSession(self.chat_store)
             session.attach(data)
-            before = session.append_user(prompt, settings=profile['settings'], model=profile['model'],
-                                         title_limit=60, retitle=True)
+            # Client validation must not leave an unsent turn in saved history.
             self.state.client = (ChatClient(profile['base_url'], self.chat_key.value)
                                  if profile.get('provider', 'server') == 'server' else client_for(profile))
+            before = session.append_user(prompt, settings=profile['settings'], model=profile['model'],
+                                         title_limit=60, retitle=True)
             transport = MobileGenerationTransport(self.state.client, session,
                 current=lambda: self.active_host and self.state.current is data)
             coordinator = GenerationCoordinator(session, transport)
