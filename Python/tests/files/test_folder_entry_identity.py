@@ -4,7 +4,9 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from commonUtils.configuration.layered import register_settings
 from commonUtils.testing.stages import TestStage
+from mobile import folder_hub
 from models.local_folder import LocalFolder
 from services.folders.entries import get_folder_entries
 
@@ -52,3 +54,32 @@ class FolderEntryIdentityTests(unittest.TestCase):
                          [('', root, None)])
         self.assertEqual(get_folder_entries(['', ' '], include_local_only=False,
                                             local_folders=[root]), [])
+
+
+class FolderEntryPolicyParityTests(unittest.TestCase):
+    def test_mobile_and_desktop_follow_personal_folder_exclusions_and_reset(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = root / 'configFile.ini'
+            settings.write_text('[Folders]\nexcluded_remote_names = Default\n'
+                                'excluded_folder_name_suffixes = -Old\n')
+            store = register_settings(settings, root / 'personal.ini')
+            remotes = ['Default', 'Personal', 'Draft-OLD', 'Draft-New', 'Keep']
+            overrides = {('Folders', 'excluded_remote_names'): 'personal',
+                         ('Folders', 'excluded_folder_name_suffixes'): '-new'}
+
+            with patch('config.get_config_file_path', return_value=settings), patch.object(
+                folder_hub, '__file__', str(root / 'mobile/folder_hub.py')
+            ):
+                def check_visible(expected):
+                    self.assertCountEqual(folder_hub.visible_remotes(remotes), expected)
+                    self.assertCountEqual(
+                        [entry.name for entry in get_folder_entries(remotes, local_folders=[])],
+                        expected,
+                    )
+
+                check_visible(['Personal', 'Draft-New', 'Keep'])
+                store.save(overrides)
+                check_visible(['Default', 'Draft-OLD', 'Keep'])
+                store.save(dict.fromkeys(overrides))
+                check_visible(['Personal', 'Draft-New', 'Keep'])
