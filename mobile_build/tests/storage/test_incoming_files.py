@@ -4,16 +4,21 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
+from contextlib import contextmanager
 from hashlib import sha256
 import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
-from mobile.incoming_files import consume, inbox_path, valid_name
+from mobile import incoming_files
+from mobile.incoming_files import consume, inbox_path, start_receiving, valid_name
 from services.documents.locations import use_shared_local, _shared_local_roots
 
 
@@ -173,3 +178,136 @@ class IncomingTests(unittest.TestCase):
         app.loop.run_until_complete(app.show_files(location=('Received Files', '')))
         self.assertEqual(app.file_provider.root, self.inbox)
         self.assertEqual([row['name'] for row in app.file_rows.values()], ['hello.txt'])
+
+    def receiver_host(self):
+        view = object()
+        return SimpleNamespace(
+            loop=asyncio.get_running_loop(), private_root=self.root, active_host=True,
+            incoming_status='unchanged', body=view, files_view=view,
+            file_provider=SimpleNamespace(root=self.inbox), browse_files=AsyncMock(),
+            incoming_notice=SimpleNamespace(text='', style=SimpleNamespace(display='none')),
+        )
+
+    def test_cancelled_receiver_waiting_for_mutation_lock_never_enters_batch(self):
+        delivery = self.delivery()
+
+        async def exercise():
+            host = self.receiver_host()
+            waiting = asyncio.Event()
+            release, unlocked = Event(), asyncio.Event()
+
+            @contextmanager
+            def lock():
+                host.loop.call_soon_threadsafe(waiting.set)
+                try:
+                    if not release.wait(5):
+                        raise TimeoutError('Test lock was not released')
+                    yield
+                finally:
+                    host.loop.call_soon_threadsafe(unlocked.set)
+
+            with patch.object(incoming_files, 'native_queues', return_value=(self.queue,)), \
+                 patch('commonUtils.persistence.publication.mutation_lock', lock()), \
+                 patch.object(incoming_files, 'inbox_path', return_value=self.inbox) as initialize:
+                start_receiving(host)
+                try:
+                    await asyncio.wait_for(waiting.wait(), 2)
+                    host.incoming_task.cancel()
+                    await asyncio.sleep(0)
+                    waiting_on_worker = not host.incoming_task.done()
+                finally:
+                    release.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(host.incoming_task, 2)
+                await asyncio.wait_for(unlocked.wait(), 2)
+                self.assertTrue(waiting_on_worker)
+                initialize.assert_not_called()
+
+        asyncio.run(exercise())
+        self.assertTrue(delivery.exists())
+        self.assertEqual(list(self.inbox.iterdir()), [])
+
+    def test_cancelled_receiver_finishes_admitted_publication_before_retiring(self):
+        delivery = self.delivery()
+        copy = incoming_files.shutil.copyfileobj
+
+        async def exercise():
+            host = self.receiver_host()
+            started, successor_done = asyncio.Event(), asyncio.Event()
+            release = Event()
+
+            def copy_after_cancel(*args):
+                host.loop.call_soon_threadsafe(started.set)
+                if not release.wait(5):
+                    raise TimeoutError('Test copy was not released')
+                return copy(*args)
+
+            with patch.object(incoming_files, 'native_queues', return_value=(self.queue,)), \
+                 patch.object(incoming_files.shutil, 'copyfileobj', side_effect=copy_after_cancel):
+                start_receiving(host)
+                try:
+                    await asyncio.wait_for(started.wait(), 2)
+                    self.assertTrue((delivery / 'receipt.json').is_file())
+                    host.active_host = False
+                    host.incoming_task.cancel('initial')
+                    await asyncio.sleep(0)
+                    host.incoming_task.cancel('repeated')
+                    await asyncio.sleep(0)
+                    waiting_on_worker = not host.incoming_task.done()
+                finally:
+                    release.set()
+                with self.assertRaisesRegex(asyncio.CancelledError, '^initial$'):
+                    await asyncio.wait_for(host.incoming_task, 2)
+                self.assertTrue(waiting_on_worker)
+
+            self.assertFalse(delivery.exists())
+            self.assertEqual(host.incoming_status, 'unchanged')
+            self.assertEqual(host.incoming_notice.style.display, 'none')
+            host.browse_files.assert_not_awaited()
+            successor = self.receiver_host()
+            outcomes = []
+
+            def record_consume(*args, **kwargs):
+                result = consume(*args, **kwargs)
+                outcomes.append(result)
+                host.loop.call_soon_threadsafe(successor_done.set)
+                return result
+
+            with patch.object(incoming_files, 'native_queues', return_value=(self.queue,)), \
+                 patch.object(incoming_files, 'consume', side_effect=record_consume):
+                start_receiving(successor)
+                try:
+                    await asyncio.wait_for(successor_done.wait(), 2)
+                finally:
+                    successor.incoming_task.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await asyncio.wait_for(successor.incoming_task, 2)
+            self.assertEqual(outcomes, [(0, 0)])
+
+        asyncio.run(exercise())
+        self.assertEqual([(p.name, p.read_bytes()) for p in self.inbox.iterdir()], [('hello.txt', b'hello')])
+
+    def test_late_storage_error_does_not_publish_to_inactive_receiver(self):
+        async def exercise():
+            host = self.receiver_host()
+            started, release = asyncio.Event(), Event()
+
+            def fail_after_reset(*args, **kwargs):
+                host.loop.call_soon_threadsafe(started.set)
+                if not release.wait(5):
+                    raise TimeoutError('Test consume was not released')
+                raise OSError('Storage unavailable')
+
+            with patch.object(incoming_files, 'native_queues', return_value=(self.queue,)), \
+                 patch.object(incoming_files, 'consume', side_effect=fail_after_reset):
+                start_receiving(host)
+                try:
+                    await asyncio.wait_for(started.wait(), 2)
+                    host.active_host = False
+                    host._reset_scheduled = True
+                finally:
+                    release.set()
+                await asyncio.wait_for(host.incoming_task, 4)
+            self.assertEqual(host.incoming_status, 'unchanged')
+
+        asyncio.run(exercise())
