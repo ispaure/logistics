@@ -318,6 +318,18 @@ re-raising. Normal interactive close keeps the save veto before worker cancellat
 close vetoes. Shared index cancellation also handles workers that have exited
 before their queued GUI completion is delivered.
 
+After construction returns a window, `launch.main()` owns rollback if displaying
+it, starting updates or running the Qt event loop raises. It clears the pending
+update handoff, retires the window before the index service stops, and re-raises
+the original failure. Window rollback also drains the updater, disables the
+dialog and suppresses queued close retries. A cleanup failure adds only its
+exception type to the original error; it does not replace that error. The index
+service's existing `finally`/stop error behavior is unchanged. Constructor
+failures remain constructor-owned, so the launcher does not repeat their cleanup.
+`test_launch.py` covers these failure stages and the unchanged normal update
+handoff. This reuses startup/page-worker rollback; it is not a general recovery
+policy for every document or job populated during an event-loop failure.
+
 The macOS launcher supports the system Bash 3.2. Pause flags use portable,
 case-insensitive case patterns; avoid Bash 4 lowercase parameter expansion there.
 
