@@ -15,6 +15,100 @@ from features.notebooks._vendor.rmscene import scene_stream as ss
 
 
 class RecoverySharingTests(unittest.TestCase):
+    def test_discard_replaces_recovery_base_with_complete_saved_archive(self):
+        from features.notebooks.notebook import MAX_ARCHIVE
+        from features.notebooks.storage import NotebookDocument
+        from services.documents.storage import local_document_resource
+
+        for replaced in (False, True):
+            with self.subTest(replaced=replaced), TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = root / 'source.rmdoc'
+                original = Notebook.new('Saved', template='Logistics Daily planner')
+                original.members['opaque/future.bin'] = b'\x01\xffsaved member'
+                source.write_bytes(original.to_bytes())
+                repository = Repository(root / 'recovery')
+                with local_document_resource(source, max_bytes=MAX_ARCHIVE) as resource:
+                    document = NotebookDocument(Notebook.read(resource.read()), resource=resource,
+                                                recovery=repository)
+                    Editor(document.book, document.checkpoint).apply(dict(op='template',
+                        name='Logistics Meeting notes', format='pro', visible=True))
+                    if replaced:
+                        replacement = Notebook.new('Replacement', template='Logistics Restaurant review')
+                        replacement.content['fileType'] = 'pdf'
+                        replacement.members[replacement.id + '.pdf'] = b'%PDF-opaque embedded source'
+                        replacement.members['opaque/future.bin'] = b'\x02\xfereplacement member'
+                        replacement.members[f'{replacement.id}/{replacement.pages[0].id}.future'] = b'page sidecar'
+                        source.write_bytes(replacement.to_bytes())
+                    saved_bytes = source.read_bytes()
+                    expected = Notebook.read(saved_bytes)
+                    document.discard()
+                    recovered = repository.open(document.key)
+                    self.assertEqual(recovered.id, expected.id)
+                    self.assertEqual(recovered.members, expected.members)
+                    self.assertEqual([page.template for page in recovered.pages],
+                                     [page.template for page in expected.pages])
+                    self.assertEqual(source.read_bytes(), saved_bytes)
+                    self.assertFalse(document.dirty)
+
+    def test_discard_base_publication_failures_keep_source_and_draft_retryable(self):
+        from unittest.mock import Mock, patch
+        from features.notebooks.notebook import MAX_ARCHIVE
+        from features.notebooks.storage import NotebookDocument
+        from services.documents.storage import local_document_resource
+
+        for failure in ('base', 'manifest', 'binding'):
+            with self.subTest(failure=failure), TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = root / 'source.rmdoc'
+                original = Notebook.new('Original', template='Logistics Daily planner')
+                original.members['opaque/future.bin'] = b'original opaque member'
+                source.write_bytes(original.to_bytes())
+                repository = Repository(root / 'recovery')
+                changed = Mock()
+                with local_document_resource(source, max_bytes=MAX_ARCHIVE) as resource:
+                    document = NotebookDocument(Notebook.read(resource.read()), resource=resource,
+                                                recovery=repository, changed=changed)
+                    editor = Editor(document.book, document.checkpoint)
+                    editor.apply(dict(op='template', name='Logistics Meeting notes', format='pro', visible=True))
+                    draft = document.book
+                    draft_members = dict(draft.members)
+                    revision = resource.revision
+                    replacement = Notebook.new('Replacement', template='Logistics Restaurant review')
+                    replacement.members['opaque/future.bin'] = b'replacement opaque member'
+                    source.write_bytes(replacement.to_bytes())
+                    saved_bytes = source.read_bytes()
+                    manifest = repository.root / document.key / 'state.json'
+                    before = manifest.read_bytes()
+                    target = {'base': 'features.notebooks.recovery.atomic_write_bytes',
+                              'manifest': 'features.notebooks.recovery.atomic_write_json'}
+                    failing = (patch(target[failure], side_effect=OSError('Publication unavailable'))
+                               if failure != 'binding' else
+                               patch.object(document, 'changed', side_effect=OSError('Publication unavailable')))
+                    with failing:
+                        with self.assertRaisesRegex(OSError, 'Publication unavailable'):
+                            document.discard()
+                    self.assertTrue(document.dirty)
+                    self.assertIs(document.book, draft)
+                    self.assertEqual(resource.revision, revision)
+                    self.assertEqual(source.read_bytes(), saved_bytes)
+                    if failure != 'binding':
+                        self.assertEqual(manifest.read_bytes(), before)
+                    # Any still-open draft can checkpoint its own complete base
+                    # after failure, even if discard already published recovery.
+                    editor.apply(dict(op='stroke', points=[[20, 30, .5]]))
+                    recovered = repository.open(document.key)
+                    self.assertEqual(recovered.id, draft.id)
+                    self.assertEqual(recovered.members['opaque/future.bin'], b'original opaque member')
+                    for name, data in draft_members.items():
+                        if name.endswith(('.template', '.logistics-template.json')):
+                            self.assertEqual(recovered.members[name], data)
+                    self.assertEqual(len(recovered.page(0).strokes), 1)
+                    document.discard()
+                    self.assertEqual(repository.open(document.key).members, Notebook.read(saved_bytes).members)
+                    self.assertEqual(source.read_bytes(), saved_bytes)
+                    self.assertFalse(document.dirty)
+
     def test_rejected_binding_checkpoint_keeps_recovery_and_editor_aligned(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
