@@ -25,6 +25,7 @@ def _assert_comic_centered(view, *, fullscreen=False):
     else:
         from java import jclass
         image = native.getDrawable()
+        assert image is not None, 'Comic drawable is not attached to the native viewport'
         rect = jclass('android.graphics.RectF')(0, 0, image.getIntrinsicWidth(), image.getIntrinsicHeight())
         native.getImageMatrix().mapRect(rect)
         dx, dy = rect.centerX() - native.getWidth() / 2, rect.centerY() - native.getHeight() / 2
