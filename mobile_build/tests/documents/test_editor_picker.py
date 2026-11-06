@@ -12,8 +12,14 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
+import toga
+
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
+
+
+class SyntheticPrivateFiles(LocalFiles):
+    private = True
 
 
 class EditorPickerTests(unittest.TestCase):
@@ -539,9 +545,157 @@ class EditorPickerTests(unittest.TestCase):
         gate = ResumePassword('fixture-password')
         self.app.loop.run_until_complete(self.app.show_text_destination('locked.md', b'Private draft', privacy_gate=gate))
         self.app.screen_privacy.conceal()
-        self.app.loop.run_until_complete(self.app.save_text_destination())
+        with patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
+            self.app.loop.run_until_complete(self.app.save_text_destination())
+        dialog.assert_not_awaited()
         self.assertFalse((self.app.private_root / 'LocalFiles' / 'locked.md').exists())
         self.assertEqual(self.app.save_as_data, b'Private draft')
+
+    async def open_provider_save_as(self, *, private=True, gate=None):
+        from services.documents.provider_documents import ProviderDocuments
+        root = Path(self.directory.name) / ('private-source' if private else 'ordinary-source')
+        root.mkdir()
+        source = root / 'source.txt'
+        source.write_bytes(b'original')
+        provider = (SyntheticPrivateFiles if private else LocalFiles)(root)
+        self.assertTrue(await self.app.open_crypt(
+            copies=ProviderDocuments(provider), key=source.name, privacy_gate=gate, edit=True))
+        owner = self.app.provider_sessions().active
+        owner.crypt_text.value = 'edited draft'
+        picker = self.app.editor_picker()
+        await picker.show_crypt_save_as(owner=owner)
+        self.assertIs(picker.origin.owner, owner)
+        self.assertTrue(self.app.workspace.accepts(picker.origin.token))
+        return picker, source
+
+    async def choose_ordinary_save_destination(self, picker):
+        self.assertTrue(await picker.browser_editor_location(('Local files', '')))
+        self.assertIn('Plaintext', picker.picker_destination.text)
+        return picker.editor_provider('Local files').root
+
+    def test_private_provider_text_save_as_decline_preserves_draft(self):
+        from services.session_auth import ResumePassword
+
+        async def exercise():
+            gate = ResumePassword('synthetic gate')
+            picker, source = await self.open_provider_save_as(gate=gate)
+            self.assertFalse(gate.locked)
+            destination = await self.choose_ordinary_save_destination(picker)
+            with (patch.object(toga, 'ConfirmDialog', wraps=toga.ConfirmDialog) as confirm,
+                  patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock, return_value=False) as dialog):
+                await picker.save_text_destination()
+            dialog.assert_awaited_once()
+            confirm.assert_called_once_with('Save to unencrypted storage?',
+                                            'The destination will contain a decrypted copy. Continue?')
+            self.assertFalse((destination / source.name).exists())
+            self.assertEqual(picker.operation.data, b'edited draft')
+            self.assertEqual(source.read_bytes(), b'original')
+
+        self.app.loop.run_until_complete(exercise())
+
+    def test_private_provider_text_save_as_accepts_without_resume_gate(self):
+        async def exercise():
+            picker, source = await self.open_provider_save_as()
+            self.assertIsNone(picker.operation.privacy_gate)
+            destination = await self.choose_ordinary_save_destination(picker)
+            with patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock, return_value=True) as dialog:
+                await picker.save_text_destination()
+            dialog.assert_awaited_once()
+            self.assertEqual((destination / source.name).read_bytes(), b'edited draft')
+            self.assertEqual(source.read_bytes(), b'original')
+            self.assertIsNone(picker.operation.data)
+
+        self.app.loop.run_until_complete(exercise())
+
+    def test_same_policy_provider_text_saves_without_plaintext_confirmation(self):
+        from services.session_auth import ResumePassword
+
+        async def exercise():
+            for private in (True, False):
+                with self.subTest(private=private):
+                    gate = ResumePassword('synthetic gate')
+                    picker, source = await self.open_provider_save_as(private=private, gate=gate)
+                    destination = source.parent if private else await self.choose_ordinary_save_destination(picker)
+                    if private:
+                        self.assertEqual(picker.save_as_storage.value, 'Source location')
+                    picker.save_as_name.value = 'copy.txt'
+                    with patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
+                        await picker.save_text_destination()
+                    dialog.assert_not_awaited()
+                    self.assertEqual((destination / 'copy.txt').read_bytes(), b'edited draft')
+                    self.assertEqual(source.read_bytes(), b'original')
+
+        self.app.loop.run_until_complete(exercise())
+
+    def test_plaintext_confirmation_rejects_changed_destination_or_source(self):
+        from services.session_auth import ResumePassword
+
+        async def exercise():
+            gate = ResumePassword('synthetic gate')
+            picker, source = await self.open_provider_save_as(gate=gate)
+            destination = await self.choose_ordinary_save_destination(picker)
+            origin = picker.origin.token
+            for change in ('folder', 'name', 'gate', 'origin'):
+                with self.subTest(change=change):
+                    async def confirm(dialog):
+                        if change == 'folder':
+                            picker.picker_folder.value = 'changed'
+                        elif change == 'name':
+                            picker.save_as_name.value = 'changed.txt'
+                        elif change == 'gate':
+                            gate.lock()
+                            self.assertTrue(gate.authorize(gate.revision))
+                        else:
+                            self.app.workspace.invalidate(origin[0])
+                        return True
+
+                    with patch.object(self.app.main_window, 'dialog', side_effect=confirm) as dialog:
+                        await picker.save_text_destination()
+                    dialog.assert_awaited_once()
+                    self.assertFalse((destination / source.name).exists())
+                    self.assertFalse((destination / 'changed.txt').exists())
+                    self.assertEqual(picker.operation.data, b'edited draft')
+                    picker.picker_folder.value = ''
+                    picker.save_as_name.value = source.name
+
+        self.app.loop.run_until_complete(exercise())
+
+    def test_private_notebook_save_as_confirms_before_publication(self):
+        from features.notebooks.notebook import Notebook
+        from services.documents.storage import DocumentResource
+
+        async def exercise():
+            root = Path(self.directory.name) / 'private-notebook'
+            root.mkdir()
+            notebook = Notebook.new('Synthetic notebook')
+            name = notebook.name + '.rmdoc'
+            (root / name).write_bytes(notebook.to_bytes())
+            picker = self.app.editor_picker()
+            session = self.app.workspace.open('provider-session', 'notebook-source', 'notebook', transient=True)
+            with DocumentResource(SyntheticPrivateFiles(root), name, max_bytes=128 * 1024 * 1024) as resource:
+                owner = SimpleNamespace(session=session, privacy_gate=None,
+                    document=SimpleNamespace(resource=resource), editor=SimpleNamespace(notebook=notebook))
+                await picker.show_notebook_destination(owner)
+                target = (await self.choose_ordinary_save_destination(picker)) / name
+                draft = picker.operation.data
+                with (patch.object(toga, 'ConfirmDialog', wraps=toga.ConfirmDialog) as confirm,
+                      patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock, return_value=False) as dialog):
+                    await picker.save_text_destination()
+                dialog.assert_awaited_once()
+                confirm.assert_called_once_with('Save to unencrypted storage?',
+                                                'The destination will contain a decrypted copy. Continue?')
+                self.assertFalse(target.exists())
+                self.assertEqual(picker.operation.data, draft)
+                with (patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock, return_value=True) as dialog,
+                      patch('features.notebooks.mobile.documents.retarget_notebook',
+                            new_callable=AsyncMock, return_value=True) as retarget):
+                    await picker.save_text_destination()
+                dialog.assert_awaited_once()
+                retarget.assert_awaited_once()
+                self.assertEqual(target.read_bytes(), draft)
+                self.assertIsNone(picker.operation.data)
+
+        self.app.loop.run_until_complete(exercise())
 
     def test_save_as_cancel_restores_managed_origin_even_with_old_provider_active(self):
         from features.text_editor.resources import LocalTextCopies
