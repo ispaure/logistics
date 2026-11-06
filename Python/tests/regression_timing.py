@@ -82,7 +82,10 @@ class TimingReport:
             if rows:
                 print(f'\n{title}:', flush=True)
                 for row in rows:
-                    print(f"  {row['duration_seconds']:8.3f}s  {row['outcome']:18} {row[name]}", flush=True)
+                    label = row[name]
+                    if key == 'modules' and row.get('stage'):
+                        label += f" [stage={row['stage']}]"
+                    print(f"  {row['duration_seconds']:8.3f}s  {row['outcome']:18} {label}", flush=True)
         print(f'Timing report: {self.path}', flush=True)
 
 

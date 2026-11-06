@@ -46,15 +46,37 @@ def reordered(rows, order, seed, *, group=None):
     return [row for batch in batches for row in batch]
 
 
+def matching_sources(directory, pattern, include_patterns):
+    return sorted(path for path in directory.rglob(pattern)
+                  if path.is_file() and all(fnmatchcase(path.name, extra) for extra in include_patterns))
+
+
+def select_sources(paths, stages):
+    if not paths:
+        raise ValueError('Module isolation requires at least one matching test file.')
+    selected = []
+    for row in validate(paths):
+        # Source classification may see no methods in a dynamically loaded module.
+        available = {level for _, level, _ in row.cases} or {row.default}
+        levels = tuple(level for level in stages if level in available)
+        if levels:
+            selected.append((row, levels))
+    if not selected:
+        raise ValueError('No tests selected for the requested execution stages.')
+    return selected
+
+
+def source_inventory(row, levels):
+    stages = [level.value for level in levels]
+    return dict(stage=row.default.value, stages=stages,
+                cases=[case for case in row.inventory() if case['stage'] in stages])
+
+
 def run_isolated(directory, pattern, interval, include_patterns=(), report=None, *,
                  stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None,
                  order='default', seed=None):
     """Validate first, then run isolated files by stage and known duration."""
-    modules = sorted(path for path in directory.rglob(pattern)
-                     if path.is_file() and all(fnmatchcase(path.name, extra) for extra in include_patterns))
-    if not modules:
-        raise ValueError('Module isolation requires at least one matching test file.')
-    classified = validate(modules)
+    selected = select_sources(matching_sources(directory, pattern, include_patterns), stages)
     durations = {}
     if timings is not None:
         previous = json.loads(Path(timings).read_text())
@@ -76,18 +98,15 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                 raise ValueError('Invalid successful module duration in timing report.')
             durations[row['path'], row.get('stage')] = seconds
     plan = [(level, row) for level in stages for row in reordered(
-                [r for r in sorted(classified, key=lambda r: (
-                    durations.get((str(r.path.relative_to(directory)), level.value), 0), str(r.path)))
-                 if level in {value for _, value, _ in r.cases} or not r.cases and r.default is level],
+                sorted((r for r, levels in selected if level in levels), key=lambda r: (
+                    durations.get((str(r.path.relative_to(directory)), level.value), 0), str(r.path))),
                 order, seed)]
-    if not plan:
-        raise ValueError('No tests selected for the requested execution stages.')
     if report is not None:
         report.data.update(stages=[s.value for s in stages], mode=mode, fail_fast=fail_fast,
                            order=order, seed=seed,
                            planned_modules=[dict(path=str(r.path.relative_to(directory)), stage=s.value) for s, r in plan],
-                           classified_files=[dict(path=str(r.path.relative_to(directory)), stage=r.default.value,
-                                                  cases=r.inventory()) for r in classified], not_run=[], coverage_complete=True)
+                           classified_files=[dict(path=str(r.path.relative_to(directory)), **source_inventory(r, levels))
+                                             for r, levels in selected], not_run=[], coverage_complete=True)
     failed, stop_reason, active_stage, stage_failed = [], '', None, False
     for index, (level, row) in enumerate(plan):
         if active_stage is not None and level is not active_stage:
@@ -186,7 +205,7 @@ def main():
     selection.add_argument('--stage', choices=[s.value for s in STAGE_ORDER], action='append')
     parser.add_argument('--mode', choices=('fast', 'diagnostic'), default='diagnostic')
     parser.add_argument('--fail-fast', action='store_true')
-    parser.add_argument('--inventory', action='store_true', help='Validate and list classification without importing tests')
+    parser.add_argument('--inventory', action='store_true', help='List selected source classifications without importing tests')
     parser.add_argument('--timings', type=Path, help='Prior report for deterministic duration ordering on this environment')
     parser.add_argument('--order', choices=('default', 'reverse', 'random'), default='default',
                         help='Reorder files, classes and methods within each stage; class fixtures stay contiguous')
@@ -219,12 +238,14 @@ def main():
     args.stages = tuple(s for s in STAGE_ORDER if s.value in args.stage) if args.stage else PROFILES[args.profile]
     if args.inventory:
         try:
-            rows = validate(args.directory.rglob(args.pattern))
-            if not rows:
+            paths = matching_sources(args.directory, args.pattern, args.include_pattern)
+            if not paths:
                 raise ValueError('No matching test sources for inventory.')
+            rows = select_sources(paths, args.stages)
         except (ValueError, OSError, SyntaxError) as error:
             parser.error(str(error))
-        print(json.dumps([dict(file=str(r.path.relative_to(args.directory)), stage=r.default.value, cases=r.inventory()) for r in rows], indent=2))
+        print(json.dumps([dict(file=str(r.path.relative_to(args.directory)), **source_inventory(r, levels))
+                          for r, levels in rows], indent=2))
         return 0
     report = TimingReport(args.report or default_report(args.directory), args.directory,
                           args.pattern, args.isolate_modules, args.junit)
@@ -239,7 +260,7 @@ def main():
     except ValueError as error:
         report.data.update(preflight_error=str(error), coverage_complete=False,
                            not_run=[dict(file=str(p.relative_to(args.directory)), reason='Preflight failed')
-                                    for p in sorted(args.directory.rglob(args.pattern)) if p.is_file()])
+                                    for p in matching_sources(args.directory, args.pattern, args.include_pattern)])
         print(str(error), file=sys.stderr, flush=True)
         code = 2
     except BaseException:
