@@ -131,6 +131,49 @@ class FeatureRegistryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Unknown UI workflow'):
                 registry.get_workflow('missing')
 
+    def test_projections_preserve_duplicate_cycle_and_dependency_metadata_validation(self):
+        cases = [
+            ([feature('same'), feature('same')], ValueError, 'Duplicate Logistics feature name'),
+            ([feature('first', ('second',)), feature('second', ('first',))],
+             RuntimeError, 'first -> second -> first'),
+            ([feature('bad', 'not-a-tuple')], TypeError, 'must be a tuple/list'),
+        ]
+        for projection in (registry.get_feature_states, registry.get_browser_extensions):
+            for modules, error, message in cases:
+                with self.subTest(projection=projection.__name__, message=message), \
+                     patch.object(registry, 'load_features', return_value=modules):
+                    with self.assertRaisesRegex(error, message):
+                        projection()
+
+    def test_states_preserve_groups_transitive_disabling_and_load_errors(self):
+        base = feature('base')
+        middle = feature('middle', ('base',))
+        owner = feature('owner', ('middle',), FEATURE_LABEL='Reader', FEATURE_DESCRIPTION='Read files')
+        engine = feature('engine', ('middle',), FEATURE_GROUP='owner')
+        consumer = feature('consumer', ('engine', 'owner'))
+        optional = feature('optional', optional_dependencies=('missing',))
+        broken = feature('broken', FEATURE_LOAD_ERROR='Cannot load')
+        modules = [consumer, owner, engine, middle, base, optional, broken]
+        registry._disabled_features.add('base')
+        with patch.object(registry, 'load_features', return_value=modules):
+            states = {state.name: state for state in registry.get_feature_states()}
+            self.assertEqual(list(states), ['consumer', 'owner', 'middle', 'base', 'optional', 'broken'])
+            self.assertEqual([state.name for state in states.values() if state.enabled], ['optional'])
+            self.assertTrue(all(states[name].available for name in ('consumer', 'owner', 'middle', 'base')))
+            self.assertFalse(states['broken'].available)
+            self.assertEqual(states['broken'].error, 'Cannot load')
+            self.assertEqual(states['owner'].label, 'Reader')
+            self.assertEqual(states['owner'].description, 'Read files')
+            self.assertEqual(states['owner'].members, ('owner', 'engine'))
+            self.assertEqual(states['owner'].dependencies, ('middle',))
+            self.assertEqual(states['consumer'].dependencies, ('owner',))
+            self.assertEqual(states['owner'].dependents, ())
+            registry._disabled_features.clear()
+            refreshed = {state.name: state for state in registry.get_feature_states()}
+            self.assertTrue(refreshed['owner'].enabled)
+            self.assertEqual(refreshed['owner'].dependents, ('consumer',))
+            self.assertEqual(refreshed['middle'].dependents, ('owner',))
+
     def test_browser_extensions_preserve_feature_identity_and_are_lazy(self):
         install = Mock()
         extension = BrowserExtensionContribution(install)
@@ -142,6 +185,29 @@ class FeatureRegistryTests(unittest.TestCase):
         self.assertEqual(contributions[0].feature_label, 'Comics')
         self.assertIs(contributions[0].contribution, extension)
         install.assert_not_called()
+
+    def test_browser_extensions_keep_enabled_roster_when_contribution_hook_changes_preferences(self):
+        from commonUtils.ui.features import BrowserExtension
+        install = Mock()
+        extension = BrowserExtensionContribution(install)
+        def contributions():
+            registry._disabled_features.add('modern')
+            return FeatureContributions(browser_extensions=[extension])
+        legacy = feature('legacy', get_contributions=contributions)
+        definition = Feature(id='modern', label='Modern', browser=BrowserExtension())
+        modern = feature('modern', register=Mock(return_value=definition))
+        with patch.object(registry, 'load_features', return_value=[modern, legacy]), \
+             patch.object(definition, 'install_browser', return_value='controller') as install_browser:
+            extensions = registry.get_browser_extensions()
+            self.assertEqual([entry.feature_name for entry in extensions], ['legacy', 'modern'])
+            self.assertIs(extensions[0].contribution, extension)
+            install.assert_not_called()
+            install_browser.assert_not_called()
+            host = SimpleNamespace(file_browser=object())
+            self.assertEqual(extensions[1].contribution.install(host), 'controller')
+            install_browser.assert_called_once_with(host.file_browser, host=host)
+            self.assertEqual([entry.feature_name for entry in registry.get_browser_extensions()], ['legacy'])
+        modern.register.assert_called_once_with()
 
     def test_toggle_filters_contributions_and_dependencies_and_initializes_once(self):
         from commonUtils.formats.registry import file_types

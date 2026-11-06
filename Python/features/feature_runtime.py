@@ -304,7 +304,10 @@ class FeatureRegistry:
     def get_available_features(self) -> list[ModuleType]:
         """Return features whose hard dependencies are all available."""
 
-        feature_map = self._get_feature_map()
+        return self._get_available_features(self._get_feature_map())
+
+    def _get_available_features(self, feature_map) -> list[ModuleType]:
+        """Filter one discovered roster without discovering features again."""
 
         return [
             feature
@@ -350,7 +353,10 @@ class FeatureRegistry:
                                         definition_of=self.get_feature_definition)
 
     def get_enabled_features(self):
-        available = self.get_available_features()
+        return self._get_enabled_features(self.get_available_features())
+
+    def _get_enabled_features(self, available):
+        """Filter one available roster by preferences and enabled dependencies."""
         feature_map = {self._get_feature_name(feature): feature for feature in available}
         enabled = set(feature_map) - self._disabled_features
         # Remove consumers of disabled dependencies, including transitive consumers.
@@ -381,7 +387,8 @@ class FeatureRegistry:
 
     def get_feature_states(self):
         feature_map = self._get_feature_map()
-        enabled = {self._get_feature_name(feature) for feature in self.get_enabled_features()}
+        available = self._get_available_features(feature_map)
+        enabled = {self._get_feature_name(feature) for feature in self._get_enabled_features(available)}
         leaders, groups = self._feature_groups(feature_map)
         states = []
         for name, members in groups.items():
@@ -593,8 +600,11 @@ class FeatureRegistry:
 
     def get_browser_extensions(self) -> list[RegisteredContribution[BrowserExtensionContribution]]:
         """Return extensions installed into each Logistics browser host."""
-        extensions = self._collect_contributions('browser_extensions')
-        for feature in self.get_enabled_features():
+        features = self.get_enabled_features()
+        contributions = self.catalog.get(features, self.get_feature_definition)
+        extensions = self.catalog.collect(contributions, 'browser_extensions',
+                                          self._get_feature_name, self._get_feature_label)
+        for feature in features:
             definition = self.get_feature_definition(feature)
             if definition is not None and definition.browser is not None:
                 extensions.append(RegisteredContribution(definition.id, definition.label,
