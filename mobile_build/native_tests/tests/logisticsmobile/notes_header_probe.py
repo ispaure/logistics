@@ -91,6 +91,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 for button in (owner.close_button, owner.menu, owner.links_button):
                     control = button._impl.native
                     rect = control.convertRect(control.bounds, toView=window)
+                    assert abs(float(rect.size.width) - owner.back_button.style.width) <= 1
                     midpoint = rect.origin.y + rect.size.height / 2
                     assert title_frame.origin.y <= midpoint <= title_frame.origin.y + title_frame.size.height
                 assert title_frame.origin.y + title_frame.size.height <= article_frame.origin.y
