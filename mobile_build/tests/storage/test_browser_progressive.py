@@ -2,6 +2,7 @@
 
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
+from commonUtils.testing.waiting import wait_until
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
@@ -73,7 +74,9 @@ class RecycledBrowserTests(unittest.TestCase):
         browser.sort.value = 'Name Z–A'
         self.assertEqual(browser.native_list.data[0].entry.payload['path'], rows[-1]['path'])
         browser.search.value = 'file-00003'
-        self.app.loop.run_until_complete(asyncio.sleep(.45))
+        self.app.loop.run_until_complete(wait_until(
+            lambda: len(browser.native_list.data) == 1, interval=.01,
+            message=lambda: f'Expected one matching row, found {len(browser.native_list.data)}'))
         self.assertEqual(len(browser.native_list.data), 1)
         row = browser.native_list.data[0]
         self.app.loop.run_until_complete(browser.select(row.entry))
@@ -81,12 +84,16 @@ class RecycledBrowserTests(unittest.TestCase):
         self.assertEqual(row.title, 'Human title')
         self.assertFalse(browser.buttons)
         browser.search.value = 'absent'
-        self.app.loop.run_until_complete(asyncio.sleep(.45))
+        self.app.loop.run_until_complete(wait_until(
+            lambda: browser.empty_label in browser.widget.children, interval=.01,
+            message=lambda: f'No empty state for absent query, found {len(browser.native_list.data)} rows'))
         self.assertFalse(browser.native_list.data)
         self.assertIn(browser.empty_label, browser.widget.children)
         self.assertEqual(browser.empty_label.text, 'No matching items.')
         browser.close_search()
-        self.app.loop.run_until_complete(asyncio.sleep(.45))
+        self.app.loop.run_until_complete(wait_until(
+            lambda: len(browser.native_list.data) == len(rows), interval=.01,
+            message=lambda: f'Cleared search restored {len(browser.native_list.data)} of {len(rows)} rows'))
         self.assertEqual(len(browser.native_list.data), 50)
         self.assertIn(browser.native_list, browser.widget.children)
 
@@ -131,10 +138,10 @@ class RecycledBrowserTests(unittest.TestCase):
         browser.search.value = 'murakami'
         async def check():
             try:
-                async def visible():
-                    while not blocked.is_set() or not browser.native_list.data:
-                        await asyncio.sleep(.01)
-                await asyncio.wait_for(visible(), 2)
+                await wait_until(
+                    lambda: blocked.is_set() and browser.native_list.data, timeout=2, interval=.01,
+                    message=lambda: f'Expected a partial result while descendants are blocked '
+                                    f'(blocked={blocked.is_set()}, rows={len(browser.native_list.data)})')
                 row = browser.native_list.data[0]
                 self.assertEqual(row.title, 'Haruki Murakami')
                 self.assertEqual(row.entry.payload['path'], folder['path'])
@@ -143,12 +150,14 @@ class RecycledBrowserTests(unittest.TestCase):
                 self.assertIn('Searching', browser.page_label.text)
                 # Clearing search invalidates any later worker result.
                 browser.close_search()
-                await asyncio.sleep(.45)
+                await wait_until(
+                    lambda: browser.tree is browser.folder_tree, timeout=2, interval=.01,
+                    message='Clearing search did not restore the original folder tree')
                 self.assertNotIn(browser.page_label, browser.widget.children)
                 self.assertEqual([entry.payload['path'] for entry in browser.entries], ['Books'])
             finally:
                 release.set()
-            await asyncio.gather(*tuple(browser.tasks))
+                await asyncio.wait_for(asyncio.gather(*tuple(browser.tasks)), 5)
             self.assertEqual([entry.payload['path'] for entry in browser.entries], ['Books'])
         self.app.loop.run_until_complete(check())
 

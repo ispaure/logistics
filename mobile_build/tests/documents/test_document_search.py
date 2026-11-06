@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 from commonUtils.testing.stages import TestStage
+from commonUtils.testing.waiting import wait_until
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.document_search import scan_local_documents
 from mobile_build.tests.support.app import create_app
@@ -134,9 +135,13 @@ class LocalDocumentSearchTests(TestCase):
         app.document_view_buttons['Recent'].on_press()
         app.document_search.value = 'unique filename'
         self.assertIsNone(app.document_views.parent)
+        search = app.hub_controller()._documents_file_search
+
         async def wait():
-            await asyncio.sleep(.35)
-            await app.hub_controller()._documents_file_search.task
+            task = await wait_until(lambda: search.task, interval=.01,
+                                    message='Filename query did not start a document search task')
+            await asyncio.wait_for(task, 5)
+
         app.loop.run_until_complete(wait())
         from mobile_build.tests.workspace.test_hub_documents import widgets
         import toga
