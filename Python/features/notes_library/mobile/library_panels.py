@@ -10,7 +10,7 @@ from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.operations import OperationCancelled
 from features.notes_library import library_files
 from ..navigation import PathChange
-from services.documents.authoring.document_dialogs import DocumentTypeDialog
+from services.documents.authoring.document_dialogs import DocumentDialog, DocumentTypeDialog
 
 
 # Match the host's 13-sp captions and 16-sp controls in Toga CSS-point units.
@@ -441,7 +441,7 @@ class LibraryPanels:
         button.notes_file_actions = lambda: None
 
     async def file_actions(self, path):
-        if not self.valid() or self.file_command_busy:
+        if not self.valid() or self.file_command_busy or self.sidebar.action_choice is not None:
             return
         self.selected_path = path
         choices = []
@@ -457,17 +457,10 @@ class LibraryPanels:
         dialog.title, dialog.message = PurePosixPath(path).name, 'Choose a file action.'
         request = self.file_action_request = getattr(self, 'file_action_request', 0) + 1
         side, epoch, destination = self.sidebar.side, self.epoch, self.host.destination()
-        if side is not None:
-            # The floating panel lives above the controller's alert layer.
-            # Retire it before presenting the same menu for … and long press.
-            self.sidebar.show_detail()
-            self.sidebar.finish_dismissals()
-        action = await self.view.window.dialog(dialog)
+        action = await self.sidebar.choose_action(dialog, self.view.window)
         if (not self.valid() or self.epoch != epoch or self.file_action_request != request
                 or self.host.destination() != destination):
             return
-        # Native alerts can dismiss the floating drawer. Its origin still owns
-        # cancellation and the return from any form opened by this decision.
         if action == 'rename':
             self.selected_path = path
             self.manage_entry(move=True, return_side=side)
@@ -477,11 +470,6 @@ class LibraryPanels:
             self.copy_entry_form(path, return_side=side)
         elif action == 'delete':
             await self.delete_entry(path)
-            if (self.valid() and self.epoch == epoch and self.file_action_request == request
-                    and self.host.destination() == destination and side is not None):
-                self.sidebar.show(side)
-        elif side is not None:
-            self.sidebar.show(side)
 
     def show_file_action(self, view, *, route, title, return_side=None):
         if not self.valid() or self.file_command_busy:
@@ -624,12 +612,24 @@ class LibraryPanels:
                     and getattr(self, 'file_action_request', 0) == request and self.host.destination() == destination)
         change = PathChange(deleted=path)
         removed = change.removes
-        if self.path and removed(self.path) and not await self.prepare_leave():
-            return
+        async def confirm_save():
+            dialog = DocumentDialog('Save document changes?', 'Save this document before leaving it.',
+                                    discard_label='Discard changes')
+            return await self.sidebar.choose_action(dialog, self.view.window)
+        if self.path and removed(self.path):
+            confirm = confirm_save if self.sidebar.side is not None else None
+            if not await self.prepare_leave(confirm=confirm):
+                return
         if not current():
             return
-        if not await self.view.window.dialog(toga.ConfirmDialog('Delete ' + PurePosixPath(path).name + '?',
-                'Permanently delete this item and its contents? Links are not rewritten.')) or not current():
+        title = 'Delete ' + PurePosixPath(path).name + '?'
+        message = 'Permanently delete this item and its contents? Links are not rewritten.'
+        if self.sidebar.side is not None:
+            answer = await self.sidebar.choose_action(DocumentDialog(title, message, delete=True), self.view.window)
+            confirmed = answer is True or answer == 'delete'
+        else:
+            confirmed = await self.view.window.dialog(toga.ConfirmDialog(title, message))
+        if not confirmed or not current():
             return
         self.file_command_busy = True
         try:

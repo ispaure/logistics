@@ -14,6 +14,8 @@ class NotesDrawers:
         self.view = toga.Box(children=[article], style=Pack(direction=ROW, flex=1))
         self.policy = SimpleNamespace(sidebar_width=320, gap=0)
         self.overlay = None
+        self.action_choice = None
+        self.action_overlay = None
         self.side = None
         self.wide = False
         self.wide_files_open = True
@@ -65,6 +67,8 @@ class NotesDrawers:
             apply()
         if self.overlay is not None:
             self.overlay.reposition()
+        if self.action_overlay is not None:
+            self.action_overlay.reposition()
 
     def layout_files(self):
         expanded = self.wide and self.wide_files_open
@@ -142,7 +146,54 @@ class NotesDrawers:
             begin_page_slide(proxy, -1 if side == 'files' else 1)
             finish_page_slide(proxy, -1 if side == 'files' else 1)
 
+    async def choose_action(self, dialog, window):
+        drawer = self.overlay
+        backend = type(self.sidebar._impl).__module__
+        if drawer is None or not backend.startswith(('toga_iOS.', 'toga_android.')):
+            return await window.dialog(dialog)
+        if self.action_choice is not None:
+            return 'cancel'
+
+        result = self.action_choice = self.app.loop.create_future()
+        def finish(value):
+            if not result.done():
+                result.set_result(value)
+
+        from .appearance import surface
+        content = toga.Box(style=Pack(direction='column', margin=12))
+        content.add(toga.Label(dialog.title, style=Pack(font_weight='bold', margin_bottom=4)),
+                    toga.Label(dialog.message, style=Pack(margin_bottom=8)))
+        for label, value, role in dialog.choices:
+            def select(widget, value=value, **kwargs):
+                finish(value)
+            content.add(surface(toga.Button(label, on_press=select, style=Pack(height=44)),
+                                radius=8, background='transparent',
+                                foreground='destructive' if role == 2 else 'text', outlined=False))
+        panel = toga.ScrollContainer(content=content, horizontal=False)
+        panel.overlay_height = 76 + 44 * len(dialog.choices)
+        panel.hide = lambda: finish('cancel')
+        surface(panel, radius=12, background='surface', outlined=False)
+        if drawer.outside_tap is not None:
+            drawer.outside_tap.enabled = False
+        choice = None
+        try:
+            choice = self.action_overlay = SpeechOverlay(panel, self.view, self.app, dim=True, centered=True,
+                                   label='File actions', android_radius=12)
+            return await result
+        finally:
+            if choice is not None:
+                choice.close()
+            if drawer.outside_tap is not None:
+                drawer.outside_tap.enabled = True
+            self.action_choice = self.action_overlay = None
+
+    def cancel_action(self):
+        if self.action_choice is not None and not self.action_choice.done():
+            self.action_choice.set_result('cancel')
+
     def swipe(self, direction):
+        if self.action_choice is not None:
+            return False
         if (self.side == 'files' and direction < 0) or (self.side == 'links' and direction > 0):
             self.show_detail()
             return True
@@ -247,6 +298,7 @@ class NotesDrawers:
             self.install_swipe(self.sidebar if self.side == 'files' else self.links)
 
     def show_detail(self):
+        self.cancel_action()
         if self.side is not None:
             self.on_close()
         self.side = None

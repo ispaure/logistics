@@ -168,6 +168,15 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 if orientation == 'portrait':
                     await asyncio.sleep(.45)
                     await self.capture_header(evidence / 'notes-files-portrait.png')
+                    drawer = owner.sidebar.overlay
+                    pending = asyncio.create_task(owner.file_actions('World'))
+                    await self.wait_for(lambda: owner.sidebar.action_overlay is not None,
+                        'File actions did not open above Files')
+                    await self.capture_header(evidence / 'notes-file-actions-portrait.png')
+                    cancel = owner.sidebar.action_overlay.panel.content.children[-1]
+                    await self.touch_native(cancel._impl.native)
+                    await asyncio.wait_for(pending, timeout=5)
+                    assert owner.sidebar.overlay is drawer and owner.sidebar.side == 'files'
                 owner.sidebar.show_detail()
                 owner.sidebar.finish_dismissals()
                 await asyncio.sleep(.4)

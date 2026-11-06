@@ -1004,6 +1004,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
     def back_action(self):
         """Close floating panels before retracing note links."""
+        if self.sidebar.action_choice is not None:
+            return self.sidebar.cancel_action
         if self.sidebar.sidebar_open:
             return self.sidebar.show_detail
         opening = getattr(self, 'page_loading', None)

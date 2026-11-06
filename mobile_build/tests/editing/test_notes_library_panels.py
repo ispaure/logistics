@@ -313,20 +313,21 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 owner.return_from_file_action()
         self.run_async(exercise())
 
-    def test_file_action_menu_cancel_restores_drawer_dismissed_by_native_dialog(self):
+    def test_file_action_menu_cancel_keeps_the_original_drawer(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
             await owner.open_note('Vault/Home.md')
             owner.sidebar.show_sidebar()
             history = list(owner.history)
+            drawer = owner.sidebar.overlay
             async def dismiss(dialog):
-                self.assertIsNone(owner.sidebar.overlay)
+                self.assertIs(owner.sidebar.overlay, drawer)
                 self.assertEqual(owner.sidebar.retiring, [])
-                owner.sidebar.show_detail()
-                return 'cancel'  # Android Back and the native Cancel button.
+                return 'cancel'
             with patch.object(self.app.main_window, 'dialog', new=dismiss):
                 await owner.file_actions('Vault/Projects/Plan.MD')
             self.assertEqual(owner.sidebar.side, 'files')
+            self.assertIs(owner.sidebar.overlay, drawer)
             self.assertEqual(owner.path, 'Vault/Home.md')
             self.assertEqual(owner.history, history)
         self.run_async(exercise())
@@ -344,7 +345,6 @@ class NotesLibraryPanelTests(unittest.TestCase):
                             owner.sidebar.show_sidebar()
                             history = list(owner.history)
                             async def choose(dialog):
-                                owner.sidebar.show_detail()  # Native popup dismissed by the alert.
                                 return action
                             with patch.object(self.app.main_window, 'dialog', new=choose):
                                 await owner.file_actions('Vault/Projects/Plan.MD')

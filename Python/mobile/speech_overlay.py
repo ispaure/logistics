@@ -39,7 +39,7 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False, edge_panel=False, android_radius=0):
+    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False, edge_panel=False, android_radius=0, centered=False):
         self.leading = leading
         self.full_height = full_height or leading
         self.label = label
@@ -47,6 +47,7 @@ class SpeechOverlay:
         self.dim = dim
         self.edge_panel = edge_panel
         self.android_radius = android_radius
+        self.centered = centered
         self.backdrop = None
         self.owner = owner
         self.anchor = anchor
@@ -124,6 +125,12 @@ class SpeechOverlay:
                       if self.full_height else self.panel.overlay_height)
             gutter = 0 if self.edge_panel else 12
             x = left + gutter if self.leading else right - width - gutter
+            if self.centered:
+                top = float(insets.top)
+                bottom = float(bounds.height - insets.bottom)
+                height = min(height, max(1, bottom - top - 24))
+                top += (bottom - top - height) / 2
+                x = (left + right - width) / 2
             frame = CGRect((x, top), (width, height))
             if native.frame != frame:
                 native.frame = frame
@@ -171,6 +178,8 @@ class SpeechOverlay:
                   if self.full_height else self.container.scale_in(self.panel.overlay_height))
         if self.edge_panel:
             height = max(1, edge_bounds().height())
+        elif self.centered:
+            height = min(height, max(1, edge_bounds().height() - self.container.scale_in(24)))
         self.container.set_content(self.panel._impl)
         self.container.resize_content(width, height)
         self.popup = PopupWindow(root, width, height, True)
@@ -202,9 +211,10 @@ class SpeechOverlay:
         self.popup.setOnDismissListener(self.dismissal)
         if self.leading:
             self.popup.setAnimationStyle(0)  # Host owns drawer motion and E Ink policy.
-        self.popup.showAtLocation(owner._impl.native, Gravity.TOP | (Gravity.LEFT if self.leading else Gravity.END),
+        self.popup.showAtLocation(owner._impl.native, Gravity.CENTER if self.centered else
+                                  Gravity.TOP | (Gravity.LEFT if self.leading else Gravity.END),
                                   0 if self.edge_panel else self.container.scale_in(12),
-                                  edge_bounds().top if self.edge_panel else self.container.scale_in(96))
+                                  edge_bounds().top if self.edge_panel else 0 if self.centered else self.container.scale_in(96))
         if self.dim:
             from android.view import WindowManager
             decor = root.getRootView()
@@ -224,6 +234,8 @@ class SpeechOverlay:
                       if self.full_height else self.container.scale_in(self.panel.overlay_height))
             if self.edge_panel:
                 height = max(1, edge_bounds().height())
+            if self.centered:
+                height = min(height, max(1, edge_bounds().height() - self.container.scale_in(24)))
             self.container.resize_content(width, height)
             if self.edge_panel:
                 self.popup.update(0, edge_bounds().top, width, height)
