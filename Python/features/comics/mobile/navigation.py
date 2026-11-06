@@ -56,8 +56,26 @@ class ComicNavigation:
         return start > 0 or (self.page == start and self.split and self.half == 1)
 
     def load(self, start, *, viewport, mode='auto', split_wide=True, anchor_right=False):
+        """Load a spread and stage its position until native rendering succeeds."""
         requested_half, self.requested_half = self.requested_half, None
         relayout = self.layout_reload
+        indices, data = self._read_spread(start, viewport=viewport, mode=mode, anchor_right=anchor_right)
+        wide = self.sizes[start][0] > self.sizes[start][1]
+        split = split_wide and not anchor_right and wide and viewport[1] > viewport[0] > 1
+        if requested_half is not None:
+            half = requested_half
+        elif self.page == start:
+            half = self.resume_half if relayout else self.half
+        else:
+            half = 0
+        self.prepared_relayout = relayout
+        self.prepared_right_anchored = anchor_right
+        self.prepared_viewport = viewport
+        self.prepared = (start, half if split else 0, split)
+        return indices, data
+
+    def _read_spread(self, start, *, viewport, mode, anchor_right=False):
+        """Read candidate pages and cache dimensions without staging navigation."""
         if mode not in {'single', 'auto', 'double'}:
             raise ValueError('Choose single, auto or double page layout.')
         if not 0 <= start < self.count:
@@ -85,14 +103,6 @@ class ComicNavigation:
             indices = (start,)
         if start not in indices:
             indices = (start,)
-        wide = self.sizes[start][0] > self.sizes[start][1]
-        split = split_wide and not anchor_right and wide and viewport[1] > viewport[0] > 1
-        half = requested_half if requested_half is not None else ((self.resume_half if relayout else self.half) if self.page == start else 0)
-        self.prepared_relayout = relayout
-        self.prepared_right_anchored = anchor_right
-        self.prepared_viewport = viewport
-        self.prepared = (start, half if split else 0, split)
-        # Commit only after every required page has loaded and validated.
         return indices, [data[index] for index in indices]
 
     def previous(self, start, *, viewport, mode='auto'):
@@ -103,7 +113,7 @@ class ComicNavigation:
         if self.right_anchored and not self.right_to_left:
             return max(0, start - (2 if len(self.visible) == 2 else 1))
         if start >= 2 and mode != 'single':
-            indices, _ = self.load(start - 2, viewport=viewport, mode=mode)
+            indices, _ = self._read_spread(start - 2, viewport=viewport, mode=mode)
             if len(indices) == 2:
                 return start - 2
         return start - 1
