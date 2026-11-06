@@ -159,7 +159,7 @@ python3 dev.py test desktop --profile smoke --mode fast
 python3 dev.py test mobile --profile daily
 python3 dev.py test shared --profile full
 python3 dev.py test bridge --profile smoke --mode fast
-python3 dev.py test-owner resources --profile daily
+python3 dev.py test-owner document-services --profile daily
 ```
 
 Profiles are cumulative: `smoke` selects SMOKE, `daily` adds REGRESSION, `full`
