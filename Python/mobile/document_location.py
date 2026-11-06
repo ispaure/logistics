@@ -200,7 +200,9 @@ def mount_apple_title(view, controller, title):
         tools.close()
     bounds = controller.view.bounds.size
     available = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
-    gutters = ((32 if edge else 16) + sum((button.style.width or 48) + 8 for button in controls)
+    control_widths = (button.style.width for button in controls)
+    gutters = ((32 if edge else 16) + sum((width if isinstance(width, (int, float)) else 48) + 8
+                                        for width in control_widths)
                if controls else (32 if edge else 216))
     width = max(44, available - gutters)
     state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width, leading)
