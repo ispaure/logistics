@@ -91,7 +91,7 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertEqual([button.style.width for button in controls], [29] * 4)
             self.assertEqual([button.style.height for button in controls], [48] * 4)
             title_controls = (owner.close_button, owner.menu, owner.links_button)
-            self.assertEqual([button.style.width for button in title_controls], [29] * 3)
+            self.assertEqual([button.style.width for button in title_controls], [38] * 3)
             owner.reflow(1100)
             self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
             self.assertEqual([button.style.width for button in controls], [48] * 4)

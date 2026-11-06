@@ -88,17 +88,25 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 title = owner.view._document_title_view
                 title_frame = title.convertRect(title.bounds, toView=window)
                 article_frame = owner.web._impl.native.convertRect(owner.web._impl.native.bounds, toView=window)
-                for button in (owner.menu, owner.links_button):
+                for button in owner.view._document_title_controls:
                     control = button._impl.native
                     rect = control.convertRect(control.bounds, toView=window)
-                    assert abs(float(rect.size.width) - owner.back_button.style.width) <= 1
+                    assert abs(float(rect.size.width) - button.style.width) <= 1
                     midpoint = rect.origin.y + rect.size.height / 2
                     assert title_frame.origin.y <= midpoint <= title_frame.origin.y + title_frame.size.height
                 assert title_frame.origin.y + title_frame.size.height <= article_frame.origin.y
                 assert header.parent is owner.article
                 controller = self.native_host.adapter.content_controller(owner.destination)
                 from .fixtures import ios_toolbar_items
-                assert ios_toolbar_items(controller, leading=True) == [owner.close_button._native_reader_close_item]
+                from mobile.ios_toolbar import vertical_edge
+                close_item = owner.close_button._native_reader_close_item
+                if vertical_edge(controller):
+                    assert close_item is not None
+                    assert ios_toolbar_items(controller, leading=True) == [close_item]
+                else:
+                    assert close_item is None
+                    assert header.children[0] is owner.close_button
+                    assert not ios_toolbar_items(controller, leading=True)
                 evidence = output / 'viewer-layout'
                 evidence.mkdir(exist_ok=True)
                 if owner.sidebar.expanded:
@@ -120,9 +128,23 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 if drive_touches:
                     assert await owner.open_note(deep_note.relative_to(root).as_posix())
                     await asyncio.sleep(.6)
+                    shortened = owner._breadcrumbs_shortened
+                    if shortened:
+                        await capture_window(self, evidence / ('breadcrumbs-fitted-' + orientation + '.png'))
+                        await self.real_swipe(owner, 1, strip=scroll)
+                        for _ in range(60):
+                            if (not owner._breadcrumbs_shortened and scroll.max_horizontal_position > 20
+                                    and scroll.horizontal_position <= 1):
+                                break
+                            await asyncio.sleep(.05)
+                        assert not owner._breadcrumbs_shortened, 'Horizontal drag did not expand breadcrumb labels'
+                        assert owner.sidebar.side is None
+                        assert scroll.horizontal_position <= 1
+                        await capture_window(self, evidence / ('breadcrumbs-expanded-' + orientation + '.png'))
+                    else:
+                        self.assert_breadcrumb_end(owner)
                     assert scroll.max_horizontal_position > 20
-                    self.assert_breadcrumb_end(owner)
-                    for direction in (1, -1):
+                    for direction in ((-1, 1) if shortened else (1, -1)):
                         before = scroll.horizontal_position
                         await self.real_swipe(owner, direction, strip=scroll)
                         assert (before - scroll.horizontal_position) * direction > 5, (
@@ -176,9 +198,12 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
                     title_width=float(title_frame.size.width), document_width=float(article_frame.size.width)))
             close = owner.close_button._native_reader_close_item
-            from rubicon.objc import ObjCClass
-            assert ObjCClass('UIApplication').sharedApplication.sendAction_to_from_forEvent_(
-                close.action, close.target, close, None)
+            if close is None:
+                owner.close_button._impl.native.sendActionsForControlEvents_(1 << 6)
+            else:
+                from rubicon.objc import ObjCClass
+                assert ObjCClass('UIApplication').sharedApplication.sendAction_to_from_forEvent_(
+                    close.action, close.target, close, None)
             for _ in range(100):
                 if not owner.valid():
                     break

@@ -117,7 +117,7 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 titles = label.getParent()
                 density = label.getResources().getDisplayMetrics().density
                 margins = titles.getLayoutParams()
-                unit = round(owner.back_button.style.width * density)
+                unit = round(owner.menu.style.width * density)
                 assert margins.getMarginStart() == 2 * unit
                 assert margins.getMarginEnd() == unit
                 close_rect = self.native_rect(owner.close_button._impl.native)
@@ -135,6 +135,15 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 assert popup is not None and popup.getMenu().size() > 0, 'Actions menu did not open'
                 await self.capture_header(evidence / ('notes-menu-' + orientation + '.png'))
                 popup.dismiss()
+                if owner._breadcrumbs_shortened:
+                    crumb_x, _, crumb_width, _ = self.native_rect(owner.breadcrumbs.children[0]._impl.native)
+                    fraction = (crumb_x + crumb_width / 2 + 65 * density - rects[2][0]) / scroll_width
+                    await self.touch_native(scroll._impl.native, fraction=fraction, swipe=1)
+                    await self.wait_for(lambda: not owner._breadcrumbs_shortened
+                        and scroll.max_horizontal_position > 0,
+                        'Horizontal drag did not expand breadcrumb labels')
+                    assert not owner.sidebar.sidebar_open
+                    await asyncio.sleep(.3)
                 before = scroll.horizontal_position
                 for _ in range(20):
                     if scroll.horizontal_position <= 1:
