@@ -250,14 +250,20 @@ class NotebookWorkspace(qt.QWidget):
     def perform(self, action):
         if self.busy:
             return
-        if action['op'] == 'export':
+        try:
+            op = validate_action(action)
+        except ValueError as failure:
+            # The bridge consumed this envelope; release its JS queue even
+            # when validation rejects it before dispatch or busy ownership.
+            self.web.page().runJavaScript(update_script(self.state(), str(failure)))
+            return
+        if op == 'export':
             return self.export_document()
-        if action['op'] in {'save', 'save-as'}:
-            return self.save_document(save_as=action['op'] == 'save-as')
+        if op in {'save', 'save-as'}:
+            return self.save_document(save_as=op == 'save-as')
         self.busy = True
         error = ''
         try:
-            op = validate_action(action)
             if op == 'page-previews':
                 from ..previews import page_previews
                 rows = page_previews(self.editor.notebook, action['start'])
