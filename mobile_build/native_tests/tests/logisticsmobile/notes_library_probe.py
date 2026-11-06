@@ -220,7 +220,8 @@ class NotesLibraryProbe(LogisticsMobile):
             await capture_window(self, evidence / 'notes-files.png')
             assert await owner.open_note('Home.md')
             await asyncio.sleep(.4)
-            assert owner.secondary.parent is None if owner.host.apple else owner.secondary.parent is owner.view
+            expected_parent = owner.article if owner.sidebar.expanded else owner.view
+            assert owner.secondary.parent is expected_parent
             await capture_window(self, evidence / 'notes-reading.png')
             session_ids = set(self.workspace.sessions)
             await self.check_file_previews(owner, root, evidence)
