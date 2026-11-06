@@ -35,6 +35,62 @@ class _PendingWorkerPage(qt.QWidget):
 
 
 class MainWindowNavigationTests(MainWindowFixture, QtTestCase):
+    def test_fixture_retires_worker_before_destroying_its_page(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from pathlib import Path
+        from threading import Event
+        from unittest import TestResult
+
+        for fail in (False, True):
+            with self.subTest(failing_test_body=fail), ThreadPoolExecutor(max_workers=1) as executor:
+                started, stop = Event(), Event()
+                pages_at_stop, finished_at_destruction = [], []
+
+                class WorkerCase(MainWindowFixture, QtTestCase):
+                    def runTest(case):
+                        case.root = Path(case.temporary_directory().name)
+                        source = case.root / 'fixture.txt'
+                        source.write_text('synthetic worker input')
+                        contribution = case.contribution('Worker', 'worker')
+                        window = case.window((contribution,))
+                        page = window._feature_pages[('feature', 'worker')]
+
+                        def work():
+                            started.set()
+                            if not stop.wait(5):
+                                raise TimeoutError('Fixture never requested worker shutdown')
+                            return source.read_text()
+
+                        case.future = page.future = executor.submit(work)
+
+                        def prepare_close():
+                            if not stop.is_set():
+                                pages_at_stop.append(main_window.registry.get_pages())
+                                stop.set()
+                            return case.future.done()
+
+                        def destroyed():
+                            finished_at_destruction.append(case.future.done())
+                            stop.set()  # Let the regression report premature destruction safely.
+
+                        page.prepare_close = prepare_close
+                        page.destroyed.connect(destroyed)
+                        case.assertTrue(started.wait(5))
+                        case.assertFalse(case.future.done())
+                        if fail:
+                            case.fail('intentional failure with a running worker')
+
+                case = WorkerCase()
+                result = case.run(TestResult())
+                self.assertEqual(result.errors, [])
+                self.assertEqual(len(result.failures), int(fail), result.failures)
+                if fail:
+                    self.assertIn('intentional failure with a running worker', result.failures[0][1])
+                self.assertEqual(finished_at_destruction, [True])
+                self.assertEqual(pages_at_stop, [case._window_contributions])
+                self.assertEqual(case.future.result(), 'synthetic worker input')
+                self.assertFalse(case.root.exists())
+
     def test_menus_follow_feature_workspace_and_restore_for_plain_destinations(self):
         from commonUtils.ui.workspaces.workspace import Workspace
         def create(parent):
