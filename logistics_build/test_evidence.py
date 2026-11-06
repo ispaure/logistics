@@ -8,6 +8,8 @@ import platform
 import subprocess
 import sys
 
+from commonUtils.runtime.streams import file_sha256
+
 HOST_SUITES = {'commonutils', 'logistics', 'portable-contracts', 'desktop-ui', 'mobile-host', 'release-tooling', 'manager-contracts', 'compression-parity'}
 
 
@@ -77,7 +79,7 @@ def inputs(root, scopes):
         if not path.is_file():
             raise UnverifiableInputs('Test input is missing: ' + name)
         digest.update(name.encode() + b'\0')
-        digest.update(hashlib.sha256(path.read_bytes()).digest())
+        digest.update(bytes.fromhex(file_sha256(path)))
     return digest.hexdigest()
 
 
