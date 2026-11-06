@@ -50,6 +50,59 @@ var active context.CancelFunc
 var admitted = map[string]bool{}
 var clients = map[string]fs.Fs{}
 var staleFilesystemCache bool
+
+// A backend owns the context retained by OAuth and other background workers.
+// Requests temporarily connect cancellation to it, but normal completion does
+// not end its lifetime. Only the serial operation owner mutates clients.
+type cachedClient struct {
+	fs.Fs
+	ctx  context.Context
+	stop context.CancelFunc
+}
+
+type backendCancellation struct {
+	ctx    context.Context
+	detach func() bool
+	stop   context.CancelFunc
+}
+
+type operationBackends struct {
+	mu       sync.Mutex
+	finished bool
+	hooks    []backendCancellation
+}
+
+type operationBackendsKey struct{}
+
+func followBackendCancellation(ctx context.Context, stop context.CancelFunc) {
+	owner, _ := ctx.Value(operationBackendsKey{}).(*operationBackends)
+	if owner == nil {
+		context.AfterFunc(ctx, stop)
+		return
+	}
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if owner.finished {
+		stop()
+		return
+	}
+	owner.hooks = append(owner.hooks, backendCancellation{ctx, context.AfterFunc(ctx, stop), stop})
+}
+
+func (owner *operationBackends) finish() {
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	owner.finished = true
+	for _, hook := range owner.hooks {
+		// Detach cannot recall an already-started callback. Also cover cancelled
+		// contexts whose callback has not yet started, before normal request stop.
+		if !hook.detach() || hook.ctx.Err() != nil {
+			hook.stop()
+		}
+	}
+	owner.hooks = nil
+}
+
 var allowed = map[string]string{
 	"crypt":    "remote password password2 filename_encryption directory_name_encryption filename_encoding suffix",
 	"drive":    "token client_id client_secret scope root_folder_id team_drive",
@@ -100,10 +153,18 @@ func operation(action string) (context.Context, func()) {
 		stop()
 		ctx, stop = context.WithTimeout(context.Background(), duration)
 	}
+	backends := &operationBackends{}
+	ctx = context.WithValue(ctx, operationBackendsKey{}, backends)
 	cancellation.Lock()
 	active = stop
 	cancellation.Unlock()
-	return ctx, func() { stop(); cancellation.Lock(); active = nil; cancellation.Unlock() }
+	return ctx, func() {
+		cancellation.Lock()
+		defer cancellation.Unlock()
+		active = nil
+		backends.finish()
+		stop()
+	}
 }
 
 func validPath(p string) bool {
@@ -189,16 +250,27 @@ func shutdownClients() {
 	comparisonState.Lock()
 	comparisonState.current = nil
 	comparisonState.Unlock()
-	// Cache eviction can itself disconnect network clients. Defer it until
-	// the next explicit online operation, before it creates a filesystem.
-	staleFilesystemCache = true
 	cryptCipherMu.Lock()
 	clear(cryptCiphers)
 	cryptCipherMu.Unlock()
+	retireBackendClients()
+}
+
+func retireBackendClients() {
+	// Crypt backends can share a backing Fs in rclone's global cache. Retire
+	// the entire client view together so none retains a cancelled backing Fs.
+	// Cache eviction may disconnect clients; only the next online operation
+	// does that work, never local credential publication.
+	staleFilesystemCache = true
 	// Detach synchronously, then retire old network clients independently. A
 	// backend's disconnect must never delay a local credential import/unlock.
 	retired := clients
 	clients = map[string]fs.Fs{}
+	for _, client := range retired {
+		if cached, ok := client.(*cachedClient); ok {
+			cached.stop()
+		}
+	}
 	if len(retired) > 0 {
 		go retireClients(retired)
 	}
@@ -317,15 +389,44 @@ func clearStaleFilesystemCache() {
 }
 
 func remote(ctx context.Context, name string) (fs.Fs, error) {
+	return remoteRoot(ctx, name, "")
+}
+
+// Roots are supplied only by the validated crypt connection, never by a raw
+// request. Rooted backing clients share the same lifetime/cache owner.
+func remoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !admitted[name] {
 		return nil, errors.New("import a credential package first")
 	}
+	for _, client := range clients {
+		if cached, ok := client.(*cachedClient); ok && cached.ctx.Err() != nil {
+			retireBackendClients()
+			break
+		}
+	}
 	clearStaleFilesystemCache()
+	// A cached crypt Fs may use a backing Fs created by a different client.
+	// Request cancellation must reach that owner's retained OAuth context too.
+	for _, client := range clients {
+		if cached, ok := client.(*cachedClient); ok {
+			followBackendCancellation(ctx, cached.stop)
+		}
+	}
 	kind, _ := store.GetValue(name, "type")
 	if kind == "crypt" && ctx.Value(mirrorLogicalKey{}) != true {
 		return nil, errors.New("crypt uses the bounded encrypted-copy interface")
 	}
-	if f := clients[name]; f != nil {
+	key := name
+	if root != "" {
+		key += ":" + root
+	}
+	if f := clients[key]; f != nil {
+		if cached, ok := f.(*cachedClient); ok {
+			return cached.Fs, nil
+		}
 		return f, nil
 	}
 	info, err := fs.Find(kind)
@@ -336,13 +437,44 @@ func remote(ctx context.Context, name string) (fs.Fs, error) {
 	options := fs.ConfigMap(info.Prefix, info.Options, "", nil)
 	// Retain registered backend defaults, but admit only our validated settings.
 	options.ClearGetters(configmap.PriorityNormal)
+	if kind == "crypt" {
+		_, backing, backingRoot, _, err := cryptConnection(name)
+		if err != nil {
+			return nil, err
+		}
+		backingFs, err := remoteRoot(ctx, backing, backingRoot)
+		if err != nil {
+			return nil, err
+		}
+		backingPath := backing + ":" + backingRoot
+		// rclone cache.Get deliberately strips cancellation before constructing
+		// a backing Fs. Populate it through our generation-bound factory first,
+		// then pin it until crypt takes its own pin. Preserve package aliases.
+		backingFs, err = cache.GetFn(ctx, backingPath, func(context.Context, string) (fs.Fs, error) {
+			return backingFs, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		cache.Pin(backingFs)
+		defer cache.Unpin(backingFs)
+		options.AddGetter(configmap.Simple{"remote": backingPath}, configmap.PriorityNormal)
+	}
 	options.AddGetter(values, configmap.PriorityNormal)
 	options.ClearSetters().AddSetter(values)
-	f, err := info.NewFs(ctx, name, "", options)
-	if err != nil {
+	lifetime, stop := context.WithCancel(context.WithoutCancel(ctx))
+	followBackendCancellation(ctx, stop)
+	f, err := info.NewFs(lifetime, name, root, options)
+	if err != nil || ctx.Err() != nil || lifetime.Err() != nil {
+		stop()
+		// A failed constructor may already have cached a backing filesystem.
+		retireBackendClients()
+		if f != nil {
+			go retireClients(map[string]fs.Fs{name: f})
+		}
 		return nil, errors.New("could not connect; check credentials and network")
 	}
-	clients[name] = f
+	clients[key] = &cachedClient{Fs: f, ctx: lifetime, stop: stop}
 	return f, nil
 }
 

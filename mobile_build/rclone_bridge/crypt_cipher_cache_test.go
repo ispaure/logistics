@@ -247,3 +247,66 @@ func TestPrepareFailedBatchDoesNotPublishPartialCiphers(t *testing.T) {
 		t.Fatal("failed batch published partial cipher results")
 	}
 }
+
+func TestCipherPublicationWithConcurrentTokenRefresh(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	requireFixtureReply(t, "import", importFixtureInput(t, "RefreshFixture", "drive", syntheticOAuthToken))
+	writer := store.connection("RefreshFixture")
+	_, finish, ok := tryCredentialLoad()
+	if !ok {
+		t.Fatal("publication scope unavailable")
+	}
+	defer finish()
+	start, done := make(chan struct{}), make(chan struct{})
+	tokens := []string{`{"access_token":"synthetic-one"}`, `{"access_token":"synthetic-two"}`}
+	go func() {
+		defer close(done)
+		<-start
+		for i := 0; i < 2000; i++ {
+			writer.Set("token", tokens[i%2])
+		}
+	}()
+	close(start)
+	for i := 0; i < 2000; i++ {
+		publishCryptCiphers(nil)
+	}
+	<-done
+	value, _ := store.GetValue("RefreshFixture", "token")
+	if !admitted["RefreshFixture"] || value != tokens[1] {
+		t.Fatal("publication lost package or final token")
+	}
+}
+
+func TestCredentialPublicationWithConcurrentTokenRefresh(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	requireFixtureReply(t, "import", importFixtureInput(t, "RefreshFixture", "drive", syntheticOAuthToken))
+	writer := store.connection("RefreshFixture")
+	before, err := connectionIdentity("RefreshFixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := importFixtureInput(t, "Unrelated", "memory", "")
+	start, done := make(chan struct{}), make(chan struct{})
+	tokens := []string{`{"access_token":"synthetic-one"}`, `{"access_token":"synthetic-two"}`}
+	go func() {
+		defer close(done)
+		<-start
+		for i := 0; i < 2000; i++ {
+			writer.Set("token", tokens[i%2])
+		}
+	}()
+	// Even on an assertion failure, do not race cleanup with the writer.
+	defer func() { <-done }()
+	close(start)
+	for i := 0; i < 50; i++ {
+		requireFixtureReply(t, "import", input)
+	}
+	<-done
+	value, _ := store.GetValue("RefreshFixture", "token")
+	after, err := connectionIdentity("RefreshFixture")
+	if !admitted["RefreshFixture"] || !admitted["Unrelated"] || value != tokens[1] || before != after || err != nil {
+		t.Fatal("publication lost package, token or identity", err)
+	}
+}

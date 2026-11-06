@@ -238,13 +238,21 @@ func publishCredentialSets() {
 	view.values.Label = latestCredential
 	admitted = map[string]bool{}
 	for _, set := range credentialSets {
+		// The publication view is detached. Live getters and token callbacks
+		// still route to the origin, whose mutex owns every mutable setting.
+		set.storage.mu.Lock()
 		for name, alias := range set.aliases {
 			if values := set.storage.values.Remotes[name]; values != nil {
-				view.values.Remotes[alias] = values
+				copied := make(map[string]string, len(values))
+				for key, value := range values {
+					copied[key] = value
+				}
+				view.values.Remotes[alias] = copied
 				view.origins[alias] = credentialOrigin{set.storage, name}
 				admitted[alias] = true
 			}
 		}
+		set.storage.mu.Unlock()
 	}
 	store = view
 	credentialView = view
