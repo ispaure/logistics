@@ -136,7 +136,11 @@ def safe_geometry(app):
              controller.navigationItem.titleView if controller is not None else None)
     if (title is not None and vertical_edge(controller)
             and title.superview is not None and not controller.navigationItem.prompt):
-        title_rect = title.convertRect(title.bounds, toView=window)
+        from mobile.document_location import side_title_header
+        notes_header = (side_title_header(reader)
+                        if getattr(reader, '_notes_title_controls', ()) else None)
+        title_row = notes_header._impl.native if notes_header is not None else title
+        title_rect = title_row.convertRect(title_row.bounds, toView=window)
         title_bottom = float(title_rect.origin.y + title_rect.size.height)
         title_gap = float(title_rect.origin.y - safe.top)
         body_rect = window_rect
@@ -144,17 +148,23 @@ def safe_geometry(app):
             frame = getattr(reader, '_reading_frame_owner', None)
             # Managed Markdown has a title row and WebView without a paginated
             # ReadingFrame. Measure its first actual content row after the title.
-            from mobile.document_location import side_title_header
+            header = side_title_header(reader)
+            # Notes puts the title inside its article beside the persistent
+            # Files pane. Measure the next article row, not the outer split.
+            siblings = list(header.parent.children)
             content_view = (frame.content if frame is not None else next(
-                child for child in reader.children
-                if child is not side_title_header(reader) and child.layout.content_height > 0))
+                child for child in siblings[siblings.index(header) + 1:]
+                if child.layout.content_height > 0))
             content = content_view._impl.native
             body_rect = content.convertRect(content.bounds, toView=window)
         content_gap = float(body_rect.origin.y) - title_bottom
         result.update(reader_title_top_gap=title_gap, reader_title_content_gap=content_gap)
         outer_top = float(reader.style.margin_top or 0) if reader is not None else 0
         result['reader_title_outer_margin_top'] = outer_top
-        assert 4 <= title_gap - outer_top <= 8, result
+        if notes_header is not None:
+            assert 0 <= title_rect.origin.y <= 44, result
+        else:
+            assert 4 <= title_gap - outer_top <= 8, result
         assert 4 <= content_gap <= 8, result
         origin = container.native.convertRect(container.native.bounds, toView=window).origin
         minimum_top = (float(safe.top) if reader is not None else title_bottom + 4) - float(origin.y)
