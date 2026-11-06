@@ -36,9 +36,13 @@ supported archives except `.cbz`, leaving comic activation to Comics. Explicit
 Archives actions remain available for CBZ. Passive **Archive Contents** details
 are shared file-model hooks and do not require Archives to be enabled.
 
-`open_archive_window` reuses a live document with the same absolute opened or
-requested path, including while its first header read is pending. The application
-hosts it in Documents when available; independent browsers can use a standalone
+`ui/window.py:open_archive_window` reuses a live, non-closing document by its
+current absolute archive path. It falls back to the initial requested path only
+while no archive has been admitted, including pending or failed initial opens.
+After a successful switch, opening the old path no longer raises the switched
+window. `Python/tests/archives/test_archive_workspace_ui.py` covers standalone
+reuse after a switch. The application hosts the window in Documents when
+available; independent browsers can use a standalone
 window. Each archive retains its own page/session. Closing the originating browser
 stops its controller from routing or refreshing, while retained documents remain
 usable. Feature disablement removes new admission through launchers/actions;

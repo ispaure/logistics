@@ -76,6 +76,13 @@ installations may need additional filesystem permissions and ownership handling.
   removing this recovery copy. If the final directory move fails, Logistics
   attempts to restore the original directory.
 
+`package_publication.require_package_ready()` blocks clear, sync, rebuild and
+restore while the package directory retains recovery artifacts. Reviewed sync
+checks again in `before_start`, so recovery that appears during review prevents
+launch. The guard preserves the retained generation for explicit recovery.
+`test_plex.py` and `test_plex_publication.py` cover blocked actions and the
+launch-time recheck.
+
 Staging and retained recovery data require additional disk space. Preferences
 and Windows registry imports are separate from the data-directory swap; they
 are not part of a single transaction. Native registry/7-Zip operations and Linux

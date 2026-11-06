@@ -39,12 +39,14 @@ candidate and retains only configured roots that exist as directories.
 
 `ui/dialogs.py` owns review invalidation when the path or recursion changes.
 `review_conflicts` skips symbolic-link candidates, captures lstat identities and
-compares SHA-256 hashes. Apply rechecks both identities and hashes before unlinking
-the copy. This is a best-effort filesystem recheck, not an atomic transaction
-with Dropbox's sync client.
+compares SHA-256 hashes. `conflicts.py:delete_reviewed_conflicts` checks both
+reviewed identities before hashing and rechecks them after equal hashes,
+immediately before unlinking the copy. An observed edit or replacement fails
+that item and preserves both files. Another change can still occur between the
+last check and unlinking.
 
 `Python/tests/integrations/test_dropbox.py` covers deletion of an identical copy,
-preservation of unique content, and changes to either file after review. These
+preservation of unique content, and edits or replacements after hashing. These
 local-file fixtures do not verify a real Dropbox account, OS source discovery or
 service-side recovery. The November 4 documentation audit read source/tests only;
 it did not rerun tests or establish native acceptance.

@@ -69,6 +69,11 @@ desktop launching still require platform validation.
 requires a local entry and lazily constructs `ui/folder_widget.py`. That widget
 owns the library selector and reviewed export route through `ui/export_dialog.py`.
 The BOOX button in this route prefills the destination after checking the mount.
+On confirmation, `ExportDialog` consumes its review before handing the captured
+plan to the export worker. Failure or cancellation requires a fresh review.
+Cancellation leaves completed changes in place, while a failed staging pass
+preserves existing exports and skips pruning. `Python/tests/calibre/test_calibre.py`
+covers fresh review after a failed apply.
 `ui/manage_dialog.py` retains an older confirmation-based BOOX workflow; do not
 confuse that direct facade call with the registered folder widget's review dialog.
 There is no root `folder_widget.py` compatibility module.

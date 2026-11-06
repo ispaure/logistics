@@ -101,6 +101,13 @@ downloader module; they retain the same callable objects and signatures. An
 unused-import report inside `downloader.py` is not evidence these commands can be
 removed. Transfer preparation and review remain in their existing owners.
 
+`sync.py:push_seasons` requires `SyncState.SUCCEEDED` for waiting transfers.
+Reviewed transfers also accept `STARTED`, which only confirms launch. Rejected
+outcomes stop later seasons without undoing earlier transfers. Configuration
+push and pull derive both operands from the same captured directory.
+`Python/tests/integrations/test_youtube_downloader.py` checks outcome handling
+and consistent operands with mocked transfers.
+
 ## Desktop and mobile ownership
 
 The feature registers desktop folder workflows through `ui_contributions.py`

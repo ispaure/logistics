@@ -48,6 +48,13 @@ Only after the complete rename plan passes validation are files renamed. The sha
 before execution, stages the batch, and rolls it back if publication fails. Any
 unresolved recovery paths are reported rather than overwritten.
 
+`ui/dialogs.py:RenameMkaDialog` consumes the approved plan before dispatching
+the worker and forwards the rename engine's progress. Failure or cancellation
+requires a fresh review. The shared engine checks cancellation between atomic
+renames and attempts to roll back the batch if interrupted.
+`Python/tests/integrations/test_mka_renames.py` covers failed apply, fresh review
+and progress forwarding.
+
 The [earlier video brief](video-player.md) redirects to the Video Player owner.
 
 ## Platform boundary and validation
