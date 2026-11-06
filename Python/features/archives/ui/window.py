@@ -43,7 +43,8 @@ def open_archive_window(path=None):
     from commonUtils.ui.document_host import show_document, document_is_open
     candidate = Path(path).absolute() if path else None
     existing = next((window for window in _windows if candidate is not None
-                     and (window.page.path == candidate or getattr(window, '_requested_path', None) == candidate) and not window.page.closing
+                     and (window.page.path or getattr(window, '_requested_path', None)) == candidate
+                     and not window.page.closing
                      and document_is_open(window)), None)
     if existing is not None:
         show_document(existing)
