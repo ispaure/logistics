@@ -47,6 +47,10 @@ class NotesHeaderProbe(NotesDrawersProbe):
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Home.md').write_text('# Home\n\n[[Other]]\n')
             (root / 'Other.md').write_text('# Other\n\n[[Home]]\n')
+            large = root / 'Large folder'
+            large.mkdir()
+            for index in range(55):
+                (large / f'Note {index:02}.md').write_text('# Note')
             folder = root / '3D Character Art'
             folder.mkdir(exist_ok=True)
             (folder / '3D Character Art.md').write_text(
@@ -129,6 +133,11 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 if owner.sidebar.expanded:
                     tab = owner.panel_tabs['Files']._impl.native
                     tabs_frame = tab.convertRect(tab.bounds, toView=window)
+                    if drive_touches and vertical_edge(controller):
+                        panel = owner.tree._impl.native
+                        frame = panel.convertRect(panel.bounds, toView=window)
+                        bottom_gap = window.bounds.size.height - frame.origin.y - frame.size.height
+                        assert abs(frame.origin.y - bottom_gap) <= 2, ('Asymmetric Files panel', frame.origin.y, bottom_gap)
                     title_y = float(title_frame.origin.y + title_frame.size.height / 2)
                     assert abs(title_y - float(tabs_frame.origin.y + tabs_frame.size.height / 2)) <= 2
                     await capture_window(self, evidence / ('notes-pane-open-' + orientation + '.png'))
@@ -218,6 +227,10 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await asyncio.sleep(.3)
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
                     title_width=float(title_frame.size.width), document_width=float(article_frame.size.width)))
+            owner.sidebar.show_sidebar()
+            await owner.toggle_folder('Large folder')
+            assert owner.rows.recycled
+            assert any(row.path == 'Large folder/Note 54.md' for row in owner.rows.native_list.data)
             close = owner.close_button._native_reader_close_item
             if close is None:
                 owner.close_button._impl.native.sendActionsForControlEvents_(1 << 6)

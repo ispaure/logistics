@@ -17,6 +17,7 @@ class NotesDrawers:
         self.side = None
         self.wide = False
         self.wide_files_open = True
+        self.files_bottom_extension = 0
         self.gestures = []
         self.opening_gestures = []
         self.retiring = []
@@ -53,12 +54,21 @@ class NotesDrawers:
             self.show_detail()
             self.finish_dismissals()
         self.expanded = expanded
+        self.extend_files_bottom(self.files_bottom_extension)
         if expanded:
             self.sidebar.style.flex = 0
             self.view.insert(0, self.sidebar)
         else:
             self.view.remove(self.sidebar)
             self.sidebar.style.flex = 1
+
+    def extend_files_bottom(self, extension):
+        self.files_bottom_extension = extension
+        margin = -extension if self.expanded else 0
+        if self.sidebar.style.margin_bottom == margin:
+            return False
+        self.sidebar.style.margin_bottom = margin
+        return True
 
     def toggle(self, widget=None, **kwargs):
         if self.expanded:

@@ -18,9 +18,7 @@ class NativeTreeRows:
             style=Pack(flex=1))
         self.native_list.tree_actions = self
         self.status = toga.Label('', style=Pack(display=NONE))
-        self.more = toga.Button('Show more notes', on_press=self.show_more,
-                                style=Pack(height=48, display=NONE))
-        self.widget = toga.Box(children=[self.native_list, self.status, self.more],
+        self.widget = toga.Box(children=[self.native_list, self.status],
                                style=Pack(direction=COLUMN, flex=1))
 
     @property
@@ -77,17 +75,6 @@ class NativeTreeRows:
         display = PACK if value else NONE
         if self.status.style.display != display:
             self.status.style.display = display
-
-    def footer(self, message, more):
-        self.message(message)
-        display = PACK if more else NONE
-        if self.more.style.display != display:
-            self.more.style.display = display
-
-    def show_more(self, widget=None, **kwargs):
-        if self.active():
-            self.owner.shown += 50
-            self.owner.render_tree()
 
     def select_path(self):
         index = next((i for i, row in enumerate(self.native_list.data)
@@ -153,7 +140,7 @@ class NativeTreeRows:
     def clear(self):
         self.epoch += 1
         self.native_list.clear()
-        self.footer('', False)
+        self.message('')
 
     def dispose(self):
         self.closed = True
