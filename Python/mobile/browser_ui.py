@@ -40,7 +40,7 @@ def entry_icon(directory, *, landing_page=False):
         style=Pack(width=ENTRY_ICON_SIZE, height=ENTRY_ICON_SIZE,
                    margin_left=ENTRY_ICON_MARGIN, margin_right=ENTRY_ICON_MARGIN)))
     image.browser_entry_kind = 'folder_document' if directory and landing_page else 'folder' if directory else 'file'
-    surface(image, radius=0, background='transparent', foreground='accent',
+    surface(image, radius=0, background='transparent', foreground='file_icon',
             outlined=False, eink_outlined=False)
     return image
 

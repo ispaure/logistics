@@ -5,6 +5,8 @@ DEFAULTS and exposes validate() for existing callers.
 """
 import json
 
+from services.appearance_palette import DEFAULT_ACCENT
+
 from .magnifier import LEVELS, RANGE_ERROR
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
 from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
@@ -20,8 +22,8 @@ DEFAULTS = {
     'epub_font_size': '16',
     'restore_last_document': 'true',
     'last_document': '',
-    'accent_hue': '221',
-    'accent_saturation': '83',
+    'accent_hue': str(DEFAULT_ACCENT[0]),
+    'accent_saturation': str(DEFAULT_ACCENT[1]),
     'workspace_local_group': 'Others',
     'document_card_overview': 'false',
     'show_legacy': 'false',

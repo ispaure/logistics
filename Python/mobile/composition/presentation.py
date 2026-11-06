@@ -254,7 +254,12 @@ def notes_host(app):
         from ..hub_icons import icon
         def row_list(**kwargs):
             result = RecycledFileList(icon_size=20, **kwargs)
-            result.tree_landing_icon = icon('folder_document')
+            landing = icon('folder_document')
+            if app.routes.apple:
+                from ..appearance import apple_color
+                native = landing._impl.native
+                landing._impl.native = native.imageWithTintColor(apple_color('file_icon'), renderingMode=1)
+            result.tree_landing_icon = landing
             return result
         return NativeTreeRows(owner, row_list)
 

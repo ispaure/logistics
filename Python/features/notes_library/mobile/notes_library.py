@@ -909,7 +909,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     entry_icon.style.height = 48
                     compact_file_row_padding(entry_icon)
                     self.host.presentation.surface(entry_icon, radius=0, background='transparent',
-                        foreground='accent', outlined=False)
+                        foreground='file_icon', outlined=False)
                 else:
                     entry_icon = self.host.entry_icon(directory, landing_page=page is not None)
                     entry_icon.style.width = entry_icon.style.height = 20

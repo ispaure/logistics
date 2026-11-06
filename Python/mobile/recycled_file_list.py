@@ -4,6 +4,7 @@ import weakref
 import toga
 from commonUtils.ui.native.recycled_list import RecycledList, ListAppearance, thumbnail_image
 from .appearance import apple_color, android_palette, eink_enabled
+from services.appearance_palette import FILE_ICON_BLUE
 from .hub_icons import icon
 from .ui_metrics import TOUCH_TARGET, BODY_TEXT, CAPTION_TEXT
 
@@ -20,6 +21,9 @@ class RecycledFileList(RecycledList):
             high_contrast=eink_enabled, icon=lambda folder: icon('files' if folder else icon_kind),
             row_height=TOUCH_TARGET, body_text=BODY_TEXT, caption_text=CAPTION_TEXT, icon_size=icon_size)
         super().__init__(row_kind=row_kind, appearance=appearance, **kwargs)
+        if self.factory.DetailedList.__module__.startswith('toga_android.'):
+            from android.graphics import Color
+            self._impl.native.setEntryIconColor(Color.parseColor(FILE_ICON_BLUE))
         app = toga.App.app
         if not hasattr(app, '_recycled_file_lists'):
             app._recycled_file_lists = weakref.WeakSet()

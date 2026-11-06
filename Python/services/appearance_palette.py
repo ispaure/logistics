@@ -3,14 +3,18 @@
 Matches the desktop Slate defaults (including its 6% blue dark tint). Light
 cards use a near-white surface so large mobile screens avoid a stark white fill.
 """
+DEFAULT_ACCENT = (221, 60)
+DEFAULT_ACCENT_COLOR = '#3363cc'
+FILE_ICON_BLUE = '#315ea8'
+
 LIGHT = dict(window='#f0f2f6', surface='#fafbfc', alternate='#f5f7fa',
-             text='#202838', muted='#606b7c', border='#c5cedb', primary='#2563eb', accent='#2563eb', hover='#e3eaf7')
+             text='#202838', muted='#606b7c', border='#c5cedb', primary=DEFAULT_ACCENT_COLOR, accent=DEFAULT_ACCENT_COLOR, hover='#e3eaf7')
 DARK = dict(window='#23262c', surface='#2d3035', alternate='#34373c',
-            text='#eef1f7', muted='#a6b0c0', border='#52555a', primary='#2563eb', accent='#2563eb', hover='#3d4045')
+            text='#eef1f7', muted='#a6b0c0', border='#52555a', primary=DEFAULT_ACCENT_COLOR, accent=DEFAULT_ACCENT_COLOR, hover='#3d4045')
 LIGHT.update(control_border='#7b8493', destructive='#c62828')
 DARK.update(control_border='#858c99', destructive='#ff8a80')
 for colors in (LIGHT, DARK):
-    colors.update(destructive_fill='#d32f2f', on_destructive='#ffffff')
+    colors.update(file_icon=FILE_ICON_BLUE, destructive_fill='#d32f2f', on_destructive='#ffffff')
 LIGHT.update(tree_guide='#a8b2c1')
 DARK.update(tree_guide='#737f90')
 
@@ -37,7 +41,6 @@ for colors in (LIGHT, DARK):
 
 from commonUtils.ui.appearance.colors import argb as argb
 
-DEFAULT_ACCENT = (221, 83)
 
 
 def validate_accent(hue, saturation):
@@ -52,19 +55,19 @@ def validate_accent(hue, saturation):
     return hue, saturation
 
 
-def accent_colors(hue=221, saturation=83):
-    """Resolve one vivid sRGB accent shared by light and dark appearance."""
+def accent_colors(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1]):
+    """Resolve one sRGB accent shared by light and dark appearance."""
     import colorsys
     hue, saturation = validate_accent(hue, saturation)
     if (hue, saturation) == DEFAULT_ACCENT:
-        color = '#2563eb'
+        color = DEFAULT_ACCENT_COLOR
     else:
         rgb = colorsys.hls_to_rgb(hue / 360, .5, saturation / 100)
         color = '#' + ''.join(f'{round(channel * 255):02x}' for channel in rgb)
     return color, color
 
 
-def set_accent(hue=221, saturation=83):
+def set_accent(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1]):
     """Change only accent roles; semantic artwork and lock colors are independent."""
     hue, saturation = validate_accent(hue, saturation)
     for colors, color in zip((LIGHT, DARK), accent_colors(hue, saturation)):
@@ -93,7 +96,7 @@ def themed_chapter(content, mode):
 EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
             text='#000000', muted='#000000', border='#000000',
             primary='#000000', accent='#000000', hover='#ffffff')
-EINK.update(folder='#000000', folder_unlocked='#000000', folder_locked='#000000')
+EINK.update(file_icon='#000000', folder='#000000', folder_unlocked='#000000', folder_locked='#000000')
 EINK.update(settings_background='#ffffff', settings_group='#ffffff', settings_separator='#000000')
 EINK.update(control_border='#000000', destructive='#000000')
 EINK.update(destructive_fill='#000000', on_destructive='#ffffff')

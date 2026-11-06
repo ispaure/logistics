@@ -103,7 +103,7 @@ class AccentProbe(LogisticsMobile):
                 controls.hue.on_release()
                 await asyncio.sleep(.4)
                 assert float(self.preferences.values['accent_hue']) == hue
-                assert LIGHT['accent'] != '#2563eb'
+                assert LIGHT['accent'] != '#3363cc'
                 for original, colors in zip(before, (LIGHT, DARK)):
                     assert {key: value for key, value in original.items() if key not in ('accent', 'primary')} == {
                         key: value for key, value in colors.items() if key not in ('accent', 'primary')}
@@ -115,8 +115,8 @@ class AccentProbe(LogisticsMobile):
                 result['samples'].append(sample)
                 await capture_window(self, evidence / f'accent-{name}.png')
             controls.reset()
-            assert LIGHT['accent'] == '#2563eb'
-            assert DARK['accent'] == '#2563eb'
+            assert LIGHT['accent'] == '#3363cc'
+            assert DARK['accent'] == '#3363cc'
             result['success'] = True
         except BaseException:
             result['error'] = traceback.format_exc()
