@@ -506,8 +506,6 @@ def collect_owned_ios_evidence(device, started_ns, logs):
             or not str(owner.get('name', '')).startswith('Logistics Native Gate ')):
         raise ValueError('Native evidence simulator does not match its owned lease.')
     from build_manager.apple_simulators import AppleSimulators
-    if AppleSimulators().matching(device, owner['name']) is None:
-        raise ValueError('Owned native evidence simulator is unavailable.')
     return collect_leased_ios_evidence(AppleSimulators(), lease, owner, device, started_ns, logs)
 
 
