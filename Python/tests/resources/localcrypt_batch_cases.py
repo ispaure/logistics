@@ -2,20 +2,14 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-import os
 from pathlib import Path
-import unittest
-from features.rclone import executable
-from tests.local_crypt_fixture import crypt_fixture
+from tests.local_crypt_fixture import crypt_fixture, require_pinned_rclone
 
 
 class LocalCryptBatchChecks:
     @classmethod
     def setUpClass(cls):
-        if not executable.get_rclone_path().is_file():
-            if os.environ.get('LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'):
-                raise RuntimeError('Required pinned rclone is missing.')
-            raise unittest.SkipTest('Pinned rclone executable not installed')
+        cls.binary = require_pinned_rclone()
 
 
     def check_dataview_discovery_batches_names_across_folders(self, settings):
@@ -24,7 +18,7 @@ class LocalCryptBatchChecks:
         from features.notes_library.notes import NotesLibrary
         from logistics_build.build_retention import scratch
         with self.subTest(settings=settings), scratch(Path.cwd()) as directory, crypt_fixture(
-                directory, executable.get_rclone_path(), crypt_settings=settings) as fixture:
+                directory, self.binary, crypt_settings=settings) as fixture:
             provider = fixture.provider
             paths = [f'Topics/Folder{i}/Common/Note.md' for i in range(24)]
             paths[0] = paths[0].removesuffix('.md') + '.markdown'
@@ -68,7 +62,7 @@ class LocalCryptBatchChecks:
         from features.notes_library.notes import NotesLibrary
         from logistics_build.build_retention import scratch
         with self.subTest(settings=settings), scratch(Path.cwd()) as directory, crypt_fixture(
-                directory, executable.get_rclone_path(), crypt_settings=settings) as fixture:
+                directory, self.binary, crypt_settings=settings) as fixture:
             provider = fixture.provider
             # Ciphertext-only fixture entries: lookup must never read bodies.
             for folder in ('Topics', 'Other', '.hidden', 'Topics/Nested'):

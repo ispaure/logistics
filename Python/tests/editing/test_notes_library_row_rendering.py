@@ -96,8 +96,7 @@ class DesktopRowRenderingTests(QtTestCase):
         return report
 
     def test_local_and_encrypted_native_tree_rows(self):
-        from features.rclone import executable
-        from tests.local_crypt_fixture import crypt_fixture
+        from tests.local_crypt_fixture import crypt_fixture, require_pinned_rclone
         results = []
         with scratch(Path.cwd()) as workspace:
             local = workspace / 'local'
@@ -105,11 +104,7 @@ class DesktopRowRenderingTests(QtTestCase):
             provider = LocalFiles(local)
             self.fixture(provider, 40)
             results.append(self.exercise(provider, 40, 'local'))
-            binary = executable.get_rclone_path()
-            if not binary.is_file():
-                if os.environ.get('LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'):
-                    self.fail('Required pinned rclone is missing')
-                self.skipTest('Optional pinned rclone is not installed')
+            binary = require_pinned_rclone()
             encrypted = workspace / 'encrypted'
             encrypted.mkdir()
             with crypt_fixture(encrypted, binary, pull=False) as fixture:
