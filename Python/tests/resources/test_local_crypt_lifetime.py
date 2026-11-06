@@ -17,6 +17,163 @@ from tests.local_crypt_fixture import crypt_fixture
 
 
 from tests.resources.localcrypt_cases import LocalCryptCase
+from types import SimpleNamespace
+from unittest import TestCase
+
+
+class LocalCryptConstructionTests(TestCase):
+    """Exercise constructor handoffs without a CLI, GUI, or real credentials."""
+
+    def setUp(self):
+        directory = self.enterContext(TemporaryDirectory())
+        self.root = Path(directory)
+        self.item = SimpleNamespace(context=self.root / 'account.session', package=self.root / 'account.zip',
+                                    remote='Secret', root=self.root / 'ciphertext')
+        self.item.data = self.item.root / self.item.remote
+        self.item.data.mkdir(parents=True)
+        self.binary = self.root / 'synthetic-rclone'
+        self.binary.touch()
+        self.values = {'Secret': {'type': 'crypt', 'remote': 'Cloud:synthetic', 'password': 'synthetic-old'},
+                       'Cloud': {'type': 'local'}}
+        self.children, self.caches = [], []
+        self.before = set(session.paths())
+        self.enterContext(patch.object(local_crypt.configuration, 'get_rclone_config_dir', return_value=self.root))
+        self.enterContext(patch('features.rclone.storage.install_local_storage_policy'))
+        remember, cache = session.remember, local_crypt.PrivateReadCache
+        def track_child(context, values, **options):
+            if options.get('private'):
+                self.children.append(context)
+            return remember(context, values, **options)
+        def track_cache(*args, **kwargs):
+            result = cache(*args, **kwargs)
+            self.caches.append(result)
+            return result
+        self.enterContext(patch.object(session, 'remember', side_effect=track_child))
+        self.enterContext(patch.object(local_crypt, 'PrivateReadCache', side_effect=track_cache))
+        self.addCleanup(self.retire)
+        self.replace()
+
+    def retire(self):
+        for context in (self.item.context, *self.children):
+            session.forget(context)
+            session.forget_package_path(context)
+        for cache in self.caches:
+            cache.retire()
+        self.assertEqual(set(session.paths()), self.before)
+
+    def replace(self, password='synthetic-old', *, package=None, values=None):
+        settings = values if values is not None else {
+            **self.values, 'Secret': {**self.values['Secret'], 'password': password}}
+        session.remember(self.item.context, settings, package_path=package or self.item.package)
+
+    def construct(self, **kwargs):
+        provider = local_crypt.CryptResources(self.item, binary=self.binary, **kwargs)
+        self.addCleanup(provider.close)
+        return provider
+
+    def assert_retired(self):
+        for child in self.children:
+            self.assertIsNone(session.credentials(child))
+        self.assertTrue(all(cache.closed for cache in self.caches))
+
+    def test_replacement_after_snapshot_rejects_and_retires_child(self):
+        with patch.object(local_crypt, 'validate_ciphertext_tree', side_effect=lambda _: self.replace('synthetic-new')):
+            with self.assertRaises(ValueError):
+                self.construct()
+        self.assert_retired()
+        self.assertEqual(session.credentials(self.item.context)['Secret']['password'], 'synthetic-new')
+
+    def test_lock_after_snapshot_retires_partial_construction(self):
+        with patch.object(local_crypt, 'validate_ciphertext_tree', side_effect=lambda _: session.forget(self.item.context)):
+            with self.assertRaises(ValueError):
+                self.construct()
+        self.assert_retired()
+
+    def test_final_snapshot_follows_completed_unlock(self):
+        unlocked = local_crypt.unlock
+        first = True
+        def replace_after_unlock(*args, **kwargs):
+            nonlocal first
+            values = unlocked(*args, **kwargs)
+            if first:
+                first = False
+                self.replace('synthetic-new')
+            return values
+        with patch.object(local_crypt, 'unlock', side_effect=replace_after_unlock):
+            provider = self.construct()
+        self.assertEqual(session.credentials(provider.context)['view']['password'], 'synthetic-new')
+
+    def test_final_snapshot_revalidates_package_remote_and_password(self):
+        from features.rclone.desktop_service import service
+        capture = service.credentials.capture
+        cases = [('package', self.values, self.root / 'unrelated.zip'),
+                 ('remote', {'Secret': {'type': 'local'}}, self.item.package),
+                 ('password', {'Secret': {'type': 'crypt', 'remote': 'Cloud:synthetic'},
+                               'Cloud': {'type': 'local'}}, self.item.package)]
+        for label, values, package in cases:
+            with self.subTest(label=label):
+                self.replace()
+                def changed_before_capture(context):
+                    if context == self.item.context:
+                        self.replace(values=values, package=package)
+                    return capture(context)
+                with patch.object(service.credentials, 'capture', side_effect=changed_before_capture):
+                    with self.assertRaises(ValueError):
+                        self.construct()
+                self.assert_retired()
+
+    def test_replacement_after_registration_retires_cache_and_child(self):
+        remember = session.remember
+        def replace_after_registration(context, values, **options):
+            remember(context, values, **options)
+            if options.get('private'):
+                self.replace('synthetic-new')
+        with patch.object(session, 'remember', side_effect=replace_after_registration):
+            with self.assertRaises(ValueError):
+                self.construct()
+        self.assert_retired()
+        self.assertEqual(session.credentials(self.item.context)['Secret']['password'], 'synthetic-new')
+
+    def test_failure_after_child_publication_retires_child_and_cache(self):
+        with patch.object(local_crypt, 'CryptCommand', side_effect=RuntimeError('synthetic construction failure')):
+            with self.assertRaisesRegex(RuntimeError, 'synthetic construction failure'):
+                self.construct()
+        self.assert_retired()
+
+    def test_unrelated_package_replacement_does_not_revoke_child(self):
+        unrelated = self.root / 'other.session'
+        self.addCleanup(session.forget_package_path, unrelated)
+        self.addCleanup(session.forget, unrelated)
+        def replace_other(_):
+            for password in ('synthetic-first', 'synthetic-second'):
+                session.remember(unrelated, {'Other': {'type': 'local', 'password': password}},
+                                 package_path=self.root / 'other.zip')
+        with patch.object(local_crypt, 'validate_ciphertext_tree', side_effect=replace_other):
+            provider = self.construct()
+        provider.credential_grant.check()
+        self.assertFalse(provider.closed)
+        provider.close()
+        self.assert_retired()
+        self.assertIsNotNone(session.credentials(unrelated))
+
+    def test_initial_password_unlock_and_failed_password_preserve_ownership(self):
+        from commonUtils.archives.zip_access import open_archive
+        with open_archive(self.item.package, 'w', password='synthetic-package-password') as archive:
+            for name, settings in self.values.items():
+                archive.writestr(name + '.txt', '[' + name + ']\n' + '\n'.join(
+                    key + '=' + value for key, value in settings.items()))
+        session.forget(self.item.context)
+        provider = self.construct(password='synthetic-package-password')
+        provider.credential_grant.check()
+        self.assertEqual(session.package_path(self.item.context), self.item.package)
+        self.assertFalse(self.item.context.with_suffix('.conf').exists())
+        provider.close()
+        self.replace(package=self.root / 'unrelated.zip')
+        revoked = session.revocation_check(self.item.context)
+        with self.assertRaises(Exception):
+            self.construct(password='synthetic-wrong-password')
+        self.assertFalse(revoked())
+        self.assert_retired()
 
 
 class LocalCryptLifetimeTests(LocalCryptCase):
