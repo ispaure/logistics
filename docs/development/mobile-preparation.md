@@ -4,7 +4,7 @@ Logistics Mobile is the native Toga application for iOS and Android. The host
 composes Workspaces browsing and transfers, document editing and reading,
 feature-gated Chat, and Settings. The desktop Qt launcher and its dependency
 pins are separate. Mobile code uses portable commonUtils APIs and native
-adapters under the desktop import boundary.
+adapters without loading desktop initialization.
 
 | Responsibility | Source owner |
 | --- | --- |
@@ -182,7 +182,8 @@ and [workspace navigation guide](mobile-workspace-navigation.md).
 | `access.py` | Scoped binary imports; Android content URIs are handled by ContentResolver streams; iOS URLs retain security-scoped access until reading finishes; every handle/scope is closed on failure |
 | `pickers.py` | Android ACTION_OPEN_DOCUMENT and iOS UIDocumentPicker open mode; native grants are consumed immediately to import a private copy; no broad storage permission or persisted external write access |
 | `app.py` | Application composition, startup, document workflows and window attachment |
-| `preferences.py` | Immutable defaults and bounded private INI; validation, atomic replace, malformed-file preservation and concurrent-edit rejection |
+| `preference_schema.py` | Serialized defaults and value validation, independent of INI I/O |
+| `preferences.py` | Bounded private INI, migrations, atomic replace, malformed-file preservation and concurrent-edit rejection |
 | `preview.py` | Bounded basic Markdown HTML; escaped raw input, inert links and offline CSP |
 | `smoke.py` | Fresh-interpreter desktop-dependency rejection, real runtime identity, exact test inventory and structured evidence |
 | `mobile_build/tools.py` | Whitelisted Logistics sources, tracked/clean shared Python sources, licenses, source SHAs and dirty-state records; strict emulator/simulator evidence verification |
