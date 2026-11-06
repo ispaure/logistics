@@ -277,6 +277,49 @@ class ArchiveWorkspaceUITests(QtTestCase):
         self.assertIs(open_archive_window(second), window)
         self.assertIs(open_archive_window(first), reopened)
 
+    def test_standalone_launcher_retries_failed_initial_open_in_same_window(self):
+        from features.archives.ui.window import open_archive_window
+
+        path = self.root / 'missing.zip'
+        window = open_archive_window(path)
+        self.wait_until(lambda: not window.page.busy)
+        self.assertIsNone(window.page.path)
+        self.assertIn('Operation failed', window.page.status.text())
+
+        archives.create([self.root / 'source'], path)
+        self.assertIs(open_archive_window(path), window)
+        self.wait_until(lambda: not window.page.busy)
+        self.assertEqual(window.page.path, path)
+
+    def test_standalone_launcher_skips_closing_window_for_same_archive(self):
+        from threading import Event
+        from commonUtils.ui.document_host import document_is_open
+        from features.archives.ui.window import open_archive_window, _windows
+
+        path = self.path
+        window = open_archive_window(path)
+        self.wait_until(lambda: not window.page.busy)
+        self.assertEqual(window.page.path, path)
+
+        release = Event()
+
+        def hold_worker(progress, cancelled, password):
+            release.wait(timeout=10)
+
+        window.page._run('test', hold_worker, path)
+        try:
+            self.assertFalse(window.close())
+            self.assertTrue(window.page.closing)
+            self.assertTrue(document_is_open(window))
+            replacement = open_archive_window(path)
+            self.assertIsNot(replacement, window)
+        finally:
+            release.set()
+
+        self.wait_until(lambda: window not in _windows, drain_deferred=True)
+        self.wait_until(lambda: not replacement.page.busy)
+        self.assertEqual(replacement.page.path, path)
+
 
 class ArchiveDeclarationTests(unittest.TestCase):
     def test_archive_contributes_document_launcher(self):
