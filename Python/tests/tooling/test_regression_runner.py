@@ -283,6 +283,61 @@ class Cases(unittest.TestCase):
             self.assertIn('Failed isolated test files: test_first.py', result.stderr)
             self.assertTrue(marker.exists())
 
+    def test_invalid_child_evidence_preserves_prefix_and_obeys_stop_policy(self):
+        with patch.object(sys, 'path', [str(RUNNER.parent), *sys.path]):
+            spec = importlib.util.spec_from_file_location('child_evidence_probe', RUNNER)
+            runner = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(runner)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ('test_first.py', 'test_second.py'):
+                (root / name).write_text(
+                    '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                    'class Cases(unittest.TestCase):\n def test_case(self): pass\n')
+            prefix = dict(id='test_first.Cases.test_case', stage='regression', outcome='failed',
+                          started_at='start', finished_at='finish', duration_seconds=0.25,
+                          message='original failure')
+            schema = dict(schema_version=1, complete=True, exit_code=0)
+            defects = (
+                ('{broken', 'Cannot read child timing report', []),
+                ('[]', 'Invalid child timing report schema', []),
+                (json.dumps(schema), 'must contain a tests list', []),
+                (json.dumps(dict(schema, tests=[prefix, {'id': 'missing'}])), 'position 2', [prefix]),
+                (json.dumps(dict(schema, tests=[])), 'no complete case evidence', []),
+                (json.dumps(dict(schema, tests=[dict(prefix, outcome='passed')], planned_tests=[
+                    dict(id='test_first.Cases.test_case', stage='regression'),
+                    dict(id='test_first.Cases.test_unreported', stage='regression'),
+                ])), 'does not account for all planned cases', [dict(prefix, outcome='passed')]),
+            )
+            real_run = subprocess.run
+            for payload, reason, kept in defects:
+                for mode, fail_fast, expected in (('diagnostic', False, 2), ('fast', False, 1),
+                                                  ('diagnostic', True, 1)):
+                    with self.subTest(reason=reason, mode=mode, fail_fast=fail_fast):
+                        def run_child(command, **kwargs):
+                            if command[command.index('--pattern') + 1] == 'test_first.py':
+                                Path(command[command.index('--report') + 1]).write_text(payload)
+                                return subprocess.CompletedProcess(command, 0)
+                            return real_run(command, **kwargs)
+
+                        report = runner.TimingReport(root / 'result.json', root, 'test*.py', True)
+                        with patch.object(runner.subprocess, 'run', side_effect=run_child) as run:
+                            code = runner.run_isolated(root, 'test*.py', 60, report=report,
+                                                       mode=mode, fail_fast=fail_fast)
+                        self.assertEqual(code, 1)
+                        self.assertEqual(run.call_count, expected)
+                        first = report.data['modules'][0]
+                        self.assertEqual((first['path'], first['stage']), ('test_first.py', 'regression'))
+                        self.assertEqual(first['outcome'], 'preflight_error')
+                        self.assertTrue(first['test_report_available'])
+                        self.assertFalse(first['test_report_complete'])
+                        self.assertIn(reason, first['evidence_error'])
+                        self.assertFalse(report.data['coverage_complete'])
+                        self.assertEqual([r for r in report.data['tests'] if r['file'] == 'test_first.py'],
+                                         [dict(row, file='test_first.py') for row in kept])
+                        if expected == 2:
+                            self.assertEqual(report.data['modules'][1]['outcome'], 'passed')
+
     def test_abnormal_child_exit_fails_validation(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

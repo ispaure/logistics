@@ -236,6 +236,36 @@ class Derived(Base): pass
             self.assertTrue(report['not_run'])
             self.assertEqual(len(report['modules']), 1)
 
+    def test_fixture_skips_explain_unstarted_methods_without_counting_them(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'test_class.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                'class Skipped(unittest.TestCase):\n'
+                ' @classmethod\n def setUpClass(cls): raise unittest.SkipTest("missing class fixture")\n'
+                ' def test_never_started(self): pass\n'
+                'class Broken(unittest.TestCase):\n'
+                ' @classmethod\n def setUpClass(cls): raise RuntimeError("broken class fixture")\n'
+                ' def test_never_started(self): pass\n'
+                'class Working(unittest.TestCase):\n def test_runs(self): pass\n')
+            (root / 'test_module.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                'def setUpModule(): raise unittest.SkipTest("missing module fixture")\n'
+                'class Skipped(unittest.TestCase):\n def test_never_started(self): pass\n')
+            result, report = self.run_fixture(root)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertTrue(all(module['test_report_complete'] for module in report['modules']))
+            self.assertFalse(report['coverage_complete'])
+            self.assertEqual([(row['id'], row['reason']) for row in report['not_run']], [
+                ('test_class.Broken.test_never_started', 'Smoke gate or fixture failure'),
+                ('test_class.Skipped.test_never_started', 'Fixture skipped: missing class fixture'),
+                ('test_module.Skipped.test_never_started', 'Fixture skipped: missing module fixture'),
+            ])
+            self.assertEqual([r['id'] for r in report['tests'] if not r.get('fixture_event')],
+                             ['test_class.Working.test_runs'])
+            self.assertTrue(any('broken class fixture' in r.get('message', '') for r in report['tests']))
+            self.assertEqual(report['modules'][1]['outcome'], 'passed')
+
     def test_junit_and_live_progress_preserve_each_cases_stage(self):
         from build_manager.test_results import read_junit
         with TemporaryDirectory() as directory:
