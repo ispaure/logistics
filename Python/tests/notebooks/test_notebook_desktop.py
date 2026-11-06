@@ -106,6 +106,57 @@ class NotebookDesktopTests(unittest.TestCase):
         event.ignore.assert_called_once()
         panel.dispose.assert_not_called()
 
+    def test_discard_closes_only_after_resetting_the_observed_recovery_draft(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from commonUtils.ui import pyside as qt
+        from features.notebooks.editor import Editor
+        from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+        from features.notebooks.recovery import Repository
+        from features.notebooks.storage import NotebookDocument
+        from features.notebooks.ui.workspace import NotebookWindow
+        from services.documents.storage import local_document_resource
+
+        for conflict in (False, True):
+            with self.subTest(conflict=conflict), TemporaryDirectory() as directory:
+                path = Path(directory) / 'Saved.rmdoc'
+                saved = Notebook.new('Saved').to_bytes()
+                path.write_bytes(saved)
+                repository = Repository(Path(directory) / 'recovery')
+                unrelated = repository.create(Notebook.new('Unrelated'))
+                with local_document_resource(path, max_bytes=MAX_ARCHIVE) as resource:
+                    document = NotebookDocument(Notebook.read(resource.read()), resource=resource, recovery=repository)
+                    editor = Editor(document.book, document.checkpoint)
+                    editor.apply(dict(op='rename', name='Draft'))
+                    if conflict:
+                        newer = repository.open(document.key)
+                        Editor(newer, lambda book: repository.save(document.key, book)).apply(
+                            dict(op='rename', name='Other window'))
+                    panel = NS(document=document, editor=editor, busy=False, dispose=Mock())
+                    window = NS(centralWidget=lambda: panel)
+                    event = Mock()
+                    with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard), \
+                            patch.object(qt.QMessageBox, 'warning') as warning:
+                        NotebookWindow.closeEvent(window, event)
+                    self.assertEqual(path.read_bytes(), saved)
+                    self.assertEqual(repository.open(unrelated).name, 'Unrelated')
+                    if conflict:
+                        event.ignore.assert_called_once()
+                        event.accept.assert_not_called()
+                        panel.dispose.assert_not_called()
+                        warning.assert_called_once()
+                        self.assertIn('another window', warning.call_args.args[2])
+                        self.assertTrue(document.dirty)
+                        self.assertEqual(editor.notebook.name, 'Draft')
+                        self.assertEqual(repository.open(document.key).name, 'Other window')
+                    else:
+                        event.accept.assert_called_once()
+                        event.ignore.assert_not_called()
+                        panel.dispose.assert_called_once()
+                        warning.assert_not_called()
+                        self.assertFalse(document.dirty)
+                        self.assertEqual(repository.open(document.key).name, 'Saved')
+
     def test_untouched_new_draft_closes_without_save_prompt(self):
         from features.notebooks.notebook import Notebook
         from features.notebooks.storage import NotebookDocument
