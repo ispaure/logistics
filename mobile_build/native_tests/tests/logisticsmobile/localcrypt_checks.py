@@ -422,19 +422,9 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     await app.show_crypt_save_as()
     app.save_as_name.value = 'local-copy.md'
     app.save_as_storage.value = 'Local files'
-    await app.save_text_destination()
-    assert (local / 'local-copy.md').read_bytes() == b'# Edited after native move', app.save_as_status.value
-    app.provider_sessions().active.crypt_text.value = '# Local save after Save As'
-    await app.save_crypt()
-    assert (local / 'local-copy.md').read_bytes() == b'# Local save after Save As'
-    await app.show_crypt_save_as()
-    app.save_as_storage.value = crypt_label
-    app.save_as_name.value = 'saved-as.md'
-    # Existing destinations now require native replacement confirmation. Cancel
-    # it and verify both the current document and encrypted bytes stay intact.
     original_dialog = app.main_window.dialog
-    replacements = []
-    async def cancel_replacement(dialog):
+    answered = []
+    async def answer_confirmation(dialog, *, title, answer):
         import toga
         from commonUtils.runtime.platform import get_os, OS
         assert isinstance(dialog, toga.ConfirmDialog)
@@ -445,22 +435,43 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
             if get_os() is OS.IOS:
                 from .dialog_driver import presented_ios_dialog
                 native = await presented_ios_dialog(dialog)
-                assert str(native.title) == 'Replace “saved-as.md”?' and native.presentingViewController is not None
+                assert str(native.title) == title
                 from .dialog_driver import respond_ios_dialog
-                await respond_ios_dialog(dialog, False)
+                await respond_ios_dialog(dialog, answer)
             else:
                 assert native.isShowing()
-                native.getButton(-2).performClick()
-            replacements.append('cancelled')
+                if answer:
+                    from java import jclass
+                    message = native.findViewById(jclass('android.R$id').message)
+                    assert 'decrypted copy' in str(message.getText())
+                native.getButton(-1 if answer else -2).performClick()
+            answered.append(title)
             return await asyncio.wait_for(task, 5)
         finally:
             if not task.done():
                 task.cancel()
+    async def accept_decrypted_copy(dialog):
+        return await answer_confirmation(dialog, title='Save to unencrypted storage?', answer=True)
+    with patch.object(app.main_window, 'dialog', side_effect=accept_decrypted_copy):
+        await asyncio.wait_for(app.save_text_destination(), 30)
+    assert answered == ['Save to unencrypted storage?']
+    assert (local / 'local-copy.md').read_bytes() == b'# Edited after native move', app.save_as_status.value
+    app.provider_sessions().active.crypt_text.value = '# Local save after Save As'
+    await app.save_crypt()
+    assert (local / 'local-copy.md').read_bytes() == b'# Local save after Save As'
+    await app.show_crypt_save_as()
+    app.save_as_storage.value = crypt_label
+    app.save_as_name.value = 'saved-as.md'
+    # Existing destinations now require native replacement confirmation. Cancel
+    # it and verify both the current document and encrypted bytes stay intact.
     from features.rclone.localcrypt.mobile.resources import encrypted_copies
     destination_before = encrypted_copies(provider).open('saved-as.md').data
+    async def cancel_replacement(dialog):
+        return await answer_confirmation(dialog, title='Replace “saved-as.md”?', answer=False)
+    answered.clear()
     with patch.object(app.main_window, 'dialog', side_effect=cancel_replacement):
         await asyncio.wait_for(app.save_text_destination(), 30)
-    assert replacements == ['cancelled'], 'Replacement did not show the native confirmation'
+    assert answered == ['Replace “saved-as.md”?'], 'Replacement did not show the native confirmation'
     assert encrypted_copies(provider).open('saved-as.md').data == destination_before
     assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).key == 'local-copy.md'
     app.cancel_text_destination()
