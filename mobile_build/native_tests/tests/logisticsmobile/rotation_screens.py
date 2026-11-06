@@ -122,9 +122,7 @@ async def _workspaces(app, fixtures, selected, check):
 
 
 async def _folders(app, fixtures, selected, check):
-    # A focused folder run must not inherit the caller's previous source.
-    app.show_locations()
-    app.change_folder_source('Local')
+    # The explicit local location avoids restoring a previously selected remote.
     await app.show_files(location=('Local files', fixtures.root.name))
     if 'folder' in selected:
         await check('folder')
@@ -153,12 +151,22 @@ async def _chat(app, fixtures, selected, check):
 
 
 async def _settings(app, fixtures, selected, check):
+    from mobile.routes import contains
     app.show_settings()
+    assert app.native_host.state.destination == 'settings', 'Settings navigation was refused'
+    # Reselecting the active tab is the ordinary app action that clears retained
+    # wide detail as well as compact routes. Showing the root alone retains it.
+    assert app.select_destination('settings'), 'Settings root checkpoint was refused'
+    navigation = app.settings_navigation
+    assert not navigation.detail_requested and not app.routes.screens['settings']
+    assert contains(app.body, navigation), 'Settings root is not mounted'
     if 'settings' in selected:
         await check('settings')
     for name, category in SETTINGS_SCREENS:
         if name in selected:
-            app.settings_navigation.choose(category)
+            navigation.choose(category)
+            assert navigation.detail_requested and navigation.selected == category, ('Settings category was refused', category)
+            assert contains(app.body, navigation.options[category]), ('Settings category is not mounted', category)
             await check(name)
             if category != 'About':
                 app.routes.back()

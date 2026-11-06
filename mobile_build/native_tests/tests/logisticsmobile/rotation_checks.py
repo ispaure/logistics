@@ -18,16 +18,17 @@ def panel_state(app):
     body = app.body
     settings = getattr(app, 'settings_navigation', None)
     category = destination == 'settings' and settings is not None and settings.detail_requested
+    settings_routes = app.routes.screens['settings']
+    active_category = category and (not settings_routes or settings_routes[-1][0] == 'settings-category')
     route_state = tuple((key, tuple(row[0] for row in rows
                          if not (category and key == 'settings' and row[0] == 'settings-category')))
                         for key, rows in app.routes.screens.items())
-    if category:
+    if active_category:
         panel = ('settings-category', settings.selected)
     else:
         # Wide Settings layouts move the category sidebar into the active route.
         sidebar = settings.sidebar if destination == 'settings' and settings is not None else None
         panel = tuple(id(child) for child in body.children if child is not sidebar)
-        settings_routes = app.routes.screens['settings']
         if destination == 'settings' and settings_routes and settings_routes[-1][0] == 'documentation':
             reader = app.documentation
             panel += (id(reader.web), reader.path, tuple(reader.history), reader.history_index)
@@ -508,8 +509,6 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
     captured = set()
     from .timings import measure, section
     async def check_panel(name):
-        if panels is not None and name not in panels:
-            return
         await asyncio.sleep(.4)
         print('LOGISTICS_ROTATION_PANEL=' + name, flush=True)
         expected = panel_state(app)
@@ -546,8 +545,6 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
                         captured.add(key)
                         await capture_window(app, Path(app.paths.cache) / f'rotation-{name}-{orientation}.png')
     async def check(name):
-        if panels is not None and name not in panels:
-            return
         return await measure(app, 'rotation-panel', check_panel(name), panel=name)
 
     from .rotation_screens import coverage_inventory, visit_screens
