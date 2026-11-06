@@ -51,15 +51,20 @@ def populate(app, container, *, title='Notes Library', refresh=True):
     if not app.feature_enabled('notes_library'):
         container.add(toga.Label('Notes Library is disabled.'))
         return
-    unlock_hint = FittedLabel('Unlock LocalCrypt to include encrypted libraries.', style=Pack(font_size=12))
     rows = toga.Box(style=Pack(direction='column'))
     status = FittedLabel('Looking for libraries…', style=Pack(font_size=12))
     container.add(rows, status)
     from .layout_participants import participants, LayoutFrame
     layout = participants(app)
-    for key, label in (('notes-discovery-status', status), ('notes-discovery-unlock', unlock_hint)):
+    def fit_label(key, label):
         label._layout_subscription = layout.register(key, label, fit_discovery_status)
         fit_discovery_status(label, LayoutFrame(app.main_window.size.width, app.adaptive.content_width))
+
+    fit_label('notes-discovery-status', status)
+    if app.home_unlock_candidates():
+        unlock_hint = FittedLabel('Unlock LocalCrypt to include encrypted libraries.', style=Pack(font_size=12))
+        container.insert(0, unlock_hint)
+        fit_label('notes-discovery-unlock', unlock_hint)
     token = object()
     app._notes_discovery_token = token
     previous = getattr(app, '_notes_discovery_task', None)
@@ -142,10 +147,10 @@ def populate(app, container, *, title='Notes Library', refresh=True):
                 rows.add(button)
             if rows.children:
                 surface(rows, radius=16)
+            else:
+                from .hub_controls import empty_document_row
+                rows.add(empty_document_row('No Notes libraries found.'))
             status.text = 'Some locations could not be checked.' if errors else ''
-            if (not found and app.feature_enabled('rclone')
-                    and any(item.get('crypt_remotes') for _, item in app.home_unlock_candidates())):
-                container.insert(1, unlock_hint)
         except (asyncio.CancelledError, OperationCancelled):
             return
     app._notes_discovery_task = app.loop.create_task(scan())
