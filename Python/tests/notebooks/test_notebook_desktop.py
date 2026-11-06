@@ -193,6 +193,94 @@ class NotebookMenuTests(unittest.TestCase):
 
 
 class NotebookAcknowledgementTests(unittest.TestCase):
+    def test_rejected_bridge_commands_acknowledge_without_changing_recovery_or_history(self):
+        from copy import deepcopy
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from urllib.parse import quote
+        from features.notebooks.bridge import Bridge
+        from features.notebooks.editor import Editor
+        from features.notebooks.notebook import Notebook, read_archive
+        from features.notebooks.protocol import document_state
+        from features.notebooks.recovery import Repository
+        from features.notebooks.storage import NotebookDocument
+        from features.notebooks.ui.workspace import NotebookWorkspace
+
+        with TemporaryDirectory() as directory, patch('features.notebooks.notebook.time.time', return_value=1234567890):
+            original = Notebook.new('Imported notebook')
+            original.metadata['opaque'] = {'source': 'synthetic', 'version': 17}
+            original.members['unknown/sidecar.bin'] = b'synthetic opaque bytes'
+            book = Notebook.read(original.to_bytes())
+            repository = Repository(directory)
+            document = NotebookDocument(book, recovery=repository)
+            editor = Editor(book, document.checkpoint)
+            for x in (20, 40):
+                editor.apply(dict(op='stroke', points=[[x, 30, .5]]))
+            editor.apply(dict(op='undo'))
+            owner = NS(busy=False, editor=editor, document_window=None, web=Mock(),
+                       state=lambda: document_state(editor, document),
+                       acknowledge_stroke=Mock(), save_document=Mock(), export_document=Mock())
+            bridge = Bridge()
+            recovery_path = Path(directory, document.key)
+            recovery_before = {path.name: path.read_bytes() for path in recovery_path.iterdir()}
+            archive_before = read_archive(book.to_bytes())
+            state_before = deepcopy(owner.state())
+            history_before = (list(editor.undo), list(editor.redo))
+            revision_before = dict(repository.revisions[book])
+            dirty_before = document.dirty
+            actions = [dict(op='unknown'), dict(op='page', index=True), dict(op='rename', name=[]),
+                       dict(op='stroke', points='invalid'), dict(op='stroke', points=[[20, 30, .5]], width=999)]
+            for sequence, action in enumerate(actions, 1):
+                with self.subTest(action=action):
+                    accepted = bridge.command(bridge.url + '?command=' + quote(json.dumps(
+                        dict(sequence=sequence, action=action))))
+                    self.assertEqual(accepted, action)
+                    owner.web.page.return_value.runJavaScript.reset_mock()
+                    NotebookWorkspace.perform(owner, accepted)
+                    owner.web.page.return_value.runJavaScript.assert_called_once()
+                    script = owner.web.page.return_value.runJavaScript.call_args.args[0]
+                    self.assertTrue(script.startswith('window.notebookUpdate('))
+                    state, error = json.loads('[' + script[len('window.notebookUpdate('):-1] + ']')
+                    self.assertTrue(error)
+                    self.assertEqual(state, json.loads(json.dumps(state_before)))
+                    self.assertEqual(read_archive(book.to_bytes()), archive_before)
+                    self.assertEqual({path.name: path.read_bytes() for path in recovery_path.iterdir()}, recovery_before)
+                    self.assertEqual(repository.revisions[book], revision_before)
+                    self.assertEqual((editor.undo, editor.redo), history_before)
+                    self.assertEqual(document.dirty, dirty_before)
+                    self.assertFalse(owner.busy)
+            owner.save_document.assert_not_called()
+            owner.export_document.assert_not_called()
+            owner.acknowledge_stroke.assert_not_called()
+            action = bridge.command(bridge.url + '?command=' + quote(json.dumps(
+                dict(sequence=len(actions) + 1, action=dict(op='rename', name='Still editable')))))
+            NotebookWorkspace.perform(owner, action)
+            self.assertEqual(repository.open(document.key).name, 'Still editable')
+            self.assertEqual(book.members['unknown/sidecar.bin'], b'synthetic opaque bytes')
+            self.assertEqual(book.metadata['opaque'], original.metadata['opaque'])
+
+    def test_save_and_export_keep_worker_busy_ownership_until_completion(self):
+        from features.notebooks.ui.workspace import NotebookWorkspace
+        for op in ('save', 'save-as', 'export'):
+            with self.subTest(op=op):
+                owner = NS(busy=False, web=Mock(), state=Mock())
+                def start(*args, **kwargs):
+                    self.assertFalse(owner.busy)
+                    owner.busy = True
+                owner.save_document = Mock(side_effect=start)
+                owner.export_document = Mock(side_effect=start)
+                NotebookWorkspace.perform(owner, dict(op=op))
+                if op == 'export':
+                    owner.export_document.assert_called_once_with()
+                    owner.save_document.assert_not_called()
+                else:
+                    owner.save_document.assert_called_once_with(save_as=op == 'save-as')
+                    owner.export_document.assert_not_called()
+                self.assertTrue(owner.busy)
+                owner.web.page.assert_not_called()
+                owner.state.assert_not_called()
+
     def test_stroke_delta_avoids_full_state_but_failure_resynchronizes(self):
         from features.notebooks.notebook import Notebook
         from features.notebooks.editor import Editor
