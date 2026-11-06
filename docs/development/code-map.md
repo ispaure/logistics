@@ -53,6 +53,7 @@ aliases; external extensions must update their host imports.
 | Desktop startup | `Python/launch.py` | [Architecture](architecture.md) |
 | Rail, landing chooser or destination hosting | `Python/desktop/navigation/catalog.py`, `Python/desktop/{main_window,sidebar,landing}.py` | [Architecture](architecture.md) |
 | Open document tabs or cooperative close | `Python/desktop/documents.py` | [Architecture](architecture.md#independent-text-documents) |
+| Settings → Appearance or another named panel | `Python/mobile/settings/appearance.py`, `Python/desktop/settings/appearance.py`; category hosts in `mobile/settings/categories.py` and `desktop/pages/settings.py` | [Screen and panel map](ui-architecture.md#find-a-screen-by-its-visible-name) |
 | Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`, `Python/features/runtime/{preferences,dependencies,activation,catalog}.py`; application instance in `Python/features/application.py` | [Feature lifecycle](features.md) |
 | Register a feature page, settings group or launcher | The feature's `__init__.py` and any delegated contribution module | [Extension points](extension-points.md) |
 | Browser actions, previews or file activation | Feature registration and handlers; `Python/desktop/file_browser.py` for host integration | [Browser extensions](file-browser.md) |
@@ -68,11 +69,12 @@ aliases; external extensions must update their host imports.
 | Mobile text Open/Save As | `Python/mobile/editor_picker.py`; `app.editor_picker()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Saved-import inventory/deletion | `Python/mobile/saved_files_ui.py`; `app.saved_files()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Mobile Close/Back decisions and host replacement | `Python/mobile/session_workflows/`, `application_lifecycle.py` | [Session transitions](mobile-runtime.md#session-transition-decisions) |
-| Mobile surface publication and settings | `Python/mobile/reading/`, `Python/mobile/settings/` | [Mobile runtime](mobile-runtime.md#reader-publication-boundary) |
+| Mobile surface publication | `Python/mobile/reading/` | [Mobile runtime](mobile-runtime.md#reader-publication-boundary) |
 | Mobile reader sessions and host access | `Python/mobile/{reader_sessions,private_sessions,reader_host,provider_document,provider_opening,provider_view}.py` | [Mobile architecture](mobile-architecture-roadmap.md) |
 | Mobile format presentation or cloud integration | `Python/features/{books,comics}/mobile/`, rclone `mobile/` and workflow-owned `*/mobile/` | [Mobile preparation](mobile-preparation.md) |
 | Which sources reach a mobile build | Owning `mobile_sources.json`; `mobile_build/tools.py` aggregates `APP_MODULES` and `DOCUMENT_MODULES` | [Mobile preparation](mobile-preparation.md) |
 | Defaults, private state or resource roots | Owning feature's `config.ini`, `Python/features/settings.py`, `Python/config.py` | [Configuration and data](configuration-and-data.md) |
+| Mobile preference keys versus storage/migrations | `Python/mobile/preference_schema.py`, `Python/mobile/preferences.py` | [Mobile preferences](configuration-and-data.md#mobile-preference-ownership) |
 
 Feature desktop presentation is feature-owned: Git, LM, Blender, Books, IDE and Text Editor use `ui/`; substantial Blender/rclone workflows nest their own platform presentation. Books, Comics, LM and Text Editor have mobile adapters. Follow the actual
 registration factory to find the presentation; do not assume every feature has

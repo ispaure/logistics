@@ -248,6 +248,14 @@ written to the catalogue or recovery records.
 
 Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package.
 
+`BooksPage._show_chapter` in `ui/reader.py` owns chapter assignment and rendering
+for chapter controls, contents and internal links, boundary turns, progress seeks
+and `ui/bookmarks.py`. If the destination raises `OSError` or `BookError`, it
+restores the previous chapter index and reports the error, keeping visible content
+and saved position aligned. Callers retain their speech, motion, fragment and
+location choices. `test_books_reader.py` checks failed chapter transitions and
+successful retries without changing the persisted location format.
+
 ## Format mutations
 
 `mutations.py` owns metadata plans, content-preserving archive rewrites and post-write format validation for desktop/mobile consumers. Storage adapters retain conflict detection, encryption and atomic publication; the mobile managed library retains recovery journals and checksum records.

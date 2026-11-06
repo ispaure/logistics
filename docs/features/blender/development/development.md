@@ -227,8 +227,14 @@ and launching an existing installation without provisioning or a prompt.
 scope/override contracts. Personal scope adds Presets, a management-mode BlenderPage.
 The navigation page retains launch cards and Settings shortcuts. Both surfaces share
 `get_manager()` for launched-process ownership. Card shortcuts pass their version
-and name to the retained settings panel. Selection saves persist intent without
-provisioning; launch preparation applies it through the existing worker/rollback path.
+and name to the retained settings panel. The page checks that the preset selection
+is still current, then delegates to `AddonLibrary.save_pending_selection` in
+`addons/library.py`. The library takes the preset installation lock, preserves
+installed metadata and publishes ordered pending choices in the existing
+`.logistics-addons.json` format. Pending saves and successful apply share atomic
+publication. Saving intent does not provision addons; launch preparation applies
+it through the existing worker/rollback path. `test_blender_library.py` covers
+pending selection order, lock refusal and retained installation metadata.
 
 `addons/bluehole.py` is deliberately specific to ispaure/BlueHole: allowlisted main/beta/alpha
 channels resolve to versioned branches through GitHub's branch API, and commit-pinned codeload ZIPs are

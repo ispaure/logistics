@@ -251,3 +251,12 @@ thresholds, animation preservation, source-change checks and file deletion/moves
 Shared copy fallback retains its existing non-atomic guarantee; atomic exclusive
 rename remains a different operation. API details belong in commonUtils' resource,
 archive, format, process, stream and persistence guides.
+
+`logistics_build/release_verification.py` uses the existing
+`commonUtils.runtime.streams.stream_signature` to hash manifest-listed ZIP members
+incrementally, checking cooperative cancellation between reads. Logistics retains
+the HTTPS/download bound, published digest, source/dependency/tag checks, member
+path validation and cancellation error contract. Manifest/version JSON still uses
+the existing metadata reads. This reuses an available shared API without changing
+the commonUtils or manager dependency pins; `test_release_verification.py` covers
+bounded member reads, cancellation and digest mismatches.

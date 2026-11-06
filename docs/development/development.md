@@ -30,11 +30,13 @@ python3 dev.py lint
 | --- | --- | --- |
 | A feature's controls or behavior | `Python/features/<feature>/`; desktop presentation in `ui/`, mobile adapters in `mobile/` | [Code and owner map](code-map.md) |
 | Desktop navigation, document tabs or browser hosting | `Python/desktop/` | [Architecture](architecture.md), [browser ownership](browser-ownership.md) |
+| Settings → Appearance or another named panel | `Python/mobile/settings/`, `Python/desktop/settings/` | [Screen map and adding a panel](ui-architecture.md) |
 | Document resource sessions and storage policy | `Python/services/documents/` | [Document storage](document-storage.md) |
 | Mobile audio consent and capture privacy | `services/audio_output.py`, `mobile/audio_output.py` | [Audio playback](audio-playback.md) |
 | Access, resume authentication and privacy scope | `Python/services/`, `Python/mobile/` | [Access and privacy](access-privacy.md) |
 | Mobile navigation, storage or document lifetime | `Python/mobile/` | [Mobile host owners](mobile-runtime.md) |
-| Settings, registration or a new feature | Owning feature's `__init__.py` and `config.ini` | [Feature conventions](features.md), [extension points](extension-points.md) |
+| Registration or a new feature | Owning feature's `__init__.py` and `config.ini` | [Feature conventions](features.md), [extension points](extension-points.md) |
+| Preference schema, migration or persistence | `Python/mobile/{preference_schema,preferences}.py`, `Python/features/{settings,preferences}.py`, `Python/features/runtime/preferences.py` | [Configuration and data](configuration-and-data.md) |
 | A shared Logistics policy | `Python/services/` | [Service owners](services.md) |
 | Project build plans, snapshots, suites and release policy | `logistics_build/` | [Manager/project ownership](build-deployment-audit.md), [adapter contracts](build-manager.md) |
 | Mobile build tooling ownership | `mobile_build/` | [Build tooling map](build-tooling.md) |

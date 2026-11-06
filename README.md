@@ -139,6 +139,8 @@ Application source lives under `Python/`: `desktop/` hosts the desktop app,
 Project build policy and manager adapters live in `logistics_build/`; native
 packaging and deployment helpers live in `mobile_build/`. See the
 [code map](docs/development/code-map.md) for ownership and native compatibility.
+The [screen and panel map](docs/development/ui-architecture.md) locates named
+settings such as **Settings → Appearance** and explains where to add a panel.
 
 For contributors, start with [your first contribution](docs/development/getting-started.md).
 `python3 dev.py doctor` checks the local environment; `dev.py setup desktop` and

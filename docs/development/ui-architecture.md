@@ -1,4 +1,4 @@
-# Feature UI ownership
+# Screen and panel ownership
 
 Application-wide guidance has moved to [developer documentation](development.md):
 
@@ -6,6 +6,59 @@ Application-wide guidance has moved to [developer documentation](development.md)
 - [Feature declarations and toggles](features.md)
 - [Application extension points](extension-points.md)
 - [Browser extensions](file-browser.md)
+
+## Find a screen by its visible name
+
+| Screen or panel | Presentation owner | Composition and navigation |
+| --- | --- | --- |
+| Mobile Settings → Appearance | `Python/mobile/settings/appearance.py`; accent controls in `accent.py` beside it | `mobile.app.LogisticsMobile.show_settings()` → `settings.categories.settings_sections()` → `SettingsNavigation` |
+| Mobile Settings → App | `Python/mobile/settings/app.py` | Same lazy category registry |
+| Mobile Settings → Privacy & Security | `Python/mobile/settings/privacy_security.py`; audio and trusted Wi-Fi controls in sibling modules | Same registry; access policy remains with the [privacy owners](access-privacy.md) |
+| Mobile Settings → Markdown, Text or EPUB | `Python/mobile/settings/text.py` | One parameterized font/reading panel, with feature-specific controls retained |
+| Mobile Settings → Workspaces | `Python/mobile/settings/workspaces.py` | Storage and connection actions delegate to their existing owners |
+| Mobile Settings → Help or About | `Python/mobile/settings/help.py`; installed-version content in `information.py` | Help/About share one module; their routes remain separate |
+| Desktop Settings → Appearance & shared controls | `Python/desktop/settings/appearance.py:AppearanceSettingsPanel` | `desktop.pages.settings.SettingsPage._selected()` |
+| Desktop Settings → Configuration | `Python/desktop/settings/configuration.py:ConfigurationPanel` | Same retained category host |
+| Desktop Settings → Feature settings | `Python/desktop/settings/feature_settings.py:FeatureSettingsPanel` | Feature contributions supply lazy widgets and config files |
+| Mobile workspace browser | `Python/mobile/files_ui.py`, `file_drawer.py`, `workspace_navigation.py` | [Workspace navigation](mobile-workspace-navigation.md) separates retained browsers from pane placement |
+| Desktop Workspaces | `Python/desktop/pages/folders.py`, `folder_tree.py`, `workspace_panes.py` | Source requests and selection stay with the page/controller |
+
+Mobile `settings/categories.py` keeps small feature links and the ordered `Category`
+declarations: title, factory, arguments, icon, camera requirement and required
+feature IDs. `settings_sections()` applies those requirements before building
+anything. `settings/navigation.py` reads the same metadata for icons and retains
+each category on first access through `SettingsPages`; compact routes and wide
+panes share those retained pages. Category titles are route identities, so changing
+a display label requires checking selection restoration and callers.
+
+Desktop `SettingsPage` owns the sidebar, selected scope, retained panels and close
+checks. Its historical `CommonUtilsPanel` name remains an alias of
+`AppearanceSettingsPanel`; new implementation work belongs in the named panel.
+The platforms keep their own widgets and navigation. Shared form and editor
+mechanisms remain in commonUtils.
+
+## Add or change a Settings panel
+
+1. Put a substantial mobile panel beside the existing visibly named modules in
+   `Python/mobile/settings/`; reuse `forms.py` for rows and page construction.
+   Keep tiny launch links in `categories.py` and reuse parameterized controls
+   where the behavior is the same.
+2. Add the mobile factory to `SettingsCategories` and its ordered `Category`
+   declaration. Declare the icon and feature/camera gates there. Preserve lazy
+   construction and per-window retained state in `SettingsNavigation`.
+3. Keep preference defaults and validation in `mobile/preference_schema.py`,
+   persistence/migrations in `mobile/preferences.py`, and access policy with its
+   service owner. Add new modules to the owning `mobile_sources.json`.
+4. Check mobile settings navigation, controls and checkpoint behavior with
+   `python3 dev.py test mobile 'test_settings*.py'`; check the payload with
+   `python3 dev.py test desktop test_mobile_packaging.py`. Native layouts,
+   focus and gestures still require native validation.
+
+For a desktop application category, add its panel under `desktop/settings/` and
+connect it in `SettingsPage`. Feature settings use a `SettingsContribution`
+instead; follow [extension points](extension-points.md#feature-settings). Preserve
+scope changes and `can_close()` behavior. Start with
+`python3 dev.py test desktop test_settings_page.py`.
 
 ## Long-running workflows and safe closing
 
