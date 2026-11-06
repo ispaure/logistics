@@ -44,7 +44,12 @@ class CryptResources(CryptNoteLookup, LocalFiles):
 
     def __init__(self, item, *, binary=None, password=None):
         self.connection = item
-        values = unlock(item, password)
+        # Initial password unlock may publish the first parent generation. Bind
+        # only the final snapshot to a grant captured after that load completes.
+        unlock(item, password)
+        from features.rclone.desktop_service import service
+        parent_grant = service.credentials.capture(item.context)
+        values = unlock(item)
         self.binary = binary or executable.get_rclone_path()
         if not Path(self.binary).is_file():
             raise ValueError('Install the configured rclone executable first.')
@@ -59,17 +64,24 @@ class CryptResources(CryptNoteLookup, LocalFiles):
         settings = dict(values[item.remote])
         settings['remote'] = str(item.data.resolve(strict=True))
         self.storage_namespace = sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
-        session.remember(self.context, {'view': settings}, private=True, parent=item.context)
         self._cancellation = WorkerCancellation()
         self._cache = PrivateReadCache(native_path(self.root), self._check_active)
-        self._commands = CryptCommand(self.binary, self.context, self._cancellation,
-                                      self._check_active, closed=lambda: self.closed)
-        self._leases = ResourceLeases(validate=self._check_active, close=self.close)
-        self._unsubscribe = session.on_forget(self.context, self.close)
-        from features.rclone.desktop_service import service
-        self.credential_grant = service.credentials.capture(self.context)
-        from features.rclone.document_protection import DesktopDocumentProtection
-        self.document_protection = DesktopDocumentProtection(self)
+        try:
+            session.remember(self.context, {'view': settings}, private=True, parent=item.context)
+            self._commands = CryptCommand(self.binary, self.context, self._cancellation,
+                                          self._check_active, closed=lambda: self.closed)
+            self._leases = ResourceLeases(validate=self._check_active, close=self.close)
+            self._unsubscribe = session.on_forget(self.context, self.close)
+            self.credential_grant = service.credentials.capture(self.context)
+            from features.rclone.document_protection import DesktopDocumentProtection
+            self.document_protection = DesktopDocumentProtection(self)
+            # remember() attaches to the current parent: reject an intervening
+            # replacement instead of lending that generation stale settings.
+            parent_grant.check()
+            self._check_active()
+        except BaseException:
+            self.close()
+            raise
 
     @property
     def closed(self):
