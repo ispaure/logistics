@@ -2,9 +2,14 @@
 from hashlib import sha256
 import json
 from pathlib import Path
+from stat import S_ISREG
 from commonUtils.persistence import atomic_write_json
-from .workspace import uuid
-from services.identifiers import digest
+from commonUtils.persistence.publication import mutation_lock
+from services.identifiers import digest, uuid
+
+MAX_ITEMS = 256
+MAX_BYTES = 65536
+PROVIDERS = ('managed-text', 'library', 'notebook')
 
 
 class ResourceImports:
@@ -23,23 +28,43 @@ class ResourceImports:
         self.received_root = (self.collection_root.parent / 'Received Files'
                               if self.collection_root is not None and self.shared_root is None else None)
         self.path = self.root / 'resource-imports.json'
-        self.items, self.error = {}, ''
-        if self.path.exists():
-            try:
-                if self.path.is_symlink() or self.path.stat().st_size > 65536:
-                    raise ValueError('Invalid import index.')
-                data = json.loads(self.path.read_text())
-                if not isinstance(data, dict) or data.get('schema') != 1:
-                    raise ValueError('Invalid import index.')
-                items = data['items']
-                if not isinstance(items, dict) or len(items) > 256:
-                    raise ValueError('Invalid import index.')
-                for key, value in items.items():
-                    if not digest(key) or not isinstance(value, dict) or set(value) != {'provider', 'resource'} or value['provider'] not in {'managed-text', 'library', 'notebook'} or not uuid(value['resource']):
-                        raise ValueError('Invalid import identity.')
-                self.items = items
-            except (OSError, ValueError, TypeError, KeyError):
-                self.error = 'The import index could not be restored; its original file was preserved.'
+        try:
+            self._refresh()
+        except ValueError:
+            pass  # Defer reporting unreadable history until it is used.
+
+    def _read_items(self):
+        try:
+            info = self.path.lstat()
+        except FileNotFoundError:
+            return {}
+        if not S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
+            raise ValueError('Invalid import index.')
+        with self.path.open('rb') as stream:
+            raw = stream.read(MAX_BYTES + 1)
+        if len(raw) > MAX_BYTES:
+            raise ValueError('Invalid import index.')
+        data = json.loads(raw.decode('utf-8'))
+        if not isinstance(data, dict) or data.get('schema') != 1:
+            raise ValueError('Invalid import index.')
+        items = data.get('items')
+        if not isinstance(items, dict) or len(items) > MAX_ITEMS:
+            raise ValueError('Invalid import index.')
+        for key, value in items.items():
+            if (not digest(key) or not isinstance(value, dict)
+                    or set(value) != {'provider', 'resource'}
+                    or value['provider'] not in PROVIDERS or not uuid(value['resource'])):
+                raise ValueError('Invalid import identity.')
+        return items
+
+    def _refresh(self):
+        try:
+            self.items = self._read_items()
+        except (OSError, ValueError, RecursionError):
+            self.items = {}
+            self.error = 'The import index could not be restored; its original file was preserved.'
+            raise ValueError(self.error) from None
+        self.error = ''
 
     def identity(self, path):
         path = Path(path)
@@ -66,26 +91,32 @@ class ResourceImports:
         return sha256(identity.encode()).hexdigest()
 
     def find(self, path):
-        if self.error:
-            raise ValueError(self.error)
-        return self.items.get(self.identity(path))
+        with mutation_lock:
+            self._refresh()
+            return self.items.get(self.identity(path))
 
     def remember(self, path, provider, resource):
-        if self.error or self.path.is_symlink():
-            raise ValueError(self.error or 'Import index cannot be linked.')
         key = self.identity(path)
-        if key not in self.items and len(self.items) >= 256:
-            raise ValueError('Private-copy import history is full (limit: 256).')
-        updated = dict(self.items)
-        updated[key] = dict(provider=provider, resource=resource)
-        atomic_write_json(self.path, dict(schema=1, items=updated), max_bytes=65536, durable_directory=True)
-        self.items = updated
+        if provider not in PROVIDERS or not uuid(resource):
+            raise ValueError('Invalid import identity.')
+        with mutation_lock:
+            self._refresh()
+            if key not in self.items and len(self.items) >= MAX_ITEMS:
+                raise ValueError(f'Private-copy import history is full (limit: {MAX_ITEMS}).')
+            # The last published remember for this path replaces its mapping.
+            updated = dict(self.items)
+            updated[key] = dict(provider=provider, resource=resource)
+            self._publish(updated)
 
     def forget(self, provider, resource):
-        if self.error or self.path.is_symlink():
-            raise ValueError(self.error or 'Import index cannot be linked.')
-        updated = {key: value for key, value in self.items.items()
-                   if (value['provider'], value['resource']) != (provider, resource)}
-        if updated != self.items:
-            atomic_write_json(self.path, dict(schema=1, items=updated), max_bytes=65536, durable_directory=True)
-            self.items = updated
+        with mutation_lock:
+            self._refresh()
+            updated = {key: value for key, value in self.items.items()
+                       if (value['provider'], value['resource']) != (provider, resource)}
+            if updated != self.items:
+                self._publish(updated)
+
+    def _publish(self, items):
+        atomic_write_json(self.path, dict(schema=1, items=items),
+                          max_bytes=MAX_BYTES, durable_directory=True)
+        self.items = items

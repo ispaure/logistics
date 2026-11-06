@@ -1,6 +1,9 @@
 """Repeated private-copy opens preserve resource identity across launches."""
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
+import json
+from threading import Barrier
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
@@ -10,6 +13,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from mobile.app import LogisticsMobile
+from mobile.resource_imports import ResourceImports
 
 
 def seed_download(store, name, data):
@@ -24,8 +28,140 @@ def seed_download(store, name, data):
 
 
 class ResourceImportTests(unittest.TestCase):
+    def setUp(self):
+        directory = self.enterContext(TemporaryDirectory())
+        self.index_root = Path(directory).resolve()
+
+    def test_independent_writers_keep_both_imports(self):
+        documents = ResourceImports(self.index_root)
+        notebooks = ResourceImports(self.index_root)
+        document = self.index_root / 'private.md'
+        notebook = self.index_root / 'private.rmdoc'
+        documents.remember(document, 'managed-text', 'a' * 32)
+        notebooks.remember(notebook, 'notebook', 'b' * 32)
+        self.assertEqual(documents.find(notebook), dict(provider='notebook', resource='b' * 32))
+        self.assertEqual(notebooks.find(document), dict(provider='managed-text', resource='a' * 32))
+        self.assertNotIn('private', documents.path.read_text())
+
+    def test_forget_is_visible_and_later_writes_do_not_resurrect_it(self):
+        document = self.index_root / 'private.md'
+        documents = ResourceImports(self.index_root)
+        documents.remember(document, 'managed-text', 'a' * 32)
+        notebooks = ResourceImports(self.index_root)
+        notebook = self.index_root / 'private.rmdoc'
+        notebooks.remember(notebook, 'notebook', 'b' * 32)
+        reader = ResourceImports(self.index_root)
+        documents.forget('notebook', 'b' * 32)
+        self.assertIsNone(reader.find(notebook))
+        notebooks.remember(self.index_root / 'another.rmdoc', 'notebook', 'c' * 32)
+        self.assertIsNone(ResourceImports(self.index_root).find(notebook))
+        self.assertEqual(notebooks.find(document)['resource'], 'a' * 32)
+
+    def test_last_successful_remember_replaces_mapping_and_old_forget_keeps_it(self):
+        path = self.index_root / 'private.md'
+        earlier = ResourceImports(self.index_root)
+        earlier.remember(path, 'managed-text', 'a' * 32)
+        later = ResourceImports(self.index_root)
+        later.remember(path, 'managed-text', 'b' * 32)
+        earlier.forget('managed-text', 'a' * 32)
+        self.assertEqual(earlier.find(path), dict(provider='managed-text', resource='b' * 32))
+        self.assertEqual(ResourceImports(self.index_root).find(path)['resource'], 'b' * 32)
+
+    def test_threaded_writers_preserve_disjoint_mappings(self):
+        writers = [ResourceImports(self.index_root) for _ in range(4)]
+        start = Barrier(len(writers))
+
+        def remember(index, imports):
+            start.wait(timeout=5)
+            imports.remember(self.index_root / str(index), 'notebook', f'{index:032x}')
+
+        with ThreadPoolExecutor(max_workers=len(writers)) as pool:
+            futures = [pool.submit(remember, index, imports) for index, imports in enumerate(writers)]
+            for future in futures:
+                future.result()
+        restored = ResourceImports(self.index_root)
+        for index in range(len(writers)):
+            self.assertEqual(restored.find(self.index_root / str(index)),
+                             dict(provider='notebook', resource=f'{index:032x}'))
+
+    def test_failed_publication_leaves_committed_mappings_available(self):
+        path = self.index_root / 'private.md'
+        imports = ResourceImports(self.index_root)
+        imports.remember(path, 'managed-text', 'a' * 32)
+        original = imports.path.read_bytes()
+        with patch('mobile.resource_imports.atomic_write_json', side_effect=OSError('write failed')):
+            with self.assertRaisesRegex(OSError, 'write failed'):
+                imports.remember(path, 'managed-text', 'b' * 32)
+            with self.assertRaisesRegex(OSError, 'write failed'):
+                imports.forget('managed-text', 'a' * 32)
+        self.assertEqual(imports.path.read_bytes(), original)
+        self.assertEqual(imports.find(path)['resource'], 'a' * 32)
+        imports.forget('managed-text', 'a' * 32)
+        self.assertIsNone(imports.find(path))
+
+    def test_remember_checks_current_capacity_and_validates_new_identity(self):
+        imports = ResourceImports(self.index_root)
+        path = self.index_root / 'private.md'
+        with self.assertRaises(ValueError):
+            imports.remember(path, 'managed-text', 'private.md')
+        with self.assertRaises(ValueError):
+            imports.remember(path, 'private.md', 'a' * 32)
+        self.assertFalse(imports.path.exists())
+
+        identity = dict(provider='managed-text', resource='a' * 32)
+        items = {f'{index:064x}': identity for index in range(255)}
+        items[imports.identity(path)] = identity
+        original = json.dumps(dict(schema=1, items=items))
+        imports.path.write_text(original)
+        with self.assertRaisesRegex(ValueError, 'limit: 256'):
+            imports.remember(self.index_root / 'new.md', 'managed-text', 'b' * 32)
+        self.assertEqual(imports.path.read_text(), original)
+        imports.remember(path, 'managed-text', 'b' * 32)
+        self.assertEqual(imports.find(path)['resource'], 'b' * 32)
+        self.assertEqual(len(imports.items), 256)
+
+    def test_stale_instance_vetoes_invalid_disk_index(self):
+        imports = ResourceImports(self.index_root)
+        path = self.index_root / 'private.md'
+        imports.remember(path, 'managed-text', 'a' * 32)
+        identity = dict(provider='managed-text', resource='a' * 32)
+        invalid_indexes = {
+            'malformed JSON': b'{',
+            'invalid ID': json.dumps(dict(schema=1, items={
+                imports.identity(path): dict(identity, resource='private.md'),
+            })).encode(),
+            'too many items': json.dumps(dict(schema=1, items={
+                f'{index:064x}': identity for index in range(257)
+            })).encode(),
+            'oversized': b' ' * 65537,
+        }
+        for label, invalid in invalid_indexes.items():
+            with self.subTest(label=label):
+                imports.path.write_bytes(invalid)
+                for action in (
+                    lambda: imports.find(path),
+                    lambda: imports.remember(path, 'managed-text', 'b' * 32),
+                    lambda: imports.forget('managed-text', 'a' * 32),
+                ):
+                    with self.assertRaises(ValueError):
+                        action()
+                self.assertEqual(imports.path.read_bytes(), invalid)
+
+    def test_stale_instance_vetoes_dangling_index_symlink(self):
+        imports = ResourceImports(self.index_root)
+        path = self.index_root / 'private.md'
+        target = self.index_root / 'missing'
+        imports.path.symlink_to(target)
+        with self.assertRaises(ValueError):
+            imports.find(path)
+        with self.assertRaises(ValueError):
+            imports.remember(path, 'managed-text', 'a' * 32)
+        with self.assertRaises(ValueError):
+            imports.forget('managed-text', 'a' * 32)
+        self.assertEqual(imports.path.readlink(), target)
+        self.assertFalse(target.exists())
+
     def test_android_received_files_on_sd_keep_identity_and_reject_siblings(self):
-        from mobile.resource_imports import ResourceImports
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             private, collection = root / 'private', root / 'sd/Logistics/Local'
@@ -51,7 +187,6 @@ class ResourceImportTests(unittest.TestCase):
                 imports.find(linked)
 
     def test_ios_inbox_import_identity_is_retained_without_plaintext_names(self):
-        from mobile.resource_imports import ResourceImports
         from services.documents.locations import use_shared_local, _shared_local_roots
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -100,7 +235,6 @@ class ResourceImportTests(unittest.TestCase):
             self.assertEqual(app.reader_manager().active.session.id, identity)
             self.assertEqual(len(app.readers.catalog.library_store.items()[0]), 1)
             # Legacy imports acquire a persistent source when reopened from Local.
-            import json
             store = app.readers.catalog.library_store
             key = owner.session.resource
             self.assertTrue(app.close_session(identity))
@@ -116,7 +250,6 @@ class ResourceImportTests(unittest.TestCase):
             store.progress(active.book_record, active.book_record['position'])
 
     def test_relocated_collection_keeps_existing_identity_and_rejects_other_paths(self):
-        from mobile.resource_imports import ResourceImports
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             private, shared = root / 'private', root / 'Documents/Local'
@@ -160,7 +293,6 @@ class ResourceImportTests(unittest.TestCase):
                 raw = (root / 'resource-imports.json').read_text()
                 self.assertNotIn('same.md', raw)
                 self.assertNotIn('kept draft', raw)
-                from mobile.resource_imports import ResourceImports
                 self.assertEqual(ResourceImports(root).find(path)['resource'], key)
                 linked = root / 'linked.md'
                 linked.symlink_to(path)
