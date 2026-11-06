@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from time import monotonic
 from threading import Event, Lock
 from typing import Protocol
-from mobile.worker_retirement import drain_worker
+from services.worker_retirement import drain_worker
 from .models import TransferOutcome
 
 

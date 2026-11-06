@@ -8,7 +8,7 @@ from toga.style.pack import COLUMN, ROW
 
 from features.rclone.transfers.transfer_options import TransferOptions, load_options, save_options
 from features.rclone.transfers.service import TransferContext
-from mobile.worker_retirement import drain_worker
+from services.worker_retirement import drain_worker
 from .plan import NativeTransferRequest
 from features.rclone.mobile.messages import import_hint
 

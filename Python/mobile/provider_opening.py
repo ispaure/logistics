@@ -6,7 +6,7 @@ from commonUtils.runtime.operations import check_cancelled
 from services.documents.mobile_reading import reading_capabilities, close_document_reader
 from .provider_ui import private_label
 from .provider_view import ProviderDocumentView
-from .worker_retirement import drain_worker
+from services.worker_retirement import drain_worker
 
 
 async def _await_opening_worker(worker, cancelled):

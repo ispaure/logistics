@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from io import BytesIO
 
 from features.rclone.credential_loading import CredentialStage, CredentialResult
-from mobile.worker_retirement import drain_worker
+from services.worker_retirement import drain_worker
 from .cloud import PACKAGE_LIMIT, download_name
 
 

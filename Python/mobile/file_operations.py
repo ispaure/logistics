@@ -12,7 +12,7 @@ from commonUtils.runtime.resources.mutations import (
 )
 from services.documents.locations import CollectionFiles
 from features.rclone.localcrypt.mobile.resources import encrypted_storage
-from .worker_retirement import drain_worker
+from services.worker_retirement import drain_worker
 
 
 @dataclass(frozen=True)
