@@ -1,5 +1,7 @@
 """Platform PDF rendering adapter; document lifetime stays in the feature facade."""
 
+from contextlib import suppress
+
 from ..limits import PAGE_EDGE
 
 
@@ -50,9 +52,14 @@ class AndroidPDF:
                 self.document = jclass("android.graphics.pdf.PdfRenderer")(descriptor)
                 descriptor = None  # transferred to renderer
             self.count = self.document.getPageCount()
-        finally:
-            if descriptor is not None:
-                descriptor.close()
+        except BaseException:
+            # Retire whichever object owns the duplicate, preserving the
+            # opening failure even if rollback also raises.
+            resource = self.document if self.document is not None else descriptor
+            if resource is not None:
+                with suppress(BaseException):
+                    resource.close()
+            raise
 
     def __enter__(self):
         return self
