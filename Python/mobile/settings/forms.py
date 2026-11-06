@@ -1,4 +1,4 @@
-"""Compact preference rows and offline installed-build information."""
+"""Shared Settings page frames, preference rows and responsive form fitting."""
 import json
 from pathlib import Path
 import sys
@@ -17,6 +17,14 @@ from ..ui_metrics import CONTROL_TEXT, CAPTION_TEXT, toga_font_size
 
 OPTION_FONT_SIZE = toga_font_size(CONTROL_TEXT)
 NOTE_FONT_SIZE = toga_font_size(CAPTION_TEXT)
+
+
+def page(title):
+    """Create the shared titled body for a lazily constructed Settings panel."""
+    from .titles import page_title
+    box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+    box.add(page_title(title))
+    return box
 
 
 def fit_text(control, width):
