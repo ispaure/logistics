@@ -15,6 +15,7 @@ class HostLifecycle:
 
     def __init__(self, host):
         self.host = host
+        self.replacement_attempt = None
         self.replacement_prepared = False
         self.replaced = False
         self.exited = False
@@ -63,27 +64,52 @@ class HostLifecycle:
             if stop is not None:
                 stop(value)
 
-    def prepare_replacement(self):
-        """Flush durable state before replacement loads it on a worker thread."""
-        if self.replacement_prepared:
-            return
-        host = self.host
+    def prepare_replacement(self, receipt=None):
+        """Preservation is a preflight; the predecessor stays active until claim."""
         from .session_workflows.transitions import transitions_for
-        transitions_for(host).preserve_for_replacement()
-        self._cancel_task('startup_task')
-        host.active_host = False
-        self._retire(self, 'stop_local_searches')
-        self.replacement_prepared = True
+        transitions_for(self.host).preserve_for_replacement(receipt)
 
-    def retire_for_replacement(self):
-        """Retire callbacks/resources once, after successful preservation."""
-        self.prepare_replacement()
+    def retire_for_replacement(self, receipt=None, *, incoming=None, identity=None, attempt=None):
+        """Admit once, claim before callbacks, then retry independent cleanup."""
+        host = self.host
+        private = getattr(host, 'private_sessions', None)
+        if not self.replaced:
+            if private is not None and receipt is None:
+                receipt = private.prepare_replacement_sync()
+            self.prepare_replacement(receipt)
+            # Preservation callbacks can reenter startup or mutate providers.
+            if private is not getattr(host, 'private_sessions', None):
+                raise OSError('The private workspace changed during replacement.')
+            if private is not None:
+                private.require_replacement_safe(receipt)
+            if incoming is not None:
+                from .app import _active_hosts
+                own = lifecycle(incoming)
+                if (self.replacement_attempt is not attempt or _active_hosts.get(identity) is not host
+                        or own.replaced or own.startup_aborted):
+                    raise asyncio.CancelledError
+            # No await or arbitrary callback between the final checks and this
+            # ownership change. Provider admission only sets terminal flags.
+            if private is not None:
+                private._admit_retirement()
+            host.active_host = False
+            self.replacement_prepared = self.replaced = True
+            if incoming is not None:
+                incoming.active_host = False
+                incoming._startup_claim = identity
+                _active_hosts[identity] = incoming
+        if private is not None:
+            self._retire(private, 'retire')
         self._retire_resources()
-        self.replaced = True
 
     def abort_startup(self):
         """Retire only initialized resources, without checkpointing partial state."""
         self.startup_aborted = True
+        identity = self.host.__dict__.get('_startup_claim')
+        if identity is not None:
+            from .app import _active_hosts
+            if _active_hosts.get(identity) is self.host:
+                del _active_hosts[identity]
         screen = getattr(self.host, 'startup_screen', None)
         self._retire(getattr(screen, 'cover', None), 'dispose')
         self._retire_resources()

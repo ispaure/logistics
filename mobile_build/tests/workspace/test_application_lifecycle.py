@@ -98,9 +98,11 @@ class HostLifecycleTests(unittest.TestCase):
         self.assertFalse(owner.replacement_prepared)
         host.checkpoint_chat.return_value = True
         owner.prepare_replacement()
+        self.assertTrue(host.active_host)
+        owner.retire_for_replacement()
         self.assertFalse(host.active_host)
 
-    def test_async_prepare_then_retire_flushes_once_and_disposes_once(self):
+    def test_prepare_is_only_preflight_and_retirement_rechecks_then_disposes_once(self):
         host = self.host()
         owner = lifecycle(host)
         with patch('mobile.markdown_speech.stop_markdown_speech'), \
@@ -110,9 +112,9 @@ class HostLifecycleTests(unittest.TestCase):
             owner.retire_for_replacement()
             owner.retire_for_replacement()
         self.assertIs(lifecycle(host), owner)
-        host.store.flush_checkpoints.assert_called_once_with()
-        host.credential_document_lists.flush_writes.assert_called_once_with()
-        host.checkpoint_chat.assert_called_once_with()
+        self.assertEqual(host.store.flush_checkpoints.call_count, 2)
+        self.assertEqual(host.credential_document_lists.flush_writes.call_count, 2)
+        self.assertEqual(host.checkpoint_chat.call_count, 2)
         host.startup_task.cancel.assert_called_once_with()
         host.screen_privacy.dispose.assert_called_once_with()
         host.cloud_startup_task.cancel.assert_called_once_with()

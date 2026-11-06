@@ -50,6 +50,8 @@ class PrivateController(ReaderHost, ProviderUI):
         self.set_document_busy(busy)
 
     def set_document_busy(self, busy):
+        if busy and (self.manager.terminal or self.provider_document().terminal or not self.app.active_host):
+            raise OSError('This private document has retired.')
         self.operation_busy = busy
         if busy:
             self.operation_idle.clear()
@@ -127,14 +129,161 @@ class PrivateController(ReaderHost, ProviderUI):
         return await self.app.show_crypt_save_as(widget, owner=self, **kwargs)
 
 
+class _ReplacementReceipt:
+    """Ephemeral observations produced only by this manager's flush path."""
+    def __init__(self, manager, observations):
+        self.manager, self.observations = manager, observations
+
+
 class PrivateSessions:
     def __init__(self, app):
         self.app = app
         self.controllers = {}
         self.active = None
         self.positions = {}
+        self.terminal = False
         from .protection import for_app
         for_app(app).register(self, self.privacy_gates)
+
+    def _replacement_observations(self):
+        from commonUtils.ui.native.text_size import native_backend
+        if self.terminal or not self.app.active_host or getattr(self.app, 'private_sessions', self) is not self:
+            raise OSError('The previous private workspace is no longer available.')
+        observations = []
+        members = tuple(self.controllers.items())
+        # Access checks may invoke provider code. Run them before taking the
+        # all-controller state observation, so one cannot stale an earlier row.
+        for _, owner in members:
+            try:
+                owner.document_access()
+            except ValueError:
+                raise OSError('Unlock the private document before replacing this workspace.') from None
+        for key, owner in members:
+            document = owner.__dict__.get('_provider_document')
+            if document is None:
+                raise OSError('The private document owner changed during replacement.')
+            workspace, session = self.app.workspace, owner.session
+            token = workspace.token(key)
+            if (owner.manager is not self or owner.app is not self.app
+                    or workspace.sessions.get(key) is not session or not workspace.accepts(token)
+                    or document.terminal or document.busy or document.worker is not None
+                    or document.cancel is not None or getattr(owner, '_opening_token', None) is not None
+                    or owner.private_dirty()):
+                raise OSError('Save or finish the private document before replacing this workspace.')
+            progress = getattr(owner, '_provider_progress', None)
+            if progress is not None:
+                progress.require_idle()
+            reader = document.reader
+            workflow = getattr(owner, '_provider_markdown', None)
+            editor = getattr(workflow, 'formatted', None)
+            content = getattr(workflow, 'content', None)
+            view = getattr(editor, 'view', None)
+            mounted = editor is not None and content is not None and view in content.children
+            native = mounted and not getattr(reader, 'read_only', False) and native_backend(view).startswith(('toga_iOS.', 'toga_android.'))
+            if (getattr(workflow, 'closed', False) or (mounted and getattr(editor, 'closed', False))
+                    or getattr(workflow, 'preparing_formatted', None) is not None
+                    or (getattr(workflow, 'pending', None) is not None and not workflow.pending.done())):
+                raise OSError('Finish the private editor before replacing this workspace.')
+            # Keep owner references in the receipt; ids only compare exact identity,
+            # never overloaded equality on controllers or native view wrappers.
+            state = (key, id(owner), id(owner.manager), id(owner.app), id(workspace), id(session), token,
+                     id(document), id(reader), id(getattr(reader, 'source', None)), id(workflow),
+                     id(content), id(getattr(workflow, 'source', None)), id(editor), id(view), mounted, native,
+                     id(progress), id(getattr(progress, 'state', None)),
+                     (progress.generation, progress.snapshot()) if progress is not None else None,
+                     getattr(editor, 'bridge', None), getattr(editor, '_revision', None))
+            observations.append((owner, editor if native else None, state,
+                                 (self.app, workspace, session, document, reader, getattr(reader, 'source', None),
+                                  workflow, content, getattr(workflow, 'source', None), editor, view,
+                                  progress, getattr(progress, 'state', None))))
+        if tuple((key, id(owner)) for key, owner in self.controllers.items()) != tuple((key, id(owner)) for key, owner in members):
+            raise OSError('The private workspace changed during replacement.')
+        return observations
+
+    async def prepare_replacement(self, *, valid=lambda: True):
+        observations = self._replacement_observations()
+        for index, (owner, editor, state, references) in enumerate(observations):
+            if editor is None:
+                continue
+            try:
+                await editor.flush()
+            except (ValueError, OSError):
+                raise OSError('Could not preserve private editor input. Keep the document open.') from None
+            if not valid():
+                import asyncio
+                raise asyncio.CancelledError
+            current = self._replacement_observations()
+            if (len(current) != len(observations) or current[index][2][:-1] != state[:-1]
+                    or type(editor._revision) is not int or editor._revision <= state[-1]):
+                raise OSError('The private editor changed during replacement.')
+            observations[index] = current[index]
+        self.require_replacement_safe(_ReplacementReceipt(self, observations))
+        for index, (owner, editor, state, references) in enumerate(observations):
+            progress = getattr(owner, '_provider_progress', None)
+            if progress is None:
+                continue
+            try:
+                await progress.prepare_replacement()
+            except (OSError, ValueError):
+                raise OSError('Could not preserve private reader progress.') from None
+            if not valid():
+                import asyncio
+                raise asyncio.CancelledError
+            current = self._replacement_observations()
+            if (len(current) != len(observations) or current[index][2][:-3] != state[:-3]
+                    or current[index][2][-2:] != state[-2:]):
+                raise OSError('The private workspace changed during replacement.')
+            observations[index] = current[index]
+        receipt = _ReplacementReceipt(self, observations)
+        self.require_replacement_safe(receipt)
+        return receipt
+
+    def prepare_replacement_sync(self):
+        self.require_replacement_safe()
+        observations = self._replacement_observations()
+        for index, (owner, editor, state, references) in enumerate(observations):
+            progress = getattr(owner, '_provider_progress', None)
+            if progress is None:
+                continue
+            progress.checkpoint_replacement()
+            current = self._replacement_observations()
+            if (len(current) != len(observations) or current[index][2][:-3] != state[:-3]
+                    or current[index][2][-2:] != state[-2:]):
+                raise OSError('The private workspace changed during replacement.')
+            observations[index] = current[index]
+        receipt = _ReplacementReceipt(self, observations)
+        self.require_replacement_safe(receipt)
+        return receipt
+
+    def require_replacement_safe(self, receipt=None):
+        current = self._replacement_observations()
+        if receipt is None:
+            if any(editor is not None for _, editor, _, _ in current):
+                raise OSError('Save or close the native private editor before replacing this workspace.')
+        elif (not isinstance(receipt, _ReplacementReceipt) or receipt.manager is not self
+              or [row[2] for row in current] != [row[2] for row in receipt.observations]):
+            raise OSError('The private workspace changed during replacement.')
+
+    def _admit_retirement(self):
+        # Plain-state transition only. The lifecycle validates immediately before
+        # this segment, then claims the successor before invoking any callbacks.
+        self.terminal = True
+        for owner in self.controllers.values():
+            owner._provider_document.terminal = True
+
+    def retire(self, receipt=None):
+        """Accepted replacement only; no manifest, history or credential writes."""
+        if not self.terminal:
+            self.require_replacement_safe(receipt)
+            self._admit_retirement()
+        failed = False
+        for owner in self.controllers.values():
+            try:
+                owner.provider_document().dispose()
+            except Exception:
+                failed = True
+        if failed:
+            raise OSError('Private document cleanup is incomplete; retry retirement.')
 
     def privacy_gates(self):
         return tuple(owner.privacy_gate for owner in self.controllers.values())
@@ -160,16 +309,12 @@ class PrivateSessions:
             pending = owner._crypt_cancel
             if pending is not None:
                 pending.set()
-            if pending is None and not owner.operation_busy:
+            progress = getattr(owner, '_provider_progress', None)
+            if pending is None and not owner.operation_busy and getattr(progress, 'worker', None) is None:
                 self.close(key, discard=True, force=True)
-            else:
-                # Cancellation may still be retiring a worker. Clear the UI now;
-                # its completion cannot present content with the invalid token.
-                owner._crypt_cancel = None
-                try:
-                    ProviderUI.clear_private_reader(owner, discard=True)
-                finally:
-                    owner._crypt_cancel = pending
+            # A busy owner retains its source until the actual worker retires.
+            # Visible widgets are detached immediately below; finish_operation
+            # retries this policy once it can safely close the retained reader.
             owner.session.title = ''
             view = getattr(owner, 'crypt_view', None)
             if view is not None:
@@ -190,7 +335,7 @@ class PrivateSessions:
 
     def available(self, key):
         owner = self.controllers.get(key)
-        if owner is None or owner.crypt_reader is None:
+        if self.terminal or not self.app.active_host or owner is None or owner.crypt_reader is None:
             return False
         try:
             owner.document_access()
@@ -199,6 +344,8 @@ class PrivateSessions:
         return True
 
     def bind(self, owner):
+        if self.terminal or not self.app.active_host:
+            raise OSError('This private workspace has retired.')
         self.suspend(except_owner=owner)
         readers = getattr(self.app, 'readers', None)
         if readers is not None and readers.active is not None:
@@ -293,6 +440,8 @@ class PrivateSessions:
 
     async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False):
         import asyncio
+        if self.terminal or not self.app.active_host:
+            return False
         if not self.app.require_document_feature(key, copies=copies):
             return False
         destination = destination or self.app.native_host.state.destination
@@ -480,6 +629,8 @@ class PrivateSessions:
         return any(owner.private_dirty() for owner in self.controllers.values())
 
     def close(self, key, *, discard=False, force=False):
+        if self.terminal:
+            return False
         owner = self.controllers.get(key)
         if owner is None:
             return False
@@ -491,6 +642,8 @@ class PrivateSessions:
         if not force and owner.private_dirty() and not discard:
             owner.resume_crypt()
             owner.crypt_title.text = 'Unsaved changes: save,\nor discard and close.'
+            return False
+        if getattr(getattr(owner, '_provider_progress', None), 'worker', None) is not None:
             return False
         reader = owner.crypt_reader
         if reader is not None and not force:
@@ -514,8 +667,12 @@ class PrivateSessions:
         return True
 
     def clear(self, *, discard=False):
+        if self.terminal:
+            return False
         owners = list(self.controllers.values())
-        if any(owner._crypt_cancel is not None or owner.operation_busy for owner in owners):
+        if any(owner._crypt_cancel is not None or owner.operation_busy
+               or getattr(getattr(owner, '_provider_progress', None), 'worker', None) is not None
+               for owner in owners):
             return False
         dirty = next((owner for owner in owners if owner.private_dirty()), None)
         if dirty is not None and not discard:
@@ -523,6 +680,7 @@ class PrivateSessions:
             dirty.crypt_title.text = 'Unsaved changes: save,\nor discard and close.'
             return False
         for owner in owners:
-            self.close(owner.session.id, discard=True, force=True)
+            if not self.close(owner.session.id, discard=True, force=True):
+                return False
         self.positions.clear()
         return True
