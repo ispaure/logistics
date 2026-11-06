@@ -142,13 +142,37 @@ class PackageTests(unittest.TestCase):
             packaging.package(root, root / 'release.zip', names, required=set())
             with zipfile.ZipFile(root / 'release.zip') as archive:
                 archive.extractall(root / 'extracted')
-            env = dict(os.environ, APPDATA=str(root / 'appdata'), USERPROFILE=str(root / 'user'))
+            from commonUtils.integrations.wrappers.cmdShellWrapper.process import (
+                ProcessSupervisor, get_process_group_kwargs,
+            )
+
+            launch_temp = root / 'launch-temp'
+            launch_temp.mkdir()
+            env = dict(os.environ, APPDATA=str(root / 'appdata'), USERPROFILE=str(root / 'user'),
+                       TEMP=str(launch_temp), TMP=str(launch_temp))
             env.pop('COMMONUTILS_ROOT', None)
-            result = subprocess.run(['cmd.exe', '/d', '/c', 'LaunchLogistics_WIN.bat'],
-                cwd=root / 'extracted/Logistics', env=env, stdin=subprocess.DEVNULL,
-                capture_output=True, text=True, errors='replace', timeout=60)
-            output = result.stdout + result.stderr
-            self.assertEqual(result.returncode, 1, output)
+            log = root / 'launcher.log'
+            timed_out = False
+            with log.open('wb') as stream:
+                child = subprocess.Popen(['cmd.exe', '/d', '/c', 'LaunchLogistics_WIN.bat'],
+                    cwd=root / 'extracted/Logistics', env=env, stdin=subprocess.DEVNULL,
+                    stdout=stream, stderr=subprocess.STDOUT, **get_process_group_kwargs())
+                try:
+                    with ProcessSupervisor(child):
+                        child.wait(timeout=60)
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+            with log.open('rb') as stream:
+                stream.seek(max(0, log.stat().st_size - 8192))
+                output = stream.read(8192).decode('utf-8', errors='replace')
+            if timed_out:
+                staging = list(launch_temp.glob('commonutils_launch_*'))
+                expected = ('SOURCE_DIR_VALUE', 'LAUNCH_FILE_VALUE', 'ENSURE_USER_DIR',
+                            'ENVIRONMENT_SYNC_WRAPPER_VALUE')
+                present = sorted(name for name in expected if any((path / name).is_file() for path in staging))
+                self.fail(f'Packaged launcher exceeded 60 seconds. Config staging directories: {len(staging)}. '
+                          f'Written config fields: {present}. Launcher output tail:\n{output}')
+            self.assertEqual(child.returncode, 1, output)
             self.assertIn('Configured source_dir does not exist or is not a directory:', output)
             self.assertIn('missing-source', output)
 
