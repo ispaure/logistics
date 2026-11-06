@@ -21,7 +21,16 @@ def panel_state(app):
     route_state = tuple((key, tuple(row[0] for row in rows
                          if not (category and key == 'settings' and row[0] == 'settings-category')))
                         for key, rows in app.routes.screens.items())
-    panel = ('settings-category', settings.selected) if category else tuple(id(child) for child in body.children)
+    if category:
+        panel = ('settings-category', settings.selected)
+    else:
+        # Wide Settings layouts move the category sidebar into the active route.
+        sidebar = settings.sidebar if destination == 'settings' and settings is not None else None
+        panel = tuple(id(child) for child in body.children if child is not sidebar)
+        settings_routes = app.routes.screens['settings']
+        if destination == 'settings' and settings_routes and settings_routes[-1][0] == 'documentation':
+            reader = app.documentation
+            panel += (id(reader.web), reader.path, tuple(reader.history), reader.history_index)
     source = getattr(app, 'folder_source', None) if destination == 'files' else None
     return (destination, route_state, panel, source, getattr(app, 'file_path', None),
             content_state(app),
