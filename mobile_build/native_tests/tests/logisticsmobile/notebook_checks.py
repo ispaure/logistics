@@ -86,7 +86,8 @@ async def exercise_notebooks(app, *, return_to_home=True):
         return await panel.web.evaluate_javascript(
             "document.body.classList.contains('native-drawing-tools')")
     native_tools = await native_drawing_row()
-    if tools is not None and getattr(panel.view, '_reader_top_band_state', None) is None:
+    title_controls = getattr(panel.view, '_document_title_controls', ())
+    if tools is not None and not title_controls and getattr(panel.view, '_reader_top_band_state', None) is None:
         controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
         if tools.fits(controller):
             for _ in range(15):
@@ -94,7 +95,19 @@ async def exercise_notebooks(app, *, return_to_home=True):
                     break
                 await asyncio.sleep(.1)
                 native_tools = await native_drawing_row()
-            assert native_tools, 'The allocation fits the notebook tools but the native row did not mount'
+            if not native_tools:
+                from features.notebooks.mobile.panel import _bounded_input_result
+                try:
+                    dom = await _bounded_input_result(panel.web.evaluate_javascript(
+                        "JSON.stringify({lease:document.body.classList.contains('native-drawing-tools'),"
+                        "hidden:document.body.classList.contains('tools-hidden'),"
+                        "hook:typeof window.notebookNativeTools,busy,active:active!==null,queued:queue.length})"), 1)
+                except Exception as error:
+                    dom = type(error).__name__
+                raise AssertionError(('Eligible notebook row did not acquire its DOM lease',
+                    dict(canvas_ready=panel._canvas_ready, strip_mounted=tools.strip is not None,
+                         current=tools.current(), observer_running=tools.task is not None and not tools.task.done(),
+                         pending_queries=len(tools.pending), epoch=tools.epoch, dom=dom)))
     if native_tools:
         assert tools is not None and tools.current()
         frames = [tools.anchor(name) for name in tools.buttons]

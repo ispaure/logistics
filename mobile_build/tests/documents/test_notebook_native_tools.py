@@ -107,6 +107,47 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(button._impl.native.hidden)
             self.assertEqual(button.enabled, not self.state[name]['disabled'])
 
+    async def test_new_strip_waits_for_native_attachment_before_querying(self):
+        strip = self.manager.strip
+        self.manager.visible.return_value = False
+        self.manager.owns_controller = unittest.mock.Mock(return_value=True)
+        close = self.manager.close = unittest.mock.Mock()
+        queried = asyncio.Event()
+
+        async def query(script):
+            queried.set()
+            return json.dumps(self.state)
+
+        self.manager.query = AsyncMock(side_effect=query)
+        task = asyncio.create_task(self.manager.observe())
+        try:
+            await asyncio.sleep(0)
+            close.assert_not_called()
+            self.manager.query.assert_not_awaited()
+            self.assertIs(self.manager.strip, strip)
+            self.assertTrue(all(not button.enabled for button in self.manager.buttons.values()))
+            self.manager.visible.return_value = True
+            await asyncio.wait_for(queried.wait(), 1)
+            self.manager.query.assert_awaited_once_with('window.notebookNativeTools?.(null)')
+            self.assertTrue(self.manager.buttons['undo'].enabled)
+            self.assertFalse(self.manager.buttons['redo'].enabled)
+            close.assert_not_called()
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_route_change_retires_unattached_strip_without_renewing_lease(self):
+        self.manager.visible.return_value = False
+        self.manager.owns_controller = unittest.mock.Mock(return_value=True)
+        close = self.manager.close = unittest.mock.Mock()
+        self.manager.query = AsyncMock(return_value=json.dumps(self.state))
+        task = asyncio.create_task(self.manager.observe())
+        await asyncio.sleep(0)
+        self.manager.owns_controller.return_value = False
+        await asyncio.wait_for(task, .5)
+        close.assert_called_once_with()
+        self.manager.query.assert_not_awaited()
+
     async def test_retired_canvas_cannot_receive_actions(self):
         self.panel.web = object()
         self.manager.query = AsyncMock()

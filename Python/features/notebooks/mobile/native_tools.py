@@ -99,13 +99,17 @@ class NativeDrawingTools:
             raise TimeoutError('The notebook controls are still responding.')
         return future.result()
 
-    def visible(self, panel):
-        from commonUtils.ui.native.keyboard import native_value
+    def owns_controller(self, panel):
         if not panel.app.active_host:
             return False
         adapter = panel.app.native_host.adapter
         controller = adapter.content_controller(panel.app.native_host.state.destination)
-        if self.controller is None or controller.ptr.value != self.controller.ptr.value:
+        return (self.controller is not None and controller is not None
+                and controller.ptr.value == self.controller.ptr.value)
+
+    def visible(self, panel):
+        from commonUtils.ui.native.keyboard import native_value
+        if not self.owns_controller(panel):
             return False
         native = self.header._impl.native
         window = native_value(native.window)
@@ -122,12 +126,14 @@ class NativeDrawingTools:
             native = parent
         return False
 
-    def current(self):
-        panel = self.panel()
+    def owns_strip(self, panel):
         return (panel is not None and not panel.closed and panel.web is self.web
                 and self.header is not None and self.header.parent is not None
-                and self.strip is not None and self.strip.parent is self.header
-                and self.visible(panel))
+                and self.strip is not None and self.strip.parent is self.header)
+
+    def current(self):
+        panel = self.panel()
+        return self.owns_strip(panel) and self.visible(panel)
 
     async def refresh(self, action=None):
         panel = self.panel()
@@ -182,6 +188,14 @@ class NativeDrawingTools:
     async def observe(self):
         epoch = self.epoch
         try:
+            # Native attachment can trail logical mounting on the first layout
+            # turn. Keep the untouched buttons disabled until visibility agrees.
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 1
+            while (self.epoch == epoch and self.owns_strip(panel := self.panel())
+                   and self.owns_controller(panel) and not self.visible(panel)
+                   and loop.time() < deadline):
+                await asyncio.sleep(.05)
             while self.epoch == epoch and self.current():
                 if not self.lock.locked():
                     async with self.lock:
