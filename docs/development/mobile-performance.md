@@ -626,32 +626,11 @@ reported delay to these emulator results.
 
 ### Retained Workspaces implementation
 
-Workspaces retains its root page and separate row hierarchies for Local, Cloud
-and Home Server. Background discovery still snapshots native credential state on
-the UI loop, coalesces worker scans and rejects retired credential generations.
-Each publication reconciles the selected source: unchanged controls stay attached,
-added/removed folders change only the affected hierarchy, and lock/status changes
-update the existing icon and accessibility description. Callbacks resolve the
-latest choices when pressed. Detached source views reconcile before mounting;
-credential and visibility filters still remove unavailable entries. A remote-only
-metadata change does not discard unchanged Local rows. Source and credential
-selection survive returning to the page, and transfer actions are reevaluated.
-Discovery errors keep the existing recovery actions and rebuild a failed page on
-retry.
+The current [retained Workspaces contract](mobile-runtime.md#retained-workspaces-implementation)
+owns row reconciliation, credential-generation rejection and native painting
+reuse. The measurements below record the October implementation and validation.
 
-Offscreen Workspaces construction batches native surface painting until each
-control has its final roles and metrics. Android caches resolved drawing classes,
-immutable colour lists and up to 128 drawable constant-state templates. Each view
-gets an independent mutated drawable; bounds, tint, pressed state and animations
-are not shared. Template keys include resolved colours and pixel geometry, so
-Light/Dark, E Ink and density changes cannot reuse the wrong appearance. Existing
-compact icon updates preserve dimensions, padding and symbol configuration rather
-than resetting the control and forcing repeated Toga layout. No persistent cache,
-new credential index or row virtualization is introduced.
-
-The attached root is not removed and reattached on an unchanged tab return.
-Detail routes retain their previous browser/Back behavior. The same emulator
-fixture measured warm Local callbacks at 12–13 ms and Cloud at 9–12 ms, with the
+The same emulator fixture measured warm Local callbacks at 12–13 ms and Cloud at 9–12 ms, with the
 next native draw at 20–31 ms. The first build of a source remains more expensive
 (126–143 ms callback in this run). These are emulator results, not an estimate of
 Samsung A15 latency. Native checks verify page/source reuse, lock/unlock changes,
