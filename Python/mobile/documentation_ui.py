@@ -8,7 +8,7 @@ from .browser_ui import entry_icon, middle_filename
 from .appearance import accessible_name, hierarchy_row_style
 import toga
 from toga.style import Pack
-from toga.style.pack import CENTER, ROW
+from toga.style.pack import CENTER, COLUMN, ROW
 
 
 class DocumentationReader(MarkdownWikiView):
@@ -131,27 +131,39 @@ class DocumentationReader(MarkdownWikiView):
         return opened
 
     def filter(self, widget=None, **kwargs):
-        super().filter(widget, **kwargs)
         if not hasattr(self, 'rows'):
             return
-        query = self.search.value or ''
-        mode = 'content' if self.mode.value == 'Page text' else 'filename'
-        def visible(entries):
-            for entry in entries:
-                yield entry
-                if query or entry.location in self.expanded:
-                    yield from visible(entry.children)
-        for row, entry in zip(self.rows.children, visible(self.catalog.search(query, mode))):
-            button = row.children[-1]
-            button.text = entry.title
-            middle_filename(button)
-            button.wiki_path = entry.page
-            row.style.align_items = CENTER
-            directory = entry.location != entry.page
-            row.insert(2, entry_icon(directory, landing_page=entry.page is not None))
-            accessible_name(button, entry.title + (' — Open folder page' if directory and entry.page is not None else ''))
-            selected = self.path is not None and entry.page == self.path
-            hierarchy_row_style(row, selected)
+        mounted = self.rows
+        # The shared builder and our decoration are synchronous. Prepare a
+        # detached tree so each style/icon change cannot relayout all results.
+        # Keep the scroll content itself mounted to preserve its native owner.
+        self.rows = toga.Box(style=Pack(direction=COLUMN))
+        try:
+            super().filter(widget, **kwargs)
+            query = self.search.value or ''
+            mode = 'content' if self.mode.value == 'Page text' else 'filename'
+            def visible(entries):
+                for entry in entries:
+                    yield entry
+                    if query or entry.location in self.expanded:
+                        yield from visible(entry.children)
+            for row, entry in zip(self.rows.children, visible(self.catalog.search(query, mode))):
+                button = row.children[-1]
+                button.text = entry.title
+                middle_filename(button)
+                button.wiki_path = entry.page
+                row.style.align_items = CENTER
+                directory = entry.location != entry.page
+                row.insert(2, entry_icon(directory, landing_page=entry.page is not None))
+                accessible_name(button, entry.title + (' — Open folder page' if directory and entry.page is not None else ''))
+                selected = self.path is not None and entry.page == self.path
+                hierarchy_row_style(row, selected)
+            prepared = tuple(self.rows.children)
+            self.rows.clear()
+        finally:
+            self.rows = mounted
+        mounted.clear()
+        mounted.add(*prepared)
 
     def show_page_search(self, widget=None, **kwargs):
         self.reading = True

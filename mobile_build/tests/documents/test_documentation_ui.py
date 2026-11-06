@@ -201,6 +201,29 @@ class DocumentationTests(unittest.TestCase):
             self.assertEqual(self.app.settings_navigation.selected, 'Help')
         self.assertFalse(any(self.app.feature_enabled(name) for name in BY_NAME))
 
+    def test_filter_layout_work_does_not_grow_with_result_count(self):
+        from mobile.documentation_ui import show_documentation
+        root = Path(self.temporary.name).resolve() / 'layout-docs'
+        root.mkdir()
+        home = root / 'layout-docs.md'
+        home.write_text('# Home')
+        for group, count in (('Small', 5), ('Large', 40)):
+            for index in range(count):
+                (root / f'{group}-{index}.md').write_text(f'# {group} page {index}')
+        owner = show_documentation(self.app, root, home)
+        rows = owner.rows
+        scroll = next(child for child in owner.browse.children if getattr(child, 'content', None) is rows)
+        samples = []
+        for query in ('Small', 'Large'):
+            owner.search.value = query
+            with patch.object(rows, 'refresh', wraps=rows.refresh) as refresh:
+                owner.filter()
+            samples.append((len(rows.children), refresh.call_count))
+            self.assertIs(owner.rows, rows)
+            self.assertIs(scroll.content, rows)
+        self.assertGreater(samples[1][0], samples[0][0])
+        self.assertLessEqual(samples[1][1], samples[0][1] + 2)
+
     def test_close_and_page_history_are_separate_controls(self):
         from mobile.documentation_ui import show_documentation
         root = Path(self.temporary.name).resolve() / 'docs'
