@@ -21,6 +21,58 @@ session identity, privacy exclusions and view-state rules remain in `workspace.p
 
 ## Owners
 
+Unqualified filenames below are relative to `Python/mobile/`; paths beginning
+with `features/` or `services/` are relative to `Python/`. Follow the owner before
+changing a widget: session state, pending work and visible placement can have
+different lifetimes.
+
+| Change | Owner |
+| --- | --- |
+| Startup and application wiring | `app.py`, `composition/assembly.py`, `composition/presentation.py` |
+| Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
+| Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
+| Retained destination browser, provider and listing lifetime | `file_drawer.py`; pane placement remains in `workspace_navigation.py` |
+| Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
+| Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`; retained tree controls in `folder_tree_view.py`, styling in `folder_hub_style.py` |
+| File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `document_mutations.py` owns live text identity handoff; `files_ui.py` retains forms, confirmation and forwarding methods |
+| Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `file_drawer.py` |
+| Local file management and comic batch entry points | `files_ui.py` |
+| Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
+| Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
+| Explicit read-only services and writable compatibility state | `services/workflow_host.py`; lazy owner access in `composition/assembly.py` |
+| Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
+| Managed-text create/open/save, inventory, preview and picker completion | `managed_documents.py` (`ManagedDocumentWorkflows`); app retains aggregate checkpoint guards |
+| Provider Markdown modes, controls and preview lifecycle | `services/documents/authoring/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
+| Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
+| Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
+| Provider opening, session and controls | `provider_opening.py` prepares and publishes; `provider_document.py` owns the reader session; `provider_view.py` builds unpublished controls; `provider_presentation.py` builds chrome; `provider_ui.py` retains session commands |
+| Reader surface publication and footer/chrome synchronization | `reading/publication.py`, validity captures in `reading/sources.py` |
+| Settings composition and named panels | `settings/categories.py` declares factories/icons/gates; `settings/navigation.py` retains pages; [named panel map](ui-architecture.md#find-a-screen-by-its-visible-name) |
+| Preference defaults/validation versus INI persistence | `preference_schema.py`; `preferences.py` retains storage and migrations |
+| Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |
+| Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
+| Device screen locking and sensitive-content protection | `screen_privacy.py` |
+
+`workspace_navigation.WorkspaceFrame.render()` updates its controls, selects a
+retained leading pane, then delegates compact drawer and wide/fold layout to
+`_render_drawer()` and `_render_split()`. `_leading_pane()` reuses the existing
+overview or document widgets, preserving their scroll and editing state. Workspace
+host tests cover drawer transitions, Back, rotation, fold direction and retained
+widget identity; native gesture and safe-area behavior still needs device checks.
+
+Format behavior and presentation remain with `features/books/mobile` and
+`features/comics/mobile`. Cloud, managed collections and encrypted-copy adapters
+remain with `features/rclone/mobile`. The host owns navigation, session policy and
+workflow composition. Shared toolkit mechanisms remain in commonUtils.
+
+Feature adapters receive application policy through presentation contracts.
+`MobileHostUI` supplies folder-route recording and temporary loading-panel scopes
+to rclone; `MobilePresentation` supplies font sizing/binding and folder actions to
+the text editor. Feature code must not import the `mobile` host to reach
+those services. Secondary scene hosts share the application's command registry
+alongside its other application infrastructure, while retaining independent
+document and navigation state.
+
 ### Reader control edges
 
 All imported/provider book and comic progress rows and PDF progress strips use
@@ -46,12 +98,22 @@ retain system bar/cutout insets without a guessed radius.
 
 The focused `viewer_layout_probe` exercises imported/provider EPUB and comics,
 PDF, images, text, MP4 and AVI across both landscape directions and portrait
-return. `mobile_build.validation.document_storage_tools --probe viewer-layout`
-runs it in an isolated QA identity. For iOS, `--family all` covers iPhone, iPad
+return. The `viewer-layout` selector of
+`mobile_build.validation.document_storage_tools` runs it in an isolated QA
+identity; see the complete invocation below. For iOS, `--family all` covers iPhone, iPad
 and Duo closed/open/partial poses using a pinned simulator-only fold helper.
 Builds and devices have manager-owned cleanup; reports/screenshots remain under
 ignored test evidence. This matrix is diagnostic native acceptance, not a claim
 of testing every physical device or a private movie's decoder corruption.
+
+From the repository root, using the prepared mobile environment:
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe viewer-layout --family all --output test-results/viewer-layout
+```
+
+This is a native build/run command. Use the [build tooling prerequisites](build-tooling.md)
+and the helper's owned disposable devices; preserve its evidence before cleanup.
 
 On iOS, `cycle_collection.py` owns cyclic garbage collection for the process's
 UI loop. Toga constraint finalizers call UIKit, so automatic CPython collection
@@ -111,52 +173,7 @@ a square black border on Android; noninteractive group headings stay borderless.
 This policy covers workspace and file navigation, not all feature UI or readers;
 system accessibility extremes still require native layout validation.
 
-| Change | Owner |
-| --- | --- |
-| Startup and application wiring | `app.py`, `composition/assembly.py`, `composition/presentation.py` |
-| Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
-| Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
-| Retained destination browser, provider and listing lifetime | `file_drawer.py`; pane placement remains in `workspace_navigation.py` |
-| Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
-| Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`; retained tree controls in `folder_tree_view.py`, styling in `folder_hub_style.py` |
-| File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `document_mutations.py` owns live text identity handoff; `files_ui.py` retains forms, confirmation and forwarding methods |
-| Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `file_drawer.py` |
-| Local file management and comic batch entry points | `files_ui.py` |
-| Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
-| Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
-| Explicit read-only services and writable compatibility state | `services/workflow_host.py`; lazy owner access in `composition/assembly.py` |
-| Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
-| Managed-text create/open/save, inventory, preview and picker completion | `managed_documents.py` (`ManagedDocumentWorkflows`); app retains aggregate checkpoint guards |
-| Provider Markdown modes, controls and preview lifecycle | `services/documents/authoring/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
-| Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
-| Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
-| Provider content preparation and chrome assembly | `provider_presentation.py`; session and publication orchestration in `provider_ui.py` |
-| Reader surface publication and footer/chrome synchronization | `reading/publication.py`, validity captures in `reading/sources.py` |
-| Settings composition and named panels | `settings/categories.py` declares factories/icons/gates; `settings/navigation.py` retains pages; [named panel map](ui-architecture.md#find-a-screen-by-its-visible-name) |
-| Preference defaults/validation versus INI persistence | `preference_schema.py`; `preferences.py` retains storage and migrations |
-| Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |
-| Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
-| Device screen locking and sensitive-content protection | `screen_privacy.py` |
-
-`workspace_navigation.WorkspaceFrame.render()` updates its controls, selects a
-retained leading pane, then delegates compact drawer and wide/fold layout to
-`_render_drawer()` and `_render_split()`. `_leading_pane()` reuses the existing
-overview or document widgets, preserving their scroll and editing state. Workspace
-host tests cover drawer transitions, Back, rotation, fold direction and retained
-widget identity; native gesture and safe-area behavior still needs device checks.
-
-Format behavior and presentation remain with `features/books/mobile` and
-`features/comics/mobile`. Cloud, managed collections and encrypted-copy adapters
-remain with `features/rclone/mobile`. The host owns navigation, session policy and
-workflow composition. Shared toolkit mechanisms remain in commonUtils.
-
-Feature adapters receive application policy through presentation contracts.
-`MobileHostUI` supplies folder-route recording and temporary loading-panel scopes
-to rclone; `MobilePresentation` supplies font sizing/binding and folder actions to
-the text editor. Feature code must not import the `mobile` host to reach
-those services. Secondary scene hosts share the application's command registry
-alongside its other application infrastructure, while retaining independent
-document and navigation state.
+### Native destination chrome
 
 `navigation.py` installs the desktop destination artwork on Android bottom bars
 and rails and iOS tabs: Home, Workspaces, stacked Documents, the Chat bubble and
@@ -313,10 +330,14 @@ failure/cancellation. iOS video uses the same native lease, preserving the prior
 idle-timer setting only when the final transfer/player releases its request.
 These are automatic-idle-sleep requests, not CPU/background execution locks.
 
-`mobile_build.validation.document_storage_tools ios --probe file-transfer --family
-'iPhone Duo' --output test-results/file-transfer-progress` runs the focused native
-acceptance in a manager-owned disposable simulator. It checks overlapping awake
-leases, visible native progress, navigation veto, an actual switch to Settings,
+From the repository root with the prepared mobile environment:
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe file-transfer --family 'iPhone Duo' --output test-results/file-transfer-progress
+```
+
+This runs focused native acceptance in a manager-owned disposable simulator.
+It checks overlapping awake leases, visible native progress, navigation veto, an actual switch to Settings,
 temporary-file cleanup, preserved source bytes and a verified retry. Its encrypted
 writer polling/cancellation and Android lease coverage are host tests; this does
 not establish physical device auto-lock timing or background transfer duration.

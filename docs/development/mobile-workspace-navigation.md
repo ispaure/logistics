@@ -1,6 +1,40 @@
 # Mobile workspace drawers and paired documents
 
+This guide maps Workspaces and document panes to their state owners. Paths are
+relative to `Python/mobile/`. Use [the mobile host map](mobile-runtime.md#owners)
+for composition and [document storage](document-storage.md#trace-a-mobile-provider-reader)
+for provider access and reader retirement.
+
+| Change | Start here | Contract below |
+| --- | --- | --- |
+| Open/close a drawer or place an existing document beside another | `workspace_navigation.py`, `workspace_policy.py` | [Frame and drawer ownership](#frame-and-drawer-ownership), [selection policy](#selection-policy-owner) |
+| Load a folder or reject a stale listing | `file_drawer.py`, `folder_listing.py` | [Frame and drawer ownership](#frame-and-drawer-ownership), [viewport restoration](#folder-viewport-restoration) |
+| Change destination roots, Back behavior or root actions | `navigation.py`, `destination_actions.py` | [Home/Documents hubs](#home-and-documents-hub-sections), [Back policy](#android-back-policy-and-panel-audit-2026-10-18) |
+| Change width/fold/rotation presentation while retaining state | `workspace_navigation.py`, `adaptive_workspace.py` | [Geometry](#content-geometry-across-themes), [rotation](#rotation-and-display-cutouts), [safe areas](#native-safe-areas-during-rotation) |
+| Change reader title bars or gestures | `ios_toolbar.py`, `ios_reader_chrome.py`, feature reader adapters | [Toolbar actions](#adaptive-ios-toolbar-actions), [gestures and origins](#reader-gestures-and-document-origins) |
+
+Dated audit and feedback sections preserve the scope of those observations.
+They do not certify a later source revision or replace the focused host and
+[native validation](#native-navigation-validation) for a new change.
+
 ## Frame and drawer ownership
+
+`workspace_navigation.WorkspaceNavigation` owns destination routes, open/closed
+drawer state, retained drawer references and paired-session selection.
+`WorkspaceFrame` mounts and restores existing widgets for compact, split and
+fold-aware layouts. It does not own browser requests or rebuild editor buffers.
+
+`file_drawer.FileDrawer` owns the destination browser controls, selected folder,
+provider, refresh task and captured credential generation. Its `FolderListing`
+rejects superseded location, credential and host results. Frame restoration only
+unmounts its widget; it preserves the listing and selected folder. Full-page picker
+scopes keep their own return edges, and nested pickers retain independent drawers.
+`workspace_navigation` continues to expose `FileDrawer` and the same widget-detach
+helper for existing imports. Native toolbar/menu helpers remain there.
+
+The rotation/pairing/credential contracts in `test_workspace_navigation.py` and
+the real delayed-worker contracts in `test_folder_listing.py` cover this boundary.
+Native pose and chrome acceptance remain separate from dummy-backend results.
 
 Opening a Workspaces folder retains a highlighted, bold row in the source tree,
 connecting the left workspace pane to the browser on the right. Source refreshes
@@ -39,23 +73,6 @@ Leaving a cleared picker on the stack exposes an empty Workspaces form even
 after the busy flag resets, and tab changes retain that unusable form.
 `test_transfer_feedback.py` covers Back, tab changes and local browsing during
 selected downloads, plus worker success, failure and cancellation cleanup.
-
-`workspace_navigation.WorkspaceNavigation` owns destination routes, open/closed
-drawer state, retained drawer references and paired-session selection.
-`WorkspaceFrame` mounts and restores existing widgets for compact, split and
-fold-aware layouts. It does not own browser requests or rebuild editor buffers.
-
-`file_drawer.FileDrawer` owns the destination browser controls, selected folder,
-provider, refresh task and captured credential generation. Its `FolderListing`
-rejects superseded location, credential and host results. Frame restoration only
-unmounts its widget; it preserves the listing and selected folder. Full-page picker
-scopes keep their own return edges, and nested pickers retain independent drawers.
-`workspace_navigation` continues to expose `FileDrawer` and the same widget-detach
-helper for existing imports. Native toolbar/menu helpers remain there.
-
-The rotation/pairing/credential contracts in `test_workspace_navigation.py` and
-the real delayed-worker contracts in `test_folder_listing.py` cover this boundary.
-Native pose and chrome acceptance remain separate from dummy-backend results.
 
 The workspace layout signature includes content height only for a horizontal
 fold, where stacked panes need explicit heights. Keyboard and search-toolbar
@@ -453,12 +470,25 @@ dropping the request while the provider is busy. Native refreshes do not cancel
 the request; leaving its originating body or destination does.
 `test_document_creation.py` checks keyboard expansion, format/name/folder
 retention, I/O disabling and direct wide creation. The focused native
-`document_creation_probe.py`, run by `mobile_build.validation.document_storage_tools --probe creation`,
+`document_creation_probe.py`, selected with `--probe creation` in
+`mobile_build.validation.document_storage_tools`,
 checks real software keyboards, both landscape rotations and creation flows in
 owned simulators. The owning helper can build current native sources or reuse
 an explicitly supplied compatible shell. System keyboard screenshots are
 captured separately from app-window renders. Evidence is saved before removing
 the QA app and owned simulator.
+
+A complete invocation from the repository root, using the prepared mobile
+environment, is:
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe creation --family all --output test-results/document-creation
+```
+
+This executes native acceptance with the [build tooling prerequisites](build-tooling.md).
+For the [storage selector check](#storage-selector-keyboard-lifetime), use
+`--probe storage-selector` and a separate `--output test-results/storage-selector`.
+Use `android` instead of `ios` and omit `--family` for the owned Android emulator.
 
 ## File loading panels
 
@@ -1738,8 +1768,8 @@ input view; removing that field during keyboard layout resigns focus and closes
 the location picker immediately. Folder listing can still disable the selector
 until the newly selected location has loaded.
 
-`storage_selector_probe.py`, run through
-`mobile_build.validation.document_storage_tools --probe storage-selector`, checks
+`storage_selector_probe.py`, selected with `--probe storage-selector` in
+`mobile_build.validation.document_storage_tools`, checks
 opening the native selector and changing local locations across portrait and
 landscape. The iOS `--family all` matrix includes iPhone, iPad, and closed, open
 and partly open Duo postures; Android uses the owned disposable emulator.
