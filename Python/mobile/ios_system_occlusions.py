@@ -141,7 +141,8 @@ def observe_window_occlusions(app, native):
             reserve_bar_clearance(controller)
             controller.view.setNeedsLayout()
             controller.navigationBar.setNeedsLayout()
-            controller.view.layoutIfNeeded()
+            # UIKit may already be rotating this hierarchy. Invalidate the
+            # bars without forcing a nested native layout pass.
         app.resize_workspace()
 
     app.loop.call_soon(refresh)
