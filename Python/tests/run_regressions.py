@@ -1,5 +1,6 @@
 """Run a suite with safe periodic progress and native-crash tracebacks."""
 import argparse
+from collections import Counter
 import faulthandler
 from fnmatch import fnmatchcase
 import importlib.util
@@ -85,6 +86,62 @@ def source_inventory(row, levels):
                 cases=[case for case in row.inventory() if case['stage'] in stages])
 
 
+def read_child_evidence(path, stage, exit_code):
+    """Read a checkpoint in order, retaining validated records before a defect."""
+    records, not_run = [], []
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return records, not_run, False, 'Child timing report is missing.'
+    except (OSError, ValueError, RecursionError) as error:
+        return records, not_run, True, f'Cannot read child timing report: {error}'
+
+    if not isinstance(data, dict) or type(data.get('schema_version')) is not int or data['schema_version'] != 1:
+        return records, not_run, True, 'Invalid child timing report schema.'
+    if not isinstance(data.get('tests'), list):
+        return records, not_run, True, 'Child timing report must contain a tests list.'
+    for index, row in enumerate(data['tests'], 1):
+        if (not isinstance(row, dict)
+                or any(not isinstance(row.get(key), str) or not row[key]
+                       for key in ('id', 'started_at', 'finished_at'))
+                or row.get('outcome') not in ('passed', 'failed', 'error', 'skipped',
+                                              'expected_failure', 'unexpected_success', 'incomplete')
+                or type(row.get('duration_seconds')) not in (int, float)
+                or not 0 <= row['duration_seconds'] <= sys.float_info.max
+                or not isinstance(row.get('message', ''), str)
+                or type(row.get('fixture_event', False)) is not bool
+                or row.get('stage') != stage):
+            return records, not_run, True, f'Invalid child test record at position {index}.'
+        records.append(row)
+
+    omitted = data.get('not_run', [])
+    if not isinstance(omitted, list) or any(
+            not isinstance(row, dict) or not isinstance(row.get('id'), str) or not row['id']
+            or row.get('stage') != stage or not isinstance(row.get('reason'), str) or not row['reason']
+            for row in omitted):
+        return records, not_run, True, 'Invalid child not_run evidence.'
+    not_run = omitted
+    if data.get('complete') is not True:
+        return records, not_run, True, 'Child timing report is incomplete.'
+    if type(data.get('exit_code')) is not int or data['exit_code'] != exit_code:
+        return records, not_run, True, 'Child timing report exit code differs from the process exit code.'
+    if not records or any(row['outcome'] == 'incomplete' for row in records):
+        return records, not_run, True, 'Child timing report has no complete case evidence.'
+    if exit_code == 0 and any(row['outcome'] in ('failed', 'error', 'unexpected_success') for row in records):
+        return records, not_run, True, 'Successful child exit contradicts recorded test failures.'
+
+    planned = data.get('planned_tests')
+    if not isinstance(planned, list) or any(
+            not isinstance(row, dict) or not isinstance(row.get('id'), str) or not row['id']
+            or row.get('stage') != stage for row in planned):
+        return records, not_run, True, 'Invalid child planned_tests evidence.'
+    accounted = Counter(row['id'] for row in records if not row.get('fixture_event'))
+    accounted.update(row['id'] for row in not_run)
+    if not planned or accounted != Counter(row['id'] for row in planned):
+        return records, not_run, True, 'Child timing report does not account for all planned cases.'
+    return records, not_run, True, None
+
+
 def run_isolated(directory, pattern, interval, include_patterns=(), report=None, *,
                  stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None,
                  order='default', seed=None, exact_files=()):
@@ -159,28 +216,30 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                     outcome = 'crashed'
             except subprocess.TimeoutExpired:
                 code, outcome = 124, 'timeout'
+            records, not_run, available, evidence_error = read_child_evidence(child_report, level.value, code)
+            if evidence_error:
+                print(f'{relative_file} [stage={level.value}]: {evidence_error}', file=sys.stderr, flush=True)
+                if code == 0:
+                    code, outcome = 2, 'preflight_error'
             if report is not None:
-                records, child_complete = [], False
-                if child_report.exists():
-                    child_data = json.loads(child_report.read_text(encoding='utf-8'))
-                    records, child_complete = child_data['tests'], child_data['complete']
-                    report.data['not_run'].extend(dict(r, file=relative_file) for r in child_data.get('not_run', []))
-                    if child_data.get('not_run'):
-                        report.data.update(stopped_early=True, coverage_complete=False)
-                if not child_complete or not records:
-                    if code == 0:
-                        code, outcome = 2, 'preflight_error'
+                report.data['not_run'].extend(dict(r, file=relative_file) for r in not_run)
+                if evidence_error:
+                    covered = [record['id'] for record in records
+                               if not record.get('fixture_event') and record['outcome'] != 'incomplete']
+                    covered.extend(record['id'] for record in not_run)
                     report.data['not_run'].append(dict(
                         file=relative_file, stage=level.value,
                         cases=[case for case in row.inventory() if case['stage'] == level.value
-                               and not any(record['id'].endswith('.' + case['case']) for record in records)],
-                        reason='Isolated module did not produce complete case evidence: ' + outcome))
+                               and not any(case_id.endswith('.' + case['case']) for case_id in covered)],
+                        reason='Isolated module did not produce complete case evidence: ' + evidence_error))
+                if not_run or evidence_error:
                     report.data.update(stopped_early=True, coverage_complete=False)
                 report.data['tests'].extend(dict(r, file=relative_file, stage=level.value) for r in records)
                 report.data['modules'].append(dict(
                     path=relative_file, stage=level.value, started_at=started_at, finished_at=timestamp(),
                     duration_seconds=monotonic() - started, exit_code=code, outcome=outcome,
-                    test_report_available=child_report.exists(), test_report_complete=child_complete))
+                    test_report_available=available, test_report_complete=evidence_error is None,
+                    **({'evidence_error': evidence_error} if evidence_error else {})))
                 report.save()
         elapsed = report.data['modules'][-1]['duration_seconds'] if report is not None else monotonic() - started
         emit_progress('file_finished', name=relative_file, status=outcome, seconds=elapsed, stage=level.value)
@@ -404,6 +463,7 @@ def run_suite(args, report):
                 for level in args.stages:
                     if result.shouldStop:
                         break
+                    result.fixture_stage = level.value
                     unittest.TestSuite(t for s, t in cases if s is level).run(result)
                     if args.mode == 'fast' and level is TestStage.SMOKE and not result.wasSuccessful():
                         break
@@ -411,8 +471,17 @@ def run_suite(args, report):
         result = unittest.TextTestRunner(verbosity=2, resultclass=result_factory,
                                          failfast=args.fail_fast).run(StagedSuite())
         executed = {r['id'] for r in report.data['tests']}
-        report.data['not_run'] = [dict(id=t.id(), stage=s.value, reason='Fail-fast failure' if args.fail_fast else 'Smoke gate or fixture failure')
-                                  for s, t in cases if t.id() not in executed]
+        fixture_skips = {(r['stage'], r['id']): 'Fixture skipped: ' + r['message']
+                         for r in report.data['tests'] if r.get('fixture_event') and r['outcome'] == 'skipped'}
+        default_reason = 'Fail-fast failure' if args.fail_fast else 'Smoke gate or fixture failure'
+        for level, test in cases:
+            if test.id() not in executed:
+                module = type(test).__module__
+                class_name = unittest.util.strclass(type(test))
+                reason = (fixture_skips.get((level.value, f'setUpModule ({module})'))
+                          or fixture_skips.get((level.value, f'setUpClass ({class_name})'))
+                          or default_reason)
+                report.data['not_run'].append(dict(id=test.id(), stage=level.value, reason=reason))
         report.data['coverage_complete'] = not report.data['not_run']
         report.data['stopped_early'] = bool(report.data['not_run'])
         return int(not result.wasSuccessful())

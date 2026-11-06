@@ -66,7 +66,9 @@ class TimingReport:
             for row in self.data['modules']:
                 if row['outcome'] != 'passed' or not row['test_report_complete']:
                     cases.append(dict(name=row['path'], classname='Logistics.runner', status='error',
-                                      seconds=row['duration_seconds'], message='Isolated module: ' + row['outcome'], stage=row.get('stage')))
+                                      seconds=row['duration_seconds'], stage=row.get('stage'),
+                                      message='Isolated module: ' + row['outcome'] +
+                                      (': ' + row['evidence_error'] if row.get('evidence_error') else '')))
             for row in self.data.get('not_run', []):
                 cases.append(dict(name=row.get('id', row.get('file', 'unstarted')), classname='Logistics.not_run',
                                   status='skipped', message='Not run: ' + row['reason'], stage=row.get('stage')))
@@ -127,7 +129,7 @@ class TimedResult(unittest.TextTestResult):
             self.report.data['tests'].append({
                 'id': test.id(), 'outcome': outcome, 'started_at': timestamp(),
                 'finished_at': timestamp(), 'duration_seconds': 0.0,
-                'fixture_event': True,
+                'fixture_event': True, 'stage': self.fixture_stage,
             })
 
     def addFailure(self, test, err):
