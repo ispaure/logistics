@@ -6,7 +6,7 @@ from pathlib import Path
 from features.video.playback import VideoContent, SubtitleContent
 from services.documents.video_progress import VideoProgress
 from features.video.transport import VideoTransport
-from mobile.worker_retirement import drain_worker
+from services.worker_retirement import drain_worker
 from services.access_policy import display_allowed
 
 
