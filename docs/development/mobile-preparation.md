@@ -1,8 +1,60 @@
 # Mobile document host and validation
 
-The mobile folder, document and video headers use the shared panning title
-from commonUtils. The Android build compiles its native Java source root.
-The iOS project includes the shared UIKit label when configuring its launcher.
+Logistics Mobile is the native Toga application for iOS and Android. The host
+composes Workspaces browsing and transfers, document editing and reading,
+feature-gated Chat, and Settings. The desktop Qt launcher and its dependency
+pins are separate. Mobile code uses portable commonUtils APIs and native
+adapters under the desktop import boundary.
+
+| Responsibility | Source owner |
+| --- | --- |
+| Application entry and startup | `Python/mobile/__main__.py` calls `main().main_loop()`; `Python/mobile/app.py` constructs the application and composes its workflows. |
+| Installed entry and dependencies | `mobile_build/pyproject.toml` declares the Briefcase app key, source roots, test sources and platform requirements. `mobile_build/tools.py` generates the staged `logisticsmobile/__main__.py` entry, which calls the same `mobile.app.main`. |
+| Payload selection | [Owner-declared source selection](#owner-declared-source-selection) defines what enters the mobile source payload. |
+| Destinations and window lifetime | `Python/mobile/navigation.py` defines destination metadata. `window_scenes.py` binds UIKit scenes to hosts, and `window_owners.py` arbitrates process-local writer ownership. |
+| Build and deployment | Follow the [mobile handbook](mobile-handbook.md) and [build tooling map](build-tooling.md) for generated projects, native bridges and deployment ownership. |
+
+Use the [mobile host code guide](mobile-runtime.md) for current implementation
+owners and the [mobile user guide](../user_mobile/user_mobile.md) for supported
+workflows.
+
+## Owner-declared source selection
+
+The mobile host, services and selected features each declare a
+`mobile_sources.json` file with schema 1 and explicit paths relative to their
+owner. Update the owning manifest when adding a source dependency. The
+`SOURCE_OWNERS` list in `mobile_build/tools.py` selects the manifests without
+importing feature registration. The staging tool validates the selected imports
+and packages the manifests with the payload. Type-checking-only imports and
+uncalled registration factories do not pull additional modules into the payload.
+
+Staging combines the selected Logistics files with portable commonUtils sources
+and declared package data. It rejects linked source paths and excludes the local
+external feature checkout. Clean staging requires tracked shared sources.
+Local dirty staging is identified in the source manifest and is ineligible as
+clean runtime evidence. Generated Briefcase projects and
+`mobile_build/payload/` are build outputs.
+
+## Validation gates
+
+Use the [host validation commands](mobile-launchers.md#host-validation) for
+focused checks and [platform checks](platform-checks.md) for release gates.
+The [native build workflow](../../.github/workflows/mobile-build.yml) produces
+Android and iOS development artifacts and runs native UI validation.
+The [document runtime workflow](../../.github/workflows/mobile-runtime.yml)
+checks the embedded Python runtimes with a separate case inventory. The runtime
+verifier checks the platform and runtime identity, source identity, exact case
+inventory and passing results. Desktop harness runs cannot supply mobile runtime
+evidence.
+
+Keep packaging, native interaction and device acceptance distinct. Picker
+fixtures exercise import lifetimes without proving OS permission behavior.
+iPad scene evidence requires actual scenes and separate workspace and writer
+checks. Android resize and Activity recreation exercise one host. Physical
+pickers, keyboard/touch and accessibility, device eviction, minimum-iOS
+interaction and physical fold gestures require platform-specific evidence.
+Use the [Duo rotation and fold checks](mobile-handbook.md#duo-rotation-and-fold-verification)
+when changing foldable layouts.
 
 ## Offline component notices
 
@@ -69,7 +121,9 @@ device validation; host tests do not establish those behaviors.
 
 ## Native destination routes
 
-The mobile host uses Home, Files, Documents and Settings, with independent screen
+The destination metadata lists Home, Workspaces, Documents, Chat and Settings.
+Workspaces retains the internal `files` route key. Chat is available when the LM
+feature is enabled. Destinations have independent screen
 stacks in shared Python navigation state. `commonUtils.ui.native.routes` retains screen views while
 changing destinations. UIKit owns the Apple navigation controllers and reports
 completed pops through a lifecycle-owned delegate. Android uses a small tracked
@@ -103,36 +157,22 @@ origin and rejects UI completion after that session closes; a background import
 does not switch a different active document. Closed ordinary drafts remain stored.
 Session generations prevent late results from reviving closed or invalidated
 resources. `workspace_navigation.py` supplies the active adaptive presentation
-inside the existing native destination/Back stacks on both Apple and Android.
-It replaces the earlier Documents-only native split installation from
-`adaptive_workspace.py`. At 640 points/dp it can place a browser or retained text
-editor beside the current document, in equal halves. Compact windows show a
-full-height drawer or the current document. A Material rail starts separately at
-600 dp. Resizing never closes a session. `action_menu.py` isolates native editor
+inside the native destination and Back stacks on Apple and Android. It can
+place a browser or retained editor beside the current document when the pane
+allocation permits it. Compact layouts use a drawer or the current document.
+Resizing preserves open sessions. The [workspace navigation guide](mobile-workspace-navigation.md)
+covers platform thresholds, Android fold geometry and rail behavior. `action_menu.py` isolates native editor
 command presentation and rebinds commands to their editor owner.
 
-A replacement host for the same app-private root retires its predecessor,
-invalidates old session generations and cancels pending private file work. This
-is the single-workspace Activity-recreation contract; independent OS windows
-require a separate writer/scene ownership model before enabling them.
-
-The --workspace mode of mobile_build/validation/navigation_tools.py drives the actual app, rather
-than the minimal foundation fixture. Local matrices passed two-draft keyboard,
-phone/tablet resize, Activity recreation and restart on Android, and rotation,
-background/resume and restart on Duo and iPad. Physical BOOX, real fold gestures,
-iOS 15 runtime interaction and accessibility/device touch checks remain unverified.
-
-Logistics has an independent native text/Markdown prototype in
-`Python/mobile`, with Briefcase configuration and tooling under
-[`mobile_build/`](mobile-launchers.md). The desktop Qt launcher and its dependency
-pins remain separate. The shared Qt facade retains its desktop capability gate:
-the mobile host uses Toga and portable commonUtils persistence rather than
-importing desktop initialization, menus or dialogs.
-
-The proposed [native navigation and open documents plan](mobile-navigation-plan.md)
-defines the next UI architecture for iPhone, iPhone Duo, iPad and Android.
-Its milestones describe future work; the contracts and evidence below describe
-the existing implementation and its development history.
+A replacement host with the same private root and window identity retires its
+predecessor, invalidates old session generations and cancels pending private file
+work. Android uses this replacement path for Activity recreation and uses the
+adaptive workspace for side-by-side panes. iPad supports independent UIKit
+scenes. Each scene owns its host, navigation and workspace state. The scene
+manager shares ordinary document storage and uses `WindowOwners` to prevent
+competing writers. Protected sessions are restricted to a single window.
+See the [scene implementation milestone](#phase-4-part-1-independent-uikit-scenes)
+and [workspace navigation guide](mobile-workspace-navigation.md).
 
 ## Ownership and contracts
 
@@ -141,7 +181,7 @@ the existing implementation and its development history.
 | `documents.py` | Explicit absolute app-private root; UUID file identities; 1 MiB bounded Unicode text; original encoding/endings; exclusive creation, atomic saves and recovery JSON; stale/deleted-file rejection and safe copies |
 | `access.py` | Scoped binary imports; Android content URIs are handled by ContentResolver streams; iOS URLs retain security-scoped access until reading finishes; every handle/scope is closed on failure |
 | `pickers.py` | Android ACTION_OPEN_DOCUMENT and iOS UIDocumentPicker open mode; native grants are consumed immediately to import a private copy; no broad storage permission or persisted external write access |
-| `app.py` | Native Home/Documents/Settings shell; selection, title editing, multiline text, New/Import/Save/copy/export/preview; checkpoints on edit, focus loss and normal exit |
+| `app.py` | Application composition, startup, document workflows and window attachment |
 | `preferences.py` | Immutable defaults and bounded private INI; validation, atomic replace, malformed-file preservation and concurrent-edit rejection |
 | `preview.py` | Bounded basic Markdown HTML; escaped raw input, inert links and offline CSP |
 | `smoke.py` | Fresh-interpreter desktop-dependency rejection, real runtime identity, exact test inventory and structured evidence |
@@ -169,60 +209,26 @@ runtimes that report Linux with `getandroidapilevel`. Android activity
 results use the pinned Toga backend's `start_activity` hook. These backend/native
 interfaces must be rechecked before upgrading Toga.
 
-Draft writes currently occur on each edit. This favors simple recovery in the
-small prototype; larger documents need performance work before expanding the
-1 MiB limit. Focus/exit hooks supplement these checkpoints. Physical-device tests
-must still check forced termination, suspension, permission denial/revocation,
-providers with slow I/O, keyboard resizing and accessible touch layouts.
+The editor queues ordinary draft checkpoints through `DocumentStore`, batching
+edits before background publication. Focus loss and exit provide additional
+checkpoint opportunities. See [document responsiveness](mobile-runtime.md#startup-and-document-responsiveness)
+for the persistence and validation scope.
 
 ## Selected features and dependencies
 
-The native app includes text/Markdown and EPUB/comic readers and uses Toga 0.5.7 backends with Briefcase
-0.4.5. It installs no desktop PySide, image or archive dependencies. Staging copies
-only whitelisted Logistics Python modules plus tracked shared Python sources and
-licenses. It never follows the local external feature link or copies private INIs,
-Git metadata or untracked shared files. Local dirty payloads are labelled and
-cannot produce accepted mobile runtime evidence.
+The app uses the platform Toga backends declared by Briefcase. For current
+feature selection and import boundaries, follow the
+[mobile feature selection guide](mobile-runtime.md#mobile-feature-selection)
+and the [payload manifests](#owner-declared-source-selection). The portable
+testbed adds test modules and fixtures for runtime contracts. Briefcase's native
+UI test entry is separate from the normal application entry.
 
-Native payloads select the portable EPUB/comic modules too. The testbed additionally
-selects generated fixtures, including EPUB metadata/resource reading and comic
-page bytes/ComicInfo updates. Encrypted archives, other desktop tools, external
-sharing and app-store distribution remain future work. No desktop capability is enabled by a prototype build.
+## Implementation history
 
-## Validation gates
-
-[Native builds](../../.github/workflows/mobile-build.yml) create an Android debug
-APK and an unsigned iOS Simulator app archive, with bounded build jobs and retained
-source manifests/logs. Build success proves packaging, not native UI interactions.
-
-[Document runtime checks](../../.github/workflows/mobile-runtime.yml) use the
-already established CPython 3.14.7 testbeds, pinned at
-`823f0323ee6ec1402088b73bce1a38473cac36dc`. Android builds x86_64 on Ubuntu 24.04 and selects Android command-line tools
-19.0, matching the native application gate. The runner-bundled SDK manager failed
-to unpack the current emulator archive; the versioned installation is selected
-through the `latest` path required by the pinned CPython driver.
-iOS builds arm64 Simulator on macOS 15. The existing iOS resource-copy workaround
-is retained. Twenty-five cases run inside each actual interpreter:
-
-- Nine private document, recovery, encoding, conflict and scoped-import contracts.
-- Three existing EPUB/comic/Markdown fixture scenarios.
-- Three mobile preference and offline-preview contracts.
-- Four mobile library, reading, sanitization, progress and image-bound contracts.
-- Four mobile chat, cancellation, privacy and recovery scenarios using loopback fixtures.
-- Runtime identity and a desktop-dependency import boundary.
-
-The verifier requires one report, expected native `sys.platform`, actual emulator
-or simulator classification, both clean source SHAs, the exact inventory/count,
-zero failures/errors and zero skips. Host runs are explicitly `desktop-harness`
-and cannot pass the mobile verifier. Scoped-import unit cases use provider objects
-to check lifetime/error contracts; they do not prove actual picker permissions.
-Reports explicitly record `native_picker_tested: false`.
-
-Source paths on alpha trigger the corresponding mobile jobs; manual target
-controls become available once the workflows are on the default branch. New
-mobile push runs supersede older mobile push runs. Existing desktop release
-validation remains independent. Native artifacts are development outputs, not
-store uploads or physical-device signing.
+The evidence, plans and numbered phases through Phase 6 Parts 2–3 below record
+earlier checkpoints. Their case counts, release references, destination labels,
+pending milestones and device limits apply to those checkpoints. Use the
+[validation gates](#validation-gates) above for current checks.
 
 ## Evidence status
 
@@ -260,38 +266,22 @@ do not substitute for this release gate.
 
 ## Next work
 
-1. Validate the hosted native artifacts and document runtime results, then run the
-   app on simulators/emulators and physical devices with real provider selections.
-2. Exercise keyboard/touch/accessibility and suspend/termination recovery before
-   adding reader or IDE features.
-3. Add explicit export/share and provider writeback, with stale-source checks and
-   permission/bookmark handling appropriate to each platform.
-4. Select target-native image/archive dependencies before enabling those features;
-   then introduce signing, distribution and store metadata.
-
-The [mobile user guide](../user_mobile/user_mobile.md) describes
-the implemented document flow, and [build instructions](mobile-launchers.md)
-list the independent environment and host checks.
+The early prototype plan called for native picker and recovery validation,
+reader expansion, explicit export/share, a provider writeback contract and
+signed distribution. These were proposals at that checkpoint. Follow the
+[mobile host code guide](mobile-runtime.md) and [mobile handbook](mobile-handbook.md)
+for implemented workflows and current validation.
 
 ## Phase roadmap
 
-The authorized implementation order is phase 1 (hub/preferences/text/Markdown),
-phase 2 (EPUB and comic readers), phase 3 (LM chat), and phase 4 (rclone credential
-packages and feasible remote access). Each phase is committed with its phase
-prefix, pushed, released on alpha only after every platform gate passes, and the
-successful release commit is promoted to main for a release request. Physical
-device validation and signed distribution remain distinct from source releases.
-
-Phase 1 adds Home/Documents/Settings navigation, private INI preferences,
-platform export-copy pickers and an offline basic Markdown preview. Android's
-pinned WebView needs the declared Chaquopy static proxy for navigation handlers.
-HTML is capped below its 2 MiB default content limit. Active HTML is never passed
-through; default-src none and navigation refusal prevent preview network access.
-System provider export is explicit; neither original-source writeback nor external
-sharing is implied. Picker cancellation and stream cleanup are tested contracts,
-not actual native-provider evidence. Static CI runs the official Toga dummy widget
-and picker contracts before release, while real mobile testbeds cover the added
-portable preference and preview cases.
+The original sequence began with hub/preferences/text/Markdown, then added EPUB
+and comic readers, LM chat, and rclone credential packages and remote access.
+Phase 1 used Home/Documents/Settings navigation, private INI preferences,
+platform export-copy pickers and an offline basic Markdown preview. The pinned
+Android WebView used a Chaquopy static proxy for navigation handlers. The preview
+bounded HTML below the WebView's 2 MiB default content limit, escaped active
+input and refused navigation. The picker tests covered cancellation and stream
+cleanup with fixtures.
 
 ## Phase 2 reader contracts
 
@@ -699,9 +689,9 @@ synchronization. The 10,000-entry bound matches the mobile traversal budget.
 
 Library sessions use `reader_sessions.Readers` with per-session native views and
 one shared LibraryStore adapter. Inactive decoders suspend; asynchronous page/open
-results check reader generation and host lifetime. Protected comic sessions remain
-transient. LocalCrypt still uses its existing guarded private reader; full private
-session integration and independent windows remain later work.
+results check reader generation and host lifetime. At this checkpoint, protected
+comic sessions were transient and LocalCrypt used its guarded private reader. Independent scenes arrived in
+[Phase 4 Part 1](#phase-4-part-1-independent-uikit-scenes).
 
 Checkpoint validation: 42 mobile widget/workflow tests, six shared workspace/cloud
 checks and the Go bridge suite passed. Both native suites passed all 18 cases,
@@ -711,8 +701,7 @@ and Android (local artifact `test-results/mobile-evidence/2026-10-14-mobile-chec
 Both reports identify local snapshot
 `3862ab9c3f839f7c79b3cb9c92a0dbeef62a9f31225941e9867721e6b005724e`.
 These are local development checks, not a published release or physical-device
-validation. Work pauses here at the user's request; unfinished milestones remain
-listed in the mobile navigation plan.
+validation.
 
 
 ### Explicit text-session close
@@ -1040,8 +1029,8 @@ The [three-pass alpha audit](mobile-alpha-verification.md) records the delayed-o
 superseded-host and hidden password-focus fixes, plus native navigation-intent
 tracking that tolerates UIKit container refreshes. All 72 frozen host tests,
 39 core tests and 25 native cases on each of Android, iPad and iPhone pass.
-Concurrent folder improvements are excluded from this frozen audit. These fixes
-and evidence remain local under the user's commit hold; main.07 stays unchanged.
+Concurrent folder improvements were excluded from the local audit snapshot,
+which was separate from main.07.
 
 Native comic geometry checks wait for three consecutive centered samples after
 chrome transitions, with a 15-second deadline. This replaces a fixed 300 ms delay
@@ -1327,7 +1316,3 @@ canvas. The shared native image component owns gesture arbitration, lens drawing
 and cleanup. EPUBs, ordinary image previews and comics with controls visible
 leave it disabled. The lens uses the current in-memory page/spread without
 creating files. Native touch/render validation remains a separate device check.
-
-## Owner-declared source selection
-
-Each supported feature and the mobile host/services own a `mobile_sources.json` file (`schema: 1`, explicit `modules` paths relative to that owner). Add a source there when introducing a dependency. `mobile_build/tools.py` aggregates the allowlists without importing feature registration, validates selected application/feature/service imports, and packages the manifests as part of source identity. Type-checking-only dependencies and uncalled feature registration factories do not enter the runtime payload. Generated Briefcase projects and `mobile_build/payload/` remain outputs.
