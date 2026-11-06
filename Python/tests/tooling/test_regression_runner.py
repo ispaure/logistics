@@ -119,6 +119,72 @@ class RegressionRunnerTests(unittest.TestCase):
         return subprocess.run([sys.executable, str(RUNNER), str(directory), '--isolate-modules', *extra],
                               capture_output=True, text=True, timeout=30)
 
+    def test_inventory_matches_filtered_execution_without_importing_sources(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_keep_mixed.py').write_text('''from pathlib import Path
+import unittest
+from commonUtils.testing.stages import TestStage, stage
+
+TEST_STAGE = TestStage.EXTENDED
+Path(__file__).with_suffix('.imported').touch()
+
+class Cases(unittest.TestCase):
+    @stage(TestStage.SMOKE)
+    def test_smoke(self): pass
+
+    @stage(TestStage.REGRESSION)
+    def test_regression(self): pass
+
+    def test_extended(self): pass
+''')
+            (root / 'test_keep_extended.py').write_text(
+                '# TEST_STAGE = TestStage.EXTENDED\nraise RuntimeError("excluded stage imported")\n')
+            (root / 'test_keep_invalid_source.py').write_text('raise RuntimeError("excluded file imported")\n')
+            (root / 'test_other_mixed.py').write_text('raise RuntimeError("excluded file imported")\n')
+            filters = ('--include-pattern', 'test_keep_*', '--include-pattern', '*d.py')
+            inventories = []
+            for selection in (('--profile', 'daily'), ('--stage', 'regression', '--stage', 'smoke')):
+                inventory = self.run_modules(root, *filters, *selection, '--inventory')
+                self.assertEqual(inventory.returncode, 0, inventory.stderr)
+                self.assertFalse(list(root.glob('*.imported')))
+                inventories.append(json.loads(inventory.stdout))
+            rows, explicit_stages = inventories
+            self.assertEqual(rows, explicit_stages)
+            self.assertEqual([row['file'] for row in rows], ['test_keep_mixed.py'])
+            self.assertEqual(rows[0]['stage'], 'extended')
+            self.assertEqual(rows[0]['stages'], ['smoke', 'regression'])
+            self.assertEqual({(case['case'], case['stage']) for case in rows[0]['cases']},
+                             {('Cases.test_smoke', 'smoke'), ('Cases.test_regression', 'regression')})
+
+            report = root / 'report.json'
+            execution = self.run_modules(root, *filters, '--profile', 'daily', '--report', str(report))
+            self.assertEqual(execution.returncode, 0, execution.stdout + execution.stderr)
+            self.assertTrue((root / 'test_keep_mixed.imported').is_file())
+            data = json.loads(report.read_text())
+            self.assertEqual(data['classified_files'], [dict(path=rows[0]['file'], stage=rows[0]['stage'],
+                                                            stages=rows[0]['stages'], cases=rows[0]['cases'])])
+            self.assertEqual([(module['path'], module['stage']) for module in data['modules']],
+                             [(rows[0]['file'], level) for level in rows[0]['stages']])
+            self.assertEqual({(case['id'].split('.', 1)[1], case['stage']) for case in data['tests']},
+                             {(case['case'], case['stage']) for case in rows[0]['cases']})
+            self.assertIn('test_keep_mixed.py [stage=smoke]', execution.stdout.split('Slowest files')[1])
+
+    def test_inventory_and_execution_reject_empty_stage_selection(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_extended.py').write_text(
+                '# TEST_STAGE = TestStage.EXTENDED\nraise RuntimeError("must not import")\n'
+                'import unittest\nclass Cases(unittest.TestCase):\n def test_extended(self): pass\n')
+            report = root / 'report.json'
+            for options in (('--inventory',), ('--report', str(report))):
+                with self.subTest(options=options):
+                    result = self.run_modules(root, '--stage', 'smoke', *options)
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertIn('No tests selected for the requested execution stages.', result.stderr)
+                    self.assertNotIn('must not import', result.stderr)
+            self.assertEqual(json.loads(report.read_text())['modules'], [])
+
     def test_modules_have_independent_process_state(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
