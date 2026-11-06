@@ -150,3 +150,26 @@ class RotationSafeGeometryTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.check(self.fixture(), compact=False)
         self.check(self.fixture(y=82), compact=False)
+
+    def test_vertical_rail_can_reclaim_only_a_measured_clear_top_strip(self):
+        app = self.fixture(y=8, width=350)
+        app.main_window._impl.native.safeAreaInsets.top = 24
+        container = app.body.children[0]._impl.container
+        container.native.safeAreaInsets.top = 24
+        container.top_inset = 0
+        container.controller = object()
+        for regions, accepted in (
+            (((400, 0, 46, 24),), True),
+            (((350, 0, 46, 24),), False),
+            ((), False),
+        ):
+            with self.subTest(regions=regions), patch(
+                    'mobile.ios_reader_chrome.occlusion_geometry', return_value=regions):
+                if accepted:
+                    self.assertEqual(self.check(app, compact=False)['y'], 8)
+                else:
+                    with self.assertRaises(AssertionError):
+                        self.check(app, compact=False)
+        container.top_inset = 24
+        with self.assertRaises(AssertionError):
+            self.check(app, compact=False)
