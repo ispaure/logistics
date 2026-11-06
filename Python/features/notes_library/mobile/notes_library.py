@@ -17,11 +17,12 @@ from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
 from features.notes_library.notes import NotesLibrary, MAX_NOTE, MAX_PREVIEW_HTML, MARKDOWN, document_kind
+from features.notes_library import library_files
 from ..notes import breadcrumb_folders
 from ..navigation import PathChange, MutationResult
 from commonUtils.runtime.operations import OperationCancelled
-from commonUtils.search.names import natural_name_key, search_terms
-from commonUtils.search.providers import search_resources, SearchResult
+from commonUtils.search.names import search_terms
+from commonUtils.search.providers import SearchResult
 from commonUtils.ui.native.adaptive import allocated_width
 from commonUtils.ui.native.appearance import accessible_name
 
@@ -593,20 +594,6 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         def cancelled():
             return generation != self.search_generation or not self.valid()
 
-        def list_children(folder, *, cancelled):
-            try:
-                entries = self.library.folders(folder, cancelled=cancelled)
-            except ValueError as error:
-                if cancelled():
-                    raise OperationCancelled() from error
-                # An oversized or unsupported folder is a partial listing.
-                raise OSError(str(error)) from error
-            return [row for row in entries
-                    if self.host.folder_visible(row["path"], directory=row["directory"])]
-
-        def read_text(path, *, cancelled):
-            return self.library.read_text(path, cancelled=cancelled)
-
         last_progress_size = -1
         def publish(result, finished=False):
             nonlocal last_progress_size
@@ -622,9 +609,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.render_tree()
 
         def project(result):
-            rows = [dict(row, name=posixpath.basename(row['path'])) for row in result.rows]
-            rows.sort(key=lambda row: (row.get('content_match', False), natural_name_key(row['name']),
-                                      natural_name_key(row['path'])))
+            rows = [dict(row, name=posixpath.basename(row['path']))
+                    for row in library_files.ranked_search_rows(result.rows)]
             return SearchResult(rows, result.scanned, result.complete, result.errors)
 
         await asyncio.sleep(SEARCH_DEBOUNCE_SECONDS)
@@ -665,9 +651,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     self.host.loop.call_soon_threadsafe(deliver_progress)
         try:
             def scan():
-                return project(search_resources(self.provider, self.root, query, cancelled=cancelled,
-                    list_children=list_children, read_text=read_text if include_text else None,
-                    progress=progress))
+                return project(library_files.search(self.library, query, include_text=include_text,
+                    visible=self.host.folder_visible, cancelled=cancelled, progress=progress))
             result = await asyncio.to_thread(scan)
         except OperationCancelled:
             return

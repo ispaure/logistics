@@ -937,7 +937,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             window.toggle_links()
             self.wait_until(lambda: not window.aux.busy and not window.connections_progress.busy)
             with patch.object(qt.QInputDialog, 'getText', return_value=('Other.md', True)), \
-                    patch('features.notes_library.ui.library_panels.search_resources', wraps=search_resources) as search, \
+                    patch('features.notes_library.library_files.search_resources', wraps=search_resources) as search, \
                     patch('features.notes_library.notes_links.connections', wraps=connections) as links:
                 window.copy_entry('Home.md')
                 self.wait_until(lambda: not window.progress.busy and not window.aux.busy and not window.connections_progress.busy)
