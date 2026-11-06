@@ -454,3 +454,74 @@ func TestOwnedCryptRootsKeepPackageAliasesSeparate(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnedCryptTrailingColonRootUsesExactCancellableBacking(t *testing.T) {
+	var roots []string
+	var contexts []context.Context
+	memoryInfo, err := fs.Find("memory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaceFixtureDrive(t, func(ctx context.Context, name, root string, m configmap.Mapper) (fs.Fs, error) {
+		roots = append(roots, root)
+		contexts = append(contexts, ctx)
+		memory, err := memoryInfo.NewFs(ctx, name, root, configmap.Simple{})
+		return &mirrorOAuthFixtureFs{&fixtureListFS{Fs: memory, list: func(context.Context) (fs.DirEntries, error) { return nil, nil }}}, err
+	})
+	var data bytes.Buffer
+	archive := zip.NewWriter(&data)
+	for name, text := range map[string]string{
+		"Cloud":  "type=drive\ntoken=" + syntheticOAuthToken + "\n",
+		"Secret": "type=crypt\nremote=Cloud:folder:\npassword=" + obscure.MustObscure("synthetic-colon-password") + "\n",
+	} {
+		member, err := archive.Create(name + ".txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = fmt.Fprintf(member, "[%s]\n%s", name, text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importPackageMode(data.Bytes(), "", "ColonRoot.zip", true); err != nil {
+		t.Fatal(err)
+	}
+	cipher, _, _, _, err := cryptConnection("Secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "folder:/" + cipher.EncryptDirName("sub")
+	ctx, finish := scopedOperation("mirror_sync")
+	finished := false
+	defer func() {
+		if !finished {
+			finish()
+		}
+	}()
+	ctx = context.WithValue(ctx, mirrorLogicalKey{}, true)
+	f, err := remoteRootFs(ctx, "Secret", "sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Root() != "sub" || f.Features().UnWrap().Root() != expected {
+		t.Errorf("unexpected logical/backing roots: %q/%q", f.Root(), f.Features().UnWrap().Root())
+	}
+	if len(roots) != 1 || roots[0] != expected {
+		t.Errorf("factory roots %q; want only %q", roots, expected)
+	}
+	for i, captured := range contexts {
+		if captured.Done() == nil {
+			t.Errorf("factory %q received uncancellable context", roots[i])
+		}
+	}
+	cancel()
+	finish()
+	finished = true
+	for i, captured := range contexts {
+		if captured.Err() != context.Canceled {
+			t.Errorf("factory %q survived cancellation: %v", roots[i], captured.Err())
+		}
+	}
+}
