@@ -35,14 +35,27 @@ class FolderListingNativeTests(unittest.TestCase):
             folder = provider.root / provider.mapping('books', directory=True)
             folder.mkdir()
             expected = {f'books/page{index}.cbz' for index in range(270)}
+            ciphertext_entries = []
             for path in expected:
-                (provider.root / provider.mapping(path)).write_bytes(b'encrypted fixture')
-            (provider.root / provider.mapping('books/subfolder', directory=True)).mkdir()
+                child = provider.root / provider.mapping(path)
+                child.write_bytes(b'encrypted fixture')
+                ciphertext_entries.append((child.name, False))
+            subfolder = provider.root / provider.mapping('books/subfolder', directory=True)
+            subfolder.mkdir()
+            ciphertext_entries.append((subfolder.name, True))
             with patch.object(client, 'request', wraps=client.request) as request:
                 rows = provider.list('books')
-                batches = [call for call in request.call_args_list if call.args[0] == 'crypt_paths']
-                self.assertEqual([len(call.kwargs['entries']) for call in batches], [256, 15])
-            self.assertEqual({row['path'] for row in rows}, expected | {'books/subfolder'})
+                batches = [call.kwargs['entries'] for call in request.call_args_list
+                           if call.args[0] == 'crypt_paths']
+                self.assertLessEqual(len(batches), 4, 'Listing should coalesce ciphertext names')
+                decoded_entries = []
+                for batch in batches:
+                    self.assertTrue(1 <= len(batch) <= 256)
+                    self.assertLessEqual(sum(2 * len(entry['path'].encode('utf-8')) + 64
+                                             for entry in batch), 24 * 1024)
+                    decoded_entries.extend((entry['path'], entry['directory']) for entry in batch)
+                self.assertCountEqual(decoded_entries, ciphertext_entries)
+            self.assertCountEqual([row['path'] for row in rows], expected | {'books/subfolder'})
             self.assertTrue(rows[0]['directory'])
             client.clear()
             with self.assertRaises(ValueError):
