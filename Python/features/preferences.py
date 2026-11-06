@@ -54,6 +54,22 @@ def load_disabled(path):
     return set(parser.get('Features', 'disabled', fallback='').split())
 
 
+def read_legacy_disabled(path):
+    """Read a migration source without recovery or fallback on read failure.
+
+    None means no source exists. Parse and access errors must leave migration
+    pending; treating them as an empty selection would discard saved choices.
+    The forgiving load_disabled API remains available to unlayered hosts.
+    """
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        with path.open(encoding='utf-8') as stream:
+            parser.read_file(stream)
+    except FileNotFoundError:
+        return None
+    return set(parser.get('Features', 'disabled', fallback='').split())
+
+
 def save_disabled(path, disabled):
     parser = _read(path, saving=True)
     if not parser.has_section('Features'):

@@ -256,3 +256,107 @@ class FeaturePreferencesTests(unittest.TestCase):
         registry.load_feature_preferences()
         self.assertEqual(registry.feature_overrides(), {'pref_child': False})
         self.assertEqual(ledger.state('feature-overrides-v2'), 'done')
+
+    def test_failed_initial_import_defers_dependent_migrations_and_retries(self):
+        from commonUtils.configuration.layered import register_settings
+        from features.settings import migration_ledger
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        save_disabled(self.path, {'pref_child', 'text_editor'})
+        original = self.path.read_bytes()
+        with patch.object(registry, 'feature_settings_store', return_value=store), patch(
+                'features.preferences.preferences_path', return_value=self.path):
+            save = store.save
+            failed = False
+            def fail_first(changes, **kwargs):
+                nonlocal failed
+                if not failed:
+                    failed = True
+                    raise OSError('Synthetic write failure')
+                return save(changes, **kwargs)
+            with patch.object(store, 'save', side_effect=fail_first):
+                registry.load_feature_preferences()
+            self.assertIn('pref_child', registry._disabled_features)
+            ledger = migration_ledger(store)
+            self.assertEqual(ledger.state('feature-enable-v1'), 'pending')
+            self.assertIsNone(ledger.state('feature-overrides-v2'))
+            self.assertIsNone(ledger.state('notes-library-feature-v1'))
+            registry.load_feature_preferences()
+            self.assertEqual(registry.feature_overrides(),
+                             {'pref_child': False, 'text_editor': False, 'notes_library': False})
+            self.assertNotIn(('FeatureDefaults', 'disabled_list-str'), store.overrides())
+            for key in ('feature-enable-v1', 'feature-overrides-v2', 'notes-library-feature-v1'):
+                self.assertEqual(ledger.state(key), 'done')
+        self.assertEqual(self.path.read_bytes(), original)
+
+    def test_unreadable_initial_import_is_pending_until_legacy_read_recovers(self):
+        from commonUtils.configuration.layered import register_settings
+        from features.settings import migration_ledger
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        save_disabled(self.path, {'pref_child'})
+        original = self.path.read_bytes()
+        open_path = Path.open
+        def deny_legacy(path, *args, **kwargs):
+            if path == self.path:
+                raise PermissionError('Synthetic read failure')
+            return open_path(path, *args, **kwargs)
+        with patch.object(registry, 'feature_settings_store', return_value=store), patch(
+                'features.preferences.preferences_path', return_value=self.path):
+            with patch.object(Path, 'open', deny_legacy):
+                registry.load_feature_preferences()
+            ledger = migration_ledger(store)
+            self.assertEqual(ledger.state('feature-enable-v1'), 'pending')
+            self.assertIsNone(ledger.state('feature-overrides-v2'))
+            self.assertFalse(store.personal.exists())
+            registry.load_feature_preferences()
+            self.assertEqual(registry.feature_overrides(), {'pref_child': False})
+            # Completed imports no longer read or quarantine obsolete sources.
+            with patch.object(Path, 'open', deny_legacy):
+                registry.load_feature_preferences()
+            self.assertFalse(registry.is_feature_enabled('pref_child'))
+        self.assertEqual(self.path.read_bytes(), original)
+
+    def test_import_completion_failure_does_not_consume_snapshot_before_retry(self):
+        from commonUtils.configuration.layered import register_settings
+        from commonUtils.configuration.migrations import MigrationLedger
+        from features.settings import migration_ledger
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        save_disabled(self.path, {'pref_child'})
+        complete = MigrationLedger.complete
+        def fail_import_completion(ledger, *keys):
+            if keys == ('feature-enable-v1',):
+                raise OSError('Synthetic completion failure')
+            return complete(ledger, *keys)
+        with patch.object(registry, 'feature_settings_store', return_value=store), patch(
+                'features.preferences.preferences_path', return_value=self.path):
+            with patch.object(MigrationLedger, 'complete', fail_import_completion):
+                registry.load_feature_preferences()
+            self.assertFalse(registry.is_feature_enabled('pref_child'))
+            self.assertIn(('FeatureDefaults', 'disabled_list-str'), store.overrides())
+            self.assertIsNone(migration_ledger(store).state('feature-overrides-v2'))
+            registry.load_feature_preferences()
+            self.assertEqual(registry.feature_overrides(), {'pref_child': False})
+            self.assertNotIn(('FeatureDefaults', 'disabled_list-str'), store.overrides())
+
+    def test_malformed_legacy_import_is_preserved_and_retried_after_repair(self):
+        from commonUtils.configuration.layered import register_settings
+        from features.settings import migration_ledger
+        defaults = self.path.with_name('defaults.ini')
+        defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
+        store = register_settings(defaults, self.path.with_name('personal.ini'))
+        original = b'[Features\ndisabled=pref_child\n'
+        self.path.write_bytes(original)
+        with patch.object(registry, 'feature_settings_store', return_value=store), patch(
+                'features.preferences.preferences_path', return_value=self.path):
+            registry.load_feature_preferences()
+            self.assertEqual(self.path.read_bytes(), original)
+            self.assertEqual(migration_ledger(store).state('feature-enable-v1'), 'pending')
+            self.assertFalse(store.personal.exists())
+            self.path.write_text('[Features]\ndisabled=pref_child\n')
+            registry.load_feature_preferences()
+            self.assertEqual(registry.feature_overrides(), {'pref_child': False})
