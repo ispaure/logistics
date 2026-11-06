@@ -127,22 +127,35 @@ class SettingsCategories:
 
 @dataclass(frozen=True)
 class Category:
+    """A menu entry; when listed, at least one required feature must be enabled."""
     title: str
     factory: str
     arguments: tuple = ()
     camera_required: bool = False
+    icon: str = 'preferences'
+    required_features: tuple[str, ...] = ()
 
 
 CATEGORIES = (
-    Category('App', 'application'), Category('Appearance', 'appearance'), Category('Features', 'features'),
-    Category('Camera', 'camera', camera_required=True), Category('Read aloud', 'speech'),
-    Category('Markdown', 'text_size', ('Markdown', 'markdown_font_size')),
-    Category('Text', 'text_size', ('Text', 'text_font_size')),
-    Category('EPUB', 'text_size', ('EPUB', 'epub_font_size')),
-    Category('Books & Comics', 'books'), Category('LM Chat', 'chat'),
-    Category('Workspaces', 'workspaces'), Category('Privacy & Security', 'privacy'), Category('Reset', 'reset'),
-    Category('Help', 'help'), Category('About', 'about'),
+    Category('App', 'application'),
+    Category('Appearance', 'appearance', icon='appearance'),
+    Category('Features', 'features'),
+    Category('Camera', 'camera', camera_required=True, required_features=('images',)),
+    Category('Read aloud', 'speech', icon='speaker'),
+    Category('Markdown', 'text_size', ('Markdown', 'markdown_font_size'),
+             icon='edit', required_features=('text_editor', 'notes_library')),
+    Category('Text', 'text_size', ('Text', 'text_font_size'),
+             icon='edit', required_features=('text_editor', 'notes_library')),
+    Category('EPUB', 'text_size', ('EPUB', 'epub_font_size'), icon='books', required_features=('books',)),
+    Category('Books & Comics', 'books', icon='books', required_features=('comics', 'pdf')),
+    Category('LM Chat', 'chat', icon='chat', required_features=('lm',)),
+    Category('Workspaces', 'workspaces', icon='folder'),
+    Category('Privacy & Security', 'privacy', icon='storage_crypt'),
+    Category('Reset', 'reset'),
+    Category('Help', 'help', icon='help'),
+    Category('About', 'about', icon='info'),
 )
+BY_TITLE = {entry.title: entry for entry in CATEGORIES}
 
 
 def settings_sections(app):
@@ -150,9 +163,7 @@ def settings_sections(app):
     from features.images.mobile.burst_camera import available
     app.settings_status = SettingsLabel(app.preferences.error, style=Pack(margin_top=12))
     owner = SettingsCategories(app)
-    requirements = {'Camera': ('images',), 'Markdown': ('text_editor', 'notes_library'), 'Text': ('text_editor', 'notes_library'),
-        'EPUB': ('books',), 'Books & Comics': ('comics', 'pdf'), 'LM Chat': ('lm',)}
     return {entry.title: lambda entry=entry: getattr(owner, entry.factory)(*entry.arguments)
             for entry in CATEGORIES if (not entry.camera_required or available(app))
-            and (entry.title not in requirements or any(enabled(app.preferences, name)
-                 for name in requirements[entry.title]))}
+            and (not entry.required_features or any(enabled(app.preferences, name)
+                 for name in entry.required_features))}

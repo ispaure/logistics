@@ -17,6 +17,25 @@ from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_category_visibility_keeps_shared_text_settings_and_checks_camera_support(self):
+        from mobile.settings.categories import settings_sections
+
+        app = self.make_app()
+        app.preferences.save(disabled_features=json.dumps([
+            'text_editor', 'notes_library', 'books', 'comics', 'pdf', 'lm', 'images']))
+        with patch('features.images.mobile.burst_camera.available', return_value=True):
+            sections = settings_sections(app)
+            self.assertEqual(list(sections), ['App', 'Appearance', 'Features', 'Read aloud',
+                'Workspaces', 'Privacy & Security', 'Reset', 'Help', 'About'])
+            # Notes Library still reads text even if the standalone editor is off.
+            app.preferences.save(disabled_features=json.dumps([
+                'text_editor', 'books', 'comics', 'pdf', 'lm']))
+            sections = settings_sections(app)
+            self.assertEqual(list(sections)[3:7], ['Camera', 'Read aloud', 'Markdown', 'Text'])
+            self.assertFalse(hasattr(app, 'text_font_size_choice'))
+        with patch('features.images.mobile.burst_camera.available', return_value=False):
+            self.assertNotIn('Camera', settings_sections(app))
+
     def test_read_aloud_loads_automatically_and_refreshes_when_reopened(self):
         app = self.make_app()
         app.preferences.save(speech_voice='Removed voice')
