@@ -558,19 +558,8 @@ class BlenderPage(qt.QWidget):
         release, name = self.release, self.preset.currentText()
         config = {'enabled': self.bluehole_enabled.isChecked(), 'branch': self.bluehole_branch.currentText(),
                   'deluxe': self.bluehole_deluxe.currentText() == 'Yes'}
-        # Store intent independently of installing Blender/downloading addons.
-        import json
         try:
-            self.manager._require_idle(release, name)
-            root = self.manager.preset(release, name)
-            state = self.library.selection(root)
-            if 'installed_bluehole' not in state and state.get('bluehole', {}).get('commit'):
-                state['installed_bluehole'] = {key: state['bluehole'].get(key) for key in ('branch', 'commit')}
-            if config['deluxe']:
-                config['deluxe_stamp'] = state.get('bluehole', {}).get('deluxe_stamp')
-            staged = self.manager._contained(root, '.logistics-addons.tmp')
-            staged.write_text(json.dumps({**state, 'selected': identities, 'bluehole': config}, indent=2), encoding='utf-8')
-            staged.replace(root / '.logistics-addons.json')
+            self.library.save_pending_selection(release, name, identities, bluehole=config)
             self._show_choices()
             self.status.setText('Addon selection saved. It will be applied on the next launch.')
         except (OSError, ValueError) as error:

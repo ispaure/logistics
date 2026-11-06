@@ -82,6 +82,33 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(self.library.for_preset(self.preset).entries()[0].source, 'Personal')
         self.assertEqual(self.library.for_preset(other).entries(), [])
 
+    def test_pending_selection_respects_preset_lock_and_retains_installation(self):
+        import json
+        from features.blender.installation.install import installation_lock
+
+        installed = {'legacy:tool': {'module': 'tool', 'path': 'scripts/addons/tool', 'digest': 'fixture'}}
+        selection_file = self.preset / '.logistics-addons.json'
+        selection_file.write_text(json.dumps({
+            'selected': ['legacy:tool'], 'installed': installed,
+            'bluehole': {'enabled': True, 'branch': 'main', 'commit': 'a' * 40, 'deluxe_stamp': 'fixture'},
+        }), encoding='utf-8')
+        original = selection_file.read_bytes()
+        config = {'enabled': True, 'branch': 'beta', 'deluxe': True}
+        with installation_lock(self.preset):
+            with self.assertRaisesRegex(ValueError, 'Another operation'):
+                self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
+        with patch.object(self.manager, 'running', return_value=True):
+            with self.assertRaisesRegex(ValueError, 'Close the Blender instance'):
+                self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
+        self.assertEqual(selection_file.read_bytes(), original)
+
+        self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
+        self.assertEqual(self.library.selection(self.preset), {
+            'selected': [], 'installed': installed,
+            'installed_bluehole': {'branch': 'main', 'commit': 'a' * 40},
+            'bluehole': {**config, 'deluxe_stamp': 'fixture'},
+        })
+
     def test_import_does_not_execute_code_unknown_is_not_auto_resolved_and_conflicts_refused(self):
         path = self.package('unknown.zip', minimum=None, body='raise RuntimeError("must never execute")')
         self.library.add(path)
