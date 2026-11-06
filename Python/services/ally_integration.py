@@ -50,8 +50,16 @@ def activate(logistics_root, ally_root):
                     ):
                         raise RuntimeError(f'Active link changed while staging replacement: {link}')
                     staged.replace(link)
-                except BaseException:
-                    staged.unlink(missing_ok=True)
+                except BaseException as switch_error:
+                    try:
+                        staged.unlink(missing_ok=True)
+                    except OSError as cleanup_error:
+                        cleanup_note = f'Staging cleanup could not complete at {staged}: {cleanup_error}'
+                        if isinstance(switch_error, Exception):
+                            raise RuntimeError(
+                                f'Integration retarget failed: {switch_error}. {cleanup_note}'
+                            ) from switch_error
+                        switch_error.add_note(cleanup_note)
                     raise
     os.environ['LOGISTICS_ALLY_ROOT'] = str(ally_root)
 
