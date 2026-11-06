@@ -31,8 +31,9 @@ class NativeArchiveAccess:
     """Own one decoded archive lifetime; sources supply version and _request.
 
     Native work runs outside the cache lock so close never waits for I/O.
-    Results are checked again before publication and cannot refill a closed
-    session. The lock also keeps concurrent reads from counting a block twice.
+    Each request captures its password and revision before dispatch; changing
+    the password back cannot revive an older result. Publication cannot refill
+    a closed session or count concurrently read members twice.
     """
     archive_action = 'file_archive'
     max_read = 16 * 1024 * 1024
@@ -42,6 +43,7 @@ class NativeArchiveAccess:
         self._archive_lock = RLock()
         self.closed = False
         self.password = password
+        self._password_revision = 0
         self.headers = None
         self.cache, self.cache_bytes = OrderedDict(), 0
 
@@ -63,20 +65,20 @@ class NativeArchiveAccess:
         headers = action == self.archive_action and not values
         with self._archive_lock:
             self._check_open()
-            password = self.password
+            password, revision = self.password, self._password_revision
             if headers and self.headers is not None:
                 return self.headers
-        result = self._request(action, **values)
+        result = self._request(action, password=password, **values)
         self.check()
         with self._archive_lock:
             self._check_open()
-            if password != self.password:
+            if revision != self._password_revision:
                 raise ValueError('The archive password changed while reading. Reopen it.')
             if headers:
                 self.headers = result
             return result
 
-    def _request(self, action, **values):
+    def _request(self, action, *, password, **values):
         raise NotImplementedError
 
     @contextmanager
@@ -88,6 +90,7 @@ class NativeArchiveAccess:
                 self.cache.clear()
                 self.cache_bytes = 0
                 self.password = password
+                self._password_revision += 1
         archive = NativeArchive(self)
         if archive.protected:
             # Validate the supplied inner password before presenting a reader.
@@ -105,7 +108,7 @@ class NativeArchiveAccess:
         self._check_archive_version(self.path)
         with self._archive_lock:
             self._check_open()
-            key = member, self.password
+            key = member, self._password_revision
             if key in self.cache:
                 self.cache.move_to_end(key)
                 return self.cache[key]
@@ -115,7 +118,7 @@ class NativeArchiveAccess:
         self._check_archive_version(self.path)
         with self._archive_lock:
             self._check_open()
-            if key != (member, self.password):
+            if key != (member, self._password_revision):
                 raise ValueError('The archive password changed while reading. Reopen it.')
             if key not in self.cache:
                 self.cache[key] = data

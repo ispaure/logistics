@@ -43,10 +43,10 @@ class NativeSource(NativeArchiveAccess):
             raise ValueError('The encrypted file changed; reopen it.')
         return current
 
-    def _request(self, action, **values):
+    def _request(self, action, *, password, **values):
         with self.path.open('rb') as encrypted:
             return self.client.request(action, remote=self.record['remote'], identity=self.record['identity'],
-                path=self.record['encrypted_path'], fd=encrypted.fileno(), password=self.password, **values)
+                path=self.record['encrypted_path'], fd=encrypted.fileno(), password=password, **values)
 
     @contextmanager
     def open(self, path):

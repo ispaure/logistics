@@ -53,7 +53,7 @@ class RemoteSource(NativeArchiveAccess):
             raise ValueError('The remote file changed. Reopen it.')
         return self.expected
 
-    def _request(self, action, **values):
+    def _request(self, action, *, password, **values):
         if action == self.archive_action and self.cache_token is not None:
             action = 'remote_cache_archive'
             values['run'] = self.cache_token
@@ -66,7 +66,7 @@ class RemoteSource(NativeArchiveAccess):
             self.progress('Reading remote file data')
         self.check()  # Presentation callbacks may close or revoke this source.
         return self.client.request(action, remote=self.remote, path=self.path, identity=self.identity,
-            expected=getattr(self, 'expected', ''), password=self.password, **values)
+            expected=getattr(self, 'expected', ''), password=password, **values)
 
     def cache_archive(self):
         """One native network stream into RAM; progress/control bypass network locks."""

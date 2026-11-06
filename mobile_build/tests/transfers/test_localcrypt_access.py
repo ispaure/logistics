@@ -136,6 +136,53 @@ class NativeArchiveLifetimeTests(unittest.TestCase):
             self.assertEqual(len(source.cache), 1)
             self.assertEqual(source.cache_bytes, len(b'fixture'))
 
+    def test_password_change_and_restore_rejects_the_in_flight_member(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Event
+        with TemporaryDirectory() as root:
+            source, calls = self.source(root)
+            entered, dispatch, returned, release = Event(), Event(), Event(), Event()
+            transport, native = source._request, source.client.request
+            native_passwords = []
+
+            def record_password(action, **values):
+                if 'member' in values:
+                    native_passwords.append(values['password'])
+                return native(action, **values)
+
+            def paused_transport(action, **values):
+                if 'member' not in values:
+                    return transport(action, **values)
+                entered.set()
+                if not dispatch.wait(5):
+                    raise TimeoutError('Synthetic dispatch was not released')
+                result = transport(action, **values)
+                returned.set()
+                if not release.wait(5):
+                    raise TimeoutError('Synthetic result was not released')
+                return result
+
+            source.client.request = record_password
+            source._request = paused_transport
+            with ThreadPoolExecutor(max_workers=1) as workers:
+                pending = workers.submit(source.read_member, 'page.txt')
+                try:
+                    self.assertTrue(entered.wait(5))
+                    with source.open_archive(source.path, password='synthetic-replacement'):
+                        pass
+                    dispatch.set()
+                    self.assertTrue(returned.wait(5))
+                    with source.open_archive(source.path, password='synthetic-inner-password'):
+                        pass
+                finally:
+                    dispatch.set()
+                    release.set()
+                with self.assertRaisesRegex(ValueError, 'password changed'):
+                    pending.result(5)
+            self.assertEqual(native_passwords, ['synthetic-inner-password'])
+            self.assertFalse(source.cache)
+            self.assertEqual(source.cache_bytes, 0)
+
 
 class Client:
     generation = 0
