@@ -775,8 +775,11 @@ runtime identity, expected cases and
 absence of skips. Raw receipts remain diagnostic evidence on failure. Canonical
 `android-result.json` and `android-result.receipt.log` are published only after
 owned emulator teardown, final diagnostic handling and scratch retirement succeed.
-The primary failure survives secondary collection/cleanup errors; logcat remains
-best effort and can record an error marker. `test_android_runtime_hosted.py` uses
+Once the emulator session starts, the primary failure survives secondary
+collection/cleanup errors. Session-entry failure handling remains with the pinned
+SDK session; an entry failure followed by cleanup failure can still mask the
+entry error. Logcat remains best effort and can record an error marker.
+`test_android_runtime_hosted.py` uses
 host fixtures for these failure paths and does not certify hosted adb transport
 or native behavior. Local runtime results remain a separate acceptance scope.
 
