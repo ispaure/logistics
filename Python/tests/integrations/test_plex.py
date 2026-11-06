@@ -15,7 +15,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
-from unittest.mock import patch
+from unittest.mock import ANY, Mock, patch
 from zipfile import ZipFile
 
 from commonUtils.runtime.platform import OS
@@ -173,13 +173,44 @@ class PlexPackageTests(unittest.TestCase):
                 patch.object(actions.config, 'LogisticsConfig', return_value=settings), \
                 patch.object(actions, 'reviewed_sync') as sync:
             actions.pull_pms(None, 'config.ini')
-            sync.assert_called_once_with(local.name + ':', self.package, config_path='config.ini', operation='Pull')
+            sync.assert_called_once_with(local.name + ':', self.package, config_path='config.ini',
+                                         operation='Pull', before_start=ANY)
+            sync.call_args.kwargs['before_start']()
             sync.reset_mock()
             actions.push_pms(None, 'config.ini')
-            sync.assert_called_once_with(self.package, local.name + ':', config_path='config.ini', operation='Push')
+            sync.assert_called_once_with(self.package, local.name + ':', config_path='config.ini',
+                                         operation='Push', before_start=ANY)
+            sync.call_args.kwargs['before_start']()
             (self.package / 'old.zip').write_bytes(b'old')
             actions.clear_local_pmsdata(None)
             self.assertEqual(list(self.package.iterdir()), [])
+
+    def test_recovery_appearing_during_sync_review_vetoes_launch(self):
+        local = SimpleNamespace(path=self.package, name=self.package.name)
+        settings = SimpleNamespace(path_remote_local=self.root)
+        recovery = self.package / '.logistics-plex-recovery-during-review'
+        launch = Mock()
+
+        def review(*args, before_start, **kwargs):
+            recovery.mkdir()
+            (recovery / 'original.zip').write_bytes(b'original package')
+            before_start()
+            launch()
+
+        with patch.object(actions, 'get_local_cls_pmsdata', return_value=local), \
+                patch.object(actions, 'get_remote_cls_pmsdata', return_value=local), \
+                patch.object(actions.config, 'LogisticsConfig', return_value=settings), \
+                patch.object(actions, 'reviewed_sync', side_effect=review):
+            for action in (actions.pull_pms, actions.push_pms):
+                with self.subTest(action=action.__name__):
+                    with self.assertRaises(RuntimeError) as raised:
+                        action(None, 'config.ini')
+                    self.assertIn(str(recovery), str(raised.exception))
+                    original = recovery / 'original.zip'
+                    self.assertEqual(original.read_bytes(), b'original package')
+                    original.unlink()
+                    recovery.rmdir()
+        launch.assert_not_called()
 
     def test_linux_package_and_restore_retains_previous_data(self):
         packages.package_data(self.data, self.package, OS.LINUX)
