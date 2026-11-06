@@ -54,6 +54,31 @@ class ChatInventoryTests(TestCase):
         self.assertTrue(self.store.summaries()[1])
         self.assertEqual(self.store.cached_summaries()[0], [])
 
+    def test_non_object_profiles_are_reported_and_preserved(self):
+        profile = self.store.root / 'profile.json'
+        for value in (None, [], 'invalid', 1, True):
+            with self.subTest(value=value):
+                content = json.dumps(value).encode('utf-8')
+                profile.write_bytes(content)
+                with self.assertRaisesRegex(ValueError, 'Invalid mobile chat profile'):
+                    self.store.profile()
+                self.assertEqual(profile.read_bytes(), content)
+                self.assertEqual(self.store.load(self.data['id'])['draft'], self.data['draft'])
+
+    def test_invalid_profile_does_not_prevent_opening_existing_conversation(self):
+        app = self.inventory_app()
+        profile = app.private_root / 'LM' / 'profile.json'
+        profile.write_bytes(b'[]')
+        app.show_chat()
+        self.assertEqual(app.chat_current['id'], self.data['id'])
+        self.assertEqual(app.chat_prompt.value, self.data['draft'])
+        self.assertIn('Invalid mobile chat profile', app.chat_status.value)
+        self.assertEqual(profile.read_bytes(), b'[]')
+        # The fallback must not authorize overwriting the unreadable profile.
+        with self.assertRaisesRegex(OSError, 'profile changed'):
+            app.chat_store.save_profile(app.chat_profile, app.chat_profile_original)
+        self.assertEqual(profile.read_bytes(), b'[]')
+
     def test_async_first_visit_selects_existing_conversation_without_creating_another(self):
         app = self.inventory_app()
         async def exercise():
