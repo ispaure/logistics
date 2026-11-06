@@ -1,5 +1,7 @@
 """Window-level system-region wakeups for every native navigation bar."""
 
+from weakref import ref
+
 
 def native_geometry(native):
     """Geometry in the current window, including equal-size window moves.
@@ -66,9 +68,15 @@ def observe_window_occlusions(app, native):
     regions = occlusion_geometry(native)
     if app is None or not getattr(app, 'active_host', False):
         return
-    state = (regions, native_geometry(native))
-    if getattr(app, '_ios_window_occlusions', None) == state:
+    adapter = app.native_host.adapter
+    if adapter is None:
+        app._ios_window_occlusions = None
         return
+    state = (regions, native_geometry(native))
+    owner = getattr(app, '_ios_window_occlusion_owner', None)
+    if owner is not None and owner() is adapter and getattr(app, '_ios_window_occlusions', None) == state:
+        return
+    app._ios_window_occlusion_owner = ref(adapter)
     app._ios_window_occlusions = state
     if getattr(app, '_ios_occlusion_refresh_pending', False):
         return
@@ -77,12 +85,17 @@ def observe_window_occlusions(app, native):
     def refresh():
         app._ios_occlusion_refresh_pending = False
         if not getattr(app, 'active_host', False):
+            app._ios_window_occlusions = None
             return
-        adapter = app.native_host.adapter
+        host = app.native_host
+        adapter = host.adapter
+        if adapter is None:
+            app._ios_window_occlusions = None
+            return
         navigation = list(getattr(adapter, 'navigation', ()))
         # UIKit can move a destination into More's navigation controller. Its
         # live owner is not necessarily in the original controller array.
-        for destination in getattr(app.native_host, 'destinations', ()):
+        for destination in getattr(host, 'destinations', ()):
             navigation.append(adapter.navigation_for(destination))
         outer = getattr(adapter, 'outer_navigation', None)
         if outer is not None:

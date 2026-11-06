@@ -144,6 +144,10 @@ class ShellContainmentTests(unittest.TestCase):
         root_class.alloc.assert_not_called()
 
 
+class NavigationAdapter(SimpleNamespace):
+    pass
+
+
 class WindowOcclusionTests(unittest.TestCase):
     def setUp(self):
         self.loop = asyncio.new_event_loop()
@@ -153,7 +157,7 @@ class WindowOcclusionTests(unittest.TestCase):
         self.navigation = SimpleNamespace(view=Mock(), navigationBar=Mock())
         self.secondary = SimpleNamespace(view=Mock(), navigationBar=Mock())
         self.app = SimpleNamespace(active_host=True, loop=self.loop,
-            native_host=SimpleNamespace(adapter=SimpleNamespace(navigation=[self.navigation])),
+            native_host=SimpleNamespace(adapter=NavigationAdapter(navigation=[self.navigation])),
             adaptive=SimpleNamespace(secondary=self.secondary), resize_workspace=Mock())
 
     def test_root_only_changes_refresh_bar_owners_and_reclaim_idle_clearance(self):
@@ -196,6 +200,55 @@ class WindowOcclusionTests(unittest.TestCase):
             self.clearance.assert_any_call(more)
             outer.view.layoutIfNeeded.assert_called_once()
             more.view.layoutIfNeeded.assert_called_once()
+        self.loop.run_until_complete(exercise())
+
+    def test_missing_adapter_at_refresh_does_not_raise_or_consume_geometry(self):
+        from mobile.ios_system_occlusions import observe_window_occlusions
+        host = self.app.native_host
+        host.destinations = ['chat']
+        adapter = host.adapter
+        adapter.navigation_for = Mock(return_value=self.navigation)
+        native = object()
+        errors = []
+        self.loop.set_exception_handler(lambda loop, context: errors.append(context['exception']))
+
+        async def exercise():
+            with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=()):
+                observe_window_occlusions(self.app, native)
+                host.adapter = None
+                await asyncio.sleep(0)
+                self.assertEqual(errors, [])
+                self.clearance.assert_not_called()
+                self.app.resize_workspace.assert_not_called()
+                self.assertFalse(self.app._ios_occlusion_refresh_pending)
+                host.adapter = adapter
+                observe_window_occlusions(self.app, native)
+                await asyncio.sleep(0)
+            self.clearance.assert_any_call(self.navigation)
+            self.app.resize_workspace.assert_called_once()
+        self.loop.run_until_complete(exercise())
+
+    def test_same_geometry_on_replacement_coalesces_and_refreshes_current_owner(self):
+        from mobile.ios_system_occlusions import observe_window_occlusions
+        host = self.app.native_host
+        first = SimpleNamespace(view=Mock(), navigationBar=Mock())
+        later = SimpleNamespace(view=Mock(), navigationBar=Mock())
+        native = object()
+
+        async def exercise():
+            with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=()):
+                observe_window_occlusions(self.app, native)
+                host.adapter = NavigationAdapter(navigation=[first])
+                observe_window_occlusions(self.app, native)
+                await asyncio.sleep(0)
+                self.navigation.view.layoutIfNeeded.assert_not_called()
+                first.view.layoutIfNeeded.assert_called_once()
+                self.app.resize_workspace.assert_called_once()
+                host.adapter = NavigationAdapter(navigation=[later])
+                observe_window_occlusions(self.app, native)
+                await asyncio.sleep(0)
+                later.view.layoutIfNeeded.assert_called_once()
+                self.assertEqual(self.app.resize_workspace.call_count, 2)
         self.loop.run_until_complete(exercise())
 
     def test_updates_coalesce_and_retired_windows_do_not_refresh(self):
