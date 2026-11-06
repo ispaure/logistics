@@ -162,14 +162,14 @@ class RecycledNotesRowsTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
-    def test_paging_and_scope_retirement_keep_native_sources_bounded(self):
+    def test_native_list_exposes_all_rows_and_retires_sources(self):
         async def exercise():
             owner = await self.library(count=80)
             await owner.toggle_folder('Vault/Many')
             rows = owner.rows
-            self.assertEqual(len(rows.children), 50)
-            rows.show_more()
-            self.assertGreater(len(rows.children), 80)
+            note_paths = [row.path for row in rows.children if row.path.startswith('Vault/Many/Note ')]
+            self.assertCountEqual(note_paths, [f'Vault/Many/Note {index}.md' for index in range(80)])
+            self.assertEqual(owner._row_cache, {})
             all_rows = [state['rows'] for state in owner._row_panels.values()]
             owner.dispose()
             for source in all_rows:
