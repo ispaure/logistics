@@ -5,6 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS
@@ -359,6 +360,51 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.owner.permitted())
         self.owner.unregister('broken')
 
+    async def test_disposal_retries_failures_and_ignores_late_callbacks(self):
+        from mobile.audio_output import _owners
+        broken = Mock(side_effect=[RuntimeError('pause failed'), None])
+        healthy = Mock()
+        self.owner.register('broken', broken)
+        self.owner.register('healthy', healthy)
+        self.owner.prompt = Mock()
+        prompt = self.owner.prompt
+        self.native.dispose.side_effect = [RuntimeError('native removal failed'), None]
+
+        with self.assertRaisesRegex(RuntimeError, 'pause failed'):
+            self.owner.dispose()
+        prompt.cancel.assert_called_once_with()
+        self.native.dispose.assert_called_once_with()
+        self.assertNotIn(self.owner, self.owner.scope.listeners)
+        self.assertNotIn(self.owner, _owners)
+        revision = self.owner.policy.revision
+        self.owner.refresh(lost=True)
+        self.owner.interrupt(True)
+        self.owner.protection_changed(True)
+        self.owner.pause()  # A protection change may already have queued it.
+        self.assertEqual(self.owner.policy.revision, revision)
+        broken.assert_called_once_with()
+
+        self.owner.dispose()
+        self.owner.dispose()
+        self.assertEqual(broken.call_count, 2)
+        self.assertEqual(self.native.dispose.call_count, 2)
+        healthy.assert_called_once_with()
+        prompt.cancel.assert_called_once_with()
+
+    async def test_constructor_releases_monitor_and_subscriptions_after_refresh_failure(self):
+        from mobile.audio_output import _owners
+        native = Mock()
+        failure = RuntimeError('refresh failed')
+        owners = set(_owners)
+        listeners = set(self.owner.scope.listeners)
+        with patch.object(AudioOutput, 'refresh', side_effect=failure):
+            with self.assertRaises(RuntimeError) as raised:
+                AudioOutput(self.app, native=native)
+        self.assertIs(raised.exception, failure)
+        native.dispose.assert_called_once_with()
+        self.assertEqual(set(_owners), owners)
+        self.assertEqual(set(self.owner.scope.listeners), listeners)
+
 
 class SpeechResumeGateTests(unittest.TestCase):
     def test_native_paused_utterance_cannot_bypass_output_revocation(self):
@@ -391,23 +437,55 @@ class SpeechResumeGateTests(unittest.TestCase):
 
 
 class AppleRouteEventTests(unittest.TestCase):
-    def test_loss_reasons_are_distinct_from_ordinary_selection_changes(self):
-        import sys
-        from unittest.mock import patch
+    def make_monitor(self, center, changed, interrupted):
         from mobile.audio_output_native import AppleOutputs
+        classes = {'AVAudioSession': NS(sharedInstance=object()),
+                   'NSNotificationCenter': NS(defaultCenter=center),
+                   'NSOperationQueue': NS(mainQueue=object())}
+        objc = NS(ObjCClass=classes.__getitem__,
+                  Block=lambda callback, *signature: callback, objc_id=object())
+        with patch.dict(sys.modules, {'rubicon.objc': objc}), patch('ctypes.CDLL'):
+            return AppleOutputs(changed, interrupted)
+
+    def test_partial_registration_is_rolled_back(self):
+        token = object()
+        failure = RuntimeError('registration failed')
+        center = NS(addObserverForName=Mock(side_effect=[token, failure]), removeObserver=Mock())
+        changed, interrupted = Mock(), Mock()
+        with self.assertRaises(RuntimeError) as raised:
+            self.make_monitor(center, changed, interrupted)
+        self.assertIs(raised.exception, failure)
+        center.removeObserver.assert_called_once_with(token)
+        for call in center.addObserverForName.call_args_list:
+            call.kwargs['usingBlock'](None)
+        changed.assert_not_called()
+        interrupted.assert_not_called()
+
+    def test_failed_token_removal_does_not_block_other_tokens_and_can_retry(self):
+        first, second = object(), object()
+        center = NS(addObserverForName=Mock(side_effect=[first, second]),
+                    removeObserver=Mock(side_effect=[RuntimeError('removal failed'), None, None]))
+        changed, interrupted = Mock(), Mock()
+        monitor = self.make_monitor(center, changed, interrupted)
+        with self.assertRaisesRegex(RuntimeError, 'removal failed'):
+            monitor.dispose()
+        for call in center.addObserverForName.call_args_list:
+            call.kwargs['usingBlock'](None)
+        monitor.dispose()
+        monitor.dispose()
+        self.assertEqual([call.args[0] for call in center.removeObserver.call_args_list],
+                         [first, second, first])
+        changed.assert_not_called()
+        interrupted.assert_not_called()
+
+    def test_loss_reasons_are_distinct_from_ordinary_selection_changes(self):
         callbacks = {}
         def observe(name, **kwargs):
             callbacks[name] = kwargs['usingBlock']
             return object()
         center = NS(addObserverForName=Mock(side_effect=observe), removeObserver=Mock())
-        classes = {'AVAudioSession': NS(sharedInstance=object()),
-                   'NSNotificationCenter': NS(defaultCenter=center),
-                   'NSOperationQueue': NS(mainQueue=object())}
-        objc = NS(ObjCClass=lambda name: classes[name],
-                  Block=lambda callback, *signature: callback, objc_id=object())
         changed = Mock()
-        with patch.dict(sys.modules, {'rubicon.objc': objc}), patch('ctypes.CDLL'):
-            monitor = AppleOutputs(changed, Mock())
+        monitor = self.make_monitor(center, changed, Mock())
         try:
             callback = callbacks['AVAudioSessionRouteChangeNotification']
             for reason, lost in [(1, False), (2, True), (7, True), (8, False)]:

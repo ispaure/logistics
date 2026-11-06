@@ -33,6 +33,51 @@ class ScreenPrivacyTests(unittest.TestCase):
             for owner in getattr(getattr(app, 'private_sessions', None), 'controllers', {}).values()))
         return privacy
 
+    def fake_ios(self, center):
+        window = SimpleNamespace(respondsToSelector=Mock(return_value=False))
+        impl = type('Impl', (), {'__module__': 'toga_iOS.app'})()
+        app = SimpleNamespace(_impl=impl, main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
+        objc = SimpleNamespace(ObjCClass=lambda name: SimpleNamespace(defaultCenter=center),
+                               Block=lambda callback, *signature: callback, objc_id=object())
+        return app, patch.dict(sys.modules, {'rubicon.objc': objc})
+
+    def test_partial_ios_registration_is_rolled_back(self):
+        from features.rclone.mobile.cloud import CloudClient
+        token = object()
+        failure = RuntimeError('registration failed')
+        center = SimpleNamespace(addObserverForName=Mock(side_effect=[token, failure]), removeObserver=Mock())
+        app, native = self.fake_ios(center)
+        credential_observers = CloudClient.credential_state.observers
+        before = set(credential_observers)
+        with native, self.assertRaises(RuntimeError) as raised:
+            ScreenPrivacy(app)
+        self.assertIs(raised.exception, failure)
+        center.removeObserver.assert_called_once_with(token)
+        self.assertEqual(set(credential_observers), before)
+        self.assertFalse(app._layout_participants.entries)
+
+    def test_disposal_retries_failed_observer_and_blocks_queued_delivery(self):
+        from features.rclone.mobile.cloud import CloudClient
+        tokens = [object() for _ in range(6)]
+        center = SimpleNamespace(addObserverForName=Mock(side_effect=tokens),
+                                 removeObserver=Mock(side_effect=[RuntimeError('removal failed')] + [None] * 6))
+        app, native = self.fake_ios(center)
+        with native, patch.object(ScreenPrivacy, 'refresh'):
+            privacy = ScreenPrivacy(app)
+        with self.assertRaisesRegex(RuntimeError, 'removal failed'):
+            privacy.dispose()
+        self.assertFalse(app._layout_participants.entries)
+        self.assertNotIn(privacy, app._protection.process.listeners)
+        self.assertNotIn(privacy, CloudClient.credential_state.observers)
+        for call in center.addObserverForName.call_args_list:
+            call.kwargs['usingBlock'](None)
+        self.assertFalse(privacy.inactive)
+        self.assertFalse(privacy.interrupted)
+        privacy.dispose()
+        privacy.dispose()
+        self.assertEqual([call.args[0] for call in center.removeObserver.call_args_list],
+                         tokens + tokens[:1])
+
     def test_android_configuration_callback_refreshes_only_its_activity(self):
         application = SimpleNamespace(registerActivityLifecycleCallbacks=Mock())
         activity = SimpleNamespace(getApplication=lambda: application)

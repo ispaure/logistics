@@ -1,4 +1,6 @@
 """Selected-output queries and native lifetime only; consent lives in AudioOutput."""
+import logging
+
 from services.audio_output import output
 
 
@@ -38,22 +40,36 @@ class AppleOutputs:
         self.audio = value(ObjCClass('AVAudioSession'), 'sharedInstance')
         self.center = value(ObjCClass('NSNotificationCenter'), 'defaultCenter')
         self.tokens = []
-        self.blocks = []
+        self.closed = False
         self.active_interruption = False
         def interruption(note):
+            if self.closed:
+                return
             kind = note.userInfo.objectForKey('AVAudioSessionInterruptionTypeKey')
             number = kind if isinstance(kind, int) else (value(kind, 'unsignedIntegerValue') if kind is not None else 1)
             self.active_interruption = number == 1
             interrupted(self.active_interruption)
         def route_changed(note):
+            if self.closed:
+                return
             reason = note.userInfo.objectForKey('AVAudioSessionRouteChangeReasonKey')
             number = reason if isinstance(reason, int) else (value(reason, 'unsignedIntegerValue') if reason is not None else 0)
             changed(lost=number in (2, 7))  # Old output unavailable / no suitable route.
-        for name, callback in [('AVAudioSessionRouteChangeNotification', route_changed),
-                               ('AVAudioSessionInterruptionNotification', interruption)]:
-            block = Block(callback, None, objc_id)
-            self.blocks.append(block)
-            self.tokens.append(self.center.addObserverForName(name, object=None, queue=value(ObjCClass('NSOperationQueue'), 'mainQueue'), usingBlock=block))
+        queue = value(ObjCClass('NSOperationQueue'), 'mainQueue')
+        try:
+            for name, callback in (
+                ('AVAudioSessionRouteChangeNotification', route_changed),
+                ('AVAudioSessionInterruptionNotification', interruption),
+            ):
+                block = Block(callback, None, objc_id)
+                token = self.center.addObserverForName(name, object=None, queue=queue, usingBlock=block)
+                self.tokens.append((token, block))
+        except Exception:
+            try:
+                self.dispose()
+            except Exception:
+                logging.getLogger(__name__).error('Could not roll back Apple audio observers.')
+            raise
 
     def prepare(self):
         # Activate without submitting audio, then re-query the actual selected route.
@@ -73,10 +89,18 @@ class AppleOutputs:
         return self.active_interruption
 
     def dispose(self):
-        for token in self.tokens:
-            self.center.removeObserver(token)
-        self.tokens.clear()
-        self.blocks.clear()
+        self.closed = True
+        failure = None
+        pending = []
+        for token, block in self.tokens:
+            try:
+                self.center.removeObserver(token)
+            except Exception as error:
+                pending.append((token, block))
+                failure = failure or error
+        self.tokens = pending
+        if failure is not None:
+            raise failure
 
 
 class AndroidOutputs:
