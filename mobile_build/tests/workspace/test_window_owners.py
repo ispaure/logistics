@@ -13,6 +13,37 @@ from mobile.app import LogisticsMobile
 
 
 class WindowOwnerTests(unittest.TestCase):
+    def test_failed_secondary_startup_releases_its_identity_and_leaves_primary_live(self):
+        from unittest.mock import patch
+        from mobile.app import _active_hosts
+        from mobile_build.tests.support.app import mobile_app
+        with mobile_app() as app:
+            manager = app.scene_manager
+            manager.window_class = toga.Window
+            identifier = 'c' * 32
+            windows = set(app.windows)
+            owners = dict(manager.owners.hosts)
+            writers = dict(manager.owners.writers)
+            failed = []
+            attach = LogisticsMobile._attach_startup_window
+            def fail(host, restored_document):
+                attach(host, restored_document)
+                failed.append(host)
+                raise ValueError('synthetic late scene startup failure')
+            with patch.object(LogisticsMobile, '_attach_startup_window', fail):
+                with self.assertRaisesRegex(ValueError, 'synthetic late scene startup failure'):
+                    manager.make_host(identifier)
+            self.assertFalse(failed[0].active_host)
+            self.assertTrue(app.active_host)
+            self.assertEqual(set(app.windows), windows)
+            self.assertEqual(manager.owners.hosts, owners)
+            self.assertEqual(manager.owners.writers, writers)
+            self.assertNotIn(str(app.private_root.resolve()) + ':' + identifier, _active_hosts)
+            restored = manager.make_host(identifier)
+            self.assertTrue(restored.active_host)
+            self.assertIs(manager.owners.hosts[identifier], restored)
+            manager.disconnect(restored)
+
     def test_scene_activity_before_privacy_initialization_waits_for_ready_host(self):
         from unittest.mock import Mock
         from mobile.window_scenes import SceneManager
