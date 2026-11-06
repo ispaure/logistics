@@ -41,20 +41,80 @@ class ScreenPrivacyTests(unittest.TestCase):
                                Block=lambda callback, *signature: callback, objc_id=object())
         return app, patch.dict(sys.modules, {'rubicon.objc': objc})
 
-    def test_partial_ios_registration_is_rolled_back(self):
+    def assert_constructor_rollback(self, app, native, failure, refresh_error=None):
         from features.rclone.mobile.cloud import CloudClient
-        token = object()
-        failure = RuntimeError('registration failed')
-        center = SimpleNamespace(addObserverForName=Mock(side_effect=[token, failure]), removeObserver=Mock())
-        app, native = self.fake_ios(center)
-        credential_observers = CloudClient.credential_state.observers
-        before = set(credential_observers)
-        with native, self.assertRaises(RuntimeError) as raised:
-            ScreenPrivacy(app)
+        from mobile.protection import for_credentials
+
+        credentials = CloudClient.credential_state
+        process = for_credentials(credentials)
+        observers, listeners = set(credentials.observers), set(process.listeners)
+        windows = set(process.windows)
+        with native, patch.object(ScreenPrivacy, 'refresh', side_effect=refresh_error):
+            with self.assertRaises(RuntimeError) as raised:
+                app.screen_privacy = ScreenPrivacy(app)
         self.assertIs(raised.exception, failure)
-        center.removeObserver.assert_called_once_with(token)
-        self.assertEqual(set(credential_observers), before)
+        self.assertFalse(hasattr(app, 'screen_privacy'))
+        self.assertEqual(set(credentials.observers), observers)
+        self.assertEqual(set(process.listeners), listeners)
+        self.assertEqual(set(process.windows), windows)
         self.assertFalse(app._layout_participants.entries)
+
+    def test_partial_ios_registration_is_rolled_back(self):
+        stages = (*range(6), 'trait setup', 'trait registration', 'refresh')
+        for stage in stages:
+            with self.subTest(stage=stage):
+                failure = RuntimeError('setup failed')
+                tokens = [object() for _ in range(6)]
+                # A failed registration supplies no token to unregister.
+                expected = tokens[:stage] if isinstance(stage, int) else tokens
+                registrations = [*expected, failure] if isinstance(stage, int) else tokens
+                center = SimpleNamespace(addObserverForName=Mock(side_effect=registrations), removeObserver=Mock())
+                app, native = self.fake_ios(center)
+                window = app.main_window._impl.native
+                window.respondsToSelector.return_value = True
+                trait = object()
+                window.registerForTraitChanges = Mock(return_value=trait)
+                window.unregisterForTraitChanges = Mock()
+                if stage == 'trait setup':
+                    window.respondsToSelector.side_effect = failure
+                elif stage == 'trait registration':
+                    window.registerForTraitChanges.side_effect = failure
+                self.assert_constructor_rollback(
+                    app, native, failure, refresh_error=failure if stage == 'refresh' else None)
+                self.assertEqual([call.args[0] for call in center.removeObserver.call_args_list], expected)
+                if stage == 'refresh':
+                    window.unregisterForTraitChanges.assert_called_once_with(trait)
+                else:
+                    window.unregisterForTraitChanges.assert_not_called()
+
+    def test_partial_android_registration_is_rolled_back(self):
+        for stage in ('get application', 'register listener', 'refresh'):
+            with self.subTest(stage=stage):
+                failure = RuntimeError('setup failed')
+                application = SimpleNamespace(registerActivityLifecycleCallbacks=Mock(),
+                                              unregisterActivityLifecycleCallbacks=Mock())
+                activity = SimpleNamespace(getApplication=Mock(return_value=application))
+                impl = type('Impl', (), {'__module__': 'toga_android.app', 'native': activity})()
+                app = SimpleNamespace(_impl=impl)
+                if stage == 'get application':
+                    activity.getApplication.side_effect = failure
+                elif stage == 'register listener':
+                    application.registerActivityLifecycleCallbacks.side_effect = failure
+                native = patch.dict(sys.modules, {
+                    'android.app': SimpleNamespace(Application=SimpleNamespace(ActivityLifecycleCallbacks=object)),
+                    'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+                })
+                self.assert_constructor_rollback(
+                    app, native, failure, refresh_error=failure if stage == 'refresh' else None)
+                if stage == 'get application':
+                    application.registerActivityLifecycleCallbacks.assert_not_called()
+                    application.unregisterActivityLifecycleCallbacks.assert_not_called()
+                else:
+                    listener = application.registerActivityLifecycleCallbacks.call_args.args[0]
+                    application.unregisterActivityLifecycleCallbacks.assert_called_once_with(listener)
+                    with patch.object(ScreenPrivacy, 'reveal') as reveal:
+                        listener.onActivityResumed(activity)
+                    reveal.assert_not_called()
 
     def test_disposal_retries_failed_observer_and_blocks_queued_delivery(self):
         from features.rclone.mobile.cloud import CloudClient
