@@ -7,6 +7,7 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from contextlib import closing
+import json
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -122,6 +123,63 @@ class PlexPackageTests(unittest.TestCase):
         (self.data / 'metadata.db').write_bytes(b'old data')
         self.package = self.root / 'Library-PMSDATA'
         self.package.mkdir()
+
+    def test_retained_recovery_blocks_package_actions_without_touching_files(self):
+        local = SimpleNamespace(path=self.package, name=self.package.name)
+        settings = SimpleNamespace(path_remote_local=self.root)
+        archive = self.package / packages.archive_name(OS.WIN)
+        archive.write_bytes(b'visible archive')
+        (self.package / 'unrelated.txt').write_bytes(b'unrelated')
+        executable = self.root / '7z.exe'
+        executable.touch()
+        recovery = self.package / '.logistics-plex-recovery-synthetic'
+        recovery.mkdir()
+        (recovery / archive.name).write_bytes(b'original archive')
+        journal = recovery / 'journal.json'
+        with patch.object(actions, 'get_local_cls_pmsdata', return_value=local), \
+                patch.object(actions, 'get_remote_cls_pmsdata', return_value=local), \
+                patch.object(actions.config, 'LogisticsConfig', return_value=settings), \
+                patch.object(actions, 'reviewed_sync') as sync, \
+                patch.object(packages.subprocess, 'run') as run:
+            for phase, guidance in [('committed', 'verify the published package'),
+                                    ('rolling_back', 'inspect the recovery journal'),
+                                    (None, 'inspect the recovery journal')]:
+                journal.write_text(json.dumps(dict(schema=1, phase=phase, originals=[archive.name],
+                                                   published={})) if phase else 'invalid journal')
+                before = {path: path.read_bytes() for path in self.package.rglob('*') if path.is_file()}
+                operations = {
+                    'pull': lambda: actions.pull_pms(None, 'config.ini'),
+                    'push': lambda: actions.push_pms(None, 'config.ini'),
+                    'package': lambda: packages.package_data(self.data, self.package, OS.WIN, executable),
+                    'restore': lambda: packages.restore_data(self.package, self.data, OS.WIN, executable),
+                    'clear': lambda: actions.clear_local_pmsdata(None),
+                }
+                for name, operation in operations.items():
+                    with self.subTest(phase=phase, operation=name):
+                        with self.assertRaisesRegex(RuntimeError, guidance) as raised:
+                            operation()
+                        self.assertIn(str(recovery), str(raised.exception))
+                        self.assertEqual({path: path.read_bytes() for path in self.package.rglob('*')
+                                          if path.is_file()}, before)
+                        self.assertEqual((self.data / 'metadata.db').read_bytes(), b'old data')
+            sync.assert_not_called()
+            run.assert_not_called()
+
+    def test_clear_and_sync_proceed_without_recovery(self):
+        local = SimpleNamespace(path=self.package, name=self.package.name)
+        settings = SimpleNamespace(path_remote_local=self.root)
+        with patch.object(actions, 'get_local_cls_pmsdata', return_value=local), \
+                patch.object(actions, 'get_remote_cls_pmsdata', return_value=local), \
+                patch.object(actions.config, 'LogisticsConfig', return_value=settings), \
+                patch.object(actions, 'reviewed_sync') as sync:
+            actions.pull_pms(None, 'config.ini')
+            sync.assert_called_once_with(local.name + ':', self.package, config_path='config.ini', operation='Pull')
+            sync.reset_mock()
+            actions.push_pms(None, 'config.ini')
+            sync.assert_called_once_with(self.package, local.name + ':', config_path='config.ini', operation='Push')
+            (self.package / 'old.zip').write_bytes(b'old')
+            actions.clear_local_pmsdata(None)
+            self.assertEqual(list(self.package.iterdir()), [])
 
     def test_linux_package_and_restore_retains_previous_data(self):
         packages.package_data(self.data, self.package, OS.LINUX)
@@ -285,5 +343,14 @@ class PlexDialogTests(QtTestCase):
         self.assertEqual(dialog.windowTitle(), 'Manage PMS - Library')
         self.assertIs(dialog.folder, folder)
         self.assertTrue(any(label.text() == str(Path('/local/Library-PMSDATA')) for label in dialog.findChildren(qt.QLabel)))
+        from features.plex.package_publication import PackageRecoveryRequired
+        recovery_message = f'Plex package recovery remains at {local.path}/.logistics-plex-recovery-test.'
+        with patch.object(actions.ui, 'display_msg_box_ok_cancel', return_value=True), \
+                patch.object(actions.ui, 'display_msg_box_ok') as display:
+            for name in ('clear_local_pmsdata', 'pull_pms', 'push_pms'):
+                with self.subTest(action=name), patch.object(actions, name, side_effect=PackageRecoveryRequired(recovery_message)):
+                    getattr(dialog, f'_{name}')()
+                    display.assert_called_once_with('Plex Package Recovery Required', recovery_message)
+                    display.reset_mock()
         dialog.deleteLater()
         app.processEvents()

@@ -10,6 +10,7 @@ from commonUtils.runtime.platform import OS, get_os
 from commonUtils.ui import pyside
 
 from features.plex import actions, detection
+from features.plex.package_publication import PackageRecoveryRequired
 from models.folder_entry import FolderEntry
 
 
@@ -187,6 +188,12 @@ class PlexManagePMSDialog(pyside.QDialog):
             case _:
                 return 'Platform'
 
+    def _run_package_folder_action(self, action, *args):
+        try:
+            action(self.folder, *args)
+        except PackageRecoveryRequired as error:
+            ui.display_msg_box_ok('Plex Package Recovery Required', str(error))
+
     def _clear_local_pmsdata(self):
         confirmed = ui.display_msg_box_ok_cancel(
             'Clear Local -PMSDATA',
@@ -194,7 +201,7 @@ class PlexManagePMSDialog(pyside.QDialog):
         )
 
         if confirmed:
-            actions.clear_local_pmsdata(self.folder)
+            self._run_package_folder_action(actions.clear_local_pmsdata)
 
     def _pull_pms(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -204,7 +211,7 @@ class PlexManagePMSDialog(pyside.QDialog):
         )
 
         if confirmed:
-            actions.pull_pms(self.folder, self.config_path)
+            self._run_package_folder_action(actions.pull_pms, self.config_path)
 
     def _unpackage_pms(self):
         confirmed = ui.display_msg_box_ok_cancel(
@@ -236,4 +243,4 @@ class PlexManagePMSDialog(pyside.QDialog):
         )
 
         if confirmed:
-            actions.push_pms(self.folder, self.config_path)
+            self._run_package_folder_action(actions.push_pms, self.config_path)
