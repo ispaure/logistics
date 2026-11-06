@@ -57,7 +57,7 @@ class ResponsivenessTests(unittest.TestCase):
         app.select_destination('home')
         app.native_host.activate('home')
         with patch.object(FolderHubUI, 'build_folder_picker', side_effect=AssertionError('Rebuilt page')), \
-                patch('mobile.folder_hub_ui.source_tab') as style, \
+                patch('mobile.workspaces_screen.source_tab') as style, \
                 patch.object(app.adaptive, 'prepare') as prepare:
             self.assertTrue(app.select_destination('files'))
         self.assertIs(app.folder_picker_view, page)
@@ -67,7 +67,7 @@ class ResponsivenessTests(unittest.TestCase):
         style.assert_not_called()
         prepare.assert_not_called()
         # A real subgroup change still updates both selectors, exactly once.
-        with patch('mobile.folder_hub_ui.source_tab') as style:
+        with patch('mobile.workspaces_screen.source_tab') as style:
             app.folder_local_buttons['Rclone'].on_press()
             self.assertEqual(style.call_args_list, [
                 unittest.mock.call(app.folder_local_buttons['Rclone'], True),
