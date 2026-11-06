@@ -18,10 +18,15 @@ optional tools:
 | `preferences.py` | Feature preference paths, loading and migration |
 
 
-Public registry imports remain compatible. The implementation owners under
+The public registry API is unchanged. The implementation owners under
 `features/runtime/` are infrastructure, rather than a user-facing optional tool.
-Discovery enumerates direct packages with `__init__.py`; keep infrastructure free
-of user-facing feature registration hooks. New feature behavior belongs in its own package; the
+`discovery.get_feature_names()` enumerates public direct packages with `__init__.py`
+and excludes the names in `discovery.INFRASTRUCTURE_PACKAGES`, currently `runtime`.
+It does not require a modern `register()` hook: legacy packages and failed imports
+remain visible to the registry. `Scripts/architecture.py` uses the same exclusion
+set to classify infrastructure while still inspecting its outgoing imports.
+Keep infrastructure free of user-facing feature registration hooks.
+New feature behavior belongs in its own package; the
 registry coordinates the runtime owners rather than absorbing feature workflows.
 
 Use lightweight `__init__.py` registration, portable named domain modules,

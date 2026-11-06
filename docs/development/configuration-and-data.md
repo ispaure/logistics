@@ -42,8 +42,26 @@ Logistics preferences live at `~/Library/Application Support/Logistics` on macOS
 `%APPDATA%/Logistics` (with a home-directory fallback) on Windows, and
 `$XDG_CONFIG_HOME/logistics` or `~/.config/logistics` on Linux. commonUtils cache,
 temp and settings paths are separate; use its storage helpers, not hard-coded
-Logistics preference paths. Feature enablement is saved atomically; malformed
-preferences are retained under a `.broken-...` name where possible.
+Logistics preference paths. Feature enablement is saved atomically. Explicit
+unlayered legacy reads retain malformed preferences under a `.broken-...` name
+where possible; pending layered migrations preserve the source in place for retry.
+
+## Mobile preference ownership
+
+`Python/mobile/preference_schema.py` owns `DEFAULTS` and value validation, including
+delegation to the owning reading, camera and access-policy validators.
+`Python/mobile/preferences.py:Preferences` owns the private `preferences.ini`,
+the `[Mobile]` section, migrations, bounded reads, external-change checks and atomic
+publication. Existing imports of `mobile.preferences.DEFAULTS` and calls to
+`Preferences.validate()` remain supported.
+
+This separation does not change saved key names, default values, validation or
+migration order. Invalid or oversized input remains preserved with saving blocked
+until repaired; UTF-8 BOM/newline behavior and session-only association filtering
+remain in the persistence owner. Settings widgets consume this API rather than
+reading or writing INI files themselves. Start with
+`python3 dev.py test mobile test_mobile_preferences.py` and feature-admission
+coverage in `test_mobile_features.py`.
 
 ## Android collection location recovery
 
@@ -141,6 +159,16 @@ explicit; the reset arrow removes the key. Untouched features resolve against
 current defaults at startup. The retryable `feature-overrides-v2` migration removes
 the old personal selection snapshot while preserving differing choices and
 unrelated settings. Whole-preference reset also marks this migration complete.
+
+`features.runtime.preferences.PreferenceState` coordinates the legacy import,
+per-feature override migration and Notes Library migration in order. The pending
+legacy import uses `features.preferences.read_legacy_disabled()` for a strict,
+non-mutating read. A read, parse, publication or completion-marker failure leaves
+that migration pending and prevents its dependents from being marked complete.
+Successfully read legacy choices remain the fallback when publication fails;
+existing personal overrides still take precedence. Once import is complete,
+startup does not reread the obsolete legacy file. Focused retry and preservation
+coverage lives in `Python/tests/application/test_feature_preferences.py`.
 
 Blender release catalogs use `features/blender/config-<exact-version>.ini`, one
 file per version with platform sections. Initialization registers each file with

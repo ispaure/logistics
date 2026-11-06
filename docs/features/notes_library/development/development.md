@@ -15,8 +15,13 @@
 ## Destination and feature contract
 
 The mobile and desktop library panels retain an interface per search scope.
-Each owns its query control, result widgets, pagination and status; the existing
-provider scanner remains shared. Scope switches cancel pending work and advance
+Each host owns its query controls, asynchronous scheduling, progress batching,
+result widgets and pagination. Desktop `ui/library_panels.py` and mobile
+`mobile/notes_library.py` share rooted listing, cancellation and listing-error
+handling through `library_files.search`, which delegates scanning to commonUtils.
+`ranked_search_rows` places filename matches before body matches, using natural
+filename and path order. Mobile supplies its visibility filter before traversal.
+Scope switches cancel pending work and advance
 its publication generation before restoring the target interface. Completed
 queries are retained, while library mutations and saves invalidate cached queries.
 Retirement clears both scopes, including hidden query controls. Mobile also keeps
@@ -24,7 +29,10 @@ Files rows separate from both search scopes.
 
 The mobile `test_notes_library_modes.py` and `test_notes_library_panels.py` suites
 and desktop `test_notes_library_desktop.py` cover independent inputs and results,
-pagination, late callbacks, provider scope and retirement. The managed
+pagination, late callbacks, provider scope and retirement.
+`test_notes_library_folders.py` covers name-only search without body reads,
+ranking, visibility before traversal, partial listing failures and cancellation.
+The managed
 `document_storage_tools ios|android --probe notes-search` check exercises retained
 native inputs/results across scope changes and rotation using synthetic notes.
 

@@ -132,7 +132,8 @@ system accessibility extremes still require native layout validation.
 | Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
 | Provider content preparation and chrome assembly | `provider_presentation.py`; session and publication orchestration in `provider_ui.py` |
 | Reader surface publication and footer/chrome synchronization | `reading/publication.py`, validity captures in `reading/sources.py` |
-| Settings composition, category controls and connection forms | `settings/navigation.py`, `settings/categories.py`, `settings/forms.py`, `settings/speech.py`, `settings/information.py` |
+| Settings composition and named panels | `settings/categories.py` declares factories/icons/gates; `settings/navigation.py` retains pages; [named panel map](ui-architecture.md#find-a-screen-by-its-visible-name) |
+| Preference defaults/validation versus INI persistence | `preference_schema.py`; `preferences.py` retains storage and migrations |
 | Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |
 | Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
 | Device screen locking and sensitive-content protection | `screen_privacy.py` |
@@ -1532,10 +1533,17 @@ not native rendering certification.
 
 `settings.navigation.SettingsNavigation` owns compact routes, retained wide panes
 and per-window selection. Its `SettingsPages` mapping builds each category only on
-first access. `SettingsCategories` constructs application controls;
-`settings.forms` owns shared rows and connection forms, `settings.speech` owns
-voice controls, and `settings.information` builds installed-version/help content.
+first access. `SettingsCategories` delegates substantial panels to visibly named
+modules: `settings/appearance.py`, `app.py`, `privacy_security.py`, `text.py`,
+`workspaces.py` and `help.py`. The ordered `Category` declarations also own icons,
+camera requirements and feature gates; navigation reads that same metadata.
+Small feature links remain in `categories.py`. `settings.forms` owns shared rows
+and connection forms, `settings.speech` owns voice controls, and
+`settings.information` builds installed-version content.
 The old `settings_ui.py` module is removed; use canonical imports and patch targets.
+Follow the [screen map and panel recipe](ui-architecture.md) when adding a category;
+follow [preference ownership](configuration-and-data.md#mobile-preference-ownership)
+when changing saved keys or migrations.
 
 Mobile credential import opens the system picker first. Bounded ZIP metadata
 determines whether to present `import-credentials-password`; otherwise the UI

@@ -82,8 +82,12 @@ must be retained when modifying the parser.
 `comic_split_wide` is a separate boolean mobile preference, defaulting to `true`
 for new and existing preference files without that key. The shared comic appearance
 form exposes it alongside page layout. It does not change EPUB preferences.
-`mobile/navigation.py` stages `(source index, half, split)` until native rendering
-succeeds; hosts call `commit()` only after publishing the prepared view. Next and
+`ComicNavigation.previous()` in `mobile/navigation.py` probes candidate spreads
+through `_read_spread`, which can cache image dimensions while leaving requested
+halves and prepared display state intact. `load()` stages the source index, half,
+split, viewport and anchor for the next display. Imported and provider controllers
+call `commit()` after publishing the prepared view. `test_comic_spreads.py` covers
+probe isolation, failed candidate reads and layout-aware previous targets. Next and
 Previous visit both halves in source reading order, reversing the visual order for
 right-to-left manga. A strict landscape source in a strict portrait viewport is
 eligible, independently of Single/Automatic/Two-page layout. Square viewports and
@@ -364,8 +368,8 @@ metadata publication, revocation and shutdown.
 `ComicNavigation.page` is the selected logical anchor. `visible` is the composed
 spread and can start before that anchor. With `anchor_right=True`, LTR spreads
 use the preceding page on the left; RTL spreads use the following page on the
-left. Rendering commits anchor and visible indices only after native preparation
-succeeds. Ordinary platforms keep their original spread-start navigation.
+left. The controller commits the anchor and visible indices after publishing the
+prepared view. Ordinary platforms keep their original spread-start navigation.
 
 The host's `ReadingPresentation` supplies local seam geometry and reserved gap.
 Only an active vertical division supplies the seam; inactive flat divisions
