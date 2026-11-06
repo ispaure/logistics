@@ -60,10 +60,13 @@ def fit_document_title(root, label, leading_count, trailing_count, *, notes_cont
                 native.setLayoutParams(params)
                 padding = round((2 if button.style.width < 48 else 12) * density)
                 native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
-            if getattr(button._impl, '_android_surface_size', None) is not None:
+            close = getattr(button._impl, '_android_surface_size', None) is not None
+            if close or button is notes_controls[-1]:
                 icon_width = button._impl._control_drawable.getBounds().width()
-                start_padding = max(0, (unit - icon_width) // 2)
-                end_padding = max(0, unit - icon_width - start_padding)
+                space = max(0, unit - icon_width)
+                start_padding = space // 2 if close else min(space, round(
+                    (6 if button.style.width < 48 else 16) * density))
+                end_padding = space - start_padding
                 if (native.getPaddingStart(), native.getPaddingEnd()) != (start_padding, end_padding):
                     native.setPaddingRelative(start_padding, native.getPaddingTop(),
                                               end_padding, native.getPaddingBottom())

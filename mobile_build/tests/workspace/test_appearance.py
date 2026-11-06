@@ -70,8 +70,8 @@ class AppearanceTests(unittest.TestCase):
                                      {key: value for key, value in original.items() if key not in ('accent', 'primary')})
                 self.assertEqual(EINK, before[2])
         set_accent()
-        self.assertEqual(LIGHT['accent'], '#2563eb')
-        self.assertEqual(DARK['accent'], '#2563eb')
+        self.assertEqual(LIGHT['accent'], '#3363cc')
+        self.assertEqual(DARK['accent'], '#3363cc')
 
     def test_full_saturation_violet_is_not_lightened_in_either_mode(self):
         from mobile.palette import accent_colors

@@ -109,11 +109,11 @@ class SettingsUITests(unittest.TestCase):
         controls.hue.value = 150
         controls.saturation.value = 60
         self.assertEqual(app.preferences.values['accent_hue'], '221')
-        self.assertEqual(LIGHT['accent'], '#2563eb')
+        self.assertEqual(LIGHT['accent'], '#3363cc')
         self.assertEqual(controls.hue._accent_preview, accent_colors(150, 60))
         self.assertEqual(controls.saturation._accent_preview, controls.hue._accent_preview)
         controls.hue.on_release()
-        self.assertNotEqual(LIGHT['accent'], '#2563eb')
+        self.assertNotEqual(LIGHT['accent'], '#3363cc')
         self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 150)
         with patch.object(app.preferences, 'save', side_effect=OSError('Disk full')):
             controls.hue.on_press()
@@ -123,7 +123,7 @@ class SettingsUITests(unittest.TestCase):
         self.assertEqual(controls.hue._accent_preview, accent_colors(150, 60))
         self.assertEqual(app.settings_status.text, 'Disk full')
         controls.reset()
-        self.assertEqual(LIGHT['accent'], '#2563eb')
+        self.assertEqual(LIGHT['accent'], '#3363cc')
         self.assertEqual(app.settings_status.text, '')
         self.assertEqual(float(Preferences(app.preferences.path.parent).values['accent_hue']), 221)
         # Accessibility and keyboard adjustments do not emit touch release.
