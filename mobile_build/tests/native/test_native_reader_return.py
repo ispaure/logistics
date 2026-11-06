@@ -23,6 +23,16 @@ class Navigation:
 
 
 class NativeReaderReturnTests(unittest.TestCase):
+    def test_native_reflow_and_pop_are_inert_after_uninstall(self):
+        self.routes.show(toga.Label('Reader'), route='reader:fixture')
+        self.pop()
+        reflow = self.app.loop.call_soon.call_args.args[0]
+        self.routes.uninstall()
+        self.host.adapter = None
+        reflow()
+        self.app.adaptive.render.assert_not_called()
+        self.routes.native_popped(self.navigation[0])
+
     def test_native_pop_from_library_file_form_restores_origin_and_clears_form_context(self):
         library_view = toga.Box(children=[toga.Label('Open document')])
         self.routes.show(library_view, route='notes-library:fixture')

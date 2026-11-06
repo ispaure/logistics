@@ -1,4 +1,5 @@
 """Logistics reader gestures and Back policy over destination-local routes."""
+import asyncio
 import inspect
 import weakref
 
@@ -21,6 +22,7 @@ class MobileRoutes(Routes):
     def __init__(self, app, *args, **kwargs):
         self.app = app
         self.back_task = None
+        self._retired = False
         self.origins = {}
         self._selection_returns = {}
         from .folder_navigation import FolderNavigation
@@ -28,6 +30,14 @@ class MobileRoutes(Routes):
         super().__init__(*args, **kwargs)
 
     def uninstall(self):
+        if not self._retired:
+            self._retired = True
+            task = self.back_task
+            if (task is not None and not task.done()
+                    and not (isinstance(task, asyncio.Task) and task.cancelling())):
+                # Cancel once: a repeated native cleanup must not interrupt a
+                # feature callback that is still draining its worker in finally.
+                task.cancel()
         volume = getattr(self, 'volume_pages', None)
         if volume is not None:
             volume.dispose()
@@ -188,6 +198,8 @@ class MobileRoutes(Routes):
             self.render(destination)
 
     def back(self):
+        if self._retired:
+            return False
         if (self.host.state.destination == 'documents'
                 and not self.screens['documents']
                 and not getattr(self.app.adaptive, 'in_detail', False)
@@ -234,7 +246,11 @@ class MobileRoutes(Routes):
         if origin is not None and len(screens) < count:
             self.return_to(origin)
         if self.apple and len(screens) < count and screens:
-            self.app.loop.call_soon(self.folders.restore_viewport, destination, screens[-1][0])
+            expected = screens[-1][0]
+            def restore():
+                if not self._retired:
+                    self.folders.restore_viewport(destination, expected)
+            self.app.loop.call_soon(restore)
         return handled
 
     def install(self):
@@ -261,7 +277,7 @@ class MobileRoutes(Routes):
             self.on_render()
 
     def native_popped(self, navigation):
-        if self.changing or self.host.changing:
+        if self._retired or self.changing or self.host.changing:
             return
         destination = self.host.adapter.destination_for_navigation(navigation)
         if destination is None:
@@ -296,6 +312,8 @@ class MobileRoutes(Routes):
         # Reapply reader ownership after the navigation delegate has returned.
         expected = screens[-1][0] if popped and screens else None
         def reflow():
+            if self._retired:
+                return
             self.app.adaptive.render()
             if expected is not None:
                 # UIKit and the native reader bars can move a retained table's
@@ -304,7 +322,7 @@ class MobileRoutes(Routes):
         self.app.loop.call_soon(reflow)
 
     def sync_back(self, destination=None):
-        if self.back_callback is not None:
+        if not self._retired and self.back_callback is not None:
             destination = destination or self.host.state.destination
             # At Home's root, leave the callback disabled so Android owns exit
             # and its back-to-home preview. Tab selection never creates history.
@@ -317,16 +335,20 @@ class MobileRoutes(Routes):
         self.sync_back()
 
     def invoke_back(self, callback):
+        if self._retired:
+            return False
         self.app.mark_navigation()
         result = callback()
         if inspect.isawaitable(result):
-            async def complete():
-                try:
-                    await result
-                finally:
+            # Schedule the callback itself so cancellation before its first
+            # step cannot strand an unawaited coroutine inside a wrapper.
+            task = self.back_task = asyncio.ensure_future(result, loop=self.app.loop)
+            def complete(completed):
+                if self.back_task is completed:
                     self.back_task = None
+                if not self._retired:
                     self.sync_back()
-            self.back_task = self.app.loop.create_task(complete())
+            task.add_done_callback(complete)
         self.sync_back()
         return True
 
@@ -337,6 +359,8 @@ class MobileRoutes(Routes):
         must pop that form rather than consume a retained browser's history.
         Native dialogs, popup menus and the IME keep Android's own dismissal.
         """
+        if self._retired:
+            return False
         if self.back_task is not None:
             return True
         video = getattr(self.app, 'video_player', None)

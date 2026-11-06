@@ -13,6 +13,77 @@ from commonUtils.ui.native.routes import Routes
 
 
 class NavigationTests(unittest.TestCase):
+    def test_uninstall_cancels_back_once_and_preserves_async_cleanup(self):
+        import asyncio
+        from commonUtils.testing.event_loop import close_loop
+        from mobile.routes import MobileRoutes
+        loop = asyncio.new_event_loop()
+        self.addCleanup(close_loop, loop)
+        host = NativeNavigationHost(DESTINATION_ITEMS)
+        app = SimpleNamespace(loop=loop, mark_navigation=Mock())
+        routes = MobileRoutes(app, host, guard=lambda: True, changed=Mock())
+
+        async def exercise():
+            cleanup_started, release = asyncio.Event(), asyncio.Event()
+            async def navigate():
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    cleanup_started.set()
+                    await release.wait()
+            with patch.object(routes, 'sync_back') as sync:
+                routes.invoke_back(navigate)
+                task = routes.back_task
+                await asyncio.sleep(0)
+                sync.reset_mock()
+                try:
+                    routes.uninstall()
+                    await asyncio.sleep(0)
+                    self.assertTrue(cleanup_started.is_set())
+                    self.assertFalse(task.done())
+                    routes.uninstall()  # Retrying native cleanup must not cancel the drain.
+                    release.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+                    await asyncio.sleep(0)
+                    self.assertIsNone(routes.back_task)
+                    sync.assert_not_called()
+                    late = Mock()
+                    self.assertFalse(routes.invoke_back(late))
+                    late.assert_not_called()
+                    self.assertFalse(routes.system_back())
+                finally:
+                    release.set()
+                    if not task.done():
+                        task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+        loop.run_until_complete(exercise())
+
+    def test_uninstall_before_back_starts_closes_its_coroutine(self):
+        import asyncio
+        import inspect
+        from commonUtils.testing.event_loop import close_loop
+        from mobile.routes import MobileRoutes
+        loop = asyncio.new_event_loop()
+        self.addCleanup(close_loop, loop)
+        host = NativeNavigationHost(DESTINATION_ITEMS)
+        app = SimpleNamespace(loop=loop, mark_navigation=Mock())
+        routes = MobileRoutes(app, host, guard=lambda: True, changed=Mock())
+        async def navigate():
+            await asyncio.sleep(0)
+        work = navigate()
+        self.addCleanup(work.close)
+        async def exercise():
+            routes.invoke_back(lambda: work)
+            task = routes.back_task
+            routes.uninstall()
+            await asyncio.gather(task, return_exceptions=True)
+            await asyncio.sleep(0)
+            self.assertTrue(task.cancelled())
+            self.assertEqual(inspect.getcoroutinestate(work), inspect.CORO_CLOSED)
+            self.assertIsNone(routes.back_task)
+        loop.run_until_complete(exercise())
+
     def test_apple_destination_items_follow_late_bar_traits_without_navigation(self):
         import asyncio
         from mobile.navigation import install_apple_destination_layout
