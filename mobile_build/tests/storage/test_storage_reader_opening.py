@@ -4,8 +4,6 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-import base64
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -16,22 +14,8 @@ from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopie
 from services.documents.locations import use_shared_local, _shared_local_roots
 from mobile.app import LogisticsMobile
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
-from mobile_build.tests.reading.test_library_catalog import CryptClient
+from mobile_build.tests.support.localcrypt import ReaderClient
 from mobile_build.tests.support.pdf import PDF, native_pdf
-
-
-class ReaderClient(CryptClient):
-    def crypt_remotes(self):
-        return []
-
-    def cancel(self):
-        pass
-
-    def request(self, action, **values):
-        if action == 'crypt_decode':
-            return dict(name=bytes.fromhex(values['path'].rsplit('/', 1)[-1]).decode(),
-                        data=base64.b64encode(os.read(values['fd'], 1024 * 1024)[::-1]).decode())
-        return super().request(action, **values)
 
 
 class StorageReaderOpeningTests(unittest.TestCase):
