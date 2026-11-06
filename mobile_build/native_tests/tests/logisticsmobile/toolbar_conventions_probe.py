@@ -14,7 +14,7 @@ from .rotation_checks import pose_snapshot
 BUNDLE = 'io.github.ispaure.logisticsconventionsqa'
 
 
-def native_geometry(app):
+def native_geometry(app, *, verify=True):
     from mobile.ios_toolbar import vertical_edge
     from rubicon.objc import ObjCClass
     window = app.main_window._impl.native
@@ -28,8 +28,27 @@ def native_geometry(app):
         return [round(float(v), 2) for v in
                 (value.origin.x, value.origin.y, value.size.width, value.size.height)]
 
+    def visible_rect(view):
+        """Intersect real clipping ancestors; collapsed tabs retain old frames."""
+        x, y, width, height = rect(view)
+        left, top, right, bottom = x, y, x + width, y + height
+        ancestor = view
+        while ancestor is not None:
+            if ancestor.isHidden() or float(ancestor.alpha) < .01:
+                return None
+            if ancestor == window or ancestor.clipsToBounds or ancestor.layer.masksToBounds:
+                x, y, width, height = rect(ancestor)
+                left, top = max(left, x), max(top, y)
+                right, bottom = min(right, x + width), min(bottom, y + height)
+            ancestor = children(ancestor, 'superview')
+        return [left, top, right - left, bottom - top] if right > left and bottom > top else None
+
     def controller(value):
-        return dict(kind=str(value.objc_class.name), frame=rect(value.view),
+        from rubicon.objc import SEL
+        item = value.navigationItem
+        compression = (int(item.verticalBarCompressionBehavior)
+                       if item.respondsToSelector(SEL('verticalBarCompressionBehavior')) else None)
+        return dict(kind=str(value.objc_class.name), frame=rect(value.view), compression=compression,
                     edge=vertical_edge(value),
                     children=[controller(child) for child in children(value, 'childViewControllers')])
 
@@ -37,8 +56,15 @@ def native_geometry(app):
     def views(view, hidden=False):
         hidden = hidden or bool(view.isHidden()) or float(view.alpha) == 0
         if not hidden and view.isKindOfClass(ObjCClass('UIControl')):
-            buttons.append(dict(kind=str(view.objc_class.name),
-                                label=str(view.accessibilityLabel or ''), frame=rect(view)))
+            button = dict(kind=str(view.objc_class.name),
+                          label=str(view.accessibilityLabel or ''), frame=rect(view))
+            button['visible_frame'] = visible_rect(view)
+            if button['kind'] in ('_UIButtonBarButton', '_UITabButton'):
+                from rubicon.objc import CGPoint
+                x, y, width, height = button['frame']
+                hit = window.hitTest(CGPoint(x + width / 2, y + height / 2), withEvent=None)
+                button['hit_target'] = bool(hit is not None and hit.isDescendantOfView(view))
+            buttons.append(button)
         for child in children(view, 'subviews'):
             views(child, hidden)
     views(window)
@@ -46,7 +72,8 @@ def native_geometry(app):
     occlusions = []
     if window.respondsToSelector(SEL('reservedRegionsOfKind:options:')):
         kind = ObjCClass('UIViewReservedRegionKind').occlusionRegionKind()
-        for region in window.reservedRegionsOfKind(kind, options=0):
+        regions = ObjCClass('NSMutableArray').arrayWithArray(window.reservedRegionsOfKind(kind, options=0))
+        for region in regions:
             r = region.frame
             occlusions.append([float(r.origin.x), float(r.origin.y), float(r.size.width), float(r.size.height)])
     navigation = app.native_host.adapter.navigation_for(app.native_host.state.destination)
@@ -69,27 +96,61 @@ def native_geometry(app):
             bounds = rect(view)
             if bounds[2] <= 0 or bounds[3] <= 0:
                 continue
-            items.append(dict(label=str(item.accessibilityLabel or item.title or ''), frame=bounds))
-    for item in items:
-        x, y, width, height = item['frame']
+            items.append(dict(label=str(item.accessibilityLabel or item.title or ''), frame=bounds,
+                              visible_frame=visible_rect(view)))
+    header_items, collisions = [], []
+    body = app.routes.body()
+    view = body.children[0] if body.children else None
+    reader_header = getattr(view, '_reader_top_band_state', None)
+    home_header = getattr(view, '_home_top_band', None)
+    destination_header = getattr(view, '_destination_top_band', None)
+    controls = (reader_header['buttons'] if reader_header else home_header['row'].children if home_header
+                else destination_header['buttons'] if destination_header else ())
+    for button in controls:
+        native = button._impl.native
+        if native.window is not None and not native.isHidden():
+            bounds = rect(native)
+            from rubicon.objc import CGPoint
+            hit = window.hitTest(CGPoint(bounds[0] + bounds[2] / 2, bounds[1] + bounds[3] / 2), withEvent=None)
+            item = dict(label=str(native.accessibilityLabel or getattr(button, 'text', '')),
+                        frame=bounds, hit_target=bool(hit is not None and hit.isDescendantOfView(native)))
+            header_items.append(item)
+            if min(bounds[2:]) < 44 or not item['hit_target']:
+                collisions.append(('Header action is not a reachable 44pt target', item))
+    bars = [button for button in buttons if button['kind'] == '_UIButtonBarButton' and button['visible_frame']]
+    for item in [*items, *bars, *header_items]:
+        frame = item.get('visible_frame', item['frame'])
+        if frame is None:
+            continue
+        x, y, width, height = frame
         for left, top, w, h in occlusions:
             overlap = (min(x + width, left + w) - max(x, left),
                        min(y + height, top + h) - max(y, top))
-            assert min(overlap) <= 1, ('Native action overlaps system UI', item, occlusions)
+            if min(overlap) > 1:
+                collisions.append(('Native action overlaps system UI', item, occlusions))
     # System overflow and Back are not necessarily in our explicit item groups.
     # Include their control frames when checking the shared vertical bar against
     # destination tabs; checking only the Island misses action/tab collisions.
-    tabs = [button for button in buttons if button['kind'] == '_UITabButton']
-    bars = [button for button in buttons if button['kind'] == '_UIButtonBarButton']
+    tabs = [button for button in buttons if button['kind'] == '_UITabButton' and button['visible_frame']]
     for button in bars:
-        x, y, width, height = button['frame']
+        x, y, width, height = button['visible_frame']
         for tab in tabs:
-            left, top, w, h = tab['frame']
+            left, top, w, h = tab['visible_frame']
             overlap = (min(x + width, left + w) - max(x, left),
                        min(y + height, top + h) - max(y, top))
-            assert min(overlap) <= 1, ('Native action overlaps destination tab', button, tab)
-    return dict(controllers=controller(window.rootViewController), buttons=buttons,
-                items=items, occlusions=occlusions, pose=pose_snapshot(app))
+            if min(overlap) > 1:
+                collisions.append(('Native action overlaps destination tab', button, tab))
+    containers = []
+    for container, _ in app.native_host.adapter.containers:
+        containers.append(dict(frame=rect(container.native),
+            safe=[float(getattr(container.native.safeAreaInsets, side)) for side in ('top', 'left', 'bottom', 'right')],
+            applied=[float(getattr(container, side + '_inset')) for side in ('top', 'left', 'bottom', 'right')]))
+    result = dict(controllers=controller(window.rootViewController), buttons=buttons,
+                items=items, occlusions=occlusions, pose=pose_snapshot(app),
+                containers=containers, header_items=header_items, collisions=collisions)
+    if verify:
+        assert not collisions, collisions
+    return result
 
 
 class ConventionsProbe(ToolbarProbe):
@@ -124,6 +185,10 @@ class ConventionsProbe(ToolbarProbe):
         close = getattr(view, '_reader_close_button', None)
         if close is not None and not getattr(view, '_reader_fullscreen', False):
             label = str(getattr(close, 'accessible_name', None) or close._impl.native.accessibilityLabel)
+            if getattr(view, '_reader_top_band_state', None) is not None:
+                assert any(row['label'] == label and row['frame'][2] >= 44 and row['frame'][3] >= 44
+                           for row in sample['native']['buttons']), sample
+                return
             assert sample['leading'] and sample['leading'][0] == label, sample
 
     async def record(self, name):

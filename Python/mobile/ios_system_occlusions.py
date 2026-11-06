@@ -1,6 +1,59 @@
 """Window-level system-region wakeups for every native navigation bar."""
 
 
+def native_geometry(native):
+    """Geometry in the current window, including equal-size window moves.
+
+    Never use a screen/model size or a previously retained tab's allocation.
+    The window frame matters for system Split View even when its size is stable.
+    """
+    if native is None:
+        return ()
+    bounds, safe = getattr(native, 'bounds', None), getattr(native, 'safeAreaInsets', None)
+    if bounds is None or safe is None:
+        return ()
+    window = getattr(native, 'window', None)
+    window = window() if callable(window) else window
+    frame = native.convertRect(bounds, toView=window) if window is not None else bounds
+    window_frame = getattr(window, 'frame', None)
+    def rect(value):
+        return (float(value.origin.x), float(value.origin.y),
+                float(value.size.width), float(value.size.height))
+    return (rect(frame), tuple(float(getattr(safe, side, 0)) for side in ('top', 'left', 'bottom', 'right')),
+            rect(window_frame) if window_frame is not None else ())
+
+
+def compact_content_top(container):
+    """Reclaim an empty rectangular band beside a vertical system rail.
+
+    Horizontal title/Back bars retain UIKit's safe area. Reader title headers
+    and Home's measured header have their own shared policies below this one.
+    """
+    from .ios_toolbar import vertical_edge
+    controller = getattr(container, 'controller', None)
+    if controller is None or not vertical_edge(controller):
+        return False
+    navigation = getattr(controller, 'navigationController', None)
+    navigation = navigation() if callable(navigation) else navigation
+    if hasattr(controller, 'navigationBar'):
+        navigation = controller
+    content = getattr(navigation, 'topViewController', controller)
+    item = getattr(content, 'navigationItem', None)
+    if (navigation is not None and not navigation.isNavigationBarHidden() and item is not None
+            and (item.titleView is not None or item.prompt or item.title)):
+        return False
+    window = getattr(container.native, 'window', None)
+    window = window() if callable(window) else window
+    if window is None:
+        return False
+    from .reader_edges import apple_reader_top
+    top = apple_reader_top(container, window)
+    if abs(container.top_inset - top) <= .5:
+        return False
+    container.top_inset = top
+    return True
+
+
 def observe_window_occlusions(app, native):
     """Read inside root layout, independently of toolkit size notifications.
 
@@ -13,11 +66,7 @@ def observe_window_occlusions(app, native):
     regions = occlusion_geometry(native)
     if app is None or not getattr(app, 'active_host', False):
         return
-    bounds = getattr(native, 'bounds', None)
-    safe = getattr(native, 'safeAreaInsets', None)
-    geometry = (() if bounds is None or safe is None else
-                (float(bounds.size.width), float(bounds.size.height), float(safe.top), float(safe.bottom)))
-    state = (regions, geometry)
+    state = (regions, native_geometry(native))
     if getattr(app, '_ios_window_occlusions', None) == state:
         return
     app._ios_window_occlusions = state
@@ -78,37 +127,28 @@ def control_top_clearance(regions, left, right, safe_top, *, target=44, gap=8):
 
 
 def reserve_bar_clearance(controller):
-    """Place bar controls around current system regions and destination tabs.
+    """Let UIKit place native items; configure only its compression preference.
 
-    Vertical bars share space with destination tabs: let UIKit compress those
-    tabs first instead of moving actions into them. Horizontal bars reserve only
-    a missing top inset. Keep other owners' insets and all live target/actions.
+    Reserved regions belong to custom content layout. Native navigation bars
+    already avoid system activity and own overflow. Never add a camera/Island
+    inset to them; clear only a contribution left by the older app policy.
     """
-    from .ios_reader_chrome import occlusion_geometry
-    view, bar = controller.view, controller.navigationBar
-    previous = getattr(controller, '_logistics_occlusion_top', 0)
-    safe = max(0, float(view.safeAreaInsets.top) - previous)
-    frame = bar.convertRect(bar.bounds, toView=view)
-    left, right = float(frame.origin.x), float(frame.origin.x + frame.size.width)
-    content = getattr(controller, 'topViewController', None)
     from .ios_toolbar import vertical_edge
-    # The adaptive bar's public frame can span the whole window, including
-    # the horizontal title area, while its buttons run down the side.
-    vertical = bool(vertical_edge(content)) if content is not None else frame.size.height > frame.size.width
+    from rubicon.objc import SEL
+    content = getattr(controller, 'topViewController', None)
     if content is not None:
-        from rubicon.objc import SEL
         item = content.navigationItem
         if item.respondsToSelector(SEL('setVerticalBarCompressionBehavior:')):
-            behavior = 1 if vertical and not bar.isHidden() else 0
+            behavior = 1 if vertical_edge(content) else 0
             if int(item.verticalBarCompressionBehavior) != behavior:
                 item.verticalBarCompressionBehavior = behavior
-    top = control_top_clearance(occlusion_geometry(view), left, right, safe)
-    extra = max(0, top - safe) if not vertical and not bar.isHidden() else 0
-    if abs(extra - previous) <= .5:
+    previous = getattr(controller, '_logistics_occlusion_top', 0)
+    if not previous:
         return False
     from rubicon.objc import UIEdgeInsets
     insets = controller.additionalSafeAreaInsets
+    # Assigning native insets can synchronously call layout again.
+    controller._logistics_occlusion_top = 0
     controller.additionalSafeAreaInsets = UIEdgeInsets(
-        max(0, float(insets.top) - previous + extra), insets.left, insets.bottom, insets.right)
-    controller._logistics_occlusion_top = extra
+        max(0, float(insets.top) - previous), insets.left, insets.bottom, insets.right)
     return True

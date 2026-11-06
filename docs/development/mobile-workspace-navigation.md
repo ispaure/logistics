@@ -1747,17 +1747,46 @@ and partly open Duo postures; Android uses the owned disposable emulator.
 
 ## System occlusion clearance
 
-`ios_system_occlusions.control_top_clearance` computes clearance from the current
-column and every intersecting reserved system region. Horizontal navigation owners apply only the missing top inset, retaining UIKit's
-safe area and other additional insets. Vertical navigation owners use UIKit's
-bar-item compression preference so destination tabs yield space to Close/Back
-and document actions; adding a top inset there can push actions into those tabs. The same calculation budgets supplemental controls and content reader
-headers. Outer root, per-destination and UIKit's current More navigation owners receive
-the policy. Optional
-drawer commands reuse the supplemental overflow budget; Close/Back stay direct.
-Multiple activities and closed/open display changes invalidate layout;
-shrinking regions release the extra inset without accumulating padding. No device
-model or fixed Dynamic Island height determines placement.
+Native action placement follows Apple's [bar guidance](https://developer.apple.com/videos/play/tech-talks/111462/?time=120)
+and [Duo design guidelines](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo).
+Actions use real `UIBarButtonItem` objects in container-owned navigation bars,
+with groups, visibility priorities and `verticalBarCompressionBehavior`.
+UIKit owns placement, compression and overflow around changing system activity.
+Optional drawer/Search actions join regular vertical item groups so they can
+overflow; Back/Close retain their navigation placement. Existing overflow menus
+use `additionalOverflowItems` with live providers. Activity changes do not replace
+unchanged native groups, and the app does not estimate native bar capacity or add
+Island padding to native navigation controllers.
+
+When UIKit exposes vertical-bar APIs, the active shell keeps each navigation controller
+inside its owning tab. The toolkit's unused outer navigation controller leaves
+the window hierarchy: merely hiding its bar still prevents the inner navigation
+and tab containers from coordinating compression. A plain root forwards the
+existing content and preserves fullscreen status-bar behavior. The toolkit's
+container callbacks remain attached, its title adapter stays available, and host
+disposal restores the original controller stack and view ownership. A UIKit-only
+comparison reproduced overlaps with the extra outer navigation controller and
+automatic overflow without it; this is a containment correction, not an
+activity-detection heuristic.
+
+Custom content is different: the [reserved-region API](https://developer.apple.com/documentation/uikit/uiview/reservedregion)
+returns occupied rectangles in the receiving view's coordinates. The shared
+`control_top_clearance` policy uses every intersecting region to protect custom
+headers and content. No device model or fixed Dynamic Island height determines
+placement. Root and leaf observations include host position, bounds, all four
+safe-area edges and window frame, so equal-size window moves and activity changes
+refresh retained custom layouts. The compatibility `reserve_bar_clearance` hook
+now configures native compression and retires only the old app-owned extra inset,
+preserving other owners' insets.
+
+The shared container policy reclaims the rectangular top inset beside a vertical
+system rail only for a measured unoccupied content column. Visible native titles
+and prompts retain their space. Home and Documents can place their retained
+actions in a measured free leading status-band column, with full-width content
+reserved below the complete system cluster. Home keeps its two-column landscape
+layout. Insufficient width/height, active folds and unsupported reservations
+restore the regular layout and toolbar. Home uses native fitting sizes, including
+the current text size, before moving Open/New and the conditional Unlock action.
 
 `reader_top_band` can project storage-backed reader chrome into a native content
 header when a measured, tall system region occupies one edge and leaves enough
@@ -1775,8 +1804,8 @@ areas are never made negative. Host tests cover eligibility and ownership; nativ
 acceptance must additionally verify mounted title/control frames, touch targets,
 system-region clearance and restoration in the actual display posture.
 
-Host checks cover column intersection, two activities, growth/shrink and inset
-ownership. Native toolbar acceptance checks actual accessible action frames against
+Host checks cover custom column intersection, two activities, growth/shrink,
+legacy inset retirement and native group identity. Native toolbar acceptance checks actual accessible action frames against
 reserved regions; physical-device Live Activity transitions require device testing.
 
 The focused `toolbar_conventions_tools --system-occlusions --sweep` acceptance
@@ -1789,3 +1818,20 @@ panning-title class, the runner compiles the staged production title helper into
 the disposable bundle. Apps, helper binaries, compiler caches and simulators use
 the existing scratch/owned-device cleanup. Live Activity growth/shrink is covered
 by host wakeup tests; this focused native run does not stimulate external activities.
+
+`toolbar_conventions_tools --adaptive-shell` adds a separate, disposable silent
+media app and asserts actual idle/playing/stopped reservation changes. It captures
+root and Settings pages, repeated Documents/Home rotation, collection selection,
+Unlock presence/absence and repeated notebook entry. Reports contain control,
+container and system-region frames in window coordinates; projected controls also
+check native hit testing. `--static-shell` runs the same inventory without claiming
+activity coverage on other displays. All stimuli, apps and simulators remain in
+the existing scratch/owned-device lifecycle. This does not establish genuine
+two-app Split View or physical touch acceptance; those remain separate gates.
+
+The [November 5 Brief 1 handoff](iphone-duo-feedback-plan.md#brief-1-implementation-handoff--november-5-2026)
+records the completed open/front activity sweeps and integrated static profiles.
+The activity gate requires measured growth and contraction at unchanged window
+dimensions. Native collision checks intersect actual clipping ancestors: UIKit
+retains offscreen tab views when its bar collapses to a destination selector.
+Raw frames and hit-test results remain in the local report for review.

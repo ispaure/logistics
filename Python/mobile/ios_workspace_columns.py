@@ -84,6 +84,8 @@ class WorkspaceColumns:
         safe = container.native.safeAreaInsets
         container.top_inset, container.bottom_inset = safe.top, safe.bottom
         container.left_inset, container.right_inset = safe.left, safe.right
+        from .ios_system_occlusions import compact_content_top
+        compact_content_top(container)
         from .folder_hub_ui import reflow_folder_notice
         reflow_folder_notice(self.app, float(container.native.bounds.size.width - safe.left - safe.right) - 24)
         if container.content is not None:
@@ -101,6 +103,8 @@ class WorkspaceColumns:
         safe = container.native.safeAreaInsets
         container.top_inset, container.bottom_inset = safe.top, safe.bottom
         container.left_inset, container.right_inset = safe.left, safe.right
+        from .ios_system_occlusions import compact_content_top
+        compact_content_top(container)
         if container.content is not None:
             container.content.interface.refresh()
 

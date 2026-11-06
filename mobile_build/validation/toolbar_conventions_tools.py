@@ -20,7 +20,7 @@ BUNDLE = 'io.github.ispaure.logisticsconventionsqa'
 
 def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=False,
         duoctl=None, pose=None, extended=False, appearance=None, content_size=None,
-        extended_only=False, reader_space=False, system_occlusions=False):
+        extended_only=False, reader_space=False, system_occlusions=False, adaptive_shell=False, static_shell=False):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
@@ -29,10 +29,15 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
                           for row in rows if row.get('isAvailable') and row['name'] == family)
     name = 'Build Manager Toolbar QA ' + uuid4().hex
     owned = device is None
+    if adaptive_shell and not owned:
+        raise ValueError('External audio QA requires an owned disposable simulator.')
+    if static_shell and not adaptive_shell:
+        raise ValueError('--static-shell requires --adaptive-shell.')
     cache, installed = None, False
     with scratch(REPO) as workspace:
         app = prepare(source, workspace / 'build')
         entrypoint = (
+            ('from tests.logisticsmobile.adaptive_shell_probe import main\nmain().main_loop()\n') if adaptive_shell else
             ('from tests.logisticsmobile.system_occlusion_probe import main\nmain().main_loop()\n') if system_occlusions else
             ('from tests.logisticsmobile.reader_space_probe import ReaderSpaceProbe\n'
              f'ReaderSpaceProbe("Reader Layout QA", "{BUNDLE}").main_loop()\n') if reader_space else
@@ -74,6 +79,9 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True,
                        capture_output=True)
         shutil.copyfile(app / 'app/fold-source.json', output / 'source.json')
+        if adaptive_shell and not static_shell:
+            from . import media_stimulus
+            media = media_stimulus.prepare(workspace, output)
         try:
             if owned:
                 device = client.create(name, model, runtime)
@@ -91,27 +99,39 @@ def run(source, output, *, family='iPhone Duo', timeout=240, device=None, sweep=
                 if duoctl is None or not owned or 'Duo' not in family:
                     raise ValueError('Automated poses require an explicit simulator tool and an owned Duo.')
                 tool = [sys.executable, str(duoctl), '-d', device]
+                pose_environment = dict(os.environ, XDG_CACHE_HOME=str(workspace / 'pose-cache'))
                 for attempt in range(3):
                     try:
                         subprocess.run([*tool, 'hinge', str({'closed': 0, 'partial': 127, 'open': 180}[pose])],
-                                       check=True, timeout=60)
+                                       check=True, timeout=60, env=pose_environment)
                         break
                     except subprocess.CalledProcessError:
                         if attempt == 2:
                             raise
                         time.sleep(1)  # A fresh boot can publish displays before HID is ready.
-                state = subprocess.check_output([*tool, 'state'], text=True, timeout=30)
+                state = subprocess.check_output([*tool, 'state'], text=True, timeout=30, env=pose_environment)
                 (output / 'simulator-pose.json').write_text(state)
             client.invoke('install', device, str(app))
             installed = True
+            if adaptive_shell and not static_shell:
+                client.invoke('install', device, str(media))
             cache = Path(client.invoke('get_app_container', device, BUNDLE, 'data')) / 'Library/Caches/toolbar-qa'
+            if adaptive_shell:
+                cache = cache.parent / 'shell-qa'
             if reader_space:
                 cache = cache.parent
             arguments = [flag for flag, enabled in (('--sweep', sweep), ('--extended', extended or extended_only),
-                         ('--extended-only', extended_only)) if enabled]
-            client.invoke('launch', device, BUNDLE, *arguments)
+                         ('--extended-only', extended_only), ('--static-shell', static_shell)) if enabled]
+            client.invoke('launch', '--stdout=' + str(output / 'app-stdout.log'),
+                          '--stderr=' + str(output / 'app-stderr.log'), device, BUNDLE, *arguments)
             deadline = time.monotonic() + timeout
+            media_phase = None
             while time.monotonic() < deadline:
+                if adaptive_shell and (cache / 'ready').exists():
+                    phase = (cache / 'ready').read_text()
+                    if phase != media_phase:
+                        media_stimulus.advance(client, device, cache, output, phase, BUNDLE)
+                        media_phase = phase
                 result = cache / ('reader-space-result.json' if reader_space else 'result.json')
                 if result.exists():
                     report = json.loads(result.read_text())
@@ -162,6 +182,8 @@ if __name__ == '__main__':
     parser.add_argument('--content-size', help='Native simctl content-size category, on owned simulators only')
     parser.add_argument('--extended-only', action='store_true', help='Run only the additional panel inventory')
     parser.add_argument('--system-occlusions', action='store_true', help='Focus on Markdown Close/Save, workspace roots and destination confirmation.')
+    parser.add_argument('--adaptive-shell', action='store_true', help='Repeat destination/reader transitions with real external audio activity.')
+    parser.add_argument('--static-shell', action='store_true', help='Run the adaptive shell inventory without external activity on other devices.')
     parser.add_argument('--reader-space', action='store_true', help='Check the portrait comic title and footer layout')
     args = parser.parse_args()
     if not os.environ.get('DEVELOPER_DIR'):
@@ -170,4 +192,5 @@ if __name__ == '__main__':
     run(args.app, args.output, family=args.family, timeout=args.timeout, device=args.device,
         sweep=args.sweep, duoctl=args.duoctl, pose=args.pose, extended=args.extended,
         appearance=args.appearance, content_size=args.content_size,
-        extended_only=args.extended_only, reader_space=args.reader_space, system_occlusions=args.system_occlusions)
+        extended_only=args.extended_only, reader_space=args.reader_space, system_occlusions=args.system_occlusions,
+        adaptive_shell=args.adaptive_shell, static_shell=args.static_shell)

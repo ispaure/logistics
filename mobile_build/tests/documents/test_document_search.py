@@ -247,7 +247,7 @@ class LocalDocumentSearchTests(TestCase):
             header, buttons = root._destination_actions
             self.assertIsNone(buttons[0].parent)
 
-    def test_short_vertical_bar_keeps_unlock_and_both_file_commands_reachable(self):
+    def test_vertical_bar_exposes_each_command_to_native_overflow(self):
         app = self.app
         with patch.object(app, 'home_unlock_candidates', return_value=[('fixture', {})]):
             app.show_documents_hub()
@@ -255,11 +255,7 @@ class LocalDocumentSearchTests(TestCase):
             child, parent = object(), object()
             adapter = SimpleNamespace(parent=parent, content_controller=lambda destination: child)
             with (patch.object(app.native_host, 'adapter', adapter),
-                  patch('mobile.ios_toolbar.vertical_edge', return_value=2),
-                  patch('mobile.ios_toolbar.supplemental_fits', return_value=False) as capacity):
+                  patch('mobile.ios_toolbar.vertical_edge', return_value=2)):
                 actions = root._ios_toolbar_buttons()
-            capacity.assert_called_once_with(child, 4)
             self.assertEqual([button.accessible_name for button in actions],
-                             ['Unlock LocalCrypt', 'Document actions'])
-            self.assertEqual([label for label, _ in root._destination_action_menu.actions],
-                             ['Open document', 'New document', 'Search documents'])
+                             ['Unlock LocalCrypt', 'Open document', 'New document', 'Search documents'])

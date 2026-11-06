@@ -31,7 +31,10 @@ def reserved_divisions(widget, *, include_inactive=False):
         return ()
     from rubicon.objc import ObjCClass
     kind = ObjCClass('UIViewReservedRegionKind').divisionRegionKind()
-    regions = native.reservedRegionsOfKind(kind, options=int(include_inactive))
+    # Use Foundation's array adapter instead of reflecting Swift collection
+    # classes from a reentrant UIKit layout callback.
+    regions = ObjCClass('NSMutableArray').arrayWithArray(
+        native.reservedRegionsOfKind(kind, options=int(include_inactive)))
     return tuple(Division(float(r.frame.origin.x), float(r.frame.origin.y),
                           float(r.frame.size.width), float(r.frame.size.height))
                  for r in regions)

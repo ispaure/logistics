@@ -68,7 +68,7 @@ def sync_reader_toolbar(app, view, destination=None):
             from .android_reader_chrome import sync
             sync(app, view, destination or app.native_host.state.destination)
         return
-    from .ios_toolbar import mount_actions, mount_leading, vertical_edge, clear_actions, action_state, system_occlusions
+    from .ios_toolbar import mount_actions, mount_leading, clear_actions, action_state, layout_geometry
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
     controller = adapter.content_controller(destination)
@@ -120,8 +120,8 @@ def sync_reader_toolbar(app, view, destination=None):
         detach(control)
     from .reader_chrome import reader_buttons
     buttons = [] if getattr(view, '_reader_fullscreen', False) else reader_buttons(app, view)
-    occlusions = system_occlusions(controller)
-    state = (action_state(buttons), vertical_edge(controller), occlusions)
+    geometry = layout_geometry(controller)
+    state = (action_state(buttons), geometry)
     for button in buttons:
         detach(button)
         button.app, button.window = app, app.main_window
@@ -157,7 +157,7 @@ def sync_reader_toolbar(app, view, destination=None):
         for button in leading:
             detach(button)
             button.app, button.window = app, app.main_window
-        leading_state = (action_state(leading), occlusions)
+        leading_state = (action_state(leading), geometry)
         if projections.get((key, 'leading')) != leading_state:
             mount_leading(controller, leading, replaces_back=True)
             projections[key, 'leading'] = leading_state
@@ -234,8 +234,11 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 navigation.setNavigationBarHidden(True, animated=False)
             return
         if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
-            if not bool(navigation.isNavigationBarHidden()):
-                navigation.setNavigationBarHidden(True, animated=False)
+            projected = (getattr(view, '_home_top_band', None) is not None
+                         or getattr(view, '_destination_top_band', None) is not None)
+            hidden = projected or not bool(view._ios_toolbar_buttons())
+            if bool(navigation.isNavigationBarHidden()) != hidden:
+                navigation.setNavigationBarHidden(hidden, animated=False)
             return
         # Include both legacy item arrays and modern grouped/overflow actions.
         # Disabled actions still need their toolbar, as do native More/Back routes.
@@ -251,7 +254,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         hidden = not (actions or getattr(item, 'prompt', None) or (nested and not inline_close))
         if bool(navigation.isNavigationBarHidden()) != hidden:
             navigation.setNavigationBarHidden(hidden, animated=False)
-        if destination == 'settings' and nested and body.children:
+        if destination == 'settings' and nested and body is not None and body.children:
             from .settings.titles import sync_route_title
             sync_route_title(body.children[-1], navigation, controller)
 

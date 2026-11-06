@@ -40,6 +40,67 @@ def fullscreen(window, *, images=False):
         '_comic_chrome_hidden' if images else '_reader_chrome_hidden', False))
 
 
+def install_shell_root(adapter, root_class):
+    """Keep the tab/navigation hierarchy outside Toga's unused outer bar.
+
+    A navigation controller above the tab controller prevents UIKit's shared
+    vertical bar from coordinating tab compression with the inner bar items.
+    Retain the toolkit's container, callbacks and title adapter; only its unused
+    navigation wrapper leaves the window hierarchy for the host's lifetime.
+    """
+    from rubicon.objc import ObjCClass, SEL
+    if (getattr(adapter, '_logistics_shell_root', None) is not None
+            or not adapter.parent.respondsToSelector(SEL('setNeedsUpdateOfVerticalBarConfiguration'))):
+        return
+    window, outer, content = adapter.window._impl.native, adapter.outer_navigation, adapter.parent
+    stack = list(outer.viewControllers)
+    if window.rootViewController != outer or stack != [content]:
+        return
+    root = root_class.alloc().init()
+    placeholder = ObjCClass('UIViewController').alloc().init()
+    placeholder.title = content.title
+    outer.setViewControllers([placeholder], animated=False)
+    # UIKit can retain the departing child until its next layout even without
+    # animation. Finish public containment removal before attaching it again.
+    attached = content.parentViewController is not None
+    if attached:
+        content.willMoveToParentViewController(None)
+    content.view.removeFromSuperview()
+    if attached:
+        content.removeFromParentViewController()
+    root.addChildViewController(content)
+    root.view.frame = window.bounds
+    content.view.frame = root.view.bounds
+    adapter._logistics_shell_autoresizing = content.view.autoresizingMask
+    content.view.autoresizingMask = 18  # Flexible width and height, owned by UIKit.
+    root.view.addSubview(content.view)
+    content.didMoveToParentViewController(root)
+    adapter._logistics_shell_root = root
+    adapter._logistics_shell_stack = stack
+    adapter._logistics_shell_placeholder = placeholder
+    window.rootViewController = root
+
+
+def restore_shell_root(adapter):
+    """Return the original toolkit hierarchy before the native host retires."""
+    root = getattr(adapter, '_logistics_shell_root', None)
+    if root is None:
+        return
+    content, window = adapter.parent, adapter.window._impl.native
+    content.willMoveToParentViewController(None)
+    content.view.removeFromSuperview()
+    content.removeFromParentViewController()
+    content.view.autoresizingMask = adapter._logistics_shell_autoresizing
+    content.title = adapter._logistics_shell_placeholder.title
+    adapter.outer_navigation.setViewControllers(adapter._logistics_shell_stack, animated=False)
+    if window.rootViewController == root:
+        window.rootViewController = adapter.outer_navigation
+    adapter._logistics_shell_root = None
+    adapter._logistics_shell_stack = None
+    adapter._logistics_shell_placeholder = None
+    adapter._logistics_shell_autoresizing = None
+
+
 def install():
     global _installed
     if _installed:
@@ -63,11 +124,32 @@ def install():
             result = send_super(__class__, self, 'childViewControllerForStatusBarHidden', restype=objc_id)
             return ObjCInstance(result) if result else None
 
+    class LogisticsShellController(containers.UIViewController):
+        @objc_method
+        def prefersStatusBarHidden(self) -> bool:
+            return fullscreen(self.view.window)
+
+        @objc_method
+        def childViewControllerForStatusBarHidden(self) -> objc_id:
+            children = list(self.childViewControllers)
+            return None if fullscreen(self.view.window) or not children else children[0]
+
     # Toga constructs the outer window navigation controller through this symbol.
     # Leave unregistered windows and ordinary routes under UIKit's normal policy.
     containers.UINavigationController = LogisticsReadingNavigationController
     original_layout = AppleNavigation.layout_content
     original_window_layout = AppleNavigation.layout_window
+    original_init, original_dispose = AppleNavigation.__init__, AppleNavigation.dispose
+
+    def initialize(adapter, host, window):
+        original_init(adapter, host, window)
+        install_shell_root(adapter, LogisticsShellController)
+
+    def dispose(adapter):
+        restore_shell_root(adapter)
+        original_dispose(adapter)
+
+    AppleNavigation.__init__, AppleNavigation.dispose = initialize, dispose
 
     def layout_window(adapter, container):
         original_window_layout(adapter, container)
@@ -96,8 +178,12 @@ def install():
                 container.top_inset = container.bottom_inset = 0
                 container.left_inset = container.right_inset = 0
             else:
+                from .ios_system_occlusions import compact_content_top
+                changed = compact_content_top(container)
+                from .home_header import compact_content_top as compact_home
+                changed = compact_home(container) or changed
                 from .ios_content_background import expand_preview
-                changed = expand_preview(container)
+                changed = expand_preview(container) or changed
                 from .reader_edges import compact_apple_reader
                 changed = compact_apple_reader(container) or changed
             if changed and container.content is not None:
@@ -146,10 +232,12 @@ def notify_viewport(container):
     if app is None or not getattr(app, 'active_host', False):
         return
     from .ios_toolbar import vertical_edge
+    from .ios_system_occlusions import native_geometry
     regions = occlusion_geometry(getattr(container, 'native', None))
     geometry = (float(container.width), float(container.height),
                 container.top_inset, container.bottom_inset, container.left_inset, container.right_inset,
-                vertical_edge(getattr(container, 'controller', None)), regions)
+                vertical_edge(getattr(container, 'controller', None)), regions,
+                native_geometry(getattr(container, 'native', None)))
     if geometry == getattr(container, '_logistics_viewport', None):
         return
     container._logistics_viewport = geometry
@@ -175,6 +263,10 @@ def occlusion_geometry(native):
     if not native.respondsToSelector(SEL('reservedRegionsOfKind:options:')):
         return ()
     kind = ObjCClass('UIViewReservedRegionKind').occlusionRegionKind()
+    # Materialize Swift-backed NSArray results before Python iteration. The
+    # pinned bridge can reenter lazy selector discovery for Swift array classes
+    # during UIKit callbacks; a Foundation-owned array uses its stable adapter.
+    regions = ObjCClass('NSMutableArray').arrayWithArray(native.reservedRegionsOfKind(kind, options=0))
     return tuple(sorted((float(r.frame.origin.x), float(r.frame.origin.y),
                   float(r.frame.size.width), float(r.frame.size.height))
-                 for r in native.reservedRegionsOfKind(kind, options=0)))
+                 for r in regions))

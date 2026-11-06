@@ -368,6 +368,8 @@ class HubUI:
             box.add(toga.Button('Burst camera', on_press=lambda widget: present(self.app),
                                 style=Pack(height=48)))
         self.home_sections = HubSections(box, recent_box, before=camera_heading)
+        self.home_sections._home_primary_actions = self.home_actions
+        self.home_sections._home_primary_buttons = tuple(self.home_actions.children)
         self.reflow_home()
         return self.home_sections
 

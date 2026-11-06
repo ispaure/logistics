@@ -13,6 +13,9 @@ def prepare(app, view, destination):
         original = view
         view = toga.Box(children=[original], style=Pack(direction=COLUMN, flex=1))
         view.content = getattr(original, 'content', original)
+        if destination == 'home' and hasattr(original, '_home_primary_actions'):
+            view._home_primary_actions = original._home_primary_actions
+            view._home_primary_buttons = original._home_primary_buttons
     if hasattr(view, '_destination_actions'):
         return view
     # Existing root pages already own different content margins. Cancel that
@@ -35,11 +38,6 @@ def prepare(app, view, destination):
         new = icon_button('compose', 'New document', on_press=app.new_hub_document)
         opener._toolbar_symbol, new._toolbar_symbol = 'folder', 'plus'
         buttons.extend([opener, new, search])
-        from .action_menu import ActionMenu
-        more = icon_button('more', 'Document actions')
-        more._toolbar_group = 'credentials'
-        view._destination_action_menu = ActionMenu(more, app,
-            [('Open document', app.open_hub_file), ('New document', app.new_hub_document), ('Search documents', app.open_document_search)], document=False)
     view._destination_actions = (header, buttons)
     def apple_actions():
         actions = selected(app, buttons)
@@ -48,13 +46,8 @@ def prepare(app, view, destination):
             view._ios_toolbar_leading = [view._document_search_close] if searching else []
             if searching:
                 actions = [button for button in actions if button is not search]
-        from .ios_toolbar import vertical_edge, supplemental_fits
-        controller = app.native_host.adapter.parent
-        budget = app.native_host.adapter.content_controller(destination)
-        if destination == 'documents' and vertical_edge(controller) and not supplemental_fits(budget, len(actions)):
-            # A folded display can share a short edge with all five tabs. One
-            # native menu keeps both commands reachable without covering a tab.
-            return [buttons[0], more] if buttons[0] in actions else [more]
+        from .ios_toolbar import vertical_edge
+        controller = app.native_host.adapter.content_controller(destination)
         # Horizontal groups run left-to-right; vertical groups run top-to-bottom.
         # Keep Unlock outermost horizontally and first in a vertical action rail.
         if buttons[0] in actions and not vertical_edge(controller):
@@ -98,11 +91,10 @@ def refresh(app, view):
 
 
 def sync_native_host(app, view, destination):
-    """Overview actions belong to the whole window, outside nested folder panes.
+    """Keep tab actions inside that tab's native navigation container.
 
-    A partially folded Workspaces navigation controller can be the lower pane.
-    The existing outer navigation controller is the common full-window owner.
-    Reader and nested routes continue to use their destination controllers.
+    Putting actions above the tab controller gives UIKit separate bar owners;
+    their controls can overlap instead of participating in shared compression.
     """
     if not app.routes.apple or app.native_host.adapter is None:
         return
@@ -111,6 +103,82 @@ def sync_native_host(app, view, destination):
                 and hasattr(view, '_destination_actions'))
     if overview:
         overview = bool(selected(app, view._destination_actions[1]))
+    if destination == 'home' and not app.routes.screens[destination]:
+        from .home_header import sync
+        if sync(app, view):
+            overview = False
+    elif not app.routes.screens[destination] and hasattr(view, '_destination_actions'):
+        if project_header(app, view, destination):
+            overview = False
     outer = adapter.outer_navigation
-    if bool(outer.isNavigationBarHidden()) == overview:
-        outer.setNavigationBarHidden(not overview, animated=False)
+    if not outer.isNavigationBarHidden():
+        outer.setNavigationBarHidden(True, animated=False)
+    from .ios_system_occlusions import reserve_bar_clearance
+    reserve_bar_clearance(outer)
+    if not app.routes.screens[destination] and hasattr(view, '_destination_actions'):
+        navigation = adapter.navigation_for(destination)
+        if bool(navigation.isNavigationBarHidden()) == overview:
+            navigation.setNavigationBarHidden(not overview, animated=False)
+        reserve_bar_clearance(navigation)
+
+
+def project_header(app, view, destination):
+    """Use a measured free top column for overview actions after every pose.
+
+    The original buttons and menus move intact. If any target cannot fit, all
+    actions return to the adaptive native bar and its existing overflow policy.
+    """
+    from .ios_toolbar import vertical_edge, system_occlusions
+    from .reader_top_band import free_top_band
+    controller = app.native_host.adapter.content_controller(destination)
+    native, window = controller.view, app.main_window._impl.native
+    origin = native.convertRect(native.bounds, toView=window).origin
+    buttons = list(view._ios_toolbar_buttons())
+    buttons = [*view._ios_toolbar_leading, *buttons]
+    sizes = [(max(44, button.style.width or 48), max(44, button.style.height or 48)) for button in buttons]
+    from .fold_layout import division
+    geometry = None
+    if (buttons and not vertical_edge(controller) and abs(float(origin.y)) <= .5
+            and division(app, view) is None):
+        geometry = free_top_band(system_occlusions(controller), float(native.bounds.size.width),
+            float(window.safeAreaInsets.top), sum(width for width, _ in sizes) + 32,
+            row_height=max(height for _, height in sizes) + 16)
+    state = getattr(view, '_destination_top_band', None)
+    header = view._destination_actions[0]
+    if geometry is None:
+        if state is not None:
+            if header.parent is not None:
+                header.parent.remove(header)
+            del header.style.height
+            header.style.margin = state['margins']
+            header.style.align_items = CENTER
+            view._destination_top_band = None
+        return False
+    signature = (tuple(sorted(geometry.items())), tuple(id(button) for button in buttons))
+    if state is not None and state['signature'] == signature:
+        return True
+    margins = state['margins'] if state is not None else tuple(
+        getattr(header.style, 'margin_' + side) for side in ('top', 'right', 'bottom', 'left'))
+    header.clear()
+    # Keep actions at the top even when a detached activity extends the body
+    # reservation. An auto-height row can center them inside that larger gap.
+    row = toga.Box(style=Pack(direction=ROW, align_items=CENTER, height=max(height for _, height in sizes)))
+    for button in buttons:
+        if button.parent is not None:
+            button.parent.remove(button)
+        button.app, button.window = app, app.main_window
+        row.add(button)
+    header.add(row)
+    header.style.align_items = 'start'
+    header.style.height = geometry['reserve'] - 16
+    header.style.margin = (8 - (view.style.margin_top or 0),
+        geometry['width'] - geometry['right'] + 16 - (view.style.margin_right or 0),
+        8, geometry['left'] + 16 - (view.style.margin_left or 0))
+    if header.parent is None:
+        view.insert(0, header)
+    view._destination_top_band = dict(signature=signature, geometry=geometry, margins=margins,
+                                      buttons=buttons, header=header)
+    container = getattr(view._impl, 'container', None)
+    if container is not None:
+        app.native_host.adapter.layout_content(container)
+    return True

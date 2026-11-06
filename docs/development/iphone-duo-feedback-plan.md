@@ -1,6 +1,6 @@
 # iPhone Duo screenshot feedback: five implementation briefs
 
-Prepared November 5, 2026 from 26 user-supplied annotated screenshots. **Planning only: none of the changes below has been implemented or validated by this review.** The five briefs describe future implementation chats; creating or starting those chats is outside this planning pass.
+Prepared November 5, 2026 from 26 user-supplied annotated screenshots as a planning-only review. Subsequent implementation and validation are recorded in the individual handoffs below; the original review did not implement the changes.
 
 ## Scope and interpretation
 
@@ -53,6 +53,63 @@ File ownership is exclusive during implementation. These are initial source entr
 - Verify no overlap among system activity, contextual actions and destination navigation; expanding controls must not hide another required action. Preserve native overflow behavior and stable open menus where possible.
 - Exercise inner portrait/landscape, narrow front display and genuine left/right two-app windows when available. Internal panes do not establish system Split View acceptance.
 - Deliver the shared bounds/invalidation contract and reproduction results to the other four chats. Record any unavailable physical/system-window case as unverified.
+
+### Brief 1 implementation contract
+
+Keep feature headers on the existing `ios_toolbar` / `reader_top_band` owners.
+System reservations are queried in the receiving native view's coordinates;
+window position, bounds, all safe-area edges and the current bar edge participate
+in custom-layout invalidation. UIKit owns native bar capacity, placement and
+overflow through real grouped bar items and visibility/compression priorities;
+do not add native bar insets or estimate slots from Island dimensions. A same-size
+activity change refreshes custom content clearance while unchanged native groups
+retain their live action/menu ownership. Only the shared container policy may
+reclaim an unused content band; feature pages must not add Island-specific offsets.
+See the [implemented native/custom boundary](mobile-workspace-navigation.md#system-occlusion-clearance).
+
+Reader acceptance also includes the later report that a notebook appeared clear
+in one right-hand two-app Split View capture and overlapped after a retry. One
+clear capture does not resolve that intermittent case. Brief 5 must repeat entry,
+rotation and resizing with real system activity expansion/contraction and record
+the notebook controls, content bounds and reservations in the same coordinates.
+Internal panes and synthetic reservation tests do not establish system-window
+acceptance.
+
+### Brief 1 implementation handoff — November 5, 2026
+
+S1–S5 now share measured container clearance, geometry invalidation and retained
+control ownership. Home keeps two landscape columns and fits Open/New in the
+free portrait header column. Documents restores its leading header after repeated
+rotations, including optional Unlock and all four collections. Native actions
+remain real bar items; UIKit owns activity clearance and overflow. Removing the
+unused navigation controller above the tab host enables the system to coordinate
+action and tab compression. Host teardown restores the toolkit hierarchy and
+window title, and fullscreen status-bar behavior remains attached to the root.
+
+Native validation uses the current Python payload restaged into the existing
+SDK 27.1 simulator shell, with the current production title helper compiled into
+the disposable bundle. This is not a fresh production build or physical-device
+deployment. Completed checks:
+
+| Profile | Snapshots | Verified scope |
+| --- | ---: | --- |
+| Open Duo, external audio | 195 | Same-size system reservation growth/shrink from 120 → 212 → 120 points, five destinations, Settings categories, repeated Documents/Home rotations, collections, Unlock variants, notebook reentry and shell restoration |
+| Front Duo, final feature integration and external audio | 192 | Same-size system reservation growth/shrink from 170 → 250 → 170 points, native compression/overflow, full shell/rotation inventory and shell restoration |
+| Open Duo, final feature integration | 65 | Layout and shell restoration after integrating Settings titles and notebook updates through `e23f9c5c0`; no additional activity claim |
+| Ordinary iPhone 17 | 63 | Static shell/rotation inventory with the legacy native-container path |
+| iPad Pro 11-inch (M5) | 63 | Static shell/rotation inventory and retained Settings/content routes |
+
+The audit retains raw control frames and measures visible clipping bounds so
+UIKit's hidden, collapsed-tab views are not mistaken for rendered collisions.
+It records native hit tests and enforces reachable 44-point targets for projected
+headers. External playback must produce an observed reserved-region transition;
+starting a player alone is insufficient. Temporary apps, compilers and simulators
+use the build manager's scratch and owned-device cleanup.
+
+The shared navigation, toolbar, region bridge, fold layout, Home header, reader
+header, Settings and notebook host regressions pass. Genuine two-app Split View,
+the intermittent right-hand notebook retry and physical touch/Live Activity
+acceptance remain unverified and carry forward to Brief 5 and release validation.
 
 ## Brief 2 — Settings navigation, preference controls and privacy copy
 
