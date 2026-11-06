@@ -59,6 +59,28 @@ def set_jpg_exif_comments(target_dir: str | Path, recursive: bool, comments: str
     )
 
 
+def set_jpg_exif_comments_batch(target_dir: str | Path, recursive: bool, comments: str, *,
+                                report=lambda done, total, message: None, cancelled=lambda: False):
+    """Return the batch result and whether each completed JPEG changed."""
+    from commonUtils.filesystem.traversal import scan_directory
+    from commonUtils.runtime.operations import BatchResult, OperationCancelled, run_batch
+
+    report(0, 0, 'Scanning for JPEGs…')
+    try:
+        paths = scan_directory(target_dir, recursive=recursive, cancelled=cancelled)
+    except OperationCancelled:
+        return BatchResult(cancelled=True), {}
+
+    jpeg_paths = [path for path in paths
+                  if path.suffix.lower() in ('.jpg', '.jpeg') and not path.is_symlink()]
+    changed = {}
+
+    def set_comment(path):
+        changed[path] = piexifWrapper.jpg_set_exif_comments(path, comments)
+
+    return run_batch(jpeg_paths, set_comment, progress=report, cancelled=cancelled), changed
+
+
 def compress_folders(target_dirs, *, recursive=True, always_keep_compressed=False,
                      quality_color=80, quality_grayscale=45, max_long_edge=5120,
                      max_height=None, preserve_animated_and_multipage_originals=True,

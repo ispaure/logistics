@@ -2,18 +2,90 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
+from threading import Event
 from unittest.mock import patch
 
 from PIL import Image
+from commonUtils.integrations.wrappers import piexifWrapper
 from commonUtils.testing.stages import TestStage
 from commonUtils.tests.qt_test_case import QtTestCase
 from features.images import actions
-from features.images.ui.dialogs import ImageCompressDialog
+from features.images.ui.dialogs import ExifCommentsDialog, ImageCompressDialog
 
 TEST_STAGE = TestStage.REGRESSION
 
 
 class ImageFolderDialogTests(QtTestCase):
+    def test_exif_dialog_reports_success_before_corrupt_file(self):
+        root = Path(self.temporary_directory().name).resolve()
+        good = root / '01.jpg'
+        Image.new('RGB', (8, 8), 'red').save(good)
+        original = good.read_bytes()
+        bad = root / '02.jpg'
+        bad.write_bytes(b'not a JPEG')
+        dialog = ExifCommentsDialog(initial_path=root)
+        dialog.comments.setText('New comment')
+        dialog.show()
+
+        with patch.object(dialog, '_confirm', return_value=True):
+            dialog._execute()
+            self.wait_until(lambda: not dialog.busy)
+
+        self.assertTrue(dialog.isVisible())
+        self.assertEqual(dialog.results.topLevelItemCount(), 2)
+        self.assertEqual(dialog.results.topLevelItem(0).text(1), 'Changed')
+        self.assertEqual(dialog.results.topLevelItem(1).text(1), 'Failed')
+        self.assertIn('1 changed', dialog.task.message.text())
+        self.assertIn('1 failed', dialog.task.message.text())
+        self.assertNotEqual(good.read_bytes(), original)
+        self.assertEqual((root / '01.jpg.before-comments').read_bytes(), original)
+        self.assertEqual(bad.read_bytes(), b'not a JPEG')
+        self.assertFalse((root / '02.jpg.before-comments').exists())
+
+    def test_closing_exif_dialog_finishes_current_edit_and_reports_remaining(self):
+        root = Path(self.temporary_directory().name).resolve()
+        first, second = root / '01.jpg', root / '02.jpg'
+        for path in (first, second):
+            Image.new('RGB', (8, 8), 'red').save(path)
+        originals = {path: path.read_bytes() for path in (first, second)}
+        dialog = ExifCommentsDialog(initial_path=root)
+        dialog.comments.setText('New comment')
+        dialog.show()
+        started, release = Event(), Event()
+        edit = piexifWrapper.jpg_set_exif_comments
+
+        def edit_current(path, comments):
+            started.set()
+            if not release.wait(10):
+                raise TimeoutError('Test did not release the JPEG writer')
+            return edit(path, comments)
+
+        with patch.object(dialog, '_confirm', return_value=True), \
+                patch.object(piexifWrapper, 'jpg_set_exif_comments', side_effect=edit_current) as writer:
+            try:
+                dialog.action_button.click()
+                self.wait_until(started.is_set, message='JPEG writer did not start')
+                self.assertFalse(dialog.close())
+                self.assertTrue(dialog.isVisible())
+                self.assertTrue(dialog.busy)
+                self.assertTrue(dialog.task.cancelled.is_set())
+            finally:
+                release.set()
+                self.wait_until(lambda: not dialog.busy)
+        writer.assert_called_once_with(first, 'New comment')
+        self.assertTrue(dialog.isVisible())
+        self.assertEqual(dialog.results.topLevelItemCount(), 2)
+        self.assertEqual(dialog.results.topLevelItem(0).text(1), 'Changed')
+        self.assertEqual(dialog.results.topLevelItem(1).text(0), str(second))
+        self.assertEqual(dialog.results.topLevelItem(1).text(1), 'Not processed')
+        self.assertIn('1 not processed', dialog.task.message.text())
+        self.assertIn('Cancelled', dialog.task.message.text())
+        self.assertNotEqual(first.read_bytes(), originals[first])
+        self.assertEqual((root / '01.jpg.before-comments').read_bytes(), originals[first])
+        self.assertEqual(second.read_bytes(), originals[second])
+        self.assertFalse((root / '02.jpg.before-comments').exists())
+        self.assertTrue(dialog.close())
+
     def test_invalid_options_show_feedback_before_confirmation_or_background_work(self):
         root = Path(self.temporary_directory().name).resolve()
         source = root / 'sample.png'

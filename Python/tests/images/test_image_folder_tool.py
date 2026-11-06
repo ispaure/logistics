@@ -1,4 +1,4 @@
-"""Current folder compression preserves inputs and reports per-image outcomes."""
+"""Image folder workflows preserve inputs and report per-image outcomes."""
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -7,10 +7,105 @@ import unittest
 from unittest.mock import patch
 
 from PIL import Image
+import piexif
+from commonUtils.integrations.wrappers import piexifWrapper
 from commonUtils.testing.stages import TestStage
 from features.images import actions, processing
 
 TEST_STAGE = TestStage.REGRESSION
+
+
+class ExifCommentsBatchTests(unittest.TestCase):
+    def setUp(self):
+        temp = self.enterContext(TemporaryDirectory())
+        self.root = Path(temp).resolve()
+
+    def jpeg(self, name):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new('RGB', (8, 8), 'red').save(path)
+        return path
+
+    def test_changed_and_noop_keep_original_backup(self):
+        path = self.jpeg('photo.JPEG')
+        original = path.read_bytes()
+        self.assertIsNone(actions.set_jpg_exif_comments(self.root, False, 'Old comment'))
+        backup = self.root / 'photo.JPEG.before-comments'
+        self.assertEqual(backup.read_bytes(), original)
+
+        result, changed = actions.set_jpg_exif_comments_batch(self.root, False, 'Café')
+        self.assertEqual(result.completed, [path])
+        self.assertEqual(result.failed, {})
+        self.assertEqual(changed, {path: True})
+        edited = path.read_bytes()
+        metadata = piexif.load(edited)
+        self.assertEqual(bytes(metadata['0th'][piexifWrapper.COMMENTS_TAG_ADDRESS]), 'Café\0'.encode('utf-16-le'))
+        self.assertEqual(backup.read_bytes(), original)
+
+        with patch.object(piexifWrapper, 'atomic_write_bytes', wraps=piexifWrapper.atomic_write_bytes) as write:
+            result, changed = actions.set_jpg_exif_comments_batch(self.root, False, 'Café')
+        write.assert_not_called()
+        self.assertEqual(result.completed, [path])
+        self.assertEqual(result.failed, {})
+        self.assertEqual(changed, {path: False})
+        self.assertEqual(path.read_bytes(), edited)
+        self.assertEqual(backup.read_bytes(), original)
+
+    def test_scan_skips_hidden_files_and_symlinks_and_respects_recursion(self):
+        source = self.jpeg('visible/photo.jpg')
+        skipped = [self.jpeg(name) for name in ('outside.jpg', 'input/.hidden.jpg', 'input/.hidden/photo.jpg')]
+        folder = self.root / 'input'
+        nested = self.jpeg('input/nested/photo.jpg')
+        links = (folder / 'linked.jpg', folder / 'linked-folder')
+        links[0].symlink_to(skipped[0])
+        links[1].symlink_to(source.parent, target_is_directory=True)
+        untouched = {path: path.read_bytes() for path in [source, *skipped, nested]}
+
+        result, _ = actions.set_jpg_exif_comments_batch(folder, False, 'New comment')
+        self.assertEqual(result.completed, [])
+        self.assertEqual(result.failed, {})
+        result, changed = actions.set_jpg_exif_comments_batch(folder, True, 'New comment')
+        self.assertEqual(result.completed, [nested])
+        self.assertEqual(result.failed, {})
+        self.assertEqual(changed, {nested: True})
+        self.assertNotEqual(nested.read_bytes(), untouched.pop(nested))
+        for path, original in untouched.items():
+            self.assertEqual(path.read_bytes(), original)
+            self.assertFalse(path.with_name(path.name + '.before-comments').exists())
+        for link in links:
+            self.assertTrue(link.is_symlink())
+            self.assertFalse(link.with_name(link.name + '.before-comments').exists())
+
+    def test_cancellation_during_scan_leaves_all_jpegs_untouched(self):
+        source = self.jpeg('photo.jpg')
+        original = source.read_bytes()
+        result, changed = actions.set_jpg_exif_comments_batch(
+            self.root, True, 'New comment', cancelled=lambda: True)
+        self.assertTrue(result.cancelled)
+        self.assertEqual(result.completed, [])
+        self.assertEqual(result.failed, {})
+        self.assertEqual(changed, {})
+        self.assertEqual(source.read_bytes(), original)
+        self.assertEqual(list(self.root.iterdir()), [source])
+
+    def test_concurrent_source_edit_is_reported_as_failure(self):
+        source = self.jpeg('photo.jpg')
+        original = source.read_bytes()
+        write = piexifWrapper.atomic_write_bytes
+
+        def edit_before_publication(path, *args, **kwargs):
+            if path == source:
+                source.write_bytes(b'external edit')
+            return write(path, *args, **kwargs)
+
+        with patch.object(piexifWrapper, 'atomic_write_bytes', side_effect=edit_before_publication):
+            result, changed = actions.set_jpg_exif_comments_batch(self.root, False, 'New comment')
+        self.assertEqual(result.completed, [])
+        self.assertIn('JPEG changed during metadata editing', result.failed[source])
+        self.assertEqual(changed, {})
+        self.assertEqual(source.read_bytes(), b'external edit')
+        self.assertEqual((self.root / 'photo.jpg.before-comments').read_bytes(), original)
+        self.assertCountEqual(self.root.iterdir(), [source, self.root / 'photo.jpg.before-comments'])
 
 
 class ImageFolderToolTests(unittest.TestCase):

@@ -188,15 +188,47 @@ class ExifCommentsDialog(ToolDialog):
         self.form.addRow('Recursive:', self.recursive)
         self.form.addRow('Comments:', self.comments)
 
+        self.results = pyside.QTreeWidget()
+        self.results.setHeaderLabels(['Image', 'Result', 'Details'])
+        self.results.setRootIsDecorated(False)
+        self.results.setColumnWidth(0, 320)
+        self.results.setColumnWidth(1, 130)
+        self.root_layout.insertWidget(self.root_layout.count() - 2, self.results, 1)
+        self.cancel_button.setText('Close')
+
     def _execute(self):
+        if self.busy:
+            return
         target = self._require_directory(self.target_dir)
 
         if target is None or not self._confirm():
             return
 
-        image_actions.set_jpg_exif_comments(
-            target_dir=target,
-            recursive=self.recursive.isChecked(),
-            comments=self.comments.text()
-        )
-        self.accept()
+        recursive = self.recursive.isChecked()
+        comments = self.comments.text()
+        self.results.clear()
+        self._run_background(lambda report, cancelled: image_actions.set_jpg_exif_comments_batch(
+            target, recursive, comments, report=report, cancelled=cancelled), self._show_results,
+            cancel_text='Cancel after current image',
+            cancel_message='Cancellation requested. Any JPEG already being edited will finish…')
+
+    def _show_results(self, result):
+        batch, changed = result
+        if batch.cancelled and not (batch.completed or batch.failed or batch.remaining):
+            self.task.message.setText('Folder scan cancelled. No JPEGs were processed.')
+            return
+
+        rows = [(path, 'Changed' if changed[path] else 'Unchanged', '') for path in batch.completed]
+        rows += [(path, 'Failed', str(error)) for path, error in batch.failed.items()]
+        rows += [(path, 'Not processed', 'Cancelled') for path in batch.remaining]
+        for path, status, detail in rows:
+            row = pyside.QTreeWidgetItem([str(path), status, detail])
+            row.setToolTip(0, str(path))
+            row.setToolTip(2, detail)
+            self.results.addTopLevelItem(row)
+        updated = sum(changed.values())
+        summary = (f'{updated} changed · {len(batch.completed) - updated} unchanged · '
+                   f'{len(batch.failed)} failed · {len(batch.remaining)} not processed.')
+        if batch.cancelled:
+            summary += ' Cancelled. Completed changes remain.'
+        self.task.message.setText(summary)
