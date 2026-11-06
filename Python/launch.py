@@ -34,6 +34,7 @@ def main() -> int:
     configure(presenter=present_diagnostic)
     initialize_settings()
     indexing = IndexService()
+    main_window = None
     try:
         indexing.start()
         apply_theme(app)
@@ -52,6 +53,18 @@ def main() -> int:
             # Let Qt display the landing page before minimizing its console.
             pyside.QTimer.singleShot(0, main_window.dlg, minimize_console_window)
         exit_code = app.exec()
+    except BaseException as error:
+        # Construction rolls itself back until it returns an owned window.
+        # A failed display, updater startup or event loop must retire it too.
+        if main_window is not None:
+            main_window.pending_update = None
+            try:
+                main_window._cleanup_failed_startup()
+            except BaseException as cleanup_error:
+                # Keep the launch failure authoritative without exposing any
+                # resource path or provider detail from the cleanup exception.
+                error.add_note(f'Main window cleanup also failed ({type(cleanup_error).__name__}).')
+        raise
     finally:
         indexing.stop()
     if main_window.pending_update is not None:
