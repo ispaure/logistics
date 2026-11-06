@@ -39,7 +39,7 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False, edge_panel=False, android_radius=0, centered=False):
+    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False, edge_panel=False, android_radius=0, centered=False, width_limit=320, opposite_gutter=None):
         self.leading = leading
         self.full_height = full_height or leading
         self.label = label
@@ -48,6 +48,8 @@ class SpeechOverlay:
         self.edge_panel = edge_panel
         self.android_radius = android_radius
         self.centered = centered
+        self.width_limit = width_limit
+        self.opposite_gutter = opposite_gutter
         self.backdrop = None
         self.owner = owner
         self.anchor = anchor
@@ -120,7 +122,7 @@ class SpeechOverlay:
                             right = min(right, x)
                         elif x + width <= (left + right) / 2:
                             left = max(left, x + width)
-            width = max(1, min(320, right - left - (44 if self.edge_panel else 56 if self.dim else 24)))
+            width = max(1, min(self.width_limit, right - left - self.horizontal_clearance(apple=True)))
             height = (max(1, bottom - top - (0 if self.edge_panel else 12))
                       if self.full_height else self.panel.overlay_height)
             gutter = 0 if self.edge_panel else 12
@@ -156,6 +158,13 @@ class SpeechOverlay:
         self.outside_tap.cancelsTouchesInView = True
         window.addGestureRecognizer(self.outside_tap)
 
+    def horizontal_clearance(self, *, apple=False):
+        if self.opposite_gutter is not None:
+            return self.opposite_gutter
+        if apple and self.edge_panel:
+            return 44
+        return 56 if self.dim else 24
+
     def android(self, owner):
         from android.graphics.drawable import ColorDrawable
         from android.view import Gravity
@@ -171,9 +180,9 @@ class SpeechOverlay:
         root = FrameLayout(context)
         self.container = Container()
         self.container.init_container(root)
-        width = min(self.container.scale_in(320),
+        width = min(self.container.scale_in(self.width_limit),
                     (owner._impl.native.getRootView().getWidth() if self.full_height else
-                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(56 if self.dim else 24))
+                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(self.horizontal_clearance()))
         height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
                   if self.full_height else self.container.scale_in(self.panel.overlay_height))
         if self.edge_panel:
@@ -227,9 +236,9 @@ class SpeechOverlay:
         def reposition():
             if self.container is None:
                 return
-            width = min(self.container.scale_in(320),
+            width = min(self.container.scale_in(self.width_limit),
                     (owner._impl.native.getRootView().getWidth() if self.full_height else
-                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(56 if self.dim else 24))
+                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(self.horizontal_clearance()))
             height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
                       if self.full_height else self.container.scale_in(self.panel.overlay_height))
             if self.edge_panel:

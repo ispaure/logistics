@@ -53,7 +53,8 @@ class NotesDrawers:
         def apply():
             self.policy.sidebar_width = files_width
             self.policy.gap = gap
-            self.sidebar.style.width = files_width
+            if self.side != 'files':
+                self.sidebar.style.width = files_width
             self.links.style.width = drawer_width
             self.view.style.gap = gap
             self.layout_files()
@@ -80,6 +81,7 @@ class NotesDrawers:
         self.expanded = expanded
         self.extend_files_bottom(self.files_bottom_extension)
         if expanded:
+            self.sidebar.style.width = self.policy.sidebar_width
             self.sidebar.style.flex = 0
             self.view.insert(0, self.sidebar)
         else:
@@ -128,9 +130,13 @@ class NotesDrawers:
         self.side = side
         self.on_change()
         panel = self.sidebar if side == 'files' else self.links
+        if side == 'files':
+            del panel.style.width
         self.overlay = SpeechOverlay(panel, self.view, self.app, leading=side == 'files',
                                      full_height=True, label='Files' if side == 'files' else 'Links',
-                                     dim=True, edge_panel=True, android_radius=8)
+                                     dim=True, edge_panel=True, android_radius=8,
+                                     width_limit=352 if side == 'files' else 320,
+                                     opposite_gutter=28 if side == 'files' else None)
         self.overlay.chapter_owner = self.view
         panel.overlay = self.overlay
         self.install_swipe(panel)

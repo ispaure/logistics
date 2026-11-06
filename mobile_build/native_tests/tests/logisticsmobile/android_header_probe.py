@@ -53,6 +53,8 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Home.md').write_text('# Home\n\n[[Other]]')
             (root / 'Other.md').write_text('# Other\n\n[[Home]]')
+            long_name = 'Weekly environment art and lighting production references.md'
+            (root / long_name).write_text('# Weekly review')
             (root / 'World').mkdir(exist_ok=True)
             (root / 'World/World.md').write_text('# World')
             folder = root / 'World/Projects/Character art production planning'
@@ -167,6 +169,11 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                     'Root breadcrumb tap did not reveal Files')
                 if orientation == 'portrait':
                     await asyncio.sleep(.45)
+                    listing = owner.rows.native_list
+                    entry = next(row for row in listing.data if row.path == long_name)
+                    label = listing._impl.native.getRowTitleView(entry.index, listing._impl.generation)
+                    assert label is not None and label.getMaxLines() == 2
+                    assert label.getLayout().getLineCount() == 2, 'Long note title did not wrap'
                     await self.capture_header(evidence / 'notes-files-portrait.png')
                     drawer = owner.sidebar.overlay
                     pending = asyncio.create_task(owner.file_actions('World'))
