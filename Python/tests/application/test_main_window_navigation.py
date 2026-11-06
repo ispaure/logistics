@@ -7,11 +7,31 @@ TEST_STAGE = TestStage.REGRESSION
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from unittest.mock import Mock, patch
+from shiboken6 import isValid
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.contributions import PageContribution, RegisteredContribution
 from desktop import main_window
 from tests.application._main_window_fixture import MainWindowFixture
+
+
+class _PendingWorkerPage(qt.QWidget):
+    """A worker that acknowledges cancellation on the next Qt event turn."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.worker_running = True
+        self.stop_requested = False
+        self.can_close = Mock(return_value=False)
+
+    def prepare_close(self):
+        if not self.stop_requested:
+            self.stop_requested = True
+            qt.QTimer.singleShot(0, self, self._finish_worker)
+        return not self.worker_running
+
+    def _finish_worker(self):
+        self.worker_running = False
 
 
 class MainWindowNavigationTests(MainWindowFixture, QtTestCase):
@@ -181,6 +201,163 @@ class MainWindowNavigationTests(MainWindowFixture, QtTestCase):
         self.assertEqual(len(created), 1)
         self.assertFalse(created[0].worker.isRunning())
 
+    def test_late_startup_failure_drains_pages_without_normal_close_prompts(self):
+        from contextlib import nullcontext
+
+        for failure_stage in ('subscription', 'menus', 'snow'):
+            with self.subTest(failure_stage=failure_stage):
+                created = []
+                subscriptions = []
+                failure = RuntimeError(f'{failure_stage} failed')
+                subscribe = main_window.registry.subscribe
+
+                def working(parent=None):
+                    page = _PendingWorkerPage(parent)
+                    created.append(page)
+                    self.addCleanup(lambda: parent.deleteLater() if isValid(parent) else None)
+                    return page
+
+                def observe(callback):
+                    if isinstance(callback.__self__, main_window.MainWindow):
+                        if failure_stage == 'subscription':
+                            raise failure
+                        unsubscribe = Mock(wraps=subscribe(callback))
+                        subscriptions.append(unsubscribe)
+                        return unsubscribe
+                    return subscribe(callback)
+
+                target = {'menus': 'desktop.header_menus.HeaderMenus',
+                          'snow': 'desktop.snow.SnowOverlay'}.get(failure_stage)
+                fail = patch(target, side_effect=failure) if target else nullcontext()
+                entry = RegisteredContribution('test', 'Test', PageContribution(
+                    'Working feature', 'working.page', working))
+                with patch.object(main_window, 'CORE_TABS', ((0, 'Working core', working),)), \
+                        patch.object(main_window.registry, 'get_pages', return_value=[entry]), \
+                        patch.object(main_window.registry, 'subscribe', side_effect=observe), fail:
+                    with self.assertRaises(RuntimeError) as raised:
+                        main_window.MainWindow()
+                    self.assertIs(raised.exception, failure)
+                    self.assertEqual(len(created), 2)
+                    for page in created:
+                        self.assertTrue(page.stop_requested)
+                        self.assertFalse(page.worker_running)
+                        page.can_close.assert_not_called()
+                    for unsubscribe in subscriptions:
+                        unsubscribe.assert_called_once_with()
+                    self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+                    self.assertTrue(all(not isValid(page) for page in created))
+
+    def test_startup_unsubscribes_before_draining_workers(self):
+        subscriptions = []
+        subscribe = main_window.registry.subscribe
+
+        def observe(callback):
+            unsubscribe = Mock(wraps=subscribe(callback))
+            if isinstance(callback.__self__, main_window.MainWindow):
+                subscriptions.append(unsubscribe)
+            return unsubscribe
+
+        def working(parent=None):
+            page = _PendingWorkerPage(parent)
+            prepare_close = page.prepare_close
+
+            def stop():
+                subscriptions[0].assert_called_once_with()
+                return prepare_close()
+
+            page.prepare_close = stop
+            self.addCleanup(lambda: parent.deleteLater() if isValid(parent) else None)
+            return page
+
+        with patch.object(main_window, 'CORE_TABS', ((0, 'Working core', working),)), \
+                patch.object(main_window.registry, 'get_pages', return_value=[]), \
+                patch.object(main_window.registry, 'subscribe', side_effect=observe), \
+                patch('desktop.snow.SnowOverlay', side_effect=RuntimeError('snow failed')):
+            with self.assertRaisesRegex(RuntimeError, 'snow failed'):
+                main_window.MainWindow()
+        self.assertEqual(len(subscriptions), 1)
+        subscriptions[0].assert_called_once_with()
+
+    def test_failed_feature_wiring_drains_page_during_startup_and_refresh(self):
+        for startup in (True, False):
+            with self.subTest(startup=startup):
+                window = None if startup else self.window()
+                if window is not None:
+                    window.dlg.show()
+                created = []
+                failure = RuntimeError('feature signal connection failed')
+
+                def working(parent=None):
+                    page = _PendingWorkerPage(parent)
+                    page.feature_settings_requested = Mock()
+                    page.feature_settings_requested.connect.side_effect = failure
+                    created.append(page)
+                    if startup:
+                        self.addCleanup(lambda: parent.deleteLater() if isValid(parent) else None)
+                    return page
+
+                entry = RegisteredContribution('test', 'Test', PageContribution(
+                    'Working feature', 'working.page', working))
+                with patch.object(main_window, 'CORE_TABS', ()), patch.object(
+                        main_window.registry, 'get_pages', return_value=[entry]):
+                    with self.assertRaises(RuntimeError) as raised:
+                        if startup:
+                            main_window.MainWindow()
+                        else:
+                            window._sync_feature_pages()
+                self.assertIs(raised.exception, failure)
+                self.assertEqual(len(created), 1)
+                page = created[0]
+                self.assertTrue(page.stop_requested)
+                self.assertFalse(page.worker_running)
+                page.can_close.assert_not_called()
+                self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+                self.assertFalse(isValid(page))
+                if window is not None:
+                    self.assertTrue(isValid(window.dlg))
+                    self.assertTrue(window.dlg.isVisible())
+                    self.assertEqual(window.tabs.count(), 2)
+                    self.assertNotIn(('test', 'working.page'), window._feature_pages)
+
+    def test_startup_retains_feature_before_assigning_navigation_properties(self):
+        created = []
+
+        def working(parent=None):
+            page = _PendingWorkerPage(parent)
+            page.setProperty = Mock(side_effect=RuntimeError('navigation property failed'))
+            created.append(page)
+            self.addCleanup(lambda: parent.deleteLater() if isValid(parent) else None)
+            return page
+
+        entry = RegisteredContribution('test', 'Test', PageContribution(
+            'Working feature', 'working.page', working))
+        with patch.object(main_window, 'CORE_TABS', ()), patch.object(
+                main_window.registry, 'get_pages', return_value=[entry]):
+            with self.assertRaisesRegex(RuntimeError, 'navigation property failed'):
+                main_window.MainWindow()
+        self.assertEqual(len(created), 1)
+        self.assertTrue(created[0].stop_requested)
+        self.assertFalse(created[0].worker_running)
+
+    def test_successful_startup_keeps_close_veto_before_worker_cancellation(self):
+        window = self.window()
+        page = window._core_pages[0][2]
+        page.can_close = Mock(return_value=False)
+        page.prepare_close = Mock(return_value=True)
+        window.dlg.show()
+        window.pending_update = object()
+
+        self.assertFalse(window.dlg.close())
+        self.assertTrue(window.dlg.isVisible())
+        self.assertFalse(window._closing)
+        self.assertIsNone(window.pending_update)
+        page.prepare_close.assert_not_called()
+
+        page.can_close.return_value = True
+        self.assertTrue(window.dlg.close())
+        self.assertFalse(window.dlg.isVisible())
+        page.prepare_close.assert_called_once_with()
+
     def test_real_core_pages_start_with_rclone_contributions(self):
         from pathlib import Path
         from tempfile import TemporaryDirectory
@@ -252,7 +429,6 @@ class MainWindowNavigationTests(MainWindowFixture, QtTestCase):
         self.assertIsNone(window.tabs.currentWidget())
 
     def test_feature_pages_hide_and_restore_without_recreating_or_deleting(self):
-        from shiboken6 import isValid
         contribution = self.contribution('Feature', 'feature')
         window = self.window([contribution])
         feature_page = window.tabs.widget(1)

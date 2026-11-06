@@ -103,37 +103,37 @@ class MainWindow(pyside.Window):
             for _, _, page in self._core_pages:
                 if isinstance(page, SettingsPage):
                     page.reveal = self._show_settings
+            self._unsubscribe = registry.subscribe(self._features_changed)
+            self.dlg.destroyed.connect(self._unsubscribe)
+            self.tabs.currentChanged.connect(self._tab_changed)
+            self._close_guard = _CloseGuard(self)
+            self._last_destination = self.tabs.currentWidget()
+            self._bind_docking_preview(self.documents)
+            for _, _, page in self._core_pages:
+                self._bind_docking_preview(page)
+            register_document_host(self.documents)
+            register_process_host(self.actions)
+            from desktop.bulk_rename import register_bulk_rename_host
+            register_bulk_rename_host(self._show_bulk_rename)
+            from .notifications import notification_service, Toast
+            self.toast = Toast(notification_service(), self.dlg)
+            self.dlg.statusBar().addWidget(self.toast, 1)
+            self._toast_status_guard = _ToastStatusGuard(self.toast, self.dlg.statusBar())
+            self._refresh_sidebar()
+            self._update_window_title()
+            self.dlg.workspace_menu_document = self._menu_document
+            from .header_menus import HeaderMenus
+            self.header_menus = HeaderMenus(self)
+            self.dlg.workspace_publish_menus = True
+            self.dlg.workspace_menu_actions = [self.header_menus.menu.menuAction()]
+            self.documents.workspace.active_changed.connect(self._sync_menus)
+            self._sync_menus()
+
+            from .snow import SnowOverlay
+            self.snow = SnowOverlay(self.dlg)
         except BaseException:
             self._cleanup_failed_startup()
             raise
-        self._unsubscribe = registry.subscribe(self._features_changed)
-        self.dlg.destroyed.connect(self._unsubscribe)
-        self.tabs.currentChanged.connect(self._tab_changed)
-        self._close_guard = _CloseGuard(self)
-        self._last_destination = self.tabs.currentWidget()
-        self._bind_docking_preview(self.documents)
-        for _, _, page in self._core_pages:
-            self._bind_docking_preview(page)
-        register_document_host(self.documents)
-        register_process_host(self.actions)
-        from desktop.bulk_rename import register_bulk_rename_host
-        register_bulk_rename_host(self._show_bulk_rename)
-        from .notifications import notification_service, Toast
-        self.toast = Toast(notification_service(), self.dlg)
-        self.dlg.statusBar().addWidget(self.toast, 1)
-        self._toast_status_guard = _ToastStatusGuard(self.toast, self.dlg.statusBar())
-        self._refresh_sidebar()
-        self._update_window_title()
-        self.dlg.workspace_menu_document = self._menu_document
-        from .header_menus import HeaderMenus
-        self.header_menus = HeaderMenus(self)
-        self.dlg.workspace_publish_menus = True
-        self.dlg.workspace_menu_actions = [self.header_menus.menu.menuAction()]
-        self.documents.workspace.active_changed.connect(self._sync_menus)
-        self._sync_menus()
-
-        from .snow import SnowOverlay
-        self.snow = SnowOverlay(self.dlg)
 
     def _build_layout(self):
         central_widget = self.launch_surface = LaunchSurface()
@@ -313,8 +313,8 @@ class MainWindow(pyside.Window):
         for registered in pages:
             contribution = registered.contribution
             page = self._create_feature_page(contribution)
-            page.setProperty('navigation_icon', contribution.navigation_icon)
             self._feature_pages[(registered.feature_name, contribution.page_id)] = page
+            page.setProperty('navigation_icon', contribution.navigation_icon)
             tabs.append(
                 (
                     contribution.order,
@@ -331,7 +331,21 @@ class MainWindow(pyside.Window):
 
     def _cleanup_failed_startup(self):
         """Cancel already-created pages and drain Qt workers before destruction."""
+        unsubscribe = getattr(self, '_unsubscribe', None)
+        if unsubscribe is not None:
+            unsubscribe()
+        # A failed constructor has no interactive save/close decision to make.
+        guard = getattr(self, '_close_guard', None)
+        if guard is not None:
+            self.dlg.removeEventFilter(guard)
         pages = [page for _, _, page in self._core_pages] + list(self._feature_pages.values())
+        self._stop_page_workers(pages)
+        self.dlg.close()
+        self.dlg.deleteLater()
+
+    @staticmethod
+    def _stop_page_workers(pages):
+        """Keep failed pages alive until their cooperative cancellation finishes."""
         loop = pyside.QEventLoop()
         timer = pyside.QTimer()
         timer.setInterval(20)
@@ -352,8 +366,6 @@ class MainWindow(pyside.Window):
             timer.start()
             loop.exec()
             timer.stop()
-        self.dlg.close()
-        self.dlg.deleteLater()
 
     def _bind_docking_preview(self, page):
         from commonUtils.ui.workspaces.workspace import Workspace
@@ -387,19 +399,25 @@ class MainWindow(pyside.Window):
 
     def _create_feature_page(self, contribution):
         page = contribution.create_page(self.dlg)
-        if getattr(page, 'retain_when_disabled', False):
-            page.activate = lambda: self._destination_changed(page)
-            page.changed.connect(lambda: pyside.QTimer.singleShot(0, self.dlg, self._library_sessions_changed))
-            page.workspace.active_changed.connect(self._sync_menus)
-        if contribution.page_id in ('git.workspace', 'lm.chat'):
-            page.working_file_opener = self._open_git_file_in_ide
-        settings_requested = getattr(page, 'feature_settings_requested', None)
-        if settings_requested is not None:
-            settings_requested.connect(self._show_feature_settings)
-        self._bind_docking_preview(page)
-        idle = getattr(page, 'idle', None)
-        if idle is not None and callable(getattr(idle, 'connect', None)):
-            idle.connect(self._retry_close)
+        try:
+            if getattr(page, 'retain_when_disabled', False):
+                page.activate = lambda: self._destination_changed(page)
+                page.changed.connect(lambda: pyside.QTimer.singleShot(0, self.dlg, self._library_sessions_changed))
+                page.workspace.active_changed.connect(self._sync_menus)
+            if contribution.page_id in ('git.workspace', 'lm.chat'):
+                page.working_file_opener = self._open_git_file_in_ide
+            settings_requested = getattr(page, 'feature_settings_requested', None)
+            if settings_requested is not None:
+                settings_requested.connect(self._show_feature_settings)
+            self._bind_docking_preview(page)
+            idle = getattr(page, 'idle', None)
+            if idle is not None and callable(getattr(idle, 'connect', None)):
+                idle.connect(self._retry_close)
+        except BaseException:
+            # The caller cannot retain this page until wiring has succeeded.
+            self._stop_page_workers([page])
+            page.deleteLater()
+            raise
         return page
 
     def _open_git_file_in_ide(self, path):
