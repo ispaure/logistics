@@ -1167,6 +1167,15 @@ volume, verifies SHA-256, publishes with exclusive rename, flushes the directory
 and only then removes the handoff. A private receipt makes interrupted cleanup
 retryable without a duplicate copy. Reset also erases the shared iOS intake.
 
+`start_receiving()` checks host liveness and storage-change state under the
+publication mutation lock before admitting a batch. Cancellation while waiting
+for that lock leaves the handoff queued. Cancellation lets an admitted batch's
+publication and receipt cleanup settle under the lock; the receiver drains the worker,
+including repeated cancellation, before propagating. A retired host receives no
+late status or browser refresh. `test_incoming_files.py` covers both admission
+boundaries, successor consumption without duplication and a late storage error.
+These host regressions do not exercise native share-extension delivery.
+
 Focused tests (`test_received_files.py`, `test_incoming_files.py` and
 `test_ios_storage.py`) cover visible roots, legacy-copy conflicts and retries,
 collection-drive copying, publication conflicts, interruption, linked/traversal input,

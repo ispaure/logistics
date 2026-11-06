@@ -116,6 +116,14 @@ private-content policy and transfer workflows remain in Logistics. See the
 [architecture roadmap](mobile-architecture-roadmap.md) for the baseline assessment
 and validation sequence.
 
+Failed Apple navigation construction can retain an inactive cleanup owner.
+Keep the `NativeNavigationHost` available for its uninstall retry before another
+install; Logistics shell extensions remain responsible for their own acquisitions
+and application mutations. Shared rollback does not reverse unrecorded consumer
+mutations or establish UIKit acceptance. The
+[native lifetime contract](../../Python/commonUtils/docs/development/reference/ui/native/native.md#lifetime-ownership-before-backend-changes)
+documents retained cleanup and its host-fixture limits.
+
 ## Grouped shared UI imports
 
 Logistics uses `commonUtils.ui.workspaces`, `tasks`, `readers`, `settings` and

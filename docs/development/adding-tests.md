@@ -94,6 +94,11 @@ Leave widget deletion to that fixture after worker retirement; eager `deleteLate
 can destroy a window while its worker still owns callbacks. Keep synthetic patches
 and storage alive until retirement finishes.
 
+Class and method skip decorators bypass Qt fixture installation; a runtime
+`SkipTest` still runs its cleanup. Keep skip policy in unittest rather than adding
+consumer hook restoration. See the
+[shared fixture contract](../../Python/commonUtils/docs/development/reference/tests/tests.md#host-runner-overhead).
+
 Mobile host tests belong under `mobile_build/tests/<owner>/` and run with
 `dev.py test mobile FILENAME`. Synchronous app tests use
 `mobile_build.tests.support.app.mobile_app()` as a context, or `create_app(self)`
