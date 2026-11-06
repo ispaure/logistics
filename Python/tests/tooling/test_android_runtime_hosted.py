@@ -5,6 +5,7 @@ TEST_STAGE = TestStage.REGRESSION
 from contextlib import contextmanager
 import json
 from pathlib import Path
+import shutil
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -74,6 +75,8 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
                     events.append('scratch-preserved' if (workspace / '.keep').exists() else 'scratch-released')
                     if scratch_error is not None:
                         raise scratch_error
+                    if not (workspace / '.keep').exists():
+                        shutil.rmtree(workspace)
             class Emulator:
                 def __init__(_self, sdk, path, **options):
                     events.append(('execution-context', options.get('execution_context')))
@@ -320,6 +323,56 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
             self.assertFalse((fixture[3] / 'android-result.json').exists())
             self.assertFalse((fixture[3] / 'android-result.receipt.log').exists())
             self.assertIn('cleanup', fixture[4])
+
+    def test_valid_receipt_is_not_published_when_owning_cleanup_fails(self):
+        for phase in ('session', 'final-copy', 'scratch'):
+            options = {'cleanup_error': True} if phase == 'session' else {
+                'scratch_error': OSError('scratch retirement failed')} if phase == 'scratch' else {}
+            with self.subTest(phase=phase), self.fixture(**options) as fixture:
+                copy = hosted.shutil.copyfile
+                def copy_evidence(source, destination):
+                    if phase == 'final-copy' and Path(source).name == 'removed-lease.json':
+                        raise OSError('final diagnostic copy failed')
+                    return copy(source, destination)
+                with patch.object(hosted.shutil, 'copyfile', side_effect=copy_evidence):
+                    with self.assertRaises((OSError, RuntimeError)):
+                        self.run_fixture(*fixture[:4])
+                self.assertTrue((fixture[3] / 'android-receipt.json').exists())
+                self.assertFalse((fixture[3] / 'android-result.json').exists())
+                self.assertFalse((fixture[3] / 'android-result.receipt.log').exists())
+                self.assertIn('cleanup', fixture[4])
+
+    def test_accepted_receipt_is_published_only_after_scratch_retires(self):
+        with self.fixture() as fixture:
+            scratch = hosted.scratch
+            @contextmanager
+            def retire(root):
+                with scratch(root) as workspace:
+                    yield workspace
+                self.assertFalse(workspace.exists())
+                self.assertFalse((fixture[3] / 'android-result.json').exists())
+                self.assertFalse((fixture[3] / 'android-result.receipt.log').exists())
+            with patch.object(hosted, 'scratch', retire):
+                self.assertEqual(self.run_fixture(*fixture[:4]), self.report())
+            self.assertEqual(fixture[4][-1], 'scratch-released')
+            self.assertTrue((fixture[3] / 'android-result.receipt.log').exists())
+            self.assertEqual(json.loads((fixture[3] / 'android-result.json').read_text()), self.report())
+
+    def test_failed_acceptance_publication_removes_both_canonical_files(self):
+        with self.fixture() as fixture:
+            write = Path.write_bytes
+            def fail_result(path, data):
+                if path == (fixture[3] / 'android-result.json').resolve():
+                    write(path, data)
+                    raise OSError('result publication failed')
+                return write(path, data)
+            with patch.object(Path, 'write_bytes', fail_result):
+                with self.assertRaisesRegex(OSError, 'result publication failed'):
+                    self.run_fixture(*fixture[:4])
+            self.assertFalse((fixture[3] / 'android-result.json').exists())
+            self.assertFalse((fixture[3] / 'android-result.receipt.log').exists())
+            self.assertTrue((fixture[3] / 'android-receipt.json').exists())
+            self.assertEqual(fixture[4][-1], 'scratch-released')
 
     def test_retry_preserves_previous_retained_workspace_pointer(self):
         with self.fixture(cleanup_error=True) as fixture:

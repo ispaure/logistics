@@ -145,10 +145,6 @@ def run(root, cpython, payload, reports, *, install_image=True):
                             failure = _retain_failure(failure, error, 'Runtime diagnostics failed')
                         if failure is not None:
                             raise failure
-                        # Verification precedes diagnostic errors, but accepted
-                        # evidence is published only after live collection succeeds.
-                        shutil.copyfile(candidate.with_suffix('.receipt.log'), reports / 'android-result.receipt.log')
-                        shutil.copyfile(candidate, reports / 'android-result.json')
                     except BaseException as error:
                         # Capture session-body failures before exit can raise a
                         # separate owned-device cleanup failure. Session entry
@@ -181,9 +177,26 @@ def run(root, cpython, payload, reports, *, install_image=True):
                 except BaseException as error:
                     failure = _retain_failure(failure, error, 'Final emulator diagnostics failed')
                     raise failure
+            # Retain the verified bytes across scratch retirement. Raw receipt
+            # diagnostics remain durable even if any owning cleanup fails.
+            accepted = [(reports / name, (workspace / name).read_bytes())
+                        for name in ('android-result.receipt.log', 'android-result.json')]
     except BaseException as error:
         # Scratch retirement is also secondary to a recorded test/device failure.
         failure = _retain_failure(failure, error, 'Scratch cleanup failed')
+        raise failure
+    # Canonical passing evidence requires successful device, diagnostics and
+    # scratch cleanup. Publication failure must not leave partial acceptance.
+    try:
+        for destination, data in accepted:
+            destination.write_bytes(data)
+    except BaseException as error:
+        failure = error
+        for destination, _ in accepted:
+            try:
+                destination.unlink(missing_ok=True)
+            except BaseException as cleanup_error:
+                failure = _retain_failure(failure, cleanup_error, 'Acceptance publication cleanup failed')
         raise failure
     return result
 
