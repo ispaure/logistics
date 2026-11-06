@@ -39,6 +39,18 @@ class RotationInventoryTests(unittest.TestCase):
             (*DESTINATION_ITEMS, ('future', 'Future screen', '', '')), (*CATEGORIES, NS(title='New category')))
         self.assertTrue({'Future screen', 'Settings → New category'} <= {r['title'] for r in future['gaps']})
 
+    def test_nested_documentation_state_is_not_hidden_by_retained_settings_category(self):
+        page = object()
+        app = NS(native_host=NS(state=NS(destination='settings')), body=NS(children=[page]),
+                 settings_navigation=NS(detail_requested=True, selected='Text', sidebar=object()),
+                 routes=NS(screens={'settings': [('documentation', page, None)]}),
+                 adaptive=NS(detail_routes=(), in_detail=False),
+                 documentation=NS(web=object(), path='first', history=['first'], history_index=0))
+        original = rotation_checks.panel_state(app)
+        for field, value in (('web', object()), ('path', 'second'), ('history', ['second']), ('history_index', 1)):
+            with self.subTest(field=field), patch.object(app.documentation, field, value):
+                self.assertNotEqual(rotation_checks.panel_state(app), original)
+
 
 class RotationVisitTests(unittest.IsolatedAsyncioTestCase):
     async def test_focused_home_uses_no_fixture_or_unrelated_app_capabilities(self):
@@ -92,6 +104,41 @@ class RotationVisitTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RotationScenarioTests(unittest.TestCase):
+    def test_focused_settings_resets_retained_wide_category_before_root_audit(self):
+        from mobile_build.tests.support.app import mobile_app
+        with mobile_app() as app, patch.object(app.adaptive, 'content_width', return_value=900):
+            app.show_settings()
+            app.settings_navigation.choose('Text')
+            self.assertTrue(app.settings_navigation.detail_requested)
+            async def check(name):
+                self.assertEqual(name, 'settings')
+                self.assertFalse(app.settings_navigation.detail_requested)
+                self.assertFalse(app.settings_navigation.detail.children)
+            app.loop.run_until_complete(rotation_screens.visit_screens(app, check, panels={'settings'}))
+
+    def test_refused_category_is_not_reported_as_visited(self):
+        from mobile_build.tests.support.app import mobile_app
+        with mobile_app() as app:
+            app.show_settings()
+            with patch.object(app.settings_navigation, 'choose', return_value=None):
+                check = AsyncMock()
+                with self.assertRaisesRegex(AssertionError, 'Settings category was refused'):
+                    app.loop.run_until_complete(rotation_screens.visit_screens(app, check, panels={'settings-appearance'}))
+                check.assert_not_awaited()
+
+    def test_focused_folder_does_not_restore_previously_selected_remote(self):
+        from mobile_build.tests.support.app import mobile_app
+        from commonUtils.runtime.resources.local import LocalFiles
+        with mobile_app() as app:
+            app.folder_source = 'rclone'
+            async def check(name):
+                self.assertEqual(name, 'folder')
+                self.assertIsInstance(app.file_provider, LocalFiles)
+                self.assertTrue(any(row['name'] == 'Child' for row in app.file_rows.values()))
+            with patch.object(app, 'start_cloud_restore') as restore:
+                app.loop.run_until_complete(rotation_screens.visit_screens(app, check, panels={'folder'}))
+            restore.assert_not_called()
+
     def test_full_sweep_visits_real_synthetic_screens_in_inventory_order(self):
         from mobile_build.tests.support.app import mobile_app
         import toga
