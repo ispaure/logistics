@@ -122,7 +122,7 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	stats := accounting.Stats(ctx)
 	defer stats.ResetCounters()
 	clearStaleFilesystemCache()
-	online, err := fs.NewFs(ctx, remoteName+":"+remoteRoot)
+	online, err := remoteRootFs(ctx, remoteName, remoteRoot)
 	if err != nil {
 		return 0, err
 	}

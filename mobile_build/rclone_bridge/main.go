@@ -58,6 +58,7 @@ type cachedClient struct {
 	fs.Fs
 	ctx  context.Context
 	stop context.CancelFunc
+	err  error // NewFs may return the parent filesystem with fs.ErrorIsFile.
 }
 
 type backendCancellation struct {
@@ -402,12 +403,28 @@ func clearStaleFilesystemCache() {
 }
 
 func remote(ctx context.Context, name string) (fs.Fs, error) {
-	return remoteRoot(ctx, name, "")
+	return remoteRootFs(ctx, name, "")
 }
 
-// Roots are supplied only by the validated crypt connection, never by a raw
-// request. Rooted backing clients share the same lifetime/cache owner.
-func remoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
+var unownedFilesystemCache = errors.New("filesystem cache changed during connection")
+
+// Callers validate logical roots before admission; crypt roots are derived from
+// that package's cipher. Every online entrypoint uses this lifetime owner.
+func remoteRootFs(ctx context.Context, name, root string) (fs.Fs, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		f, err := connectRemoteRoot(ctx, name, root)
+		if err != unownedFilesystemCache {
+			return f, err
+		}
+		// A direct rclone caller may have populated the global cache. Never
+		// adopt its unowned lifetime; retire both cache layers before retrying.
+		retireBackendClients()
+		clearStaleFilesystemCache()
+	}
+	return nil, unownedFilesystemCache
+}
+
+func connectRemoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -438,7 +455,7 @@ func remoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
 	}
 	if f := clients[key]; f != nil {
 		if cached, ok := f.(*cachedClient); ok {
-			return cached.Fs, nil
+			return cached.Fs, cached.err
 		}
 		return f, nil
 	}
@@ -451,26 +468,44 @@ func remoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
 	// Retain registered backend defaults, but admit only our validated settings.
 	options.ClearGetters(configmap.PriorityNormal)
 	if kind == "crypt" {
-		_, backing, backingRoot, _, err := cryptConnection(name)
-		if err != nil {
-			return nil, err
-		}
-		backingFs, err := remoteRoot(ctx, backing, backingRoot)
+		cipher, backing, backingRoot, _, err := cryptConnection(name)
 		if err != nil {
 			return nil, err
 		}
 		backingPath := backing + ":" + backingRoot
-		// rclone cache.Get deliberately strips cancellation before constructing
-		// a backing Fs. Populate it through our generation-bound factory first,
-		// then pin it until crypt takes its own pin. Preserve package aliases.
-		backingFs, err = cache.GetFn(ctx, backingPath, func(context.Context, string) (fs.Fs, error) {
-			return backingFs, nil
-		})
-		if err != nil {
-			return nil, err
+		paths := []string{backingRoot}
+		if root != "" {
+			paths = []string{fspath.JoinRootPath(backingRoot, cipher.EncryptFileName(root))}
 		}
-		cache.Pin(backingFs)
-		defer cache.Unpin(backingFs)
+		backingFs, backingErr := remoteRootFs(ctx, backing, paths[0])
+		firstFs, firstErr := backingFs, backingErr
+		if root != "" && backingErr != fs.ErrorIsFile {
+			// Match crypt.NewFs: an unsuccessful file probe falls back to the
+			// directory spelling, which can differ with directory encryption off.
+			paths = append(paths, fspath.JoinRootPath(backingRoot, cipher.EncryptDirName(root)))
+			backingFs, backingErr = remoteRootFs(ctx, backing, paths[1])
+		}
+		if backingErr != nil && backingErr != fs.ErrorIsFile {
+			return nil, backingErr
+		}
+		for index, backingRoot := range paths {
+			candidate, candidateErr := backingFs, backingErr
+			if index == 0 && firstErr == nil {
+				candidate, candidateErr = firstFs, firstErr
+			} else if index == 0 && len(paths) > 1 {
+				// The failed file probe is ignored by crypt. Alias its lookup to
+				// the owned directory result so it cannot retry via Background.
+				candidateErr = nil
+			}
+			cached, err := cache.GetFn(ctx, backing+":"+backingRoot, func(context.Context, string) (fs.Fs, error) {
+				return candidate, candidateErr
+			})
+			if cached != candidate || err != candidateErr {
+				return nil, unownedFilesystemCache
+			}
+			cache.Pin(cached)
+			defer cache.Unpin(cached)
+		}
 		options.AddGetter(configmap.Simple{"remote": backingPath}, configmap.PriorityNormal)
 	}
 	options.AddGetter(values, configmap.PriorityNormal)
@@ -478,7 +513,7 @@ func remoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
 	lifetime, stop := context.WithCancel(context.WithoutCancel(ctx))
 	followBackendCancellation(ctx, stop)
 	f, err := info.NewFs(lifetime, name, root, options)
-	if err != nil || ctx.Err() != nil || lifetime.Err() != nil {
+	if (err != nil && err != fs.ErrorIsFile) || ctx.Err() != nil || lifetime.Err() != nil {
 		stop()
 		// A failed constructor may already have cached a backing filesystem.
 		retireBackendClients()
@@ -487,8 +522,8 @@ func remoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
 		}
 		return nil, errors.New("could not connect; check credentials and network")
 	}
-	clients[key] = &cachedClient{Fs: f, ctx: lifetime, stop: stop}
-	return f, nil
+	clients[key] = &cachedClient{Fs: f, ctx: lifetime, stop: stop, err: err}
+	return f, err
 }
 
 type entry struct {
