@@ -1001,7 +1001,8 @@ class NativeEvidenceRetentionTests(unittest.TestCase):
 
     def test_owned_ios_lease_and_matching_required_before_container_read(self):
         with TemporaryDirectory() as directory:
-            lease = Path(directory)/'lease'; owner = dict(device='owned', name='created')
+            lease = Path(directory) / 'ios-native-ui-owned.json'
+            owner = dict(device='owned', name='Logistics Native Gate example')
             lease.write_text(json.dumps(owner)); client = Mock()
             client.matching.return_value = None
             with patch.object(ui_tools.subprocess, 'check_output') as command, self.assertRaises(ValueError):
@@ -1009,9 +1010,12 @@ class NativeEvidenceRetentionTests(unittest.TestCase):
             command.assert_not_called()
             cache = Path(directory)/'container/Library/Caches'; cache.mkdir(parents=True)
             (cache/'pdf-edge-left.png').write_bytes(b'actual')
+            client.matching.reset_mock()
             client.matching.return_value = dict(udid='owned')
-            with patch.object(ui_tools.subprocess, 'check_output', return_value=str(cache.parents[1])) as command:
-                result = ui_tools.collect_leased_ios_evidence(client, lease, owner, 'owned', 0, directory)
+            with (patch('build_manager.apple_simulators.AppleSimulators', return_value=client),
+                  patch.object(ui_tools.subprocess, 'check_output', return_value=str(cache.parents[1])) as command):
+                result = ui_tools.collect_owned_ios_evidence('owned', 0, directory)
+            client.matching.assert_called_once_with('owned', owner['name'])
             self.assertEqual(result[0]['name'], 'pdf-edge-left.png')
             self.assertEqual(command.call_args.args[0][3:5], ['owned', 'io.github.ispaure.logisticsmobile'])
 
