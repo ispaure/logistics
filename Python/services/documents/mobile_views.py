@@ -27,15 +27,56 @@ def retire_webview(view):
     set_inline_html(view, 'https://logistics.invalid/closed/', '<p>Document closed.</p>')
 
 
-def document_webview(resource=None, **options):
+def document_webview(resource=None, *, inline_video=False, **options):
     """Choose the canvas privacy implementation at the host storage boundary."""
-    if resource is not None and not resource.policy.persistent:
+    import toga
+    from toga.platform import get_factory
+    private = resource is not None and not resource.policy.persistent
+    backend = get_factory().WebView.__module__ if inline_video else ''
+    view_type = toga.WebView
+    if private:
         from commonUtils.ui.native.private_webview import PrivateWebView
         # Notebook archives allow 128 MiB expanded; an initial page can exceed
         # the text reader's HTML bound. The private adapter never stages HTML.
-        return PrivateWebView(max_html_bytes=128 * 1024 * 1024, **options)
-    import toga
-    return toga.WebView(**options)
+        view_type = PrivateWebView
+        options['max_html_bytes'] = 128 * 1024 * 1024
+    if inline_video and backend.startswith('toga_iOS.'):
+        from rubicon.objc import CGRect, ObjCClass
+        from toga_iOS.widgets.webview import TogaWebView, WebView
+
+        class InlineBackend(WebView):
+            def create(self):
+                configuration = ObjCClass('WKWebViewConfiguration').alloc().init()
+                configuration.allowsInlineMediaPlayback = True
+                configuration.allowsPictureInPictureMediaPlayback = False
+                configuration.allowsAirPlayForMediaPlayback = False
+                # The Notes page starts media only after native audio approval.
+                configuration.mediaTypesRequiringUserActionForPlayback = 0
+                if private:
+                    configuration.websiteDataStore = ObjCClass('WKWebsiteDataStore').nonPersistentDataStore()
+                self.native = TogaWebView.alloc().initWithFrame(
+                    CGRect((0, 0), (0, 0)), configuration=configuration)
+                self.native.interface, self.native.impl = self.interface, self
+                self.native.navigationDelegate = self.native
+                self.native.UIDelegate = self.native
+                self.loaded_future, self._allowed_url = None, None
+                self.add_constraints()
+                if private:
+                    if self.native.configuration.websiteDataStore.isPersistent():
+                        raise RuntimeError('Private view requires a nonpersistent WebView store.')
+                    self.interface.private_configured = True
+
+        class InlineVideoView(view_type):
+            def _create(self):
+                if private:
+                    self.private_closed = self.private_configured = False
+                return InlineBackend(interface=self)
+
+        view_type = InlineVideoView
+    view = view_type(**options)
+    if inline_video and backend.startswith('toga_android.'):
+        view._impl.settings.setMediaPlaybackRequiresUserGesture(False)
+    return view
 
 
 def markdown_webview(*, private=False, **options):

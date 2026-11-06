@@ -100,10 +100,15 @@ def run(output, *, reuse=None, image=None, software_decode=False, retain_build=F
         except (ValueError, UnicodeDecodeError):
             return
         name = value['name']
-        if name not in ('white', 'yellow', 'back', 'off', 'restored'):
+        if name not in ('fullscreen', 'white', 'yellow', 'back', 'off', 'restored'):
             raise ValueError('Unknown PiP evidence request')
         screen = subprocess.check_output([str(emulator.adb), '-s', serial, 'exec-out', 'screencap', '-p'],
             env=environment, timeout=15)
+        if name == 'fullscreen':
+            (output / 'fullscreen.png').write_bytes(screen)
+            emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/pip-capture.json')
+            emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/pip-capture-done')
+            return
         image = Image.open(BytesIO(screen)).convert('RGB')
         # The fixture has a solid dark blue video plane; bright pixels inside
         # the PiP bounds are VLC's white/yellow subtitle glyphs.
@@ -147,6 +152,8 @@ def run(output, *, reuse=None, image=None, software_decode=False, retain_build=F
             serial = record['serial']
             emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=180)
             emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'system', 'screen_off_timeout', '600000')
+            # The OS tutorial can take focus after first entering immersive mode.
+            emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure', 'immersive_mode_confirmations', 'confirmed')
             emulator.invoke('-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
             emulator.invoke('-s', serial, 'shell', 'wm', 'dismiss-keyguard')
             emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', BUNDLE + '/io.github.ispaure.logistics.video.VideoPipQAActivity', '--ez', 'software_decode', str(software_decode).lower())
@@ -167,6 +174,7 @@ def run(output, *, reuse=None, image=None, software_decode=False, retain_build=F
             else:
                 raise TimeoutError('Native Android PiP acceptance timed out')
             assert set(observations) == {'white', 'yellow', 'back', 'off', 'restored'}, observations
+            assert (output / 'fullscreen.png').is_file()
             for name in ('white', 'back', 'restored'):
                 assert observations[name]['white'] > observations['off']['white'] + 10, observations
             assert observations['yellow']['yellow'] > observations['off']['yellow'] + 10, observations

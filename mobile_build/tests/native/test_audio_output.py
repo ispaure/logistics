@@ -437,6 +437,19 @@ class SpeechResumeGateTests(unittest.TestCase):
 
 
 class AppleRouteEventTests(unittest.TestCase):
+    def test_built_in_route_can_use_its_port_type_when_uid_is_missing(self):
+        from mobile.audio_output_native import AppleOutputs
+        monitor = AppleOutputs.__new__(AppleOutputs)
+        speaker = NS(portType='Speaker', UID=None, portName='Internal speaker')
+        bluetooth = NS(portType='BluetoothA2DPOutput', UID=None, portName='Headphones')
+        monitor.audio = NS(currentRoute=NS(outputs=[speaker]))
+        policy = OutputPolicy()
+        policy.observe(monitor.outputs())
+        self.assertTrue(policy.request_play({}))
+        monitor.audio.currentRoute.outputs = [bluetooth]
+        policy.observe(monitor.outputs())
+        self.assertFalse(policy.request_play({}))
+
     def make_monitor(self, center, changed, interrupted):
         from mobile.audio_output_native import AppleOutputs
         classes = {'AVAudioSession': NS(sharedInstance=object()),

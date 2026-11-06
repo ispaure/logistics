@@ -1,5 +1,9 @@
 # Comics mobile workflows
 
+In **Settings → Books & Comics**, **Comic cover on outer display** saves a
+separate, off-by-default choice for iPhone Duo. It uses the comic's first page
+as the cover. See [outer display requirements and battery impact](../../books/user_mobile/reading.md#book-cover-on-iphone-duo).
+
 On Android, **Appearance → Volume buttons turn pages** enables volume down for
 next page and volume up for previous page. It is off by default and saved
 separately for books and comics. Tap **Apply and return** to save. Each press

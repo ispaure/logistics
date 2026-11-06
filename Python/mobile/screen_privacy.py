@@ -196,6 +196,10 @@ class ScreenPrivacy:
         output = getattr(self.app, 'audio_output', None)
         if output is not None:
             output.invalidate(pause=False)  # Reject dialogs without stopping permitted background speech.
+        notes = getattr(self.app, 'vault_browser', None)
+        pause_inline = getattr(notes, 'pause_inline_videos', None)
+        if pause_inline is not None:
+            pause_inline()
         video = getattr(self.app, 'video_player', None)
         if video is not None:
             video.conceal()
@@ -306,6 +310,10 @@ class ScreenPrivacy:
             self.captured = captured
             scene = window.windowScene
             scene_inactive = scene is not None and native_value(scene, 'activationState') != 0
+            if protected or self.inactive or self.interrupted or scene_inactive or captured:
+                output = getattr(getattr(self.app, 'scene_manager', None), 'external_comics', None)
+                if output is not None and (protected or (output.source is not None and output.source() is self.app)):
+                    output.reader_cover.clear()
             hidden = protected and (self.inactive or getattr(self, 'interrupted', False) or scene_inactive or captured)
             self.set_ios_shield(hidden or (transitioning and protected and self.resume_locked))
             return hidden

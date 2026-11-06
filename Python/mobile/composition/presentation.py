@@ -173,6 +173,7 @@ def speech_presentation(app):
 
 
 def notes_host(app):
+    from ..audio_output import for_app
     from features.notes_library.mobile.notes_library import NotesHost
     from features.notes_library.notes import MAX_NOTE, MAX_RENDERED_HTML, MAX_IMAGE_HTML
     from commonUtils.ui.native.markdown_preview import MarkdownPreviewLimits
@@ -223,11 +224,11 @@ def notes_host(app):
                 atomic_write_json(timing_marker.with_name('notes-open-timing.json'), sample, max_bytes=4096)
             except OSError:
                 pass  # Optional measurement must not interrupt document opening.
-    async def open_resource(provider, path):
+    async def open_resource(provider, path, **options):
         from features.video.formats import VIDEO_EXTENSIONS
         if Path(path).suffix.lower() in VIDEO_EXTENSIONS:
             from services.documents.mobile_storage import open_provider_document
-            return await open_provider_document(app, provider, path)
+            return await open_provider_document(app, provider, path, **options)
         from mobile.favourites import resource_reference
         from mobile.document_sources import reopen_file
         source, _ = resource_reference(app, provider, path)
@@ -254,6 +255,7 @@ def notes_host(app):
         return NativeTreeRows(owner, row_list)
 
     return NotesHost(
+        audio_output=lambda: for_app(app),
         folder_browser=folder_browser,
         show_error=show_error,
         remember_document=lambda owner: obsidian.remember_note(app, owner),

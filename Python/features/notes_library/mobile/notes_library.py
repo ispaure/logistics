@@ -66,6 +66,7 @@ class NotesHost:
     remember_document: Callable = lambda owner: None
     batch_rows: Callable = nullcontext
     tree_rows: Callable = lambda owner: None
+    audio_output: Callable = lambda: None
 
 
 from .library_panels import CAPTION_FONT, CONTROL_FONT, LibraryPanels
@@ -123,6 +124,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self._open_timing = None
         self.shown = 50
         self.base = "https://markdown.invalid/vault/" + uuid4().hex + "/"
+        self._page_videos = {}
+        self._video_opening = None
         self.rows = self.new_panel_rows()
         self.notice = toga.Label("", style=Pack(font_size=12))
         self.tree = toga.Box(
@@ -339,7 +342,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if hasattr(self, 'open_card'):
             self.open_card.style.display = NONE if self.sidebar.sidebar_open or self.sidebar.expanded else PACK
         available = getattr(self, '_notes_available', 320)
-        article_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
+        policy = self.sidebar.policy
+        files_extent = policy.sidebar_width + policy.gap if self.sidebar.expanded else 0
+        article_width = max(0, available - files_extent)
         self.welcome_content.style.width = min(360, max(0, article_width - 48))
         left, right = (8, 8) if self.sidebar.wide else self.host.toolbar_insets(self.secondary)
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
@@ -458,8 +463,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 if path:
                     await self.open_note(path)
                 else:
-                    await self.reveal_folder(folder, select=False)
-                    self.sidebar.show_sidebar()
+                    await self.reveal_folder(folder)
             button = self.host.list_button(toga.Button(label, on_press=open_folder,
                 style=Pack(height=44, width=max(minimum, measure(label) + 12), font_size=13)))
             button._impl._content_inset = 0
@@ -717,7 +721,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             pending_progress = None
             publish(result, finished=True)
 
-    async def reveal_folder(self, path, *, select=True):
+    async def reveal_folder(self, path):
         self.search.value = ""
         self.select_panel_tab('Files')
         folder = self.root
@@ -727,11 +731,14 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 return
             folder = posixpath.join(folder, part)
         self.expanded.add(path)
-        if select:
-            self.selected_path = path
         if path not in self.folders:
             await self.load_folder(path)
-        self.render_tree()
+        if not self.valid() or self.panel_tab != 'Files':
+            return
+        self.selected_path = path
+        if not self.sidebar.expanded and self.sidebar.side != 'files':
+            self.sidebar.show_sidebar()
+        self.render_tree(reveal=path)
         self.refresh_reader_actions()
 
     def new_panel_rows(self):
@@ -744,7 +751,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return rows.widget
         return toga.ScrollContainer(content=rows, horizontal=False, style=Pack(flex=1))
 
-    def render_tree(self):
+    def render_tree(self, *, reveal=None):
         if not self.valid():
             return
         task = getattr(self, 'tree_task', None)
@@ -753,7 +760,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if getattr(self, 'panel_tab', 'Files') == 'Calendar':
             return
         from commonUtils.ui.native.text_size import native_backend
-        row_updates = self.tree_updates()
+        row_updates = self.tree_updates(reveal=reveal)
         def batched_updates():
             try:
                 while True:
@@ -788,7 +795,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 updates.close()
         self.tree_task = self.host.loop.create_task(render())
 
-    def tree_updates(self):
+    def tree_updates(self, *, reveal=None):
         if not self.valid():
             return
         old_rows = dict(getattr(self, '_row_cache', {}))
@@ -813,6 +820,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                          if self.host.folder_visible(entry["path"], directory=entry["directory"])]
         else:
             add(self.root)
+        reveal_index = next((index for index, (entry, _) in enumerate(flattened)
+                             if entry['path'] == reveal), None) if reveal is not None else None
         def landing_page(entry):
             if not entry['directory']:
                 return None
@@ -840,9 +849,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 for entry, depth in flattened]
             self.rows.message(message)
             self.rows.add(*records)
+            if reveal_index is not None:
+                self.rows.native_list.scroll_to_row(reveal_index)
             self.sidebar.refresh_gestures()
             yield
             return
+        if reveal_index is not None:
+            self.shown = max(self.shown, reveal_index + 1)
         for entry, depth in flattened[: self.shown]:
             path, directory = entry["path"], entry["directory"]
             page = landing_page(entry)
@@ -958,6 +971,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             # once for each bulk call rather than laying out every row in turn.
             self.rows.clear()
             self.rows.add(*desired)
+        if reveal_index is not None:
+            self.rows_scroll.vertical_position = min(
+                reveal_index * 48, self.rows_scroll.max_vertical_position)
         for key, row in list(self._row_cache.items()):
             if key not in new_rows:
                 # A cancelled cleanup must not expose an unbound cached row.
@@ -1022,8 +1038,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
     async def browse_parent(self, widget=None, **kwargs):
         if self.path is not None:
-            await self.reveal_folder(posixpath.dirname(self.path), select=False)
-            self.sidebar.show_sidebar()
+            await self.reveal_folder(posixpath.dirname(self.path))
 
     def present(self, *, destination=None):
         if self.valid() and self.session is not None:
@@ -1379,6 +1394,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
     def dispose(self):
         self.library_title = 'Notes Library'
+        self.clear_video_actions()
         if hasattr(self, 'file_drag'):
             self.file_drag.dispose()
         self.cancel_data_views()

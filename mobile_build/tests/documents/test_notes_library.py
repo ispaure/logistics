@@ -227,6 +227,8 @@ class NotesLibraryTests(unittest.TestCase):
             await owner.breadcrumbs.children[-1].on_press()
             self.assertEqual(owner.sidebar.side, 'files')
             self.assertIn('Vault/Projects/Plain', owner.expanded)
+            self.assertEqual(owner.selected_path, 'Vault/Projects/Plain')
+            self.assertEqual(owner.path, 'Vault/Projects/Plain/Unknown.bin')
             owner.sidebar.show_detail()
             await links[1].on_press()
             self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
@@ -311,11 +313,13 @@ class NotesLibraryTests(unittest.TestCase):
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             self.assertTrue(await owner.open_note('Vault/Home.md'))
             media = owner.library.image_source('Vault/Home.md')
+            self.assertIsNotNone(media('clip.mp4'))
             transports = [transport for _, transport in media.videos.values()]
             self.assertTrue(transports)
             with patch.object(owner.web, 'set_content', wraps=owner.web.set_content) as publish:
                 self.assertTrue(await owner.open_note('LICENSE', resolve_link=True), owner.notice.text)
             self.assertTrue(all(transport.closed.is_set() for transport in transports))
+            self.assertFalse(owner._page_videos)
             self.assertNotIn('<video', publish.call_args.args[1])
             self.assertEqual(owner.path, 'Vault/LICENSE')
             owner.dispose()
@@ -374,12 +378,13 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertIsNone(await open_vault(self.app, self.provider, 'Vault', 'documents'))
         self.run_async(exercise())
 
-    def test_video_embeds_stream_in_preview_and_editor_and_close_with_library(self):
+    def test_video_embeds_open_native_fullscreen_from_reading_view(self):
         from mobile.obsidian import open_vault
         from services.documents.authoring.markdown_editor import editor_blocks
         (self.vault / 'Media').mkdir()
         (self.vault / 'Media/potato.mp4').write_bytes(b'video fixture')
-        source = '![[potato.mp4]]\n'
+        (self.vault / 'Media/second.mp4').write_bytes(b'second video fixture')
+        source = '![[potato.mp4]]\n\n![Second clip](Media/second.mp4)\n'
         (self.vault / 'Home.md').write_text(source)
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
@@ -387,7 +392,15 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertTrue(await owner.open_note('Vault/Home.md'))
             media = owner.library.image_source('Vault/Home.md')
             html = publish.call_args.args[1]
-            self.assertIn('<video ', html)
+            import re
+            links = re.findall(r'href="([^"]+\?video=[0-9a-f]+)"', html)
+            self.assertEqual(len(links), 2)
+            self.assertEqual(html.count('Play fullscreen video'), 2)
+            self.assertEqual(html.count('<video '), 2)
+            self.assertNotIn('<video controls', html)
+            self.assertIn('aria-label="Second clip"', html)
+            self.assertNotIn('http://127.0.0.1:1/', html)
+            self.assertEqual(len(media.videos), 2)
             blocks = editor_blocks(source, image_source=media)
             self.assertIn('<video ', blocks[0]['html'])
             self.assertIn('![[potato.mp4]]', blocks[0]['source'])
@@ -398,16 +411,29 @@ class NotesLibraryTests(unittest.TestCase):
                     'features.video.mobile.player.open_video', new_callable=AsyncMock, return_value=True) as native:
                 for video in ('Vault/Media/potato.mp4', 'potato.mp4'):
                     self.assertTrue(await owner.open_note(video, resolve_link=video == 'potato.mp4'), owner.notice.text)
-                self.assertEqual(pause.await_count, 2)
-            self.assertEqual(native.await_count, 2)
-            native.assert_awaited_with(self.app, self.provider, 'Vault/Media/potato.mp4')
+                native.assert_awaited_with(self.app, self.provider, 'Vault/Media/potato.mp4')
+                self.assertFalse(owner.follow_link(owner.web, owner.base + '?video=unknown'))
+                self.assertEqual(native.await_count, 2)
+                for link, filename in zip(links, ('potato.mp4', 'second.mp4')):
+                    self.assertFalse(owner.follow_link(owner.web, link))
+                    self.assertTrue(await owner._video_opening)
+                    native.assert_awaited_with(self.app, self.provider, 'Vault/Media/' + filename, fullscreen=True)
+                self.assertFalse(owner.follow_link(owner.web, links[0].replace(owner.base, owner.base + 'old/')))
+                self.assertEqual(pause.await_count, 4)
+            inline = links[0].replace('?video=', '?inline-video=')
+            with patch.object(owner.web, 'evaluate_javascript') as javascript, patch.object(
+                    owner._inline_audio, 'request_play', side_effect=[False, True]) as consent:
+                self.assertFalse(owner.follow_link(owner.web, inline))
+                javascript.assert_not_called()
+                self.assertFalse(owner.follow_link(owner.web, inline))
+                javascript.assert_called_once_with('window.logisticsPlayVideo?.("' + inline.split('=')[-1] + '")')
+                self.assertEqual(consent.call_count, 2)
+                owner._inline_audio.players[owner]()
+                self.assertIn('video.pause()', javascript.call_args.args[0])
+            self.assertEqual(native.await_count, 4)
             self.assertEqual(owner.path, 'Vault/Home.md')
             self.assertIsNone(owner.embedded)
-            # Native mobile HTML embeds are deliberately simple and lazy. No
-            # full-player resume preferences or autoplay enter page rendering.
-            self.assertIn('controls playsinline preload="none"', html)
             self.assertNotIn('autoplay', html)
-            self.assertNotIn('#t=', html)
             self.assertNotIn('autoplay', blocks[0]['html'])
             owner.dispose()
             self.assertTrue(all(transport.closed.is_set() for transport in transports))

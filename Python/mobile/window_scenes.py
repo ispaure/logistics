@@ -151,6 +151,8 @@ class SceneManager:
         import toga
         from toga.types import Size
         manager = self
+        from .reader_cover_display import native_bridge
+        reader_cover = native_bridge(self.app)
 
         class SceneBackend(MainWindow):
             def __init__(self, interface, title, position, size):
@@ -175,6 +177,10 @@ class SceneManager:
 
             @objc_method
             def scene_willConnectToSession_options_(self, scene, session, options) -> None:
+                if reader_cover is not None and reader_cover.ownsSceneRole(session.role):
+                    self.window = reader_cover.sharedDisplay().connectScene(
+                        scene, token=options.sceneAccessoryUserInfo)
+                    return
                 if not is_workspace_scene(session.role):
                     self.window = manager.external_comics.connect_ios(scene)
                     return
@@ -243,6 +249,8 @@ class SceneManager:
             def sceneDidDisconnect_(self, scene) -> None:
                 if hasattr(self, 'host'):
                     manager.disconnect(self.host)
+                elif reader_cover is not None and reader_cover.ownsSceneRole(scene.session.role):
+                    reader_cover.sharedDisplay().disconnectScene(scene)
                 else:
                     manager.external_comics.disconnect_ios(scene)
 
@@ -259,9 +267,12 @@ class SceneManager:
             @objc_method
             def application_configurationForConnectingSceneSession_options_(self, application, session, options):
                 manager.reconcile_scenes()
+                if reader_cover is not None and reader_cover.ownsSceneRole(session.role):
+                    name = 'Logistics reader cover'
+                else:
+                    name = 'Logistics workspace' if is_workspace_scene(session.role) else 'Logistics comic display'
                 configuration = ObjCClass('UISceneConfiguration').alloc().initWithName(
-                    'Logistics workspace' if is_workspace_scene(session.role) else 'Logistics comic display',
-                    sessionRole=session.role)
+                    name, sessionRole=session.role)
                 configuration.delegateClass = LogisticsSceneDelegate
                 return configuration
 

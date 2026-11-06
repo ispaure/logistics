@@ -10,7 +10,8 @@ import android.os.Handler;
 import android.os.Looper;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /** Query anticipated media outputs, never the list of paired/nearby devices. */
@@ -61,31 +62,50 @@ public final class AudioOutputs {
     }
     public String outputs() {
         try {
-            List<AudioDeviceInfo> selected;
+            List<AudioDeviceInfo> selected = Collections.emptyList();
             if (Build.VERSION.SDK_INT >= 33) {
-                selected = audio.getAudioDevicesForAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
-            } else {
-                // Older APIs enumerate connected, not selected, devices. Do not guess.
-                selected = Arrays.asList(audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS));
-                if (selected.size() != 1) return "null";
+                try {
+                    selected = audio.getAudioDevicesForAttributes(new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build());
+                } catch (SecurityException ignored) {
+                    // Some devices restrict the selected-route query.
+                }
             }
+            if (selected.isEmpty()) selected = unambiguousOutputs();
             if (selected.isEmpty()) return "null";
             JSONArray rows = new JSONArray();
             for (AudioDeviceInfo device : selected) {
                 int type = device.getType();
+                if (type == AudioDeviceInfo.TYPE_UNKNOWN) return "null";
                 boolean bluetooth = type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                    type == AudioDeviceInfo.TYPE_HEARING_AID ||
                     (Build.VERSION.SDK_INT >= 31 && (type == AudioDeviceInfo.TYPE_BLE_HEADSET || type == AudioDeviceInfo.TYPE_BLE_SPEAKER)) ||
                     (Build.VERSION.SDK_INT >= 33 && type == AudioDeviceInfo.TYPE_BLE_BROADCAST);
-                String id = bluetooth ? device.getAddress() : Integer.toString(device.getId());
+                String id = bluetooth ? (Build.VERSION.SDK_INT >= 28 ? device.getAddress() : null)
+                    : Integer.toString(device.getId());
                 if (bluetooth && (id == null || id.isEmpty() || "02:00:00:00:00:00".equals(id))) return "null";
+                CharSequence name = device.getProductName();
                 rows.put(new JSONObject().put("id", id).put("type", type).put("bluetooth", bluetooth)
-                    .put("name", device.getProductName().toString()));
+                    .put("name", name == null ? "" : name.toString()));
             }
             return rows.toString();
         } catch (Exception error) {
             return "null"; // Missing permission/identity is never an approved speaker.
         }
+    }
+    private List<AudioDeviceInfo> unambiguousOutputs() {
+        AudioDeviceInfo[] connected = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        if (connected.length == 1) return Collections.singletonList(connected[0]);
+        List<AudioDeviceInfo> speakers = new ArrayList<>();
+        for (AudioDeviceInfo device : connected) {
+            int type = device.getType();
+            if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER || type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER_SAFE)
+                speakers.add(device);
+            else if (type != AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) return Collections.emptyList();
+        }
+        // The receiver and speaker can both be enumerated on a phone with no
+        // connected accessories. Neither physical output needs approval.
+        return speakers;
     }
     public void close() {
         listener = null;

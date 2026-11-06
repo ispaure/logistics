@@ -75,8 +75,9 @@ speech metadata becomes generic whenever any session protects the app.
 - iOS queries the active [audio session ports](https://developer.apple.com/documentation/avfaudio/avaudiosessionportdescription).
   Android 13+ queries anticipated media outputs with
   [getAudioDevicesForAttributes](https://developer.android.com/reference/android/media/AudioManager#getAudioDevicesForAttributes(android.media.AudioAttributes)).
-  Older Android cannot reliably distinguish selected from connected outputs when
-  several exist; protected playback then fails closed. Unreadable/redacted Bluetooth
+  If the selected-route query is unavailable, Android accepts a single enumerated
+  output or an internal-only speaker and receiver combination. Multiple outputs
+  with an external device remain ambiguous. Unreadable or redacted Bluetooth
   identities also fail closed only for protected playback. Ordinary playback bypasses these consent checks. The app does not silently trust a display name.
 - Android device callbacks plus a 100 ms route recheck catch selection changes
   without connection events. OS routing can precede notification or polling;

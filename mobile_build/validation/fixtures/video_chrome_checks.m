@@ -384,8 +384,17 @@
             CGRectGetHeight(strip) <= 0) {
             [self finish:@"Cached ranges are clipped outside the slider"]; return;
         }
-        if ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls && v.videoHeader.superview != v.portraitHeader) || !v.videoHeader.window ||
-            v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != (v.portraitTabletop ? NSTextAlignmentLeft : NSTextAlignmentCenter)) {
+        CGRect deckFrame = [v.controlsScroll convertRect:v.controlsScroll.bounds toView:self.window];
+        for (UIButton *button in v.transport.arrangedSubviews) {
+            CGRect frame = [button convertRect:button.bounds toView:self.window];
+            if (!button.configuration.image || !CGRectContainsRect(CGRectInset(deckFrame, -1, -1), frame)
+                || frame.size.width < 44 || frame.size.height < 44) {
+                [self finish:@"Video transport icon or touch target is missing from the controls"]; return;
+            }
+        }
+        BOOL compactIdentity = !v.tabletop && [v.navigationItem.prompt containsString:v.videoTitle.text ?: @""];
+        if (!compactIdentity && ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls && v.videoHeader.superview != v.portraitHeader) || !v.videoHeader.window ||
+            v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != (v.portraitTabletop ? NSTextAlignmentLeft : NSTextAlignmentCenter))) {
             [self finish:@"Video identity is not centered in the native title area"]; return;
         }
         [v showCachedRanges:@"{\"ranges\":[[0,0.3],[0.5,0.65],[0.8,1]]}"];
@@ -431,7 +440,7 @@
         CGRect filename = [v.videoTitle convertRect:v.videoTitle.bounds toView:self.window];
         UIView *source = v.sourceLabel.superview;
         CGRect details = [source convertRect:source.bounds toView:self.window];
-        if (!v.portraitTabletop && fabs(CGRectGetMidX(filename) - CGRectGetMidX(details)) > .5) {
+        if (!compactIdentity && !v.portraitTabletop && fabs(CGRectGetMidX(filename) - CGRectGetMidX(details)) > .5) {
             [self finish:@"Storage details are not centered beneath the filename"]; return;
         }
         [self.samples addObject:@{@"titleFrame": NSStringFromCGRect(title),
@@ -461,12 +470,11 @@
         return;
     }
     @try {
-        id sender = nil;
-        for (UIBarButtonItem *item in self.video.mediaItems)
-            if ([item.accessibilityLabel isEqualToString:@"More playback options"]) sender = item;
+        id sender = v.playButton;
         SEL selector = NSSelectorFromString(selectors[index]);
-        for (UIBarButtonItem *item in self.video.mediaItems)
-            if (item.action == selector) sender = item;
+        for (UIBarButtonItemGroup *group in v.navigationItem.trailingItemGroups)
+            for (UIBarButtonItem *item in group.barButtonItems)
+                if (item.action == selector) sender = item;
         if (self.video.tabletop) {
             for (UIStackView *row in (self.video.portraitTabletop ? @[self.video.portraitUtilities] : self.video.tabletopUtilities.arrangedSubviews))
                 for (UIButton *button in row.arrangedSubviews)

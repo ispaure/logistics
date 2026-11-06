@@ -34,15 +34,35 @@ class NotesDrawers:
         return self.side is not None
 
     def reflow(self, width):
+        from .fold_layout import division
         from .notes_gestures import install_opening_swipes
         install_opening_swipes(self)
-        self.wide = width >= 840  # 320 for Files, at least 520 for the document.
-        self.layout_files()
+        fold = division(self.app, self.view)
+        vertical_fold = fold is not None and fold.vertical
+        self.wide = vertical_fold or width >= 840  # 320 for Files, at least 520 for the document.
         # The host passes the document width minus its 24-unit inset. Leave
         # at least 44 units opposite the drawer for outside dismissal.
-        self.policy.sidebar_width = min(320, max(1, width - 32))
-        self.sidebar.style.width = max(1, self.policy.sidebar_width)
-        self.links.style.width = max(1, self.policy.sidebar_width)
+        drawer_width = min(320, max(1, width - 32))
+        # UIKit reports the crease and its interaction margins in this row's
+        # coordinates, including any offset from a system bar or safe area.
+        files_width, gap = (fold.x, fold.width) if vertical_fold else (drawer_width, 0)
+        previous_gap = self.policy.gap
+
+        def apply():
+            self.policy.sidebar_width = files_width
+            self.policy.gap = gap
+            self.sidebar.style.width = files_width
+            self.links.style.width = drawer_width
+            self.view.style.gap = gap
+            self.layout_files()
+
+        if ((vertical_fold or previous_gap)
+                and (self.expanded or (self.wide and self.wide_files_open))
+                and (files_width, gap) != (self.policy.sidebar_width, previous_gap)):
+            from .notes_motion import resize_panes
+            resize_panes(self.view, apply)
+        else:
+            apply()
         if self.overlay is not None:
             self.overlay.reposition()
 

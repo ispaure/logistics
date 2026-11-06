@@ -57,7 +57,7 @@ async def exercise(app):
         assert report['controls'][1] >= midpoint + 6
         assert abs(report['controls'][0] + report['controls'][2]/2 - report['movie'][2]/2) < 1, 'Deck is not centered across the lower panel'
         report['buttons'] = []
-        rows = [native.tabletopTransport]
+        rows = [native.transport]
         if native.portraitTabletop:
             rows.append(native.portraitUtilities)
         else:
@@ -72,7 +72,7 @@ async def exercise(app):
                 hit = window.hitTest(CGPoint(x+w/2,y+h/2),withEvent=None)
                 assert hit == button or hit.isDescendantOfView(button), 'Deck action is not hittable'
                 report['buttons'].append(dict(label=str(button.accessibilityLabel),frame=[x,y,w,h]))
-        play_frame = frame(native.tabletopPlay,view)
+        play_frame = frame(native.playButton,view)
         assert abs(play_frame[0] + play_frame[2]/2 - report['movie'][2]/2) < 1, 'Play button is not centered on the lower panel'
         native.setControlsShown(False)
         assert native.controlsVisible, 'Fold deck should remain available'

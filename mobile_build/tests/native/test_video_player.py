@@ -600,7 +600,7 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
                 if not ready.is_set():
                     opening.cancel()
                 await asyncio.gather(opening, return_exceptions=True)
-            player.present.assert_called_once_with(0, [])
+            player.present.assert_called_once_with(0, [], fullscreen=False)
             player.native.play.assert_not_called()
             remember.assert_not_called()
             self.assertIsNone(app.video_player)

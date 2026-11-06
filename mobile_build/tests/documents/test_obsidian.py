@@ -238,7 +238,7 @@ class ObsidianTests(unittest.TestCase):
     def setUp(self):
         import toga
         factory = patch('services.documents.mobile_views.document_webview',
-                        side_effect=lambda resource=None, **options: toga.WebView(**options))
+                        side_effect=lambda resource=None, inline_video=False, **options: toga.WebView(**options))
         factory.start()
         self.addCleanup(factory.stop)
         self.temporary = TemporaryDirectory()

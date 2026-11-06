@@ -7,6 +7,7 @@ import asyncio
 import posixpath
 import re
 from html import unescape
+from json import dumps
 from pathlib import PurePosixPath
 from textwrap import fill
 from time import perf_counter
@@ -18,6 +19,7 @@ from ..notes import MAX_PREVIEW_HTML, MARKDOWN, document_kind
 from ..dataview import view_plan
 from ..dataview_script import worker_policy
 from .library_panels import LibraryOpening
+from .inline_video import install_controls, video_embed
 
 
 class LibraryDocuments:
@@ -85,12 +87,14 @@ class LibraryDocuments:
         return opened
 
 
-    async def open_video_file(self, path):
+    async def open_video_file(self, path, *, page=None):
         path = self.contained(path)
         if self.host.open_resource is None:
             self.notice.text = 'Video playback is unavailable in this host.'
             return False
         try:
+            if not self.valid() or (page is not None and (self.base != page or self.editing)):
+                return False
             # Pause page media before handing audio to the native player. Keep
             # the page and provider alive so returning from playback is immediate.
             surfaces = [self.web]
@@ -99,9 +103,11 @@ class LibraryDocuments:
                 surfaces.append(formatted.view)
             for surface in surfaces:
                 await surface.evaluate_javascript("document.querySelectorAll('video').forEach(video => video.pause())")
-            if not self.valid():
+            if not self.valid() or (page is not None and (self.base != page or self.editing)):
                 return False
             self.speech.close()
+            if page is not None:
+                return bool(await self.host.open_resource(self.provider, path, fullscreen=True))
             return bool(await self.host.open_resource(self.provider, path))
         except (OSError, ValueError, PermissionError) as error:
             self.notice.text = str(error)
@@ -184,19 +190,18 @@ class LibraryDocuments:
             def read():
                 stage('Preparing embedded media…')
                 plan = view_plan(data.decode("utf-8-sig"))
-                html = self.host.preview(plan.render() if plan.scripts else plan.source,
-                                         image_source=self.library.image_source(path, cancelled=cancelled))
-                html = self.data_view_html(html, active=bool(plan.scripts), base=base)
-                self.access.validate_preview(html, MAX_PREVIEW_HTML)
-                return html, plan
+                html, videos = self.note_preview(plan.render() if plan.scripts else plan.source,
+                    path, base, active=bool(plan.scripts), cancelled=cancelled)
+                return html, videos, plan
 
-            html, plan = await asyncio.to_thread(read)
+            html, videos, plan = await asyncio.to_thread(read)
             if not self.valid() or epoch != self.epoch:
                 return False
             self.mark_open_timing('prepared', epoch)
             # Native admission can still reject the styled page. Do not retire
             # the current editor or advance history until it has succeeded.
             set_inline_html(self.web, base, html)
+            self.clear_video_actions()
             self.cancel_data_views()
             if remember and path != self.path:
                 del self.history[self.history_index + 1 :]
@@ -209,6 +214,7 @@ class LibraryDocuments:
             self.update_tree_selection()
             self.title.text = fill(PurePosixPath(path).name, width=28)
             self.base = base
+            self.set_video_actions(videos)
             if self._open_timing is not None:
                 self._open_timing['published_epoch'] = epoch
             self.data_view_plan = plan if plan.scripts else None
@@ -260,7 +266,23 @@ class LibraryDocuments:
         if not parsed.scheme and not parsed.netloc:
             target = url
         elif url.split("?", 1)[0] == self.base:
-            target = parse_qs(parsed.query).get("target", [""])[0]
+            query = parse_qs(parsed.query)
+            if 'inline-video' in query:
+                key = query['inline-video'][0]
+                audio = getattr(self, '_inline_audio', None)
+                if (key in self._page_videos and not self.editing and audio is not None
+                        and audio.interactive()):
+                    self.speech.close()
+                    if audio.request_play():
+                        self.web.evaluate_javascript('window.logisticsPlayVideo?.(' + dumps(key) + ')')
+                return False
+            if "video" in query:
+                path = self._page_videos.get(query["video"][0])
+                pending = self._video_opening
+                if path is not None and not self.editing and (pending is None or pending.done()):
+                    self._video_opening = self.host.loop.create_task(self.open_video_file(path, page=self.base))
+                return False
+            target = query.get("target", [""])[0]
         else:
             return False
         link = urlsplit(target)
@@ -319,6 +341,51 @@ class LibraryDocuments:
             self.web.evaluate_javascript('window.scrollTo(0,' + str(self.positions[self.path]) + ')')
 
 
+    def clear_video_actions(self):
+        if self._video_opening is not None:
+            self._video_opening.cancel()
+        audio = getattr(self, '_inline_audio', None)
+        if audio is not None:
+            self.pause_inline_videos()
+            audio.unregister(self)
+            self._inline_audio = None
+        self._page_videos.clear()
+
+    def set_video_actions(self, videos):
+        self._page_videos = videos
+        if videos:
+            self._inline_audio = self.host.audio_output()
+            if self._inline_audio is not None:
+                self._inline_audio.register(self, self.pause_inline_videos)
+
+    def pause_inline_videos(self):
+        if getattr(self, '_inline_audio', None) is not None:
+            self.web.evaluate_javascript("document.querySelectorAll('.note-video video').forEach(video => video.pause())")
+
+    def note_preview(self, text, path, base, *, active=False, cancelled=lambda: False):
+        sources = {}
+        def remember_video(path, url):
+            sources[url] = path
+
+        videos = {}
+        html = self.host.preview(text, image_source=self.library.image_source(
+            path, cancelled=cancelled, on_video=remember_video))
+        html = self.data_view_html(html, active=active, base=base)
+        def video_button(match):
+            source = sources.get(unescape(match[1]))
+            if source is None:
+                return match[0]
+            key = uuid4().hex
+            videos[key] = source
+            return video_embed(match[0], base, key, PurePosixPath(source).name)
+
+        html = re.sub(r'<video controls\b[^>]*\bsrc="([^"]+)"[^>]*>[^<]*</video>',
+                      video_button, html)
+        if videos:
+            html = install_controls(html, uuid4().hex, worker=active)
+        self.access.validate_preview(html, MAX_PREVIEW_HTML)
+        return html, videos
+
     def data_view_html(self, html, *, active=False, base=None):
         base = self.base if base is None else base
         html = re.sub(r'href="([^"]*)"', lambda match: 'href="' + base + '?target='
@@ -355,18 +422,18 @@ class LibraryDocuments:
                 valid=valid, marker=base), timeout=35)
             if text is None or not valid():
                 return
-            def render():
-                html = self.host.preview(text, image_source=self.library.image_source(path))
-                html = self.data_view_html(html, base=base)
-                self.access.validate_preview(html, MAX_PREVIEW_HTML)
-                return html
-            html = await asyncio.to_thread(render)
+            html, videos = await asyncio.to_thread(self.note_preview, text, path, base,
+                                                  cancelled=lambda: not valid())
             if valid():
                 await self.remember_position()
                 if valid():
                     self.page_search.loading()
                     self.data_views_loading = False
                     set_inline_html(self.web, self.base, html)
+                    self.clear_video_actions()
+                    self.set_video_actions(videos)
+        except OperationCancelled:
+            return
         except (OSError, ValueError, TypeError, KeyError, RuntimeError, asyncio.TimeoutError) as error:
             if valid():
                 self.data_views_loading = False
@@ -425,6 +492,7 @@ class LibraryDocuments:
         # Retain the reusable reader, but retire its old DOM and media when a
         # source editor, drawing or file preview replaces the Markdown page.
         set_inline_html(self.web, self.base, '<!doctype html><html><body></body></html>')
+        self.clear_video_actions()
         self.path = self.selected_path = path
         self.folder_pages.update(pages)
         self.update_tree_selection()
@@ -490,6 +558,7 @@ class LibraryDocuments:
                     editor.dispose()
                     return False
             self.cancel_data_views()
+            self.clear_video_actions()
             self.embedded, self.editing = editor, True
             self.article.clear()
             self.article.add(editor.view)
