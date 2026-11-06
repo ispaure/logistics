@@ -101,14 +101,8 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                         native.getPaddingLeft(), native.getPaddingRight())
                 assert abs(scroll.horizontal_position - scroll.max_horizontal_position) <= 1, (
                     'Initial breadcrumb end', scroll.horizontal_position, scroll.max_horizontal_position)
-                controls = [owner.back_button, owner.forward_button, owner.edit, owner.reader_actions_button]
-                if scroll.parent is owner.note_actions_row:
-                    controls.insert(2, scroll)
-                else:
-                    assert scroll.parent is owner.secondary
-                    _, actions_y, _, actions_height = self.native_rect(owner.note_actions_row._impl.native)
-                    _, scroll_y, _, _ = self.native_rect(scroll._impl.native)
-                    assert scroll_y >= actions_y + actions_height - 1
+                controls = [owner.back_button, owner.forward_button, scroll, owner.edit, owner.reader_actions_button]
+                assert list(owner.secondary.children) == controls
                 row_x, _, row_width, _ = self.native_rect(owner.secondary._impl.native)
                 rects = [self.native_rect(control._impl.native) for control in controls]
                 assert rects[0][0] >= row_x - 1

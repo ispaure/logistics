@@ -272,20 +272,17 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.reader_actions_button,
             self.links_button,
         ]
-        self.secondary = toga.Box(style=Pack(direction=COLUMN, margin_left=8, margin_right=8))
-        self.note_actions_row = toga.Box(style=Pack(direction=ROW, gap=4))
-        self.note_actions_space = toga.Box(style=Pack(flex=1))
-        self.secondary.add(self.note_actions_row)
+        self.secondary = toga.Box(style=Pack(direction=ROW, gap=4, margin_left=8, margin_right=8))
         for button in (self.back_button, self.forward_button, self.edit, self.reader_actions_button):
             if button.parent is not None:
                 button.parent.remove(button)
-            self.note_actions_row.add(button)
+            self.secondary.add(button)
         self.view.insert(1, self.secondary)
         self.breadcrumbs = toga.Box(style=Pack(direction=ROW, justify_content=CENTER))
         from .breadcrumbs import BreadcrumbScroll
         self.breadcrumb_scroll = BreadcrumbScroll(content=self.breadcrumbs, horizontal=True,
             vertical=False, style=Pack(flex=1, height=44))
-        self.note_actions_row.insert(2, self.breadcrumb_scroll)
+        self.secondary.insert(2, self.breadcrumb_scroll)
         self.sidebar.breadcrumb_scroll = self.breadcrumb_scroll
         self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
         self._breadcrumb_key = None
@@ -362,33 +359,29 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.secondary.parent.remove(self.secondary)
         editable = not self.path or PurePosixPath(self.path).suffix.lower() in MARKDOWN
         if editable and self.library.writable and self.edit.parent is None:
-            self.note_actions_row.insert(len(self.note_actions_row.children) - 1, self.edit)
-        elif (not editable or not self.library.writable) and self.edit.parent is self.note_actions_row:
-            self.note_actions_row.remove(self.edit)
-        row = self.note_actions_row
-        scroll = self.breadcrumb_scroll
-        space = self.note_actions_space
-        controls_width = sum(button.style.width + row.style.gap for button in row.children
-                             if button is not scroll and button is not space)
-        inline_width = article_width - left - right - controls_width
-        # Give the path its own scrollable row when the actions leave too little room.
-        compact = inline_width < 96
-        self._breadcrumb_width = max(0, article_width - left - right if compact else inline_width)
-        if compact and scroll.parent is row:
-            row.remove(scroll)
-            row.insert(2, space)
-            scroll.style.flex = 0
-            self.secondary.add(scroll)
-        elif not compact and scroll.parent is self.secondary:
-            self.secondary.remove(scroll)
-            row.remove(space)
-            scroll.style.flex = 1
-            row.insert(2, scroll)
-        self.refresh_breadcrumbs()
+            self.secondary.insert(len(self.secondary.children) - 1, self.edit)
+        elif (not editable or not self.library.writable) and self.edit.parent is self.secondary:
+            self.secondary.remove(self.edit)
         if getattr(self, '_edit_chrome', None) != self.editing:
             self._edit_chrome = self.editing
             self.host.presentation.apply_icon(self.edit, 'view' if self.editing else 'edit',
-                                              'View document' if self.editing else 'Edit document')
+                                              'View document' if self.editing else 'Edit document',
+                                              preserve_layout=True)
+        controls = [button for button in self.secondary.children if button is not self.breadcrumb_scroll]
+        available = article_width - left - right
+        gap = self.secondary.style.gap
+        # Preserve a useful breadcrumb viewport without adding another toolbar row.
+        width = round(48 * .6) if available - len(controls) * (48 + gap) < 160 else 48
+        for button in controls:
+            if button.style.width != width:
+                button.style.width = width
+                impl = button._impl
+                if type(impl).__module__.startswith('toga_android.'):
+                    native = impl.native
+                    padding = impl.scale_in(2 if width < 48 else 12)
+                    native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
+        self._breadcrumb_width = max(0, available - len(controls) * (width + gap))
+        self.refresh_breadcrumbs()
 
     def native_note_buttons(self):
         """Keep panel controls in the title bar and document actions below it."""

@@ -84,13 +84,18 @@ class NotesLibraryTests(unittest.TestCase):
             owner.host = replace(owner.host, toolbar_insets=lambda toolbar: (72, 72))
             owner.reflow(390)
             self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
-            self.assertGreaterEqual(owner._breadcrumb_width, 96)
-            self.assertEqual(list(owner.note_actions_row.children), [owner.back_button,
-                owner.forward_button, owner.note_actions_space, owner.edit, owner.reader_actions_button])
+            self.assertGreaterEqual(owner._breadcrumb_width, 90)
+            controls = [owner.back_button, owner.forward_button, owner.edit, owner.reader_actions_button]
+            self.assertEqual(list(owner.secondary.children), [
+                *controls[:2], owner.breadcrumb_scroll, *controls[2:]])
+            self.assertEqual([button.style.width for button in controls], [29] * 4)
+            self.assertEqual([button.style.height for button in controls], [48] * 4)
             owner.reflow(834)
-            self.assertIs(owner.breadcrumb_scroll.parent, owner.note_actions_row)
+            self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
+            self.assertEqual([button.style.width for button in controls], [48] * 4)
             owner.reflow(390)
             self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
+            self.assertEqual([button.style.width for button in controls], [29] * 4)
             owner.sidebar.show_sidebar()
             self.assertIs(owner.view.children[0], header)
             owner.sidebar.show_detail()
@@ -207,7 +212,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertTrue(any(getattr(child, 'text', '') == 'Plain' for child in owner.breadcrumbs.children))
             owner.reflow(390)
             self.assertEqual(len(owner.breadcrumbs.children), 5)
-            self.assertEqual(owner.note_actions_row.children, [owner.back_button, owner.forward_button,
+            self.assertEqual(owner.secondary.children, [owner.back_button, owner.forward_button,
                 owner.breadcrumb_scroll, owner.reader_actions_button])
             await owner.breadcrumbs.children[-1].on_press()
             self.assertEqual(owner.sidebar.side, 'files')
@@ -235,8 +240,8 @@ class NotesLibraryTests(unittest.TestCase):
                     owner.host = replace(owner.host, apple=apple)
                     for width in (320, 834, 390):
                         owner.reflow(width)
-                        self.assertNotIn(owner.edit, owner.note_actions_row.children)
-                        self.assertEqual(owner.note_actions_row.children, [owner.back_button,
+                        self.assertNotIn(owner.edit, owner.secondary.children)
+                        self.assertEqual(owner.secondary.children, [owner.back_button,
                             owner.forward_button, owner.breadcrumb_scroll, owner.reader_actions_button])
                 self.assertIn('Read aloud…', [label for label, _ in owner.reader_actions.actions])
                 owner.dispose()
@@ -824,7 +829,7 @@ class NotesLibraryTests(unittest.TestCase):
                     self.assertIs(owner.view._reader_close_button, owner.close_button)
                     self.assertEqual(owner.close_button.control_icon, 'close')
                     self.assertEqual(owner.view._native_reader_buttons(), [owner.links_button])
-                    self.assertEqual(owner.note_actions_row.children[:2], [owner.back_button, owner.forward_button])
+                    self.assertEqual(owner.secondary.children[:2], [owner.back_button, owner.forward_button])
                     self.assertEqual(owner.menu.control_icon, 'notes_files')
                     self.assertFalse(owner.back_button.enabled)
                     self.assertFalse(owner.forward_button.enabled)
