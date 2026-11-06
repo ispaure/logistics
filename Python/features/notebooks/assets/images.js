@@ -145,7 +145,7 @@ function captureCutout(path) {
   }
   paintBackground(g, bg);
   const selection=imageSelection; imageSelection=null;const previous=selected;selected=new Set();
-  try { for(const p of sceneItems()) if(imageVisible(p)) { if(p.corners) paintPicture(p,g,false);else line(p,g) } } finally { imageSelection=selection;selected=previous }
+  try { paintOrderedInk(sceneItems().filter(imageVisible), g, false) } finally { imageSelection=selection;selected=previous }
   imageClipboard={src:boundedPNG(surface),width,height,sourcePageId:imagePageIdentity(),sourceCorners:[[left,top],[left+width,top],[left+width,top+height],[left,top+height]]}; imageRender(); $('status').textContent='Cutout copied. Paste on this page or another page.'
 }
 const imageDown=canvas.onpointerdown,imageMove=canvas.onpointermove,imageUp=canvas.onpointerup,imageCancel=canvas.onpointercancel;
