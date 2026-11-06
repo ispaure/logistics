@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
+from copy import deepcopy
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -89,6 +90,36 @@ class ChatUITests(unittest.TestCase):
     def configure(self, url):
         self.app.chat_url.value = url
         self.app.chat_model.value = 'fixture-model'
+
+    def test_client_preparation_failure_keeps_unsent_turn_out_of_saved_history(self):
+        app = self.app
+        self.configure('http://127.0.0.1:1234')
+        app.chat_prompt.value = 'Send once after correcting the session key'
+        self.assertTrue(app.checkpoint_chat())
+        record = app.chat_current
+        before = deepcopy(record)
+        app.chat_key.value = 'synthetic invalid key'
+        with patch('features.lm.mobile.ui.ChatClient.stream',
+                   side_effect=lambda payload, fragment: fragment('Accepted') or 'stop') as stream:
+            for _ in range(2):
+                app.loop.run_until_complete(app.send_chat())
+                self.assertIs(app.chat_current, record)
+                self.assertEqual(record, before)
+                self.assertEqual(app.chat_store.load(record['id']), before)
+                self.assertEqual(app.chat_prompt.value, before['draft'])
+                self.assertIn('API keys must', app.chat_status.value)
+                self.assertFalse(app.chat_busy)
+                self.assertIsNone(app.chat_client)
+            stream.assert_not_called()
+            app.chat_key.value = 'synthetic-valid-key'
+            app.loop.run_until_complete(app.send_chat())
+            stream.assert_called_once()
+        saved = app.chat_store.load(record['id'])
+        self.assertEqual([entry['role'] for entry in saved['messages']], ['user', 'assistant'])
+        self.assertEqual(saved['messages'][0]['content'], before['draft'])
+        self.assertEqual(saved['messages'][1]['content'], 'Accepted')
+        self.assertEqual(saved['messages'][1]['status'], 'complete')
+        self.assertEqual(saved['draft'], '')
 
     def test_laptop_preserves_transcript_and_draft_through_history_and_unfold(self):
         app = self.app
