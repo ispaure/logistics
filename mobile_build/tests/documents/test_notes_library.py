@@ -44,6 +44,27 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_search_folder_note_uses_folder_document_icon_and_opens_landing_page(self):
+        from mobile.obsidian import open_vault
+        (self.vault / 'Projects/Projects.md').write_text('# Landing page')
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            owner.select_panel_tab('Search')
+            owner.search.value = 'Projects'
+            await owner.search_task
+            rows = [row for row in owner.rows.children if any(
+                hasattr(child, 'vault_path') for child in row.children)]
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertEqual(row.children[1].browser_entry_kind, 'folder_document')
+            button = next(child for child in row.children if hasattr(child, 'vault_path'))
+            self.assertEqual(button.vault_path, 'Vault/Projects')
+            await button.on_press()
+            self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_retained_native_title_stays_above_commands_and_breadcrumbs(self):
         from mobile.obsidian import open_vault
         async def exercise():
@@ -59,6 +80,16 @@ class NotesLibraryTests(unittest.TestCase):
             owner.refresh_chrome()
             self.assertIs(owner.view.children[0], header)
             self.assertLess(list(owner.view.children).index(header), list(owner.view.children).index(owner.secondary))
+            from dataclasses import replace
+            owner.host = replace(owner.host, toolbar_insets=lambda toolbar: (72, 72))
+            owner.reflow(390)
+            self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
+            self.assertGreaterEqual(owner._breadcrumb_width, 96)
+            self.assertEqual(list(owner.note_actions_row.children), [owner.back_button,
+                owner.forward_button, owner.note_actions_space, owner.edit, owner.reader_actions_button])
+            owner.reflow(834)
+            self.assertIs(owner.breadcrumb_scroll.parent, owner.note_actions_row)
+            owner.reflow(390)
             self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
             owner.sidebar.show_sidebar()
             self.assertIs(owner.view.children[0], header)
@@ -176,7 +207,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertTrue(any(getattr(child, 'text', '') == 'Plain' for child in owner.breadcrumbs.children))
             owner.reflow(390)
             self.assertEqual(len(owner.breadcrumbs.children), 5)
-            self.assertEqual(owner.secondary.children, [owner.back_button, owner.forward_button,
+            self.assertEqual(owner.note_actions_row.children, [owner.back_button, owner.forward_button,
                 owner.breadcrumb_scroll, owner.reader_actions_button])
             await owner.breadcrumbs.children[-1].on_press()
             self.assertEqual(owner.sidebar.side, 'files')
@@ -204,8 +235,8 @@ class NotesLibraryTests(unittest.TestCase):
                     owner.host = replace(owner.host, apple=apple)
                     for width in (320, 834, 390):
                         owner.reflow(width)
-                        self.assertNotIn(owner.edit, owner.secondary.children)
-                        self.assertEqual(owner.secondary.children, [owner.back_button,
+                        self.assertNotIn(owner.edit, owner.note_actions_row.children)
+                        self.assertEqual(owner.note_actions_row.children, [owner.back_button,
                             owner.forward_button, owner.breadcrumb_scroll, owner.reader_actions_button])
                 self.assertIn('Read aloud…', [label for label, _ in owner.reader_actions.actions])
                 owner.dispose()
@@ -793,7 +824,7 @@ class NotesLibraryTests(unittest.TestCase):
                     self.assertIs(owner.view._reader_close_button, owner.close_button)
                     self.assertEqual(owner.close_button.control_icon, 'close')
                     self.assertEqual(owner.view._native_reader_buttons(), [owner.links_button])
-                    self.assertEqual(owner.secondary.children[:2], [owner.back_button, owner.forward_button])
+                    self.assertEqual(owner.note_actions_row.children[:2], [owner.back_button, owner.forward_button])
                     self.assertEqual(owner.menu.control_icon, 'notes_files')
                     self.assertFalse(owner.back_button.enabled)
                     self.assertFalse(owner.forward_button.enabled)

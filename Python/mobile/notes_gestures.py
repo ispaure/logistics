@@ -36,9 +36,13 @@ def install_opening_swipes(owner):
                     size = article.bounds.size
                     if not (0 <= point.x < size.width and 0 <= point.y < size.height):
                         return False
-                    strip = getattr(current, 'breadcrumb_scroll', None)
-                    if strip is not None and strip.parent is not None:
-                        viewport = strip._impl.native
+                    # UIKit can report an ancestor as the touch view. Hit-test
+                    # the retained scroll surfaces before walking that ancestry.
+                    for name in ('breadcrumb_scroll', 'document_web'):
+                        surface = getattr(current, name, None)
+                        if surface is None or surface.parent is None:
+                            continue
+                        viewport = surface._impl.native
                         if native_value(viewport.window) is not None and not viewport.hidden:
                             if viewport.pointInside(touch.locationInView(viewport), withEvent=None):
                                 return False
