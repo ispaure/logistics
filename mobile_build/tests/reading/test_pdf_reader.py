@@ -8,12 +8,14 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from mobile.app import LogisticsMobile
 from features.rclone.mobile.remote_readers import RemoteReaders
@@ -43,6 +45,63 @@ def search_panel():
 
 
 class PDFMobileTests(unittest.TestCase):
+    def test_android_renderer_constructor_and_context_cleanup(self):
+        from features.pdf.backends.android import AndroidPDF
+
+        class MemoryFD(BytesIO):
+            def fileno(self):
+                return 41
+
+        cases = (
+            ('success', False),
+            ('renderer acquisition', False),
+            ('renderer acquisition', True),
+            ('page count', False),
+            ('page count', True),
+        )
+        for phase, cleanup_fails in cases:
+            with self.subTest(phase=phase, cleanup_fails=cleanup_fails):
+                original_fd = MemoryFD()
+                duplicate = Mock()
+                if cleanup_fails:
+                    duplicate.close.side_effect = RuntimeError('cleanup failure')
+                from_fd = Mock(return_value=duplicate)
+                renderer = Mock()
+                renderer.close.side_effect = duplicate.close
+                renderer.getPageCount.return_value = 3
+                create_renderer = Mock(return_value=renderer)
+                failure = RuntimeError(phase)
+                if phase == 'renderer acquisition':
+                    create_renderer.side_effect = failure
+                elif phase == 'page count':
+                    renderer.getPageCount.side_effect = failure
+                classes = {
+                    'android.os.ParcelFileDescriptor': SimpleNamespace(fromFd=from_fd),
+                    'android.graphics.pdf.PdfRenderer': create_renderer,
+                }
+                java = SimpleNamespace(jclass=classes.__getitem__)
+                with patch.dict(sys.modules, {'java': java}), patch(
+                        'os.memfd_create', return_value=41, create=True), patch(
+                        'os.fdopen', return_value=original_fd):
+                    if phase == 'success':
+                        with AndroidPDF(b'fixture') as pdf:
+                            self.assertEqual(pdf.count, 3)
+                            self.assertTrue(original_fd.closed)
+                            renderer.close.assert_not_called()
+                            duplicate.close.assert_not_called()
+                    else:
+                        with self.assertRaises(RuntimeError) as caught:
+                            AndroidPDF(b'fixture')
+                        self.assertIs(caught.exception, failure)
+                self.assertTrue(original_fd.closed)
+                from_fd.assert_called_once_with(41)
+                create_renderer.assert_called_once_with(duplicate)
+                if phase == 'renderer acquisition':
+                    renderer.close.assert_not_called()
+                else:
+                    renderer.close.assert_called_once_with()
+                duplicate.close.assert_called_once_with()
+
     def test_numeric_jump_waits_for_refresh_and_rejects_a_retired_navigation(self):
         with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
             previous_root = LogisticsMobile.storage_root
