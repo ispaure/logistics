@@ -350,9 +350,12 @@ def _install_ios_appearance(app):
         @objc_method
         def traitCollectionDidChange_(self, previous: objc_id) -> None:
             send_super(__class__, self, 'traitCollectionDidChange:', previous, argtypes=[objc_id])
-            impl = self.impl
-            if impl in _surfaces:
-                paint_surface(impl, _surfaces[impl])
+            # UIKit resolves dynamic colors itself. The layer border is a
+            # static CGColor; refresh it without replacing button configuration
+            # and title state while UIKit is processing the trait transition.
+            if self.impl in _surfaces and self.layer.borderWidth:
+                color = apple_color('control_border').resolvedColorWithTraitCollection(self.traitCollection)
+                self.layer.borderColor = color.CGColor
 
         @objc_method
         def pointInside_withEvent_(self, point: CGPoint, event: objc_id) -> bool:
