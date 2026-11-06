@@ -60,6 +60,13 @@ def fit_document_title(root, label, leading_count, trailing_count, *, notes_cont
                 native.setLayoutParams(params)
                 padding = round((2 if button.style.width < 48 else 12) * density)
                 native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
+            if getattr(button._impl, '_android_surface_size', None) is not None:
+                icon_width = button._impl._control_drawable.getBounds().width()
+                start_padding = max(0, (unit - icon_width) // 2)
+                end_padding = max(0, unit - icon_width - start_padding)
+                if (native.getPaddingStart(), native.getPaddingEnd()) != (start_padding, end_padding):
+                    native.setPaddingRelative(start_padding, native.getPaddingTop(),
+                                              end_padding, native.getPaddingBottom())
         start, end = android_title_insets(width, leading_count, trailing_count, size=unit)
         titles = root.getChildAt(title_index)
         margins = titles.getLayoutParams()
@@ -156,7 +163,7 @@ def sync(app, view, destination):
         toolbar = root.getParent()
         if notes_controls and isinstance(toolbar, jclass('androidx.appcompat.widget.Toolbar')):
             adapter._reader_action_bar_insets = toolbar, toolbar.getContentInsetStart(), toolbar.getContentInsetEnd()
-            inset = round(8 * root.getResources().getDisplayMetrics().density)
+            inset = round(4 * root.getResources().getDisplayMetrics().density)
             toolbar.setContentInsetsRelative(inset, inset)
         adapter._reader_action_bar_title = label
         adapter._reader_action_bar_status = status

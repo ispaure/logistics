@@ -200,6 +200,8 @@ def mount_apple_title(view, controller, title):
         tools.close()
     bounds = controller.view.bounds.size
     available = float(bounds.width) or float(view.window._impl.native.bounds.size.width)
+    if notes_controls:
+        view._notes_compact_title = not edge and available < 600
     control_widths = (button.style.width for button in controls)
     gutters = ((32 if edge else 16) + sum((width if isinstance(width, (int, float)) else 48) + 8
                                         for width in control_widths)
@@ -253,6 +255,10 @@ def mount_apple_title(view, controller, title):
                         button.parent.remove(button)
                 header.add(*controls[:-1], header._title_content, controls[-1])
         if notes_controls:
+            inset = 4 if view._notes_compact_title else 8
+            if header.style.margin_left != inset:
+                header.style.margin_left = header.style.margin_right = inset
+                header._title_content.style.margin_left = header._title_content.style.margin_right = inset
             if edge and close.parent is header:
                 header.remove(close)
             elif not edge and close.parent is not header:

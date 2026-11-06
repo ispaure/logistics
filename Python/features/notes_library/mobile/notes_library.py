@@ -252,9 +252,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.close_button = self.host.presentation.icon_button(
             "close", "Close Notes Library", on_press=self.close
         )
-        if host.apple:
-            host.presentation.surface(self.close_button, radius=24, background='surface',
-                                      foreground='text', outlined=False)
+        self.close_button._impl._android_surface_size = 32
+        host.presentation.surface(self.close_button, radius=24, background='surface',
+                                  foreground='text', outlined=False)
         self.toolbar.insert(0, self.close_button)
         self.view._reader_close_button = self.close_button
         for button in (self.back_button, self.forward_button):
@@ -347,6 +347,10 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         article_width = max(0, available - files_extent)
         self.welcome_content.style.width = min(360, max(0, article_width - 48))
         left, right = (8, 8) if self.sidebar.wide else self.host.toolbar_insets(self.secondary)
+        backend = type(self.close_button._impl).__module__
+        compact_header = getattr(self.view, '_notes_compact_title', False)
+        if compact_header or backend.startswith('toga_android.'):
+            left = right = 4
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
         show = self.path is not None and not self.sidebar.sidebar_open
