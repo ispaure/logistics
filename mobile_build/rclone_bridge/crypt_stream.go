@@ -121,6 +121,11 @@ func cryptArchive(ctx context.Context, name, encrypted, identity, password, memb
 	return archiveContents(ctx, blocks, reader.size, password, member, 10000, 16*1024*1024)
 }
 
+type archiveMemberReadError struct{ cause error }
+
+func (e archiveMemberReadError) Error() string { return "Could not read the inner ZIP member." }
+func (e archiveMemberReadError) Unwrap() error { return e.cause }
+
 func archiveContents(ctx context.Context, reader io.ReaderAt, size int64, password, member string, maxMembers, maxRead int) (any, error) {
 	archive, err := zip.NewReader(reader, size)
 	if err != nil {
@@ -147,23 +152,47 @@ func archiveContents(ctx context.Context, reader io.ReaderAt, size int64, passwo
 	}
 	if selected != nil {
 		file := selected
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if file.UncompressedSize64 > uint64(maxRead) {
 			return nil, errors.New("archive member exceeds the read buffer limit")
 		}
-		if file.IsEncrypted() {
+		encrypted := file.IsEncrypted()
+		if encrypted {
 			if password == "" {
 				return nil, archivePasswordError
 			}
 			file.SetPassword(password)
 		}
+		memberError := func(err error) error {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			for _, contextErr := range []error{context.Canceled, context.DeadlineExceeded} {
+				if errors.Is(err, contextErr) {
+					return contextErr
+				}
+			}
+			if err == nil {
+				return nil
+			}
+			if encrypted {
+				return archivePasswordError
+			}
+			return archiveMemberReadError{cause: err}
+		}
 		stream, err := file.Open()
 		if err != nil {
-			return nil, archivePasswordError
+			return nil, memberError(err)
 		}
 		data, readErr := readBounded(ctx, stream, maxRead)
 		closeErr := stream.Close()
-		if readErr != nil || closeErr != nil || uint64(len(data)) != file.UncompressedSize64 {
-			return nil, archivePasswordError
+		if err := memberError(errors.Join(readErr, closeErr)); err != nil {
+			return nil, err
+		}
+		if uint64(len(data)) != file.UncompressedSize64 {
+			return nil, memberError(errors.New("invalid inner archive member size"))
 		}
 		return map[string]string{"data": base64.StdEncoding.EncodeToString(data)}, nil
 	}
