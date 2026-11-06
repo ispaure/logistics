@@ -499,6 +499,11 @@ async def rotate_panel(app, *, panel, cycle, orientation):
 
 
 async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
+    from .rotation_screens import select_screens
+    # Validate before any navigation or native orientation request.
+    panels = tuple(screen.panel for screen in select_screens(panels))
+    if type(cycles) is not int or cycles < 1:
+        raise ValueError('Rotation cycles must be a positive integer.')
     samples = []
     captured = set()
     from .timings import measure, section
@@ -545,100 +550,9 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
             return
         return await measure(app, 'rotation-panel', check_panel(name), panel=name)
 
-    app.show_locations()
-    await check('workspaces')
-    for source in ('rclone', 'Network shares', 'Local'):
-        app.change_folder_source(source)
-        assert app.folder_source == source
-        await check('workspace-' + source)
-    from services.documents.locations import collection_path
-    root = collection_path(app.private_root) / 'Rotation fixture'
-    (root / 'Child').mkdir(parents=True, exist_ok=True)
-    (root / 'Child' / 'Note.md').write_text('# Rotation fixture\n\nRetain this panel.')
-    await app.show_files(location=('Local files', root.name))
-    await check('folder')
-    await app.browser_file_folder(next(row for row in app.file_rows.values() if row['name'] == 'Child'))
-    await check('nested-folder')
-    app.show_home()
-    await check('home')
-    app.show_documents_hub()
-    await check('documents')
-    app.show_chat()
-    await check('chat')
-    app.show_chat_configuration()
-    await check('chat-configuration')
-    app.show_settings()
-    await check('settings')
-    app.settings_navigation.choose('Text')
-    await check('settings-text')
-    app.routes.back()
-    app.settings_navigation.choose('About')
-    await check('settings-about')
-    app.show_cloud_connections()
-    await check('connections')
-    app.show_home()
-    assert await app.open_hub_file()
-    await check('home-file-picker')
-    app.adaptive.browser('home').cancel_browser()
-    document = app.store.create('Rotation.md', b'# Rotation\n\nRetain this document.')
-    app.open_document(document.id)
-    app.show_documents(destination='home')
-    await check('markdown-preview')
-    app.show_documents(edit=True, destination='home')
-    await check('text-editor')
-    app.show_home()
-    from .fixtures import make_books
-    from commonUtils.runtime.resources.documents import LocalDocuments
-    fixtures = root / 'Readers'
-    fixtures.mkdir(exist_ok=True)
-    epub, comic = make_books(fixtures)
-    for path, name in ((epub, 'epub'), (comic, 'comic')):
-        store = app.reader_manager().catalog.library_store
-        book = store.import_book(LocalDocuments(), path)
-        await app.open_book(book['id'])
-        owner = app.readers.active
-        if name == 'comic':
-            owner.set_reading_mode(False)
-        await check(name)
-        app.show_home()
-    from commonUtils.runtime.resources.local import LocalFiles
-    from features.text_editor.resources import LocalTextCopies
-    app.show_home()
-    assert await app.open_crypt(copies=LocalTextCopies(LocalFiles(root / 'Child')), key='Note.md')
-    await check('provider-markdown')
-    owner = app.private_sessions.active
-    owner.toggle_private_preview()
-    await check('provider-text-editor')
-    app.show_home()
-    from types import SimpleNamespace
-    from services.documents.readers import PrivateReader
-    def open_archive(key, **kwargs):
-        reader = PrivateReader(key, (fixtures / key).read_bytes())
-        reader.key = key
-        return reader
-    copies = SimpleNamespace(root=fixtures, provider=LocalFiles(fixtures),
-                             encrypted=False, offline=True, open=open_archive)
-    assert await app.open_crypt(copies=copies, key=epub.name), app.cloud_status.value
-    await check('provider-epub')
-    owner = app.private_sessions.active
-    owner.show_provider_epub_find()
-    await check('provider-epub-find')
-    owner.provider_epub_view.close_find()
-    app.show_home()
-    from mobile.obsidian import open_vault
-    vault = await open_vault(app, LocalFiles(root), 'Child', destination='home')
-    await check('notes-library')
-    await vault.open_note('Child/Note.md')
-    await check('notes-article')
-    app.show_settings()
-    from mobile.documentation_ui import show_documentation
-    wiki = root / 'Wiki'
-    wiki.mkdir(exist_ok=True)
-    page = wiki / 'docs.md'
-    page.write_text('# Rotation guide\n\nRetain the current help page.')
-    reader = show_documentation(app, wiki, page)
-    from .web_checks import wait_for_text
-    await wait_for_text(reader.web, 'Retain the current help page.')
-    assert reader.path == page.resolve() and reader.history == [reader.path] and reader.history_index == 0
-    await check('documentation')
-    return {'rotation_preserves_panels': True, 'rotation_samples': samples}
+    from .rotation_screens import coverage_inventory, visit_screens
+    await visit_screens(app, check, panels=panels)
+    from mobile.navigation import DESTINATION_ITEMS
+    from mobile.settings.categories import CATEGORIES
+    return {'rotation_preserves_panels': True, 'rotation_samples': samples,
+            'rotation_inventory': coverage_inventory(DESTINATION_ITEMS, CATEGORIES, panels=panels)}
