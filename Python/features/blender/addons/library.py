@@ -14,10 +14,13 @@ from tempfile import TemporaryDirectory
 import tomllib
 import zipfile
 
+from commonUtils.persistence.atomic import atomic_write_bytes
 from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
 from features.blender.installation.releases import relative_path
+
+SELECTION_FILE = '.logistics-addons.json'
 
 
 def version_tuple(value):
@@ -268,7 +271,7 @@ class AddonLibrary:
         return max(choices, key=lambda item: (version_tuple(item.version), item.published), default=None)
 
     def selection(self, root):
-        path = root / '.logistics-addons.json'
+        path = root / SELECTION_FILE
         if not path.exists():
             return {'selected': [], 'installed': {}}
         if path.is_symlink():
@@ -282,6 +285,28 @@ class AddonLibrary:
                        for entry in value['installed'].values())):
             raise ValueError('Invalid preset addon selection')
         return value
+
+    def save_pending_selection(self, release, name, identities, *, bluehole):
+        """Save choices for the next launch while retaining installed state."""
+        from features.blender.addons import bluehole as bluehole_source
+        from features.blender.installation.install import installation_lock
+
+        config = bluehole_source.validate(bluehole)
+        root = self.manager.preset(release, name)
+        with installation_lock(root):
+            self.manager._require_idle(release, name)
+            state = self.selection(root)
+            previous = state.get('bluehole', {})
+            if 'installed_bluehole' not in state and previous.get('commit'):
+                state['installed_bluehole'] = {key: previous.get(key) for key in ('branch', 'commit')}
+            if config['deluxe']:
+                config['deluxe_stamp'] = previous.get('deluxe_stamp')
+            state.update(selected=list(identities), bluehole=config)
+            self._publish_selection(root, state)
+
+    def _publish_selection(self, root, state):
+        path = self.manager._contained(root, SELECTION_FILE)
+        atomic_write_bytes(path, json.dumps(state, indent=2).encode('utf-8'))
 
     def apply(self, release, name, identities, *, bluehole=None, cancelled=lambda: False):
         self.warnings = []
@@ -361,8 +386,6 @@ class AddonLibrary:
                 run_blender_script(executable, manager.environment(release, name), Path(__file__).with_name('apply_addons.py'),
                                    request, cancelled=cancelled)
                 check_cancelled(cancelled)
-                staged = root / '.logistics-addons.tmp'
-                manager._contained(root, staged.name)
                 installed_bluehole = ({
                     'branch': installed_branch,
                     'commit': commit,
@@ -374,8 +397,7 @@ class AddonLibrary:
                     'installed_bluehole': installed_bluehole,
                     'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp},
                 }
-                staged.write_text(json.dumps(selection, indent=2), encoding='utf-8')
-                staged.replace(root / '.logistics-addons.json')
+                self._publish_selection(root, selection)
             except BaseException:
                 for folder in folders:
                     if (root / folder).exists():
