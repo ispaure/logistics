@@ -3,6 +3,7 @@ import asyncio
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 from commonUtils.testing.event_loop import close_loop
@@ -24,6 +25,45 @@ def linked_pdf():
 
 
 class PDFMobileLinkTests(unittest.TestCase):
+    @patch('features.pdf.links.safe_page_links', side_effect=lambda data, index: [index])
+    @patch('features.images.validation.image_dimensions', side_effect=lambda page: page)
+    def test_only_committed_spreads_replace_link_geometry(self, dimensions, links):
+        from features.pdf.mobile.canvas import PDFNavigation
+
+        for action in ('failed load', 'back probe', 'uncommitted resize'):
+            with self.subTest(action=action):
+                document = SimpleNamespace(data=b'', count=5, page=lambda index: (300, 600))
+                navigation = PDFNavigation(document)
+                viewport = (1200, 800)
+                indices, _ = navigation.load(2, viewport)
+                navigation.commit(indices, viewport)
+                shown_sizes = {index: navigation.sizes[index] for index in indices}
+                shown_links = dict(navigation.links)
+                if action == 'failed load':
+                    def page(index):
+                        if index == 1:
+                            raise OSError('Cannot read second page')
+                        return (300, 600)
+                    document.page = page
+                    with self.assertRaisesRegex(OSError, 'Cannot read second page'):
+                        navigation.load(0, viewport)
+                elif action == 'back probe':
+                    self.assertEqual(navigation.previous(), 0)
+                else:
+                    document.page = lambda index: (600, 1200)
+                    navigation.load(2, (600, 1000))
+
+                self.assertEqual(navigation.indices, indices)
+                self.assertEqual(navigation.viewport, viewport)
+                self.assertEqual(navigation.links, shown_links)
+                self.assertEqual({index: navigation.sizes[index] for index in indices}, shown_sizes)
+
+                document.page = lambda index: (400, 800)
+                next_indices, _ = navigation.load(0, viewport)
+                navigation.commit(next_indices, viewport)
+                self.assertEqual(navigation.links, {0: [0], 1: [1]})
+                self.assertEqual(navigation.sizes[0], (400, 800))
+
     def test_link_undo_expiry_and_retired_session(self):
         with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
             previous_root = LogisticsMobile.storage_root
