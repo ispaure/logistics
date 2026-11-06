@@ -54,13 +54,17 @@ class PDFSearchBar(toga.Box):
                 results = await asyncio.shield(worker)
             except asyncio.CancelledError as error:
                 action.cancelled.set()
-                # Cancelling the await does not stop the extraction thread.
-                # Retain the busy owner until that worker has retired.
+                # Keep the request busy until extraction retires. Cancelling
+                # asyncio.wait does not cancel the underlying worker task.
                 try:
                     if worker is not None:
-                        await worker
-                except Exception:
-                    pass
+                        while not worker.done():
+                            try:
+                                await asyncio.wait((worker,))
+                            except asyncio.CancelledError:
+                                continue
+                        if not worker.cancelled():
+                            worker.exception()
                 finally:
                     self.controller.fail(action, error)
                 raise

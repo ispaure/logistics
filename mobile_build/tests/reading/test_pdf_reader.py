@@ -152,17 +152,21 @@ class PDFMobileTests(unittest.TestCase):
 
     def test_search_rejects_late_completion_after_edit_inactivity_or_dispose(self):
         from features.pdf.search import search_pdf
-        for change in ('edit', 'error', 'inactive', 'dispose', 'cancel'):
+        for change in ('edit', 'error', 'inactive', 'dispose', 'cancel', 'cancel twice'):
             with self.subTest(change=change), search_panel() as (app, search, pages, active):
-                started, release = Event(), Event()
+                started, release, finished = Event(), Event(), Event()
+                cancelled = change in ('cancel', 'cancel twice')
                 def slow_search(data, query, **kwargs):
                     started.set()
-                    if not release.wait(5):
-                        raise TimeoutError('Search fixture was not released')
-                    if change == 'error':
-                        raise RuntimeError('obsolete failure')
-                    # Intentionally ignore cancellation to exercise result rejection.
-                    return search_pdf(data, query)
+                    try:
+                        if not release.wait(5):
+                            raise TimeoutError('Search fixture was not released')
+                        if change == 'error':
+                            raise RuntimeError('obsolete failure')
+                        # Intentionally ignore cancellation to exercise result rejection.
+                        return search_pdf(data, query)
+                    finally:
+                        finished.set()
                 async def check():
                     search.input.value = 'needle'
                     with patch('features.pdf.mobile.search.search_pdf', slow_search):
@@ -180,13 +184,20 @@ class PDFMobileTests(unittest.TestCase):
                                 pending.cancel()
                                 await asyncio.sleep(0)
                                 self.assertTrue(search.controller.state.busy)
+                                if change == 'cancel twice':
+                                    pending.cancel()
+                                    done, _ = await asyncio.wait([pending], timeout=0.05)
+                                    self.assertTrue(search.controller.state.busy)
+                                    self.assertFalse(done)
                         finally:
                             release.set()
-                        if change == 'cancel':
-                            with self.assertRaises(asyncio.CancelledError):
+                            if started.is_set():
+                                self.assertTrue(await asyncio.to_thread(finished.wait, 5))
+                            if cancelled and pending.cancelling():
+                                with self.assertRaises(asyncio.CancelledError):
+                                    await pending
+                            else:
                                 await pending
-                        else:
-                            await pending
                     self.assertEqual(pages, [])
                     self.assertFalse(search.controller.results.matches)
                     self.assertEqual(search.status.text, '')
