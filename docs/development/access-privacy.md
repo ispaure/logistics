@@ -33,11 +33,12 @@ Device sleep is an environment/lifecycle event; the speech timer counts listenin
 time and is not a credential gate.
 
 iOS temporary inactivity (including Control Center) immediately covers protected
-pixels without issuing a lifecycle password challenge or pausing video. Actual
-application/scene backgrounding and protected-data unavailability still conceal
-playback and lock eligible sessions. Call, audio interruption, capture and output
-route safeguards remain independent. Returning from temporary inactivity removes
-the cover without starting previously paused playback.
+pixels and locks eligible sessions through `ScreenPrivacy.interrupt()` and
+`conceal()`, including the video conceal callback. Returning requires resume
+authentication unless the configured trusted Wi-Fi waiver applies. Unprotected
+interruptions do not lock or conceal ordinary playback; actual background entry
+retains its playback policy. Call, audio interruption, capture and output route
+safeguards remain independent. See [resume challenges](#resume-challenges-and-asynchronous-callbacks).
 
 ## Baseline and migration
 
