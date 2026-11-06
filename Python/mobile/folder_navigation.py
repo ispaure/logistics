@@ -300,6 +300,13 @@ class FolderNavigation:
                         panel.refresh()
                         retained.preview.browser.vertical_position = retained.scroll
                 continue
+            # The previous item supplies UIKit's Back button for this folder.
+            # Keep the native chevron and pop gestures without breadcrumb text.
+            if type(getattr(routes.app, '_impl', None)).__module__.startswith('toga_iOS.'):
+                from rubicon.objc import SEL
+                previous = routes.host.adapter.content_controller(destination).navigationItem
+                if previous.respondsToSelector(SEL('setBackButtonDisplayMode:')):
+                    previous.backButtonDisplayMode = 2  # UINavigationItemBackButtonDisplayModeMinimal
             Routes.show(routes, view, destination=destination, route=entry.route, title=title)
         for route, panel, _ in routes.screens[destination]:
             retained = self.screens.get((destination, route))
