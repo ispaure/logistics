@@ -14,6 +14,7 @@ from commonUtils.runtime.resources.selection import ResourceSelection
 from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.runtime.resources.provider import capabilities
 from .control_icons import icon_button
+from services.documents.storage import DocumentPolicy
 from services.workflow_host import HostService, StateAttribute
 
 
@@ -55,6 +56,7 @@ class PickerOperation:
     """
     data: bytes | None = None
     source_document: object = None
+    source_policy: DocumentPolicy | None = None
     privacy_gate: object = None
     origin: PickerOrigin | None = None
     creation: tuple | None = None
@@ -277,7 +279,10 @@ class EditorPicker:
             return
         if self.cloud_busy or owner is None or owner.crypt_reader is None or not owner.crypt_reader.editable:
             return
-        operation = PickerOperation(origin=self._capture_origin(owner, managed=False))
+        source = getattr(owner.crypt_reader, 'source', None)
+        provider = getattr(source, 'provider', owner._crypt_reader_store)
+        operation = PickerOperation(origin=self._capture_origin(owner, managed=False),
+                                    source_policy=DocumentPolicy.for_provider(provider))
         await self.show_text_destination(owner.crypt_reader.name, owner.crypt_reader.text_snapshot.encode(owner.crypt_text.value),
             privacy_gate=getattr(owner, 'privacy_gate', None), operation=operation)
 
@@ -307,7 +312,9 @@ class EditorPicker:
 
     async def show_notebook_destination(self, panel):
         epoch, navigation = self._epoch, self.app.navigation_generation
+        source = getattr(getattr(panel, 'document', None), 'resource', None)
         operation = PickerOperation(origin=self._capture_origin(panel, managed=False),
+                                    source_policy=source.policy if source is not None else None,
                                     binary_owner=panel, privacy_gate=panel.privacy_gate)
         name = panel.editor.notebook.name + '.rmdoc'
         data = await asyncio.to_thread(panel.editor.notebook.to_bytes)
@@ -1186,7 +1193,10 @@ class EditorPicker:
         work = self._begin_work()
         operation = work.presentation
         data, creation = operation.data, operation.creation
+        origin = operation.origin
         try:
+            if not self._accepts(work) or (origin is not None and not self.app.workspace.accepts(origin.token)):
+                return
             notebook = self.creating_notebook()
             if creation is not None and notebook and self.notebook_templates is not None:
                 operation.notebook_template, operation.notebook_format = self.notebook_templates.selection()
@@ -1203,13 +1213,14 @@ class EditorPicker:
                 session_count=len(self.app.workspace.sessions), session_limit=MAX_SESSIONS, store=self.store,
                 source_document=source_document, notebook_template=operation.notebook_template,
                 notebook_format=operation.notebook_format)
-            if operation.binary_owner is not None:
-                from services.documents.storage import DocumentPolicy
-                source = operation.binary_owner.document.resource
-                if source is not None and source.policy.confirm_plaintext(DocumentPolicy.for_provider(provider)):
-                    if not await self.app.main_window.dialog(toga.ConfirmDialog(
-                            'Save to unencrypted storage?', 'The destination will contain a decrypted copy. Continue?')) or not self._accepts(work):
-                        return
+            source_policy = operation.source_policy
+            confirm_plaintext = source_policy is not None and source_policy.confirm_plaintext(
+                DocumentPolicy.for_provider(provider))
+            if confirm_plaintext:
+                confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
+                    'Save to unencrypted storage?', 'The destination will contain a decrypted copy. Continue?'))
+                if not self._accepts(work) or not confirmed:
+                    return
             destination, revision = await asyncio.to_thread(request.resolve, cancelled=work.cancel.is_set)
             if not self._accepts(work):
                 return
@@ -1220,9 +1231,11 @@ class EditorPicker:
                     'Replacing it will overwrite its contents.'))
                 if not self._accepts(work) or not confirmed:
                     return
-                if (target, label, folder) != (self.save_as_name.value, self.save_as_storage.value, self.picker_folder.value):
-                    self.save_as_status.value = 'Destination changed. Save again to confirm the new destination.'
-                    return
+            if (confirm_plaintext or revision is not None) and target != self.save_as_name.value:
+                self.save_as_status.value = 'Destination changed. Save again to confirm the new destination.'
+                return
+            if origin is not None and not self.app.workspace.accepts(origin.token):
+                return
             publication = await asyncio.to_thread(request.publish, destination, revision,
                                                    cancelled=work.cancel.is_set)
             if not self._accepts(work):
@@ -1259,6 +1272,7 @@ class EditorPicker:
                     source_document.text = source_document.snapshot.text
                     self.app.finish_save_as_source(source_document)
                 self.operation.source_document = None
+                self.operation.source_policy = None
             else:
                 self.save_as_status.value = ('The file was created in the chosen folder, but its editor could not be opened.'
                     if creation is not None else 'The file was saved, but its editor could not be opened. The Save As draft is retained.')
