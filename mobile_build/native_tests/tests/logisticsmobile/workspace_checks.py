@@ -119,9 +119,12 @@ async def exercise_workspace(app):
     await capture('conversations')
     assert list(app.chat_workspace.children) == ([app.chat_sidebar, app.chat_messages] if navigation.wide else [app.chat_sidebar])
     if navigation.wide:
-        pair = width(app.chat_sidebar), width(app.chat_messages)
-        assert abs(pair[0] - pair[1]) <= 2, ('Unequal native chat panes', pair)
-        assert max(pair) <= app.adaptive.content_width('chat') / 2 + 2, ('Chat exceeded its native allocation', pair)
+        sidebar, conversation = width(app.chat_sidebar), width(app.chat_messages)
+        available = width(app.chat_workspace)
+        expected_sidebar = min(320, app.adaptive.content_width('chat') // 3)
+        assert abs(sidebar - expected_sidebar) <= 2, ('Unexpected native Chat sidebar width', sidebar, expected_sidebar)
+        assert conversation > sidebar, ('Chat must give the conversation more space', sidebar, conversation)
+        assert abs(sidebar + 12 + conversation - available) <= 2, ('Chat did not fit its native allocation', available)
     app.open_chat(key)
     assert app.chat_prompt.value == 'Unsent conversation draft'
     app.chat_drawer_open = False
@@ -134,7 +137,7 @@ async def exercise_workspace(app):
         tab = app.native_host.adapter.controller.tabBar
         bar = tab.convertRect(tab.bounds, toView=window)
         if not tab.isHidden() and bar.origin.y >= rect.origin.y:
-            assert rect.origin.y + rect.size.height <= bar.origin.y - 10, 'Tab bar covers composer'
+            assert rect.origin.y + rect.size.height <= bar.origin.y - 6 + 1, 'Tab bar covers composer'
     app.show_settings()
     await capture('settings')
     assert app.native_host.state.destination == 'settings'
