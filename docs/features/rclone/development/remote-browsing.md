@@ -242,6 +242,27 @@ ordinary/crypt remote text and comics through the real Python/native boundary,
 without creating an offline copy.
 
 
+## Native connection and archive errors
+
+`mobile_build/rclone_bridge/main.go` owns cached backend contexts in `clients`.
+Each operation temporarily connects its cancellation to those retained contexts.
+Normal completion detaches all cancellation hooks before ending the request, so
+cached OAuth work is not left attached to an already-completed request. Explicit
+cancellation retires the connected lifetimes; a later access rebuilds them.
+Rooted online mirror/download connections use the same `remoteRootFs` owner.
+Crypt backing lookups validate the cached filesystem identity and full remote-path
+join, including colon-containing roots; a foreign cached lifetime is cleared and
+retried rather than adopted. `backend_lifetime_test.go` and
+`operation_scope_test.go` cover these boundaries with synthetic host backends.
+
+`crypt_stream.go:archiveContents()` keeps member-read cancellation and deadline
+errors distinct from an inner ZIP password error. For an unencrypted member,
+payload I/O/size failures have a generic wire message while preserving their
+underlying cause internally. Encrypted AES/ZipCrypto members retain the existing
+password fallback for other failures. `file_archive_test.go` covers these bounded
+member paths; manifest, metadata and thumbnail paths are outside this correction.
+These host checks do not establish OS/device acceptance.
+
 ## Native validation, 2026-10-15
 
 The final browse-only payload passed 16 targeted checks on each of Android 15
