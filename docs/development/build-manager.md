@@ -478,6 +478,14 @@ For adding a file, suite or native case, use the
 supplies selectable choices. The adapter connects those choices to phases,
 optional file previews and declared JUnit artifacts. These are separate steps.
 
+`python3 dev.py test-map` keeps schema 1 and the legacy `file_count`/`test_files`
+fields for matching `test*.py` files. `source_count`/`source_files` instead follow
+the declared source roots and patterns; host `standalone_files` identify declared
+drivers outside that filename family. `case_count`/`case_ids` come from explicit
+native/runtime registries. Unenumerated external layers have no invented case
+total. iOS and Android can share source files: source/support counts and runnable
+case counts must not be added as interchangeable coverage.
+
 The descriptor now declares `portable.contracts` (tooling contracts under
 `Python/tests/tooling`), `desktop.ui` (application/UI checks under
 `Python/tests/application`), `android.native`, `android.runtime`, `ios.native`,
@@ -759,6 +767,18 @@ required job, and be at most 24 hours old. Missing, skipped, failed, stale or
 unavailable proof runs that family afresh. The retained evidence artifact links
 the accepted run IDs and source. Packaging/reproducibility checks and publication
 remain required. The selector consumes completed GitHub workflow records.
+
+Hosted Android runtime collection belongs to `logistics_build/android_runtime_hosted.py`.
+It reads the app-private receipt from its owned emulator with a 1 MiB limit and
+retains it on the host as `android-receipt.json`. It verifies the staged manifest,
+runtime identity, expected cases and
+absence of skips. Raw receipts remain diagnostic evidence on failure. Canonical
+`android-result.json` and `android-result.receipt.log` are published only after
+owned emulator teardown, final diagnostic handling and scratch retirement succeed.
+The primary failure survives secondary collection/cleanup errors; logcat remains
+best effort and can record an error marker. `test_android_runtime_hosted.py` uses
+host fixtures for these failure paths and does not certify hosted adb transport
+or native behavior. Local runtime results remain a separate acceptance scope.
 
 ## Shared test environment settings
 
