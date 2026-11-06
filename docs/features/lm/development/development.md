@@ -374,6 +374,16 @@ rollback. Chat UI methods read these records directly. Existing app `chat_*`
 accessors forward to the same records without copying state. Host capabilities
 are read-only references that follow the application's current services.
 
+`ChatUI` checks `active_host` before presenting controls and again after model
+discovery or transcript JavaScript awaits. Late results, errors and rendering
+acknowledgements cannot update a retired host. `set_chat_busy()` still resets the
+logical request state without touching retired controls. The send operation's
+terminal cleanup still checkpoints its partial reply and draft for that
+conversation; suppressing presentation does not discard its persistence work.
+`mobile_build/tests/chat/test_chat_ui.py` exercises delayed results and retirement
+with host fixtures. Live model service and native WebView acceptance remain
+separate.
+
 ## Mobile source manifest
 
 `Python/features/lm/mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

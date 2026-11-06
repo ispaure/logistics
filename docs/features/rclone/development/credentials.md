@@ -81,6 +81,15 @@ Native `mobile/credential_loading.py` captures a bounded ZIP and alias snapshot,
 then delegates atomic import, device-vault restore, or SMB addition to the
 existing `CloudClient`/native authorities. Native ZIP passwords remain necessary
 for retained session ZIPs; this does not turn device retention into an unlock.
+
+The native bridge's `credential_sets.go:publishCredentialSets()` copies each
+remote's settings map under its originating store's mutex. The published alias
+view therefore owns its maps instead of sharing mutable dictionaries between
+credential sets. Live getters and OAuth token setters still route to the origin
+through its existing generation checks. Connection lifetime belongs to the
+[native backend owner](remote-browsing.md#native-connection-and-archive-errors),
+separately from this credential projection.
+
 `credentials.retain(NativeCredentialRetention(...))` resolves connection identities
 and package aliases through the native adapter, then asks `CredentialPackages` to
 retain only the original password-protected ZIP. Its request carries the selected
