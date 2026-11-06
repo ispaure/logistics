@@ -321,35 +321,50 @@ class CryptBrowserView(qt.QMainWindow):
         self.open_operation.start(open_private, message='Opening private document…')
 
     def _opened(self, result, error):
-        if self.closing or self.open_operation.cancelled.is_set():
-            self.idle.emit()
-            return
-        path, fragment, password = self.pending_document
-        if error or result is None:
-            from services.documents.zip_passwords import is_password_error
-            if is_password_error(error):
-                from desktop.dialogs.archive_password import ask_password
-                password = ask_password(path, error, self, source=self.provider)
-                if password:
-                    self.open_document(path, fragment, password=password)
-            return
-        kind, payload = result
-        if kind == 'markdown':
-            data, resources = payload
-            storage = MarkdownStorage(self.provider, path, data, resources, self._open_link)
-            release = self.provider.acquire()
+        resources = result[1][1] if result is not None and result[0] == 'markdown' else None
+        failure = None
+        try:
+            if self.closing or self.open_operation.cancelled.is_set():
+                self.idle.emit()
+                return
+            path, fragment, password = self.pending_document
+            if error or result is None:
+                from services.documents.zip_passwords import is_password_error
+                if is_password_error(error):
+                    from desktop.dialogs.archive_password import ask_password
+                    password = ask_password(path, error, self, source=self.provider)
+                    if password:
+                        self.open_document(path, fragment, password=password)
+                return
+            kind, payload = result
+            if kind == 'markdown':
+                data, resources = payload
+                storage = MarkdownStorage(self.provider, path, data, resources, self._open_link)
+                release = self.provider.acquire()
+                try:
+                    window = PrivateMarkdownWindow(path, storage, edit=self.pending_markdown_edit)
+                except Exception:
+                    release()
+                    raise
+                resources = None  # The window now owns the prepared media through storage.
+                window.destroyed.connect(release)
+                if fragment:
+                    window.viewer.browser.scrollToAnchor(fragment)
+                _windows.append(window)
+                window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
+                show_document(window)
+            self.open_operation.hide()
+        except BaseException as caught:
+            failure = caught
+            raise
+        finally:
+            # A discarded or failed handoff must retire its retained media.
             try:
-                window = PrivateMarkdownWindow(path, storage, edit=self.pending_markdown_edit)
-            except Exception:
-                release()
+                getattr(resources, 'close', lambda: None)()
+            except Exception as cleanup_error:
+                if failure is not None:
+                    raise failure from cleanup_error
                 raise
-            window.destroyed.connect(release)
-            if fragment:
-                window.viewer.browser.scrollToAnchor(fragment)
-            _windows.append(window)
-            window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
-            show_document(window)
-        self.open_operation.hide()
 
     def _open_link(self, path, fragment=''):
         if self.closing:

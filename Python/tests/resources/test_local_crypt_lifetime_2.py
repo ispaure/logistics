@@ -13,6 +13,125 @@ from tests.local_crypt_fixture import crypt_fixture
 
 
 from tests.resources.localcrypt_cases import LocalCryptCase
+from threading import Event
+from types import SimpleNamespace
+from unittest import TestCase
+from unittest.mock import Mock
+
+
+class MarkdownCompletionTests(TestCase):
+    """Use real resource ownership with fake media; never start a transport."""
+
+    def setUp(self):
+        from services.documents.markdown import MarkdownResources
+        from features.rclone.localcrypt.ui import views
+        self.views = views
+        self.resources = MarkdownResources()
+        self.media = Mock()
+        self.resources.media = self.media
+        self.resources['synthetic-image'] = b'synthetic image bytes'
+        self.resources.videos['synthetic-video'] = 'synthetic handle'
+        self.resources.errors['synthetic-error'] = 'synthetic message'
+        self.addCleanup(self.resources.close)
+        self.result = 'markdown', (b'# Synthetic private document', self.resources)
+        self.release = Mock()
+        self.host = SimpleNamespace(closing=False, open_operation=SimpleNamespace(cancelled=Event(), hide=Mock()),
+                                    idle=Mock(), pending_document=(Path('/synthetic/note.md'), '', None),
+                                    pending_markdown_edit=False, provider=Mock(acquire=Mock(return_value=self.release)),
+                                    _open_link=Mock())
+        self.storage = self.enterContext(patch.object(views, 'MarkdownStorage'))
+        self.window = self.enterContext(patch.object(views, 'PrivateMarkdownWindow'))
+        self.show = self.enterContext(patch.object(views, 'show_document'))
+        self.enterContext(patch.object(views, '_windows', []))
+
+    def complete(self, error=''):
+        self.views.CryptBrowserView._opened(self.host, self.result, error)
+
+    def assert_retired(self):
+        self.media.close.assert_called_once_with()
+        self.assertIsNone(self.resources.media)
+        self.assertFalse(self.resources)
+        self.assertFalse(self.resources.videos)
+        self.assertFalse(self.resources.errors)
+        self.show.assert_not_called()
+
+    def test_cancelled_completion_closes_media_once(self):
+        self.host.open_operation.cancelled.set()
+        self.complete()
+        self.assert_retired()
+        self.host.idle.emit.assert_called_once_with()
+        self.storage.assert_not_called()
+        self.complete()  # Retained operation results can be discarded again safely.
+        self.media.close.assert_called_once_with()
+
+    def test_closing_completion_closes_media(self):
+        self.host.closing = True
+        self.complete()
+        self.assert_retired()
+        self.host.idle.emit.assert_called_once_with()
+
+    def test_failed_completion_closes_unpublished_media(self):
+        self.complete('synthetic opening failure')
+        self.assert_retired()
+        self.storage.assert_not_called()
+
+    def test_failed_storage_handoff_closes_media(self):
+        self.storage.side_effect = ValueError('synthetic storage failure')
+        with self.assertRaisesRegex(ValueError, 'synthetic storage failure'):
+            self.complete()
+        self.assert_retired()
+        self.host.provider.acquire.assert_not_called()
+
+    def test_revoked_acquire_closes_media(self):
+        self.host.provider.acquire.side_effect = ValueError('synthetic locked provider')
+        with self.assertRaisesRegex(ValueError, 'synthetic locked provider'):
+            self.complete()
+        self.assert_retired()
+        self.window.assert_not_called()
+
+    def test_failed_window_handoff_closes_media_and_releases_provider(self):
+        self.window.side_effect = ValueError('synthetic window failure')
+        with self.assertRaisesRegex(ValueError, 'synthetic window failure'):
+            self.complete()
+        self.assert_retired()
+        self.release.assert_called_once_with()
+
+    def test_successful_window_handoff_preserves_media_and_lease(self):
+        self.complete()
+        self.storage.assert_called_once_with(self.host.provider, self.host.pending_document[0],
+                                            self.result[1][0], self.resources, self.host._open_link)
+        self.media.close.assert_not_called()
+        self.release.assert_not_called()
+        self.assertIs(self.resources.media, self.media)
+        self.assertTrue(self.resources)
+        self.show.assert_called_once_with(self.window.return_value)
+        self.window.return_value.destroyed.connect.assert_any_call(self.release)
+        self.host.open_operation.hide.assert_called_once_with()
+
+    def test_cleanup_failure_does_not_replace_handoff_failure(self):
+        failure = ValueError('synthetic window failure')
+        cleanup_failure = RuntimeError('synthetic media cleanup failure')
+        self.window.side_effect = failure
+        with patch.object(self.resources, 'close', side_effect=cleanup_failure) as close:
+            with self.assertRaises(ValueError) as raised:
+                self.complete()
+        self.assertIs(raised.exception, failure)
+        self.assertIs(raised.exception.__cause__, cleanup_failure)
+        close.assert_called_once_with()
+        self.release.assert_called_once_with()
+
+    def test_cleanup_failure_without_handoff_failure_remains_visible(self):
+        self.host.closing = True
+        with patch.object(self.resources, 'close', side_effect=RuntimeError('synthetic media cleanup failure')):
+            with self.assertRaisesRegex(RuntimeError, 'synthetic media cleanup failure'):
+                self.complete()
+
+    def test_cancelled_completion_without_payload_needs_no_cleanup(self):
+        self.host.open_operation.cancelled.set()
+        for result in (None, ('markdown', (b'synthetic', {}))):
+            self.result = result
+            self.complete()
+        self.show.assert_not_called()
 
 
 class LocalCryptLifetimeTests(LocalCryptCase):
