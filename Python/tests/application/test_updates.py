@@ -51,7 +51,7 @@ class UpdateUITests(QtTestCase):
             root = Path(temp)
             path = updates.ROOT / 'Python/configFile.ini'
             store = register_settings(path, root / 'personal.ini')
-            with patch('desktop.pages.settings.settings_store', return_value=store):
+            with patch('desktop.settings.configuration.settings_store', return_value=store):
                 panel = ConfigurationPanel([path], layered=True, scoped=False, scope='personal')
             editor = panel.stack.currentWidget()
             tabs = [editor.sections.tabText(i) for i in range(editor.sections.count())]

@@ -75,7 +75,8 @@ class DesktopSnowTests(unittest.TestCase):
         from desktop.snow import FIELD
         with TemporaryDirectory() as directory:
             store = LayeredSettings(Path(directory) / 'defaults.ini', Path(directory) / 'personal.ini')
-            with patch('desktop.pages.settings.settings_store', return_value=store):
+            with patch('desktop.settings.appearance.settings_store', return_value=store), \
+                    patch('desktop.settings.configuration.settings_store', return_value=store):
                 panel = CommonUtilsPanel(layered=True)
                 self.assertTrue(panel.snow_choice.isChecked())
                 panel.set_scope('personal')
