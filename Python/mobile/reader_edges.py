@@ -50,34 +50,6 @@ def footer_touch_extension(view, home):
     return max(0, footer_bottom_extension(view, home) - passive_caption_tail(view))
 
 
-def apple_reader_top(container, window):
-    """A side bar's rectangular status inset need not cover the reader width."""
-    native = container.native
-    origin = native.convertRect(native.bounds, toView=window).origin
-    top = max(0, float(window.safeAreaInsets.top) - float(origin.y))
-    responds = getattr(native, 'respondsToSelector', None)
-    if responds is None:
-        return top
-    from rubicon.objc import SEL
-    if not responds(SEL('reservedRegionsOfKind:options:')):
-        return top
-    from .ios_reader_chrome import occlusion_geometry
-    left, right = container.left_inset, float(native.bounds.size.width) - container.right_inset
-    from .ios_system_occlusions import control_top_clearance
-    regions = occlusion_geometry(native)
-    # A window-wide rectangular inset can describe a status/activity cluster
-    # entirely inside the excluded side rail. When UIKit reports that top
-    # cluster wholly outside the content column, reclaim its rectangular row.
-    # Retain hardware clearance for missing or content-intersecting geometry.
-    top_regions = [(x, width) for x, y, width, height in regions
-                   if width > 0 and height > 0 and y <= top and y + height > 0]
-    if top_regions and all(x + width <= left or x >= right for x, width in top_regions):
-        # Reclaim the hardware band without moving content above the window.
-        top = max(0, -float(origin.y))
-    return control_top_clearance(regions, left, right, top)
-
-
-
 def compact_apple_reader(container):
     """The reader owns the title row; keep only the hardware inset above it."""
     if container.content is None:
@@ -104,6 +76,8 @@ def compact_apple_reader(container):
         return False
     changed = False
     from .ios_toolbar import vertical_edge
+    from .ios_system_occlusions import content_column_top
+    edge = vertical_edge(getattr(container, 'controller', None))
     if reader is not None and getattr(reader, '_reader_top_band_state', None) is not None:
         # The native header owns actual system-region clearance inside content.
         origin = container.native.convertRect(container.native.bounds, toView=window).origin
@@ -111,7 +85,7 @@ def compact_apple_reader(container):
         if abs(container.top_inset - top) > .5:
             container.top_inset = top
             changed = True
-    elif reader is not None and (edge := vertical_edge(getattr(container, 'controller', None))):
+    elif reader is not None and edge:
         # Notes has interactive rows across the full content width. UIKit can
         # extend that width beneath the floating rail during a layout pass.
         if getattr(reader, '_notes_title_controls', ()) and edge in (1, 2):
@@ -130,7 +104,7 @@ def compact_apple_reader(container):
                     changed = True
         # Calculate top clearance after excluding the rail so its status
         # cluster does not push down the Files tabs and document together.
-        top = apple_reader_top(container, window)
+        top = content_column_top(container, window)
         if abs(container.top_inset - top) > .5:
             container.top_inset = top
             changed = True
@@ -143,6 +117,17 @@ def compact_apple_reader(container):
         changed = True
     from .appearance import reserve_navigation
     reserve_navigation(app, view=view)
+    drawers = getattr(view, '_notes_drawers', None)
+    if drawers is not None:
+        extension = 0
+        if edge in (1, 2):
+            frame = container.native.convertRect(container.native.bounds, toView=window)
+            panel_offset = drawers.view.layout.absolute_content_top - view.layout.absolute_content_top
+            top_gap = max(0, float(frame.origin.y) + container.top_inset + panel_offset)
+            bottom_gap = (float(window.bounds.size.height - frame.origin.y - frame.size.height)
+                          + container.bottom_inset + view.style.margin_bottom)
+            extension = max(0, round(bottom_gap - top_gap))
+        changed = drawers.extend_files_bottom(extension) or changed
     return changed
 
 

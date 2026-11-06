@@ -5,7 +5,8 @@ import unittest
 from unittest.mock import patch
 
 from commonUtils.testing.stages import TestStage
-from mobile.reader_edges import apple_reader_top, compact_apple_reader
+from mobile.ios_system_occlusions import content_column_top
+from mobile.reader_edges import compact_apple_reader
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -24,7 +25,7 @@ class ReaderTopClearanceTests(unittest.TestCase):
         container=NS(native=native,left_inset=left,right_inset=right)
         with patch.dict(sys.modules, {'rubicon.objc':NS(SEL=lambda selector:selector)}), patch(
                 'mobile.ios_reader_chrome.occlusion_geometry',return_value=regions):
-            return apple_reader_top(container,window)
+            return content_column_top(container,window)
 
     def test_side_cluster_does_not_spend_a_row_across_the_content(self):
         for width,height in ((951,669),(854,600),(669,951)):

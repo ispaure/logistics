@@ -299,6 +299,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if host.apple:
             self.view._document_title_controls = (self.menu, self.links_button)
             self.view._document_title_parent = self.article
+            self.view._notes_drawers = self.sidebar
         self.view._native_reader_buttons = self.native_note_buttons
         self.sidebar.on_change = self.refresh_chrome
         welcome_body = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
@@ -836,8 +837,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 searching=searching, tree_depth=depth,
                 tree_expanded=(entry['path'] in self.expanded) if entry['directory'] and not searching else None,
                 tree_landing=landing_page(entry) is not None)
-                for entry, depth in flattened[:self.shown]]
-            self.rows.footer(message, len(flattened) > self.shown)
+                for entry, depth in flattened]
+            self.rows.message(message)
             self.rows.add(*records)
             self.sidebar.refresh_gestures()
             yield
