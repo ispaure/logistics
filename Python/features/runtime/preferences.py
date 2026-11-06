@@ -25,32 +25,35 @@ class PreferenceState:
 
     def load_feature_preferences(self, path=None):
         """Load defaults before feature initialization; no package folders are renamed."""
-        from ..preferences import preferences_path, load_disabled
+        from ..preferences import preferences_path, load_disabled, read_legacy_disabled
         self.layered = path is None
         path = Path(path) if path is not None else preferences_path()
-        disabled = load_disabled(path)
         if self.layered:
             store = self.feature_settings_store()
+            legacy_disabled = None
             try:
                 from ..settings import migration_ledger
                 overrides = store.overrides()
                 def migrate():
-                    if path.exists():
-                        store.save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))})
+                    nonlocal legacy_disabled
+                    legacy_disabled = read_legacy_disabled(path)
+                    if legacy_disabled is not None:
+                        store.save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(legacy_disabled))})
                 migration_ledger(store).run('feature-enable-v1', migrate,
                                            already_applied=('Migration', 'features_bool') in overrides)
-            except (OSError, UnicodeError, Error, ValueError) as error:
-                log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
-            try:
+                # Later migrations consume the import. Do not complete them
+                # until its data and completion marker have both been saved.
+                legacy_disabled = None
                 self._migrate_feature_overrides(store)
                 self._migrate_notes_library(store)
-                disabled = self._effective_disabled_features(store)
             except (OSError, UnicodeError, Error, ValueError) as error:
-                log(Severity.ERROR, 'Feature settings', f'Could not migrate per-feature choices; original files preserved: {error}')
-                disabled = self._effective_disabled_features(store)
-        if not self.layered and path.exists():
-            from ..preferences import migrate_notes_library
-            disabled = migrate_notes_library(path, disabled)
+                log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
+            disabled = self._effective_disabled_features(store, fallback=legacy_disabled)
+        else:
+            disabled = load_disabled(path)
+            if path.exists():
+                from ..preferences import migrate_notes_library
+                disabled = migrate_notes_library(path, disabled)
         self.disabled.clear()
         self.disabled.update(disabled)
         self.path = path
@@ -66,8 +69,8 @@ class PreferenceState:
         return result
 
 
-    def _effective_disabled_features(self, store):
-        disabled = self.default_disabled_features()
+    def _effective_disabled_features(self, store, *, fallback=None):
+        disabled = self.default_disabled_features() if fallback is None else set(fallback)
         # Preserve the old selection if migration cannot publish; retry next launch.
         try:
             legacy = store.overrides().get(('FeatureDefaults', 'disabled_list-str'))
