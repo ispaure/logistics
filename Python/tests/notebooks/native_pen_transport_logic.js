@@ -45,9 +45,11 @@ console.log(JSON.stringify({constant_pressure_choice:true,default_event_force_pr
 const queueSource=fs.readFileSync(path.replace('input.js','queue.js'),'utf8');
 context.queue=[{op:'save'},{op:'stroke',points:[[1,1,.5]]}];context.busy=true;context.continuousInk=false;context.active=null;
 context.$=()=>({textContent:''});context.render=()=>{};context.pump=()=>{};
+context.wholeErasePreview=new Set(['previewed-stroke']);
 vm.runInContext(queueSource.slice(queueSource.indexOf('window.notebookUpdate ='),queueSource.indexOf('// Mobile acknowledges')),context);
 context.window.notebookUpdate({native_pen:true},'');
 assert.equal(context.queue.length,1);assert.equal(context.queue[0].op,'stroke','Retry ack lost queued pen input');
+assert.equal(context.wholeErasePreview.size,0,'Acknowledgement must clear the live eraser preview');
 console.log(JSON.stringify({retry_nonerror_ack_preserves_queued_stroke:true}));
 
 // Execute the production command pump too. Only the generated host-transport
