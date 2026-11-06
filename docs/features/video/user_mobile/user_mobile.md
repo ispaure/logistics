@@ -117,7 +117,7 @@ Cloud playback is best effort: startup and seeking may buffer or fail with slow
 networks, provider quotas or limited range support. A connection or decoder failure
 shows a retry message instead of an endless spinner; press Play to retry from the
 held position. A changed video must be closed and reopened. For persistent issues,
-or manually make a Local/LocalCrypt copy. Cloud checkpoints are encrypted and can survive closing; no plaintext movie or cloud resume sidecar is saved. Remote and crypt playback passed focused Android, iPad and iPhone
+manually make a Local/LocalCrypt copy. Cloud checkpoints are encrypted and can survive closing; no plaintext movie or cloud resume sidecar is saved. Remote and crypt playback passed focused Android, iPad and iPhone
 emulator/simulator checks using synthetic HTTPS remotes. Live-cloud throughput
 and physical-device behavior still require separate acceptance. See the [implementation and remaining acceptance work](../development/development.md).
 
