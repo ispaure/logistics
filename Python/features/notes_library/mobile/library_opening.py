@@ -27,7 +27,7 @@ class LibraryDocuments:
         if self.valid():
             await self.host.show_error(title, str(error))
 
-    async def prepare_leave(self, *, save=False):
+    async def prepare_leave(self, *, save=False, confirm=None):
         editor = self.embedded
         if editor is None:
             return True
@@ -44,9 +44,10 @@ class LibraryDocuments:
             if editor.dirty:
                 if save or getattr(editor, 'autosave_on_leave', False):
                     return await editor.save() and self.valid() and self.embedded is editor
-                if self.host.confirm is None:
+                confirm = confirm or self.host.confirm
+                if confirm is None:
                     return False
-                choice = await self.host.confirm()
+                choice = await confirm()
                 if not self.valid() or self.embedded is not editor:
                     return False
                 if choice == 'save':

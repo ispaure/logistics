@@ -235,6 +235,19 @@ class NotesHeaderProbe(NotesDrawersProbe):
             await owner.toggle_folder('Large folder')
             assert owner.rows.recycled
             assert any(row.path == 'Large folder/Note 54.md' for row in owner.rows.native_list.data)
+            drawer = owner.sidebar.overlay
+            if drawer is not None:
+                pending = asyncio.create_task(owner.file_actions('Home.md'))
+                await asyncio.sleep(.3)
+                choice = owner.sidebar.action_overlay
+                assert choice is not None and owner.sidebar.overlay is drawer
+                await capture_window(self, evidence / 'notes-file-actions-portrait.png')
+                cancel = choice.panel.content.children[-1]._impl.native
+                cancel.sendActionsForControlEvents_(1 << 6)
+                await asyncio.wait_for(pending, timeout=5)
+                assert owner.sidebar.overlay is drawer and owner.sidebar.side == 'files'
+                owner.sidebar.show_detail()
+                owner.sidebar.finish_dismissals()
             close = owner.close_button._native_reader_close_item
             if close is None:
                 owner.close_button._impl.native.sendActionsForControlEvents_(1 << 6)
