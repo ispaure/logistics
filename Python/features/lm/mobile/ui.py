@@ -24,6 +24,8 @@ class ChatTranscript(toga.WebView):
 
 class ChatUI:
     def show_chat(self, widget=None, *, present=True, **kwargs):
+        if not self.active_host:
+            return
         if not self.app.require_feature('lm', destination='chat', present=present):
             return
         if not hasattr(self, 'chat_store'):
@@ -396,6 +398,8 @@ class ChatUI:
         bar.tintColor = self.presentation.apple_color('text')
 
     def set_chat_status(self, value, *, validation=False):
+        if not self.active_host:
+            return
         anchor = self.chat_save_feedback if validation else self.chat_connection_feedback
         feedback = self.chat_config_status_box
         if feedback.parent is not anchor:
@@ -437,6 +441,8 @@ class ChatUI:
         self.render_chat_workspace()
 
     def show_chat_configuration(self, widget=None, *, destination=None, **kwargs):
+        if not self.active_host:
+            return
         destination = destination or ('settings' if self.native_host.state.destination == 'settings' else 'chat')
         if not self.app.require_feature('lm', destination=destination):
             return
@@ -482,6 +488,8 @@ class ChatUI:
         self.fit_chat_configuration()
 
     def save_chat_configuration(self, widget=None, **kwargs):
+        if not self.active_host:
+            return
         if self.state.busy:
             return
         try:
@@ -499,6 +507,8 @@ class ChatUI:
             self.set_chat_status(str(error), validation=True)
 
     def refresh_chats(self):
+        if not self.active_host:
+            return
         try:
             asyncio.get_running_loop()
             asynchronous = True
@@ -578,7 +588,7 @@ class ChatUI:
             return False
 
     def open_chat(self, key):
-        if self.state.busy or not self.checkpoint_chat():
+        if not self.active_host or self.state.busy or not self.checkpoint_chat():
             return
         self.state.needs_initial_selection = False
         try:
@@ -603,7 +613,7 @@ class ChatUI:
                 self.open_chat(key)
 
     def new_chat(self, widget=None, **kwargs):
-        if self.state.busy or not self.checkpoint_chat():
+        if not self.active_host or self.state.busy or not self.checkpoint_chat():
             return
         self.state.needs_initial_selection = False
         try:
@@ -619,6 +629,8 @@ class ChatUI:
             self.set_chat_status(str(error))
 
     def chat_draft_changed(self, widget, **kwargs):
+        if not self.active_host:
+            return
         self.resize_chat_composer()
         if (not self.state.loading and widget.value and self.state.current is None
                 and self.state.needs_initial_selection):
@@ -630,15 +642,18 @@ class ChatUI:
         if not self.state.loading and self.state.current is not None:
             self.state.current['draft'] = widget.value
             self.chat_store.queue_save(self.state.current, self.loop,
-                failed=lambda error: self.set_chat_status('Chat not saved: ' + str(error))
-                    if self.active_host else None)
+                failed=lambda error: self.set_chat_status('Chat not saved: ' + str(error)))
 
     def update_chat_transcript(self):
+        if not self.active_host:
+            return
         self.transcript.revision += 1
         self.update_chat_header()
         self.schedule_chat_render()
 
     def chat_transcript_loaded(self, widget=None, **kwargs):
+        if not self.active_host:
+            return
         self.transcript.ready = True
         self.transcript.revision += 1
         self.transcript.generation += 1
@@ -647,13 +662,13 @@ class ChatUI:
         self.schedule_chat_render()
 
     def schedule_chat_render(self):
-        if self.transcript.ready and (self.transcript.task is None or self.transcript.task.done()):
+        if self.active_host and self.transcript.ready and (self.transcript.task is None or self.transcript.task.done()):
             self.transcript.task = self.loop.create_task(self.render_chat_transcript())
 
     async def render_chat_transcript(self):
         rendered = -1
         try:
-            while rendered != self.transcript.revision:
+            while self.active_host and rendered != self.transcript.revision:
                 rendered = self.transcript.revision
                 generation = self.transcript.generation
                 data = self.state.current
@@ -663,6 +678,8 @@ class ChatUI:
                     # One renderer owns each WebView; merge bursts while keeping
                     # all native control access on the UI loop.
                     await asyncio.sleep(.08)
+                    if not self.active_host:
+                        return
                 force_latest, self.transcript.force_latest = self.transcript.force_latest, False
                 previous = self.transcript.entries if self.transcript.key == data['id'] else []
                 messages = [dict(role=entry['role'], status=entry['status'], content=entry['content'])
@@ -681,6 +698,8 @@ class ChatUI:
                     configured=configured(self.chat_profile),
                     force_latest=force_latest, start=start)
                 ready = await self.chat_transcript.evaluate_javascript(script)
+                if not self.active_host:
+                    return
                 if not ready:
                     # The initial blank-page load may finish before set_content.
                     # Its next real load event will render the current record.
@@ -693,6 +712,8 @@ class ChatUI:
             self.set_chat_status('Conversation display unavailable: ' + str(error)[:200])
 
     async def chat_primary_action(self, widget=None, **kwargs):
+        if not self.active_host:
+            return
         if self.state.busy:
             if self.state.generating:
                 self.cancel_chat()
@@ -702,6 +723,8 @@ class ChatUI:
     def set_chat_busy(self, busy, *, generating=False):
         self.state.busy = busy
         self.state.generating = busy and generating
+        if not self.active_host:
+            return
         self.chat_config_save.enabled = not busy
         for control in (self.chat_provider, self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
                         self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
@@ -789,6 +812,8 @@ class ChatUI:
             self.chat_model.value = widget.value
 
     async def refresh_chat_models(self, widget=None, **kwargs):
+        if not self.active_host:
+            return
         if not self.app.require_feature('lm', destination=getattr(self, 'chat_config_destination', 'chat')):
             return
         if self.state.busy:
@@ -800,6 +825,8 @@ class ChatUI:
             self.state.client = (ChatClient(profile['base_url'], self.chat_key.value)
                                  if profile.get('provider', 'server') == 'server' else client_for(profile))
             models = await asyncio.to_thread(self.state.client.models)
+            if not self.active_host:
+                return
             # Replacing Selection.items can fire on_change for its first item.
             # Retain the configured/manual model if the server still offers it.
             selected = profile['model'] if profile['model'] in models else (models[0] if models else '')
@@ -818,6 +845,8 @@ class ChatUI:
             self.set_chat_status('On-device model ready. Save settings to finish.' if profile.get('provider') in MODELS else f'Connected. {len(models)} model(s) available. Save settings to finish.' if models
                                  else 'Connected, but no models were listed. Load a model on the server or enter its exact ID below.')
         except Exception as error:
+            if not self.active_host:
+                return
             if PROVIDERS[self.chat_provider.value] != 'server':
                 self.chat_model.value = ''
                 try:
@@ -830,6 +859,8 @@ class ChatUI:
             self.set_chat_busy(False)
 
     async def send_chat(self, widget=None, **kwargs):
+        if not self.active_host:
+            return
         if not self.app.require_feature('lm', destination='chat'):
             return
         if self.state.busy or self.state.current is None:
@@ -915,12 +946,15 @@ class ChatUI:
             elif self.state.client:
                 self.state.client.cancel()
             self.state.client = None
+            # The terminal reply and draft still belong to this conversation.
             self.checkpoint_chat()
             self.update_chat_transcript()
             self.refresh_chats()
             self.set_chat_busy(False)
 
     def cancel_chat(self, widget=None, **kwargs):
+        if not self.active_host:
+            return
         self.state.cancelled = True
         if self.state.client:
             self.state.client.cancel()
@@ -928,6 +962,8 @@ class ChatUI:
         self.set_chat_status('Stopping…')
 
     async def export_chat(self, widget=None, **kwargs):
+        if not self.active_host:
+            return
         if self.state.busy or self.state.current is None:
             return
         try:
