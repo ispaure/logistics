@@ -3,6 +3,7 @@ import argparse
 from collections import Counter
 import faulthandler
 from fnmatch import fnmatchcase
+import hashlib
 import importlib.util
 import json
 import math
@@ -86,7 +87,16 @@ def source_inventory(row, levels):
                 cases=[case for case in row.inventory() if case['stage'] in stages])
 
 
-def read_child_evidence(path, stage, exit_code):
+def child_context(path, stage, order, seed):
+    path = path.resolve()
+    return dict(directory=str(path.parent), pattern=path.name, isolated=False,
+                stages=[stage], order=order, seed=seed, python=sys.executable,
+                platform=platform.platform(),
+                test_environment={key: os.environ.get(key) for key in ('QT_QPA_PLATFORM', 'TOGA_BACKEND')},
+                source=dict(path=str(path), sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
+
+
+def read_child_evidence(path, stage, exit_code, expected):
     """Read a checkpoint in order, retaining validated records before a defect."""
     records, not_run = [], []
     try:
@@ -98,6 +108,9 @@ def read_child_evidence(path, stage, exit_code):
 
     if not isinstance(data, dict) or type(data.get('schema_version')) is not int or data['schema_version'] != 1:
         return records, not_run, True, 'Invalid child timing report schema.'
+    if any(key not in data or type(data[key]) is not type(value) or data[key] != value
+           for key, value in expected.items()):
+        return records, not_run, True, 'Child timing report does not match the launched source context.'
     if not isinstance(data.get('tests'), list):
         return records, not_run, True, 'Child timing report must contain a tests list.'
     for index, row in enumerate(data['tests'], 1):
@@ -151,6 +164,14 @@ def read_child_evidence(path, stage, exit_code):
                 module_name, _, _ = module_name.rpartition('.')
             if not any(skips.get(fixture_id) == row['reason'] for fixture_id in fixture_ids):
                 return records, not_run, True, 'Successful child omitted a case without matching setup fixture skip.'
+    try:
+        discovery = json.loads(path.with_suffix('.plan.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError, RecursionError) as error:
+        return records, not_run, True, f'Cannot read child discovery plan: {error}'
+    if (not isinstance(discovery, dict) or any(key not in discovery or type(discovery[key]) is not type(value)
+                                             or discovery[key] != value for key, value in expected.items())
+            or discovery.get('planned_tests') != planned):
+        return records, not_run, True, 'Child timing report differs from its saved runtime discovery plan.'
     return records, not_run, True, None
 
 
@@ -220,6 +241,7 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
         with TemporaryDirectory(prefix='logistics-test-timing-') as temporary:
             child_report = Path(temporary) / 'timing.json'
             command.extend(['--report', str(child_report), '--timing-child'])
+            expected = child_context(path, level.value, order, seed)
             try:
                 code = subprocess.run(command, timeout=ISOLATED_FILE_TIMEOUT,
                                       env=dict(os.environ, BUILD_MANAGER_TEST_FILE=relative_file)).returncode
@@ -228,7 +250,7 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                     outcome = 'crashed'
             except subprocess.TimeoutExpired:
                 code, outcome = 124, 'timeout'
-            records, not_run, available, evidence_error = read_child_evidence(child_report, level.value, code)
+            records, not_run, available, evidence_error = read_child_evidence(child_report, level.value, code, expected)
             if evidence_error:
                 print(f'{relative_file} [stage={level.value}]: {evidence_error}', file=sys.stderr, flush=True)
                 if code == 0:
@@ -325,6 +347,8 @@ def main():
         if not available:
             parser.error(f'Required test dependency is unavailable: {name}. Use the owning suite environment.')
     args.stages = tuple(s for s in STAGE_ORDER if s.value in args.stage) if args.stage else PROFILES[args.profile]
+    if args.timing_child and (not args.single_file or args.isolate_modules or len(args.stages) != 1):
+        parser.error('--timing-child requires one exact file and one stage')
     exact_files = [args.pattern] if args.single_file else args.exact_file
     if args.inventory:
         try:
@@ -346,6 +370,9 @@ def main():
     if args.exact_file:
         report.data['exact_files'] = args.exact_file
     report.data.update(order=args.order, seed=args.seed)
+    if args.timing_child:
+        report.child_context = child_context(args.directory / args.pattern, args.stages[0].value, args.order, args.seed)
+        report.data.update(report.child_context)
     report.save()
     try:
         code = run_with_report(args, report)
@@ -478,6 +505,11 @@ def run_suite(args, report, rows):
         stage_by_id.update((test.id(), level.value) for level, test in cases)
         report.data.update(stages=[s.value for s in args.stages], not_run=[],
                            planned_tests=[dict(id=t.id(), stage=s.value) for s, t in cases])
+        if args.timing_child:
+            # Save the existing runtime discovery once, before execution. The
+            # final mutable report cannot silently lose both plan and results.
+            report.path.with_suffix('.plan.json').write_text(json.dumps(dict(
+                report.child_context, planned_tests=report.data['planned_tests'])), encoding='utf-8')
         class StagedSuite(unittest.TestSuite):
             def run(self, result, debug=False):
                 for level in args.stages:
