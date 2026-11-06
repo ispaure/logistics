@@ -204,6 +204,33 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'Missing required'):
                 packaging.package(root, Path(root) / 'release.zip', [], required={'launcher'})
 
+    def test_default_required_inventory_includes_build_manager_bootstrap(self):
+        bootstrap_files = {
+            'build-project.json',
+            'logistics_build/manager_bridge.py',
+            'logistics_build/tooling_bootstrap.py',
+        }
+        names = packaging.REQUIRED | bootstrap_files
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in sorted(names):
+                source = root / name
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text(name, encoding='utf-8')
+
+            output = root / 'release.zip'
+            for missing in sorted(bootstrap_files):
+                with self.subTest(missing=missing):
+                    with self.assertRaises(RuntimeError) as error:
+                        packaging.package(root, output, sorted(names - {missing}))
+                    self.assertEqual(str(error.exception), f'Missing required release files: {[missing]}')
+                    self.assertFalse(output.exists())
+
+            packaging.package(root, output, sorted(names))
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(set(archive.namelist()),
+                                 {'Logistics/.app-install.json'} | {'Logistics/' + name for name in names})
+
     def test_recursive_inventory(self):
         with patch('package_release.subprocess.check_output', side_effect=[
                 ' abc shared\n def shared/nested\n', b'a.py\0shared/nested/b.py\0']) as git:
