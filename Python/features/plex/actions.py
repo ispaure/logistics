@@ -13,11 +13,13 @@ from zipfile import BadZipFile
 import config
 
 from commonUtils import ui
+from commonUtils.persistence.publication import mutation_lock
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.runtime.platform import OS, get_os
 
 from features.plex import detection as plex_detection
 from features.plex import folders as plex_folders
+from features.plex.package_publication import require_package_ready
 from features.rclone.transfers.workflow import reviewed_sync
 
 
@@ -52,14 +54,16 @@ def clear_local_pmsdata(remote_cls):
     """Delete the contents of the local -PMSDATA folder."""
 
     path = Path(get_local_cls_pmsdata(remote_cls).path)
-    if path.is_symlink() or path.is_junction():
-        raise ValueError(f'Cannot clear a linked package directory: {path}')
-    if path.exists():
-        for child in path.iterdir():
-            if child.is_symlink() or child.is_junction() or child.is_file():
-                child.unlink()
-            elif child.is_dir():
-                shutil.rmtree(child)
+    with mutation_lock:
+        if path.is_symlink() or path.is_junction():
+            raise ValueError(f'Cannot clear a linked package directory: {path}')
+        require_package_ready(path)
+        if path.exists():
+            for child in path.iterdir():
+                if child.is_symlink() or child.is_junction() or child.is_file():
+                    child.unlink()
+                elif child.is_dir():
+                    shutil.rmtree(child)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -73,6 +77,7 @@ def pull_pms(remote_cls, config_path: str | Path):
     source_path = remote_cls_pmsdata.name + ':'
     destination_path = Path(config.LogisticsConfig().path_remote_local, remote_cls_pmsdata.name)
 
+    require_package_ready(destination_path)
     reviewed_sync(
         source_path,
         destination_path,
@@ -88,6 +93,7 @@ def push_pms(remote_cls, config_path: str | Path):
     source_path = local_cls_pmsdata.path
     destination_path = local_cls_pmsdata.name + ':'
 
+    require_package_ready(source_path)
     reviewed_sync(
         source_path,
         destination_path,
@@ -114,6 +120,7 @@ def unpackage_pms(remote_cls) -> bool:
     tool = 'Unpackage Plex Media Server'
     try:
         package = Path(get_local_cls_pmsdata(remote_cls).path)
+        require_package_ready(package)
         destination = plex_detection.get_pms_data_path()
         if destination is None:
             raise ValueError('Could not determine the Plex Media Server data directory.')

@@ -82,8 +82,17 @@ class PlexPublicationTests(unittest.TestCase):
             with self.interrupt_moves(replace), self.assertRaisesRegex(RuntimeError, 'needs recovery'):
                 transaction.publish()
             self.assertTrue((transaction.recovery / 'journal.json').is_file())
+            retry = PackagePublication(destination, sorted(staging.iterdir()), [destination / 'archive.002'])
+            before = {p.name: p.read_bytes() for p in transaction.recovery.iterdir()}
+            with self.assertRaises(publication.PackageRecoveryRequired) as raised:
+                retry.publish()
+            self.assertIn(str(transaction.recovery), str(raised.exception))
+            self.assertFalse(retry.recovery.exists())
+            self.assertEqual({p.name: p.read_bytes() for p in transaction.recovery.iterdir()}, before)
             PackagePublication.recover(transaction.recovery)
             self.assertEqual({p.name: p.read_bytes() for p in destination.iterdir()}, original)
+            retry.publish()
+            self.assertEqual((destination / 'archive.001').read_bytes(), b'new archive.001')
 
     def test_recovery_rejects_malformed_journals_without_touching_members(self):
         import json

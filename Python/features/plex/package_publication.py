@@ -6,6 +6,41 @@ from uuid import uuid4
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 
+_RECOVERY_PREFIX = '.logistics-plex-recovery-'
+
+
+class PackageRecoveryRequired(RuntimeError):
+    """The local package has retained recovery artifacts."""
+
+
+def _committed_recovery(directory):
+    journal = directory / 'journal.json'
+    if (directory.is_symlink() or directory.is_junction() or not directory.is_dir()
+            or journal.is_symlink() or not journal.is_file()):
+        return False
+    try:
+        state = json.loads(journal.read_text())
+    except (OSError, ValueError):
+        return False
+    return isinstance(state, dict) and state.get('schema') == 1 and state.get('phase') == 'committed'
+
+
+def require_package_ready(directory):
+    """Refuse admission while a retained recovery entry needs inspection."""
+    with mutation_lock:
+        try:
+            recovery = next((entry for entry in Path(directory).iterdir()
+                             if entry.name.startswith(_RECOVERY_PREFIX)), None)
+        except FileNotFoundError:
+            return
+        if recovery is None:
+            return
+        if _committed_recovery(recovery):
+            guidance = 'Before retrying, verify the published package and manually resolve the retained cleanup.'
+        else:
+            guidance = 'Before retrying, inspect the recovery journal and resolve the retained recovery.'
+        raise PackageRecoveryRequired(f'Plex package recovery remains at {recovery}. {guidance}')
+
 
 def _signature(path):
     info = path.stat()
@@ -27,7 +62,7 @@ class PackagePublication:
             raise ValueError('journal.json is reserved for recovery metadata.')
         if len(names) != len(set(names)):
             raise ValueError('Package outputs must have distinct names.')
-        self.recovery = self.destination / ('.logistics-plex-recovery-' + uuid4().hex)
+        self.recovery = self.destination / (_RECOVERY_PREFIX + uuid4().hex)
         self.state = dict(schema=1, phase='prepared', originals=[], published={})
 
     def _save(self):
@@ -76,6 +111,7 @@ class PackagePublication:
 
     def publish(self):
         with mutation_lock:
+            require_package_ready(self.destination)
             originals = {}
             for target in [*(self.destination / path.name for path in self.outputs), *self.obsolete]:
                 if target.parent != self.destination or target.is_symlink() or target.is_junction() or (target.exists() and not target.is_file()):

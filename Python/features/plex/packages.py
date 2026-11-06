@@ -11,6 +11,8 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 from commonUtils.runtime.platform import OS
 
+from .package_publication import PackagePublication, require_package_ready
+
 REGISTRY_KEY = r'HKEY_CURRENT_USER\Software\Plex, Inc.\Plex Media Server'
 PLIST_NAME = 'com.plexapp.plexmediaserver.plist'
 
@@ -66,6 +68,7 @@ def package_data(source: Path, destination: Path, platform, seven_zip=None, pref
     source, destination = Path(source), Path(destination)
     archive_name(platform)
     _validate_locations(source, destination)
+    require_package_ready(destination)
     _validate_tree(source)
     destination.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='.logistics-plex-', dir=destination) as temporary:
@@ -98,7 +101,6 @@ def package_data(source: Path, destination: Path, platform, seven_zip=None, pref
         obsolete = [path for path in destination.iterdir()
                     if path.is_file() and path.name not in names
                     and platform == OS.WIN and path.name.startswith('pms_data.7z')]
-        from .package_publication import PackagePublication
         PackagePublication(destination, outputs, obsolete).publish()
 
 
@@ -127,6 +129,7 @@ def restore_data(package: Path, destination: Path, platform, seven_zip=None, pre
     package, destination = Path(package), Path(destination)
     archive = package / archive_name(platform)
     _validate_locations(package, destination)
+    require_package_ready(package)
     if not archive.is_file() or _is_link(archive):
         raise FileNotFoundError(f'Plex archive not found: {archive}')
     if destination.exists():
