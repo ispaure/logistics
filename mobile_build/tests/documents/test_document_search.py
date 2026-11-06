@@ -138,9 +138,11 @@ class LocalDocumentSearchTests(TestCase):
         search = app.hub_controller()._documents_file_search
 
         async def wait():
-            task = await wait_until(lambda: search.task, interval=.01,
+            task = await wait_until(lambda: search.task, timeout=5, interval=.01,
                                     message='Filename query did not start a document search task')
-            await asyncio.wait_for(task, 5)
+            await wait_until(task.done, timeout=5, interval=.01,
+                             message='Filename search task did not complete')
+            await task
 
         app.loop.run_until_complete(wait())
         from mobile_build.tests.workspace.test_hub_documents import widgets
