@@ -1,12 +1,9 @@
 """Portable Workspaces visibility and naming rules, shared by both hosts."""
-from configparser import ConfigParser
-from pathlib import Path
+from commonUtils.configuration.layered import effective_settings
 
 
 def configured_values(path, key):
-    parser = ConfigParser(interpolation=None)
-    with Path(path).open(encoding='utf-8-sig') as stream:
-        parser.read_file(stream)
+    parser = effective_settings(path, case_sensitive=False, normalize_after_parse=False)
     return [value.strip() for value in parser.get('Folders', key, fallback='').split(',') if value.strip()]
 
 
