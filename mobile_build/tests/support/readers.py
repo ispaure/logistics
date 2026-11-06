@@ -3,6 +3,15 @@ import base64
 from io import BytesIO
 from zipfile import ZipFile
 
+import toga
+
+
+class MemoryWebView(toga.WebView):
+    """Dummy reader view with explicit content disposal; no native DOM proof."""
+
+    def clear_private_content(self):
+        self.set_content('about:blank', '')
+
 
 def assert_preview_only_ui(test, owner):
     """Check visible controls and overflow tools, including disabled widgets."""

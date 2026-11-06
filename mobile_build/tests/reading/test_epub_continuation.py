@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-import toga
+from mobile_build.tests.support.readers import MemoryWebView
 from commonUtils.runtime.resources.documents import LocalDocuments
 from features.books.mobile.speech_view import ReadAloudPanel
 from mobile.app import LogisticsMobile
@@ -123,9 +123,6 @@ class ContinuationTests(unittest.TestCase):
             app.loop.run_until_complete(exercise())
 
     def test_provider_book_transfers_panel_without_disposing_its_engine(self):
-        class MemoryWebView(toga.WebView):
-            def clear_private_content(self):
-                self.set_content('about:blank', '')
         with reader_app() as (app, epub):
             async def exercise():
                 app.show_cloud()

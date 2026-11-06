@@ -154,10 +154,7 @@ class ReaderParityUITests(unittest.TestCase):
             app.loop.run_until_complete(exercise())
 
     def test_provider_epub_passage_search_bookmarks_and_close_cleanup(self):
-        import toga
-        class MemoryWebView(toga.WebView):
-            def clear_private_content(self):
-                self.set_content('about:blank', '')
+        from mobile_build.tests.support.readers import MemoryWebView
         with TemporaryDirectory() as directory:
             root = Path(directory)
             app = self.host(root)

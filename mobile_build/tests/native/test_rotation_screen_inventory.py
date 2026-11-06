@@ -141,10 +141,7 @@ class RotationScenarioTests(unittest.TestCase):
 
     def test_full_sweep_visits_real_synthetic_screens_in_inventory_order(self):
         from mobile_build.tests.support.app import mobile_app
-        import toga
-        class MemoryWebView(toga.WebView):
-            def clear_private_content(self):
-                self.set_content('about:blank', '')
+        from mobile_build.tests.support.readers import MemoryWebView
         seen = []
         with mobile_app() as app, ExitStack() as patches:
             # Dummy has no private browser; use a memory-only fixture
