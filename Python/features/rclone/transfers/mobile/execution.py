@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from time import monotonic
 from threading import Event, Lock
 from typing import Protocol
+from mobile.worker_retirement import drain_worker
 from .models import TransferOutcome
 
 
@@ -62,18 +63,7 @@ async def wait_for_transfer(worker, cancel, client):
             client.cancel()
         except (OSError, ValueError):
             pass
-        while not worker.done():
-            try:
-                await asyncio.shield(worker)
-            except asyncio.CancelledError:
-                continue
-            except Exception:
-                break
-        # Consume a late failure without replacing the caller's cancellation.
-        try:
-            worker.result()
-        except BaseException:
-            pass
+        await drain_worker(worker)
         raise
 
 

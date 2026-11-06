@@ -85,6 +85,22 @@ class NativeTransferTests(unittest.TestCase):
 
 
 class TransferCancellationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_transfer_returns_worker_value_or_propagates_worker_error(self):
+        stopping, client = Event(), Mock()
+        worker = asyncio.get_running_loop().create_future()
+        result = object()
+        worker.set_result(result)
+        self.assertIs(await wait_for_transfer(worker, stopping, client), result)
+
+        worker = asyncio.get_running_loop().create_future()
+        error = OSError('Write failure')
+        worker.set_exception(error)
+        with self.assertRaises(OSError) as raised:
+            await wait_for_transfer(worker, stopping, client)
+        self.assertIs(raised.exception, error)
+        self.assertFalse(stopping.is_set())
+        client.cancel.assert_not_called()
+
     async def test_caller_cancellation_waits_for_the_writer_even_if_cancelled_again(self):
         started, release, stopping = Event(), Event(), Event()
         def writing():
@@ -97,16 +113,16 @@ class TransferCancellationTests(unittest.IsolatedAsyncioTestCase):
         caller = asyncio.create_task(wait_for_transfer(worker, stopping, client))
         try:
             self.assertTrue(await asyncio.to_thread(started.wait, 2))
-            caller.cancel()
+            caller.cancel("initial cancellation")
             await asyncio.sleep(.02)
             self.assertTrue(stopping.is_set())
             self.assertFalse(caller.done())
-            caller.cancel()
+            caller.cancel("repeated cancellation")
             await asyncio.sleep(.02)
             self.assertFalse(caller.done())
         finally:
             release.set()
-        with self.assertRaises(asyncio.CancelledError):
+        with self.assertRaisesRegex(asyncio.CancelledError, "^initial cancellation$"):
             await caller
         self.assertTrue(worker.done())
         client.cancel.assert_called_once()

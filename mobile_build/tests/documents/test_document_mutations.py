@@ -197,6 +197,9 @@ class DocumentMutationTests(unittest.TestCase):
                 task.cancel()
                 await asyncio.sleep(0)
                 self.assertFalse(task.done())
+                task.cancel()
+                await asyncio.sleep(0)
+                self.assertFalse(task.done())
                 release.set()
                 with self.assertRaises(asyncio.CancelledError):
                     await task
