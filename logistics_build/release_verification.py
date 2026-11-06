@@ -7,6 +7,9 @@ from urllib.parse import urlparse
 from urllib.request import urlopen
 import zipfile
 
+from commonUtils.runtime.operations import OperationCancelled
+from commonUtils.runtime.streams import stream_signature
+
 
 def verify_asset(asset, commit, dependency, cancelled, *, tag=None, opener=urlopen):
     expected = asset.get('digest', '')
@@ -44,6 +47,11 @@ def verify_asset(asset, commit, dependency, cancelled, *, tag=None, opener=urlop
             for name, checksum in manifest['files'].items():
                 if Path(name).is_absolute() or '..' in Path(name).parts or '\\' in name:
                     raise ValueError('Invalid release manifest member.')
-                if hashlib.sha256(files.read('Logistics/'+name)).hexdigest() != checksum:
+                try:
+                    with files.open('Logistics/'+name) as member:
+                        _, actual = stream_signature(member, cancelled=cancelled.is_set)
+                except OperationCancelled:
+                    raise RuntimeError('Public ZIP verification cancelled; no completion recorded.') from None
+                if actual != checksum:
                     raise ValueError('Release ZIP member differs from its manifest: '+name)
     return dict(sha256=digest.hexdigest(), bytes=size, logistics_commit=commit, commonUtils_commit=dependency)
