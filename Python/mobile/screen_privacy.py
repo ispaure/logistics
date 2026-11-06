@@ -3,6 +3,8 @@
 iOS public APIs cannot prevent still screenshots. Never claim otherwise or
 reparent UIKit views into undocumented secure-text-field internals.
 """
+import logging
+
 from commonUtils.ui.native.password_input import PasswordInput
 
 
@@ -22,7 +24,6 @@ class ScreenPrivacy:
         self.interrupted = False
         self.captured = False
         self.observers = []
-        self.blocks = []
         self.shield = None
         self.lock_view = None
         self.saved_content = None
@@ -30,16 +31,34 @@ class ScreenPrivacy:
         self.android_lock_layout = None
         self.lock_gates = ()
         self.unlock_busy = False
-        from .layout_participants import participants
-        self.lock_layout_subscription = participants(app).register(
-            ('resume-lock', id(self)), self, lambda owner, frame: owner.fit_lock_view(frame.width))
-        from .trusted_wifi import WifiResume
-        self.wifi_resume = WifiResume()
+        self.lock_layout_subscription = None
+        self.credential_observers = None
+        self.protection_scope = None
         self.activity_listener = self.application = None
-        self.trait_registration = self.trait_block = None
+        self.trait_registration = self.trait_block = self.trait_window = None
         self.backend = type(app._impl).__module__
-        from features.rclone.mobile.cloud import CloudClient
-        CloudClient.credential_state.observers.add(self)
+        try:
+            from .layout_participants import participants
+            self.lock_layout_subscription = participants(app).register(
+                ('resume-lock', id(self)), self, lambda owner, frame: owner.fit_lock_view(frame.width))
+            from .trusted_wifi import WifiResume
+            self.wifi_resume = WifiResume()
+            from features.rclone.mobile.cloud import CloudClient
+            self.credential_observers = CloudClient.credential_state.observers
+            self.credential_observers.add(self)
+            self.install_native_observers()
+            from .protection import for_app
+            self.protection_scope = for_app(app)
+            self.protection_scope.process.listeners.add(self)
+            self.refresh()
+        except Exception:
+            try:
+                self.dispose()
+            except Exception:
+                logging.getLogger(__name__).error('Could not roll back screen privacy setup.')
+            raise
+
+    def install_native_observers(self):
         if self.backend.startswith('toga_iOS.'):
             from rubicon.objc import ObjCClass, Block, objc_id
             self.center = ObjCClass('NSNotificationCenter').defaultCenter
@@ -52,18 +71,16 @@ class ScreenPrivacy:
                 ('UIAccessibilityReduceTransparencyStatusDidChangeNotification', self.artwork_accessibility_changed),
             ):
                 block = Block(lambda notification, callback=callback: callback(), None, objc_id)
-                self.blocks.append(block)
-                self.observers.append(self.center.addObserverForName(name, object=None, queue=None, usingBlock=block))
-            window = app.main_window._impl.native
+                token = self.center.addObserverForName(name, object=None, queue=None, usingBlock=block)
+                self.observers.append((token, block))
+            window = self.app.main_window._impl.native
             if window.respondsToSelector('registerForTraitChanges:withHandler:'):
+                self.trait_window = window
                 self.trait_block = Block(lambda view, previous: self.refresh(), None, objc_id, objc_id)
                 self.trait_registration = window.registerForTraitChanges(
                     [ObjCClass('UITraitSceneCaptureState')], withHandler=self.trait_block)
         elif self.backend.startswith('toga_android.'):
             self.install_android_lifecycle()
-        from .protection import for_app
-        for_app(app).process.listeners.add(self)
-        self.refresh()
 
     def protection_changed(self, active):
         if not self.disposed and not self.app.loop.is_closed():
@@ -73,6 +90,8 @@ class ScreenPrivacy:
             self.app.loop.call_soon_threadsafe(self.refresh)
 
     def artwork_accessibility_changed(self):
+        if self.disposed:
+            return
         # No size change is required when accessibility changes. Force the
         # container policy before the ordinary coalesced reader refresh.
         app = self.app
@@ -91,17 +110,17 @@ class ScreenPrivacy:
 
         class Listener(dynamic_proxy(Application.ActivityLifecycleCallbacks)):
             def onActivityPaused(self, activity):
-                if activity == privacy.app._impl.native:
+                if not privacy.disposed and activity == privacy.app._impl.native:
                     privacy.conceal()
 
             def onActivityResumed(self, activity):
-                if activity == privacy.app._impl.native:
+                if not privacy.disposed and activity == privacy.app._impl.native:
                     privacy.reveal()
 
             def onActivityConfigurationChanged(self, activity):
                 # Chaquopy proxies dispatch this Android default method to
                 # Python too, including uiMode changes without recreation.
-                if activity == privacy.app._impl.native:
+                if not privacy.disposed and activity == privacy.app._impl.native:
                     privacy.refresh()
 
             def onActivityCreated(self, activity, state):
@@ -119,8 +138,8 @@ class ScreenPrivacy:
             def onActivityDestroyed(self, activity):
                 pass
 
-        self.activity_listener = Listener()
         self.application = self.app._impl.native.getApplication()
+        self.activity_listener = Listener()
         self.application.registerActivityLifecycleCallbacks(self.activity_listener)
 
     def credentials_changed(self):
@@ -154,6 +173,8 @@ class ScreenPrivacy:
 
     def interrupt(self):
         """Lock protected sessions on app switcher and Control Center interruptions."""
+        if self.disposed:
+            return
         self.interrupted = True
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         if self.sensitive():
@@ -162,6 +183,8 @@ class ScreenPrivacy:
             self.prepare_native_protection()
 
     def conceal(self):
+        if self.disposed:
+            return
         self.inactive = True  # Deny reentrant playback before native/UI effects.
         # Native shielding and player callbacks can fail or reenter the loop.
         # Invalidate outstanding authentication before invoking any of them.
@@ -211,6 +234,8 @@ class ScreenPrivacy:
                 observer.app.loop.call_soon_threadsafe(observer.refresh)
 
     def reveal(self):
+        if self.disposed:
+            return
         values = getattr(getattr(self.app, 'preferences', None), 'values', {})
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         if (self.backend.startswith(('toga_iOS.', 'toga_android.')) and hasattr(self, 'wifi_resume')
@@ -226,6 +251,8 @@ class ScreenPrivacy:
         self.finish_reveal(ssid)
 
     async def resume_on_wifi(self, revision):
+        if self.disposed:
+            return
         from .trusted_wifi import read_ssid
         preferences = self.app.preferences.values
         settings = (preferences.get('session_trusted_wifi'), preferences.get('trusted_wifi_networks'))
@@ -317,6 +344,8 @@ class ScreenPrivacy:
                 gate.lock(reason='challenge')
 
     def refresh(self):
+        if self.disposed:
+            return
         from .protection import for_app
         scope = for_app(self.app)
         gates = self.gates()
@@ -447,6 +476,8 @@ class ScreenPrivacy:
             self.resume_reader()
 
     def fit_lock_view(self, width=None, height=None):
+        if self.disposed:
+            return
         if self.lock_view is None:
             return
         from .settings.forms import fit_section
@@ -540,10 +571,10 @@ class ScreenPrivacy:
     def restore_lock_layout(self):
         if self.android_lock_layout is not None:
             decor, listener = self.android_lock_layout
-            self.android_lock_layout = None
             observer = decor.getViewTreeObserver()
             if observer.isAlive():
                 observer.removeOnGlobalLayoutListener(listener)
+            self.android_lock_layout = None
         if self.saved_lock_layout is not None:
             container = self.app.main_window._impl.container
             container.on_native_layout = self.saved_lock_layout
@@ -598,23 +629,43 @@ class ScreenPrivacy:
 
     def dispose(self):
         self.disposed = True
-        self.lock_layout_subscription.dispose()
-        from .protection import for_app
-        for_app(self.app).process.listeners.discard(self)
-        for_app(self.app).dispose()
-        self.restore_lock_layout()
-        from features.rclone.mobile.cloud import CloudClient
-        CloudClient.credential_state.observers.discard(self)
+        failure = None
+
+        def attempt(cleanup, *args):
+            nonlocal failure
+            try:
+                cleanup(*args)
+            except Exception as error:
+                failure = failure or error
+                return False
+            return True
+
+        subscription = self.lock_layout_subscription
+        if subscription is not None and attempt(subscription.dispose):
+            self.lock_layout_subscription = None
+        scope = self.protection_scope
+        if scope is not None:
+            scope.process.listeners.discard(self)
+            if attempt(scope.dispose):
+                self.protection_scope = None
+        attempt(self.restore_lock_layout)
+        if self.credential_observers is not None:
+            self.credential_observers.discard(self)
+            self.credential_observers = None
         if self.activity_listener is not None:
-            self.application.unregisterActivityLifecycleCallbacks(self.activity_listener)
-            self.activity_listener = self.application = None
+            if attempt(lambda: self.application.unregisterActivityLifecycleCallbacks(self.activity_listener)):
+                self.activity_listener = self.application = None
         if self.trait_registration is not None:
-            self.app.main_window._impl.native.unregisterForTraitChanges(self.trait_registration)
-            self.trait_registration = self.trait_block = None
-        for observer in self.observers:
-            self.center.removeObserver(observer)
-        self.observers.clear()
-        self.blocks.clear()
-        if self.shield is not None:
-            self.shield.removeFromSuperview()
+            if attempt(lambda: self.trait_window.unregisterForTraitChanges(self.trait_registration)):
+                self.trait_registration = None
+        if self.trait_registration is None:
+            self.trait_window = self.trait_block = None
+        pending = []
+        for token, block in self.observers:
+            if not attempt(lambda: self.center.removeObserver(token)):
+                pending.append((token, block))
+        self.observers = pending
+        if self.shield is not None and attempt(self.shield.removeFromSuperview):
             self.shield = None
+        if failure is not None:
+            raise failure

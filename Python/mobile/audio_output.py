@@ -1,5 +1,6 @@
 """App audio consent owner; native adapters report routes, players supply pause."""
 import json
+import logging
 from weakref import WeakSet
 from services.audio_output import OutputPolicy, approvals
 
@@ -27,14 +28,21 @@ class AudioOutput:
         self.captured = False
         from .protection import for_app
         self.scope = for_app(app).process
-        self.scope.listeners.add(self)
-        _owners.add(self)
-        if native is None:
-            from .audio_output_native import monitor
-            self.native = monitor(app, self.refresh, self.interrupt)
-        self.refresh()
-        privacy = getattr(app, 'screen_privacy', None)
-        self.capture_changed(bool(privacy is not None and privacy.sensitive() and getattr(privacy, 'captured', False)))
+        try:
+            self.scope.listeners.add(self)
+            _owners.add(self)
+            if native is None:
+                from .audio_output_native import monitor
+                self.native = monitor(app, self.refresh, self.interrupt)
+            self.refresh()
+            privacy = getattr(app, 'screen_privacy', None)
+            self.capture_changed(bool(privacy is not None and privacy.sensitive() and getattr(privacy, 'captured', False)))
+        except Exception:
+            try:
+                self.dispose()
+            except Exception:
+                logging.getLogger(__name__).error('Could not roll back audio output setup.')
+            raise
 
     def approved(self):
         try:
@@ -43,6 +51,8 @@ class AudioOutput:
             return {}  # Invalid consent data grants no Bluetooth approval.
 
     def register(self, player, pause):
+        if self.closed:
+            return
         self.players[player] = pause
 
     def unregister(self, player):
@@ -52,6 +62,8 @@ class AudioOutput:
         return self.scope.protected()
 
     def protection_changed(self, active):
+        if self.closed:
+            return
         self.policy.revision += 1
         self.policy.pause()  # Close permission before scheduling native/UI work.
         import asyncio
@@ -82,27 +94,38 @@ class AudioOutput:
                     self.offer()
 
     def pause(self):
+        if not self.closed:
+            self._pause_players()
+
+    def _pause_players(self, *, retiring=False):
         self.policy.pause()
         if self.pausing:
             return
         self.pausing = True
         failure = None
         try:
-            for pause in tuple(self.players.values()):
+            for player, pause in tuple(self.players.items()):
                 try:
                     pause()  # Explicit pause, never toggle or resume.
                 except Exception as error:
                     failure = failure or error
+                else:
+                    if retiring:
+                        self.players.pop(player, None)
         finally:
             self.pausing = False
         if failure is not None:
             raise failure
 
     def interrupt(self, active):
+        if self.closed:
+            return
         self.interrupted = bool(active)
         self.pause()  # Ending an interruption does not grant playback permission.
 
     def capture_changed(self, blocked):
+        if self.closed:
+            return
         changed = bool(blocked) and not self.captured
         self.captured = bool(blocked)  # Close permission before reentrant pause callbacks.
         if changed:
@@ -216,13 +239,27 @@ class AudioOutput:
             self.pause()
 
     def dispose(self):
-        if self.closed:
-            return
         self.closed = True
-        self.pause()
-        self.players.clear()
+        failure = None
+        try:
+            self._pause_players(retiring=True)
+        except Exception as error:
+            failure = error
         if self.prompt is not None:
-            self.prompt.cancel()
-        self.native.dispose()
+            try:
+                self.prompt.cancel()
+            except Exception as error:
+                failure = failure or error
+            else:
+                self.prompt = None
+        if self.native is not None:
+            try:
+                self.native.dispose()
+            except Exception as error:
+                failure = failure or error
+            else:
+                self.native = None
         self.scope.listeners.discard(self)
         _owners.discard(self)
+        if failure is not None:
+            raise failure
