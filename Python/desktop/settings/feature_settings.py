@@ -3,6 +3,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui.markdown import open_markdown
 from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
+from .configuration import ConfigurationPanel
 from features.application import registry
 
 
@@ -68,8 +69,6 @@ class FeatureSettingsPanel(qt.QWidget):
 
     def _refresh_editor_sources(self, entries, members):
         """Refresh contributed widgets and scoped INI editors without replacing retained buffers."""
-        from desktop.pages.settings import ConfigurationPanel
-
         paths = {'application': [], 'personal': []}
         for entry in entries:
             scope = entry.config_scope or entry.scope

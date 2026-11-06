@@ -261,7 +261,9 @@ class SettingsPageTests(QtTestCase):
             path.write_text('[WheelNavigation]\nsensitivity=20\n')
             from commonUtils.configuration.layered import register_settings
             store = register_settings(path, Path(temporary) / 'personal.ini')
-            with patch('desktop.pages.settings.settings_path', return_value=path), patch('desktop.pages.settings.settings_store', return_value=store), \
+            with patch('desktop.settings.appearance.settings_path', return_value=path), \
+                    patch('desktop.settings.appearance.settings_store', return_value=store), \
+                    patch('desktop.settings.configuration.settings_store', return_value=store), \
                     patch('pathlib.Path.home', return_value=Path(temporary) / 'marca'):
                 page = SettingsPage(); self.addCleanup(page.deleteLater)
                 item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).data(0, qt.Qt.ItemDataRole.UserRole) == 'commonutils')
