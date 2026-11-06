@@ -1,6 +1,5 @@
 """Reader bookmark commands; location interpretation and state stay with EPUB."""
 from commonUtils.ui import pyside as qt
-from features.books.epub import BookError
 
 
 class Bookmarks:
@@ -29,11 +28,8 @@ class Bookmarks:
         if self.worker or not 0 <= index < len(self._bookmarks):
             return
         item = self._bookmarks[index]
-        self._current = self.book.spine.index(item['path'])
-        try:
-            self._render(position=item['position'], location=item.get('location'))
-        except (OSError, BookError) as error:
-            self.status.setText(str(error))
+        self._show_chapter(self.book.spine.index(item['path']),
+                           position=item['position'], location=item.get('location'))
         self._set_busy(False)
 
     def delete_bookmark(self):
