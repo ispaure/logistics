@@ -19,7 +19,7 @@ class HostLifecycle:
         self.replaced = False
         self.exited = False
         self.startup_aborted = False
-        self._retired_actions = set()
+        self._retired_actions = {}
 
     def _retire(self, resource, method):
         """Finish independent cleanup even if one native adapter fails.
@@ -37,7 +37,9 @@ class HostLifecycle:
         except Exception:
             logger.error('Host resource cleanup failed: %s.%s', type(resource).__name__, method)
         else:
-            self._retired_actions.add(action)
+            # Keep the disposed object with its identity until this host is
+            # released; a later resource must never inherit a recycled id.
+            self._retired_actions[action] = resource
 
     def _cancel_task(self, name):
         task = getattr(self.host, name, None)
@@ -156,14 +158,14 @@ class HostLifecycle:
         except Exception:
             logger.error('Host playback cleanup failed')
         else:
-            self._retired_actions.add(stop)
+            self._retired_actions[stop] = stop
 
     def request_exit(self):
         host = self.host
         if self.exited:
             self._retire_resources()
             return True
-        if getattr(host, '_startup_in_progress', False):
+        if self.startup_aborted or getattr(host, '_startup_in_progress', False):
             self.abort_startup()
             return True
         if getattr(host, '_reset_scheduled', False):

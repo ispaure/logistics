@@ -185,6 +185,19 @@ class HostLifecycleTests(unittest.TestCase):
         lifecycle(host).retire_for_replacement()
         host.scene_manager.external_comics.dispose.assert_not_called()
 
+    def test_aborted_startup_exit_retires_late_resources_without_checkpoint_or_shared_shutdown(self):
+        host = NS(active_host=True, memory_pressure=Mock(), checkpoint=Mock(),
+                  scene_manager=NS(external_comics=Mock()))
+        owner = lifecycle(host)
+        first = host.memory_pressure
+        owner.abort_startup()
+        host.memory_pressure = Mock()
+        self.assertTrue(owner.request_exit())
+        first.dispose.assert_called_once_with()
+        host.memory_pressure.dispose.assert_called_once_with()
+        host.checkpoint.assert_not_called()
+        host.scene_manager.external_comics.dispose.assert_not_called()
+
     def test_android_adapter_cannot_restore_window_callbacks_after_retirement(self):
         window = NS(on_resize=Mock(), on_gain_focus=Mock(), on_lose_focus=Mock())
         navigation = Mock()
