@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from io import BytesIO
 
 from features.rclone.credential_loading import CredentialStage, CredentialResult
+from mobile.worker_retirement import drain_worker
 from .cloud import PACKAGE_LIMIT, download_name
 
 
@@ -81,15 +82,5 @@ async def run_credentials(operation, *args, valid=lambda: True):
         return await asyncio.shield(task)
     except asyncio.CancelledError:
         cancelled.set()
-        while not task.done():
-            try:
-                await asyncio.shield(task)
-            except asyncio.CancelledError:
-                continue
-            except Exception:
-                break
-        try:
-            task.result()
-        except BaseException:
-            pass
+        await drain_worker(task)
         raise

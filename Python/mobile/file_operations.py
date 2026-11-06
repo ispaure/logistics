@@ -12,6 +12,7 @@ from commonUtils.runtime.resources.mutations import (
 )
 from services.documents.locations import CollectionFiles
 from features.rclone.localcrypt.mobile.resources import encrypted_storage
+from .worker_retirement import drain_worker
 
 
 @dataclass(frozen=True)
@@ -87,13 +88,7 @@ async def retiring_work(work, cancel, *, completed=lambda result: None, failed=l
         result = await asyncio.shield(worker)
     except asyncio.CancelledError:
         cancel.set()
-        while not worker.done():
-            try:
-                await asyncio.shield(worker)
-            except asyncio.CancelledError:
-                continue
-            except Exception:
-                break
+        await drain_worker(worker)
         if not worker.cancelled():
             error = worker.exception()
             if error is not None:

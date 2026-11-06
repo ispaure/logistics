@@ -8,6 +8,7 @@ from toga.style.pack import COLUMN, ROW
 
 from features.rclone.transfers.transfer_options import TransferOptions, load_options, save_options
 from features.rclone.transfers.service import TransferContext
+from mobile.worker_retirement import drain_worker
 from .plan import NativeTransferRequest
 from features.rclone.mobile.messages import import_hint
 
@@ -19,13 +20,7 @@ async def _prepare(transfers, transfer):
     except asyncio.CancelledError:
         # Keep the host busy until late preparation and comparison retire. A
         # late native cancellation must not interrupt the next transfer instead.
-        while not task.done():
-            try:
-                await asyncio.shield(task)
-            except asyncio.CancelledError:
-                continue
-            except Exception:
-                break
+        await drain_worker(task)
         try:
             review = task.result().review
         except BaseException:

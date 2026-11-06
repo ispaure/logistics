@@ -6,6 +6,7 @@ from commonUtils.runtime.operations import check_cancelled
 from services.documents.mobile_reading import reading_capabilities, close_document_reader
 from .provider_ui import private_label
 from .provider_view import ProviderDocumentView
+from .worker_retirement import drain_worker
 
 
 async def _await_opening_worker(worker, cancelled):
@@ -15,15 +16,7 @@ async def _await_opening_worker(worker, cancelled):
         return await asyncio.shield(worker)
     except asyncio.CancelledError:
         cancelled.set()
-        while not worker.done():
-            try:
-                await asyncio.shield(worker)
-            except asyncio.CancelledError:
-                continue  # Repeated lifecycle cancellation cannot release a live worker.
-            except Exception:
-                break
-        if not worker.cancelled():
-            worker.exception()  # Retrieve a late failure without replacing cancellation.
+        await drain_worker(worker)
         raise
 
 
