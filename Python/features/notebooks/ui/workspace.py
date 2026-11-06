@@ -86,6 +86,8 @@ class NotebookWorkspace(qt.QWidget):
                 widget.deleteLater()
 
     def library(self):
+        if not self.can_leave():
+            return
         self.clear()
         title = qt.QLabel('Notebooks')
         self.layout.addWidget(title)
@@ -145,8 +147,19 @@ class NotebookWorkspace(qt.QWidget):
             self.status.setText(str(error))
 
     def open_resource(self, document):
+        if not self.can_leave():
+            if document is not self.document:
+                document.close()
+            return
         self.document = document
         self.open(document.book, document.key)
+
+    def can_leave(self):
+        if getattr(self.editor, 'checkpoint_unconfirmed', False):
+            qt.QMessageBox.warning(self, 'Notebook recovery is unconfirmed',
+                                  'Your draft remains open. Use Save As before leaving it.')
+            return False
+        return True
 
     def state(self):
         value = document_state(self.editor, self.document)
@@ -176,6 +189,8 @@ class NotebookWorkspace(qt.QWidget):
             self.web.page().runJavaScript('window.notebookUI && window.notebookUI(' + json.dumps(name) + ',' + json.dumps(value) + ')')
 
     def open(self, book, key):
+        if not self.can_leave():
+            return
         if self.document is not None and self.document.book is not book:
             self.document.close()
             self.document = None
@@ -404,6 +419,8 @@ class NotebookWorkspace(qt.QWidget):
                 document.close()
             self.busy = False
             return
+        if not error:
+            self.editor.checkpoint_unconfirmed = False
         if document is not None and not error:
             previous = self.document
             self.document = document
@@ -454,6 +471,12 @@ class NotebookWindow(qt.QMainWindow):
     def closeEvent(self, event):
         panel = self.centralWidget()
         if panel.busy:
+            event.ignore()
+            return
+        if (getattr(getattr(panel, 'editor', None), 'checkpoint_unconfirmed', False)
+                and not (panel.document and panel.document.dirty)):
+            qt.QMessageBox.warning(self, 'Notebook recovery is unconfirmed',
+                                  'Your draft remains open. Use Save As before closing it.')
             event.ignore()
             return
         if panel.document and panel.document.dirty:

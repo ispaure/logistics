@@ -170,6 +170,20 @@ class NotebookDesktopTests(unittest.TestCase):
         panel.dispose.assert_called_once()
         event.accept.assert_called_once()
 
+    def test_unconfirmed_library_checkpoint_blocks_close_and_navigation(self):
+        from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
+        from commonUtils.ui import pyside as qt
+        panel = NS(document=None, editor=NS(checkpoint_unconfirmed=True), busy=False, dispose=Mock())
+        event = Mock()
+        with patch.object(qt.QMessageBox, 'warning') as warning:
+            NotebookWindow.closeEvent(NS(centralWidget=lambda: panel), event)
+            self.assertFalse(NotebookWorkspace.can_leave(panel))
+        self.assertEqual(warning.call_count, 2)
+        event.ignore.assert_called_once()
+        panel.dispose.assert_not_called()
+        panel.editor.checkpoint_unconfirmed = False
+        self.assertTrue(NotebookWorkspace.can_leave(panel))
+
 
 class NotebookMenuTests(unittest.TestCase):
     @classmethod

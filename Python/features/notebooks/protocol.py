@@ -7,6 +7,14 @@ Model validation remains authoritative for page bounds and native ink values.
 import json
 import math
 
+
+class RecoveryIncomplete(OSError):
+    """A command retains its edit after published or unconfirmed recovery work."""
+    def __init__(self, message, *, published):
+        super().__init__(message)
+        self.published = published
+
+
 MODEL_COMMANDS = frozenset({
     'copy-strokes', 'cut-strokes', 'paste-strokes', 'paste-image', 'image-transform', 'delete-image', 'arrange-image', 'unlock-pdf',
     'page', 'stroke', 'add-layer', 'layer-visible', 'transform', 'erase',
