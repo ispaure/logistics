@@ -95,6 +95,20 @@ revokes credentials and approves operations; a projected row is not permission
 to open or mutate storage. Focused checks include `test_folder_catalog`,
 `test_folder_sources_ui`, mobile Folder Hub and credential invalidation tests.
 
+`services.folders.sources.discover_folder_sources()` calls a source's optional
+`RemoteFolderSource.get_encrypted_remote_names` callback and snapshots the returned
+names into an immutable set; absent callbacks contribute an empty set.
+The provider owns that metadata: rclone contributes its lookup, while generic
+discovery neither imports rclone nor infers encryption from a context filename.
+`test_folder_sources_ui.py` covers rclone and an alternate source contribution.
+
+`services.folders.policy.read_exclusions()` reads both folder rules from one
+effective layered-settings snapshot per call. Whole-name exclusions apply to
+remote names only; suffix exclusions apply to local and remote names. Both are
+case-insensitive. Desktop merged entries use the same policy while retaining the
+unnamed local root. `test_folder_policy.py`, `test_folder_entry_identity.py` and
+`test_workspace_policy.py` cover overrides, filtering and root preservation.
+
 The desktop `FolderTreePresentation` adapter keeps source/category/legacy
 filtering and ordering in `_selected_entries`, Qt item/copy-label construction
 in `_render_entries`, and selection restoration in `refresh`. Rendering clears

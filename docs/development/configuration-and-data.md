@@ -106,6 +106,15 @@ root, `configuration/<Python-relative INI path>`; shared controls map to
 `configuration/launch_config.ini`. Bootstrap wrappers pass that personal path to
 the shared launcher, including before Python dependencies are available.
 
+Folder visibility and software lookup consume the registered effective INIs.
+Sparse personal `[Folders]` values replace the corresponding default list until
+reset; `services.folders.policy.read_exclusions()` captures both exclusion rules
+from one read. `services.software.get_software('rclone')` overlays present `*_str` values
+from the feature's effective INI onto the software release manifest, then applies
+the existing path/download validation. Unregistered mobile settings retain their
+default-file behavior. `test_folder_policy.py` and `test_software.py` cover these
+consumers independently of the Settings widgets.
+
 SettingsPage propagates one application/personal scope to all category panels.
 It starts in personal scope and offers application scope in its selector only
 when `Path.home().name == 'marca'`.
@@ -122,9 +131,13 @@ commonUtils' MigrationLedger in `state/settings-migrations.ini`, outside resetta
 overrides. Existing legacy completion markers are adopted once; pending imports
 retry idempotently after partial failures. Reset deliberately completes the legacy
 migration IDs, so old preferences cannot return even when their personal INIs are
-absent. Migration metadata rolls back along with failed resets. The prior tree is kept
-outside temporary staging until feature-default activation succeeds; failures
-restore it or retain a named recovery directory. Personal layered editors discard
+absent. Failed resets attempt to restore both the configuration and migration
+metadata. Directory-restoration failure reports the retained recovery directory
+when a prior configuration tree existed;
+if directory restoration succeeds but ledger restoration fails, the error reports
+that separate state and the metadata path, since reset may remain marked complete.
+`test_personal_settings_reset.py` covers both outcomes. The prior tree is kept
+outside temporary staging until feature-default activation succeeds. Personal layered editors discard
 pending edits and reload, while application-editor pending values remain intact.
 The registry notifies navigation observers and styling reloads immediately. Styling,
 Text Editor, Books and Git subscribe to shared change detection instead of owning

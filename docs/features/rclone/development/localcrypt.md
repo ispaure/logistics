@@ -170,12 +170,24 @@ has completed.
 
 Private sessions are children of the unlocked package session. Forgetting or
 replacing the parent recursively revokes its children. Old providers stay revoked
-after another unlock; reopen the document to create a fresh provider. Browsers and
+after another unlock; reopen the document to create a fresh provider.
+`CryptResources` captures the parent grant after initial unlock, reads its owned
+settings snapshot and validates that same grant after attaching the child. A
+parent replacement during construction rejects and closes the incomplete provider
+instead of attaching old settings to the new credential generation. Browsers and
 independent document windows hold idempotent provider leases; the last release
 removes its private credentials. Browser closure waits for its workers and releases
 only its own lease, preserving still-open documents. Worker-local cancellation is
 propagated to subprocesses and streaming writers. Cancelled opens never present a
 window. Completed publication cannot be rolled back by a later cancellation.
+
+`CryptBrowserView._opened()` owns prepared Markdown media until the new window
+accepts its `MarkdownStorage`. Cancelled or closing views and
+failed construction close unadopted media; a successful handoff leaves retirement
+with the document window. The two `test_local_crypt_lifetime*.py` modules cover
+parent replacement during construction and discarded-media cleanup with controlled
+host fixtures. These checks do not establish immediate memory erasure or native
+device privacy.
 
 Desktop credential imports require every non-directory TXT entry to be encrypted,
 including when saving a config. Validation completes in memory before saved-config or session

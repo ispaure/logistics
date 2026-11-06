@@ -1203,6 +1203,16 @@ checks below do not establish digitizer behavior or reMarkable firmware compatib
 
 ## Provider-backed notebook documents
 
+Mobile notebook import routing lives in `services.documents.mobile_notebooks`.
+An ordinary persisted source under app-private Downloads can reuse its mapped
+draft without a selected external Android drive. Discarding an orphaned draft
+after its recovery is deleted can also remove its mapping without that drive.
+Persistent-source import lookups outside the app-private root still validate the
+selected collection. This location rule is separate from encrypted notebooks' transient
+recovery policy. `test_notebook_storage.py` covers the absent-drive cases;
+the shared [import index contract](../../../development/document-storage.md)
+describes current-state merging and opaque mapping identities.
+
 `storage.py:NotebookDocument` owns the format draft and receives a generic
 `services.documents.storage.DocumentResource` plus an optional recovery adapter.
 The canvas edits the model through its checkpoint callback; it does not resolve

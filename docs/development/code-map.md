@@ -62,13 +62,16 @@ aliases; external extensions must update their host imports.
 | LM transport, saved data or desktop chat | `Python/features/lm/{transport,storage,session}.py`, `Python/features/lm/ui/` | [LM integration](../features/lm/development/lm.md) |
 | EPUB or comic format behavior | `Python/features/books/`, `Python/features/comics/` | [Books](../features/books/development/development.md), [Comics](../features/comics/development/development.md) |
 | Mobile app composition and navigation | `Python/mobile/composition/`, `Python/mobile/{app,workspace,workspace_navigation}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
+| Mobile Home and Documents controls | `Python/mobile/{home,documents_hub,hub_controls}.py`; `hub_ui.py` retains shared session/reopen coordination | [Screen map](ui-architecture.md#find-a-screen-by-its-visible-name) |
+| Mobile Workspaces root and browser location heading | `Python/mobile/workspaces_screen.py`, `browser_location.py` | [Screen map](ui-architecture.md#find-a-screen-by-its-visible-name) |
 | Mobile Workspaces discovery and refresh state | `Python/mobile/{folder_discovery,folder_controller,folder_hub}.py` | [Discovery ownership](mobile-runtime.md#workspaces-folder-discovery) |
-| Mobile main/workspace folder listing requests | `Python/mobile/folder_listing.py`; adapters in `files_ui.py`, `workspace_navigation.py` | [Listing ownership](mobile-runtime.md#folder-listing-ownership) |
+| Mobile main/workspace folder listing requests | `Python/mobile/folder_listing.py`; adapters in `files_ui.py`, `file_drawer.py` | [Listing ownership](mobile-runtime.md#folder-listing-ownership) |
 | Mobile create, rename, move and delete | `Python/mobile/file_operations.py`, `composition.presentation.file_operations`; forms in `files_ui.py` | [File operation ownership](mobile-runtime.md#file-operation-ownership) |
 | Mobile folders and file operations | `Python/mobile/{folder_hub,folder_hub_ui,files_ui}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
-| Mobile text Open/Save As | `Python/mobile/editor_picker.py`; `app.editor_picker()` owns the instance | [Mobile host owners](mobile-runtime.md) |
+| Mobile text Open/Save As | `Python/mobile/editor_picker.py`; controls in `document_destination_form.py`; `app.editor_picker()` owns the instance | [Mobile host owners](mobile-runtime.md#opensave-as-lifecycle) |
 | Saved-import inventory/deletion | `Python/mobile/saved_files_ui.py`; `app.saved_files()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Mobile Close/Back decisions and host replacement | `Python/mobile/session_workflows/`, `application_lifecycle.py` | [Session transitions](mobile-runtime.md#session-transition-decisions) |
+| Mobile native Back dispatch and pending callback lifetime | `Python/mobile/routes.py` | [Back policy](mobile-workspace-navigation.md#android-back-policy-and-panel-audit-2026-10-18) |
 | Mobile surface publication | `Python/mobile/reading/` | [Mobile runtime](mobile-runtime.md#reader-publication-boundary) |
 | Mobile reader sessions and host access | `Python/mobile/{reader_sessions,private_sessions,reader_host,provider_document,provider_opening,provider_view}.py` | [Reader publication](mobile-runtime.md#reader-publication-boundary), [provider lifetime](document-storage.md#trace-a-mobile-provider-reader) |
 | Open an encrypted or remote file in a reader | `Python/mobile/private_sessions.py` → provider opening; transport in `Python/features/rclone/mobile/remote_source.py`, native decoded lifetime in `Python/services/documents/archive_access.py` | [Source-to-reader trace](document-storage.md#trace-a-mobile-provider-reader) |

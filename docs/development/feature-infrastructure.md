@@ -85,6 +85,14 @@ Preferences, dependency ordering, activation rollback and contribution validatio
 keep their existing behavior. Shared commonUtils file-type machinery remains
 process-owned and is shared by independent registries.
 
+Each feature-state projection captures one discovered roster for availability,
+enabled state and groups. Browser contributions likewise capture one enabled
+roster for their unified and legacy extension hooks. A hook changing preferences
+cannot split that projection across two rosters; the next call reads current
+state. This is operation-local consistency, not another global registry cache.
+`test_feature_runtime.py` and `test_feature_registry.py` cover both normal refresh
+and a preference change inside a contribution hook.
+
 Tests patch the application registry instance or construct an independent registry.
 `test_feature_runtime.py` verifies independent preferences, declaration caches,
 once-per-owner initialization and observer retirement. `test_feature_registry.py`
