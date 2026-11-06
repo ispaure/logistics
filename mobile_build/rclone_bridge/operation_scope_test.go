@@ -706,3 +706,36 @@ func TestCancelledCryptBackendEvictsSharedBackingCache(t *testing.T) {
 		t.Fatal("cancelled backing cache was reused", len(backing))
 	}
 }
+
+func TestBackendCancellationAtFinishRetiresWholeSet(t *testing.T) {
+	for _, mode := range []string{"normal", "cancel-during-later-detach"} {
+		t.Run(mode, func(t *testing.T) {
+			request, cancelRequest := context.WithCancel(context.Background())
+			defer cancelRequest()
+			owner := &operationBackends{}
+			ctx := context.WithValue(request, operationBackendsKey{}, owner)
+			var lifetimes []context.Context
+			for i := 0; i < 2; i++ {
+				lifetime, stop := context.WithCancel(context.Background())
+				defer stop()
+				lifetimes = append(lifetimes, lifetime)
+				followBackendCancellation(ctx, stop)
+			}
+			if mode == "cancel-during-later-detach" {
+				detach := owner.hooks[1].detach
+				owner.hooks[1].detach = func() bool { cancelRequest(); return detach() }
+			}
+			owner.finish()
+			// Normal request teardown must leave both cached lifetimes usable.
+			cancelRequest()
+			for i, lifetime := range lifetimes {
+				if mode == "normal" && lifetime.Err() != nil {
+					t.Errorf("normal completion cancelled lifetime %d", i)
+				}
+				if mode != "normal" && lifetime.Err() == nil {
+					t.Errorf("cancellation while detaching later hook left lifetime %d alive", i)
+				}
+			}
+		})
+	}
+}

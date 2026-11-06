@@ -93,10 +93,23 @@ func (owner *operationBackends) finish() {
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
 	owner.finished = true
+	cancelled := false
 	for _, hook := range owner.hooks {
-		// Detach cannot recall an already-started callback. Also cover cancelled
-		// contexts whose callback has not yet started, before normal request stop.
-		if !hook.detach() || hook.ctx.Err() != nil {
+		if !hook.detach() {
+			cancelled = true
+		}
+	}
+	// All callbacks are detached before choosing one outcome for the set.
+	// Cancellation observed at this boundary (or an already-started callback)
+	// retires every lifetime. Otherwise completion wins before request stop.
+	for _, hook := range owner.hooks {
+		if hook.ctx.Err() != nil {
+			cancelled = true
+			break
+		}
+	}
+	if cancelled {
+		for _, hook := range owner.hooks {
 			hook.stop()
 		}
 	}
