@@ -102,13 +102,14 @@ class RemoteNativeBridgeTests(unittest.TestCase):
                 identity = client.connection_identity(remote)
                 client.request('mirror_sync', remote=remote, path='folder', identity=identity,
                     run=uuid4().hex, local_path=str(upload), push=True, decrypted=True)
-                # Use VideoContent's actual 4 MiB range policy through the Go
-                # library, rather than a permissive Python client double.
+                # Exercise the native maximum through the Go library.
                 from features.rclone.mobile.service import native_service
                 from features.rclone.remote_access import NativeRemoteLocation
+                from features.video.buffering import BufferingPolicy
                 from features.video.playback import VideoContent
                 resource = native_service(client).remotes.open(NativeRemoteLocation(remote))
-                content = VideoContent(resource, 'folder/movie.avi')
+                content = VideoContent(resource, 'folder/movie.avi',
+                                       buffering=BufferingPolicy(range_bytes=4 * 1024 * 1024))
                 try:
                     from unittest.mock import patch
                     with patch.object(client, 'request', wraps=client.request) as requests:
