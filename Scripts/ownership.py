@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,6 +39,14 @@ def selected_tests(root, owner):
 def test_owner(root, owner, python, *, dry_run=False, profile='full', mode='diagnostic', fail_fast=False):
     try:
         selected = _selected_test_files(root, owner)
+        sys.path.insert(0, str(root / 'Python'))
+        from commonUtils.testing.stages import PROFILES, validate
+        stages = set(PROFILES[profile])
+        included = {row.path for row in validate(root / path for _, path in selected)
+                    if stages.intersection({level for _, level, _ in row.cases} or {row.default})}
+        selected = [(suite, path) for suite, path in selected if root / path in included]
+        if not selected:
+            raise ValueError(f'{owner}: no test sources selected for profile {profile!r}')
     except ValueError as error:
         print(error)
         return 2

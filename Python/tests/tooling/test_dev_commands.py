@@ -132,7 +132,7 @@ class DeveloperCommandTests(unittest.TestCase):
             for path in paths:
                 source = root / path
                 source.parent.mkdir(parents=True)
-                source.touch()
+                source.write_text('# TEST_STAGE = TestStage.REGRESSION\n')
             declaration = {'fixture': {'tests': {'desktop': ['test*.py', 'test_same.py'],
                                                  'mobile': ['test_same.py']}}}
             for options, count in (({}, 2), ({'mode': 'fast'}, 1), ({'fail_fast': True}, 1)):
@@ -149,6 +149,30 @@ class DeveloperCommandTests(unittest.TestCase):
                                          list(expected))
                         self.assertEqual('--fail-fast' in command, bool(options.get('fail_fast')))
                         self.assertEqual(call.kwargs['cwd'], root)
+
+    def test_owner_profile_omits_empty_environments_and_rejects_an_empty_owner(self):
+        from Scripts import ownership
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = ('Python/tests/test_smoke.py', 'mobile_build/tests/test_regular.py')
+            for path, stage in zip(paths, ('SMOKE', 'REGRESSION')):
+                source = root / path
+                source.parent.mkdir(parents=True)
+                source.write_text(f'# TEST_STAGE = TestStage.{stage}\n')
+            declaration = {'fixture': {'tests': {'desktop': ['test_smoke.py'],
+                                                 'mobile': ['test_regular.py']}}}
+            with patch.object(ownership, 'owners', return_value=declaration), \
+                    patch.object(ownership.subprocess, 'run') as run:
+                run.return_value.returncode = 0
+                self.assertEqual(ownership.test_owner(root, 'fixture', sys.executable, profile='smoke'), 0)
+                self.assertEqual(run.call_count, 1)
+                command = run.call_args.args[0]
+                self.assertEqual(command[3], 'desktop')
+                self.assertIn(paths[0], command)
+                run.reset_mock()
+                (root / paths[0]).write_text('# TEST_STAGE = TestStage.REGRESSION\n')
+                self.assertEqual(ownership.test_owner(root, 'fixture', sys.executable, profile='smoke'), 2)
+                run.assert_not_called()
 
     def test_dry_run_accepts_custom_interpreter_without_executing(self):
         with patch.object(development.subprocess, 'run') as run:
