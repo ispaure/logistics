@@ -8,12 +8,29 @@ from unittest.mock import patch
 
 from commonUtils.configuration.layered import register_settings
 from commonUtils.testing.stages import TestStage
+from services.folders import policy
 from services.folders.policy import read_exclusions, visible_name
 
 TEST_STAGE = TestStage.REGRESSION
 
 
 class FolderPolicyTests(unittest.TestCase):
+    def test_both_exclusions_use_one_settings_snapshot(self):
+        with TemporaryDirectory() as temporary:
+            defaults = Path(temporary) / 'config.ini'
+            defaults.write_text('[Folders]\nexcluded_remote_names = First\n'
+                                'excluded_folder_name_suffixes = -FIRST\n')
+
+            def read_then_update(*args, **kwargs):
+                settings = read_settings(*args, **kwargs)
+                defaults.write_text('[Folders]\nexcluded_remote_names = Second\n'
+                                    'excluded_folder_name_suffixes = -SECOND\n')
+                return settings
+
+            read_settings = policy.effective_settings
+            with patch.object(policy, 'effective_settings', side_effect=read_then_update):
+                self.assertEqual(read_exclusions(defaults), (frozenset({'first'}), ('-first',)))
+
     def test_personal_exclusions_replace_defaults_until_reset(self):
         with TemporaryDirectory() as temporary:
             defaults = Path(temporary) / 'config.ini'
