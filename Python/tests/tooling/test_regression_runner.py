@@ -328,7 +328,8 @@ class Cases(unittest.TestCase):
             prefix = dict(id='test_first.Cases.test_case', stage='regression', outcome='failed',
                           started_at='start', finished_at='finish', duration_seconds=0.25,
                           message='original failure')
-            schema = dict(schema_version=1, complete=True, exit_code=0)
+            schema = dict(runner.child_context(root / 'test_first.py', 'regression', 'default', None),
+                          schema_version=1, complete=True, exit_code=0)
             passed = dict(prefix, outcome='passed')
             unexplained = dict(id='test_first.Cases.test_unreported', stage='regression')
             wrong_fixture = dict(prefix, id='setUpClass (test_first.Other)', outcome='skipped',
@@ -392,6 +393,66 @@ class Cases(unittest.TestCase):
             self.assertFalse(data['modules'][0]['test_report_complete'])
             self.assertFalse(data['coverage_complete'])
             self.assertTrue(data['not_run'])
+
+    def test_child_acceptance_matches_launch_and_independent_runtime_discovery(self):
+        with patch.object(sys, 'path', [str(RUNNER.parent), *sys.path]):
+            spec = importlib.util.spec_from_file_location('child_context_probe', RUNNER)
+            runner = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(runner)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_selected.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                'class Cases(unittest.TestCase):\n def test_first(self): pass\n def test_second(self): pass\n')
+            real_run = subprocess.run
+            defects = {'directory': str(root / 'other'), 'pattern': 'test_other.py', 'isolated': True,
+                       'stages': ['smoke'], 'source': {'path': 'foreign', 'sha256': '0' * 64},
+                       'lost-case': None, 'missing-plan': None, 'foreign-plan': None}
+            for defect, value in defects.items():
+                with self.subTest(defect=defect):
+                    def run_child(command, **kwargs):
+                        result = real_run(command, capture_output=True, text=True, **kwargs)
+                        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                        path = Path(command[command.index('--report') + 1])
+                        data = json.loads(path.read_text())
+                        if defect == 'lost-case':
+                            data['tests'].pop()
+                            data['planned_tests'].pop()
+                        elif defect == 'missing-plan':
+                            path.with_suffix('.plan.json').unlink(missing_ok=True)
+                        elif defect == 'foreign-plan':
+                            path.with_suffix('.plan.json').write_text('{}')
+                        else:
+                            data[defect] = value
+                        path.write_text(json.dumps(data))
+                        return result
+                    report = runner.TimingReport(root / 'result.json', root, 'test*.py', True)
+                    with patch.object(runner.subprocess, 'run', side_effect=run_child):
+                        self.assertEqual(runner.run_isolated(root, 'test*.py', 60, report=report), 1)
+                    self.assertFalse(report.data['coverage_complete'])
+                    self.assertFalse(report.data['modules'][0]['test_report_complete'])
+                    if defect in ('lost-case', 'missing-plan', 'foreign-plan'):
+                        self.assertIn('discovery plan', report.data['modules'][0]['evidence_error'])
+                        self.assertTrue(report.data['tests'], 'Retain results belonging to this launch')
+                    else:
+                        self.assertIn('launched', report.data['modules'][0]['evidence_error'])
+                        self.assertEqual(report.data['tests'], [], 'Do not attribute foreign evidence to this file')
+
+    def test_runtime_discovery_plan_preserves_custom_load_tests_selection(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_custom.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                'class Cases(unittest.TestCase):\n def test_selected(self): pass\n'
+                ' def test_helper(self): self.fail("not in runtime suite")\n'
+                'def load_tests(loader, tests, pattern):\n'
+                ' return unittest.TestSuite([Cases("test_selected")])\n')
+            report = root / 'report.json'
+            result = self.run_modules(root, '--report', str(report))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(report.read_text())
+            self.assertEqual([row['id'] for row in data['tests']], ['test_custom.Cases.test_selected'])
+            self.assertTrue(data['coverage_complete'])
 
     def test_timing_includes_cleanup_and_preserves_outcomes_across_files(self):
         with TemporaryDirectory() as temporary:
