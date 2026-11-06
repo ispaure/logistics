@@ -28,12 +28,16 @@ def _updated_preferences(path, values):
     return original, (b'\xef\xbb\xbf' + updated if bom else updated)
 
 
+def _require_preferences_revision(path, expected):
+    if path.read_bytes() != expected:
+        raise RuntimeError(f'Preferences changed outside Logistics: {path}')
+
+
 def _publish_preferences(path, original, updated):
     from commonUtils.persistence import atomic_write_bytes
     from uuid import uuid4
     def unchanged():
-        if path.read_bytes() != original:
-            raise RuntimeError(f'Preferences changed outside Logistics: {path}')
+        _require_preferences_revision(path, original)
     unchanged()
     backup = path.with_name(f'{path.name}.previous-{uuid4().hex}')
     atomic_write_bytes(backup, original, overwrite=False)
@@ -94,13 +98,21 @@ def set_all_xp12_settings(preset_path: Path, ssao: int, fsr: int, msaa: int,
               'renopt_vegetation_quality_04 ': vegetation_quality}
     original, updated = _updated_preferences(path, values)
     old_window, new_window = window.read_bytes(), Path(preset_path).read_bytes()
-    _publish_preferences(path, original, updated)
+    backup = _publish_preferences(path, original, updated)
     try:
         _publish_preferences(window, old_window, new_window)
-    except Exception:
-        # Preserve a concurrent editor's changes instead of overwriting them.
-        if path.read_bytes() == updated:
-            atomic_write_bytes(path, original)
+    except Exception as window_error:
+        def unchanged():
+            _require_preferences_revision(path, updated)
+
+        try:
+            atomic_write_bytes(path, original, validate=unchanged)
+        except Exception as rollback_error:
+            raise RuntimeError(
+                f'Window preferences publication failed: {window_error}. '
+                f'Graphics preferences rollback failed: {rollback_error}. '
+                f'Recovery copy retained at {backup}'
+            ) from window_error
         raise
     return True
 
