@@ -188,14 +188,15 @@ class Cases(unittest.TestCase):
             execution = self.run_modules(root, *selection, '--report', str(report))
             self.assertEqual(execution.returncode, 0, execution.stdout + execution.stderr)
             data = json.loads(report.read_text())
-            self.assertEqual([row['file'] for row in rows], ['first/test_same.py', 'third/test_same.py'])
+            files = [str(Path(folder) / 'test_same.py') for folder in ('first', 'third')]
+            self.assertEqual([row['file'] for row in rows], files)
             self.assertEqual(data['classified_files'],
                              [dict(path=row['file'], **{k: v for k, v in row.items() if k != 'file'}) for row in rows])
             self.assertEqual([(row['path'], row['stage']) for row in data['modules']],
                              [(row['file'], 'regression') for row in rows])
             self.assertEqual([(row['file'], row['id']) for row in data['tests']],
-                             [('first/test_same.py', 'test_same.Cases.test_first'),
-                              ('third/test_same.py', 'test_same.Cases.test_third')])
+                             [(files[0], 'test_same.Cases.test_first'),
+                              (files[1], 'test_same.Cases.test_third')])
 
     def test_exact_file_ignores_unselected_descendant_metadata(self):
         with TemporaryDirectory() as temporary:

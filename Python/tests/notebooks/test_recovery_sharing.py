@@ -17,8 +17,6 @@ from features.notebooks._vendor.rmscene import scene_stream as ss
 class RecoverySharingTests(unittest.TestCase):
     def test_discard_keeps_exact_legacy_source_base_and_retries_after_fsync_failure(self):
         import json
-        import os
-        import stat
         from io import BytesIO
         from zipfile import ZipFile
         from unittest.mock import patch
@@ -47,14 +45,10 @@ class RecoverySharingTests(unittest.TestCase):
                         archive.writestr(name, data)
                 original_bytes = stream.getvalue()
                 source.write_bytes(original_bytes)
-                fsync = os.fsync
-                def fail_directory(fd):
-                    if stat.S_ISDIR(os.fstat(fd).st_mode):
-                        raise OSError('Directory sync unavailable')
-                    return fsync(fd)
                 def write_manifest(*args, **kwargs):
-                    with patch('os.fsync', side_effect=fail_directory):
-                        return atomic_write_json(*args, **kwargs)
+                    # Inject the failure after publication on every platform.
+                    atomic_write_json(*args, **kwargs)
+                    raise OSError('Directory sync unavailable')
                 with patch('features.notebooks.recovery.atomic_write_json', side_effect=write_manifest):
                     with self.assertRaises(RecoveryIncomplete) as failure:
                         document.discard()
@@ -74,8 +68,6 @@ class RecoverySharingTests(unittest.TestCase):
 
     def test_checkpoint_publication_receipts_preserve_edit_undo_redo_and_revision(self):
         import json
-        import os
-        import stat
         from unittest.mock import patch
         from commonUtils.persistence import atomic_write_json
         from features.notebooks.notebook import MAX_ARCHIVE
@@ -95,14 +87,10 @@ class RecoverySharingTests(unittest.TestCase):
                     recovery=repository, changed=remember_notebook_resource)
                 remember_notebook_resource(document)
                 editor = Editor(document.book, document.checkpoint)
-                fsync = os.fsync
-                def fail_directory(fd):
-                    if stat.S_ISDIR(os.fstat(fd).st_mode):
-                        raise OSError('Directory sync unavailable')
-                    return fsync(fd)
                 def write_manifest(*args, **kwargs):
-                    with patch('os.fsync', side_effect=fail_directory):
-                        return atomic_write_json(*args, **kwargs)
+                    # Inject the failure after publication on every platform.
+                    atomic_write_json(*args, **kwargs)
+                    raise OSError('Directory sync unavailable')
                 for action, strokes, history in [(dict(op='stroke', points=[[20, 30, .5]]), 1, (1, 0)),
                                                  (dict(op='undo'), 0, (0, 1)), (dict(op='redo'), 1, (1, 0))]:
                     directory = repository.root / document.key
