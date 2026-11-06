@@ -289,8 +289,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self._breadcrumb_width = 320
         # Keep the library identity between its pane controls, including when
         # UIKit moves the remaining reader actions to a vertical edge.
+        self.view._notes_title_controls = (self.close_button, self.menu, self.links_button)
         if host.apple:
-            self.view._document_title_controls = (self.close_button, self.menu, self.links_button)
+            self.view._document_title_controls = self.view._notes_title_controls
         self.view._native_reader_buttons = self.native_note_buttons
         self.sidebar.on_change = self.refresh_chrome
         welcome_body = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
@@ -372,6 +373,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         gap = self.secondary.style.gap
         # Preserve a useful breadcrumb viewport without adding another toolbar row.
         width = round(48 * .6) if available - len(controls) * (48 + gap) < 160 else 48
+        for button in self.view._notes_title_controls:
+            if button.style.width != width:
+                button.style.width = width
         for button in controls:
             if button.style.width != width:
                 button.style.width = width

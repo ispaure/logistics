@@ -117,9 +117,15 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 titles = label.getParent()
                 density = label.getResources().getDisplayMetrics().density
                 margins = titles.getLayoutParams()
-                unit = round(48 * density)
+                unit = round(owner.back_button.style.width * density)
                 assert margins.getMarginStart() == 2 * unit
                 assert margins.getMarginEnd() == unit
+                close_rect = self.native_rect(owner.close_button._impl.native)
+                links_rect = self.native_rect(owner.links_button._impl.native)
+                assert abs(close_rect[0] - rects[0][0]) <= 2, (close_rect, rects[0])
+                assert abs(sum((links_rect[0], links_rect[2])) - sum((rects[-1][0], rects[-1][2]))) <= 2, (
+                    links_rect, rects[-1])
+                assert abs(close_rect[2] - unit) <= 1 and abs(links_rect[2] - unit) <= 1
                 available = titles.getParent().getWidth() - 3 * unit
                 assert abs(titles.getWidth() - available) <= 1, ('Unused title width', titles.getWidth(), available)
                 assert str(label.getText()) == name

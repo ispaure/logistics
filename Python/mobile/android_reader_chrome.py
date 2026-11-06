@@ -3,6 +3,12 @@ from .palette import android_palette
 
 
 def release_buttons(adapter):
+    saved = getattr(adapter, '_reader_action_bar_insets', None)
+    if saved is not None:
+        toolbar, start, end = saved
+        toolbar.setContentInsetsRelative(start, end)
+        adapter._reader_action_bar_insets = None
+    adapter._reader_action_bar_fit = None
     for button in getattr(adapter, '_reader_action_bar_buttons', ()):
         native = button._impl.native
         parent = native.getParent()
@@ -26,13 +32,13 @@ def set_bar_visibility(adapter, bar, visible):
     bar.show() if visible else bar.hide()
 
 
-def fit_document_title(root, label, leading_count, trailing_count):
+def fit_document_title(root, label, leading_count, trailing_count, *, notes_controls=()):
     """Keep a hold target even when Notes Library has more actions than fit."""
     from android.view import View
     from android.widget import HorizontalScrollView
     from java import dynamic_proxy
 
-    unit = round(48 * root.getResources().getDisplayMetrics().density)
+    density = root.getResources().getDisplayMetrics().density
     title_index = root.indexOfChild(label.getParent())
     actions = root.getChildAt(root.getChildCount() - 1)
     params = actions.getLayoutParams()
@@ -41,27 +47,37 @@ def fit_document_title(root, label, leading_count, trailing_count):
     scroll.addView(actions, -2, -1)
     root.addView(scroll, params)
 
+    def fit(width):
+        if width <= 0:
+            return
+        from commonUtils.ui.native.bars import android_title_insets
+        unit = round((notes_controls[0].style.width if notes_controls else 48) * density)
+        for button in notes_controls:
+            native = button._impl.native
+            params = native.getLayoutParams()
+            if params.width != unit:
+                params.width = unit
+                native.setLayoutParams(params)
+                padding = round((2 if button.style.width < 48 else 12) * density)
+                native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
+        start, end = android_title_insets(width, leading_count, trailing_count, size=unit)
+        titles = root.getChildAt(title_index)
+        margins = titles.getLayoutParams()
+        if margins.getMarginStart() != start or margins.getMarginEnd() != end:
+            margins.setMarginStart(start)
+            margins.setMarginEnd(end)
+            titles.setLayoutParams(margins)
+        bounds = scroll.getLayoutParams()
+        if bounds.width != end:
+            bounds.width = end
+            scroll.setLayoutParams(bounds)
+
     class Layout(dynamic_proxy(View.OnLayoutChangeListener)):
         def onLayoutChange(self, widget, left, top, right, bottom, *previous):
-            width = right - left
-            if width <= 0:
-                return
-            from commonUtils.ui.native.bars import android_title_insets
-            start, end = android_title_insets(width, leading_count, trailing_count, size=unit)
-            trailing = end
-            titles = widget.getChildAt(title_index)
-            margins = titles.getLayoutParams()
-            if margins.getMarginStart() != start or margins.getMarginEnd() != end:
-                margins.setMarginStart(start)
-                margins.setMarginEnd(end)
-                titles.setLayoutParams(margins)
-            scroll = widget.getChildAt(widget.getChildCount() - 1)
-            bounds = scroll.getLayoutParams()
-            if bounds.width != trailing:
-                bounds.width = trailing
-                scroll.setLayoutParams(bounds)
+            fit(right - left)
 
     root.addOnLayoutChangeListener(Layout())
+    return fit
 
 
 def sync(app, view, destination):
@@ -126,17 +142,26 @@ def sync(app, view, destination):
             button.app, button.window = app, app.main_window
             return button._impl.native
         root, label, status = android_bar(app._impl.native, leading, buttons, native_control=native_control)
+        notes_controls = getattr(view, '_notes_title_controls', ())
         if hasattr(view, '_document_path'):
             from .document_location import bind_android_hold
-            fit_document_title(root, label, len(leading), len(buttons))
+            adapter._reader_action_bar_fit = fit_document_title(
+                root, label, len(leading), len(buttons), notes_controls=notes_controls)
             bind_android_hold(view, label.getParent())
         bar.setCustomView(root, jclass('androidx.appcompat.app.ActionBar$LayoutParams')(-1, -1))
         bar.setDisplayOptions(16)  # DISPLAY_SHOW_CUSTOM; title/actions live in one row.
+        toolbar = root.getParent()
+        if notes_controls and isinstance(toolbar, jclass('androidx.appcompat.widget.Toolbar')):
+            adapter._reader_action_bar_insets = toolbar, toolbar.getContentInsetStart(), toolbar.getContentInsetEnd()
+            inset = round(8 * root.getResources().getDisplayMetrics().density)
+            toolbar.setContentInsetsRelative(inset, inset)
         adapter._reader_action_bar_title = label
         adapter._reader_action_bar_status = status
         adapter._reader_action_bar_buttons = [*leading, *buttons]
         adapter._reader_action_bar_state = state
     label = adapter._reader_action_bar_title
+    if getattr(view, '_notes_title_controls', ()) and adapter._reader_action_bar_fit is not None:
+        adapter._reader_action_bar_fit(label.getParent().getParent().getWidth())
     if hasattr(view, '_document_path'):
         from commonUtils.ui.native.panning_title import configure_android_title
         configure_android_title(label)
