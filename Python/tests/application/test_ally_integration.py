@@ -55,10 +55,45 @@ class AllyIntegrationTests(unittest.TestCase):
     def test_failed_switch_preserves_active_link_and_cleans_staging(self):
         activate(self.logistics, self.ally)
         replacement = self._replacement_package()
-        with patch.object(Path, 'replace', side_effect=OSError('switch failed')):
-            with self.assertRaisesRegex(OSError, 'switch failed'):
+        failure = OSError('switch failed')
+        with patch.object(Path, 'replace', side_effect=failure):
+            with self.assertRaises(OSError) as caught:
                 activate(self.logistics, replacement)
+        self.assertIs(caught.exception, failure)
         self._assert_original_active()
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
+    def test_failed_staging_cleanup_reports_leftover_and_preserves_active_link(self):
+        activate(self.logistics, self.ally)
+        replacement = self._replacement_package()
+        for failure, expected in (
+            (OSError('switch failed'), RuntimeError),
+            (KeyboardInterrupt(), KeyboardInterrupt),
+        ):
+            with self.subTest(failure=type(failure).__name__):
+                with (
+                    patch.object(Path, 'replace', side_effect=failure),
+                    patch.object(Path, 'unlink', autospec=True,
+                                 side_effect=PermissionError('cleanup denied')) as unlink,
+                ):
+                    with self.assertRaises(expected) as caught:
+                        activate(self.logistics, replacement)
+
+                staged = unlink.call_args.args[0]
+                self.assertEqual(set(self.link.parent.iterdir()), {self.link, staged})
+                self.assertEqual(staged.readlink(), replacement / 'Python/ally_feature')
+                self.assertEqual(self.link.readlink(), self.source)
+                self.assertEqual(os.environ.get('LOGISTICS_ALLY_ROOT'), str(self.ally))
+                if expected is RuntimeError:
+                    self.assertIs(caught.exception.__cause__, failure)
+                    self.assertIn(str(failure), str(caught.exception))
+                    diagnostic = str(caught.exception)
+                else:
+                    self.assertIs(caught.exception, failure)
+                    diagnostic, = failure.__notes__
+                self.assertIn('cleanup denied', diagnostic)
+                self.assertIn(str(staged), diagnostic)
+                staged.unlink()
 
     @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
     def test_retarget_refuses_link_changed_while_staging(self):
