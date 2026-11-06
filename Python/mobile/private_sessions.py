@@ -113,11 +113,15 @@ class PrivateController(ReaderHost, ProviderUI):
             return
 
         async def reload_when_idle():
-            # Leaving a reader cancels its layout reload, but the decode worker
-            # can still be draining when the user returns to the same page.
+            import asyncio
+            # A suspended reader can still own a draining decode or an
+            # encrypted progress write. Wait without cancelling the writer.
             await self.operation_idle.wait()
-            if (self.page_suspended and not self.cloud_busy and self.manager.active is self
-                    and self.manager.available(self.session.id)
+            progress = getattr(self, '_provider_progress', None)
+            if progress is not None and progress.worker is not None:
+                await asyncio.wait({progress.task})
+            if (self.page_suspended and self.provider_document().can_start()
+                    and self.manager.active is self and self.manager.available(self.session.id)
                     and self.app.visible_reader() == self.session.id):
                 await self.read_crypt_page()
 
