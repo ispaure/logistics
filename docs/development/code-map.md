@@ -14,7 +14,7 @@ put new code. The [restructuring record](restructuring.md) retains migration his
 | `Python/launch.py` | Desktop startup and shutdown composition |
 | `Python/desktop/` | Desktop application shell: destinations, documents, menus, settings and browser hosting |
 | `Python/features/<id>/` | Feature behavior, registration, configuration and feature-specific presentation |
-| `Python/features/{discovery,registry,feature_runtime,contributions,settings,preferences}.py` | Application feature infrastructure, rather than individual tools; see its [ownership map](feature-infrastructure.md) |
+| `Python/features/{application,discovery,feature_runtime,contributions,settings,preferences}.py` and `Python/features/runtime/` | Application feature infrastructure, rather than individual tools; see its [ownership map](feature-infrastructure.md) |
 | `Python/models/` | Host-level models, including folder identities |
 | `Python/services/` | Logistics policies and host services; see the [domain map](services.md) |
 | `Python/mobile/` | Toga mobile host and composed workflows; see the [module and test map](mobile-runtime.md) |
@@ -53,13 +53,13 @@ aliases; external extensions must update their host imports.
 | Desktop startup | `Python/launch.py` | [Architecture](architecture.md) |
 | Rail, landing chooser or destination hosting | `Python/desktop/navigation/catalog.py`, `Python/desktop/{main_window,sidebar,landing}.py` | [Architecture](architecture.md) |
 | Open document tabs or cooperative close | `Python/desktop/documents.py` | [Architecture](architecture.md#independent-text-documents) |
-| Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`, `runtime/{preferences,dependencies,activation,catalog}.py`; application instance in `application.py` | [Feature lifecycle](features.md) |
+| Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`, `Python/features/runtime/{preferences,dependencies,activation,catalog}.py`; application instance in `Python/features/application.py` | [Feature lifecycle](features.md) |
 | Register a feature page, settings group or launcher | The feature's `__init__.py` and any delegated contribution module | [Extension points](extension-points.md) |
 | Browser actions, previews or file activation | Feature registration and handlers; `Python/desktop/file_browser.py` for host integration | [Browser extensions](file-browser.md) |
 | Desktop Workspaces | `Python/desktop/pages/folders.py`, `Python/services/folders/{catalog,sources,workspaces}.py` | [Feature lifecycle](features.md#remote-folder-source-context) |
 | Git commands versus Git presentation | `Python/features/git/ui/commands/`, `repository.py`; presentation in `ui/repository_view.py` | [Git developer guide](../features/git/development/development.md) |
 | LM transport, saved data or desktop chat | `Python/features/lm/{transport,storage,session}.py`, `Python/features/lm/ui/` | [LM integration](../features/lm/development/lm.md) |
-| EPUB or comic format behavior | `Python/features/books/`, `Python/features/comics/` | The owning feature's `README.md` |
+| EPUB or comic format behavior | `Python/features/books/`, `Python/features/comics/` | [Books](../features/books/development/development.md), [Comics](../features/comics/development/development.md) |
 | Mobile app composition and navigation | `Python/mobile/composition/`, `Python/mobile/{app,workspace,workspace_navigation}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
 | Mobile Workspaces discovery and refresh state | `Python/mobile/{folder_discovery,folder_controller,folder_hub}.py` | [Discovery ownership](mobile-runtime.md#workspaces-folder-discovery) |
 | Mobile main/workspace folder listing requests | `Python/mobile/folder_listing.py`; adapters in `files_ui.py`, `workspace_navigation.py` | [Listing ownership](mobile-runtime.md#folder-listing-ownership) |
