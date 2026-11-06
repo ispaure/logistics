@@ -234,27 +234,43 @@ def start_receiving(app):
     queues = native_queues(app)
     if not queues:
         return
+    from threading import Event
+    from commonUtils.persistence.publication import mutation_lock
+    from services.worker_retirement import drain_worker
+
+    cancelled = Event()
+    failed_deliveries = {queue: set() for queue in queues}
+
+    def live_host():
+        return (not cancelled.is_set() and getattr(app, 'active_host', True)
+                and not getattr(app, '_reset_scheduled', False)
+                and not getattr(getattr(app, '_host_lifecycle', None), 'exited', False))
+
+    def can_receive():
+        return live_host() and not getattr(app, '_storage_changing', False)
+
+    def receive_ready():
+        with mutation_lock:
+            if not can_receive():
+                return None, 0, 0
+            # Once admitted, finish the batch under the lock so publication
+            # and ready-record cleanup retain their existing journal semantics.
+            inbox = inbox_path(app.private_root)
+            saved = failed = 0
+            for queue in queues:
+                good, bad = consume(queue, inbox, failed_deliveries=failed_deliveries[queue])
+                saved += good
+                failed += bad
+            return inbox, saved, failed
+
     async def receive():
-        failed_deliveries = {queue: set() for queue in queues}
-        while (getattr(app, 'active_host', True) and not getattr(app, '_reset_scheduled', False)
-               and not getattr(getattr(app, '_host_lifecycle', None), 'exited', False)):
+        while live_host():
+            worker = asyncio.create_task(asyncio.to_thread(receive_ready))
             try:
-                def receive_ready():
-                    from commonUtils.persistence.publication import mutation_lock
-                    with mutation_lock:
-                        if getattr(app, '_storage_changing', False):
-                            return None, 0, 0
-                        inbox = inbox_path(app.private_root)
-                        saved = failed = 0
-                        for queue in queues:
-                            good, bad = consume(queue, inbox, failed_deliveries=failed_deliveries[queue])
-                            saved += good
-                            failed += bad
-                        return inbox, saved, failed
-                inbox, saved, failed = await asyncio.to_thread(receive_ready)
-                if not app.active_host:
+                inbox, saved, failed = await asyncio.shield(worker)
+                if not live_host():
                     break
-                if saved or failed:
+                if (saved or failed) and can_receive():
                     app.incoming_status = (f'{saved} file(s) saved to Received Files.' if saved else '')
                     if failed:
                         app.incoming_status += ' Some incoming files could not be saved; reopen the app to retry.'
@@ -268,7 +284,13 @@ def start_receiving(app):
                     if (saved and shown == inbox and getattr(app, 'body', None) is getattr(app, 'files_view', None)
                             and not getattr(app, 'cloud_busy', False)):
                         await app.browse_files()
+            except asyncio.CancelledError:
+                cancelled.set()
+                await drain_worker(worker)
+                raise
             except (OSError, ValueError):
-                app.incoming_status = 'Incoming files are waiting. Check available storage and reopen the app.'
-            await asyncio.sleep(2)
+                if can_receive():
+                    app.incoming_status = 'Incoming files are waiting. Check available storage and reopen the app.'
+            if live_host():
+                await asyncio.sleep(2)
     app.incoming_task = app.loop.create_task(receive())
