@@ -69,6 +69,63 @@ class NotebookStorageTests(unittest.TestCase):
     def stroke(self, panel):
         panel.editor.apply(dict(op='stroke', points=[[20,30,.4],[40,50,.8]], tool=12, width=2))
 
+    def select_missing_collection(self):
+        import json
+        from services.documents.locations import CONFIG
+        volume = self.root / 'Removed SD card'
+        (self.app.private_root / CONFIG).write_text(json.dumps(
+            dict(volume=str(volume), token='a' * 32)))
+
+    def private_download(self):
+        source = self.app.private_root / 'Downloads' / 'Sketch.rmdoc'
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(Notebook.new('Sketch').to_bytes())
+        return source
+
+    def test_private_download_reuses_indexed_draft_without_collection_drive(self):
+        from mobile.resource_imports import ResourceImports
+        source = self.private_download()
+        self.select_missing_collection()
+        self.assertTrue(self.run_async(self.app.open_local_document(source)))
+        panel = self.app.notebook_panel
+        self.assertEqual(ResourceImports(self.app.private_root).find(source),
+                         dict(provider='notebook', resource=panel.key))
+        self.stroke(panel)
+        undo = list(panel.editor.undo)
+        panel.document.resource.close()
+        panel.document.resource = None
+        self.assertTrue(self.run_async(self.app.open_local_document(source)))
+        self.assertIs(self.app.notebook_panel, panel)
+        self.assertEqual(panel.editor.undo, undo)
+        self.assertTrue(panel.document.dirty)
+
+    def test_private_download_orphan_discard_without_collection_drive(self):
+        from mobile.resource_imports import ResourceImports
+        source = self.private_download()
+        original = source.read_bytes()
+        self.assertTrue(self.run_async(self.app.open_local_document(source)))
+        panel = self.app.notebook_panel
+        key = panel.key
+        self.stroke(panel)
+        panel.document.resource.close()
+        panel.document.resource = None
+        self.select_missing_collection()
+        self.assertTrue(self.app.close_session(panel.session.id, choice='discard'))
+        self.assertFalse((self.app.private_root / 'notebooks' / key).exists())
+        self.assertIsNone(ResourceImports(self.app.private_root).find(source))
+        self.assertEqual(source.read_bytes(), original)
+
+    def test_external_notebook_open_reports_missing_collection_drive(self):
+        with TemporaryDirectory() as public:
+            source = Path(public) / 'Public sketch.rmdoc'
+            original = Notebook.new('Public sketch').to_bytes()
+            source.write_bytes(original)
+            self.select_missing_collection()
+            self.assertFalse(self.run_async(self.app.open_local_document(source)))
+            self.assertIn('Collection drive unavailable', self.app.notebook_panel.status.text)
+            self.assertFalse(self.app.workspace.sessions)
+            self.assertEqual(source.read_bytes(), original)
+
     def test_delete_uses_resource_and_recovery_owners_for_local_and_private(self):
         for private in (False, True):
             with self.subTest(private=private):

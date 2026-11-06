@@ -14,6 +14,8 @@ def panels(app):
 
 
 async def open_notebook(app, *, path=None, resource=None, key=None, name=None, destination=None):
+    import asyncio
+
     if not app.require_feature('notebooks'):
         if resource is not None:
             resource.close()
@@ -69,8 +71,11 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         if resource is not None and resource.policy.persistent:
             from mobile.resource_imports import ResourceImports
             from services.documents.locations import collection_path
-            imports = ResourceImports(app.private_root, collection_root=collection_path(app.private_root))
             source_path = resource.provider.root / resource.path
+            collection_root = None
+            if not source_path.resolve().is_relative_to(Path(app.private_root).resolve()):
+                collection_root = collection_path(app.private_root)
+            imports = ResourceImports(app.private_root, collection_root=collection_root)
             imported = imports.find(source_path)
             if key is None and imported is not None and imported['provider'] == 'notebook':
                 key = imported['resource']
@@ -118,7 +123,6 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             document.source_unavailable = bool(binding and active_resource is None)
             remember_notebook_resource(document)
             return document
-        import asyncio
         document = await asyncio.to_thread(load)
         if app.navigation_generation != generation or not app.active_host:
             document.close()
@@ -209,9 +213,8 @@ def close_notebook(app, key, choice, *, leaving_reader=False):
     if panel is not None and panel.document is not None and panel.document.recovery_deleted and panel.document.resource is None:
         try:
             from mobile.resource_imports import ResourceImports
-            from services.documents.locations import collection_path
             app.recent_documents.forget('notebook', panel.key)
-            ResourceImports(app.private_root, collection_root=collection_path(app.private_root)).forget('notebook', panel.key)
+            ResourceImports(app.private_root).forget('notebook', panel.key)
         except (OSError, ValueError, KeyError) as error:
             show_notebook_close_error(app, panel, error)
             return False
