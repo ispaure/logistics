@@ -7,11 +7,9 @@ dependency pins for the Logistics revision under review. See the
 [build ownership map](build-deployment-audit.md), the [mobile runtime](mobile-runtime.md)
 and the [optional feature host boundary](optional-integration.md).
 
-<a id="current-assessment--october-28-2026"></a>
+## Current assessment — October 28, 2026
 
-## Historical assessment — October 28, 2026
-
-The review compared Logistics `69933ade`, shared `22b962f`, manager
+This historical checkpoint compared Logistics `69933ade`, shared `22b962f`, manager
 `d9baf99` and Blue Hole `388da80`, including visible working-tree edits.
 Blue Hole used its namespaced shared subtree on `blender-5.2.2/alpha`.
 The assessment itself made no commits, pushes, branch changes or pin updates.

@@ -14,9 +14,7 @@ gates for historical context. See the [mobile runtime](mobile-runtime.md),
 [reader state](reader-state.md) and [mobile preparation](mobile-preparation.md)
 for the current contracts.
 
-<a id="local-implementation-status"></a>
-
-## Implementation at the reviewed checkpoint
+## Local implementation status
 
 The subsequent host restructuring gives text Open/Save As a composed
 `EditorPicker` in `mobile.editor_picker`, with state and cancellation
@@ -55,8 +53,10 @@ through `web_checks`. The historical run used a 31-case inventory. Consult
 [adding and diagnosing tests](adding-tests.md) for current native suite selection
 and source/backend verification.
 
-Reader controllers use enumerated host services. The provider controller owns
-cancellation and busy state. Reader tools have a separate route before Back
+Reader controllers use enumerated host services. `ProviderDocumentSession` owns
+the current reader and busy/cancellation state; `ProviderDocumentOpening` owns
+preparation and publication. See [provider assembly](mobile-runtime.md#provider-presentation-assembly)
+for cancellation and disposal boundaries. Reader tools have a separate route before Back
 returns to the originating folder.
 The shared reading frame and page commands preserve separate library/provider
 progress, bookmark and cleanup policies.
