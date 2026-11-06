@@ -69,8 +69,15 @@ class NativeDocumentMenuTests(TestCase):
         native.setGroupDividerEnabled.assert_called_once_with(True)
         menu.listener.onMenuItemClick(SimpleNamespace(getItemId=lambda: 2))
         self.assertEqual(selected, ['Close document'])
+        listener = menu.listener
+        menu.dispose()
         menu.dispose()
         popup.dismiss.assert_called_once_with()
+        popup.setOnMenuItemClickListener.assert_called_with(None)
+        self.assertEqual(menu.actions, ())
+        # A native callback already queued before detachment may still arrive.
+        self.assertTrue(listener.onMenuItemClick(SimpleNamespace(getItemId=lambda: 2)))
+        self.assertEqual(selected, ['Close document'])
 
 
 class DocumentMenuTests(TestCase):
