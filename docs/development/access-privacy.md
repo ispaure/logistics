@@ -64,6 +64,13 @@ Caller mutation cannot alter an active session, and a failed copy leaves the old
 session intact. This does not change storage formats, revocation ordering or the
 separate authentication and persistence policies.
 
+Mobile provider text and notebook Save As capture their source `DocumentPolicy`
+before opening the destination form. A private-to-ordinary export requires the
+existing plaintext-copy confirmation; the picker rechecks its operation and
+source identity after asynchronous dialogs. See the
+[storage and export owner](document-storage.md#privacy-and-lifetime) for the
+handoff and host regression scope.
+
 `services.access_policy.session_only` composes explicit provider declarations
 through document wrappers. Video no longer reads credential package dictionaries
 or guesses retention from context filenames. Desktop LocalCrypt declares its
@@ -132,6 +139,14 @@ UI/document observers; notification fanout attempts every observer even if one
 fails. UI callbacks return to their scene loop. Native screen shielding stays
 synchronous; asynchronous verification cannot reveal content after rebackgrounding or credential replacement. These callbacks never revive a
 revoked I/O grant.
+
+`ScreenPrivacy` and `mobile.audio_output.AudioOutput` retain the exact registrations they own.
+Failed construction unwinds acquired subscriptions; disposal marks callbacks
+inactive before attempting every release. Failed release handles remain available
+for retry, and queued native callbacks cannot revive the disposed owner.
+`test_screen_privacy.py`, `test_audio_output.py` and `test_protection_scope.py`
+exercise setup failure, late callbacks and retry with host fixtures. Native
+observer delivery and teardown still require platform validation.
 
 ## Shared presentation and playback questions
 

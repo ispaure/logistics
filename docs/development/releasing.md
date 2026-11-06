@@ -59,6 +59,12 @@ The workflow uses GitHub's built-in token. Only the publishing job has
 even when a tag is selected. Workflow concurrency serializes runs for the same ref.
 
 The packaging tool validates pinned submodule checkouts and archive integrity.
+It also requires the source archive's configured manager entry files:
+`build-project.json`, `logistics_build/manager_bridge.py` and
+`logistics_build/tooling_bootstrap.py`, alongside
+the installer and pinned dependency metadata. The external build manager remains
+a separate dependency. `.github/scripts/test_release.py` verifies that the
+packager rejects any missing entry file before creating the ZIP.
 It excludes Git metadata, workflow files, virtual environments, caches and build
 outputs. It preserves executable permissions for macOS/Linux launchers. Local
 credentials, optional software and other untracked/ignored files are not bundled.

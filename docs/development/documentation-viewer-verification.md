@@ -33,7 +33,16 @@ assets, heading targets and separate repository boundaries.
 
 ## Mobile host and packaged payload
 
-The 14 documentation, packaged-startup and shared native-Markdown tests pass on
+`mobile.documentation_ui.DocumentationReader.filter()` prepares and decorates
+complete rows in a detached container, then replaces children of the retained
+mounted rows owner. The scroll container, catalog and shared wiki API remain the
+same. `test_documentation_ui.py` checks retained row/scroll ownership with a
+synthetic 5/40-page fixture; separate cases open and render bundled guides.
+Native acceptance must separately observe scroll position, focus,
+selection, search, links and rotation on compact/wide iOS and Android, including
+E Ink. Dummy-host timings do not establish device responsiveness.
+
+The October 16 run's 14 documentation, packaged-startup and shared native-Markdown tests passed on
 the dummy mobile backend. They cover the actual Settings documentation handler,
 phone/tablet presentation, title widths, folder rows, heading navigation, search,
 cross-wiki history and the staged payload without checkout packages on its import

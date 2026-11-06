@@ -29,15 +29,16 @@ different lifetimes.
 | Change | Owner |
 | --- | --- |
 | Startup and application wiring | `app.py`, `composition/assembly.py`, `composition/presentation.py` |
+| Home and Documents presentation | `home.py:HomeScreen`, `documents_hub.py:DocumentsHub`, shared controls in `hub_controls.py`; `hub_ui.py` retains session summaries/reopen/refresh |
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
 | Retained destination browser, provider and listing lifetime | `file_drawer.py`; pane placement remains in `workspace_navigation.py` |
 | Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
-| Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`; retained tree controls in `folder_tree_view.py`, styling in `folder_hub_style.py` |
+| Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`; root/source tabs in `workspaces_screen.py`, workflows in `folder_hub_ui.py`; retained tree controls in `folder_tree_view.py`, styling in `folder_hub_style.py` |
 | File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `document_mutations.py` owns live text identity handoff; `files_ui.py` retains forms, confirmation and forwarding methods |
 | Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `file_drawer.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
-| Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
+| Text Open/Save As and pending bytes | `editor_picker.py`; form controls in `document_destination_form.py` |
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
 | Explicit read-only services and writable compatibility state | `services/workflow_host.py`; lazy owner access in `composition/assembly.py` |
 | Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
@@ -224,6 +225,11 @@ menu factory through `MobilePresentation.NativeMenu`. `android_res` supplies
 8dp popup corners and a white, black-outlined E Ink variant. The resources are
 copied from the host's resource tree into generated Android projects by
 `cloud_build.configure_android_sources`, alongside the Books native resources.
+
+Android `DocumentNativeMenu` consumes a late item callback after disposal without
+indexing its cleared action list. Live item IDs still dispatch the existing
+actions. `test_document_menus.py` replays a retained listener on the host; actual
+popup dismissal/event ordering remains a native acceptance check.
 
 Markdown readers expose `_workspace_toolbar` so the workspace drawer shares
 their existing control row instead of adding a second header. UIKit still mounts
@@ -454,9 +460,10 @@ Results and errors are published on the UI thread only while their epoch,
 credential-client identity/generation and refresh request remain current. Old
 errors cannot replace status for a locked or newer session. Native hosts read a
 copy of the credential-matching cache while refreshing; dummy/desktop hosts keep
-the existing synchronous discovery path. `folder_hub_ui.py` retains presentation,
-navigation and forwarding methods; opening folders still uses existing credential
-guards.
+the existing synchronous discovery path. `workspaces_screen.WorkspacesScreen`
+owns the retained root, source tabs and tree mounting. `folder_hub_ui.FolderHubUI`
+subclasses it and retains discovery, access, navigation and forwarding workflows;
+opening folders still uses existing credential guards.
 
 Run `python3 dev.py test mobile 'test_folder_*.py'` for discovery, grouping, tabs,
 selection and navigation checks (`py` on Windows). The discovery tests include
@@ -550,6 +557,13 @@ owner for native probes and existing callbacks; they do not duplicate its state.
 The controller explicitly enumerates host services with `HostService`; it has no
 catch-all attribute forwarding. `files_ui.py` retains file-management behavior
 and small compatibility delegates for picker entry points.
+
+`document_destination_form.build_destination_form()` attaches named controls and
+`PickerMessage` to that same owner before route publication. It creates no second
+picker/session record. Source policy, origin validation, plaintext-export consent,
+cancellation and save decisions remain in `EditorPicker`; `PickerMessage` remains
+available through its existing import there. See the
+[private export contract](document-storage.md#privacy-and-lifetime).
 
 Provider selection and widget values are captured on the UI loop. Listing,
 resolution, publication and verification run in worker threads using captured
@@ -832,6 +846,16 @@ browser or reader state. Ordinary local browsing and local text reads can procee
 while restoration is pending. Cloud-backed reopens await restoration and validate
 the saved connection identity before exposing content. Retained session-only ZIPs
 still require their password. Background connection failure leaves Home usable.
+
+The initial restore captures its client, and `CredentialWorkflow` checks the
+active host, client identity and generation before publishing restore results,
+credential names or metadata errors. Terminal host retirement cancels the
+independent restore task as well as the native request; an ordinary user Cancel
+keeps the shared restore task available to other callers. Already-entered
+credential work retains ownership until its worker settles. Host regressions in
+`test_background_credential_refresh.py` and `test_cloud_credential_loading.py`
+exercise late results and retirement; they do not establish native bridge privacy.
+
 On Android, a native snapshot of the final loading frame covers the attached
 workspace while navigation and content receive their real viewport measurements.
 A pre-draw listener waits for positive, unchanged native root and content bounds,
@@ -1117,10 +1141,12 @@ the saved native button styling. Workspaces transfer banners use a live visibili
 predicate: only the rclone source shows running or unsuccessful transfer notices.
 Changing source reevaluates it immediately, without changing transfer state.
 
-`browser_ui.FolderLocationHeader` shows only the currently browsed storage (drive
+`browser_location.FolderLocationHeader` shows only the currently browsed storage (drive
 or cloud), adding a lock for encrypted providers/remotes. Local and remote
 browsing update it after a successful listing. Its navigation glyph becomes Back
 at the provider root and returns to Workspaces; nested folders retain Up.
+`browser_ui.py` retains `FileBrowser` and explicit compatibility exports for the
+location controls.
 
 ## Android Workspaces profiling — 2026-10-19
 
@@ -1353,6 +1379,20 @@ ordinary exit disposes the process-shared external comics display. Memory trimmi
 remains repeatable and preserves the current speech owner. `LogisticsMobile`
 delegates its callbacks to this owner; retirement does not imply that every worker
 thread has been joined.
+
+An OS-disconnected secondary scene uses `HostLifecycle.retire_secondary_scene()`:
+it attempts its checkpoint once, records failure without logging private provider
+details, and retires the window even when preservation fails. Unlike voluntary
+close, this terminal callback cannot veto native destruction. Duplicate callbacks
+can retry failed cleanup, but remove registry entries only if they still belong
+to that host. The primary scene and process credentials keep their separate
+lifetimes; `test_window_owners.py` covers these host-level distinctions.
+
+`services.worker_retirement.drain_worker()` waits for an already scheduled worker
+through repeated caller cancellation and retrieves its exception. It does not
+signal cancellation, adopt the result or decide publication: provider opening,
+credential loading, transfer review/execution and file-operation callers retain those
+policies and re-raise their original cancellation after draining.
 
 Android Activity replacement also disposes old text views, keyboard dismissal
 and seasonal effects, then uninstalls adaptive navigation and native Back before

@@ -11,6 +11,11 @@ Application-wide guidance has moved to [developer documentation](development.md)
 
 | Screen or panel | Presentation owner | Composition and navigation |
 | --- | --- | --- |
+| Mobile Home | `Python/mobile/home.py:HomeScreen` | `hub_ui.HubUI` composes Home and Documents and retains session summaries, reopen and refresh coordination |
+| Mobile Documents | `Python/mobile/documents_hub.py:DocumentsHub`; shared sections and rows in `hub_controls.py` | Same composed hub owner; routes and sessions retain their existing identities |
+| Mobile Workspaces root and source tabs | `Python/mobile/workspaces_screen.py:WorkspacesScreen` | `folder_hub_ui.FolderHubUI` retains discovery, access and folder workflows |
+| Mobile browser location heading | `Python/mobile/browser_location.py:FolderLocationHeader` | `browser_ui.FileBrowser` retains browsing and compatibility exports |
+| Mobile New/Open/Save As destination form | `Python/mobile/document_destination_form.py:build_destination_form` | `editor_picker.EditorPicker` retains operation state, source policy, consent, cancellation and publication |
 | Mobile Settings → Appearance | `Python/mobile/settings/appearance.py`; accent controls in `accent.py` beside it | `mobile.app.LogisticsMobile.show_settings()` → `settings.categories.settings_sections()` → `SettingsNavigation` |
 | Mobile Settings → App | `Python/mobile/settings/app.py` | Same lazy category registry |
 | Mobile Settings → Privacy & Security | `Python/mobile/settings/privacy_security.py`; audio and trusted Wi-Fi controls in sibling modules | Same registry; access policy remains with the [privacy owners](access-privacy.md) |

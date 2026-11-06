@@ -54,6 +54,16 @@ The updated main app also opened an existing `.rmdoc` from Workspaces → Receiv
 Files on the physical Boox; its data was preserved and only the main Logistics
 package remained installed.
 
+`mobile.resource_imports.ResourceImports` rereads its schema-1 index for each
+lookup and before each remember/forget operation. A process-wide mutation lock
+serializes reload, delta and atomic publication across index instances. Remember
+merges into current disk state; the last published mapping wins for the same
+source key. Forget removes current mappings matching the provider and opaque
+resource ID. The 256-entry/64 KiB bounds, hashed relative identities and refusal
+to overwrite invalid or linked indexes remain. This is process-local protection,
+not a cross-process lock or single-flight import. `test_resource_imports.py`
+covers stale instances, interleaved updates and malformed-index preservation.
+
 Collection and Android device-folder browsing share an ordinary-folder snapshot.
 It validates the collection location at listing boundaries rather than reopening
 its settings and SD-card marker for every child. Child link, regular-file and
@@ -145,6 +155,16 @@ screen privacy and confirmation before publishing private bytes to ordinary
 storage. Format canvases receive a checkpoint callback. Provider operations still
 validate credentials and revisions during I/O; hiding a view does not authorize a
 save after revocation. Memory-only drafts do not imply secure memory erasure.
+
+Mobile `editor_picker.PickerOperation` captures the source `DocumentPolicy` for
+provider text and notebook Save As. Before destination resolution/publication,
+`EditorPicker` uses `confirm_plaintext()` to request consent for a private source
+being saved to ordinary storage. It checks the captured workspace origin before
+work and again after dialogs, along with the current picker operation and target
+name. Cancellation or a stale source prevents publication. The form builder in
+`mobile/document_destination_form.py` owns controls; source policy, consent and
+publication remain in `EditorPicker`. `test_editor_picker.py` covers private text
+and notebook export, declined consent and source/destination changes on the host.
 
 Mobile reader adapters declare `DocumentReadCapabilities` in
 `services/documents/mobile_reading.py`: privacy, write access, credential-bound

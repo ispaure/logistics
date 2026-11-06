@@ -160,7 +160,7 @@ buttons use a 12-unit horizontal inset on both platforms; iOS Settings reserves
 refreshes retain those insets. Decorative startup and speech speed labels stay
 borderless rather than acquiring outlines against tightly fitted text.
 
-`hub_ui.document_group` owns one rounded surface per Home/Document list section.
+`hub_controls.document_group` owns one rounded surface per Home/Document list section.
 Its rows and close buttons are transparent and borderless; inset dividers
 separate complete rows, including their status text. Both native backends clip
 pressed states to the group's corners. Home includes its See all action inside
@@ -346,7 +346,7 @@ establish physical fold-pose behavior or live provider operation.
 
 ## Home and Documents hub sections
 
-`hub_ui.HubSections` retains the existing controls and moves Recent between the
+`hub_controls.HubSections` retains the existing controls and moves Recent between the
 compact page and a second scroll container. Home has Open/New actions without
 introductory copy. Its content status row is mounted only for transfer shortcuts,
 with five recent entries and a Documents link in the trailing section.
@@ -555,6 +555,13 @@ AndroidX `NavigationBack` bridge with `system_back`; explicit toolbar Back and
 Cancel pop their route directly. Document routes stay within the opening
 destination on both platforms. UIKit keeps the shared delegate and split handling.
 The app module is included in `mobile_sources.json`.
+
+`MobileRoutes.uninstall()` retires its pending asynchronous Back task once,
+without repeatedly cancelling a task already unwinding. Retired dispatch, native
+pop callbacks and queued viewport/reflow/Back-state updates do no further work.
+The invoked feature callback still owns any worker drain and resource cleanup.
+`test_navigation.py` and `test_native_reader_return.py` cover these boundaries on
+the host; actual system Back and scene/activity event ordering need native checks.
 
 The policy follows Android's [fixed start destination and navigation principles](https://developer.android.com/guide/navigation/principles)
 and [independent destination stacks](https://developer.android.com/guide/navigation/backstack/multi-back-stacks).
@@ -865,8 +872,9 @@ hamburger is not mounted.
 ## Mobile feedback follow-up (historical, superseded by the UX passes below)
 
 Home suppresses only its own Apple navigation bar; its bottom tab stays visible.
-`hub_ui` owns padded format-launcher cards, category filters and the open-session
-overview. The stored-document listing is removed. The Archives launcher selects
+Current presentation owners are `home.HomeScreen` and `documents_hub.DocumentsHub`,
+with shared section controls in `hub_controls`. `hub_ui.HubUI` retains session
+summaries, reopen and refresh coordination. The stored-document listing is removed. The Archives launcher selects
 ZIP/CBZ/EPUB files for current readers; no general archive manager is claimed.
 Bundled Qt-free glyphs are rendered from the existing desktop `DestinationIcon`
 geometry. `install_folder_hub_icon` applies the hub image to Apple tabs and both
@@ -1372,8 +1380,9 @@ and document-layout tests. Native device appearance still requires a device run.
 
 `mobile.documentation_ui.show_documentation` opens the shared
 `commonUtils.ui.native.markdown.MarkdownWikiView` with Logistics appearance.
-The catalog, native wiki UI and inert Markdown renderer belong to commonUtils. Settings opens the bundled `mobile/user_docs` tree in a detail
-route. The shared `AdaptiveSidebar` uses a 260-point sidebar, 448-point article minimum
+The catalog, native wiki UI and inert Markdown renderer belong to commonUtils.
+Settings opens the bundled `mobile/help/docs` mirror at `user_mobile/user_mobile.md`
+in a detail route. The shared `AdaptiveSidebar` uses a 260-point sidebar, 448-point article minimum
 and 12-point gap after the wiki's margins; narrower allocations use a hamburger.
 `resize_workspace` supplies the Settings content width after native rails/safe
 areas (before the wiki's own margins). Actual parent allocation caps the width,

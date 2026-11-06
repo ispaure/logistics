@@ -28,6 +28,13 @@ importing feature registration. The staging tool validates the selected imports
 and packages the manifests with the payload. Type-checking-only imports and
 uncalled registration factories do not pull additional modules into the payload.
 
+Before creating the staging destination, preflight also requires the generated
+launcher's `mobile.app` target and checks existing child packages referenced by
+`from` imports. Imported attributes are not treated as missing modules. The
+`source_sha256` digest includes selected HTML, JavaScript and CSS paths and bytes
+alongside Python sources, so changing staged web content changes the fingerprint.
+`Python/tests/test_mobile_packaging.py` covers these omissions and digest changes.
+
 Staging combines the selected Logistics files with portable commonUtils sources
 and declared package data. It rejects linked source paths and excludes the local
 external feature checkout. Clean staging requires tracked shared sources.
