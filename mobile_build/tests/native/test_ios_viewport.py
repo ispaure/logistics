@@ -12,6 +12,23 @@ from mobile.ios_reader_chrome import notify_viewport
 
 
 class ViewportTests(unittest.TestCase):
+    def test_regions_materialize_native_array_without_reflecting_swift_collection(self):
+        from mobile.ios_reader_chrome import occlusion_geometry
+        raw = object()  # Deliberately not Python-iterable.
+        region = SimpleNamespace(frame=SimpleNamespace(origin=SimpleNamespace(x=-4, y=0),
+            size=SimpleNamespace(width=88, height=212)))
+        native = Mock()
+        native.reservedRegionsOfKind.return_value = raw
+        array = Mock()
+        array.arrayWithArray.return_value = [region]
+        kind = SimpleNamespace(occlusionRegionKind=lambda: 'occlusion')
+        bridge = SimpleNamespace(SEL=lambda value: value,
+            ObjCClass=lambda name: array if name == 'NSMutableArray' else kind)
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}):
+            self.assertEqual(occlusion_geometry(native), ((-4, 0, 88, 212),))
+        array.arrayWithArray.assert_called_once_with(raw)
+        native.reservedRegionsOfKind.assert_called_once_with('occlusion', options=0)
+
     def test_occlusion_changes_refresh_without_size_inset_or_edge_changes(self):
         from unittest.mock import patch
         loop = asyncio.new_event_loop()
@@ -81,6 +98,50 @@ class ViewportTests(unittest.TestCase):
             await asyncio.sleep(0)
             self.assertEqual(app.resize_workspace.call_count, 4)
         loop.run_until_complete(exercise())
+
+
+class ShellContainmentTests(unittest.TestCase):
+    def test_native_host_removes_outer_bar_and_restores_toolkit_ownership(self):
+        from mobile.ios_reader_chrome import install_shell_root, restore_shell_root
+        content, outer, root, placeholder = Mock(), Mock(), Mock(), Mock()
+        content.title = 'Logistics'
+        content.view.autoresizingMask = 0
+        outer.viewControllers = [content]
+        window = SimpleNamespace(rootViewController=outer, bounds=object())
+        adapter = SimpleNamespace(parent=content, outer_navigation=outer,
+                                  window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
+        root_class, controller_class = Mock(), Mock()
+        root_class.alloc.return_value.init.return_value = root
+        controller_class.alloc.return_value.init.return_value = placeholder
+        bridge = SimpleNamespace(SEL=lambda value: value, ObjCClass=lambda name: controller_class)
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}):
+            install_shell_root(adapter, root_class)
+            self.assertIs(window.rootViewController, root)
+            outer.setViewControllers.assert_called_once_with([placeholder], animated=False)
+            self.assertEqual(placeholder.title, 'Logistics')
+            root.addChildViewController.assert_called_once_with(content)
+            content.didMoveToParentViewController.assert_called_once_with(root)
+            install_shell_root(adapter, root_class)
+            root_class.alloc.assert_called_once()
+            placeholder.title = 'Updated window title'
+            restore_shell_root(adapter)
+            self.assertIs(window.rootViewController, outer)
+            outer.setViewControllers.assert_called_with([content], animated=False)
+            self.assertEqual(content.removeFromParentViewController.call_count, 2)
+            self.assertEqual(content.title, 'Updated window title')
+            self.assertEqual(content.view.autoresizingMask, 0)
+            restore_shell_root(adapter)
+            self.assertEqual(content.removeFromParentViewController.call_count, 2)
+
+    def test_legacy_sdk_keeps_the_existing_root(self):
+        from mobile.ios_reader_chrome import install_shell_root
+        content = Mock()
+        content.respondsToSelector.return_value = False
+        adapter = SimpleNamespace(parent=content)
+        root_class = Mock()
+        with patch.dict('sys.modules', {'rubicon.objc': SimpleNamespace(SEL=lambda value: value, ObjCClass=Mock())}):
+            install_shell_root(adapter, root_class)
+        root_class.alloc.assert_not_called()
 
 
 class WindowOcclusionTests(unittest.TestCase):
@@ -257,6 +318,34 @@ class FixedControlAuditTests(unittest.TestCase):
 
 
 class ControlClearanceTests(unittest.TestCase):
+    def test_vertical_bar_delegates_compression_without_adding_insets(self):
+        from mobile.ios_system_occlusions import reserve_bar_clearance
+        item = Mock(verticalBarCompressionBehavior=0)
+        bar = Mock()
+        bar.isHidden.return_value = False
+        owner = SimpleNamespace(navigationBar=bar, topViewController=SimpleNamespace(navigationItem=item))
+        with patch('mobile.ios_toolbar.vertical_edge', return_value=2), patch.dict(
+                'sys.modules', {'rubicon.objc': SimpleNamespace(SEL=lambda name: name)}):
+            self.assertFalse(reserve_bar_clearance(owner))
+            self.assertEqual(item.verticalBarCompressionBehavior, 1)
+            self.assertFalse(hasattr(owner, 'additionalSafeAreaInsets'))
+            bar.isHidden.return_value = True
+            reserve_bar_clearance(owner)
+            self.assertEqual(item.verticalBarCompressionBehavior, 1)
+
+    def test_native_bars_do_not_add_island_offsets_as_activity_changes(self):
+        from mobile.ios_system_occlusions import reserve_bar_clearance
+        from types import SimpleNamespace as NS
+        insets = NS(top=5, left=2, bottom=3, right=4)
+        owner = NS(navigationBar=Mock(), additionalSafeAreaInsets=insets)
+        with patch.dict('sys.modules', {'rubicon.objc': NS(SEL=lambda name: name)}), patch(
+                'mobile.ios_reader_chrome.occlusion_geometry') as regions:
+            for occupied in (82, 120, 212, 400, 82):
+                regions.return_value = ((535, 0, 134, occupied),)
+                self.assertFalse(reserve_bar_clearance(owner))
+                self.assertIs(owner.additionalSafeAreaInsets, insets)
+            regions.assert_not_called()
+
     def test_closed_open_and_two_activities_use_current_column_geometry(self):
         from mobile.ios_system_occlusions import control_top_clearance as clearance
         self.assertEqual(clearance(((170, 8, 120, 62),), 0, 460, 59), 78)
@@ -266,46 +355,79 @@ class ControlClearanceTests(unittest.TestCase):
         self.assertEqual(clearance((), 0, 460, 59), 59)
         self.assertEqual(clearance(((850, 400, 90, 40),), 840, 950, 0), 0)
 
-    def test_bar_inset_grows_and_shrinks_without_accumulating_or_losing_other_insets(self):
-        import sys
+    def test_retiring_old_inset_preserves_other_owners_during_reentrant_layout(self):
         from mobile.ios_system_occlusions import reserve_bar_clearance
         from types import SimpleNamespace as NS
         def insets(top, left, bottom, right):
             return NS(top=top, left=left, bottom=bottom, right=right)
-        frame = NS(origin=NS(x=0, y=0), size=NS(width=940, height=44))
-        bar = Mock(bounds=frame)
-        bar.isHidden.return_value = False
-        bar.convertRect.return_value = frame
-        owner = NS(view=NS(safeAreaInsets=insets(20, 0, 0, 0)), navigationBar=bar,
-                   additionalSafeAreaInsets=insets(5, 2, 3, 4))
-        with patch.dict(sys.modules, {'rubicon.objc': NS(UIEdgeInsets=insets)}), patch(
-                'mobile.ios_reader_chrome.occlusion_geometry', return_value=((850, 0, 80, 100),)) as regions:
+        class Owner:
+            navigationBar = Mock()
+            _logistics_occlusion_top = 8
+            _insets = insets(13, 2, 3, 4)
+            @property
+            def additionalSafeAreaInsets(self):
+                return self._insets
+            @additionalSafeAreaInsets.setter
+            def additionalSafeAreaInsets(self, value):
+                self._insets = value
+                self.reentered = reserve_bar_clearance(self)
+        owner = Owner()
+        with patch.dict('sys.modules', {'rubicon.objc': NS(SEL=lambda name: name, UIEdgeInsets=insets)}):
             self.assertTrue(reserve_bar_clearance(owner))
-            self.assertEqual(owner.additionalSafeAreaInsets.top, 93)
-            owner.view.safeAreaInsets.top = 108
+            self.assertFalse(owner.reentered)
             self.assertFalse(reserve_bar_clearance(owner))
-            regions.return_value = ((850, 0, 80, 40), (850, 80, 80, 60))
-            self.assertTrue(reserve_bar_clearance(owner))
-            self.assertEqual(owner.additionalSafeAreaInsets.top, 133)
-            owner.view.safeAreaInsets.top = 148
-            regions.return_value = ()
-            self.assertTrue(reserve_bar_clearance(owner))
-            self.assertEqual(owner.additionalSafeAreaInsets, insets(5, 2, 3, 4))
+        self.assertEqual(owner.additionalSafeAreaInsets, insets(5, 2, 3, 4))
 
-    def test_vertical_bar_prefers_controls_without_pushing_into_destination_tabs(self):
-        import sys
+
+class ContentBandTests(unittest.TestCase):
+    def test_visible_native_title_retains_its_vertical_space(self):
+        from mobile.ios_system_occlusions import compact_content_top
+        item = SimpleNamespace(title='Nested page', titleView=None, prompt=None)
+        owner = SimpleNamespace(navigationItem=item)
+        navigation = SimpleNamespace(topViewController=owner, isNavigationBarHidden=lambda: False)
+        controller = SimpleNamespace(navigationController=navigation)
+        container = SimpleNamespace(controller=controller, top_inset=100)
+        with patch('mobile.ios_toolbar.vertical_edge', return_value=2):
+            self.assertFalse(compact_content_top(container))
+            self.assertEqual(container.top_inset, 100)
+
+    def test_vertical_shell_reclaims_only_unoccupied_content_column(self):
+        from mobile.ios_system_occlusions import compact_content_top
         from types import SimpleNamespace as NS
-        from mobile.ios_system_occlusions import reserve_bar_clearance
-        frame = NS(origin=NS(x=840, y=0), size=NS(width=940, height=700))
-        bar = Mock(bounds=frame)
-        bar.convertRect.return_value = frame
-        bar.isHidden.return_value = False
-        item = Mock(verticalBarCompressionBehavior=0)
-        owner = NS(view=NS(safeAreaInsets=NS(top=0)), navigationBar=bar,
-                   topViewController=NS(navigationItem=item))
-        with patch('mobile.ios_toolbar.vertical_edge', return_value=2), patch.dict(
-                sys.modules, {'rubicon.objc': NS(SEL=lambda name: name)}), patch(
-                'mobile.ios_reader_chrome.occlusion_geometry', return_value=((850, 0, 80, 170),)):
-            self.assertFalse(reserve_bar_clearance(owner))
-            self.assertEqual(item.verticalBarCompressionBehavior, 1)
-            self.assertFalse(hasattr(owner, 'additionalSafeAreaInsets'))
+        frame = NS(origin=NS(x=0, y=0), size=NS(width=951, height=669))
+        window = NS(safeAreaInsets=NS(top=82))
+        native = NS(window=window, bounds=frame, convertRect=lambda *a, **kw: frame,
+                    respondsToSelector=lambda selector: True)
+        controller = NS(navigationController=None)
+        container = NS(controller=controller, native=native, top_inset=82, left_inset=0, right_inset=84)
+        with patch('mobile.ios_toolbar.vertical_edge', return_value=2) as edge, patch.dict(
+                'sys.modules', {'rubicon.objc': NS(SEL=lambda name: name)}), patch(
+                'mobile.ios_reader_chrome.occlusion_geometry', return_value=((867, 0, 84, 212),)) as regions:
+            self.assertTrue(compact_content_top(container))
+            self.assertEqual(container.top_inset, 0)
+            regions.return_value = ((800, 0, 151, 212),)
+            self.assertTrue(compact_content_top(container))
+            self.assertEqual(container.top_inset, 220)
+            regions.return_value = ()
+            compact_content_top(container)
+            self.assertEqual(container.top_inset, 82)
+            edge.return_value = 0
+            container.top_inset = 140
+            self.assertFalse(compact_content_top(container))
+            self.assertEqual(container.top_inset, 140)
+
+    def test_equal_size_move_and_all_safe_edges_change_geometry(self):
+        from mobile.ios_system_occlusions import native_geometry
+        from types import SimpleNamespace as NS
+        frame = NS(origin=NS(x=0, y=0), size=NS(width=460, height=669))
+        window = NS(frame=frame)
+        safe = NS(top=82, left=0, bottom=28, right=84)
+        native = NS(window=window, bounds=frame, safeAreaInsets=safe, convertRect=lambda *a, **kw: frame)
+        previous = native_geometry(native)
+        for field, value in (('left', 84), ('right', 0)):
+            setattr(safe, field, value)
+            current = native_geometry(native)
+            self.assertNotEqual(current, previous)
+            previous = current
+        frame.origin.x = 490
+        self.assertNotEqual(native_geometry(native), previous)

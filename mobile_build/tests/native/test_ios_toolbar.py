@@ -7,7 +7,7 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from mobile.ios_toolbar import action_groups, bar_item, mount_actions, mount_leading, vertical_edge, prepare_form, supplemental_fits
+from mobile.ios_toolbar import action_groups, bar_item, mount_actions, mount_leading, vertical_edge, prepare_form
 
 
 class Button:
@@ -38,6 +38,7 @@ class ToolbarTests(TestCase):
         item.alloc.return_value.initWithBarButtonSystemItem.side_effect = item_factory
         group = Mock()
         group.alloc.return_value.initWithBarButtonItems.side_effect = group_factory
+        group.fixedGroupWithRepresentativeItem.side_effect = lambda representative, items: group_factory(items, representative)
         deferred = Mock()
         deferred.elementWithUncachedProvider.side_effect = lambda callback: callback
         action = Mock()
@@ -52,7 +53,7 @@ class ToolbarTests(TestCase):
         self.controller = NS(traitCollection=traits, navigationItem=Mock())
         self.owner = NS()
 
-    def test_screen_drawer_uses_supplemental_budget_but_close_stays_direct(self):
+    def test_screen_drawer_is_optional_but_close_stays_direct(self):
         from mobile.ios_toolbar import sync_screen
         app = NS(routes=NS(apple=True, screens={'chat': []}), main_window=object(),
                  native_host=NS(adapter=NS(content_controller=lambda destination: self.controller)))
@@ -83,63 +84,22 @@ class ToolbarTests(TestCase):
     def test_prominent_confirmation_uses_chosen_accent(self):
         self.assertEqual(bar_item(Button(None, 'Move here'), prominent=True).tintColor, 'accent')
 
-    def test_supplemental_budget_tracks_system_region_without_window_resize(self):
-        rect = NS(origin=NS(x=382, y=0), size=NS(width=84, height=678))
-        bar = Mock(bounds=rect, items=list(range(5)))
-        bar.isHidden.return_value = False
-        bar.convertRect.return_value = rect
-        self.controller.tabBarController = NS(tabBar=bar)
-        self.controller.view = NS(bounds=rect, safeAreaInsets=NS(top=0, bottom=28))
-        with patch('mobile.ios_toolbar.system_occlusions', return_value=((382, 0, 84, 160),)):
-            self.assertTrue(supplemental_fits(self.controller, 1))
-        with patch('mobile.ios_toolbar.system_occlusions', return_value=((382, 0, 84, 250),)):
-            self.assertFalse(supplemental_fits(self.controller, 1))
-        bar.isHidden.return_value = True
-        self.assertTrue(supplemental_fits(self.controller, 1))
-
-    def test_supplemental_budget_has_no_activity_height_cap(self):
-        rect = NS(origin=NS(x=382, y=0), size=NS(width=84, height=678))
-        bar = Mock(bounds=rect, items=list(range(5)))
-        bar.isHidden.return_value = False
-        bar.convertRect.return_value = rect
-        self.controller.tabBarController = NS(tabBar=bar)
-        self.controller.view = NS(bounds=rect, safeAreaInsets=NS(top=0, bottom=28))
-        with patch('mobile.ios_toolbar.system_occlusions') as regions:
-            # Extend far beyond the previously observed 250-point activity,
-            # then contract without resizing the window or changing bar items.
-            for height, fits in ((160, True), (250, False), (400, False),
-                                 (650, False), (160, True)):
-                with self.subTest(height=height):
-                    regions.return_value = ((382, 0, 84, height),)
-                    self.assertEqual(supplemental_fits(self.controller, 1), fits)
-            # Separate activity/status reservations must use the lowest edge,
-            # even if the regions arrive out of vertical order.
-            regions.return_value = ((382, 220, 84, 80), (382, 0, 84, 120))
-            self.assertFalse(supplemental_fits(self.controller, 1))
-            regions.return_value = ((0, 0, 84, 650), (382, 0, 84, 160))
-            self.assertTrue(supplemental_fits(self.controller, 1))
-
-    def test_supplemental_moves_to_live_overflow_and_returns_when_space_recovers(self):
+    def test_optional_actions_use_native_overflow_groups_and_restore_horizontal_placement(self):
         find, more = Button('find', 'Search this folder'), Button('more', 'Folder actions')
         more._impl.native.menu = NS(children=['folder-action'])
-        with patch('mobile.ios_toolbar.supplemental_fits', return_value=False):
-            mount_actions(self.controller, self.owner, [more], supplemental=[find])
+        mount_actions(self.controller, self.owner, [more], supplemental=[find])
         nav = self.controller.navigationItem
         self.assertEqual(nav.leadingItemGroups, [])
+        self.assertEqual(nav.trailingItemGroups[0].barButtonItems, [find._ios_action_item])
+        self.assertIsNone(find._ios_action_item.customView)
         children = []
         nav.additionalOverflowItems(lambda values: children.extend(values))
-        self.assertEqual(children[0].title, 'Search this folder')
-        self.assertEqual(children[1], 'folder-action')
-        children[0].handler(None)
-        find._impl.native.performSelector.assert_called_once_with('onPress:', withObject=None)
-        find.enabled = False
-        nav.additionalOverflowItems(lambda values: None)
-        self.assertEqual(children[0].attributes, 1)
-        children[0].handler(None)
-        self.assertEqual(find._impl.native.performSelector.call_count, 1)
-        with patch('mobile.ios_toolbar.supplemental_fits', return_value=True):
-            mount_actions(self.controller, self.owner, [more], supplemental=[find])
-        self.assertEqual(nav.leadingItemGroups[0].barButtonItems, [find._ios_action_item])
+        self.assertEqual(children, ['folder-action'])
+        retained = find._ios_action_item
+        self.controller.traitCollection.verticalBarEdge = 0
+        mount_actions(self.controller, self.owner, [more], supplemental=[find])
+        self.assertEqual(nav.leadingItemGroups[0].barButtonItems, [retained])
+        self.assertEqual(nav.trailingItemGroups[0].barButtonItems, [more._ios_action_item])
 
     def test_native_items_keep_live_enabled_state_and_menu(self):
         button = Button('find', 'Search files')
@@ -247,7 +207,7 @@ class ToolbarTests(TestCase):
         self.assertFalse(close._ios_action_item.enabled)
         self.assertIsNot(self.controller.navigationItem.leftBarButtonItems, original)
 
-    def test_system_occlusion_changes_reproject_both_sides_without_replacing_actions(self):
+    def test_system_occlusion_changes_leave_native_groups_and_actions_intact(self):
         close, find = Button('close', 'Close'), Button('find', 'Search')
         nav = self.controller.navigationItem
         with patch('mobile.ios_toolbar.system_occlusions', return_value=((867, 0, 84, 120),)) as regions:
@@ -258,8 +218,8 @@ class ToolbarTests(TestCase):
             regions.return_value = ((867, 0, 84, 212),)
             mount_leading(self.controller, [close], replaces_back=True)
             mount_actions(self.controller, self.owner, [find])
-            self.assertIsNot(nav.leadingItemGroups, leading)
-            self.assertIsNot(nav.trailingItemGroups, trailing)
+            self.assertIs(nav.leadingItemGroups, leading)
+            self.assertIs(nav.trailingItemGroups, trailing)
             self.assertIs(close._ios_action_item, close_item)
             self.assertIs(find._ios_action_item, find_item)
             leading, trailing = nav.leadingItemGroups, nav.trailingItemGroups

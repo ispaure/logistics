@@ -67,6 +67,7 @@
     "font_scaling.py",
     "hub_controller.py",
     "hub_icons.py",
+    "home_header.py",
     "hub_ui.py",
     "incoming_files.py",
     "ios/IncomingFiles.m",

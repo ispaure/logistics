@@ -29,7 +29,7 @@ class FoldLayoutTests(unittest.TestCase):
         region = NS(frame=NS(origin=NS(x=0, y=320), size=NS(width=700, height=40)))
         calls = []
         backend.native = NS(reservedRegionsOfKind=lambda kind, options: calls.append((kind, options)) or [region])
-        objc = NS(ObjCClass=lambda name: NS(divisionRegionKind=lambda: 'division'))
+        objc = NS(ObjCClass=lambda name: NS(divisionRegionKind=lambda: 'division', arrayWithArray=lambda values: values))
         with patch.dict('sys.modules', {'rubicon.objc': objc}):
             self.assertEqual(reserved_divisions(NS(_impl=backend)), (Division(0, 320, 700, 40),))
         self.assertEqual(calls, [('division', 0)])

@@ -434,14 +434,16 @@ class WorkspaceNavigationTests(unittest.TestCase):
                     screens.clear()
                     try:
                         bar.setNavigationBarHidden.reset_mock()
-                        bar.isNavigationBarHidden.return_value = False
+                        hidden = destination != 'documents'  # Documents owns real root actions.
+                        bar.isNavigationBarHidden.return_value = not hidden
                         self.navigation.sync_destination_bar(destination)
-                        bar.setNavigationBarHidden.assert_called_once_with(True, animated=False)
+                        bar.setNavigationBarHidden.assert_called_once_with(hidden, animated=False)
                         bar.setNavigationBarHidden.reset_mock()
-                        bar.isNavigationBarHidden.return_value = True
+                        bar.isNavigationBarHidden.return_value = hidden
                         self.navigation.sync_destination_bar(destination)
                         bar.setNavigationBarHidden.assert_not_called()  # No layout flicker.
                         screens.append(('fixture', None, None))
+                        bar.isNavigationBarHidden.return_value = True
                         self.navigation.sync_destination_bar(destination)
                         bar.setNavigationBarHidden.assert_called_once_with(False, animated=False)
                     finally:
