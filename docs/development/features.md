@@ -15,13 +15,14 @@ Python/features/<stable_id>/
     ui/                      # desktop presentation
     mobile/                  # mobile presentation/adapters, when supported
     mobile_sources.json      # selected mobile sources, when supported
-    README.md                # short link to docs/development/development.md
-    docs/
-        docs.md
-        development/development.md
-        user/user.md
-        user_mobile/user_mobile.md  # when supported
-    user_docs/index.md       # compatibility link to docs/user/user.md
+    README.md                # short link to the root wiki's feature guides
+    user_docs/index.md        # short compatibility link to the root wiki's user guide
+
+docs/features/<stable_id>/
+    <stable_id>.md            # feature landing, links to audience landings
+    development/development.md
+    user/user.md
+    user_mobile/user_mobile.md  # when supported
 ```
 
 The developer landing should begin with a small change-to-module/test table:
@@ -30,9 +31,9 @@ with the actual focused test filenames. Link to the shared [validation commands]
 rather than copying environment setup into every feature. Every documentation
 folder needs its own landing and parent links; see [documentation ownership](documentation-hierarchy.md).
 
-Follow factories in `__init__.py` to find canonical implementations. Old root-level
-modules may forward imports to `ui/`; keep compatibility where needed and put
-new behavior in the implementation. Do not create duplicate feature packages for
+Follow factories in `__init__.py` to find canonical implementations. First-party
+callers use the owning modules directly; the inventoried feature redirectors have
+been removed. Do not create duplicate feature packages for
 core browser/Markdown hosting or Bulk Rename, which retains its existing `desktop`
 owner. Registry/settings infrastructure also retains its current `features/`
 paths; see [infrastructure ownership](feature-infrastructure.md).
@@ -50,7 +51,7 @@ New features expose `register() -> Feature(...)` from their package `__init__.py
 Import `Feature` from `features.contributions`: it extends the reusable
 `commonUtils.ui.features.Feature` with Logistics Debug actions, folder/server/source
 contributions, workflows and pages. File types and browser capabilities are declared
-on that same object. See [the commonUtils author guide](https://github.com/ispaure/commonUtils/blob/main/ui/features/README.md).
+on that same object. See [the commonUtils author guide](../../Python/commonUtils/docs/development/reference/ui/features/features.md).
 
 The following declaration assumes feature-owned handlers/factories named below;
 see the browser guide for a complete registration example.
