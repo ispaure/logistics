@@ -206,6 +206,44 @@ class NotesDrawerTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_landscape_fold_aligns_retained_files_and_document_to_crease(self):
+        from mobile.fold_layout import Division
+        from mobile.notes_motion import resize_panes
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Home.md')
+            owner.reflow(900)
+            self.assertEqual(owner.tree.style.width, 320)
+            with (patch('mobile.fold_layout.division') as division,
+                  patch('mobile.notes_motion.resize_panes', wraps=resize_panes) as animate):
+                # A side bar can reduce the allocation below the flat-layout
+                # threshold and offset the crease from the row's midpoint.
+                for x, gap in ((401, 40), (388, 64)):
+                    division.return_value = Division(x, 0, gap, 640)
+                    owner.reflow(850)
+                    division.assert_called_with(self.app, owner.sidebar.view)
+                    self.assertTrue(owner.sidebar.expanded)
+                    self.assertEqual(owner.tree.style.width, x)
+                    self.assertEqual(owner.sidebar.view.style.gap, gap)
+                    self.assertEqual(owner.sidebar.links.style.width, 320)
+                    self.assertEqual(owner.rows.style.width, x - 24)
+                    self.assertEqual(owner.path, 'Vault/Home.md')
+                    self.assertIs(owner.web.parent, owner.article)
+                owner.reflow(850)
+                self.assertEqual(animate.call_count, 2)
+                owner.sidebar.toggle()
+                self.assertEqual(owner.sidebar.view.children, [owner.article])
+                owner.sidebar.toggle()
+                self.assertTrue(owner.sidebar.expanded)
+                division.return_value = None
+                owner.reflow(900)
+                self.assertEqual(owner.tree.style.width, 320)
+                self.assertEqual(owner.sidebar.view.style.gap, 0)
+                self.assertEqual(animate.call_count, 3)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_wide_files_does_not_offer_noop_open_or_back_actions(self):
         from toga.style.pack import NONE, PACK
         async def exercise():

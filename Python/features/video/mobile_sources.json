@@ -18,6 +18,7 @@
     "mobile/ios/PlaybackControls.m",
     "mobile/ios/DuoDeck.m",
     "mobile/android/io/github/ispaure/logistics/video/PlaybackControls.java",
+    "mobile/android/io/github/ispaure/logistics/video/PlaybackIcon.java",
     "mobile/ios/HDRDiagnostics.m",
     "mobile/ios/CaptionPictureInPicture.m",
     "mobile/ios/PausePresentation.m",

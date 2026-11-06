@@ -25,6 +25,8 @@ class ExternalComicDisplay:
         self.android = None
         self.android_refresh = None
         self._sharing_host = None
+        from .reader_cover_display import ReaderCoverDisplay
+        self.reader_cover = ReaderCoverDisplay()
 
     def select(self, app):
         self.source = weakref.ref(app)
@@ -112,6 +114,9 @@ class ExternalComicDisplay:
         return comic_canvas(app.body) if self.allowed_host(app) else None
 
     def refresh(self):
+        app = self.source() if self.source is not None else None
+        if app is None or type(app._impl).__module__.startswith('toga_iOS.'):
+            self.reader_cover.refresh(app, self.allowed_host)
         self.sync_sharing_layout()
         if not self.ios and self.android is None:
             self.update_ios_status(False)
@@ -263,6 +268,7 @@ class ExternalComicDisplay:
                 app._impl.native, self.android_refresh)
 
     def dispose(self):
+        self.reader_cover.clear()
         self.clear_ios_status()
         self.unregister_ios()
         for window, picture in self.ios.values():

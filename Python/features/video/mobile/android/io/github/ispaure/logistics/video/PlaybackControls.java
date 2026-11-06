@@ -28,7 +28,8 @@ final class PlaybackControls {
     PlaybackControls(VideoPlayer owner, View tapSurface) {
         this.owner = owner;
         cache = new CacheStrip();
-        owner.controls.addView(cache, new android.widget.LinearLayout.LayoutParams(-1, owner.dp(3)));
+        owner.controls.addView(cache, owner.controls.indexOfChild(owner.seek) + 1,
+            new android.widget.LinearLayout.LayoutParams(-1, owner.dp(3)));
         unlock = new Button(owner.activity); unlock.setText("Unlock controls");
         FrameLayout.LayoutParams frame = new FrameLayout.LayoutParams(-2, owner.dp(48), Gravity.BOTTOM | Gravity.END);
         frame.setMargins(16, 16, 16, 32);

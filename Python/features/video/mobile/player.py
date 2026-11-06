@@ -190,12 +190,12 @@ class MobileVideo:
         except (OSError, ValueError):
             pass  # Optional discovery must not interrupt an already playing video.
 
-    def present(self, position, external):
+    def present(self, position, external, *, fullscreen=False):
         self.native_restricted = self.restricted
         backend = type(self.app._impl).__module__
         if backend.startswith('toga_android.'):
             from .android import AndroidVideo
-            self.native = AndroidVideo(self, position, external)
+            self.native = AndroidVideo(self, position, external, fullscreen=fullscreen)
         elif backend.startswith('toga_iOS.'):
             from .ios import IOSVideo
             self.native = IOSVideo(self, position, external)
@@ -280,7 +280,7 @@ class MobileVideo:
         await asyncio.shield(self.retire(checkpoint=checkpoint))
 
 
-async def open_video(app, provider, path):
+async def open_video(app, provider, path, *, fullscreen=False):
     if not app.require_feature('video') or not app.checkpoint():
         return False
     previous = getattr(app, 'video_player', None)
@@ -320,7 +320,7 @@ async def open_video(app, provider, path):
             await player.close()
             return False
         app.video_player = player
-        player.present(position, subtitles)
+        player.present(position, subtitles, fullscreen=fullscreen)
         ready = getattr(player.native, 'wait_ready', None)
         if ready is not None and not await ready():
             await player.close()

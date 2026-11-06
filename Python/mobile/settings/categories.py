@@ -15,7 +15,8 @@ from .speech import speech_voice_setting
 
 def display_title(app, title):
     if title == 'Books & Comics' and not enabled(app.preferences, 'comics'):
-        return 'PDF'
+        from .reader_cover import available
+        return 'Books & Comics' if enabled(app.preferences, 'books') and available(app) else 'PDF'
     return title
 
 
@@ -83,9 +84,12 @@ class SettingsCategories:
         box = self.category(display_title(app, 'Books & Comics'))
         from ..magnifier import setting
         comics, pdf = (enabled(app.preferences, feature) for feature in ('comics', 'pdf'))
-        reader = 'Comic & PDF' if comics and pdf else 'Comic' if comics else 'PDF'
-        box.add(setting(app, reader + ' magnifier zoom'))
-        box.add(SettingsLabel('While holding the magnifier, tap − or + to change its zoom.'))
+        if comics or pdf:
+            reader = 'Comic & PDF' if comics and pdf else 'Comic' if comics else 'PDF'
+            box.add(setting(app, reader + ' magnifier zoom'))
+            box.add(SettingsLabel('While holding the magnifier, tap − or + to change its zoom.'))
+        from .reader_cover import controls
+        controls(app, box)
         return box
 
 
@@ -163,7 +167,9 @@ def settings_sections(app):
     from features.images.mobile.burst_camera import available
     app.settings_status = SettingsLabel(app.preferences.error, style=Pack(margin_top=12))
     owner = SettingsCategories(app)
+    from .reader_cover import available as cover_available
     return {entry.title: lambda entry=entry: getattr(owner, entry.factory)(*entry.arguments)
             for entry in CATEGORIES if (not entry.camera_required or available(app))
             and (not entry.required_features or any(enabled(app.preferences, name)
-                 for name in entry.required_features))}
+                 for name in entry.required_features)
+                 or (entry.factory == 'books' and enabled(app.preferences, 'books') and cover_available(app)))}

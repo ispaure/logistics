@@ -257,7 +257,7 @@ static char LGVideoActionHandlerKey, LGVideoDialogHandlersKey;
     self.portraitDeckHeight.priority = 999;
     // Swap fixed button sizes with the pose rather than rebuilding targets.
     NSMutableArray *sizes = [NSMutableArray array];
-    for (UIButton *button in self.tabletopTransport.arrangedSubviews)
+    for (UIButton *button in self.transport.arrangedSubviews)
         for (NSLayoutConstraint *constraint in button.constraints)
             if ((constraint.firstAttribute == NSLayoutAttributeWidth || constraint.firstAttribute == NSLayoutAttributeHeight) && !constraint.secondItem)
                 [sizes addObject:constraint];
@@ -275,22 +275,22 @@ static char LGVideoActionHandlerKey, LGVideoDialogHandlersKey;
             self.videoHeader.translatesAutoresizingMaskIntoConstraints = NO;
             self.deckHeaderHeight.active = YES;
             [self.portraitHeader insertArrangedSubview:self.videoHeader atIndex:0];
-            for (UIView *view in @[self.seek, self.timeLabel, self.tabletopTransport]) {
+            for (UIView *view in @[self.seek, self.timeLabel, self.transport]) {
                 [self.controls removeArrangedSubview:view]; [view removeFromSuperview];
             }
             [self.controls insertArrangedSubview:self.seek atIndex:1];
             [self.controls insertArrangedSubview:self.timeLabel atIndex:2];
-            [self.controls insertArrangedSubview:self.tabletopTransport atIndex:3];
+            [self.controls insertArrangedSubview:self.transport atIndex:3];
         }
     } else if (self.videoHeader.superview == self.portraitHeader) {
         [self.portraitHeader removeArrangedSubview:self.videoHeader]; [self.videoHeader removeFromSuperview];
         [self.controls insertArrangedSubview:self.videoHeader atIndex:0];
-        for (UIView *view in @[self.timeLabel, self.seek, self.tabletopTransport]) {
+        for (UIView *view in @[self.timeLabel, self.seek, self.transport]) {
             [self.controls removeArrangedSubview:view]; [view removeFromSuperview];
         }
-        [self.controls insertArrangedSubview:self.tabletopTransport atIndex:1];
-        [self.controls insertArrangedSubview:self.timeLabel atIndex:4];
-        [self.controls insertArrangedSubview:self.seek atIndex:5];
+        [self.controls insertArrangedSubview:self.timeLabel atIndex:3];
+        [self.controls insertArrangedSubview:self.seek atIndex:4];
+        [self.controls insertArrangedSubview:self.transport atIndex:5];
     }
     if (self.videoTitle.textAlignment != (portrait ? NSTextAlignmentLeft : NSTextAlignmentCenter))
         ((UIVisualEffectView *)self.videoHeader).effect = portrait ? nil : ({
@@ -300,10 +300,10 @@ static char LGVideoActionHandlerKey, LGVideoDialogHandlersKey;
     });
     self.videoTitle.textAlignment = portrait ? NSTextAlignmentLeft : NSTextAlignmentCenter;
     self.videoIdentity.alignment = portrait ? UIStackViewAlignmentLeading : UIStackViewAlignmentCenter;
-    self.tabletopTransport.distribution = UIStackViewDistributionEqualCentering;
-    [self.tabletopTransport setContentHuggingPriority:portrait ? 1 : UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisVertical];
+    self.transport.distribution = UIStackViewDistributionEqualCentering;
+    [self.transport setContentHuggingPriority:portrait ? 1 : UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisVertical];
     for (NSLayoutConstraint *size in self.transportSizes) {
-        BOOL primary = size.firstItem == self.tabletopPlay;
+        BOOL primary = size.firstItem == self.playButton;
         CGFloat primarySize = MIN(80, MAX(64, self.tabletopArea.size.height - 250));
         size.constant = portrait ? (primary ? primarySize : 52) : (primary ? 56 : 48);
     }

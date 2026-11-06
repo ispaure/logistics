@@ -7,7 +7,11 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.File;
@@ -20,7 +24,7 @@ public final class VideoPipQAActivity extends Activity {
     private PictureInPictureParams submittedParams;
     private final Handler handler = new Handler();
     private final JSONArray samples = new JSONArray();
-    private int stage;
+    private int stage = -1;
     private long started, stageAt, before, target, lastPlayAttempt;
     private int playAttempts;
     private boolean waiting, completed;
@@ -51,6 +55,37 @@ public final class VideoPipQAActivity extends Activity {
     private void sample(String event) throws Exception {
         samples.put(new JSONObject().put("event", event).put("decoder", video.player.getTime()).put("position", video.position()));
     }
+    private ImageButton findIcon(View view, String label) {
+        if (view instanceof ImageButton && label.equals(view.getContentDescription())) return (ImageButton)view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup)view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                ImageButton match = findIcon(group.getChildAt(i), label);
+                if (match != null) return match;
+            }
+        }
+        return null;
+    }
+    private void checkFullscreenControls() throws Exception {
+        WindowInsets insets = video.root.getRootWindowInsets();
+        require(video.controlsVisible && !insets.isVisible(WindowInsets.Type.navigationBars())
+            && !insets.isVisible(WindowInsets.Type.statusBars()), "System bars visible over fullscreen controls");
+        int bottom = insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom;
+        video.showCachedRanges("{\"ranges\":[[0,0.6]],\"approximate\":false}");
+        View cache = video.controls.getChildAt(video.controls.indexOfChild(video.seek) + 1);
+        require("Timestamp indexed cached ranges".contentEquals(cache.getContentDescription()),
+            "Cached range strip is separated from the timeline");
+        for (String label : new String[]{"Back 10 seconds", "Play", "Forward 10 seconds", "Exit fullscreen"}) {
+            ImageButton button = findIcon(video.controls, label);
+            require(button != null && button.getDrawable() != null && button.isShown(), "Missing fullscreen icon: " + label);
+            int[] position = new int[2];
+            button.getLocationOnScreen(position);
+            require(button.getHeight() >= video.dp(44)
+                && position[1] + button.getHeight() <= video.root.getHeight() - bottom,
+                "Fullscreen button overlaps navigation area: " + label);
+        }
+        sample("fullscreen-controls");
+    }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(new FrameLayout(this));
@@ -61,7 +96,13 @@ public final class VideoPipQAActivity extends Activity {
                 }
             }
             video = new VideoPlayer(this, android.net.Uri.fromFile(file("fixture.mp4")).toString(), 0, false, "[]", new VideoPlayer.Listener() {
-                public String controlInsets(String metrics) { return "[8,24,8,24]"; }
+                public String controlInsets(String metrics) {
+                    try {
+                        JSONArray safe = new JSONObject(metrics).getJSONArray("safe");
+                        return new JSONArray(new int[]{safe.getInt(0) + 8, safe.getInt(1) + 8,
+                            safe.getInt(2) + 8, safe.getInt(3)}).toString();
+                    } catch (Exception invalid) { return ""; }
+                }
                 public boolean allowed(boolean external) { return true; }
                 public boolean requestPlay() { return true; }
                 public void closed() { finish(); }
@@ -73,6 +114,7 @@ public final class VideoPipQAActivity extends Activity {
                 finally { media.release(); }
             }
             video.show();
+            video.enterFullscreenWithControls();
         } catch (Throwable error) { result(error); }
     }
     @Override public void onWindowFocusChanged(boolean focused) {
@@ -86,6 +128,7 @@ public final class VideoPipQAActivity extends Activity {
                         .put("allowed", video.allowed(false)).put("focused", hasWindowFocus())
                         .put("interactive", ((android.os.PowerManager)getSystemService(POWER_SERVICE)).isInteractive())
                         .put("audioMode", ((android.media.AudioManager)getSystemService(AUDIO_SERVICE)).getMode()));
+                    checkFullscreenControls();
                     lastPlayAttempt = SystemClock.uptimeMillis(); playAttempts++;
                     video.startByUser(); tick();
                 } catch (Throwable error) { result(error); }
@@ -108,12 +151,18 @@ public final class VideoPipQAActivity extends Activity {
                     waiting = false; next();
                 }
             } else switch (stage) {
-                case 0:
+                case -1:
                     if (!playRequested() && video.allowed(false) && hasWindowFocus() && now - lastPlayAttempt > 1000) {
                         lastPlayAttempt = now; playAttempts++;
                         video.startByUser();
                     }
                     if (video.player.isPlaying() && video.player.getTime() > 500) {
+                        video.setControlsVisible(true);
+                        capture("fullscreen");
+                    }
+                    break;
+                case 0:
+                    if (video.player.isPlaying()) {
                         video.attachSubtitleURL(android.net.Uri.fromFile(file("captions.srt")).toString()); next();
                     }
                     break;

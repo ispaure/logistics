@@ -12,7 +12,7 @@ def document_copies(provider):
     return document_source(provider, '')[0]
 
 
-async def open_provider_document(app, provider, path, *, destination=None, **options):
+async def open_provider_document(app, provider, path, *, destination=None, fullscreen=False, **options):
     """Resolve format dispatch before presenting a storage-neutral editor."""
     from pathlib import Path
     from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
@@ -27,6 +27,8 @@ async def open_provider_document(app, provider, path, *, destination=None, **opt
     suffix = Path(path).suffix.lower()
     if suffix in VIDEO_EXTENSIONS:
         from features.video.mobile.player import open_video
+        if fullscreen:
+            return await open_video(app, provider, path, fullscreen=True)
         return await open_video(app, provider, path)
     if suffix == '.rmdoc':
         from services.documents.mobile_notebooks import open_notebook
@@ -194,7 +196,7 @@ class NotesDocumentAccess:
     def webview(self, *, max_bytes, **options):
         from types import SimpleNamespace
         from services.documents.mobile_views import document_webview
-        view = document_webview(SimpleNamespace(policy=self.policy), **options)
+        view = document_webview(SimpleNamespace(policy=self.policy), inline_video=True, **options)
         if not self.policy.persistent:
             view.max_html_bytes = max_bytes
         return view

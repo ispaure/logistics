@@ -11,6 +11,7 @@
     "mobile/breadcrumbs.py",
     "mobile/dataview.py",
     "mobile/file_preview.py",
+    "mobile/inline_video.py",
     "mobile/library_document.py",
     "mobile/library_drag.py",
     "mobile/library_editing.py",

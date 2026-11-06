@@ -3,7 +3,7 @@ import json
 
 
 class AndroidVideo:
-    def __init__(self, owner, position, subtitles):
+    def __init__(self, owner, position, subtitles, *, fullscreen=False):
         from java import jclass, dynamic_proxy
         self.owner = owner
         Listener = jclass('io.github.ispaure.logistics.video.VideoPlayer$Listener')
@@ -32,6 +32,8 @@ class AndroidVideo:
             owner.restricted, json.dumps(subtitles), self.callbacks)
         self.native.setKnownDuration(owner.progress.duration)
         self.native.show()
+        if fullscreen:
+            self.native.enterFullscreenWithControls()
 
     def configure(self, settings, queue):
         from .controls import native_options

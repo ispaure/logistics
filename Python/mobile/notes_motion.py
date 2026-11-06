@@ -1,4 +1,29 @@
-"""Drawer exit motion over the same native container used for entry."""
+"""Native motion for Notes drawers and the persistent Files pane."""
+
+
+def resize_panes(view, apply):
+    impl = view._impl
+    if type(impl).__module__.startswith('toga_iOS.') and impl.native.window is not None:
+        from ctypes import CDLL, c_bool
+        reduced = CDLL(None).UIAccessibilityIsReduceMotionEnabled
+        reduced.restype = c_bool
+        if not reduced():
+            from rubicon.objc import Block, ObjCClass
+            # Toga attaches pane constraints to the shared native container.
+            container = impl.container.native
+            container.layoutIfNeeded()
+
+            def layout():
+                apply()
+                container.layoutIfNeeded()
+
+            # Match Workspaces and retarget from the current presentation.
+            ObjCClass('UIView').animateWithDuration(.28, delay=0, options=(1 << 2) | (1 << 1),
+                animations=Block(layout, None), completion=None)
+            return
+    apply()
+
+
 def slide_out(overlay, direction, app):
     if overlay.container is None and overlay.popup is None:
         return 0

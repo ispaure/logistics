@@ -313,7 +313,7 @@ class NotesLibrary:
             move_document_resource(self.provider, source, destination, cancelled=cancelled)
         return destination
 
-    def image_source(self, path, *, cancelled=lambda: False):
+    def image_source(self, path, *, cancelled=lambda: False, on_video=None):
         from services.documents.markdown_media import MarkdownMedia
         path = self.contained(path)
         with self._link_lock:
@@ -323,7 +323,8 @@ class NotesLibrary:
                 self._media[path] = MarkdownMedia(self.provider, path, root=self.root, entry=self.entry,
                                                  max_image_bytes=MAX_NOTE_IMAGES,
                                                  resolve=lambda target: self.link(path, target)[0])
-            return self._media[path].render_source(resolve=lambda target: self.link(path, target, cancelled=cancelled)[0])
+            return self._media[path].render_source(
+                resolve=lambda target: self.link(path, target, cancelled=cancelled)[0], on_video=on_video)
 
     def release_media(self, current, *, active=lambda: True):
         with self._link_lock:

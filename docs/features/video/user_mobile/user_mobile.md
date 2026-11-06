@@ -16,17 +16,16 @@ Local and saved-credential sources use ordinary recent references; session-only
 sources use the existing credential-password encrypted recent list and appear
 only while those credentials are loaded. Videos are not restored as open documents
 or started automatically at app launch. Playback and utility buttons have
-screen-reader labels. On iOS these are native navigation bar items: UIKit chooses
-the side or horizontal bar for the current window, including Duo's exterior and
-interior displays. The timeline overlays the bottom of the screen within the safe area and avoids an active Duo fold.
+screen-reader labels. On Android, iPhone and iPad, the timeline sits above the
+Play/Pause and ten-second skip icons in a bottom panel. On iOS, UIKit places
+utility buttons in the side or horizontal navigation bar for the current window.
 The iOS filename occupies the native title area alongside playback controls,
 with centered storage details beneath it and a glass background on iOS 26 or newer.
 In narrow or short iOS windows, the source and filename share a compact line
-above the native playback buttons. Open **Playback → Document location…** for
+above the video. Open **Playback → Document location…** for
 the full path.
 The green cached-range strip follows the seek track's endpoints directly beneath it.
-The movie stays centered in the full player surface when controls appear or hide. Android retains its responsive
-48-dp playback buttons.
+The movie stays centered in the full player surface when controls appear or hide.
 On a partially folded Duo with a horizontal hinge, the movie stays above the
 hinge and the controls stay below it. In portrait laptop posture, the lower
 panel uses its full height: the filename and source sit beside an **X** that
@@ -51,7 +50,8 @@ no Cancel row. Text-entry prompts still have explicit Apply/Cancel controls.
 them. Selecting a chapter seeks without resuming a paused movie. AVI files often
 have no embedded chapters; the player does not manufacture chapter boundaries.
 
-On Android, choose **Fullscreen** for immersive playback. On iOS, playback
+On Android, choose **Fullscreen** to hide the system bars. Swipe from a system
+edge to reveal them temporarily. On iOS, playback
 starts fullscreen with controls visible, then hides them during playback. Tap the video to
 bring the controls back; tap again to hide them. While playing, revealed controls
 hide again after three seconds. Pausing, finishing or encountering an error shows

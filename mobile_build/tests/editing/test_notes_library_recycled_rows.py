@@ -72,6 +72,29 @@ class RecycledNotesRowsTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_search_folder_reveals_its_selected_row_in_files(self):
+        async def exercise():
+            owner = await self.library(count=80)
+            target = 'Vault/Projects/Focus folder'
+            (self.vault / 'Projects' / 'Focus folder').mkdir()
+            await owner.toggle_folder('Vault/Many')
+            files = owner.rows
+            owner.select_panel_tab('Search')
+            owner.search.value = 'Focus folder'
+            await owner.search_task
+            result = next(row for row in owner.rows.children if row.path == target)
+            widget = files.native_list
+            with patch.object(widget, 'scroll_to_row', wraps=widget.scroll_to_row) as reveal:
+                await owner.rows.activate(result)
+                index = next(i for i, row in enumerate(files.children) if row.path == target)
+                self.assertGreater(index, 50)
+                self.assertEqual(owner.panel_tab, 'Files')
+                self.assertEqual(owner.selected_path, target)
+                self.assertEqual(widget.selection.path, target)
+                reveal.assert_called_once_with(index)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_replaced_or_hidden_rows_cannot_activate_or_open_actions(self):
         async def exercise():
             owner = await self.library()

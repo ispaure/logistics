@@ -42,9 +42,12 @@ opens/focuses a separate document. Files without a Markdown/source/notebook
 adapter use a memory-only `FilePreview` in the same library pane; images and
 PDF pages use existing image validation and PDF backends. Other formats display
 metadata without loading arbitrary binary data. Selecting a video file hands off
-to the full platform Video Player while retaining the library document. Markdown video embeds retain a revocable
-`VideoContent`/`VideoTransport` range stream with inline playback controls; they
-start paused and do not preload the whole video.
+to the full platform Video Player while retaining the library document. The
+mobile Markdown reading view and formatted editor use revocable
+`VideoContent`/`VideoTransport` streams for inline video. The reading view uses
+page-scoped actions for inline Play and native fullscreen. Inline Play goes
+through the mobile audio consent owner, which can also pause the embedded clip
+when playback permission is revoked.
 Markdown image and video embeds use the same authoritative lookup as file links:
 current folder, library root, then a unique suffix match across the library.
 Conventional attachment folders do not bypass ambiguity checks. LocalCrypt uses its

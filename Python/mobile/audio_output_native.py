@@ -81,7 +81,11 @@ class AppleOutputs:
         result = []
         for port in ports:
             kind = str(value(port, 'portType'))
-            result.append(output('ios:' + kind, str(value(port, 'UID')), str(value(port, 'portName')),
+            uid = value(port, 'UID')
+            identity = str(uid) if uid is not None else ''
+            if kind in {'Speaker', 'Receiver'}:
+                identity = identity or kind
+            result.append(output('ios:' + kind, identity, str(value(port, 'portName')),
                                  bluetooth=kind in {'BluetoothA2DPOutput', 'BluetoothHFP', 'BluetoothLE'}))
         return tuple(result) or None
 

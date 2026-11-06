@@ -99,6 +99,7 @@ class CameraBuildTests(unittest.TestCase):
             configure(project)
             configure(project)
             self.assertEqual(launcher.read_text().count('#import "../Support/BurstCamera.m"'), 1)
+            self.assertEqual(launcher.read_text().count('#import "../Support/ReaderCoverDisplay.m"'), 1)
             self.assertIn('int main() {}', launcher.read_text())
             settings = plistlib.loads(info.read_bytes())
             self.assertTrue(settings['ExistingKey'])
@@ -106,3 +107,4 @@ class CameraBuildTests(unittest.TestCase):
             self.assertIn('NSPhotoLibraryAddUsageDescription', settings)
             self.assertNotIn('NSPhotoLibraryUsageDescription', settings)
             self.assertTrue((project / 'Support/BurstCamera.m').is_file())
+            self.assertTrue((project / 'Support/ReaderCoverDisplay.m').is_file())

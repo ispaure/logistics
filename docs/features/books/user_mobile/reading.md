@@ -7,6 +7,17 @@ turns one page; holding a button does not repeat. Volume control resumes outside
 the reading view, including its Appearance screen. The setting also applies to
 remote and encrypted readers.
 
+## Book cover on iPhone Duo
+
+In **Settings → Books & Comics**, turn on **Book cover on outer display** to try
+showing an EPUB's cover on the outer screen while you read on the inner screen.
+The switch is off by default and saves your choice. The experiment requires camera
+permission. iOS shows the green camera indicator, and the app runs the camera
+without showing a preview or saving footage. Keeping the camera and outer display
+active can drain the battery noticeably faster. The feature excludes session-only
+and protected documents. Whether iOS presents the cover with this camera setup
+still needs verification on a physical Duo.
+
 ## Mobile development builds
 
 The native app reads EPUBs and CBZ/ZIP comics with PNG/JPEG/static WebP pages.

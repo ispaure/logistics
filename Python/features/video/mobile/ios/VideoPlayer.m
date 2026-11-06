@@ -63,8 +63,8 @@
 @property(nonatomic, strong) NSLayoutConstraint *portraitDeckHeight;
 @property(nonatomic, strong) NSArray<NSLayoutConstraint *> *transportSizes;
 @property(nonatomic, strong) UIStackView *videoIdentity;
-@property(nonatomic, strong) UIStackView *tabletopTransport, *tabletopUtilities;
-@property(nonatomic, strong) UIButton *tabletopPlay;
+@property(nonatomic, strong) UIStackView *transport, *tabletopUtilities;
+@property(nonatomic, strong) UIButton *playButton;
 @property(nonatomic, strong) NSLayoutConstraint *movieWidth, *movieHeight, *movieCenterY, *deckCenterY, *controlsHeightLimit;
 
 @property(nonatomic) BOOL networkWaiting, networkResumePending, playRequested;
@@ -73,12 +73,10 @@
 @property(nonatomic) uint64_t observedFrames;
 @property(nonatomic) NSTimeInterval lastPlaybackProgress, lastFrameProgress;
 @property(nonatomic, strong) NSLayoutConstraint *bufferCenterX, *bufferCenterY;
-@property(nonatomic, strong) NSArray<UIBarButtonItem *> *mediaItems;
 @property(nonatomic, strong) UILabel *timeLabel;
 @property(nonatomic, strong) NSLayoutConstraint *controlsLeading, *controlsTrailing, *controlsTop, *controlsBottom;
 @property(nonatomic, strong) UILabel *message;
 @property(nonatomic, strong) UISlider *seek;
-@property(nonatomic, strong) UIBarButtonItem *playButton;
 @property(nonatomic, strong) UIBarButtonItem *pictureButton;
 @property(nonatomic, strong) UIButton *tabletopPictureButton;
 @property(nonatomic) BOOL fullscreen;
@@ -214,10 +212,6 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self.controls addArrangedSubview:self.message];
     self.timeLabel = [[UILabel alloc] init];
     self.timeLabel.textColor = UIColor.whiteColor;
-    // Match the dark playback chrome even when the deck overlays bright video.
-    self.timeLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:.8];
-    self.timeLabel.layer.cornerRadius = 4;
-    self.timeLabel.clipsToBounds = YES;
     self.timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:13 weight:UIFontWeightRegular];
     self.timeLabel.adjustsFontSizeToFitWidth = YES;
     self.timeLabel.text = @"0:00 / 0:00";
@@ -233,9 +227,6 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self.seek addTarget:self action:@selector(seekChanged:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
     [self.controls addArrangedSubview:self.seek];
     UIBarButtonItem *close = [self item:@"Done" selector:@selector(done:)];
-    UIBarButtonItem *back = [self item:@"Back 10 seconds" selector:@selector(back:)];
-    self.playButton = [self item:@"Play" selector:@selector(togglePlay:)];
-    UIBarButtonItem *forward = [self item:@"Forward 10 seconds" selector:@selector(forward:)];
     self.pictureButton = [self item:@"Fill view" selector:@selector(togglePictureSize:)];
     UIBarButtonItem *picture = self.pictureButton;
     UIBarButtonItem *chapters = [self item:@"Chapters" selector:@selector(chapters:)];
@@ -255,14 +246,9 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         ]];
         [utilities addObject:more];
     }
-    self.mediaItems = [@[close, back, self.playButton, forward] arrayByAddingObjectsFromArray:utilities];
     if (@available(iOS 16.0, *)) {
         self.navigationItem.leadingItemGroups = @[[[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[close] representativeItem:nil]];
-        // Center groups can move wholesale into overflow on compact bars.
-        // Keep Play pinned and expose skips as ordinary native trailing items.
-        self.navigationItem.pinnedTrailingGroup = [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[self.playButton] representativeItem:nil];
         self.navigationItem.trailingItemGroups = @[
-            [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[back, forward] representativeItem:nil],
             [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[picture, tools, audio, subtitles, chapters] representativeItem:nil]
         ];
         if (!self.restricted) {
@@ -273,19 +259,18 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         }
     } else {
         self.navigationItem.leftBarButtonItem = close;
-        self.navigationItem.rightBarButtonItems = [@[forward, self.playButton, back] arrayByAddingObjectsFromArray:utilities];
+        self.navigationItem.rightBarButtonItems = utilities;
     }
-    self.tabletopTransport = [[UIStackView alloc] init];
-    self.tabletopTransport.axis = UILayoutConstraintAxisHorizontal;
-    self.tabletopTransport.alignment = UIStackViewAlignmentCenter;
-    self.tabletopTransport.distribution = UIStackViewDistributionEqualCentering;
-    self.tabletopTransport.spacing = 28;
-    [self.tabletopTransport addArrangedSubview:[self deckButton:@"Back 10 seconds" symbol:@"gobackward.10" selector:@selector(back:) primary:NO]];
-    self.tabletopPlay = [self deckButton:@"Play" symbol:@"play.fill" selector:@selector(togglePlay:) primary:YES];
-    [self.tabletopTransport addArrangedSubview:self.tabletopPlay];
-    [self.tabletopTransport addArrangedSubview:[self deckButton:@"Forward 10 seconds" symbol:@"goforward.10" selector:@selector(forward:) primary:NO]];
-    [self.controls insertArrangedSubview:self.tabletopTransport atIndex:0];
-    self.tabletopTransport.hidden = YES;
+    self.transport = [[UIStackView alloc] init];
+    self.transport.axis = UILayoutConstraintAxisHorizontal;
+    self.transport.alignment = UIStackViewAlignmentCenter;
+    self.transport.distribution = UIStackViewDistributionEqualCentering;
+    self.transport.spacing = 28;
+    [self.transport addArrangedSubview:[self deckButton:@"Back 10 seconds" symbol:@"gobackward.10" selector:@selector(back:) primary:NO]];
+    self.playButton = [self deckButton:@"Play" symbol:@"play.fill" selector:@selector(togglePlay:) primary:YES];
+    [self.transport addArrangedSubview:self.playButton];
+    [self.transport addArrangedSubview:[self deckButton:@"Forward 10 seconds" symbol:@"goforward.10" selector:@selector(forward:) primary:NO]];
+    [self.controls addArrangedSubview:self.transport];
     self.tabletopUtilities = [[UIStackView alloc] init];
     self.tabletopUtilities.axis = UILayoutConstraintAxisVertical;
     self.tabletopUtilities.spacing = 4;
@@ -434,7 +419,6 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     if (self.tabletop) visible = YES;
     if (self.controlsLocked) visible = NO;
     self.controlsVisible = visible;
-    // The video drawable must not extend beneath the on-screen seek controls.
     [self.view setNeedsLayout];
     [self.controlsTimer invalidate]; self.controlsTimer = nil;
     BOOL shown = visible && !self.pipActive;
@@ -593,11 +577,15 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     }
     for (UIView *surface in self.movie.subviews) surface.frame = self.movie.bounds;
     [self configureVideoDynamicRange:self.movie.layer];
-    self.tabletopTransport.hidden = !tabletop;
     self.tabletopUtilities.hidden = !tabletop || portrait;
+    self.timeLabel.textAlignment = tabletop ? NSTextAlignmentNatural : NSTextAlignmentCenter;
     self.controls.spacing = portrait ? (available.size.height >= 380 ? 10 : 4) : tabletop ? 2 : 4;
-    self.controls.layoutMarginsRelativeArrangement = tabletop;
-    self.controls.layoutMargins = portrait ? UIEdgeInsetsMake(8, 16, 8, 16) : tabletop ? UIEdgeInsetsMake(4, 12, 4, 12) : UIEdgeInsetsZero;
+    self.controls.layoutMarginsRelativeArrangement = YES;
+    self.controls.layoutMargins = portrait ? UIEdgeInsetsMake(8, 16, 8, 16) : UIEdgeInsetsMake(4, 12, 6, 12);
+    CGFloat transportInset = tabletop ? 0 : MAX(0, (available.size.width - 2 * margin - 24 - 260) / 2);
+    self.transport.spacing = tabletop ? 28 : 12;
+    self.transport.layoutMarginsRelativeArrangement = !tabletop;
+    self.transport.layoutMargins = UIEdgeInsetsMake(0, transportInset, 0, transportInset);
     if (tabletop && self.view.window) {
         // A hidden navigation rail may retain controller safe-area insets.
         // The lower deck uses physical window insets, not that retired rail.
@@ -623,8 +611,8 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.portraitDeckHeight.active = portrait;
     self.portraitDeckHeight.constant = MAX(44, available.size.height - 16);
     [self layoutPortraitDeck];
-    self.controlsScroll.backgroundColor = tabletop ? [UIColor colorWithWhite:.08 alpha:1] : UIColor.clearColor;
-    self.controlsScroll.layer.cornerRadius = tabletop && !portrait ? 24 : 0;
+    self.controlsScroll.backgroundColor = [UIColor colorWithWhite:.08 alpha:tabletop ? 1 : .94];
+    self.controlsScroll.layer.cornerRadius = portrait ? 0 : 20;
     if (poseChanged) [self setControlsShown:YES];
     // In laptop posture the upper panel owns the movie and the lower panel
     // owns persistent controls. The movie never spans the horizontal hinge.
@@ -636,16 +624,14 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.controlsLeading.constant = margin + CGRectGetMinX(available) - CGRectGetMinX(safe);
     self.controlsTrailing.constant = -margin + CGRectGetMaxX(available) - CGRectGetMaxX(safe);
     self.controlsTop.constant = 8 + CGRectGetMinY(available) - CGRectGetMinY(safe);
-    self.controlsBottom.constant = CGRectGetMaxY(available) - CGRectGetMaxY(safe);
+    self.controlsBottom.constant = CGRectGetMaxY(available) - CGRectGetMaxY(safe) - 6;
     self.bufferCenterX.constant = CGRectGetMidX(spinnerArea) - CGRectGetMidX(safe);
     self.bufferCenterY.constant = CGRectGetMidY(spinnerArea) - CGRectGetMidY(safe);
     [self layoutPlaybackTools];
 }
 
 - (void)updateItem:(UIBarButtonItem *)button label:(NSString *)label {
-    NSDictionary *symbols = @{@"Play": @"play.fill", @"Pause": @"pause.fill",
-        @"Back 10 seconds": @"gobackward.10", @"Forward 10 seconds": @"goforward.10",
-        @"Audio tracks": @"speaker.wave.2", @"Subtitles": @"captions.bubble", @"Fill view": @"arrow.up.left.and.arrow.down.right",
+    NSDictionary *symbols = @{@"Playback": @"slider.horizontal.3", @"Audio tracks": @"speaker.wave.2", @"Subtitles": @"captions.bubble", @"Fill view": @"arrow.up.left.and.arrow.down.right",
         @"Fit view": @"arrow.down.right.and.arrow.up.left", @"More playback options": @"ellipsis",
         @"Chapters": @"list.bullet", @"Done": @"xmark"};
     button.image = [UIImage systemImageNamed:symbols[label]];
@@ -655,12 +641,6 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         config.title = [label isEqualToString:@"Fit view"] ? @"Fit" : @"Fill";
         self.portraitPictureButton.configuration = config;
         self.portraitPictureButton.accessibilityLabel = label;
-    }
-    if (button == self.playButton && self.tabletopPlay) {
-        UIButtonConfiguration *config = self.tabletopPlay.configuration;
-        config.image = [UIImage systemImageNamed:symbols[label] withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:36 weight:UIImageSymbolWeightSemibold]];
-        self.tabletopPlay.configuration = config;
-        self.tabletopPlay.accessibilityLabel = label;
     }
     if (button == self.pictureButton && self.tabletopPictureButton) {
         UIButtonConfiguration *config = self.tabletopPictureButton.configuration;
@@ -673,6 +653,17 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     button.accessibilityLabel = label;
     button.accessibilityIdentifier = [@"video." stringByAppendingString:label];
     button.accessibilityHint = [label isEqualToString:@"Done"] ? @"Close video player" : nil;
+}
+
+- (void)updatePlayButton {
+    NSString *label = self.playRequested ? @"Pause" : @"Play";
+    if (![self.playButton.accessibilityLabel isEqualToString:label]) {
+        UIButtonConfiguration *config = self.playButton.configuration;
+        config.image = [UIImage systemImageNamed:self.playRequested ? @"pause.fill" : @"play.fill"
+                              withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:28 weight:UIImageSymbolWeightSemibold]];
+        self.playButton.configuration = config;
+        self.playButton.accessibilityLabel = label;
+    }
 }
 
 - (UIButton *)deckButton:(NSString *)label symbol:(NSString *)symbol selector:(SEL)selector primary:(BOOL)primary {
@@ -695,7 +686,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     UIBarButtonItem *button = [[UIBarButtonItem alloc] initWithImage:nil style:UIBarButtonItemStylePlain target:self action:selector];
     [self updateItem:button label:title];
     if (@available(iOS 27.0, *)) {
-        button.visibilityPriority = [title isEqualToString:@"Play"] || [title isEqualToString:@"Done"] ? 1000 : 500;
+        button.visibilityPriority = [title isEqualToString:@"Done"] ? 1000 : 500;
     }
     return button;
 }
@@ -756,7 +747,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     // VLCKit pause is an explicit pause, but coalesce duplicate OS/lifecycle events.
     self.manualResumeRequired = YES;
     self.playRequested = NO;
-    [self updateItem:self.playButton label:@"Play"];
+    [self updatePlayButton];
     if (self.networkResumePending) self.startMilliseconds = self.bufferPosition;
     self.networkResumePending = NO;
     self.buffering = NO;
@@ -848,7 +839,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         self.resumeSeekSubmitted = YES;
     }
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
-    [self updateItem:self.playButton label:@"Pause"];
+    [self updatePlayButton];
     self.networkResumePending = NO;
     NSLog(@"[VideoPlayback] play target=%lld current=%lld", self.startMilliseconds, self.player.time.value.longLongValue);
     [self logHDRTransition:@"play-request"];
@@ -1020,7 +1011,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.seek.accessibilityValue = self.timeLabel.text;
     self.pauseSnapshot.frame = self.movie.frame;
     self.lastPosition = position;
-    [self updateItem:self.playButton label:self.playRequested ? @"Pause" : @"Play"];
+    [self updatePlayButton];
 }
 - (void)mediaPlayerStateChanged:(VLCMediaPlayerState)state {
     dispatch_async(dispatch_get_main_queue(), ^{

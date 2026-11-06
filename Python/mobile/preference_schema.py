@@ -36,6 +36,8 @@ DEFAULTS = {
     'magnifier_zoom': '190',
     'epub_volume_pages': 'false',
     'comic_volume_pages': 'false',
+    'epub_outer_cover': 'false',
+    'comic_outer_cover': 'false',
     'comic_layout': 'auto',
     'comic_split_wide': 'true',
     'reading_margin': '16',
@@ -94,6 +96,8 @@ def validate(values):
     for key in ('epub_volume_pages', 'comic_volume_pages'):
         if values[key] not in {'true', 'false'}:
             raise ValueError('Invalid volume-button page preference.')
+    if any(values[key] not in {'true', 'false'} for key in ('epub_outer_cover', 'comic_outer_cover')):
+        raise ValueError('Invalid outer-display cover preference.')
     if values['comic_split_wide'] not in {'true', 'false'}:
         raise ValueError('Invalid wide comic page preference.')
     if values['comic_layout'] not in {'single', 'auto', 'double'}:

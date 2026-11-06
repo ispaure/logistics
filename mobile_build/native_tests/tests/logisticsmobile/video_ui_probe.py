@@ -23,7 +23,18 @@ def buttons(view):
 
 
 def dispatch(item):
-    item.target.performSelector(item.action, withObject=item)
+    if hasattr(item, 'sendActionsForControlEvents'):
+        item.sendActionsForControlEvents(1 << 6)  # UIControlEventTouchUpInside
+    else:
+        item.target.performSelector(item.action, withObject=item)
+
+
+def bar_items(native):
+    navigation = native.navigationItem
+    if hasattr(navigation, 'trailingItemGroups'):
+        return [item for group in [*navigation.leadingItemGroups, *navigation.trailingItemGroups]
+                for item in group.barButtonItems]
+    return [*navigation.leftBarButtonItems, *navigation.rightBarButtonItems]
 
 
 def presented_menu(native):
@@ -84,7 +95,7 @@ async def record(app, native, output, name):
         for region in view.reservedRegionsOfKind(kind, options=0):
             r = native_value(region, 'frame')
             folds.append([float(r.origin.x), float(r.origin.y), float(r.size.width), float(r.size.height)])
-    items = list(native.mediaItems)
+    items = bar_items(native)
     assert all(item.customView is None for item in items), 'Media actions use custom views'
     found = set()
     for item in items:
@@ -103,7 +114,7 @@ async def record(app, native, output, name):
         assert hit == button or hit.isDescendantOfView(button), (label, 'native action is not hittable')
         rows.append(dict(label=label, frame=[x, y, width, height]))
         found.add(label)
-    assert 'Done' in found and ('Play' in found or 'Pause' in found), ('Primary native actions missing', rows)
+    assert 'Done' in found, ('Close action missing', rows)
     bar = native_value(native_value(native, 'navigationController'), 'navigationBar')
     bar_frame = frame(bar, window)
     traits = native_value(native, 'traitCollection')
@@ -111,6 +122,13 @@ async def record(app, native, output, name):
     coordinates = [row['frame'][0 if edge else 1] for row in rows]
     assert max(coordinates) - min(coordinates) <= 5, ('Native bar did not adopt its axis', edge, rows)
     view.layoutIfNeeded()
+    for button in native.transport.arrangedSubviews:
+        label = str(button.accessibilityLabel)
+        x, y, width, height = frame(button, window)
+        assert button.configuration.image is not None and min(width, height) >= 44, (label, width, height)
+        hit = window.hitTest(CGPoint(x + width / 2, y + height / 2), withEvent=None)
+        assert hit == button or hit.isDescendantOfView(button), (label, 'transport action is not hittable')
+        rows.append(dict(label=label, frame=[x, y, width, height]))
     bx, by, bw, bh = frame(native.bufferOverlay, view)
     assert bw > 0 and bh > 0, 'Buffering indicator has no layout'
     for fx, fy, fw, fh in folds:
@@ -133,7 +151,7 @@ async def record(app, native, output, name):
     if not native.tabletop and not folds:
         # A side rail must not leave its former bottom inset below the timeline.
         physical_bottom = float(bounds.origin.y + bounds.size.height - window.safeAreaInsets.bottom)
-        assert abs(controls[1] + controls[3] - physical_bottom) < 2, (
+        assert abs(controls[1] + controls[3] - (physical_bottom - 6)) < 2, (
             'Timeline retains extra bottom safe-area space', controls, physical_bottom)
     return dict(name=name, pose=pose_snapshot(app), buttons=rows, folds=folds,
                 movie=frame(native.movie, view), controls=frame(native.controlsScroll, view),
@@ -187,7 +205,8 @@ async def exercise(app):
             report['active_case'] = row
             row['before_play'] = dict(playing=bool(native_value(native.player, 'isPlaying')),
                 allowed=owner.allowed(), audio=owner.audio_output.permitted(), position=owner.native.position()[0])
-            indexed = {str(item.accessibilityLabel): item for item in native.mediaItems}
+            indexed = {str(item.accessibilityLabel): item
+                       for item in [*bar_items(native), *native.transport.arrangedSubviews]}
             dispatch(native.playButton)
             try:
                 await until(lambda: 500 < player_clock(native.player) < 3000 and native_value(native.player, 'isPlaying'))

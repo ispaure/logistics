@@ -40,9 +40,9 @@ library history and asks before discarding unsaved edits.
 Images and documents in Files open inside the library detail pane. PDFs have
 Previous page and Next page controls. Videos such as MP4 open the full native
 mobile Video Player with its resume, autoplay, tracks and playback tools. The
-current library page stays available when you return. Markdown video embeds
-keep simple inline controls and start paused at zero; they do not autoplay or
-preload the whole video when you open a page.
+current library page stays available when you return. In a Markdown note's
+reading view, use the embedded clip's Play button and timeline to watch it in
+place. Tap **Play fullscreen video** to open it in the native Video Player.
 Unsupported formats
 show file information in that pane. Image previews allow up to 8 MiB and 16
 megapixels; PDFs allow up to 32 MiB. Back and forward retrace files opened in the
@@ -133,8 +133,9 @@ drawer. The upper-right Links button, or a left swipe across the document,
 opens Links. Choose **Out** for outgoing links or **Back** for backlinks.
 Swipe right in that drawer to close it. At 864 usable points of library width
 or more, Files opens beside the document and its toggle collapses the pane.
-Links opens on demand. Resizing preserves the current
-note and the selected panel tab.
+On a partially folded iPhone Duo in landscape, the divider follows the crease
+and leaves its reserved strip clear. Links opens on demand. Resizing preserves
+the current note and the selected panel tab.
 Touches that start inside Markdown tables scroll the table without opening either
 side panel. Selected text and zoomed pages retain their ordinary gestures.
 

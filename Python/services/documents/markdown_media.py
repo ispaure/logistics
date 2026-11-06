@@ -42,7 +42,7 @@ class MarkdownMedia:
                 self.rasters[path] = before, data
             return BytesIO(data)
 
-    def render_source(self, *, resolve=None):
+    def render_source(self, *, resolve=None, on_video=None):
         """Each render gets a fresh raster budget; video leases stay document-owned."""
         from features.video.formats import VIDEO_EXTENSIONS
         images = folder_image_source(self.image_provider, self.document, root=self.root, resolve=resolve or self.resolve,
@@ -52,12 +52,12 @@ class MarkdownMedia:
                 if self.closed:
                     return None
             if PurePosixPath(unquote(urlsplit(target).path)).suffix.lower() in VIDEO_EXTENSIONS:
-                return self(target, resolve=resolve)
+                return self(target, resolve=resolve, on_video=on_video)
             return images(target)
         source.videos = self.videos
         return source
 
-    def __call__(self, target, *, resolve=None):
+    def __call__(self, target, *, resolve=None, on_video=None):
         from features.video.formats import VIDEO_EXTENSIONS
         parts = urlsplit(target)
         name = unquote(parts.path)
@@ -119,6 +119,8 @@ class MarkdownMedia:
                             finally:
                                 content.close()
                         else:
+                            if on_video is not None:
+                                on_video(candidate, transport.url)
                             return 'video/mp4', transport.url
                     if len(self.videos) >= 8:
                         return None
@@ -131,6 +133,8 @@ class MarkdownMedia:
                         content.close()
                         raise
                     self.videos[candidate] = content, transport
+                    if on_video is not None:
+                        on_video(candidate, transport.url)
                     return 'video/mp4', transport.url
                 except (OSError, ValueError):
                     continue
