@@ -512,8 +512,8 @@
     },
     {
       "module": "features.notebooks.recovery",
-      "scope": "Repository.save",
-      "operation": "raw-method:read_text",
+      "scope": "Repository.check_revision",
+      "operation": "raw-method:read_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
