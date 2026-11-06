@@ -50,7 +50,17 @@ class SessionTransitions:
     def close(self, key, *, choice='keep'):
         return self.commit(self.prepare(key, choice=choice))
 
+    def require_notebook_replacement_safe(self):
+        # Match close_notebook's retention decision. A successful document.save
+        # clears dirty even when the editor's last checkpoint flag remains set.
+        for panel in getattr(self.host, '_notebook_views', {}).values():
+            document = panel.document
+            if (document is not None and document.dirty
+                    and getattr(panel.editor, 'checkpoint_unconfirmed', False)):
+                raise OSError('Notebook recovery is unconfirmed. Save or close the notebook before replacing this workspace.')
+
     def preserve_for_replacement(self, receipt=None):
+        self.require_notebook_replacement_safe()
         host = self.host
         private = getattr(host, 'private_sessions', None)
         if private is not None:
@@ -71,6 +81,7 @@ class SessionTransitions:
             raise OSError('The private workspace changed during replacement.')
         if private is not None:
             private.require_replacement_safe(receipt)
+        self.require_notebook_replacement_safe()
 
     def checkpoint_for_exit(self):
         host = self.host

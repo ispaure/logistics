@@ -379,3 +379,119 @@ class ReplacementAdmissionTests(TestCase):
             for asynchronous in (False, True):
                 with self.subTest(asynchronous=asynchronous):
                     asyncio.run(exercise(Path(directory), asynchronous))
+
+
+class NotebookReplacementTests(TestCase):
+    """Replacement honors the notebook owner's uncertain-checkpoint retention."""
+    def setUp(self):
+        from features.notebooks.mobile.documents import open_notebook
+        from mobile_build.tests.support.notebooks import create_storage_notebook_app
+        self.app, _, _ = create_storage_notebook_app(self)
+        self.assertTrue(self.app.loop.run_until_complete(open_notebook(self.app, name='Synthetic retained draft')))
+        self.panel = self.app.notebook_panel
+        class Shell:
+            pass
+        self.incoming = Shell()
+        self.incoming.private_root = self.app.private_root
+        self.incoming.active_host, self.incoming._async_startup = False, True
+
+    def unconfirm_checkpoint(self):
+        from features.notebooks.recovery import RecoveryIncomplete
+        from mobile_build.tests.support.notebooks import draw_stroke
+        document = self.panel.document
+        manifest = document.recovery.root / document.key / 'state.json'
+        read_bytes = Path.read_bytes
+        attempted = False
+        def reject_publication(*args, **kwargs):
+            nonlocal attempted
+            attempted = True
+            raise OSError('Synthetic interrupted publication')
+        def unreadable(path):
+            if attempted and path == manifest:
+                raise OSError('Synthetic readback unavailable')
+            return read_bytes(path)
+        with patch('features.notebooks.recovery.atomic_write_json', side_effect=reject_publication), \
+                patch.object(Path, 'read_bytes', unreadable):
+            with self.assertRaises(RecoveryIncomplete):
+                draw_stroke(self.panel)
+        self.assertTrue(document.dirty)
+        self.assertTrue(self.panel.editor.checkpoint_unconfirmed)
+
+    def assert_replacement_veto(self, *, synchronous=False):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        from mobile.startup import StartupPhase
+        panel, editor, document = self.panel, self.panel.editor, self.panel.document
+        undo = editor.undo
+        token = self.app.workspace.token(panel.session.id)
+        identity = str(self.app.private_root.resolve()) + ':primary'
+        with patch('mobile.startup.load_startup_models', side_effect=AssertionError('Model load entered')) as load, \
+                patch.object(panel, 'dispose', wraps=panel.dispose) as dispose:
+            with self.assertRaisesRegex(OSError, 'unconfirmed'):
+                if synchronous:
+                    self.incoming._async_startup = False
+                    LogisticsMobile._prepare_startup_preferences(self.incoming, self.app.private_root)
+                else:
+                    self.app.loop.run_until_complete(LogisticsMobile._prepare_startup_phase(self.incoming, StartupPhase.PREFERENCES))
+            load.assert_not_called()
+            dispose.assert_not_called()
+        lifecycle(self.incoming).abort_startup()
+        self.assertIs(_active_hosts[identity], self.app)
+        self.assertTrue(self.app.active_host)
+        self.assertTrue(self.app.workspace.accepts(token))
+        self.assertIs(panel.document, document)
+        self.assertIs(panel.editor, editor)
+        self.assertIs(editor.undo, undo)
+        self.assertEqual(len(editor.undo), 1)
+        self.assertEqual(len(editor.notebook.page(0).strokes), 1)
+        self.assertFalse(panel.closed)
+        self.assertTrue(document.dirty)
+        self.assertTrue(editor.checkpoint_unconfirmed)
+
+    def test_unconfirmed_notebook_vetoes_async_replacement_and_shell_abort(self):
+        self.unconfirm_checkpoint()
+        self.assert_replacement_veto()
+
+    def test_unconfirmed_notebook_vetoes_synchronous_replacement(self):
+        self.unconfirm_checkpoint()
+        self.assert_replacement_veto(synchronous=True)
+
+    def test_notebook_became_unconfirmed_during_preservation_callback(self):
+        with patch.object(self.app.store, 'flush_checkpoints', side_effect=self.unconfirm_checkpoint):
+            self.assert_replacement_veto()
+
+    def test_notebook_became_unconfirmed_during_final_provider_access_check(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import AsyncMock, Mock
+        checks = 0
+        def provider_check(receipt):
+            nonlocal checks
+            checks += 1
+            if checks == 3:
+                self.unconfirm_checkpoint()
+        private = NS(prepare_replacement=AsyncMock(return_value=object()),
+                     require_replacement_safe=Mock(side_effect=provider_check),
+                     _admit_retirement=Mock(), retire=Mock())
+        with patch.object(self.app, 'private_sessions', private, create=True):
+            self.assert_replacement_veto()
+        self.assertEqual(checks, 3)
+        private._admit_retirement.assert_not_called()
+        private.retire.assert_not_called()
+
+    def test_successful_notebook_save_allows_replacement_despite_stale_editor_flag(self):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        from mobile.startup import StartupPhase
+        self.unconfirm_checkpoint()
+        document, editor = self.panel.document, self.panel.editor
+        document.save()  # Existing owner clears dirty; the flag may remain until a command.
+        self.assertFalse(document.dirty)
+        self.assertTrue(editor.checkpoint_unconfirmed)
+        with patch('mobile.startup.load_startup_models', return_value={'synthetic': True}) as load:
+            self.app.loop.run_until_complete(LogisticsMobile._prepare_startup_phase(self.incoming, StartupPhase.PREFERENCES))
+            load.assert_called_once()
+        self.assertTrue(lifecycle(self.app).replaced)
+        self.assertFalse(self.app.active_host)
+        self.assertIsNone(self.panel.document)
+        self.assertIs(_active_hosts[str(self.app.private_root.resolve()) + ':primary'], self.incoming)
+        lifecycle(self.incoming).abort_startup()

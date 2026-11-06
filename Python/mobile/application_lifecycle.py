@@ -82,6 +82,10 @@ class HostLifecycle:
                 raise OSError('The private workspace changed during replacement.')
             if private is not None:
                 private.require_replacement_safe(receipt)
+            # Provider access checks can reenter notebook commands too. Read the
+            # retention state after the last such callback, before admission.
+            from .session_workflows.transitions import transitions_for
+            transitions_for(host).require_notebook_replacement_safe()
             if incoming is not None:
                 from .app import _active_hosts
                 own = lifecycle(incoming)
