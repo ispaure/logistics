@@ -558,6 +558,54 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
 
 
 class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cancelled_native_readiness_waits_for_teardown(self):
+        from features.video.mobile.player import open_video
+
+        ready, closing, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        content = Mock(remote=False)
+        app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True,
+            active_host=True, video_player=None)
+
+        async def wait_ready():
+            ready.set()
+            await asyncio.Future()
+
+        async def close():
+            closing.set()
+            await release.wait()
+            content.close()
+            app.video_player = None
+
+        player = SimpleNamespace(prepare=lambda: (0, []), close=close, present=Mock(),
+            allowed=lambda: True, closed=False, native=SimpleNamespace(wait_ready=wait_ready, play=Mock()))
+        with patch('features.video.mobile.player.VideoContent', return_value=content), patch(
+                'features.video.mobile.player.MobileVideo', return_value=player), patch(
+                'services.documents.mobile_storage.remember_video') as remember:
+            opening = asyncio.create_task(open_video(app, Mock(), 'movie.mp4'))
+            try:
+                await asyncio.wait_for(ready.wait(), 2)
+                self.assertIs(app.video_player, player)
+                opening.cancel('cancel during readiness')
+                await asyncio.wait_for(closing.wait(), 2)
+                for _ in range(2):
+                    opening.cancel('cancel during teardown')
+                    await asyncio.sleep(0)
+                    self.assertFalse(opening.done())
+                    content.close.assert_not_called()
+                release.set()
+                with self.assertRaisesRegex(asyncio.CancelledError, 'cancel during readiness'):
+                    await opening
+            finally:
+                release.set()
+                if not ready.is_set():
+                    opening.cancel()
+                await asyncio.gather(opening, return_exceptions=True)
+            player.present.assert_called_once_with(0, [])
+            player.native.play.assert_not_called()
+            remember.assert_not_called()
+            self.assertIsNone(app.video_player)
+            content.close.assert_called_once()
+
     async def test_cancelled_acquisition_reclaims_late_content(self):
         from threading import Event
         from features.video.mobile.player import open_video
