@@ -177,7 +177,7 @@ class WindowOcclusionTests(unittest.TestCase):
                 for owner in (self.navigation, self.secondary):
                     self.assertEqual(owner.view.setNeedsLayout.call_count, 3)
                     self.assertEqual(owner.navigationBar.setNeedsLayout.call_count, 3)
-                    self.assertEqual(owner.view.layoutIfNeeded.call_count, 3)
+                    owner.view.layoutIfNeeded.assert_not_called()
                 # Stable geometry must not keep invalidating menus/layout.
                 observe_window_occlusions(self.app, native)
                 await asyncio.sleep(0)
@@ -198,8 +198,8 @@ class WindowOcclusionTests(unittest.TestCase):
                 await asyncio.sleep(0)
             self.clearance.assert_any_call(outer)
             self.clearance.assert_any_call(more)
-            outer.view.layoutIfNeeded.assert_called_once()
-            more.view.layoutIfNeeded.assert_called_once()
+            outer.view.setNeedsLayout.assert_called_once()
+            more.view.setNeedsLayout.assert_called_once()
         self.loop.run_until_complete(exercise())
 
     def test_missing_adapter_at_refresh_does_not_raise_or_consume_geometry(self):
@@ -241,13 +241,13 @@ class WindowOcclusionTests(unittest.TestCase):
                 host.adapter = NavigationAdapter(navigation=[first])
                 observe_window_occlusions(self.app, native)
                 await asyncio.sleep(0)
-                self.navigation.view.layoutIfNeeded.assert_not_called()
-                first.view.layoutIfNeeded.assert_called_once()
+                self.navigation.view.setNeedsLayout.assert_not_called()
+                first.view.setNeedsLayout.assert_called_once()
                 self.app.resize_workspace.assert_called_once()
                 host.adapter = NavigationAdapter(navigation=[later])
                 observe_window_occlusions(self.app, native)
                 await asyncio.sleep(0)
-                later.view.layoutIfNeeded.assert_called_once()
+                later.view.setNeedsLayout.assert_called_once()
                 self.assertEqual(self.app.resize_workspace.call_count, 2)
         self.loop.run_until_complete(exercise())
 
