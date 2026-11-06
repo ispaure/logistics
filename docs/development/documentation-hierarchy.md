@@ -37,8 +37,11 @@ maintained in commonUtils rather than duplicated here.
 `mobile/help/`, preserving repository-relative paths. It excludes linked
 features and never traverses the external emulation repository. The Settings
 entry opens `docs/user_mobile/user_mobile.md` with the Logistics tree. Feature links stay inside the same mirrored wiki, so users can read every
-feature guide offline without changing the sidebar scope. Source files mentioned by developer pages are not included in
-this documentation mirror.
+feature guide offline without changing the sidebar scope. Links within the
+Logistics wiki use that packaged tree. Checkout-relative links to source files
+or the separate commonUtils wiki require those files in a source checkout;
+they are not included in this documentation mirror. Shared API documentation
+remains in commonUtils rather than being copied into the mobile help payload.
 
 ## Writing for a first-time reader
 

@@ -9,8 +9,7 @@ It covers setup, a safe local exploration, choosing a code/test owner and checki
 one change. Use this index afterward to look up the contract for your task.
 
 
-Start with [setup and your first change](testing.md). It covers running the app,
-choosing a code owner, running focused checks and updating the right guide.
+Use [test selection and validation](testing.md) when checking your change.
 The [worked LM attachment contribution](testing.md#worked-contribution-desktop-lm-attachments)
 traces a complete change through registration, implementation and tests.
 The commands below run from the repository root; use `py` instead of `python3`
@@ -110,9 +109,10 @@ validate a new change.
 See the [current build and deployment ownership map](build-deployment-audit.md)
 for the manager/project boundary and the `logistics_build/` migration.
 
-Start with the [ecosystem refactoring assessment](ecosystem-audit.md) for
-current cross-repository priorities and the documentation review. It separates
-remaining ownership seams from the completed work below.
+The [ecosystem refactoring assessment](ecosystem-audit.md) records the October
+cross-repository review and its source snapshots. Its former working-tree
+baseline and proposed priorities are historical; use the current owner contracts
+above and the dependency revisions pinned by your checkout for new work.
 
 Use the [earlier audit implementation record](maintenance/remaining-work-audit.md)
 for completed units and the scope of their native acceptance. The
