@@ -600,14 +600,8 @@
       "reason": "Existing standalone image compression tool owns exclusive sibling staging, encoded-image verification and publication/cleanup. It is separate from provider-backed image viewing; no source document path is opened by the viewer."
     },
     {
-      "module": "features.notes_library.mobile.notes_library",
-      "scope": "VaultBrowser.run_search.read_text",
-      "operation": "raw-method:read_text",
-      "reason": "Bounded NotesLibrary.read_text delegates to DocumentResource after containment/type checks; this is not filesystem Path.read_text."
-    },
-    {
-      "module": "features.notes_library.ui.library_panels",
-      "scope": "LibraryPanels.filter.scan.read",
+      "module": "features.notes_library.library_files",
+      "scope": "search",
       "operation": "raw-method:read_text",
       "reason": "Bounded NotesLibrary.read_text delegates to DocumentResource after containment/type checks; this is not filesystem Path.read_text."
     },
