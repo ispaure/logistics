@@ -73,6 +73,20 @@ class PerforceConsoleTests(unittest.TestCase):
                 self.assertFalse(actions.open_console(folder))
                 launch.assert_not_called()
 
+    @unittest.skipUnless(os.name == 'posix', 'Execute permission requires a POSIX host')
+    def test_nonexecutable_local_client_falls_back_to_path(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local_client = root / 'p4'
+            local_client.touch(mode=0o644)
+            bin_path = root / 'bin'
+            bin_path.mkdir()
+            path_client = bin_path / 'p4'
+            path_client.touch(mode=0o755)
+            path_client.chmod(0o755)
+            with patch.dict(os.environ, {'PATH': str(bin_path)}):
+                self.assertEqual(detection.get_p4_client_path(LocalFolder(root)), str(path_client))
+
 
 if __name__ == '__main__':
     unittest.main()

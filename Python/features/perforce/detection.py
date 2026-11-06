@@ -2,6 +2,7 @@
 Detection helpers for the Logistics Perforce feature.
 """
 
+import os
 from pathlib import Path
 import shutil
 
@@ -69,10 +70,10 @@ def get_server_id(folder: LocalFolder) -> str | None:
 
 
 def get_p4_client_path(folder: LocalFolder) -> str | None:
-    """Prefer the folder's P4 client, falling back to the system PATH."""
+    """Prefer an executable P4 client in the folder, falling back to PATH."""
 
     local_client = Path(folder.path, 'p4')
-    if local_client.is_file():
+    if local_client.is_file() and os.access(local_client, os.X_OK):
         return str(local_client.resolve())
     return shutil.which('p4')
 
