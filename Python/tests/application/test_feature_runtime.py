@@ -12,11 +12,60 @@ from unittest.mock import Mock
 
 from features.application import registry
 from features.feature_runtime import FeatureRegistry
-from features.contributions import Feature
+from features.contributions import BrowserExtensionContribution, Feature, FeatureContributions
 from features.preferences import load_disabled
 
 
 class FeatureRuntimeTests(unittest.TestCase):
+    def test_states_use_one_discovery_and_refresh_on_the_next_call(self):
+        base = ModuleType('features.base')
+        consumer = ModuleType('features.consumer')
+        consumer.FEATURE_DEPENDENCIES = ('base',)
+        loader = Mock(side_effect=[[consumer, base], [consumer]])
+        runtime = FeatureRegistry(feature_loader=loader)
+
+        states = runtime.get_feature_states()
+        self.assertEqual([(state.name, state.available, state.enabled) for state in states],
+                         [('consumer', True, True), ('base', True, True)])
+        self.assertEqual(states[0].dependencies, ('base',))
+        self.assertEqual(states[1].dependents, ('consumer',))
+        loader.assert_called_once_with()
+
+        states = runtime.get_feature_states()
+        self.assertEqual([(state.name, state.available, state.enabled) for state in states],
+                         [('consumer', False, False)])
+        self.assertEqual(states[0].dependencies, ('base',))
+        self.assertEqual(loader.call_count, 2)
+
+    def test_browser_roster_is_shared_by_legacy_and_unified_extensions_and_refreshes(self):
+        from commonUtils.ui.features import BrowserExtension
+        rosters = []
+        installers = []
+        for name in ('first', 'second'):
+            install = Mock()
+            installers.append(install)
+            legacy = ModuleType(f'features.{name}_legacy')
+            legacy.get_contributions = Mock(return_value=FeatureContributions(
+                browser_extensions=[BrowserExtensionContribution(install)]))
+            modern = ModuleType(f'features.{name}_modern')
+            modern.register = Mock(return_value=Feature(
+                id=f'{name}_modern', label=f'{name.title()} Modern', browser=BrowserExtension()))
+            rosters.append([modern, legacy])
+        loader = Mock(side_effect=[rosters[0], rosters[1], rosters[0]])
+        runtime = FeatureRegistry(feature_loader=loader)
+
+        for calls, name in enumerate(('first', 'second', 'first'), start=1):
+            extensions = runtime.get_browser_extensions()
+            self.assertEqual([entry.feature_name for entry in extensions],
+                             [f'{name}_legacy', f'{name}_modern'])
+            self.assertEqual([entry.feature_label for entry in extensions],
+                             [f'{name.title()} Legacy', f'{name.title()} Modern'])
+            self.assertEqual(loader.call_count, calls)
+        for modern, legacy in rosters:
+            modern.register.assert_called_once_with()
+        for install in installers:
+            install.assert_not_called()
+
     def test_enablement_and_preference_files_are_independent(self):
         module = ModuleType('features.isolated_runtime')
         module.FEATURE_NAME = 'isolated_runtime'
