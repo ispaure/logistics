@@ -110,7 +110,7 @@ class NativeRemoteResources:
 
     @contextmanager
     def open(self, path):
-        from .remote_readers import RemoteSource
+        from .remote_source import RemoteSource
         self.check()
         source = RemoteSource(self.client, self.remote, self.relative(path), resource=self)
         try:

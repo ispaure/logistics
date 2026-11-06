@@ -7,6 +7,7 @@ import base64
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -152,3 +153,29 @@ class RemoteServiceTests(unittest.TestCase):
                 readers.open('note.txt')
         self.assertTrue(opened.closed)
         self.assertFalse(readers.resource.closed)
+
+    def test_progress_callback_closure_prevents_a_new_native_read(self):
+        source = RemoteSource(self.client, 'Files', 'note.txt')
+        source.progress = lambda message: source.close()
+        with patch.object(self.client, 'request', wraps=self.client.request) as requests:
+            with self.assertRaises(ValueError):
+                source.request('remote_range', offset=0, count=4)
+        requests.assert_not_called()
+
+    def test_revocation_during_format_construction_retires_unpublished_reader(self):
+        readers = self.open().readers()
+        pdf = SimpleNamespace(close=unittest.mock.Mock())
+        prepared = []
+
+        def construct(key, data):
+            self.client.lock()
+            reader = SimpleNamespace(pdf=pdf)
+            prepared.append(reader)
+            return reader
+
+        with patch('features.rclone.mobile.remote_readers.PrivateReader', side_effect=construct):
+            with self.assertRaises(ValueError):
+                readers.open('note.txt')
+        self.assertTrue(prepared[0].source.closed)
+        self.assertEqual(prepared[0].password, '')
+        pdf.close.assert_called_once_with()

@@ -37,7 +37,8 @@ class ProviderDocuments:
 
     def open(self, key, *, password='', cancelled=lambda: False, read_provider=None):
         from commonUtils.archives.zip_access import ArchivePasswordError
-        content = ProviderContent(read_provider or self.provider, key, password=password, cancelled=cancelled)
+        read_provider = self.provider if read_provider is None else read_provider
+        content = ProviderContent(read_provider, key, password=password, cancelled=cancelled)
         try:
             from features.images.document import IMAGE_EXTENSIONS, ImageReader
             if Path(key).suffix.lower() in IMAGE_EXTENSIONS:
@@ -57,14 +58,14 @@ class ProviderDocuments:
                 try:
                     reader = PrivateReader(Path(key).name, source=content, path=key)
                 except ArchivePasswordError:
-                    configured = getattr(self.provider, 'archive_password', None)
+                    configured = getattr(read_provider, 'archive_password', None)
                     if password or configured is None:
                         raise
                     password = configured(key, cancelled=cancelled)
                     if not password:
                         raise
                     content.close()
-                    content = ProviderContent(self.provider, key, password=password, cancelled=cancelled)
+                    content = ProviderContent(read_provider, key, password=password, cancelled=cancelled)
                     reader = PrivateReader(Path(key).name, source=content, path=key)
             reader.source = content
             reader.key, reader.revision, reader.document_revision = key, content.expected, content.expected
