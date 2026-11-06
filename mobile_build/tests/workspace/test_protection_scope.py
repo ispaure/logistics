@@ -9,6 +9,61 @@ from services.protection import ProtectionScope
 
 
 class ProtectionScopeTests(unittest.TestCase):
+    def test_failed_registration_releases_source_and_preserves_notification_error(self):
+        scope = ProtectionScope()
+        window = scope.window()
+        original = RuntimeError('fixture admission failure')
+        events = []
+        class Listener:
+            def protection_changed(self, active):
+                events.append(active)
+                if active:
+                    raise original
+                raise ValueError('fixture rollback notification failure')
+        listener = Listener()
+        scope.listeners.add(listener)
+        with self.assertRaises(RuntimeError) as caught:
+            window.register(object(), lambda: (object(),))
+        self.assertIs(caught.exception, original)
+        self.assertEqual(window.gates(), ())
+        self.assertFalse(scope.protected())
+        self.assertFalse(scope.active)
+        self.assertEqual(events, [True, False])
+
+    def test_failed_replacement_restores_previous_registration_and_release(self):
+        scope = ProtectionScope()
+        window = scope.window()
+        owner, gate = object(), object()
+        release = window.register(owner, lambda: (gate,))
+        def unavailable():
+            raise ValueError('fixture source failure')
+        with self.assertRaisesRegex(ValueError, 'fixture source failure'):
+            window.register(owner, unavailable)
+        self.assertEqual(window.gates(), (gate,))
+        self.assertTrue(scope.active)
+        release()
+        self.assertFalse(scope.protected())
+        self.assertFalse(scope.active)
+
+    def test_failed_registration_does_not_remove_reentrant_replacement(self):
+        scope = ProtectionScope()
+        window = scope.window()
+        owner, newer = object(), object()
+        releases = []
+        class Listener:
+            def protection_changed(self, active):
+                if active:
+                    releases.append(window.register(owner, lambda: (newer,)))
+                    raise RuntimeError('fixture outer failure')
+        listener = Listener()
+        scope.listeners.add(listener)
+        with self.assertRaisesRegex(RuntimeError, 'fixture outer failure'):
+            window.register(owner, lambda: (object(),))
+        self.assertEqual(window.gates(), (newer,))
+        self.assertTrue(scope.active)
+        releases[0]()
+        self.assertFalse(scope.protected())
+
     def test_credentials_protect_process_before_any_window_exists(self):
         credentials = [object()]
         scope = ProtectionScope(lambda: tuple(credentials))

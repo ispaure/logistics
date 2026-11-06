@@ -93,8 +93,23 @@ class WindowProtection:
             raise ValueError('The protection scope is closed.')
         key = id(owner)
         entry = (owner, gates, protected)
+        previous = self.sources.get(key)
         self.sources[key] = entry
-        self.process.changed()
+        try:
+            self.process.changed()
+        except BaseException:
+            # No release handle reached the caller. Restore only our own entry;
+            # a notification may have registered a newer source reentrantly.
+            if self.sources.get(key) is entry:
+                if previous is None:
+                    self.sources.pop(key)
+                else:
+                    self.sources[key] = previous
+                try:
+                    self.process.changed()
+                except BaseException:
+                    pass  # Preserve the original registration failure.
+            raise
         def release():
             if self.sources.get(key) is entry:
                 self.sources.pop(key, None)
