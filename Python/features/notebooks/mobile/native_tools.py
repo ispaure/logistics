@@ -143,14 +143,19 @@ class NativeDrawingTools:
         value = json.loads(raw)
         if value is None:
             self.strip._impl.native.hidden = True
+            for button in self.buttons.values():
+                # Toga iOS mounts the button views beside the box view.
+                button._impl.native.hidden = True
+                button.enabled = False
             return
-        self.strip._impl.native.hidden = False
         if set(value) != set(TOOLS) or any(set(row) != {'disabled', 'active'}
                 or any(type(item) is not bool for item in row.values()) for row in value.values()):
             raise ValueError('The notebook drawing controls are not ready.')
+        self.strip._impl.native.hidden = False
         surface = panel.app.presentation.surface
         for name, row in value.items():
             button = self.buttons[name]
+            button._impl.native.hidden = False
             button.enabled = not (row['disabled'] or panel.busy or panel.native_input_pending)
             surface(button, background='hover' if row['active'] else 'surface', foreground='text')
 

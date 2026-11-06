@@ -396,18 +396,18 @@ class AppearanceTests(unittest.TestCase):
         app = NS(native_host=NS(adapter=adapter), chat_view=view,
                  main_window=NS(_impl=NS(native=NS(bounds=rect(0, 800), safeAreaInsets=NS(bottom=0)))))
         ChatUI.reserve_chat_navigation(app)
-        self.assertGreater(view.style.margin_bottom, 12)
+        self.assertEqual(view.style.margin_bottom, 86)
         adapter.tabs_hidden = lambda: True
         ChatUI.reserve_chat_navigation(app)
-        self.assertEqual(view.style.margin_bottom, 12)
+        self.assertEqual(view.style.margin_bottom, 6)
         app.main_window._impl.native.safeAreaInsets.bottom = 34
         ChatUI.reserve_chat_navigation(app)
-        self.assertEqual(view.style.margin_bottom, 46)
+        self.assertEqual(view.style.margin_bottom, 40)
         ChatUI.reserve_chat_navigation(app)
-        self.assertEqual(view.style.margin_bottom, 46)
+        self.assertEqual(view.style.margin_bottom, 40)
         view._impl.container.bottom_inset = 34
         ChatUI.reserve_chat_navigation(app)
-        self.assertEqual(view.style.margin_bottom, 12)
+        self.assertEqual(view.style.margin_bottom, 6)
 
     def test_user_picker_selection_closes_field_before_dispatching_change(self):
         from types import SimpleNamespace
@@ -454,23 +454,22 @@ class AppearanceTests(unittest.TestCase):
                         self.assertGreaterEqual(contrast_ratio(argb(palette[ink]), argb(palette[surface])), 4.5)
 
     def test_preview_and_chat_follow_the_same_system_palette(self):
-        for html, background in ((markdown_preview('# Notes'), 'window'), (transcript_document(theme_css=css_variables()), 'chat_background')):
+        for html in (markdown_preview('# Notes'), transcript_document(theme_css=css_variables())):
             self.assertIn('@media(prefers-color-scheme:dark)', html)
             for palette in (LIGHT, DARK):
                 for role, color in palette.items():
                     self.assertIn(f'--{role}:{color}', html)
-            self.assertIn(f'background:var(--{background})', html)
+            self.assertIn('background:var(--window)', html)
         self.assertIn('html,html body{background:var(--window);color:var(--text)}', markdown_preview('# Notes'))
 
     def test_chat_canvas_tracks_system_light_and_dark_themes(self):
         html = transcript_document(theme_css=css_variables())
-        self.assertEqual(LIGHT['chat_background'], '#ffffff')
-        self.assertEqual(DARK['chat_background'], '#000000')
-        self.assertIn('html { min-height:100%; background:var(--chat_background) }', html)
+        self.assertIn('html { min-height:100%; background:var(--window) }', html)
+        self.assertRegex(html, r'body \{[^}]*background:var\(--window\)')
         self.assertIn('@media(prefers-color-scheme:dark)', html)
         for palette in (LIGHT, DARK):
             self.assertGreaterEqual(contrast_ratio(argb(palette['text']),
-                                                   argb(palette['chat_background'])), 4.5)
+                                                   argb(palette['window'])), 4.5)
 
     def test_explicit_reader_appearance_overrides_device_mode(self):
         content = '<html><head><style>body{margin:24px}</style></head><body>Book</body></html>'

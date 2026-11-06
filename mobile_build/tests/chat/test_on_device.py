@@ -129,12 +129,13 @@ class OnDeviceUITests(unittest.TestCase):
         app.chat_provider.value = MODELS['apple']
         self.assertNotIn(owner.chat_server_section, owner.chat_provider_content.children)
         self.assertNotIn(owner.chat_model_section, owner.chat_provider_content.children)
-        self.assertIn(owner.chat_device_note, owner.chat_provider_content.children)
+        self.assertIn(owner.chat_device_section, owner.chat_provider_content.children)
+        self.assertIn(owner.chat_device_note, owner.chat_device_section.children)
         self.assertEqual(app.native_host.state.destination, 'settings')
         app.chat_provider.value = 'OpenAI-compatible server'
         self.assertIn(owner.chat_server_section, owner.chat_provider_content.children)
         self.assertIn(owner.chat_model_section, owner.chat_provider_content.children)
-        self.assertNotIn(owner.chat_device_note, owner.chat_provider_content.children)
+        self.assertNotIn(owner.chat_device_section, owner.chat_provider_content.children)
         self.assertEqual(app.chat_model.value, 'Keep my server model')
         self.assertEqual(app.chat_models.value, 'Keep my server model')
 
