@@ -5,6 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from copy import deepcopy
+from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -120,6 +121,149 @@ class ChatUITests(unittest.TestCase):
         self.assertEqual(saved['messages'][1]['content'], 'Accepted')
         self.assertEqual(saved['messages'][1]['status'], 'complete')
         self.assertEqual(saved['draft'], '')
+
+    def test_retired_host_discards_delayed_model_results_and_errors(self):
+        app = self.app
+        self.configure('http://127.0.0.1:1234')
+        app.chat_prompt.value = 'Pending draft'
+
+        async def exercise(error):
+            entered, release = asyncio.Event(), Event()
+            loop = asyncio.get_running_loop()
+
+            def models():
+                loop.call_soon_threadsafe(entered.set)
+                if not release.wait(3):
+                    raise RuntimeError('Model test gate timed out')
+                if error:
+                    raise ValueError('Delayed model failure')
+                return ['Late model']
+
+            with patch('features.lm.mobile.ui.ChatClient') as factory:
+                factory.return_value.models.side_effect = models
+                task = asyncio.create_task(app.refresh_chat_models())
+                try:
+                    await asyncio.wait_for(entered.wait(), 3)
+                    status = app.chat_status.value
+                    items = list(app.chat_models.items)
+                    profile = app.chat_store.profile()
+                    app.active_host = False
+                    app.chat_client.cancel()
+                    release.set()
+                    await asyncio.wait_for(task, 3)
+                    self.assertIsNone(app.chat_client)
+                    self.assertFalse(app.chat_busy)
+                    self.assertFalse(app.chat_refresh.enabled)
+                    self.assertEqual(app.chat_status.value, status)
+                    self.assertEqual(list(app.chat_models.items), items)
+                    self.assertEqual(app.chat_store.profile(), profile)
+                    key = app.chat_current['id']
+                    app.new_chat()
+                    self.assertEqual(app.chat_current['id'], key)
+                    await app.refresh_chat_models()
+                    await app.send_chat()
+                    factory.assert_called_once()
+                finally:
+                    release.set()
+                    await asyncio.gather(task, return_exceptions=True)
+                    app.active_host = True
+                    app.set_chat_busy(False)
+
+        for error in (False, True):
+            with self.subTest(error=error):
+                app.loop.run_until_complete(exercise(error))
+
+    def test_retired_host_saves_terminal_stream_without_publishing_controls(self):
+        app = self.app
+        self.configure('http://127.0.0.1:1234')
+
+        async def exercise(error):
+            entered, release = asyncio.Event(), Event()
+            loop = asyncio.get_running_loop()
+
+            def stream(payload, fragment):
+                fragment('Published partial')
+                loop.call_soon_threadsafe(entered.set)
+                if not release.wait(3):
+                    raise RuntimeError('Stream test gate timed out')
+                fragment('Discard this late fragment')
+                if error:
+                    raise ValueError('Delayed stream failure')
+                return 'stop'
+
+            app.chat_prompt.value = 'Question'
+            with patch('features.lm.mobile.ui.ChatClient') as factory:
+                factory.return_value.stream.side_effect = stream
+                task = asyncio.create_task(app.send_chat())
+                try:
+                    await asyncio.wait_for(entered.wait(), 3)
+                    async with asyncio.timeout(2):
+                        while app.chat_current['messages'][-1]['content'] != 'Published partial':
+                            await asyncio.sleep(.01)
+                    app.chat_prompt.value = 'Keep the next draft'
+                    self.assertTrue(app.checkpoint_chat())
+                    status = app.chat_status.value
+                    revision = app.chat_render_revision
+                    app.active_host = False
+                    app.chat_client.cancel()
+                    release.set()
+                    await asyncio.wait_for(task, 3)
+                    saved = app.chat_store.load(app.chat_current['id'])
+                    self.assertEqual(saved['messages'][-1]['status'], 'failed' if error else 'complete')
+                    self.assertEqual(saved['messages'][-1]['content'], 'Published partial')
+                    self.assertEqual(saved['draft'], 'Keep the next draft')
+                    self.assertIsNone(app.chat_client)
+                    self.assertFalse(app.chat_busy)
+                    self.assertEqual(app.chat_send.accessible_name, 'Stop')
+                    self.assertEqual(app.chat_status.value, status)
+                    self.assertEqual(app.chat_render_revision, revision)
+                finally:
+                    release.set()
+                    await asyncio.gather(task, return_exceptions=True)
+                    app.active_host = True
+                    app.set_chat_busy(False)
+
+        for error in (False, True):
+            with self.subTest(error=error):
+                app.loop.run_until_complete(exercise(error))
+
+    def test_retired_host_discards_queued_transcript_acknowledgement(self):
+        app = self.app
+
+        async def exercise(outcome):
+            entered, release = asyncio.Event(), asyncio.Event()
+
+            async def evaluate(script):
+                entered.set()
+                await release.wait()
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+            with patch.object(app.chat_transcript, 'evaluate_javascript', side_effect=evaluate) as js:
+                app.chat_transcript_loaded()
+                task = app.chat_render_task
+                try:
+                    await asyncio.wait_for(entered.wait(), 3)
+                    status = app.chat_status.value
+                    app.active_host = False
+                    release.set()
+                    await asyncio.wait_for(task, 3)
+                    self.assertEqual(app.chat_status.value, status)
+                    self.assertTrue(app.chat_render_ready)
+                    self.assertIsNone(app.chat_render_key)
+                    self.assertEqual(app.chat_render_entries, [])
+                    app.chat_transcript_loaded()
+                    self.assertIs(app.chat_render_task, task)
+                    js.assert_called_once()
+                finally:
+                    release.set()
+                    await asyncio.gather(task, return_exceptions=True)
+                    app.active_host = True
+
+        for outcome in (True, False, ValueError('Retired WebView')):
+            with self.subTest(outcome=outcome):
+                app.loop.run_until_complete(exercise(outcome))
 
     def test_laptop_preserves_transcript_and_draft_through_history_and_unfold(self):
         app = self.app
