@@ -66,22 +66,22 @@ class NotesLibraryTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_retained_native_title_stays_above_commands_and_breadcrumbs(self):
+        from dataclasses import replace
         from mobile.obsidian import open_vault
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             # Apple promotes this toolbar into native navigation. Its retained
             # side-title row must stay first as an empty library gains a note.
             owner.toolbar.parent.remove(owner.toolbar)
+            owner.host = replace(owner.host, apple=True, toolbar_insets=lambda toolbar: (72, 72))
             header = owner.view._document_title_header = toga.Box(style=Pack(height=37))
-            owner.view.insert(0, header)
+            owner.article.insert(0, header)
             owner.refresh_chrome()
-            self.assertIs(owner.view.children[0], header)
+            self.assertIs(owner.article.children[0], header)
             self.assertTrue(await owner.open_note('Vault/Home.md'))
             owner.refresh_chrome()
-            self.assertIs(owner.view.children[0], header)
-            self.assertLess(list(owner.view.children).index(header), list(owner.view.children).index(owner.secondary))
-            from dataclasses import replace
-            owner.host = replace(owner.host, toolbar_insets=lambda toolbar: (72, 72))
+            self.assertIs(owner.article.children[0], header)
+            self.assertIs(owner.article.children[1], owner.secondary)
             owner.reflow(390)
             self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
             self.assertGreaterEqual(owner._breadcrumb_width, 90)
@@ -92,17 +92,24 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertEqual([button.style.height for button in controls], [48] * 4)
             title_controls = (owner.close_button, owner.menu, owner.links_button)
             self.assertEqual([button.style.width for button in title_controls], [29] * 3)
-            owner.reflow(834)
+            owner.reflow(1100)
             self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
             self.assertEqual([button.style.width for button in controls], [48] * 4)
             self.assertEqual([button.style.width for button in title_controls], [48] * 3)
+            self.assertTrue(owner.sidebar.expanded)
+            owner.sidebar.toggle()
+            self.assertFalse(owner.sidebar.expanded)
+            self.assertIs(owner.article.children[0], header)
+            owner.sidebar.show_sidebar()
+            self.assertTrue(owner.sidebar.expanded)
+            self.assertIs(owner.article.children[0], header)
             owner.reflow(390)
             self.assertIs(owner.breadcrumb_scroll.parent, owner.secondary)
             self.assertEqual([button.style.width for button in controls], [29] * 4)
             owner.sidebar.show_sidebar()
-            self.assertIs(owner.view.children[0], header)
+            self.assertIs(owner.article.children[0], header)
             owner.sidebar.show_detail()
-            self.assertIs(owner.view.children[0], header)
+            self.assertIs(owner.article.children[0], header)
             owner.dispose()
         self.run_async(exercise())
 

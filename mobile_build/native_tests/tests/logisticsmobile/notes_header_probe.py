@@ -68,7 +68,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 assert hit == root_button, 'Beginning of breadcrumb path is unreachable'
                 scroll.horizontal_position = scroll.max_horizontal_position
                 await asyncio.sleep(.35)
-                for button in (owner.close_button, owner.menu, owner.links_button, *owner.breadcrumbs.children):
+                for button in (owner.menu, owner.links_button, *owner.breadcrumbs.children):
                     if not hasattr(button, 'on_press') or not button.enabled:
                         continue
                     native = button._impl.native
@@ -88,14 +88,34 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 title = owner.view._document_title_view
                 title_frame = title.convertRect(title.bounds, toView=window)
                 article_frame = owner.web._impl.native.convertRect(owner.web._impl.native.bounds, toView=window)
-                for button in (owner.close_button, owner.menu, owner.links_button):
+                for button in (owner.menu, owner.links_button):
                     control = button._impl.native
                     rect = control.convertRect(control.bounds, toView=window)
                     assert abs(float(rect.size.width) - owner.back_button.style.width) <= 1
                     midpoint = rect.origin.y + rect.size.height / 2
                     assert title_frame.origin.y <= midpoint <= title_frame.origin.y + title_frame.size.height
                 assert title_frame.origin.y + title_frame.size.height <= article_frame.origin.y
-                assert header.parent is (owner.article if owner.sidebar.expanded else owner.view)
+                assert header.parent is owner.article
+                controller = self.native_host.adapter.content_controller(owner.destination)
+                from .fixtures import ios_toolbar_items
+                assert ios_toolbar_items(controller, leading=True) == [owner.close_button._native_reader_close_item]
+                evidence = output / 'viewer-layout'
+                evidence.mkdir(exist_ok=True)
+                if owner.sidebar.expanded:
+                    tab = owner.panel_tabs['Files']._impl.native
+                    tabs_frame = tab.convertRect(tab.bounds, toView=window)
+                    title_y = float(title_frame.origin.y + title_frame.size.height / 2)
+                    assert abs(title_y - float(tabs_frame.origin.y + tabs_frame.size.height / 2)) <= 2
+                    await capture_window(self, evidence / ('notes-pane-open-' + orientation + '.png'))
+                    owner.sidebar.toggle()
+                    await asyncio.sleep(.3)
+                    assert not owner.sidebar.expanded
+                    title = owner.view._document_title_view
+                    closed = title.convertRect(title.bounds, toView=window)
+                    assert abs(title_y - float(closed.origin.y + closed.size.height / 2)) <= 2
+                    await capture_window(self, evidence / ('notes-pane-closed-' + orientation + '.png'))
+                    owner.sidebar.show_sidebar()
+                    await asyncio.sleep(.3)
                 await capture_window(self, output / ('notes-reading-' + orientation + '.png'))
                 if drive_touches:
                     assert await owner.open_note(deep_note.relative_to(root).as_posix())
@@ -121,8 +141,6 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     owner.sidebar.show_detail()
                     owner.sidebar.finish_dismissals()
                     assert await owner.open_note('3D Character Art/3D Character Art.md')
-                evidence = output / 'viewer-layout'
-                evidence.mkdir(exist_ok=True)
                 owner.sidebar.show_sidebar()
                 await asyncio.sleep(.3)
                 assert list(owner.panel_tabs) == ['Files', 'Search', 'Calendar']
@@ -157,13 +175,16 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await asyncio.sleep(.3)
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
                     title_width=float(title_frame.size.width), document_width=float(article_frame.size.width)))
-            owner.close_button._impl.native.sendActionsForControlEvents(1 << 6)
+            close = owner.close_button._native_reader_close_item
+            from rubicon.objc import ObjCClass
+            assert ObjCClass('UIApplication').sharedApplication.sendAction_to_from_forEvent_(
+                close.action, close.target, close, None)
             for _ in range(100):
                 if not owner.valid():
                     break
                 await asyncio.sleep(.05)
             else:
-                raise AssertionError('Inline Close did not dismiss the library')
+                raise AssertionError('Native Close did not dismiss the library')
             report['native_breadcrumb_swipes'] = drive_touches
             report['success'] = True
         except Exception:

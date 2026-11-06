@@ -291,7 +291,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         # UIKit moves the remaining reader actions to a vertical edge.
         self.view._notes_title_controls = (self.close_button, self.menu, self.links_button)
         if host.apple:
-            self.view._document_title_controls = self.view._notes_title_controls
+            self.view._document_title_controls = (self.menu, self.links_button)
+            self.view._document_title_parent = self.article
         self.view._native_reader_buttons = self.native_note_buttons
         self.sidebar.on_change = self.refresh_chrome
         welcome_body = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
@@ -339,7 +340,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         show = self.path is not None and not self.sidebar.sidebar_open
         self.secondary.style.display = PACK if show else NONE
         header = getattr(self.view, '_document_title_header', None)
-        parent = self.article if self.sidebar.expanded else self.view
+        # The Files tabs and document title share the same top edge. Keep
+        # the header in the article even when the persistent pane is hidden.
+        parent = self.article if self.host.apple or self.sidebar.expanded else self.view
         self.view._document_title_parent = parent
         if not self.host.apple and self.toolbar.children and self.toolbar.parent is not parent:
             if self.toolbar.parent is not None:

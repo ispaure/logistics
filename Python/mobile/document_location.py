@@ -232,7 +232,8 @@ def mount_apple_title(view, controller, title):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:
-            header = view._document_title_header = toga.Box(style=Pack(margin_top=6, margin_bottom=6))
+            top = 0 if getattr(view, '_notes_title_controls', ()) else 6
+            header = view._document_title_header = toga.Box(style=Pack(margin_top=top, margin_bottom=6))
             header._empty_bar_title = empty_bar_title()
             if controls:
                 header.style.direction = ROW
