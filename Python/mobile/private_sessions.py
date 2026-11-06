@@ -292,6 +292,7 @@ class PrivateSessions:
         sync_external(self.app)
 
     async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False):
+        import asyncio
         if not self.app.require_document_feature(key, copies=copies):
             return False
         destination = destination or self.app.native_host.state.destination
@@ -388,7 +389,7 @@ class PrivateSessions:
                     'A document that exceeds the budget by itself cannot be opened. Existing documents and unsaved edits were kept.')
             return await self._publish_opened_session(owner, session, reader, copies, key,
                                                       identity=identity, privacy_gate=privacy_gate)
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             retire_open()
             raise
         finally:
