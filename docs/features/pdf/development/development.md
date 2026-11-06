@@ -225,6 +225,8 @@ it does not claim a new passing run or current physical-device acceptance.
 `mobile/canvas.py:PDFNavigation` stages sizes and links for a candidate spread
 and publishes them with the displayed indices and viewport on commit. Failed
 loads, Back probes and uncommitted resize leave displayed link geometry intact.
+`ProviderUI._show_crypt_content()` assigns PDF spread pixels only in the accepted
+mount callback, so a mount veto also retains the image paired with those links.
 The mobile `test_pdf_links.py` exercises this boundary. PDFCanvas maps normalized image taps through the compositor’s exact spread rectangles, including the seam; it guards busy, inactive and retired sessions and owns a three-second return action. The shared ImageCanvas transports only recognized finger tap coordinates. Desktop retains QPdfView’s native plain-click navigation and offers a timed return after a completed click changes pages.
 
 `test_pdf_links.py` in the reader and mobile reading suites covers real annotations, rotation, named destinations, notebook redirects, real Qt clicks, undo, spreads and stale-session rejection. The notebook V8 driver covers link gesture arbitration. Native Apple/Android adapter execution and a freshly compiled Android shell remain pending for this change; existing native results above do not validate these new callbacks.

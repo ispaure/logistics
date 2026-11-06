@@ -455,6 +455,11 @@ to recovery rather than serializing a newly parsed model as the replacement base
 A successful source-backed desktop Save also clears the unconfirmed flag through
 `NotebookWorkspace.saved()`. Save As can preserve a draft when its original source
 is unavailable.
+The mobile host-replacement recovery guard refuses a notebook when its document
+is dirty and the editor reports `checkpoint_unconfirmed`. It runs before preservation
+and again after callbacks, before the successor claims ownership, retaining the
+old panel and RAM draft on refusal. A successful save that clears dirty no longer
+triggers this guard, even if the editor's last checkpoint flag remains set.
 Binding and recovery publication remain separate files, without a crash-atomic
 transaction or schema change. `test_recovery_sharing.py`,
 `test_notebook_desktop.py` and mobile `test_notebook_storage.py` cover rejected,

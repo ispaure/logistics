@@ -106,8 +106,8 @@ discovery neither imports rclone nor infers encryption from a context filename.
 effective layered-settings snapshot per call. Whole-name exclusions apply to
 remote names only; suffix exclusions apply to local and remote names. Both are
 case-insensitive. Desktop merged entries use the same policy while retaining the
-unnamed local root. `test_folder_policy.py`, `test_folder_entry_identity.py` and
-`test_workspace_policy.py` cover overrides, filtering and root preservation.
+unnamed local root. `test_folder_policy.py` and `test_folder_entry_identity.py`
+cover overrides, desktop/mobile policy parity, filtering and root preservation.
 
 The desktop `FolderTreePresentation` adapter keeps source/category/legacy
 filtering and ordering in `_selected_entries`, Qt item/copy-label construction
