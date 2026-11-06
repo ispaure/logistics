@@ -636,6 +636,9 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
     wiki.mkdir(exist_ok=True)
     page = wiki / 'docs.md'
     page.write_text('# Rotation guide\n\nRetain the current help page.')
-    show_documentation(app, wiki, page)
+    reader = show_documentation(app, wiki, page)
+    from .web_checks import wait_for_text
+    await wait_for_text(reader.web, 'Retain the current help page.')
+    assert reader.path == page.resolve() and reader.history == [reader.path] and reader.history_index == 0
     await check('documentation')
     return {'rotation_preserves_panels': True, 'rotation_samples': samples}
