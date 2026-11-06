@@ -3,6 +3,7 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import json
 from pathlib import Path
 import os
 import subprocess
@@ -11,12 +12,12 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from logistics_build.test_structure import inventory as classified_sources
 from logistics_build.validation_plans import desktop_checks, inventory
 
 
 class ValidationPlanTests(unittest.TestCase):
     def test_desktop_plan_preserves_existing_commands_and_budgets(self):
-        import json
         root = Path(__file__).resolve().parents[3]
         declared = json.loads((root / 'build-tests.json').read_text())['suites']
         suites = [dict(row, timeout=row.get('timeout', 1800),
@@ -119,6 +120,68 @@ class ValidationPlanTests(unittest.TestCase):
         self.assertIn('native_rotation_safe_areas', rows['native-ios']['case_ids'])
         self.assertGreater(len(rows['runtime']['case_ids']), 40)
         self.assertFalse(rows['investigations']['required'])
+
+    def test_inventory_covers_all_classified_source_roots(self):
+        root = Path(__file__).resolve().parents[3]
+        report = inventory(root)
+        self.assertEqual(report['schema'], 1)
+        expected = {}
+        for source in classified_sources(root):
+            expected.setdefault(source['owner'], []).append(source['path'])
+        self.assertEqual(set(expected), {row['source_owner'] for row in report['suites']
+                                         if 'source_owner' in row})
+        for row in report['suites']:
+            with self.subTest(suite=row['name']):
+                self.assertTrue(row['environments'])
+                if 'source_owner' in row:
+                    paths = sorted(expected[row['source_owner']])
+                    self.assertEqual(row['source_files'], paths)
+                    self.assertEqual(row['source_count'], len(paths))
+                else:
+                    self.assertNotIn('source_count', row)
+
+    def test_inventory_distinguishes_sources_cases_and_legacy_discovery(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = Path(__file__).resolve().parents[3]
+            (root / 'test-structure.json').write_bytes((repo / 'test-structure.json').read_bytes())
+            fixtures = {
+                'Python/tests/test_example.py': '',
+                'Python/tests/native_ui_smoke.py': '',
+                'Python/commonUtils/tests/mobile_smoke.py': '',
+                'mobile_build/rclone_bridge/example_test.go': 'package example',
+                'mobile_build/native_tests/tests/logisticsmobile/__init__.py':
+                    "raise AssertionError('inventory imported native tests')\nCASES = ('first', 'second')",
+                'mobile_build/native_tests/tests/logisticsmobile/fixtures.py': '',
+                'mobile_build/native_tests/ios/Support.swift': '',
+                'Python/mobile/smoke.py':
+                    "raise AssertionError('inventory imported runtime tests')\nEXPECTED_TESTS = ('TestSmoke.test_x',)",
+                'mobile_build/validation/probe.py': '',
+            }
+            for path, contents in fixtures.items():
+                source = root / path
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text(contents)
+            rows = {row['name']: row for row in inventory(root)['suites']}
+
+        self.assertEqual(rows['desktop']['test_files'], ['Python/tests/test_example.py'])
+        self.assertEqual(rows['desktop']['standalone_files'], ['Python/tests/native_ui_smoke.py'])
+        self.assertEqual(rows['desktop']['source_count'], 2)
+        self.assertEqual(rows['shared-host']['standalone_files'], ['Python/commonUtils/tests/mobile_smoke.py'])
+        self.assertEqual(rows['bridge']['file_count'], 0)
+        self.assertEqual(rows['bridge']['source_files'], ['mobile_build/rclone_bridge/example_test.go'])
+        self.assertNotIn('case_count', rows['bridge'])
+        for name in ('native-ios', 'native-android'):
+            self.assertEqual(rows[name]['source_kind'], 'shared-native-cases-and-support')
+            self.assertEqual(rows[name]['source_count'], 3)
+            self.assertEqual(rows[name]['case_ids'], ['first', 'second'])
+            self.assertEqual(rows[name]['case_count'], 2)
+        self.assertEqual(rows['runtime']['source_files'], ['Python/mobile/smoke.py'])
+        self.assertEqual(rows['runtime']['case_count'], 1)
+        self.assertEqual(rows['manager']['source_kind'], 'external')
+        self.assertNotIn('source_files', rows['manager'])
+        self.assertEqual(rows['investigations']['source_kind'], 'individual-probes')
+        self.assertNotIn('case_count', rows['investigations'])
 
     def test_package_manager_preparation_is_bounded_and_does_not_ignore_errors(self):
         root = Path(__file__).resolve().parents[3]
