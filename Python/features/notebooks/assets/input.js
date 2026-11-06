@@ -189,7 +189,7 @@ function finish(e, cancelled = false) {
     })
   } else if (mode === 'ink' && captured.length) {
     if (continuousInk) {
-      if (!['fineliner', 'ballpoint'].includes(brushFor(inkSettings.tool).family)) commitDraft(inkSettings.tool);
+      if (!['fineliner', 'ballpoint', 'highlighter'].includes(brushFor(inkSettings.tool).family)) commitDraft(inkSettings.tool);
       pendingInk = null
     } else pendingInk = {
       tool: inkSettings.tool,
