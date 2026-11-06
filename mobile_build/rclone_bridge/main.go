@@ -473,22 +473,24 @@ func connectRemoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
 			return nil, err
 		}
 		backingPath := backing + ":" + backingRoot
-		paths := []string{backingRoot}
+		// Match crypt.NewFs's full remote-path join. A bare root ending in
+		// ':' would otherwise be parsed as a remote name instead of a path.
+		paths := []string{backingPath}
 		if root != "" {
-			paths = []string{fspath.JoinRootPath(backingRoot, cipher.EncryptFileName(root))}
+			paths = []string{fspath.JoinRootPath(backingPath, cipher.EncryptFileName(root))}
 		}
-		backingFs, backingErr := remoteRootFs(ctx, backing, paths[0])
+		backingFs, backingErr := remoteRootFs(ctx, backing, strings.TrimPrefix(paths[0], backing+":"))
 		firstFs, firstErr := backingFs, backingErr
 		if root != "" && backingErr != fs.ErrorIsFile {
 			// Match crypt.NewFs: an unsuccessful file probe falls back to the
 			// directory spelling, which can differ with directory encryption off.
-			paths = append(paths, fspath.JoinRootPath(backingRoot, cipher.EncryptDirName(root)))
-			backingFs, backingErr = remoteRootFs(ctx, backing, paths[1])
+			paths = append(paths, fspath.JoinRootPath(backingPath, cipher.EncryptDirName(root)))
+			backingFs, backingErr = remoteRootFs(ctx, backing, strings.TrimPrefix(paths[1], backing+":"))
 		}
 		if backingErr != nil && backingErr != fs.ErrorIsFile {
 			return nil, backingErr
 		}
-		for index, backingRoot := range paths {
+		for index, lookupPath := range paths {
 			candidate, candidateErr := backingFs, backingErr
 			if index == 0 && firstErr == nil {
 				candidate, candidateErr = firstFs, firstErr
@@ -497,7 +499,7 @@ func connectRemoteRoot(ctx context.Context, name, root string) (fs.Fs, error) {
 				// the owned directory result so it cannot retry via Background.
 				candidateErr = nil
 			}
-			cached, err := cache.GetFn(ctx, backing+":"+backingRoot, func(context.Context, string) (fs.Fs, error) {
+			cached, err := cache.GetFn(ctx, lookupPath, func(context.Context, string) (fs.Fs, error) {
 				return candidate, candidateErr
 			})
 			if cached != candidate || err != candidateErr {
