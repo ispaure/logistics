@@ -41,6 +41,7 @@
     "destination_names.py",
     "destination_actions.py",
     "document_choices.py",
+    "document_destination_form.py",
     "document_imports.py",
     "document_location.py",
     "document_mutations.py",
