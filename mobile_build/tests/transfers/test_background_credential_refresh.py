@@ -142,6 +142,82 @@ class CredentialFreshnessTests(IsolatedAsyncioTestCase):
         app._publish_restored_connections.assert_not_called()
         app.set_cloud_busy.assert_called_once_with(False)
 
+    async def test_late_restore_preserves_current_status_and_busy_owner(self):
+        from unittest.mock import AsyncMock
+        from features.rclone.credential_loading import CredentialResult
+
+        for change in ('host', 'client', 'generation'):
+            for outcome in ('success', 'restore error', 'metadata error'):
+                with self.subTest(change=change, outcome=outcome):
+                    client = SimpleNamespace(generation=1)
+                    app = SimpleNamespace(cloud_client=client, active_host=True, cloud_busy=True,
+                        cloud_status=SimpleNamespace(value='Current'), set_cloud_busy=Mock(),
+                        set_loaded_remote_names=Mock(), _publish_restored_connections=Mock())
+
+                    def replace():
+                        if change == 'host':
+                            app.active_host = False
+                        elif change == 'client':
+                            app.cloud_client = SimpleNamespace(generation=2)
+                        else:
+                            client.generation += 1
+
+                    async def restore(*args, **kwargs):
+                        if outcome == 'restore error':
+                            replace()
+                            raise OSError('synthetic restore failure')
+                        client.generation = 2
+                        return CredentialResult('Saved.zip', ('Cloud',), True, 2)
+
+                    async def metadata():
+                        replace()
+                        if outcome == 'metadata error':
+                            raise OSError('synthetic metadata failure')
+
+                    app._load_crypt_remote_names = AsyncMock(side_effect=metadata)
+                    with patch('features.rclone.mobile.credentials_ui.native_service'), \
+                         patch('features.rclone.mobile.credentials_ui.run_credentials', new=restore), \
+                         patch('features.rclone.mobile.credentials_ui.report_failure'):
+                        await CredentialWorkflow(app).restore_cloud(initial=True)
+                    self.assertEqual(app.cloud_status.value, 'Current')
+                    self.assertEqual(app._cloud_restore_error, '')
+                    app.set_loaded_remote_names.assert_not_called()
+                    app._publish_restored_connections.assert_not_called()
+                    if change == 'generation':
+                        app.set_cloud_busy.assert_called_once_with(False)
+                    else:
+                        app.set_cloud_busy.assert_not_called()
+
+    async def test_late_metadata_failure_preserves_current_folder_error(self):
+        from unittest.mock import AsyncMock
+
+        for stage in ('retain', 'hub'):
+            for change in ('host', 'client', 'generation'):
+                with self.subTest(stage=stage, change=change):
+                    client = SimpleNamespace(generation=1, package_name='Saved.zip',
+                        package_records=(dict(package_name='Saved.zip', crypt_identities={'Cloud': 'synthetic'},
+                            document_cache_id='key'),))
+                    cache = SimpleNamespace(items={'key': {'zip': 'Saved.zip'}}, update_crypt_remotes=Mock())
+                    app = SimpleNamespace(cloud_client=client, active_host=True, folder_hub_error='Current',
+                        retained_packages=lambda: cache if stage == 'retain' else None,
+                        refresh_cloud_remote_help=Mock())
+
+                    async def fail(*args, **kwargs):
+                        if change == 'host':
+                            app.active_host = False
+                        elif change == 'client':
+                            app.cloud_client = SimpleNamespace(generation=2)
+                        else:
+                            client.generation += 1
+                        raise OSError('synthetic metadata failure')
+
+                    app.refresh_hub_crypt_locations = fail if stage == 'hub' else AsyncMock()
+                    with patch('features.rclone.mobile.credentials_ui.native_service'), \
+                         patch('features.rclone.mobile.credentials_ui.run_credentials', new=fail):
+                        self.assertFalse(await CredentialWorkflow(app)._load_crypt_remote_names())
+                    self.assertEqual(app.folder_hub_error, 'Current')
+                    app.refresh_cloud_remote_help.assert_not_called()
+
     async def test_import_rechecks_generation_before_preferences_or_retention(self):
         from unittest.mock import AsyncMock
         from features.rclone.credential_loading import CredentialResult

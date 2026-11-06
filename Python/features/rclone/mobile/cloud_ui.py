@@ -46,13 +46,16 @@ class CloudUI(LocalCryptUI):
 
     def start_cloud_restore(self):
         """Load saved credentials once, independently of the connection screens."""
-        if not self.app.feature_enabled('rclone') or getattr(self, '_storage_changing', False):
+        if (not self.active_host or not self.app.feature_enabled('rclone')
+                or getattr(self, '_storage_changing', False)):
             return
         self.prepare_cloud()
         task = getattr(self, 'cloud_restore_task', None)
-        if task is None and self.cloud_client is not None and getattr(self.cloud_client, 'vault', None) is not None:
+        client = self.cloud_client
+        if task is None and not self.cloud_busy and getattr(client, 'vault', None) is not None:
             self.set_cloud_busy(True)
-            task = self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
+            task = self.cloud_restore_task = self.loop.create_task(
+                self.restore_cloud(initial=True, initial_client=client))
         return task
 
     def show_cloud(self, widget=None, *, present=True, **kwargs):
@@ -577,6 +580,12 @@ class CloudUI(LocalCryptUI):
         return bool(opened)
 
     def cancel_cloud(self, widget=None, **kwargs):
+        if not self.active_host:
+            # Terminal retirement owns the independent restore as well as the
+            # native request. User Cancel leaves the shared restore task alone.
+            task = getattr(self, 'cloud_restore_task', None)
+            if task is not None and not task.done() and not task.cancelling():
+                task.cancel()
         if getattr(self, '_crypt_cancel', None) is not None:
             self._crypt_cancel.set()
         for owner in getattr(getattr(self, 'private_sessions', None), 'controllers', {}).values():
@@ -584,7 +593,7 @@ class CloudUI(LocalCryptUI):
                 owner._crypt_cancel.set()
         if self.cloud_client:
             self.cloud_client.cancel()
-            if hasattr(self, 'cloud_status'):
+            if self.active_host and hasattr(self, 'cloud_status'):
                 self.cloud_status.value = 'Cancelling the remote request…'
 
     async def clear_cloud(self, widget=None, **kwargs):
