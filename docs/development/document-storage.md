@@ -333,8 +333,10 @@ For ordinary notebook recovery, the
 separates rejected publication, visible publication with unconfirmed durability,
 and unknown outcomes. Host source-binding intent and recovery revisions stay
 coordinated without claiming a crash-atomic transaction across their two files.
-Unknown outcomes retain the draft for confirmed retry or Save As; private
-notebooks still have no ordinary recovery repository.
+Unknown outcomes retain the draft until recovery is confirmed or the draft is
+saved successfully. Save As can preserve a draft whose original source is
+unavailable; explicit Discard retains its own revision checks. Private notebooks
+still have no ordinary recovery repository.
 
 
 Mobile discard/reopen regression coverage lives in

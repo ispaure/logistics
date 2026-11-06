@@ -447,11 +447,14 @@ current. Recovery then distinguishes these outcomes:
 | --- | --- |
 | Publication rejected and the prior manifest is still present | Conditionally restore the prior binding while the intent write remains current; restore prior command state and preserve the earlier recovery revision |
 | Expected manifest is visible, but directory durability confirmation failed | Keep the edit, Undo/Redo and adopted revision; retain objects from the prior manifest until a later confirmed checkpoint can prune them |
-| Manifest publication or binding rollback cannot be verified | Keep the RAM draft/history and mark recovery unconfirmed; ordinary retirement is refused until a confirmed retry or Save As, with explicit Discard handled separately |
+| Manifest publication or binding rollback cannot be verified | Keep the RAM draft/history and mark recovery unconfirmed; ordinary retirement waits for confirmed recovery or a successful save, with explicit Discard retaining its own checks |
 
 `protocol.RecoveryIncomplete` carries the latter two outcomes to `Editor` and the
 hosts. A clean source reopen and explicit Discard pass the original archive bytes
 to recovery rather than serializing a newly parsed model as the replacement base.
+A successful source-backed desktop Save also clears the unconfirmed flag through
+`NotebookWorkspace.saved()`. Save As can preserve a draft when its original source
+is unavailable.
 Binding and recovery publication remain separate files, without a crash-atomic
 transaction or schema change. `test_recovery_sharing.py`,
 `test_notebook_desktop.py` and mobile `test_notebook_storage.py` cover rejected,
