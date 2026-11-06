@@ -131,6 +131,11 @@ class Repository:
         if structural:
             notebook.members, notebook.content = baseline.members, baseline.content
         notebook.structure_dirty = False
+        if publication_error is not None:
+            # The previous manifest may still be durable. Retain its immutable
+            # objects until a later checkpoint confirms directory publication.
+            raise RecoveryIncomplete('Notebook recovery was published, but durability confirmation failed. '
+                                     'The edit remains in this draft.', published=True) from publication_error
         # Keep only objects referenced by the published manifest. In-memory undo
         # owns its page objects and recreates their blobs if later restored.
         retained = {p['ink'] + '.rm' for p in pages} | {base_name, 'base.rmdoc', 'state.json'}
@@ -140,9 +145,6 @@ class Repository:
                     path.unlink(missing_ok=True)
         except OSError:
             pass  # Published recovery remains valid; retry pruning on the next save.
-        if publication_error is not None:
-            raise RecoveryIncomplete('Notebook recovery was published, but durability confirmation failed. '
-                                     'The edit remains in this draft.', published=True) from publication_error
 
     @serialize_mutation
     def open(self, key):

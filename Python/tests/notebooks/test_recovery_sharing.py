@@ -105,6 +105,10 @@ class RecoverySharingTests(unittest.TestCase):
                         return atomic_write_json(*args, **kwargs)
                 for action, strokes, history in [(dict(op='stroke', points=[[20, 30, .5]]), 1, (1, 0)),
                                                  (dict(op='undo'), 0, (0, 1)), (dict(op='redo'), 1, (1, 0))]:
+                    directory = repository.root / document.key
+                    previous = json.loads((directory / 'state.json').read_bytes())
+                    prior_objects = [directory / previous['base']] + [directory / (page['ink'] + '.rm')
+                                                                     for page in previous['pages']]
                     with patch('features.notebooks.recovery.atomic_write_json', side_effect=write_manifest):
                         with self.assertRaises(RecoveryIncomplete) as failure:
                             editor.apply(action)
@@ -114,13 +118,18 @@ class RecoverySharingTests(unittest.TestCase):
                     self.assertEqual((len(editor.undo), len(editor.redo)), history)
                     self.assertTrue(document.dirty)
                     self.assertTrue(json.loads(notebook_binding(repository, document.key).read_bytes())['dirty'])
+                    self.assertTrue(all(path.exists() for path in prior_objects),
+                                    'Unconfirmed directory durability must retain the prior manifest objects')
                 with patch('features.notebooks.recovery.atomic_write_json', side_effect=OSError('Before publication')):
                     with self.assertRaisesRegex(OSError, 'Before publication'):
                         editor.apply(dict(op='undo'))
                 self.assertEqual(len(document.book.page(0).strokes), 1)
                 self.assertEqual((len(editor.undo), len(editor.redo)), (1, 0))
+                previous = json.loads((directory / 'state.json').read_bytes())
+                old_ink = directory / (previous['pages'][0]['ink'] + '.rm')
                 editor.apply(dict(op='undo'))
                 self.assertEqual(len(repository.open(document.key).page(0).strokes), 0)
+                self.assertFalse(old_ink.exists(), 'A confirmed checkpoint may prune the old ink snapshot')
                 self.assertEqual(source.read_bytes(), original)
 
     def test_stale_checkpoint_and_failed_rollback_preserve_newer_source_binding(self):
