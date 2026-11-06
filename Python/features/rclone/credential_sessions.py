@@ -1,5 +1,6 @@
 """Isolated in-memory ownership for desktop rclone credential generations."""
 
+from copy import deepcopy
 import os
 from pathlib import Path
 import threading
@@ -61,6 +62,7 @@ class CredentialSessions:
         state_password=None,
         state_identity=None,
     ):
+        """Own a credential snapshot, then notify the retired generation's observers."""
         with self._lock:
             config_path = Path(config_path)
             if parent is not None:
@@ -73,6 +75,8 @@ class CredentialSessions:
                             "Credential sessions cannot depend on themselves or their descendants."
                         )
                     ancestor = self._parents.get(ancestor)
+            # Failed snapshots must leave the current generation and children active.
+            values = deepcopy(values)
             _, callbacks = self._forget_locked(config_path)
             if parent is not None:
                 self._parents[config_path] = Path(parent)
@@ -90,6 +94,7 @@ class CredentialSessions:
                 self._known_packages[Path(config_path)] = Path(package_path)
             if private:
                 self._private.add(Path(config_path))
+        # Observers see the complete replacement and run outside the registry lock.
         _notify(callbacks)
 
     def state_authority(self, config_path):
@@ -198,8 +203,6 @@ class CredentialSessions:
             return environment, translate(source), translate(destination)
 
     def credentials(self, config_path):
-        from copy import deepcopy
-
         with self._lock:
             item = self._sets.get(Path(config_path))
             return deepcopy(item[1]) if item else None
