@@ -121,6 +121,8 @@ From the repository root, the direct staging command below selects committed
 source. For a local development payload, add `--allow-dirty`; for a captured mobile
 release with full gates, use the [manager workflow](../user/build-manager-journeys.md).
 
+Before running Briefcase directly, follow the [project tooling readiness and repair guide](../user/build-manager.md#project-tooling-readiness-and-repair), then [prepare and expose the pinned language detector wheel](mobile-device-deployment.md) in the same shell.
+
 ```sh
 python mobile_build/tools.py stage mobile_build/payload
 cd mobile_build
@@ -145,8 +147,8 @@ Briefcase needs the Android SDK/JDK or Xcode/iOS platform resources. A listed iO
 SDK alone may be insufficient: install the matching simulator runtime through
 Xcode Settings → Components before trying a simulator run.
 
-For native iPhone Duo display/bar adaptation, select an installed iOS 27.1 SDK
-or newer before creating/building the iOS app:
+For native iPhone Duo display and bar adaptation, select Xcode with an installed
+iOS Simulator SDK in the default 27.1.x series before creating or building the iOS app.
 
 ```sh
 export DEVELOPER_DIR="$(python mobile_build/select_ios_sdk.py --path-only)"
@@ -189,7 +191,8 @@ captured before test-mode rebuilds and contain no test entry point.
 
 ## Open the app in Xcode
 
-After running native UI tests, restore the normal app launcher before using Xcode:
+After running native UI tests, restore the normal app launcher before using Xcode.
+Keep the [prepared wheel cache](mobile-device-deployment.md) exposed in this shell.
 
 ```sh
 cd mobile_build
@@ -242,7 +245,7 @@ mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools status
 ```
 
 Use the Python 3.12 environment containing Briefcase 0.4.5, with Go 1.26.9
-on `PATH`. The helper selects an installed Xcode with SDK 27.1 or newer,
+on `PATH`. The helper selects an installed Xcode with an iOS Simulator SDK in the default 27.1.x series,
 independently of the Mac's default command-line Xcode selection. Sign in to
 Xcode's Apple Accounts settings and obtain your existing development team ID
 from Signing & Capabilities. Configure once from the repository root:

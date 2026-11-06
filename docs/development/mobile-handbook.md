@@ -86,7 +86,11 @@ is active. Diagnostic commands below do not override this ownership.
 ## Run in an iPhone simulator and open Xcode
 
 A simulator is a virtual phone on your Mac; it does not install onto your iPhone
-or upload anything. From the repository root in the prepared Terminal:
+or upload anything.
+
+Before running Briefcase directly, follow the [project tooling readiness and repair guide](../user/build-manager.md#project-tooling-readiness-and-repair), then [prepare and expose the pinned language detector wheel](mobile-device-deployment.md) in the same shell.
+
+Run these commands from the repository root in the prepared Terminal.
 
 ```sh
 python mobile_build/tools.py stage mobile_build/payload --allow-dirty
@@ -145,14 +149,15 @@ mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools build
 
 These commands run from the repository root. `configure` saves local choices,
 `status` checks them, and `build` creates a signed app without installing it.
-To install and launch wirelessly, unlock the phone, unplug USB, then run:
+For normal installation, select the device in the Build Deployment Manager.
+For a wireless diagnostic install and launch, unlock the phone, unplug USB,
+and run the deployment subcommand.
 
 ```sh
-mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools deploy
 ```
 
-For normal installation, select the device in the Build Deployment Manager. For an explicitly
-wired diagnostic installation use `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools deploy --allow-wired`.
+For an explicitly wired diagnostic installation use `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools deploy --allow-wired`.
 After a first-launch trust prompt, trust the developer in the iPhone's
 **Settings → General → VPN & Device Management**, then run
 `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools launch` to retry without rebuilding.
@@ -251,8 +256,10 @@ Set `ANDROID_HOME` to that actual SDK directory (the usual Mac location is shown
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 ```
 
-Use the Python/Go environment above. Prepare a fresh payload from the repository
-root as in the simulator steps, then from `mobile_build`:
+Use the Python/Go environment above. Before running Briefcase directly, follow the [project tooling readiness and repair guide](../user/build-manager.md#project-tooling-readiness-and-repair), then [prepare and expose the pinned language detector wheel](mobile-device-deployment.md) in the same shell.
+
+Prepare a fresh payload from the repository root as in the simulator steps,
+then run the following commands from `mobile_build`.
 
 ```sh
 python cloud_build.py licenses

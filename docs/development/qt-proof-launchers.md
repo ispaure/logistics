@@ -13,7 +13,14 @@ See [the result and limitations](mobile-qt-proof.md).
 
 ## Reproduce on an Apple Silicon Mac
 
-Use a host Python environment containing PySide6 6.12.0, Pygments 2.19.2 and tqdm;
+This section records the historical Apple Silicon recipe. A new run requires
+a [retention scratch workspace](validation-artifacts.md) for staging and
+DerivedData and an explicitly owned disposable simulator with a defined
+cleanup step. Save the collected report and screenshots under ignored
+`test-results/` before removing the simulator and closing the scratch
+workspace.
+
+The proof used a host Python environment containing PySide6 6.12.0, Pygments 2.19.2 and tqdm;
 Xcode, an arm64 iOS simulator, and the pinned Go toolchain are also required.
 Download the public arm64 simulator wheels from Qt's
 [PySide6 archive](https://download.qt.io/official_releases/QtForPython/pyside6/)
@@ -30,8 +37,8 @@ Python.xcframework using `--xcframework-path`, or use the tool's checksummed
 framework downloader. Current deployment documentation is
 [Qt's iOS deployment guide](https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-ios-deploy.html).
 
-Run from the Logistics checkout, with tools available in the selected environment.
-Use a **fresh** disposable staging directory, not the repository itself:
+The historical command sequence ran from the Logistics checkout. The fixed
+temporary paths and simulator placeholder below record that setup.
 
 ```sh
 python mobile_build/qt_proof/prepare.py /tmp/logistics-qt-proof

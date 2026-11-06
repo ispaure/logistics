@@ -48,7 +48,7 @@ App Store Connect configuration and distribution signing are separate steps:
 Apple describes [distribution preparation](https://developer.apple.com/documentation/xcode/preparing-your-app-for-distribution)
 and [build upload requirements](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/).
 Check that the selected Xcode/SDK is currently accepted for App Store Connect
-before the first upload. The local selector requires SDK 27.1 or newer.
+before the first upload. The local selector defaults to the 27.1.x iOS Simulator SDK series. The app’s deployment target and installed simulator runtimes are separate.
 
 ## Manager workflow
 
@@ -108,13 +108,22 @@ The app and its Inbox extension both require App Store profiles with
 `group.io.github.ispaure.logisticsmobile`. An older main-app profile without that
 App Group cannot export the current archive. Automatic export can also stop if
 the account lacks cloud-managed certificate permission. If the configured Mac
-already has valid manual profiles and their distribution certificate, select both:
+already has a distribution certificate and valid manual profiles, supply a
+profile for each ordinary iOS target, including phone widgets and Shortcuts actions.
 
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_deploy \
+  --prepare-only \
   --profile /absolute/path/Logistics-App.mobileprovision \
-  --inbox-profile /absolute/path/Logistics-Inbox.mobileprovision
+  --inbox-profile /absolute/path/Logistics-Inbox.mobileprovision \
+  --widget-profile /absolute/path/Logistics-Widgets.mobileprovision \
+  --widget-actions-profile /absolute/path/Logistics-WidgetActions.mobileprovision
 ```
+
+The helper verifies the archive and export without prompting for upload. To
+include the optional Watch targets, supply both `--watch-profile` for the
+companion and `--watch-widget-profile` for its widget. The archive helper
+rejects either Watch profile on its own.
 
 These are placeholders for existing protected files. Preserve bundle/team identity;
 do not remove the extension or App Group to make export succeed. The diagnostic helper
