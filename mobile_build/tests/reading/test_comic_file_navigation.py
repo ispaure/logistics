@@ -14,7 +14,7 @@ from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopie
 from features.rclone.mobile.remote_resources import NativeRemoteResources
 from features.rclone.remote_access import NativeRemoteLocation
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
-from mobile_build.tests.storage.test_storage_reader_opening import ReaderClient
+from mobile_build.tests.support.localcrypt import ReaderClient
 from mobile_build.tests.support.readers import RemoteClient
 
 

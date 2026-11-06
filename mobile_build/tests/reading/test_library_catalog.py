@@ -5,36 +5,12 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-import base64
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
 from mobile.library_ui import discover_libraries
-
-
-class CryptClient:
-    generation = 1
-    identity = 'a' * 64
-    connection = 'b' * 64
-
-    def connection_identity(self, remote):
-        return self.connection
-
-    def request(self, action, **values):
-        if action == 'crypt_paths':
-            return [self.request('crypt_path', **dict(values, **entry, decode=True))['path']
-                    for entry in values['entries']]
-        if action == 'crypt_path':
-            parts = values['path'].split('/') if values['path'] else []
-            parts = ([bytes.fromhex(part).decode() for part in parts] if values.get('decode')
-                     else [part.encode().hex() for part in parts])
-            return dict(identity=self.identity, path='/'.join(parts))
-        if action == 'crypt_raw_read':
-            data = os.read(values['fd'], 256 * 1024)
-            return dict(data=base64.b64encode(data[::-1]).decode())
-        raise AssertionError(action)
+from mobile_build.tests.support.localcrypt import CryptClient
 
 
 class LibraryCatalogTests(unittest.TestCase):

@@ -11,7 +11,7 @@ from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 from services.documents.mobile_storage import open_provider_document
 from features.rclone.localcrypt.mobile.resources import CryptFiles
-from mobile_build.tests.storage.test_storage_reader_opening import ReaderClient
+from mobile_build.tests.support.localcrypt import ReaderClient
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 from zipfile import ZipFile
 

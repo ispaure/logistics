@@ -4,9 +4,7 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.SMOKE
-import base64
 import asyncio
-import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -14,23 +12,7 @@ from unittest.mock import AsyncMock, patch
 
 from mobile.app import LogisticsMobile
 from mobile.local_sources import device_files
-from mobile_build.tests.storage.test_storage_reader_opening import ReaderClient
-
-
-class CreationClient(ReaderClient):
-    def request(self, action, **values):
-        if action in {'crypt_encode', 'crypt_write_buffer'}:
-            data = base64.b64decode(values['data'])
-            os.write(values['fd'], b'cipher:' + data[::-1])
-            return {}
-        if action == 'crypt_decode':
-            data = os.read(values['fd'], 1024 * 1024)
-            return dict(name=bytes.fromhex(values['path'].rsplit('/', 1)[-1]).decode(),
-                        data=base64.b64encode(data.removeprefix(b'cipher:')[::-1]).decode())
-        if action == 'crypt_raw_read':
-            data = os.read(values['fd'], 1024 * 1024)
-            return dict(data=base64.b64encode(data.removeprefix(b'cipher:')[::-1]).decode())
-        return super().request(action, **values)
+from mobile_build.tests.support.localcrypt import CreationClient
 
 
 class DocumentCreationTests(unittest.TestCase):

@@ -747,7 +747,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
     def test_documents_and_library_paths_read_private_files_during_transfer(self):
         from threading import Event
         from unittest.mock import AsyncMock
-        from mobile_build.tests.reading.test_library_catalog import CryptClient
+        from mobile_build.tests.support.localcrypt import CryptClient
         from features.rclone.localcrypt.mobile.resources import CryptFiles
         app = self.app
         app.show_cloud(present=False)

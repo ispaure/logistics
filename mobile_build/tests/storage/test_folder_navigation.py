@@ -531,7 +531,7 @@ class ShowInFolderTests(TestCase):
 
     def test_encrypted_reader_reveals_scoped_folder_and_preserves_session(self):
         from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
-        from mobile_build.tests.storage.test_storage_reader_opening import ReaderClient
+        from mobile_build.tests.support.localcrypt import ReaderClient
         from mobile.document_sources import show_in_folder
         app = self.app
         app.cloud_client = client = ReaderClient()
