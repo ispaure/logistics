@@ -10,8 +10,8 @@ import unittest
 from unittest.mock import patch
 
 from commonUtils.runtime.resources.local import LocalFiles
-from features.rclone import executable, session
-from local_crypt_fixture import crypt_fixture
+from features.rclone import session
+from tests.local_crypt_fixture import crypt_fixture, require_pinned_rclone
 from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.storage import NotebookDocument
 from features.notebooks.editor import Editor
@@ -20,7 +20,8 @@ from services.documents.storage import DocumentResource
 
 class NotebookResourceTests(unittest.TestCase):
     def test_same_notebook_adapter_saves_local_and_encrypted_binary_resources(self):
-        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+        binary = require_pinned_rclone()
+        with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as fixture:
             for provider in (LocalFiles(fixture.plain), fixture.provider):
                 with self.subTest(private=provider.private):
                     book = Notebook.new('Private notebook sentinel')
@@ -50,7 +51,8 @@ class NotebookResourceTests(unittest.TestCase):
         from pypdf import PdfReader
         from Python.tests.notebooks.image_fixtures import locked_book, paste_action, png_source
         from features.notebooks.images import image_payloads
-        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+        binary = require_pinned_rclone()
+        with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as fixture:
             for provider in (LocalFiles(fixture.plain), fixture.provider):
                 with self.subTest(private=provider.private):
                     book = locked_book()
@@ -86,7 +88,8 @@ class NotebookResourceTests(unittest.TestCase):
                             self.assertIsNone(document.recovery)
 
     def test_browser_lease_release_preserves_document_and_revocation_retires_it(self):
-        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+        binary = require_pinned_rclone()
+        with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as fixture:
             provider = fixture.provider
             DocumentResource.publish(provider, 'draft.rmdoc', Notebook.new().to_bytes(), max_bytes=MAX_ARCHIVE)
             browser_release = provider.acquire()
@@ -107,7 +110,8 @@ class NotebookResourceTests(unittest.TestCase):
             self.assertEqual(encrypted.read_bytes(), original)
 
     def test_failed_encrypted_save_keeps_draft_baseline_and_ciphertext(self):
-        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+        binary = require_pinned_rclone()
+        with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as fixture:
             provider = fixture.provider
             DocumentResource.publish(provider, 'draft.rmdoc', Notebook.new().to_bytes(), max_bytes=MAX_ARCHIVE)
             encrypted = provider.encrypted_path('draft.rmdoc')
