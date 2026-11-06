@@ -208,7 +208,8 @@ def mount_apple_title(view, controller, title):
     state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width, leading)
     changed = getattr(view, '_document_title_state', None) != state
     if changed:
-        view._document_title_view = storage_title(title, state[1], state[2], width, leading=leading)
+        view._document_title_view = storage_title(title, state[1], state[2], width,
+                                                  leading=leading, bold=bool(notes_controls))
         if hasattr(view, '_document_path'):
             bind_apple_hold(view, view._document_title_view)
         view._document_title_state = state

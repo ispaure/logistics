@@ -105,6 +105,9 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     assert hit == native, ('Header control is covered', getattr(button, 'accessible_name', button.text))
                 header = owner.view._document_title_header
                 title = owner.view._document_title_view
+                assert int(title.font.fontDescriptor.symbolicTraits) & 2, 'Notes title is not bold'
+                assert owner.reader_actions_button._impl._surface_roles[0] == 'transparent'
+                assert owner.menu._impl._surface_roles[0] == ('hover' if owner.sidebar.expanded else 'transparent')
                 title_frame = title.convertRect(title.bounds, toView=window)
                 article_frame = owner.web._impl.native.convertRect(owner.web._impl.native.bounds, toView=window)
                 for button in owner.view._document_title_controls:
@@ -144,6 +147,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     owner.sidebar.toggle()
                     await asyncio.sleep(.3)
                     assert not owner.sidebar.expanded
+                    assert owner.menu._impl._surface_roles[0] == 'transparent'
                     title = owner.view._document_title_view
                     closed = title.convertRect(title.bounds, toView=window)
                     assert abs(title_y - float(closed.origin.y + closed.size.height / 2)) <= 2

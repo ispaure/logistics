@@ -143,6 +143,9 @@ def sync(app, view, destination):
             return button._impl.native
         root, label, status = android_bar(app._impl.native, leading, buttons, native_control=native_control)
         notes_controls = getattr(view, '_notes_title_controls', ())
+        if notes_controls:
+            from android.graphics import Typeface
+            label.setTypeface(label.getTypeface(), Typeface.BOLD)
         if hasattr(view, '_document_path'):
             from .document_location import bind_android_hold
             adapter._reader_action_bar_fit = fit_document_title(

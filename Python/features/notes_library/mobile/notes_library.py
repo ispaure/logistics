@@ -383,6 +383,17 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.host.presentation.apply_icon(self.edit, 'view' if self.editing else 'edit',
                                               'View document' if self.editing else 'Edit document',
                                               preserve_layout=True)
+        active = (self.sidebar.expanded or self.sidebar.side == 'files',
+                  self.sidebar.side == 'links', self.editing)
+        if getattr(self, '_quiet_toolbar_state', None) != active:
+            self._quiet_toolbar_state = active
+            for button, selected in zip((self.menu, self.links_button, self.edit,
+                                        self.back_button, self.forward_button, self.reader_actions_button),
+                                       (*active, False, False, False)):
+                self.host.presentation.surface(button, radius=8,
+                    background='hover' if selected else 'transparent',
+                    foreground='accent' if selected else 'text',
+                    outlined=False, eink_selected=selected)
         controls = [button for button in self.secondary.children if button is not self.breadcrumb_scroll]
         available = article_width - left - right
         gap = self.secondary.style.gap

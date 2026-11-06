@@ -114,6 +114,8 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                     scroll._impl.native.getResources().getDisplayMetrics().density) - 1, (
                     'Breadcrumb viewport too narrow', rects)
                 label = self.native_host.adapter._reader_action_bar_title
+                assert label.getTypeface().isBold(), 'Notes title is not bold'
+                assert owner.reader_actions_button._impl._surface_roles[0] == 'transparent'
                 titles = label.getParent()
                 density = label.getResources().getDisplayMetrics().density
                 margins = titles.getLayoutParams()
