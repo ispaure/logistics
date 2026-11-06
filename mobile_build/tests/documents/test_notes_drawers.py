@@ -98,13 +98,16 @@ class NotesDrawerTests(unittest.TestCase):
             self.app.document_view_buttons['Libraries'].on_press()
             await self.app._notes_discovery_task
             notes = self.app.document_notes_list
-            self.assertFalse(any(getattr(child, 'text', '') for child in notes.children[1:]))
+            self.assertEqual(notes.children[0].text, 'Notes')
+            self.assertEqual(notes.children[1].children[0].text, 'No Notes libraries found.')
             with patch.object(self.app, 'home_unlock_candidates',
                               return_value=[('fixture', {'crypt_remotes': ['Encrypted']})]):
                 from mobile.notes_discovery import populate
                 populate(self.app, notes, title='Notes', refresh=False)
                 await self.app._notes_discovery_task
-            status = notes.children[1]
+            status = notes.children[0]
+            self.assertEqual(notes.children[1].text, 'Notes')
+            self.assertEqual(notes.children[2].children[0].text, 'No Notes libraries found.')
             original = status._settings_source_text
             self.assertIn('Unlock LocalCrypt', original)
             fit_discovery_status(status, LayoutFrame(300, lambda destination: 240))
