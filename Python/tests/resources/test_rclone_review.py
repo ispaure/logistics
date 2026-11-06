@@ -115,7 +115,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_plex_gui_actions_review_both_directions(self):
         from types import SimpleNamespace
-        from unittest.mock import patch
+        from unittest.mock import ANY, patch
         from features.plex import actions
         remote = SimpleNamespace(name='Movies-PMSDATA')
         local = SimpleNamespace(name='Movies-PMSDATA', path=Path('/local/Movies-PMSDATA'))
@@ -124,9 +124,11 @@ class ReviewTests(unittest.TestCase):
                 actions.config, 'LogisticsConfig', return_value=SimpleNamespace(path_remote_local=Path('/local'))), patch.object(
                 actions, 'reviewed_sync', return_value=False) as transfer:
             actions.pull_pms(object(), '/credentials')
-            transfer.assert_called_with('Movies-PMSDATA:', local.path, config_path='/credentials', operation='Pull')
+            transfer.assert_called_with('Movies-PMSDATA:', local.path, config_path='/credentials',
+                                        operation='Pull', before_start=ANY)
             actions.push_pms(object(), '/credentials')
-            transfer.assert_called_with(local.path, 'Movies-PMSDATA:', config_path='/credentials', operation='Push')
+            transfer.assert_called_with(local.path, 'Movies-PMSDATA:', config_path='/credentials',
+                                        operation='Push', before_start=ANY)
 
     def finish(self, scan):
         self.assertTrue(scan.retired.wait(10))

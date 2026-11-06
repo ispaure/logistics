@@ -81,7 +81,8 @@ def pull_pms(remote_cls, config_path: str | Path):
     reviewed_sync(
         source_path,
         destination_path,
-        config_path=config_path, operation='Pull'
+        config_path=config_path, operation='Pull',
+        before_start=lambda: require_package_ready(destination_path),
     )
 
 
@@ -97,7 +98,8 @@ def push_pms(remote_cls, config_path: str | Path):
     reviewed_sync(
         source_path,
         destination_path,
-        config_path=config_path, operation='Push'
+        config_path=config_path, operation='Push',
+        before_start=lambda: require_package_ready(source_path),
     )
 
 
