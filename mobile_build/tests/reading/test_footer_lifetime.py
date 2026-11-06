@@ -159,23 +159,24 @@ class FooterLifetimeTests(unittest.TestCase):
 
     def test_real_provider_accepted_disposal_retires_its_view_footer(self):
         import sys
-        dispose = definitions('Python/mobile/provider_document.py', 'ProviderDocumentSession', 'dispose')
+        from mobile.provider_document import ProviderDocumentSession
+
         footer = Mock()
         owner = NS(crypt_view=NS(page_footer=footer), app=object())
-        document = NS(closed=False, owner=owner, reader=None, metadata_fields={})
-        close_reader = Mock()
+        source = Mock()
         helpers = {
-            'mobile.provider_ui': NS(private_label=lambda text: text),
-            'services.documents.mobile_reading': NS(close_document_reader=close_reader),
+            'mobile.provider_opening': NS(ProviderDocumentOpening=Mock()),
             'mobile.page_animation': NS(cancel_page_slide=Mock()),
             'mobile.ios_content_background': NS(clear=Mock()),
             'mobile.external_display': NS(sync=Mock()),
         }
         with patch.dict(sys.modules, helpers):
-            dispose(document)
-            dispose(document)
+            document = ProviderDocumentSession(owner)
+            document.reader = NS(source=source)
+            document.dispose()
+            document.dispose()
         footer.dispose.assert_called_once_with()
-        close_reader.assert_called_once_with(None)
+        source.close.assert_called_once_with()
         self.assertTrue(document.closed)
 
     def test_immersive_controls_reactivate_after_their_actual_reattachment(self):
