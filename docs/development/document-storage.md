@@ -77,6 +77,45 @@ streamed rewrite, content-manifest verification and revision-safe publication st
 with that source; ordinary local saves retain their existing backup policy.
 Neither format needs to identify a crypt implementation.
 
+## Trace a mobile provider reader
+
+Start at `mobile.private_sessions.PrivateSessions.open()` for admission and the
+captured workspace/navigation identity. `ProviderDocumentSession` retains the
+opening operation; `mobile.provider_opening.ProviderDocumentOpening` prepares
+content, builds unpublished controls through `provider_view.py`, then adopts them.
+Format presentation remains in `features/books/mobile/`, `features/comics/mobile/`
+and the other format owners.
+
+| Selected storage | Read path | Resource owner |
+| --- | --- | --- |
+| Remote, including an rclone crypt remote | `features/rclone/mobile/remote_resources.py:NativeRemoteResources.readers()` → `remote_readers.py:RemoteReaders.open()` → `remote_source.py:RemoteSource` | Independently reopened remote grant, generation-bound ranges and native RAM archive snapshot |
+| LocalCrypt copy | `features/rclone/localcrypt/mobile/content.py:CryptContentProvider.content_source()` → `archive_source.py:NativeSource` when streaming is supported, otherwise bounded in-memory `DecodedContent` | `ProviderContent` retains provider access; the native source checks client generation and ciphertext revision |
+| Generic provider text/PDF/EPUB/comic | `services/documents/provider_documents.py:ProviderDocuments.open()` → commonUtils `ProviderContent` → provider content factory | Independent content access; an explicitly supplied read provider also survives inner-password retry |
+
+The native rclone bridge under `mobile_build/rclone_bridge/` owns crypt decoding;
+the Python sources expose decoded ranges or archive members to the format reader.
+Remote byte streams use the existing seekable `RangeReader`; remote archive
+snapshots and decoded member caches stay bounded in RAM. The native remote and
+LocalCrypt implementations do not materialize a plaintext working file; a generic
+provider's transport remains its own contract. Export and saved reader state remain separate
+policies; see [reader state](reader-state.md) and [access/privacy](access-privacy.md).
+
+`services/documents/archive_access.py:NativeArchiveAccess` owns native archive
+headers, member-cache publication, inner-password revision and terminal close.
+`RemoteSource`, LocalCrypt `NativeSource` and `mobile/comic_source.py:LocalComicSource`
+share it. Native I/O runs outside the cache lock; completion must still pass
+open/version checks and the captured password revision before publishing. Changing
+a password away and back cannot admit an older completion. Closing clears retained
+password/cache state, rejects further access and prevents late reads from refilling
+the cache. This is resource retirement, not a secure-memory-erasure guarantee.
+
+Browser close releases its own grant; independently opened remote readers retain
+theirs. Credential replacement invalidates old generations. Failed opens close
+unpublished format/source resources, and ordinary session disposal closes adopted
+readers. Start with `test_localcrypt_access.py` and `test_remote_service.py` in the
+mobile host suite for synthetic retirement, range and retry checks. Native bridge
+and device checks remain necessary for their platform behavior.
+
 ## Privacy and lifetime
 
 Browser and Notes Library renames update favourites and recent references using

@@ -22,6 +22,11 @@ Build Deployment Manager supervises declared work; Logistics supplies its adapte
 and release rules in `logistics_build/`. A build-tooling change belongs outside
 the app's runtime navigation code. See the [code map](code-map.md) for exact owners.
 
+To follow a visible control, use the [screen and panel map](ui-architecture.md),
+including Settings → Appearance. To follow an encrypted remote open, use the
+[source-to-reader trace](document-storage.md#trace-a-mobile-provider-reader) from
+session admission through provider access, format preparation and publication.
+
 A **host** is the application composing a reusable component. A **provider** gives
 access to a kind of storage or external service. A **session** retains state for
 an operation or open document. Closing a view does not necessarily finish its
@@ -302,12 +307,16 @@ transfers, compression or other feature jobs.
 
 ## Startup failures
 
-Contribution categories are validated before pages are created, so a settings
-entry in a folder-source list fails with a clear feature/category error. MainWindow
-tracks each successfully created page as it builds the UI. If a later constructor
-fails, it requests worker shutdown and drains a Qt event loop before destroying
-the window and re-raising the original error. Shared index cancellation also
-handles workers that have exited before their queued GUI completion is delivered.
+Contribution categories are validated before page creation. During construction,
+`desktop.main_window.MainWindow` retains feature pages before assigning navigation
+metadata. If wiring a new page fails, the wiring helper waits for its cooperative
+workers before scheduling deletion; feature refresh uses the same helper.
+Constructor rollback unsubscribes registry updates, removes the interactive close
+guard and drains retained pages with a Qt event loop before closing the dialog and
+re-raising. Normal interactive close keeps the save veto before worker cancellation.
+`test_main_window_navigation.py` covers construction/refresh failures and normal
+close vetoes. Shared index cancellation also handles workers that have exited
+before their queued GUI completion is delivered.
 
 The macOS launcher supports the system Bash 3.2. Pause flags use portable,
 case-insensitive case patterns; avoid Bash 4 lowercase parameter expansion there.

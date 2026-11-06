@@ -49,6 +49,15 @@ policy and previews. The commonUtils provider browser and range-reader contracts
 are reused without modification. No remote path is passed to the ordinary local
 filesystem browser, index, local mutation actions or external document launchers.
 
+For mobile document opens, `mobile/remote_readers.py:RemoteReaders` owns format
+handoff over an independently reopened grant. `mobile/remote_source.py:RemoteSource`
+owns the generation-bound transport, seekable ranges and native RAM archive token;
+`remote_readers.RemoteSource` remains available as an import for existing callers.
+Decoded header/member lifetime is shared through
+`services/documents/archive_access.py:NativeArchiveAccess`. Follow the
+[source-to-reader trace](../../../development/document-storage.md#trace-a-mobile-provider-reader)
+for publication, retry and terminal-close ownership.
+
 Desktop remote commands retain at most 64 KiB of rclone stderr in memory on a
 failed request. The adapter translates recognized authorization, missing backing
 remote, invalid crypt password setting, folder access, rate limit and network errors to fixed recovery messages;
