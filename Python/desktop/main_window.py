@@ -330,7 +330,9 @@ class MainWindow(pyside.Window):
             self.tabs.addTab(page, name)
 
     def _cleanup_failed_startup(self):
-        """Cancel already-created pages and drain Qt workers before destruction."""
+        """Retire a failed construction/launch, draining workers before destruction."""
+        self._aborting = self._closing = True
+        self.dlg.setEnabled(False)
         unsubscribe = getattr(self, '_unsubscribe', None)
         if unsubscribe is not None:
             unsubscribe()
@@ -339,6 +341,8 @@ class MainWindow(pyside.Window):
         if guard is not None:
             self.dlg.removeEventFilter(guard)
         pages = [page for _, _, page in self._core_pages] + list(self._feature_pages.values())
+        if self.updates is not None:
+            pages.append(self.updates)
         self._stop_page_workers(pages)
         self.dlg.close()
         self.dlg.deleteLater()
@@ -577,12 +581,12 @@ class MainWindow(pyside.Window):
 
     def _retry_close(self):
         from shiboken6 import isValid
-        if self._closing and isValid(self.dlg):
+        if self._closing and not getattr(self, '_aborting', False) and isValid(self.dlg):
             pyside.QTimer.singleShot(0, self.dlg, self._finish_close)
 
     def _finish_close(self):
         from shiboken6 import isValid
-        if self._closing and isValid(self.dlg):
+        if self._closing and not getattr(self, '_aborting', False) and isValid(self.dlg):
             self.dlg.close()
 
     def _update_window_title(self):

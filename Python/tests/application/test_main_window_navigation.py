@@ -278,6 +278,35 @@ class MainWindowNavigationTests(MainWindowFixture, QtTestCase):
         self.assertEqual(len(subscriptions), 1)
         subscriptions[0].assert_called_once_with()
 
+    def test_launch_failure_drains_updater_and_blocks_queued_poll_and_close_retries(self):
+        window = self.window()
+        window.dlg.show()
+        from desktop.updater import UpdateController
+        updater = _PendingWorkerPage(window.dlg)
+        updater.owner = window
+        updater.progress = Mock(busy=False)
+        window.updates = updater
+        closing = Mock()
+        # The real updater queues this poll before app.exec starts. Rollback's
+        # worker-draining loop must not let that callback start new work.
+        qt.QTimer.singleShot(0, updater, lambda: UpdateController.poll(updater))
+        qt.QTimer.singleShot(0, window.dlg, window._finish_close)
+        finish = updater._finish_worker
+        during_drain = []
+        def finish_worker():
+            window._retry_close()
+            during_drain.append((window.dlg.isVisible(), window.dlg.isEnabled(), closing.call_count))
+            finish()
+        updater._finish_worker = finish_worker
+        with patch.object(window.dlg, 'close', closing), \
+                patch('desktop.updater.updates.choice') as choice:
+            window._cleanup_failed_startup()
+        self.assertTrue(updater.stop_requested)
+        self.assertFalse(updater.worker_running)
+        self.assertEqual(during_drain, [(True, False, 0)])
+        choice.assert_not_called()
+        closing.assert_called_once_with()
+
     def test_failed_feature_wiring_drains_page_during_startup_and_refresh(self):
         for startup in (True, False):
             with self.subTest(startup=startup):
