@@ -128,9 +128,15 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
             app.show_settings()
             await asyncio.sleep(.1)
             owner.resume_crypt()
+            # Leaving the reader releases its decoded pixels. Resume schedules
+            # a reload, so wait for the actual canvas before sending input.
+            await assert_comic_centered(lambda: canvas(owner), fullscreen=True)
+            assert owner.crypt_immersive
             canvas(owner).toggle_controls()
-            await asyncio.sleep(.1)
+            assert not owner.crypt_immersive
+            await assert_comic_centered(lambda: canvas(owner))
             canvas(owner).toggle_controls()
+            assert owner.crypt_immersive
             await assert_comic_centered(lambda: canvas(owner), fullscreen=True)
             assert not owner.crypt_bookmarks
         await close_copy()
