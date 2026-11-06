@@ -21,6 +21,21 @@ class NotesHeaderProbe(NotesDrawersProbe):
             'Breadcrumb did not reveal the end after layout',
             scroll.horizontal_position, scroll.max_horizontal_position)
 
+    def assert_duo_header_clearance(self, owner, controller, window):
+        from mobile.ios_toolbar import vertical_edge
+        edge = vertical_edge(controller)
+        if edge not in (1, 2):
+            return
+        header = owner.view._document_title_header._impl.native
+        row = header.convertRect(header.bounds, toView=window)
+        assert row.origin.y <= 44, ('Unexpected gap above the Duo header', row.origin.y)
+        for button in (owner.menu, owner.links_button, owner.edit, owner.reader_actions_button):
+            native = button._impl.native
+            rect = native.convertRect(native.bounds, toView=window)
+            clearance = (rect.origin.x if edge == 1 else
+                         window.bounds.size.width - rect.origin.x - rect.size.width)
+            assert clearance >= 80, ('Document control enters the rail', getattr(button, 'accessible_name', button.text), clearance)
+
     async def probe(self):
         from rubicon.objc import CGPoint
         output = Path(self.paths.cache)
@@ -107,6 +122,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     assert close_item is None
                     assert header.children[0] is owner.close_button
                     assert not ios_toolbar_items(controller, leading=True)
+                if drive_touches and orientation == 'landscape-left':
+                    self.assert_duo_header_clearance(owner, controller, window)
                 evidence = output / 'viewer-layout'
                 evidence.mkdir(exist_ok=True)
                 if owner.sidebar.expanded:
@@ -121,6 +138,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     title = owner.view._document_title_view
                     closed = title.convertRect(title.bounds, toView=window)
                     assert abs(title_y - float(closed.origin.y + closed.size.height / 2)) <= 2
+                    if drive_touches:
+                        self.assert_duo_header_clearance(owner, controller, window)
                     await capture_window(self, evidence / ('notes-pane-closed-' + orientation + '.png'))
                     owner.sidebar.show_sidebar()
                     await asyncio.sleep(.3)
@@ -140,6 +159,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
                         assert not owner._breadcrumbs_shortened, 'Horizontal drag did not expand breadcrumb labels'
                         assert owner.sidebar.side is None
                         assert scroll.horizontal_position <= 1
+                        if orientation == 'landscape-left':
+                            self.assert_duo_header_clearance(owner, controller, window)
                         await capture_window(self, evidence / ('breadcrumbs-expanded-' + orientation + '.png'))
                     else:
                         self.assert_breadcrumb_end(owner)
