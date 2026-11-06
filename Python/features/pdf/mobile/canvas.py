@@ -114,11 +114,17 @@ class PDFNavigation:
         self._stops = {}
         self._layout = None
         self.links = {}
+        self._candidate = None
         from services.documents.page_visits import PageVisits
         self.visits = PageVisits()
 
     def commit(self, indices, viewport):
-        """Remember published boundaries so Back retraces the visible spreads."""
+        """Publish link geometry and remember the displayed spread boundary."""
+        candidate = self._candidate
+        if candidate is None or candidate[:2] != (indices, viewport):
+            raise ValueError('No loaded PDF spread matches the published pages.')
+        _, _, self.sizes, self.links = candidate
+        self._candidate = None
         self._use_layout(viewport)
         self.indices, self.viewport = indices, viewport
         self.visits.visit(indices[0])
@@ -136,22 +142,28 @@ class PDFNavigation:
             self._layout = viewport
 
     def load(self, index, viewport):
-        from features.images.validation import image_dimensions
+        self._candidate = None
         self._use_layout(viewport)
-        first = self.document.page(index)
+        indices, data, sizes = self._load_spread(index, viewport)
         from features.pdf.links import safe_page_links
-        self.links = {index: safe_page_links(self.document.data, index)}
-        self.sizes[index] = image_dimensions(first)
+        links = {page: safe_page_links(self.document.data, page) for page in indices}
+        self._candidate = indices, viewport, sizes, links
+        return indices, data
+
+    def _load_spread(self, index, viewport):
+        from features.images.validation import image_dimensions
+        first = self.document.page(index)
+        sizes = {index: image_dimensions(first)}
         indices, data = (index,), [first]
         width, height = viewport
         if index + 1 < self._stops.get(index, self.document.count):
             second = self.document.page(index + 1)
-            self.sizes[index + 1] = image_dimensions(second)
-            ratios = [w / h for w, h in (self.sizes[index], self.sizes[index + 1])]
+            second_size = image_dimensions(second)
+            ratios = [w / h for w, h in (sizes[index], second_size)]
             if width >= sum(ratios) * max(1, height):
                 indices, data = (index, index + 1), [first, second]
-                self.links[index + 1] = safe_page_links(self.document.data, index + 1)
-        return indices, data
+                sizes[index + 1] = second_size
+        return indices, data, sizes
 
     def next(self):
         target = self.indices[-1] + 1
@@ -165,7 +177,7 @@ class PDFNavigation:
         if index in self._spread_starts:
             return self._spread_starts[index]
         if index >= 2:
-            indices, _ = self.load(index - 2, self.viewport)
+            indices, _, _ = self._load_spread(index - 2, self.viewport)
             if len(indices) == 2:
                 return index - 2
         # After a direct jump, the preceding page may otherwise pair with the
