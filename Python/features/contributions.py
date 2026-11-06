@@ -6,7 +6,7 @@ frontend importing feature-specific implementations.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, Iterable, TypeVar
 
 from models.folder_entry import FolderEntry
 from commonUtils.ui.features import Feature as CommonFeature
@@ -62,12 +62,14 @@ class RemoteFolderSource:
     One selectable remote-folder context exposed to the generic Folders page.
 
     context is backend-owned opaque data passed through FolderEntry objects.
+    get_encrypted_remote_names optionally supplies metadata during discovery.
     """
 
     name: str
     get_remote_names: Callable[[], list[str]]
     context: Any = None
     get_local_folders: Callable[[], list[Any]] | None = None
+    get_encrypted_remote_names: Callable[[], Iterable[str]] | None = None
 
 
 @dataclass(frozen=True)

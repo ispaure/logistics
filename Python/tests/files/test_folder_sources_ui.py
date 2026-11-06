@@ -282,6 +282,74 @@ class FolderSourceTests(QtTestCase):
         self.wait(page)
         self.assertEqual([entry.name for entry in self.entries(page)], ['Books', 'Legacy-Books'])
 
+    def test_rclone_discovery_keeps_encrypted_names_on_live_sources_only(self):
+        from features.rclone import credentials, session
+        from features.rclone.localcrypt.connections import LocalConnection
+        from features.rclone.localcrypt.mapping import Connection
+        from features.rclone.ui_contributions import _get_remote_sources
+
+        saved = self.root / 'Saved.conf'
+        saved.write_text('[SavedPrivate]\ntype=crypt\n[Public]\ntype=drive\n', encoding='utf-8')
+        package, active = self.root / 'Active.zip', self.root / 'Active.session'
+        self.make_package(package)
+        session.remember(active, {'SessionPrivate': {'type': 'crypt'}}, package_path=package)
+        self.addCleanup(session.forget, active)
+        retained_package = self.root / 'Retained.zip'
+        local = LocalConnection(retained_package, 'Public', self.root / 'local')
+        private = Connection(retained_package, 'SavedPrivate', self.root / 'private')
+        self.enterContext(patch.object(credentials, 'get_loaded_credential_config_paths', return_value=[saved, active]))
+        self.enterContext(patch('features.rclone.localcrypt.connections.connections', return_value=[local]))
+        self.enterContext(patch('features.rclone.localcrypt.mapping.connections', return_value=[private]))
+        provider = RemoteFolderSourceContribution('rclone', _get_remote_sources)
+        sources = discover_folder_sources(
+            remote_providers=[RegisteredContribution('rclone', 'rclone', provider)], local_providers=(),
+        ).remote_sources
+        self.assertEqual(
+            {snapshot.source.name: snapshot.encrypted_remote_names for snapshot in sources},
+            {
+                'Saved': frozenset({'SavedPrivate'}),
+                'Active (session)': frozenset({'SessionPrivate'}),
+                'Retained — Local': frozenset(),
+                'Retained — LocalCrypt': frozenset(),
+            },
+        )
+        for snapshot in sources[2:]:
+            self.assertIsNone(snapshot.source.get_encrypted_remote_names)
+
+    def test_discovery_reads_optional_encrypted_names_from_non_rclone_sources(self):
+        read_encrypted = Mock(return_value=['Private', 'Private'])
+        private = RemoteFolderSource(
+            'Private', lambda: ['Private'], get_encrypted_remote_names=read_encrypted,
+        )
+        public = RemoteFolderSource('Public', lambda: ['Public'], object(), lambda: [])
+        provider = RemoteFolderSourceContribution('Synthetic', lambda: [private, public])
+        first, second = discover_folder_sources(
+            remote_providers=[RegisteredContribution('synthetic', 'Synthetic', provider)], local_providers=(),
+        ).remote_sources
+        self.assertEqual(first.encrypted_remote_names, frozenset({'Private'}))
+        self.assertEqual(second.encrypted_remote_names, frozenset())
+        read_encrypted.assert_called_once_with()
+
+    def test_explicit_providers_do_not_require_application_registry(self):
+        import subprocess
+        import sys
+        from textwrap import dedent
+
+        result = subprocess.run(
+            [sys.executable, '-c', dedent("""
+                import sys
+                from unittest.mock import patch
+
+                sys.modules['features.application'] = None
+                from services.folders.sources import discover_folder_sources
+
+                with patch('services.folders.sources.get_folder_entries', return_value=()):
+                    discover_folder_sources(remote_providers=(), local_providers=())
+            """)],
+            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_legacy_visibility_defaults_off_and_is_shared_for_the_session(self):
         self.local_folders = [self.folder('Books'), self.folder('Legacy-Books'),
                               self.folder('lEgAcY-Notes')]
