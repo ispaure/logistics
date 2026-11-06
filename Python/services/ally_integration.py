@@ -1,7 +1,9 @@
 """Connect an optional sibling Ally checkout without tracking its private files."""
 import os
+import stat
 import subprocess
 from pathlib import Path
+from uuid import uuid4
 
 
 def activate(logistics_root, ally_root):
@@ -10,24 +12,47 @@ def activate(logistics_root, ally_root):
     if not (source / '__init__.py').is_file():
         raise RuntimeError(f'Ally feature package is missing: {source}')
     link = logistics_root / 'Python' / 'features' / 'emulation'
-    junction = getattr(link, 'is_junction', lambda: False)
-    if link.is_symlink() or junction():
-        if link.resolve() == source:
-            os.environ['LOGISTICS_ALLY_ROOT'] = str(ally_root)
-            return
-        if junction():
-            link.rmdir()
-        else:
-            link.unlink()
-    elif link.exists():
-        raise RuntimeError(f'Refusing to replace a real file or directory: {link}')
     if os.name == 'nt':
+        junction = getattr(link, 'is_junction', lambda: False)
+        if link.is_symlink() or junction():
+            if link.resolve() == source:
+                os.environ['LOGISTICS_ALLY_ROOT'] = str(ally_root)
+                return
+            if junction():
+                link.rmdir()
+            else:
+                link.unlink()
+        elif link.exists():
+            raise RuntimeError(f'Refusing to replace a real file or directory: {link}')
         # Directory junctions do not require Developer Mode or administrator rights.
         # Pass cmd its native command line. list2cmdline adds backslash escapes
         # around a whole command argument, which cmd's mklink does not understand.
         subprocess.run(f'cmd /d /s /c "mklink /J "{link}" "{source}""', check=True)
     else:
-        link.symlink_to(source, target_is_directory=True)
+        try:
+            observed = link.lstat()
+        except FileNotFoundError:
+            link.symlink_to(source, target_is_directory=True)
+        else:
+            if not stat.S_ISLNK(observed.st_mode):
+                raise RuntimeError(f'Refusing to replace a real file or directory: {link}')
+            if link.resolve() != source:
+                # Feature discovery skips names that start with an underscore.
+                staged = link.with_name(f'_{link.name}-{uuid4().hex}')
+                staged.symlink_to(source, target_is_directory=True)
+                try:
+                    # Detect changes during staging. POSIX rename cannot make this
+                    # identity check and the replacement a single operation.
+                    current = link.lstat()
+                    if (
+                        not os.path.samestat(observed, current)
+                        or observed.st_ctime_ns != current.st_ctime_ns
+                    ):
+                        raise RuntimeError(f'Active link changed while staging replacement: {link}')
+                    staged.replace(link)
+                except BaseException:
+                    staged.unlink(missing_ok=True)
+                    raise
     os.environ['LOGISTICS_ALLY_ROOT'] = str(ally_root)
 
 
