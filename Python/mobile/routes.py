@@ -23,6 +23,7 @@ class MobileRoutes(Routes):
         self.app = app
         self.back_task = None
         self._retired = False
+        self._installation = object()
         self.origins = {}
         self._selection_returns = {}
         from .folder_navigation import FolderNavigation
@@ -32,7 +33,7 @@ class MobileRoutes(Routes):
     def uninstall(self):
         if not self._retired:
             self._retired = True
-            task = self.back_task
+            task, self.back_task = self.back_task, None
             if (task is not None and not task.done()
                     and not (isinstance(task, asyncio.Task) and task.cancelling())):
                 # Cancel once: a repeated native cleanup must not interrupt a
@@ -247,13 +248,16 @@ class MobileRoutes(Routes):
             self.return_to(origin)
         if self.apple and len(screens) < count and screens:
             expected = screens[-1][0]
+            installation = self._installation
             def restore():
-                if not self._retired:
+                if not self._retired and self._installation is installation:
                     self.folders.restore_viewport(destination, expected)
             self.app.loop.call_soon(restore)
         return handled
 
     def install(self):
+        self._installation = object()
+        self._retired = False
         if self.apple or self.host.adapter is None:
             return super().install()
         from java import dynamic_proxy
@@ -311,8 +315,9 @@ class MobileRoutes(Routes):
         # UIKit can re-enable its pop recognizers when a push completes too.
         # Reapply reader ownership after the navigation delegate has returned.
         expected = screens[-1][0] if popped and screens else None
+        installation = self._installation
         def reflow():
-            if self._retired:
+            if self._retired or self._installation is not installation:
                 return
             self.app.adaptive.render()
             if expected is not None:
@@ -346,8 +351,8 @@ class MobileRoutes(Routes):
             def complete(completed):
                 if self.back_task is completed:
                     self.back_task = None
-                if not self._retired:
-                    self.sync_back()
+                    if not self._retired:
+                        self.sync_back()
             task.add_done_callback(complete)
         self.sync_back()
         return True
