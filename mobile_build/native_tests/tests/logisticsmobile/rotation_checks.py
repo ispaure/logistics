@@ -157,20 +157,22 @@ def safe_geometry(app):
         assert 4 <= content_gap <= 8, result
         origin = container.native.convertRect(container.native.bounds, toView=window).origin
         minimum_top = (float(safe.top) if reader is not None else title_bottom + 4) - float(origin.y)
-    # A vertical rail can contain the entire system cluster that produced a
-    # rectangular top inset. Only audit the reclaimed strip when UIKit reports
-    # every top region outside the content column and layout actually reclaimed it.
+    # An internal navigation inset can exceed the window's hardware clearance.
+    # If there is hardware clearance to reclaim, require measured top regions
+    # outside the content column before allowing content into that strip.
     layout_top = getattr(container, 'top_inset', minimum_top)
     if (controller is None and layout_top < minimum_top
             and vertical_edge(getattr(container, 'controller', None))):
         from mobile.ios_reader_chrome import occlusion_geometry
         origin = container.native.convertRect(container.native.bounds, toView=window).origin
-        rectangular_top = max(minimum_top, minimum_window_top - float(origin.y))
+        hardware_top = max(0, minimum_window_top - float(origin.y))
+        rectangular_top = max(minimum_top, hardware_top)
         regions = [(x, y, w, h) for x, y, w, h in occlusion_geometry(container.native)
                    if w > 0 and h > 0 and y <= rectangular_top and y + h > 0]
-        result['top_regions'] = regions
-        if regions and all(x + w <= insets.left or x >= size.width - insets.right
-                           for x, _, w, _ in regions):
+        result.update(top_regions=regions, hardware_top=hardware_top,
+                      layout_top=float(layout_top), window_y=float(window_rect.origin.y))
+        if (regions or hardware_top == 0) and all(
+                x + w <= insets.left or x >= size.width - insets.right for x, _, w, _ in regions):
             minimum_top = max(0, float(layout_top))
             minimum_window_top = max(0, float(origin.y) + minimum_top)
     assert window_rect.origin.x >= (0 if edge == 1 else safe.left) - 1, result

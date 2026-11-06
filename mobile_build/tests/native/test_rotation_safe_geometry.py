@@ -173,3 +173,16 @@ class RotationSafeGeometryTests(unittest.TestCase):
         container.top_inset = 24
         with self.assertRaises(AssertionError):
             self.check(app, compact=False)
+
+    def test_vertical_rail_can_reclaim_an_internal_inset_without_hardware_clearance(self):
+        app = self.fixture(y=8, width=350)
+        app.main_window._impl.native.safeAreaInsets.top = 0
+        container = app.body.children[0]._impl.container
+        container.native.safeAreaInsets.top = 24
+        container.top_inset = 0
+        container.controller = object()
+        with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=()):
+            self.assertEqual(self.check(app, compact=False)['y'], 8)
+        with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=((350, 0, 46, 24),)):
+            with self.assertRaises(AssertionError):
+                self.check(app, compact=False)
