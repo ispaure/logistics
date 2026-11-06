@@ -46,9 +46,18 @@ def inventory(root=ROOT):
                  stage=r.default.value, cases=r.inventory()) for r in rows]
 
 
+def bridge_sources(rows, profile):
+    """Use the same declared profile selection for Go inventory and execution."""
+    from commonUtils.testing.stages import PROFILES
+    stages = {stage.value for stage in PROFILES[profile]}
+    return [row for row in rows if row.get('owner', 'bridge') == 'bridge'
+            and row['path'].endswith('_test.go') and row['stage'] in stages]
+
+
 def run_bridge(rows, profile, mode, fail_fast):
     from commonUtils.testing.stages import PROFILES, TestStage
     bridge = ROOT / 'mobile_build/rclone_bridge'
+    rows = bridge_sources(rows, profile)
     failed = False
     for stage in PROFILES[profile]:
         selected = [r for r in rows if r['path'].endswith('_test.go') and r['stage'] == stage.value]

@@ -42,6 +42,37 @@ class DeveloperCommandTests(unittest.TestCase):
                     self.assertEqual(environment['TOGA_BACKEND'], 'toga_dummy')
                 self.assertEqual(run.call_args.kwargs['cwd'], ROOT)
 
+    def test_bridge_inventory_matches_execution_profile_without_starting_go(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        import json
+        from logistics_build import test_structure
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = []
+            for name, stage in (('Smoke', 'smoke'), ('Daily', 'regression'), ('Extended', 'extended')):
+                path = root / 'mobile_build/rclone_bridge' / (name.lower() + '_test.go')
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(f'func Test{name}(t *testing.T) {{}}\n')
+                rows.append(dict(owner='bridge', path=path.relative_to(root).as_posix(), stage=stage, cases=[]))
+            rows.append(dict(owner='other', path='other_test.go', stage='smoke', cases=[]))
+            for profile, names in (('smoke', ['Smoke']), ('daily', ['Smoke', 'Daily']),
+                                   ('full', ['Smoke', 'Daily', 'Extended'])):
+                with self.subTest(profile=profile), patch.object(test_structure, 'ROOT', root), \
+                        patch.object(test_structure, 'inventory', return_value=rows), \
+                        patch.object(test_structure.subprocess, 'run') as run:
+                    output = StringIO()
+                    with redirect_stdout(output):
+                        self.assertEqual(dev.main(['test', 'bridge', '--profile', profile, '--inventory']), 0)
+                    selected = json.loads(output.getvalue())
+                    self.assertEqual([row['path'] for row in selected], [
+                        'mobile_build/rclone_bridge/' + name.lower() + '_test.go' for name in names])
+                    run.assert_not_called()
+                    run.return_value.returncode = 0
+                    self.assertEqual(test_structure.run_bridge(rows, profile, 'diagnostic', False), 0)
+                    self.assertEqual([call.args[0][call.args[0].index('-run') + 1] for call in run.call_args_list],
+                                     ['^(Test' + name + ')$' for name in names])
+
     def test_custom_environment_keeps_its_python_symlink(self):
         with tempfile.TemporaryDirectory() as directory:
             interpreter = Path(directory) / 'environment-python'

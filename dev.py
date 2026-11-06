@@ -104,7 +104,8 @@ def main(argv=None):
                 parser.error('Bridge selection uses execution profiles, not Python filename/interpreter options.')
             if args.inventory:
                 import json
-                print(json.dumps([r for r in structure_rows if r['owner'] == 'bridge'], indent=2))
+                from logistics_build.test_structure import bridge_sources
+                print(json.dumps(bridge_sources(structure_rows, args.profile), indent=2))
                 return 0
             from logistics_build.test_structure import run_bridge
             if args.dry_run:
