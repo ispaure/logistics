@@ -37,10 +37,13 @@ Shared persistence API details belong in commonUtils' own documentation.
 
 `set_all_xp12_settings()` validates graphics keys and reads existing window
 preferences and the selected preset before the first publication. It publishes graphics first,
-then window positions. If window publication raises, graphics are restored only
-if they still equal the just-published update. This preserves detected concurrent
-edits, but is not a multi-file transaction or a simulator lock. Recovery copies
-remain after success or rollback; no pruning or restore UI is provided here.
+then window positions. If window publication raises, rollback validates that
+graphics still contain the just-published bytes immediately before atomic
+replacement. If rollback fails, the error reports both failures and the retained
+recovery copy. `test_flight_sim.py` covers an external edit during rollback
+staging. This check preserves detected concurrent edits. The two files publish
+separately without a simulator lock. Recovery copies remain after success or
+rollback and are managed manually.
 
 ## Fixed graphics presets
 

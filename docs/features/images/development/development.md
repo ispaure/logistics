@@ -56,7 +56,13 @@ because that wrapper is reusable code and is not specific to Logistics UI behavi
 
 Image compression may replace original image files with WEBP versions when the compressed output meets the configured rules.
 
-EXIF operations modify JPG metadata in place.
+`ui/dialogs.py:ExifCommentsDialog` runs `actions.set_jpg_exif_comments_batch`
+on the existing dialog worker. It reports changed, unchanged, failed and
+unprocessed JPEGs. Cancelling the scan edits nothing. Once editing starts,
+cancellation lets the current image finish and retains completed changes and
+backups. The synchronous `set_jpg_exif_comments` API remains available.
+`Python/tests/images/test_image_folder_tool.py` and `test_image_folder_dialog.py`
+cover cancellation, backups and reporting a failure alongside completed edits.
 
 Use disposable copies when testing behavioral changes to these operations.
 

@@ -45,10 +45,12 @@ checks choose Flatpak, then Snap, then the native path.
 An existing matching vault opens by its registered ID without a registry write.
 A new registration requires Obsidian to be closed, allocates a unique random ID,
 stores the absolute path and millisecond timestamp, then atomically publishes the
-UTF-8 JSON through `commonUtils.persistence.atomic_write_bytes`. The integration
-opens `obsidian://open?vault=<encoded-id>` after publication. Failures display an
-error and return false. Successful dispatch does not prove that the external
-application finished opening the vault.
+UTF-8 JSON through `commonUtils.persistence.atomic_write_bytes`. Publication
+checks the observed registry bytes or absence again before replacement. The
+integration then opens `obsidian://open?vault=<encoded-id>`. A dispatch failure
+leaves the registration in place for retry. Successful dispatch reports launcher
+acceptance only. `test_obsidian_registry.py` covers competing writes during
+staging and reuse after launch failure.
 
 ## Mobile ownership
 

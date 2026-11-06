@@ -44,11 +44,12 @@ No startup initialization or rclone dependency is required.
 ## Availability and lifecycle
 
 `_is_available` requires a local `FolderEntry` and the three configuration keys;
-remote-only entries do not receive this contribution. Detection does not validate
-executable permissions, data-directory readiness or a running server. Both action
-callbacks independently reject non-Linux execution. Client discovery prefers a
-local `p4` file, then `shutil.which('p4')`; finding a local file does not check its
-executable bit.
+remote-only entries do not receive this contribution. Contribution availability
+does not validate client permissions, data-directory readiness or a running server. Both action
+callbacks independently reject non-Linux execution. In `detection.py`, client
+discovery prefers a local `p4` only if it is a regular executable file.
+Otherwise it tries `shutil.which('p4')`. `test_perforce.py` covers fallback
+when the local file lacks execute permission.
 
 The terminal wrapper returning anything except `False` is treated as launch
 success. The feature does not own or await the resulting server process, perform

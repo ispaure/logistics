@@ -93,7 +93,9 @@ asyncio worker and awaited page callback, blocks overlapping navigation and chec
 the host's active/private session before publishing results or navigating.
 Worker startup errors remain visible with enabled retry controls; empty error
 messages use the exception type. Cancelling the mobile search task signals the
-worker and waits for extraction retirement before releasing its busy owner.
+worker and uses `services.worker_retirement.drain_worker()` to wait for
+extraction even after repeated cancellation. Search retains its busy owner until
+the worker settles, then propagates cancellation.
 No generic button framework or commonUtils API is introduced by this pilot.
 
 `search.py` extracts embedded text with the pinned pure-Python pypdf dependency
@@ -166,7 +168,10 @@ covers real PDF destinations, disclosure independence and stale-session guards.
 `backends/apple.py` and `backends/android.py` own the platform rasterizers;
 `limits.py` supplies the shared render edge. Backend toolkit imports stay lazy
 inside adapter construction, so a mobile import does not load Qt. Existing public
-backend class imports and the document facade remain available.
+backend class imports and the document facade remain available. If Android
+backend construction fails, `AndroidPDF` closes the renderer when it has been
+acquired, or closes the untransferred descriptor. `test_pdf_reader.py` covers
+constructor rollback and normal context cleanup with a host fixture.
 
 ## Adaptive spreads and external output
 
@@ -216,6 +221,10 @@ it does not claim a new passing run or current physical-device acceptance.
 
 ## Internal page links
 
-`links.page_links` reads up to 2,000 link annotations on the displayed page using the existing pypdf dependency. It resolves internal explicit and named destinations, excludes hidden links and non-GoTo actions, and converts crop-relative rectangles through page rotation into normalized display coordinates. Invalid optional annotations do not prevent rendering. Mobile extraction runs with the existing page-loading worker. PDFCanvas maps normalized image taps through the compositor’s exact spread rectangles, including the seam; it guards busy, inactive and retired sessions and owns a three-second return action. The shared ImageCanvas transports only recognized finger tap coordinates. Desktop retains QPdfView’s native plain-click navigation and offers a timed return after a completed click changes pages.
+`links.page_links` reads up to 2,000 link annotations on the displayed page using the existing pypdf dependency. It resolves internal explicit and named destinations, excludes hidden links and non-GoTo actions, and converts crop-relative rectangles through page rotation into normalized display coordinates. Invalid optional annotations do not prevent rendering. Mobile extraction runs with the existing page-loading worker.
+`mobile/canvas.py:PDFNavigation` stages sizes and links for a candidate spread
+and publishes them with the displayed indices and viewport on commit. Failed
+loads, Back probes and uncommitted resize leave displayed link geometry intact.
+The mobile `test_pdf_links.py` exercises this boundary. PDFCanvas maps normalized image taps through the compositor’s exact spread rectangles, including the seam; it guards busy, inactive and retired sessions and owns a three-second return action. The shared ImageCanvas transports only recognized finger tap coordinates. Desktop retains QPdfView’s native plain-click navigation and offers a timed return after a completed click changes pages.
 
 `test_pdf_links.py` in the reader and mobile reading suites covers real annotations, rotation, named destinations, notebook redirects, real Qt clicks, undo, spreads and stale-session rejection. The notebook V8 driver covers link gesture arbitration. Native Apple/Android adapter execution and a freshly compiled Android shell remain pending for this change; existing native results above do not validate these new callbacks.

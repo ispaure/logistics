@@ -670,8 +670,9 @@ Evidence: physical iPhone geometry (local artifact `test-results/mobile-evidence
 iPhone native suite (local artifact `test-results/mobile-evidence/2026-10-14-comic-screen-iphone-native-ui-local.json`),
 Android native suite (local artifact `test-results/mobile-evidence/2026-10-14-comic-screen-android-native-ui-local.json`),
 and iPad native suite (local artifact `test-results/mobile-evidence/2026-10-14-comic-screen-ipad-native-ui-local.json`).
-The build was installed and launched over localNetwork. Changes remain local;
-no commit, push or release publication was performed.
+The build was installed and launched over localNetwork. At the October 14
+physical iPhone checkpoint, the changes were local, with no commit, push or
+release publication.
 
 ## Back from files to the browser
 
