@@ -6,6 +6,8 @@ TEST_STAGE = TestStage.REGRESSION
 from types import SimpleNamespace as NS
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from contextlib import ExitStack
+from threading import Event
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
@@ -47,6 +49,91 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
         view.crypt_text, view.crypt_image = Mock(), Mock()
         operation.view.build = Mock(return_value=view)
         return operation, owner, reader, copies
+
+    async def cancel_blocked_worker(self, stage, *, prepared=False, fails=False):
+        operation, owner, reader, copies = self.fixture(remote=True)
+        reader.password = 'synthetic-password'
+        reader.pdf, reader._markdown_media = Mock(), Mock()
+        started, finished, release = asyncio.Event(), asyncio.Event(), Event()
+        loop = asyncio.get_running_loop()
+
+        def blocked(*args, **kwargs):
+            loop.call_soon_threadsafe(started.set)
+            try:
+                if not release.wait(5):
+                    raise RuntimeError('Opening fixture was not released')
+                if fails:
+                    raise OSError('Synthetic worker failure after cancellation')
+                return {'open': reader, 'progress': {}, 'page': ('text', '# Note'),
+                        'preview': '<p>Note</p>'}[stage]
+            finally:
+                loop.call_soon_threadsafe(finished.set)
+
+        with ExitStack() as patches:
+            patches.enter_context(patch('mobile.loading_progress.opening_options', return_value={}))
+            patches.enter_context(patch('mobile.preview.reader_image_source', return_value=None))
+            progress = patches.enter_context(patch('mobile.provider_progress.ProviderProgress.load', return_value={}))
+            preview = patches.enter_context(patch('mobile.preview.markdown_preview', return_value='<p>Note</p>'))
+            workers = {'open': copies.open, 'progress': progress,
+                       'page': owner.provider_page_content, 'preview': preview}
+            workers[stage].side_effect = blocked
+            supplied = (reader, 'text', '# Note') if prepared else None
+            task = asyncio.create_task(operation.open(copies=copies, key='note', prepared=supplied))
+            try:
+                await asyncio.wait_for(started.wait(), 2)
+                cancelled = operation.session.cancel
+                task.cancel()
+                await asyncio.sleep(0)
+                first_cancel = cancelled.is_set()
+                task.cancel()  # A second lifecycle signal must not abandon retirement.
+                await asyncio.sleep(0)
+                pending = not task.done()
+                busy = operation.session.busy
+                closed_while_working = reader.source.close.called
+            finally:
+                release.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                await asyncio.wait_for(finished.wait(), 2)
+
+        self.assertTrue(first_cancel)
+        self.assertTrue(pending)
+        self.assertTrue(busy)
+        self.assertFalse(closed_while_working)
+        if prepared or (stage == 'open' and fails):
+            reader.source.close.assert_not_called()
+            self.assertEqual(reader.password, 'synthetic-password')
+        else:
+            reader.source.close.assert_called_once_with()
+            reader.pdf.close.assert_called_once_with()
+            reader._markdown_media.close.assert_called_once_with()
+            self.assertEqual(reader.password, '')
+        operation.view.build.assert_not_called()
+        owner.show_view.assert_not_called()
+        owner.main_window.dialog.assert_not_awaited()
+        self.assertIsNone(operation.session.cancel)
+        self.assertFalse(operation.session.busy)
+
+    async def test_task_cancellation_reclaims_a_reader_returned_late(self):
+        await self.cancel_blocked_worker('open')
+
+    async def test_task_cancellation_waits_for_progress_before_closing_reader(self):
+        await self.cancel_blocked_worker('progress')
+
+    async def test_task_cancellation_waits_for_page_before_closing_reader(self):
+        await self.cancel_blocked_worker('page')
+
+    async def test_task_cancellation_waits_for_preview_before_closing_media(self):
+        await self.cancel_blocked_worker('preview')
+
+    async def test_task_cancellation_retires_prepared_preview_without_closing_borrowed_reader(self):
+        await self.cancel_blocked_worker('preview', prepared=True)
+
+    async def test_late_acquisition_failure_preserves_task_cancellation(self):
+        await self.cancel_blocked_worker('open', fails=True)
+
+    async def test_late_page_failure_preserves_task_cancellation_and_closes_reader(self):
+        await self.cancel_blocked_worker('page', fails=True)
 
     async def test_preview_failure_keeps_source_fallback_and_publishes_before_watching(self):
         operation, owner, reader, copies = self.fixture(remote=True)

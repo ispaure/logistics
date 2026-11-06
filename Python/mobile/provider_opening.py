@@ -8,6 +8,25 @@ from .provider_ui import private_label
 from .provider_view import ProviderDocumentView
 
 
+async def _await_opening_worker(worker, cancelled):
+    """Keep reader ownership and busy guards until the thread has stopped."""
+    worker = asyncio.ensure_future(worker)
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        cancelled.set()
+        while not worker.done():
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                continue  # Repeated lifecycle cancellation cannot release a live worker.
+            except Exception:
+                break
+        if not worker.cancelled():
+            worker.exception()  # Retrieve a late failure without replacing cancellation.
+        raise
+
+
 class ProviderDocumentOpening:
     def __init__(self, owner, session):
         self.owner, self.session = owner, session
@@ -28,35 +47,41 @@ class ProviderDocumentOpening:
         cancelled = session.cancel = threading.Event()
         session.set_busy(True)
         reader = None
+        acquisition = None
         view = None
         progress = None
         try:
             if prepared is None:
                 from .loading_progress import opening_options
-                reader = await asyncio.to_thread(copies.open, key,
-                    password=password, cancelled=cancelled.is_set, **opening_options(copies))
+                acquisition = asyncio.create_task(asyncio.to_thread(copies.open, key,
+                    password=password, cancelled=cancelled.is_set, **opening_options(copies)))
+                reader = await _await_opening_worker(acquisition, cancelled)
+                check_cancelled(cancelled.is_set)
                 owner._provider_comic_mode = owner.private_comic_mode()
                 owner._provider_comic_sharing = owner.format_services.comic_sharing()
                 owner._provider_comic_seam = owner.private_comic_seam()
                 owner._provider_viewport = (max(1, owner.main_window.size.width), max(1, owner.main_window.size.height))
                 from .provider_progress import ProviderProgress
                 progress = ProviderProgress(owner, copies, reader, key)
-                restored = await asyncio.to_thread(progress.load)
+                restored = await _await_opening_worker(asyncio.to_thread(progress.load), cancelled)
+                check_cancelled(cancelled.is_set)
                 index = restored.get('page', 0)
                 if type(index) is not int or not 0 <= index < len(reader.labels):
                     index = 0
                 navigation = getattr(reader, 'comic_navigation', None)
                 if navigation is not None:
                     navigation.requested_half = 1 if restored.get('half') == 1 else 0
-                kind, content = await asyncio.to_thread(owner.provider_page_content, reader, index)
+                kind, content = await _await_opening_worker(
+                    asyncio.to_thread(owner.provider_page_content, reader, index), cancelled)
             else:
                 reader, kind, content = prepared
+            check_cancelled(cancelled.is_set)
             if not owner.app.require_document_feature(reader.name):
                 return False
             from services.documents.storage import document_writable
             reader.read_only = not capabilities.writable or not document_writable(copies, reader)
             initial_preview, initial_preview_error = await self._prepare_initial_preview(
-                owner, reader, copies, content, edit=edit)
+                owner, reader, copies, content, edit=edit, cancelled=cancelled)
             check_cancelled(cancelled.is_set)
             view = self.view.build(reader, copies, kind, content, progress=progress)
             if getattr(owner, 'privacy_gate', None) is not None:
@@ -76,6 +101,10 @@ class ProviderDocumentOpening:
             await owner.document_open_failed(error, remote=capabilities.remote, key=key)
         finally:
             try:
+                if (reader is None and acquisition is not None and acquisition.done()
+                        and not acquisition.cancelled() and acquisition.exception() is None):
+                    # Cancellation can win the await even though open returned a reader.
+                    reader = acquisition.result()
                 if view is not None:
                     view.discard()
                 if prepared is None and session.reader is not reader:
@@ -85,15 +114,16 @@ class ProviderDocumentOpening:
                 session.cancel = None
                 session.set_busy(False)
 
-    async def _prepare_initial_preview(self, owner, reader, copies, content, *, edit):
+    async def _prepare_initial_preview(self, owner, reader, copies, content, *, edit, cancelled):
         initial_preview = None
         initial_preview_error = None
         if ((not edit or getattr(reader, 'read_only', False)) and reader.editable
                 and reader.kind in {'.md', '.markdown'}):
             from .preview import markdown_preview, reader_image_source
             try:
-                initial_preview = await asyncio.to_thread(markdown_preview, content,
-                    int(owner.preferences.values['markdown_font_size']), image_source=reader_image_source(copies, reader))
+                initial_preview = await _await_opening_worker(asyncio.to_thread(markdown_preview, content,
+                    int(owner.preferences.values['markdown_font_size']), image_source=reader_image_source(copies, reader)),
+                    cancelled)
             except ValueError as error:
                 # Keep the established source fallback and error feedback.
                 initial_preview_error = str(error)

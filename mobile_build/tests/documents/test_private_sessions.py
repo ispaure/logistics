@@ -459,12 +459,13 @@ class PrivateSessionTests(unittest.TestCase):
         owner.set_cloud_busy(False)
 
     def test_rejected_or_failed_open_retires_only_the_new_owner(self):
+        import asyncio
         from mobile.provider_opening import ProviderDocumentOpening
         prior = self.open('retained.txt')
         prior.crypt_text.value = 'Retained draft'
         manager = self.app.private_sessions
         original = ProviderDocumentOpening.open
-        for outcome in ('rejected', 'exception', 'stale'):
+        for outcome in ('rejected', 'exception', 'stale', 'cancelled'):
             with self.subTest(outcome=outcome):
                 captured = []
                 name = outcome + '.txt'
@@ -477,13 +478,18 @@ class PrivateSessionTests(unittest.TestCase):
                     self.assertIs(manager.active, owner)
                     if outcome == 'exception':
                         raise RuntimeError('Synthetic publication failure')
+                    if outcome == 'cancelled':
+                        raise asyncio.CancelledError
                     if outcome == 'stale':
                         self.app.workspace.invalidate(owner.session.id)
                         return True
                     return False
 
                 with patch.object(ProviderDocumentOpening, 'open', opening):
-                    if outcome == 'exception':
+                    if outcome == 'cancelled':
+                        with self.assertRaises(asyncio.CancelledError):
+                            self.run_async(self.app.open_crypt(copies=self.copies, key=name))
+                    elif outcome == 'exception':
                         with self.assertRaisesRegex(RuntimeError, 'Synthetic publication failure'):
                             self.run_async(self.app.open_crypt(copies=self.copies, key=name))
                     else:
@@ -497,3 +503,60 @@ class PrivateSessionTests(unittest.TestCase):
                 self.assertIsNone(retired._opening_origin)
                 self.assertIsNone(retired._opening_token)
                 self.assertFalse(retired._independent_operation)
+
+    def test_cancelled_remote_open_retires_transient_session_after_worker_finishes(self):
+        import asyncio
+        from threading import Event
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        prior = self.open('retained.txt')
+        prior.crypt_text.value = 'Retained draft'
+        manager = self.app.private_sessions
+        # Exercise remote admission/busy policy with a blocking fake, never a remote endpoint.
+        self.copies.remote_storage = True
+        reader = SimpleNamespace(source=SimpleNamespace(close=Mock()), password='synthetic-password')
+        release = Event()
+
+        async def exercise():
+            started = asyncio.Event()
+
+            def opening(*args, **kwargs):
+                self.app.loop.call_soon_threadsafe(started.set)
+                if not release.wait(5):
+                    raise RuntimeError('Provider fixture was not released')
+                return reader
+
+            with patch.object(self.copies, 'open', side_effect=opening):
+                task = asyncio.create_task(self.app.open_crypt(copies=self.copies, key='cancelled.txt'))
+                try:
+                    await asyncio.wait_for(started.wait(), 2)
+                    pending = next(owner for owner in manager.controllers.values() if owner is not prior)
+                    self.assertTrue(self.app.remote_read_busy)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    self.assertFalse(task.done())
+                    self.assertTrue(pending.operation_busy)
+                    self.assertIn(pending.session.id, self.app.workspace.sessions)
+                    reader.source.close.assert_not_called()
+                finally:
+                    release.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+
+            self.assertEqual(list(manager.controllers), [prior.session.id])
+            self.assertNotIn(pending.session.id, self.app.workspace.sessions)
+            self.assertIs(manager.active, prior)
+            self.assertEqual(prior.crypt_text.value, 'Retained draft')
+            reader.source.close.assert_called_once_with()
+            self.assertEqual(reader.password, '')
+            self.assertIsNone(pending._opening_origin)
+            self.assertIsNone(pending._opening_token)
+            self.assertFalse(pending.operation_busy)
+            self.assertFalse(pending._independent_operation)
+            self.assertFalse(self.app.remote_read_busy)
+            self.assertFalse(self.app.cloud_busy)
+
+        self.run_async(exercise())
