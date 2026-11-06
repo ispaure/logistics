@@ -1,5 +1,6 @@
 """Mobile video lifetime, credential policy and encrypted resume checkpoints."""
 import asyncio
+from contextlib import ExitStack
 from pathlib import Path
 
 from features.video.playback import VideoContent, SubtitleContent
@@ -13,13 +14,8 @@ class MobileVideo:
         self.app, self.content = app, content
         self.buffer_waits = set()
         self.failure_message = None
-        self.transport = VideoTransport(content, waiting=lambda token, active:
-            app.loop.call_soon_threadsafe(self.network_waiting, token, active),
-            failed=lambda category: app.loop.call_soon_threadsafe(self.stream_failed, category))
         from services.documents.video_state import MobileCipher
         from .controls import PlaybackControls
-        self.progress = VideoProgress(content, Path(app.private_root) / 'Video', remote_cipher=MobileCipher(app), app=app)
-        self.controls = PlaybackControls(self)
         self.native = None
         self.subtitles = []
         self.closed = False
@@ -30,11 +26,22 @@ class MobileVideo:
         self.discovery = None
         self._release_retirement = None
         self.audio_output = app.audio_output
-        self.audio_output.register(self, self.pause_audio)
         self.protection = app.protection
-        self._release_protection = self.protection.register(self,
-            lambda: (getattr(self.content, 'gate', None),),
-            protected=lambda: self.content.restricted)
+        # Until construction succeeds, unwind every acquired handle locally.
+        # open_video still owns and closes content on construction failure.
+        with ExitStack() as opening:
+            self.transport = VideoTransport(content, waiting=lambda token, active:
+                app.loop.call_soon_threadsafe(self.network_waiting, token, active),
+                failed=lambda category: app.loop.call_soon_threadsafe(self.stream_failed, category))
+            opening.callback(self.transport.close)
+            self.progress = VideoProgress(content, Path(app.private_root) / 'Video', remote_cipher=MobileCipher(app), app=app)
+            self.controls = PlaybackControls(self)
+            self.audio_output.register(self, self.pause_audio)
+            opening.callback(self.audio_output.unregister, self)
+            self._release_protection = self.protection.register(self,
+                lambda: (getattr(self.content, 'gate', None),),
+                protected=lambda: self.content.restricted)
+            opening.pop_all()
 
     def network_waiting(self, token, active):
         if active:

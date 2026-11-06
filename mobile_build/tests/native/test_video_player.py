@@ -79,6 +79,93 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.native.configure.assert_called_once()
         self.assertEqual(json.loads(owner.native.configure.call_args.args[0])['rate'], .5)
 
+    async def test_subtitle_attachment_rechecks_presentation_after_saving(self):
+        from threading import Event
+        from features.video.session import PlaybackSettings
+        for transition in ('close', 'hide', 'revoke'):
+            with self.subTest(transition=transition):
+                owner = self.player(restricted=False)
+                native = owner.native
+                subtitle = Mock(path='movie.en.srt', size=100)
+                entered, release = Event(), Event()
+
+                def save(values):
+                    entered.set()
+                    if not release.wait(2):
+                        raise TimeoutError('Controlled subtitle write timed out')
+                    return PlaybackSettings.from_dict(values)
+
+                owner.controls.store.save = Mock(side_effect=save)
+                retirement = None
+                with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
+                    owner.controls.dispatch('subtitleAttach', subtitle.path)
+                    try:
+                        self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+                        if transition == 'close':
+                            retirement = owner.retire()
+                            native.dispose.assert_called_once()
+                        elif transition == 'hide':
+                            owner.hidden = True
+                        else:
+                            owner.content.check_access.side_effect = PermissionError('Revoked')
+                        owner.content.close.assert_not_called()
+                    finally:
+                        release.set()
+                        await asyncio.wait_for(owner.controls.finish(), 2)
+                        if retirement is not None:
+                            await asyncio.wait_for(asyncio.shield(retirement), 2)
+                native.configure.assert_not_called()
+                native.add_subtitle.assert_not_called()
+                owner.transport.add_subtitle.assert_called_once_with(subtitle)
+                subtitle.close.assert_called_once()
+                self.assertEqual(owner.subtitles, [])
+                await owner.close()
+
+    async def test_subtitle_attachment_persists_selection_and_retains_until_close(self):
+        from features.video.session import PlaybackSettings
+        owner = self.player(restricted=False)
+        native = owner.native
+        subtitle = Mock(path='movie.en.srt', size=100)
+        owner.controls.store.save = Mock(side_effect=PlaybackSettings.from_dict)
+        owner.transport.add_subtitle.return_value = 'http://127.0.0.1/subtitle'
+        with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
+            await owner.controls.command('subtitleAttach', subtitle.path)
+        self.assertEqual(owner.controls.settings.subtitle_file, subtitle.path)
+        self.assertIsNone(owner.controls.settings.subtitle_track)
+        native.configure.assert_called_once()
+        native.add_subtitle.assert_called_once_with('http://127.0.0.1/subtitle')
+        native.play.assert_not_called()
+        subtitle.close.assert_not_called()
+        self.assertEqual(owner.subtitles, [subtitle])
+        await owner.close()
+        subtitle.close.assert_called_once()
+
+    async def test_failed_subtitle_preference_write_releases_unpublished_resource(self):
+        owner = self.player(restricted=False)
+        subtitle = Mock(path='movie.en.srt', size=100)
+        owner.controls.store.save = Mock(side_effect=OSError('Cannot save settings'))
+        with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
+            await owner.controls.command('subtitleAttach', subtitle.path)
+        owner.native.status.assert_called_with('Cannot save settings')
+        owner.native.configure.assert_not_called()
+        owner.native.add_subtitle.assert_not_called()
+        owner.transport.add_subtitle.assert_called_once_with(subtitle)
+        subtitle.close.assert_called_once()
+        self.assertEqual(owner.subtitles, [])
+
+    async def test_invalid_subtitle_transport_is_rejected_before_saving_selection(self):
+        owner = self.player(restricted=False)
+        subtitle = Mock(path='movie.en.srt', size=100)
+        owner.controls.store.save = Mock()
+        owner.transport.add_subtitle.side_effect = ValueError('Subtitle changed')
+        with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
+            await owner.controls.command('subtitleAttach', subtitle.path)
+        owner.transport.add_subtitle.assert_called_once_with(subtitle)
+        owner.controls.store.save.assert_not_called()
+        owner.native.add_subtitle.assert_not_called()
+        owner.native.status.assert_called_with('Subtitle changed')
+        subtitle.close.assert_called_once()
+
     async def test_show_in_folder_keeps_source_alive_until_browser_has_adopted_it(self):
         from features.video.mobile.controls import native_options
         owner = self.player(restricted=False)
@@ -264,6 +351,32 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         with patch('features.video.mobile.player.VideoContent') as content:
             self.assertFalse(await open_video(app, Mock(), 'movie.mp4'))
             content.assert_not_called()
+
+    async def test_failed_player_construction_releases_acquired_resources(self):
+        from features.video.mobile.player import open_video
+        for failure in ('progress', 'controls', 'protection'):
+            with self.subTest(failure=failure):
+                app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True,
+                    loop=asyncio.get_running_loop(), private_root=Path('/unused'),
+                    audio_output=Mock(), protection=Mock())
+                content = Mock()
+                with patch('features.video.mobile.player.VideoContent', return_value=content), patch(
+                        'features.video.mobile.player.VideoTransport') as transport, patch(
+                        'features.video.mobile.player.VideoProgress') as progress, patch(
+                        'features.video.mobile.controls.PlaybackControls') as controls:
+                    failing = dict(progress=progress, controls=controls,
+                                   protection=app.protection.register)[failure]
+                    failing.side_effect = RuntimeError('Controlled construction failure')
+                    with self.assertRaisesRegex(RuntimeError, 'Controlled construction failure'):
+                        await open_video(app, Mock(), 'movie.mp4')
+                    transport.return_value.close.assert_called_once()
+                    content.close.assert_called_once()
+                    self.assertFalse(hasattr(app, 'video_player'))
+                    if failure == 'protection':
+                        app.audio_output.unregister.assert_called_once_with(
+                            app.audio_output.register.call_args.args[0])
+                    else:
+                        app.audio_output.register.assert_not_called()
 
     async def test_failed_native_retirement_keeps_protection_until_disposal_succeeds(self):
         owner = self.player()

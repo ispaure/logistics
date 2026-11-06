@@ -149,13 +149,19 @@ class PlaybackControls:
                 try:
                     if subtitle.size > 8 * 1024 * 1024:
                         raise ValueError("Subtitles must be smaller than 8 MiB.")
-                    if owner.closed or not owner.allowed():
+                    if owner.closed or owner.hidden or not owner.allowed():
                         return
-                    url = owner.transport.add_subtitle(subtitle)
                     from dataclasses import asdict
                     async with self.settings_lock:
+                        if owner.closed or owner.hidden or not owner.allowed():
+                            return
+                        url = owner.transport.add_subtitle(subtitle)
                         self.settings = await asyncio.to_thread(self.store.save,
                             dict(asdict(self.settings), subtitle_file=subtitle.path, subtitle_track=None))
+                    # Persistence can outlive this presentation. Publish the
+                    # retained subtitle only while native controls are live.
+                    if owner.closed or owner.hidden or not owner.allowed():
+                        return
                     owner.native.configure(self.settings.json(), json.dumps(self.queue.rows()))
                     owner.native.add_subtitle(url)
                     owner.subtitles.append(subtitle)
