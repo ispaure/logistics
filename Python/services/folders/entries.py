@@ -5,49 +5,11 @@ Merged logical-folder construction for Logistics.
 from collections.abc import Iterable
 
 import config
-from services.folders.policy import configured_values
 
 from models import folder_discovery
 from models.folder_entry import FolderEntry
 from models.local_folder import LocalFolder
-
-
-FOLDERS_SECTION = 'Folders'
-EXCLUDED_REMOTE_NAMES_KEY = 'excluded_remote_names'
-EXCLUDED_FOLDER_NAME_SUFFIXES_KEY = 'excluded_folder_name_suffixes'
-
-
-def _get_configured_name_values(key: str) -> list[str]:
-    """Return one comma-separated Folders setting as a cleaned list."""
-
-    return configured_values(config.get_config_file_path(), key)
-
-
-def _get_excluded_remote_names() -> set[str]:
-    """Return exact configured remote names excluded from logical folder discovery."""
-
-    return {
-        name.casefold()
-        for name in _get_configured_name_values(EXCLUDED_REMOTE_NAMES_KEY)
-    }
-
-
-def _get_excluded_folder_name_suffixes() -> tuple[str, ...]:
-    """Return case-insensitive suffixes excluded from the complete logical folder list."""
-
-    return tuple(
-        suffix.casefold()
-        for suffix in _get_configured_name_values(EXCLUDED_FOLDER_NAME_SUFFIXES_KEY)
-    )
-
-
-def _is_excluded_folder_name(folder_name: str, excluded_suffixes: tuple[str, ...]) -> bool:
-    """Return whether a logical folder name matches one of the configured suffix exclusions."""
-
-    if not excluded_suffixes:
-        return False
-
-    return folder_name.casefold().endswith(excluded_suffixes)
+from services.folders.policy import read_exclusions, visible_name
 
 
 def get_folder_entries(
@@ -78,12 +40,12 @@ def get_folder_entries(
     else:
         local_folders = list(local_folders)
 
-    excluded_remote_names = _get_excluded_remote_names()
-    excluded_folder_suffixes = _get_excluded_folder_name_suffixes()
+    exclusions = read_exclusions(config.get_config_file_path())
 
     local_folders_by_name = {}
     for folder in local_folders:
-        if not _is_excluded_folder_name(folder.name, excluded_folder_suffixes):
+        # A local root can have an empty name and still belongs in the listing.
+        if not folder.name or visible_name(folder.name, exclusions):
             matches = local_folders_by_name.setdefault(folder.name, [])
             if all(existing.path != folder.path for existing in matches):
                 matches.append(folder)
@@ -96,16 +58,8 @@ def get_folder_entries(
 
         remote_name = str(remote_name).strip()
 
-        if not remote_name:
-            continue
-
-        if remote_name.casefold() in excluded_remote_names:
-            continue
-
-        if _is_excluded_folder_name(remote_name, excluded_folder_suffixes):
-            continue
-
-        remote_names_by_name.setdefault(remote_name, remote_name)
+        if visible_name(remote_name, exclusions, remote=True):
+            remote_names_by_name.setdefault(remote_name, remote_name)
 
     if include_local_only:
         folder_names = set(local_folders_by_name) | set(remote_names_by_name)
