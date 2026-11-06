@@ -87,10 +87,28 @@ class PDFMobileLinkTests(unittest.TestCase):
                 from features.comics.mobile.composite import spread_geometry
                 size, rects = spread_geometry([nav.sizes[i] for i in nav.indices], nav.viewport)
                 left, top, width, height = rects[0]
-                self.assertTrue(canvas.follow_link((left+width*.3)/size[0], (top+height*.2)/size[1]))
+                old_image = canvas.image
+                old_indices = nav.indices
+                from mobile.reading.publication import ReadingPublication
+                mount = ReadingPublication.mount
+                rejected = []
+
+                def reject_candidate(publication, surface, **kwargs):
+                    publication.current = lambda: False
+                    rejected.append(mount(publication, surface, **kwargs))
+                    return rejected[-1]
+
+                with patch.object(ReadingPublication, 'mount', reject_candidate):
+                    await owner.move_private_page(1)
+                self.assertEqual(rejected, [False])
+                self.assertIn(canvas, owner.crypt_content.children)
+                self.assertEqual(nav.indices, old_indices)
+                retained_image = canvas.image
+                self.assertTrue(canvas.on_tap((left+width*.3)/size[0], (top+height*.2)/size[1]))
                 while not canvas.return_page:
                     await asyncio.sleep(.01)
                 self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 2)
+                self.assertIs(retained_image, old_image)
                 await owner.move_private_page(1)
                 self.assertIsNone(canvas.return_page)
                 await canvas.jump_link(0)

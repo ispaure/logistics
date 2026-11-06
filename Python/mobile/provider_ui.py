@@ -407,9 +407,11 @@ class ProviderUI(FilesUI):
                 place_page(prepared_spread, controller.format_services.page_region(view.crypt_content))
                 surface = prepared_spread
             elif kind == 'pdf-spread':
-                view.crypt_image._external_document_page = True
-                view.crypt_image.image = pdf_image
                 surface = view.crypt_image
+                def publish_pdf():
+                    surface._external_document_page = True
+                    surface.image = pdf_image
+                publish_spread = publish_pdf
             elif kind == 'image':
                 view.crypt_image._external_comic_page = view.crypt_reader.kind in {'.cbz', '.zip'}
                 from features.images.mobile.decoding import decode_page
