@@ -72,6 +72,42 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
         with self.assertRaisesRegex(ValueError, 'imports unstaged services.documents.authoring.provider_markdown'):
             mobile_tools.validate_app_modules(REPO / 'Python/mobile', document_modules=missing_markdown)
 
+    def test_from_import_requires_existing_child_package_but_allows_attributes(self):
+        with TemporaryDirectory() as directory:
+            app = Path(directory) / 'mobile'
+            package = app / 'package'
+            child = package / 'child'
+            child.mkdir(parents=True)
+            (package / '__init__.py').write_text('value = 42\n')
+            (child / '__init__.py').write_text('')
+            consumer = app / 'consumer.py'
+            consumer.write_text('from mobile.package import value\n')
+            modules = ('consumer.py', 'package/__init__.py')
+            mobile_tools.validate_app_modules(app, modules, document_modules=())
+            for statement in ('from mobile.package import child', 'from .package import child'):
+                with self.subTest(statement=statement):
+                    consumer.write_text(statement + '\n')
+                    with self.assertRaisesRegex(ValueError, r'imports unstaged mobile\.package\.child'):
+                        mobile_tools.validate_app_modules(app, modules, document_modules=())
+                    mobile_tools.validate_app_modules(
+                        app, (*modules, 'package/child/__init__.py'), document_modules=())
+
+    def test_payload_rejects_omitted_launcher_target_before_creating_destination(self):
+        with TemporaryDirectory() as directory:
+            repo = Path(directory)
+            for owner in mobile_tools.SOURCE_OWNERS:
+                manifest = repo / 'Python' / owner / 'mobile_sources.json'
+                manifest.parent.mkdir(parents=True, exist_ok=True)
+                manifest.write_text(json.dumps(dict(schema=1, modules=[])))
+            for name in mobile_tools.BASE_DOCUMENT_MODULES:
+                (repo / 'Python' / name).touch()
+            (repo / 'Python/mobile/app.py').write_text('def main(): pass\n')
+            subprocess.run(['git', 'init', str(repo)], check=True, capture_output=True)
+            payload = repo / 'payload'
+            with self.assertRaisesRegex(ValueError, r'imports unstaged mobile\.app'):
+                mobile_tools.stage(repo, payload, allow_dirty=True)
+            self.assertFalse(payload.exists())
+
     def test_payload_excludes_private_files_desktop_features_and_links(self):
         with TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -165,6 +201,20 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertTrue((payload / 'features/books/epub.py').exists())
             self.assertTrue((payload / 'services/documents/authoring/provider_markdown.py').is_file())
             self.assertTrue((payload / 'commonUtils/ui/native/android/io/github/ispaure/commonutils/NavigationBack.java').exists())
+            repeated = mobile_tools.stage(repo, base / 'repeated')
+            self.assertEqual(manifest['source_sha256'], repeated['source_sha256'])
+            for index, name in enumerate(('document.html', 'drawing.js', 'base.css')):
+                with self.subTest(asset=name):
+                    asset = repo / 'Python/features/notebooks/assets' / name
+                    original = asset.read_bytes()
+                    try:
+                        asset.write_bytes(original + b'\n')
+                        changed = mobile_tools.stage(repo, base / f'asset-{index}', allow_dirty=True)
+                    finally:
+                        asset.write_bytes(original)
+                    for key in ('logistics_commit', 'commonUtils_commit'):
+                        self.assertEqual(manifest[key], changed[key])
+                    self.assertNotEqual(manifest['source_sha256'], changed['source_sha256'])
             bridge = shared / 'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java'
             bridge.write_text(bridge.read_text() + '\n// local fixture mutation\n')
             with self.assertRaises(ValueError):

@@ -199,10 +199,11 @@ def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, doc
                 module = importlib.util.resolve_name('.' * node.level + (node.module or ''), package) if node.level else node.module or ''
                 dependencies = [module] if node.module else [module + '.' + alias.name for alias in node.names]
                 # "from package import module" also requires that selected child
-                # when it is a source module rather than a public class/function.
+                # when it is a source module or package.
                 for alias in node.names:
                     child = module.replace('.', '/') + '/' + alias.name
-                    if (root.parent / (child + '.py')).is_file():
+                    if ((root.parent / (child + '.py')).is_file()
+                            or (root.parent / child / '__init__.py').is_file()):
                         dependencies.append(module + '.' + alias.name)
             elif isinstance(node, ast.Import):
                 dependencies = [alias.name for alias in node.names]
@@ -242,6 +243,9 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     dirty = bool(subprocess.check_output(['git', '-C', str(repo), 'status', '--porcelain', '--', *paths]))
     if dirty and not allow_dirty:
         raise ValueError('Commit mobile sources before creating a release/testbed payload.')
+    if 'app.py' not in app_modules and 'app/__init__.py' not in app_modules:
+        raise ValueError('Generated launcher imports unstaged mobile.app; '
+                         'add its module to the owning mobile source manifest before building.')
     validate_app_modules(repo / 'Python/mobile', app_modules, document_modules=document_modules)
     destination.mkdir(parents=True)
     shared = repo / 'Python/commonUtils'
@@ -312,12 +316,14 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
         ['git', '-C', str(repo), 'show', '-s', '--format=%cI', 'HEAD'], text=True).strip()
     # Identify the exact local source snapshot independently of commit IDs.
     digest = sha256()
+    source_suffixes = {'.py', '.go', '.java', '.m', '.swift', '.json', '.ini', '.mod', '.sum', '.txt',
+                       '.html', '.js', '.css'}
     roots = ((destination, ''), (repo / 'mobile_build/rclone_bridge', 'bridge/'),
              (repo / 'mobile_build/native_tests', 'native-tests/'),
              (repo / 'mobile_build/native_navigation', 'native-navigation/'))
     for root, prefix in roots:
         for path in sorted(root.rglob('*')):
-            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.m', '.swift', '.json', '.ini', '.mod', '.sum', '.txt'} and path.name != 'source.json':
+            if path.is_file() and path.suffix in source_suffixes and path.name != 'source.json':
                 digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
                 digest.update(path.read_bytes())
     manifest['source_sha256'] = digest.hexdigest()
