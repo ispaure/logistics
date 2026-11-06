@@ -151,16 +151,21 @@ def review_conflicts(target, recursive=True, *, cancelled=lambda: False):
     return tuple(reviewed)
 
 
+def _require_reviewed_identity(candidate):
+    if (_signature(candidate.path) != candidate.signature
+            or _signature(candidate.original) != candidate.original_signature
+            or candidate.path.is_symlink() or candidate.original.is_symlink()):
+        raise RuntimeError(f'File changed after review: {candidate.path}')
+
+
 def delete_reviewed_conflicts(candidates, *, cancelled=lambda: False, report=lambda done, total, message: None):
     def remove(candidate):
         if not candidate.identical:
             raise ValueError('Copies with unique or unknown contents are preserved')
-        if (_signature(candidate.path) != candidate.signature
-                or _signature(candidate.original) != candidate.original_signature
-                or candidate.path.is_symlink() or candidate.original.is_symlink()):
-            raise RuntimeError(f'File changed after review: {candidate.path}')
+        _require_reviewed_identity(candidate)
         if file_sha256(candidate.path) != file_sha256(candidate.original):
             raise RuntimeError(f'Contents differ after review: {candidate.path}')
+        _require_reviewed_identity(candidate)
         candidate.path.unlink()
         return candidate.path
     return run_batch([item for item in candidates if item.identical], remove,
