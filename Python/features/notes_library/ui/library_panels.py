@@ -3,9 +3,7 @@ import posixpath
 from pathlib import PurePosixPath
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
-from commonUtils.search.providers import search_resources
-from commonUtils.search.names import natural_name_key, search_terms
-from commonUtils.runtime.operations import OperationCancelled
+from commonUtils.search.names import search_terms
 from features.notes_library import library_files
 from .library_icons import entry_icon
 from .library_connections import LibraryConnections
@@ -289,25 +287,14 @@ class LibraryPanels(LibraryConnections):
         self.sync_search_footer()
         self.search_shown = 50
         def scan(report, cancelled):
-            def listing(folder, *, cancelled):
-                try:
-                    return library.folders(folder, cancelled=cancelled)
-                except ValueError as error:
-                    if cancelled():
-                        raise OperationCancelled() from error
-                    raise OSError(str(error)) from error
-            def read(path, *, cancelled):
-                return library.read_text(path, cancelled=cancelled)
-            return search_resources(library.provider, library.root, query, cancelled=cancelled,
-                list_children=listing, read_text=read if include_text else None,
+            return library_files.search(library, query, include_text=include_text, cancelled=cancelled,
                 progress=lambda result: self.aux_snapshot.emit(generation, result))
         self.request_aux('search', scan)
 
     def search_snapshot(self, generation, result):
         if generation != self.aux_generation or self.closing or self.locked:
             return
-        self.search_rows = sorted(result.rows, key=lambda row: (row.get('content_match', False),
-            natural_name_key(PurePosixPath(row['path']).name), natural_name_key(row['path'])))
+        self.search_rows = library_files.ranked_search_rows(result.rows)
         self.render_results()
 
     def render_results(self):

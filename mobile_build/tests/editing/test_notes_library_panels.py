@@ -633,7 +633,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 if not release.wait(3):
                     raise RuntimeError('Test did not release search')
                 return SearchResult([], 1000, True, [])
-            with patch('features.notes_library.mobile.notes_library.search_resources', side_effect=scan):
+            with patch('features.notes_library.library_files.search_resources', side_effect=scan):
                 owner.search.value = 'missing'
                 try:
                     self.assertTrue(await asyncio.to_thread(entered.wait, 2))
@@ -730,7 +730,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 if not release.wait(3):
                     raise RuntimeError('Test did not release search')
                 return SearchResult(result.rows, 1, True, [])
-            with patch('features.notes_library.mobile.notes_library.search_resources', side_effect=scan):
+            with patch('features.notes_library.library_files.search_resources', side_effect=scan):
                 owner.search.value = 'Plan'
                 try:
                     self.assertTrue(await asyncio.to_thread(entered.wait, 2))

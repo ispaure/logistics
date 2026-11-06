@@ -1,6 +1,33 @@
-"""Rooted daily-note discovery and verified local library file commands."""
-from commonUtils.runtime.operations import check_cancelled
+"""Rooted library search, daily-note discovery and verified file commands."""
+from pathlib import PurePosixPath
+from commonUtils.runtime.operations import OperationCancelled, check_cancelled
+from commonUtils.search.names import natural_name_key
+from commonUtils.search.providers import search_resources
 from services.documents.mutations import delete_document_tree, copy_document_tree, copy_document_sibling
+
+
+def search(library, query, *, include_text, visible=None, cancelled=lambda: False, progress=None):
+    """Search the library boundary; hosts own scheduling and progress publication."""
+    def listing(folder, *, cancelled):
+        try:
+            rows = library.folders(folder, cancelled=cancelled)
+        except ValueError as error:
+            if cancelled():
+                raise OperationCancelled() from error
+            # Unsupported or oversized folders make the result incomplete.
+            raise OSError(str(error)) from error
+        return rows if visible is None else [row for row in rows
+            if visible(row['path'], directory=row['directory'])]
+
+    return search_resources(library.provider, library.root, query, cancelled=cancelled,
+        list_children=listing, read_text=library.read_text if include_text else None,
+        progress=progress)
+
+
+def ranked_search_rows(rows):
+    """Filename matches precede body matches, with natural filename/path order."""
+    return sorted(rows, key=lambda row: (row.get('content_match', False),
+        natural_name_key(PurePosixPath(row['path']).name), natural_name_key(row['path'])))
 
 
 def daily_notes(library, *, visible=lambda path, **kw: True, cancelled=lambda: False):
