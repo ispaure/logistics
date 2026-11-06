@@ -71,6 +71,7 @@ aliases; external extensions must update their host imports.
 | Mobile Close/Back decisions and host replacement | `Python/mobile/session_workflows/`, `application_lifecycle.py` | [Session transitions](mobile-runtime.md#session-transition-decisions) |
 | Mobile surface publication | `Python/mobile/reading/` | [Mobile runtime](mobile-runtime.md#reader-publication-boundary) |
 | Mobile reader sessions and host access | `Python/mobile/{reader_sessions,private_sessions,reader_host,provider_document,provider_opening,provider_view}.py` | [Mobile architecture](mobile-architecture-roadmap.md) |
+| Open an encrypted or remote file in a reader | `Python/mobile/private_sessions.py` → provider opening; transport in `Python/features/rclone/mobile/remote_source.py`, native decoded lifetime in `Python/services/documents/archive_access.py` | [Source-to-reader trace](document-storage.md#trace-a-mobile-provider-reader) |
 | Mobile format presentation or cloud integration | `Python/features/{books,comics}/mobile/`, rclone `mobile/` and workflow-owned `*/mobile/` | [Mobile preparation](mobile-preparation.md) |
 | Which sources reach a mobile build | Owning `mobile_sources.json`; `mobile_build/tools.py` aggregates `APP_MODULES` and `DOCUMENT_MODULES` | [Mobile preparation](mobile-preparation.md) |
 | Defaults, private state or resource roots | Owning feature's `config.ini`, `Python/features/settings.py`, `Python/config.py` | [Configuration and data](configuration-and-data.md) |

@@ -142,6 +142,14 @@ the ordered successful-case reporting in `__main__.py` together. Whole journeys
 retain their ordered state and classification; host profile selection does not
 turn them into independent unit tests.
 
+For the shared rotation sweep, add a stable ID/title and setup group to
+`rotation_screens.py`, then supply the explicit fixture/navigation sequence in
+that group. Keep geometry and retained-content assertions in `rotation_checks.py`.
+Compare the generated catalog gaps and run `test_rotation_screen_inventory.py`
+before native acceptance. A new Settings category is not automatically covered
+because it appears in navigation metadata. See the
+[rotation inventory contract](testing.md#shared-native-rotation-inventory).
+
 Runtime smoke cases have a separate contract: `Python/mobile/smoke.py` owns
 `EXPECTED_TESTS` and checks discovered methods against it. Native UI and runtime
 evidence are verified by `logistics_build/manager_suites.py`; an extra file or a

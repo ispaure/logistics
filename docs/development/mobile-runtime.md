@@ -817,12 +817,17 @@ Toga's `on_running` callback waits for successful initialization. Native probes
 and other startup consumers must begin UI interaction there, rather than directly
 after `super().startup()`. Synchronously constructed secondary iPad scene hosts
 and non-native hosts retain their existing construction contract. Resize callbacks
-wait until startup finishes. Closing during startup cancels initialization without
-checkpointing partially built services; replacement hosts cancel an earlier
-unfinished startup and tolerate missing workspace state.
+wait until startup finishes. The native exit handler is installed before the first
+asynchronous startup turn. Exit during startup and cancellation retire the partial
+host through `HostLifecycle.abort_startup()` without checkpointing. The failure
+handler in `startup.finish_startup` avoids cancelling itself. Async failures log
+the phase and error type, then show a generic recovery screen without signalling
+readiness; cancellation shows no error screen. Synchronous startup failures retire
+initialized resources and propagate the error.
 
-Startup errors keep a generic recovery message in the loading screen and do not
-report completion. Cancellation does not display a startup error. Existing iOS
+If a secondary scene fails to start, `window_scenes.SceneManager` releases its
+window registration, exclusive writers and active-host entry and closes its
+unfinished window; the primary host remains owned independently. Existing iOS
 reset and migration still run before preferences and document services. The system
 launch screen covers the native/Python runtime boot preceding this application UI.
 `test_startup_progress.py` verifies draw/work ordering, lifecycle callbacks,
@@ -1303,15 +1308,22 @@ navigated elsewhere, even if the credential client and generation remain current
 
 ## Application shutdown and disposable resources
 
-`application_lifecycle.HostLifecycle` owns application exit vetoes, host replacement
-and memory-pressure resource release. Replacement preparation flushes documents,
-credential lists and chat before retiring callbacks; async model loading and final
-retirement share that preparation once. Failed chat preservation leaves the old
-host active for retry. Replacement disposal and successful exit are idempotent;
-memory trimming remains repeatable and preserves the current speech owner.
-`LogisticsMobile` delegates its existing callbacks to this module, so startup
-cancellation, active transfers, private documents and native callback signatures
-keep their existing behavior.
+`application_lifecycle.HostLifecycle` owns exit decisions, replacement,
+partial-startup cleanup and memory trimming. Ordinary exit checks notebook,
+transfer and private-reader guards, then asks `session_workflows.transitions` to
+checkpoint. A pending close or save veto leaves the host and callbacks live for
+retry; workflow-specific cancellation or reader cleanup may already have run.
+Replacement flushes document checkpoints, credential lists and chat first. A
+preservation failure leaves the old host active.
+
+Accepted exit and replacement share final host retirement: cancel owned tasks,
+invalidate session presentation, dispose host adapters and detach window callbacks.
+Successful resource actions are tracked by identity, so later calls can retry
+failed actions and retire resources created after an earlier pass. Only accepted
+ordinary exit disposes the process-shared external comics display. Memory trimming
+remains repeatable and preserves the current speech owner. `LogisticsMobile`
+delegates its callbacks to this owner; retirement does not imply that every worker
+thread has been joined.
 
 Android Activity replacement also disposes old text views, keyboard dismissal
 and seasonal effects, then uninstalls adaptive navigation and native Back before
@@ -1340,7 +1352,16 @@ identity checks, cancellation and publication, with
 close/save and other session commands; Books, Comics and Markdown controllers retain
 format navigation. The `compact_private_view` host callback remains compatible.
 Opening retains the acquired reader before page/preview preparation, so failure
-can release an unpublished remote source. `_prepare_initial_preview` preserves
+can release an unpublished remote source. Cancellation signals the operation and
+waits for in-flight acquisition, progress restore, page preparation or Markdown
+preview work to settle before closing the unpublished reader and releasing busy
+state. A reader returned after cancellation is reclaimed; a late worker failure
+does not replace task cancellation. Borrowed prepared readers remain owned by
+their supplying workflow until adoption. `PrivateSessions.open` retires its
+transient session after cancelled opening settles.
+`services.documents.mobile_reading.close_document_reader` attempts media, PDF and
+source cleanup in order and clears the reader password even if an earlier cleanup
+raises. `_prepare_initial_preview` preserves
 Markdown's source fallback after rendering errors. After cancellation checks and
 the host's view veto, `_publish_view` adopts controls, activates the initial
 Markdown surface and installs privacy/layout observers. The entry point retains

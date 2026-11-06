@@ -216,6 +216,17 @@ ciphertext staging and revision-safe publication, including native ZIP metadata
 rewrites that preserve untouched members. Byte saves and archive metadata saves
 retain their distinct streaming/buffer limits within that one provider contract.
 
+`CryptContentProvider.content_source()` constructs
+`localcrypt/mobile/archive_source.py:NativeSource` when the client supports
+streaming; other clients use bounded in-memory `DecodedContent`. `ProviderContent`
+retains provider access, while `NativeSource` checks the captured client generation
+and ciphertext revision. Its shared `NativeArchiveAccess`
+owner makes close terminal and validates captured inner-password revisions before
+cache publication; a late native result cannot refill a retired source. Native
+crypt operations remain in the provider adapter. See the
+[reader access trace](../../../development/document-storage.md#trace-a-mobile-provider-reader)
+for the host handoff and the separate remote transport owner.
+
 
 The embedded bridge implements crypt using rclone's cipher over an allowlisted
 backing remote in the same credential package. It does not instantiate arbitrary

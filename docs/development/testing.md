@@ -153,6 +153,9 @@ to this manifest. `--inventory` prints the full source inventory as JSON; indivi
 runner inventories are also available with `dev.py test desktop --inventory`.
 Static inventories describe locally declared/inherited methods; runtime discovery
 still determines actual unittest IDs, including imported bases and generated cases.
+Host `--inventory` applies the same filename/include and profile/stage selection
+as execution without importing tests. Its `stage` is the module default; `stages`
+lists the selected stages, and `cases` contains only selected classified methods.
 
 ```sh
 python3 dev.py test desktop --profile smoke --mode fast
@@ -179,11 +182,18 @@ selection, stage, mode, failures and unrun work; JUnit marks unrun work skipped 
 its reason. `coverage_complete` means all work in the selected scope ran, even if
 assertions failed; it does not mean a smoke profile covered the full suite.
 
-Pass `--timings path/to/previous.json` to order files by successful duration within
-a stage. It requires the same root, interpreter, platform and Qt/Toga backend
-environment; normal ordering is deterministic without timing history. Bridge Go
+Pass `--timings path/to/previous.json` to read an existing report and order files
+by successful duration within a stage. This is an input path, not a destination
+for the new report. It requires the same root, interpreter, platform and Qt/Toga
+backend environment; normal ordering is deterministic without timing history.
+New reports are saved automatically under `test-results/test-timings/`. Bridge Go
 tests run by stage with native Go fail-fast support; they currently report outcomes
 and gated stages on the console rather than the Python JSON timing schema.
+
+Use `dev.py --timings` only for a single test leg. Shared selections that include
+both Qt and Toga currently forward the same input path to both legs, whose roots,
+interpreters and backends differ. Use default ordering for that combined command,
+or run each owning isolated-runner command with its own matching report.
 
 ### Focused resource, Git and tooling checks
 
@@ -275,6 +285,40 @@ retains its normal completion behavior. Focused developer commands keep their
 existing scope.
 
 ### Test timing and maintenance
+
+#### Shared native rotation inventory
+
+`mobile_build/native_tests/tests/logisticsmobile/rotation_screens.py` owns the
+31 stable screen IDs, visible titles and explicit synthetic setup journeys.
+`rotation_checks.py` owns route/content retention and native control/safe-area
+assertions. A full default sweep visits each screen for two cycles of portrait →
+landscape-left → portrait → landscape-right → portrait: 310 observations when all
+steps execute successfully. Registration alone does not establish a native pass.
+
+Test callers can pass an iterable of `panels` IDs to `exercise_rotation()`.
+`select_screens()` rejects empty or unknown selections before setup; only the
+selected setup groups run, and `visit_screens()` requires every selected screen
+exactly once in inventory order. Setup remains explicit for readers, provider
+sessions, nested folders, Notes Library and asynchronous help rendering.
+
+Reports separate `rotation_samples` (executed observations) from
+`rotation_inventory` (registered screens, selection and gaps). The latter compares
+the inventory with `mobile.navigation.DESTINATION_ITEMS` and
+`mobile.settings.categories.CATEGORIES`. The five top-level destinations are
+registered. Settings gaps are **Features, Camera, Read aloud, Markdown, EPUB,
+Books & Comics, LM Chat and Reset**. New catalog entries appear as gaps until a
+scenario is added. Nested routes and format-specific screens outside those
+catalogs still need an explicit coverage review; PDF, video, notebook and other
+specialized probes keep their own fixtures and assertions.
+
+Use `python3 dev.py test mobile test_rotation_screen_inventory.py` for inventory,
+selection and synthetic journey contracts, plus
+`python3 dev.py test mobile 'test_native_rotation*.py'` for rotation helper checks.
+These host checks do not validate OS rotation, rendering, native gestures or
+safe-area geometry. The [native platform workflow](mobile-handbook.md) must run
+the maintained scenarios on the affected platform for that acceptance.
+
+#### Timing reports and fixtures
 
 Generic host/native test mechanisms and defaults live in `commonUtils.testing`;
 their API contracts belong to commonUtils' own testing guide. The Logistics

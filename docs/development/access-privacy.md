@@ -58,6 +58,12 @@ permission framework is required. Preserve stored settings and credential IDs.
 
 ## Provider declarations
 
+Desktop `features.rclone.credential_sessions.CredentialSessions.remember()` takes
+a detached copy of incoming credential data before retiring the old generation.
+Caller mutation cannot alter an active session, and a failed copy leaves the old
+session intact. This does not change storage formats, revocation ordering or the
+separate authentication and persistence policies.
+
 `services.access_policy.session_only` composes explicit provider declarations
 through document wrappers. Video no longer reads credential package dictionaries
 or guesses retention from context filenames. Desktop LocalCrypt declares its
