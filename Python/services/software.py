@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 import config
+from commonUtils.configuration.layered import effective_settings
 from commonUtils.runtime.streams.downloads import DownloadSpec
-from commonUtils.formats.iniType import INIFile
 from commonUtils.runtime.platform import Arch, OS, get_arch, get_os
 
 
@@ -24,9 +24,9 @@ def get_software(tool):
             raise ValueError(f'Unsupported rclone platform: {get_os().value}/{get_arch().value}')
         entry = dict(manifest[tool][key])
         if RCLONE_CONFIG_PATH.is_file():
-            settings = INIFile(RCLONE_CONFIG_PATH).read()
+            settings = effective_settings(RCLONE_CONFIG_PATH)
             for field in ('version', 'url', 'sha256', 'installed_sha256', 'archive_member', 'path'):
-                value = settings.get(key, field + '_str')
+                value = settings.get(key, field + '_str', fallback=None)
                 if value is not None:
                     entry[field] = value
     else:

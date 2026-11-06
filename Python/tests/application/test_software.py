@@ -14,6 +14,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 import config
+from commonUtils.configuration.layered import register_settings
 from commonUtils.runtime.platform import OS, Arch
 from commonUtils.runtime.streams.downloads import DownloadSpec
 from services import software
@@ -177,6 +178,29 @@ class SoftwareTests(QtTestCase):
                 settings.write_text('[osx-arm64]\npath_str = ../outside\n')
                 with self.assertRaisesRegex(ValueError, 'inside'):
                     software.get_software('rclone')
+
+    def test_rclone_uses_personal_metadata_until_reset(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = root / 'config.ini'
+            settings.write_text('[osx-arm64]\nversion_str = packaged\n')
+            store = register_settings(settings, root / 'personal.ini')
+            version = ('osx-arm64', 'version_str')
+            with patch.object(software, 'RCLONE_CONFIG_PATH', settings), \
+                    patch.object(software, 'get_os', return_value=OS.MAC), \
+                    patch.object(software, 'get_arch', return_value=Arch.ARM_64), \
+                    patch.object(software.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_software=root)):
+                packaged_spec, packaged_path = software.get_software('rclone')
+                self.assertEqual(packaged_spec.version, 'packaged')
+
+                store.save({version: 'personal%version'})
+                spec, path = software.get_software('rclone')
+                self.assertEqual(spec.version, 'personal%version')
+                self.assertEqual(spec.sha256, packaged_spec.sha256)
+                self.assertEqual(path, packaged_path)
+
+                store.save({version: None})
+                self.assertEqual(software.get_software('rclone'), (packaged_spec, packaged_path))
 
     def test_empty_root_resources_and_independent_overrides(self):
         with TemporaryDirectory() as root:
