@@ -1,5 +1,30 @@
 """A shrinking breadcrumb viewport that reveals its end after native layout."""
+from weakref import WeakMethod
+
 import toga
+
+_apple_pan_target = None
+
+
+def fit_labels(labels, width, measure):
+    """Share the row among every crumb while the touch targets fit."""
+    separator = 12 * max(0, len(labels) - 1)
+    full = sum(max(44, measure(label) + 12) for label in labels)
+    if full + separator <= width or 34 * len(labels) + separator > width:
+        return labels, 44
+    # Reserve room for each remaining crumb, and give unused room to longer names.
+    remaining = width - separator
+    result = []
+    for index, label in enumerate(labels):
+        available = remaining / (len(labels) - index)
+        if measure(label) + 12 > available:
+            prefix = label
+            while prefix and measure(prefix + '…') + 12 > available:
+                prefix = prefix[:-1]
+            label = prefix + '…'
+        result.append(label)
+        remaining -= max(34, measure(label) + 12)
+    return result, 34
 
 
 class BreadcrumbScroll(toga.ScrollContainer):
@@ -16,6 +41,64 @@ class BreadcrumbScroll(toga.ScrollContainer):
         if type(self._impl).__module__.startswith('toga_iOS.'):
             # Keep ownership of horizontal drags even when the path fits.
             self._impl.native.alwaysBounceHorizontal = True
+
+    def watch_swipes(self, expand):
+        handler = WeakMethod(expand)
+
+        def expand_if_active(delta):
+            callback = handler()
+            return callback is not None and callback(delta)
+
+        backend = type(self._impl).__module__
+        if backend.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass, SEL, objc_method
+            global _apple_pan_target
+            if _apple_pan_target is None:
+                class LogisticsBreadcrumbPan(ObjCClass('NSObject')):
+                    @objc_method
+                    def moved_(self, gesture) -> None:
+                        if int(gesture.state) != 3:
+                            return
+                        delta = gesture.translationInView(gesture.view)
+                        if abs(delta.x) >= 10 and abs(delta.x) > abs(delta.y):
+                            self.expand(delta.x)
+                _apple_pan_target = LogisticsBreadcrumbPan
+            self._pan_target = _apple_pan_target.alloc().init()
+            self._pan_target.expand = expand_if_active
+            self._impl.native.panGestureRecognizer.addTarget(self._pan_target, action=SEL('moved:'))
+        elif backend.startswith('toga_android.'):
+            from android.view import View, ViewConfiguration
+            from java import dynamic_proxy
+            native = self._impl.hScrollView
+            slop = ViewConfiguration.get(native.getContext()).getScaledTouchSlop()
+            previous = getattr(self._impl, 'hScrollListener', None)
+            class Touch(dynamic_proxy(View.OnTouchListener)):
+                start = None
+
+                def onTouch(self, view, event):
+                    action = event.getActionMasked()
+                    if action == 0:
+                        self.start = event.getRawX(), event.getRawY()
+                        if view != native:
+                            view.getParent().requestDisallowInterceptTouchEvent(True)
+                    elif action == 2 and self.start is not None:
+                        dx = event.getRawX() - self.start[0]
+                        dy = event.getRawY() - self.start[1]
+                        if abs(dx) > slop and abs(dx) > abs(dy):
+                            self.start = None
+                            if expand_if_active(dx):
+                                return True
+                    elif action in (1, 3, 5):
+                        self.start = None
+                    return bool(previous.onTouch(view, event)) if view == native and previous else False
+
+            self._swipe_touch = Touch()
+            native.setOnTouchListener(self._swipe_touch)
+
+    def watch_button(self, button):
+        listener = getattr(self, '_swipe_touch', None)
+        if listener is not None:
+            button._impl.native.setOnTouchListener(listener)
 
     def cancel_pending_end(self):
         self._end_generation += 1

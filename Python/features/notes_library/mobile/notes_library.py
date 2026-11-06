@@ -249,6 +249,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.close_button = self.host.presentation.icon_button(
             "close", "Close Notes Library", on_press=self.close
         )
+        if host.apple:
+            host.presentation.surface(self.close_button, radius=24, background='surface',
+                                      foreground='text', outlined=False)
         self.toolbar.insert(0, self.close_button)
         self.view._reader_close_button = self.close_button
         for button in (self.back_button, self.forward_button):
@@ -283,9 +286,12 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.breadcrumb_scroll = BreadcrumbScroll(content=self.breadcrumbs, horizontal=True,
             vertical=False, style=Pack(flex=1, height=44))
         self.secondary.insert(2, self.breadcrumb_scroll)
+        self.breadcrumb_scroll.watch_swipes(self.expand_breadcrumbs)
         self.sidebar.breadcrumb_scroll = self.breadcrumb_scroll
         self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
         self._breadcrumb_key = None
+        self._expanded_breadcrumb_path = None
+        self._breadcrumbs_shortened = False
         self._breadcrumb_width = 320
         # Keep the library identity between its pane controls, including when
         # UIKit moves the remaining reader actions to a vertical edge.
@@ -334,7 +340,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         available = getattr(self, '_notes_available', 320)
         article_width = max(0, available - (self.sidebar.policy.sidebar_width if self.sidebar.expanded else 0))
         self.welcome_content.style.width = min(360, max(0, article_width - 48))
-        left, right = self.host.toolbar_insets(self.secondary)
+        left, right = (8, 8) if self.sidebar.wide else self.host.toolbar_insets(self.secondary)
         if (self.secondary.style.margin_left, self.secondary.style.margin_right) != (left, right):
             self.secondary.style.margin_left, self.secondary.style.margin_right = left, right
         show = self.path is not None and not self.sidebar.sidebar_open
@@ -376,9 +382,10 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         gap = self.secondary.style.gap
         # Preserve a useful breadcrumb viewport without adding another toolbar row.
         width = round(48 * .6) if available - len(controls) * (48 + gap) < 160 else 48
+        title_width = round(48 * .8) if not self.sidebar.wide and width < 48 else 48
         for button in self.view._notes_title_controls:
-            if button.style.width != width:
-                button.style.width = width
+            if button.style.width != title_width:
+                button.style.width = title_width
         for button in controls:
             if button.style.width != width:
                 button.style.width = width
@@ -399,8 +406,18 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         return await asyncio.to_thread(self.library.folder_pages,
             [{'path': folder, 'directory': True} for folder in folders], cancelled=cancelled)
 
-    def refresh_breadcrumbs(self):
+    def expand_breadcrumbs(self, delta):
+        if self._breadcrumbs_shortened and self.path and self._expanded_breadcrumb_path != self.path and self.valid():
+            self._expanded_breadcrumb_path = self.path
+            self.host.loop.call_soon(lambda: self.refresh_breadcrumbs(reveal_end=delta < 0))
+            return True
+        return False
+
+    def refresh_breadcrumbs(self, *, reveal_end=True):
+        if self._expanded_breadcrumb_path != self.path:
+            self._expanded_breadcrumb_path = None
         if not self.path:
+            self._breadcrumbs_shortened = False
             self.breadcrumb_scroll.cancel_pending_end()
             self.breadcrumbs.clear()
             self._breadcrumb_key = None
@@ -410,7 +427,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             folders.insert(0, self.root)
         entries = [(PurePosixPath(folder).name or self.library_title,
                     self.folder_pages.get(folder), folder) for folder in folders]
-        key = (tuple(entries), self._breadcrumb_width)
+        expanded = self._expanded_breadcrumb_path == self.path
+        key = (self.path, tuple(entries), self._breadcrumb_width, expanded)
         if key == self._breadcrumb_key:
             self.breadcrumb_scroll.retry_end(self.host.loop,
                 valid=lambda: self._breadcrumb_key == key and self.valid())
@@ -428,10 +446,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 density = native.getResources().getDisplayMetrics().density
                 return native.getPaint().measureText(value) / density
             return len(value) * 8
-        for name, page, folder in entries:
-            label = name
+        from .breadcrumbs import fit_labels
+        names = [entry[0] for entry in entries]
+        labels, minimum = (names, 44) if expanded else fit_labels(names, self._breadcrumb_width, measure)
+        self._breadcrumbs_shortened = labels != names
+        for (name, page, folder), label in zip(entries, labels):
             if self.breadcrumbs.children:
-                self.breadcrumbs.add(toga.Label('/', style=Pack(margin_top=12, width=12, font_size=13)))
+                self.breadcrumbs.add(toga.Label('›', style=Pack(margin_top=12, width=12, font_size=13)))
             async def open_folder(widget, path=page, folder=folder, **kwargs):
                 if path:
                     await self.open_note(path)
@@ -439,7 +460,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     await self.reveal_folder(folder, select=False)
                     self.sidebar.show_sidebar()
             button = self.host.list_button(toga.Button(label, on_press=open_folder,
-                style=Pack(height=44, width=max(44, measure(label) + 12), font_size=13)))
+                style=Pack(height=44, width=max(minimum, measure(label) + 12), font_size=13)))
             button._impl._content_inset = 0
             self.host.presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
             backend = type(button._impl).__module__
@@ -458,8 +479,14 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             button.breadcrumb_folder = folder
             underline_folder_link(button)
             self.breadcrumbs.add(button)
-        self.breadcrumb_scroll.reveal_end(self.host.loop,
-            valid=lambda: self._breadcrumb_key == key and self.valid())
+            if self._breadcrumbs_shortened:
+                self.breadcrumb_scroll.watch_button(button)
+        if reveal_end:
+            self.breadcrumb_scroll.reveal_end(self.host.loop,
+                valid=lambda: self._breadcrumb_key == key and self.valid())
+        else:
+            self.breadcrumb_scroll.cancel_pending_end()
+            self.breadcrumb_scroll.horizontal_position = 0
 
 
     def valid(self):

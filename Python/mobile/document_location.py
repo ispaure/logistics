@@ -187,6 +187,11 @@ def mount_apple_title(view, controller, title):
     edge = vertical_edge(controller)
     tools = getattr(view, '_native_drawing_tools', None)
     controls = getattr(view, '_document_title_controls', ())
+    notes_controls = getattr(view, '_notes_title_controls', ())
+    if notes_controls:
+        close = notes_controls[0]
+        controls = notes_controls[1:] if edge else notes_controls
+        view._document_title_controls = controls
     compact_tools = tools is not None and not controls and band is None and tools.fits(controller)
     wide_notebook = (tools is not None and not controls and band is None
                      and not getattr(view, '_reader_fullscreen', False) and tools.wide_phone(controller))
@@ -232,7 +237,7 @@ def mount_apple_title(view, controller, title):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:
-            top = 0 if getattr(view, '_notes_title_controls', ()) else 6
+            top = 0 if notes_controls else 6
             header = view._document_title_header = toga.Box(style=Pack(margin_top=top, margin_bottom=6))
             header._empty_bar_title = empty_bar_title()
             if controls:
@@ -244,6 +249,13 @@ def mount_apple_title(view, controller, title):
                     if button.parent is not None:
                         button.parent.remove(button)
                 header.add(*controls[:-1], header._title_content, controls[-1])
+        if notes_controls:
+            if edge and close.parent is header:
+                header.remove(close)
+            elif not edge and close.parent is not header:
+                if close.parent is not None:
+                    close.parent.remove(close)
+                header.insert(0, close)
         if controls:
             header._title_content.style.height = max(48, storage_title_height(state[1]))
         if controller.navigationItem.titleView != header._empty_bar_title:
