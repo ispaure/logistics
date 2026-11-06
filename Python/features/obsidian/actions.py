@@ -169,16 +169,26 @@ def _normalize_path(path: Path) -> str:
     return os.path.normcase(os.path.normpath(str(resolved_path)))
 
 
-def _load_registry(registry_path: Path) -> dict[str, Any]:
-    """Load the Obsidian registry while preserving unknown top-level settings."""
+def _read_registry_bytes(registry_path: Path) -> bytes | None:
+    """Read the registry's current bytes if it is a regular file."""
 
     if not registry_path.is_file():
-        return {'vaults': {}}
+        return None
+    try:
+        return registry_path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def _load_registry(registry_path: Path) -> tuple[dict[str, Any], bytes | None]:
+    """Load the registry and capture the exact revision used to parse it."""
 
     try:
-        with registry_path.open('r', encoding='utf-8') as registry_file:
-            registry = json.load(registry_file)
-    except (OSError, json.JSONDecodeError) as error:
+        original = _read_registry_bytes(registry_path)
+        if original is None:
+            return {'vaults': {}}, None
+        registry = json.loads(original.decode('utf-8'))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise RuntimeError(f'Could not read Obsidian registry "{registry_path}": {error}') from error
 
     if not isinstance(registry, dict):
@@ -189,16 +199,16 @@ def _load_registry(registry_path: Path) -> dict[str, Any]:
     if not isinstance(vaults, dict):
         raise RuntimeError(f'Obsidian registry "{registry_path}" has an invalid "vaults" value.')
 
-    return registry
+    return registry, original
 
 
-def _write_registry(registry_path: Path, registry: dict[str, Any]) -> None:
+def _write_registry(registry_path: Path, registry: dict[str, Any], *, validate=None, overwrite=True) -> None:
     """Atomically write an Obsidian registry, preserving existing file permissions when possible."""
 
-    registry_path.parent.mkdir(parents=True, exist_ok=True)
     try:
+        registry_path.parent.mkdir(parents=True, exist_ok=True)
         content = json.dumps(registry, separators=(',', ':'), ensure_ascii=False) + '\n'
-        atomic_write_bytes(registry_path, content.encode('utf-8'))
+        atomic_write_bytes(registry_path, content.encode('utf-8'), validate=validate, overwrite=overwrite)
     except OSError as error:
         raise RuntimeError(f'Could not write Obsidian registry "{registry_path}": {error}') from error
 
@@ -222,7 +232,7 @@ def _find_registered_vault_id(registry: dict[str, Any], vault_path: Path) -> str
     return None
 
 
-def _register_vault(registry_path: Path, registry: dict[str, Any], vault_path: Path) -> str:
+def _register_vault(registry_path: Path, registry: dict[str, Any], vault_path: Path, *, original: bytes | None) -> str:
     """Add a vault to Obsidian's registry and return its newly generated vault ID."""
 
     vaults = registry['vaults']
@@ -237,7 +247,11 @@ def _register_vault(registry_path: Path, registry: dict[str, Any], vault_path: P
         'ts': int(time.time() * 1000)
     }
 
-    _write_registry(registry_path, registry)
+    def unchanged():
+        if _read_registry_bytes(registry_path) != original:
+            raise RuntimeError(f'Obsidian registry changed during registration: "{registry_path}"')
+
+    _write_registry(registry_path, registry, validate=unchanged, overwrite=original is not None)
     return vault_id
 
 
@@ -445,7 +459,7 @@ def open_vault(vault: Directory) -> bool:
     registry_path = get_registry_path()
 
     try:
-        registry = _load_registry(registry_path)
+        registry, original = _load_registry(registry_path)
     except RuntimeError as error:
         _show_error(str(error))
         return False
@@ -463,7 +477,7 @@ def open_vault(vault: Directory) -> bool:
             return False
 
         try:
-            vault_id = _register_vault(registry_path, registry, vault.path)
+            vault_id = _register_vault(registry_path, registry, vault.path, original=original)
         except RuntimeError as error:
             _show_error(str(error))
             return False
