@@ -1,37 +1,19 @@
 """Installed mobile destination, local recovery and shared drawing command bridge."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
-from pathlib import Path
-from tempfile import TemporaryDirectory
 import unittest
-from mobile.app import LogisticsMobile
 from mobile.navigation import DESTINATIONS
 from features.notebooks.notebook import Notebook
 from features.notebooks.mobile.documents import open_notebook
+from mobile_build.tests.support.notebooks import create_template_notebook_app
 
 
 class NotebookPanelTests(unittest.TestCase):
     def setUp(self):
-        from unittest.mock import AsyncMock, patch
-        import toga
-        evaluator = patch.object(toga.WebView, 'evaluate_javascript', new_callable=AsyncMock)
-        evaluator.start()
-        self.addCleanup(evaluator.stop)
-        template_choice = patch('features.notebooks.mobile.setup.choose_new_notebook',
-            new_callable=AsyncMock, side_effect=lambda *args, **kwargs: Notebook.new())
-        template_choice.start()
-        self.addCleanup(template_choice.stop)
-        self.temp=TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        LogisticsMobile.storage_root=Path(self.temp.name)
-        self.addCleanup(setattr,LogisticsMobile,'storage_root',None)
-        self.app=LogisticsMobile('Logistics','io.github.ispaure.logisticsmobile')
-        self.addCleanup(close_loop, self.app.loop)
-        self.addCleanup(self.app.main_window.close)
+        self.app = create_template_notebook_app(self)
 
     def test_failed_canvas_retirement_keeps_private_protection_until_success(self):
         from unittest.mock import patch
@@ -112,7 +94,7 @@ class NotebookPanelTests(unittest.TestCase):
     def test_close_acknowledges_before_cancelled_dirty_guard(self):
         from unittest.mock import AsyncMock, patch
         app = self.app
-        path = Path(self.temp.name) / 'cancel-close.rmdoc'
+        path = self.app.storage_root / 'cancel-close.rmdoc'
         path.write_bytes(Notebook.new().to_bytes())
         app.loop.run_until_complete(open_notebook(app, path=path))
         panel = app.notebook_panel
@@ -150,7 +132,7 @@ class NotebookPanelTests(unittest.TestCase):
     def test_delete_saved_notebook_preserves_external_changes(self):
         from unittest.mock import AsyncMock, patch
         app = self.app
-        path = Path(self.temp.name) / 'delete-source.rmdoc'
+        path = self.app.storage_root / 'delete-source.rmdoc'
         path.write_bytes(Notebook.new().to_bytes())
         app.loop.run_until_complete(open_notebook(app, path=path))
         panel = app.notebook_panel
@@ -176,7 +158,7 @@ class NotebookPanelTests(unittest.TestCase):
         app.loop.run_until_complete(open_notebook(app))
         panel = app.notebook_panel
         self.assertIsNone(folder_location(app, panel.session))
-        path = Path(self.temp.name) / 'reveal.rmdoc'
+        path = self.app.storage_root / 'reveal.rmdoc'
         path.write_bytes(Notebook.new().to_bytes())
         app.loop.run_until_complete(open_notebook(app, path=path))
         panel = app.notebook_panel
@@ -251,7 +233,7 @@ class NotebookPanelTests(unittest.TestCase):
     def test_notebook_close_keeps_unsaved_edits_for_the_close_prompt(self):
         from unittest.mock import AsyncMock, patch
         app = self.app
-        path = Path(self.temp.name) / 'unsaved.rmdoc'
+        path = self.app.storage_root / 'unsaved.rmdoc'
         path.write_bytes(Notebook.new('Original').to_bytes())
         original = path.read_bytes()
         app.loop.run_until_complete(open_notebook(app, path=path))
@@ -270,7 +252,7 @@ class NotebookPanelTests(unittest.TestCase):
         from commonUtils.runtime.resources.local import LocalFiles
         app = self.app
         owner = app.read_managed_file.__self__
-        path = Path(self.temp.name) / 'from-workspaces.rmdoc'
+        path = self.app.storage_root / 'from-workspaces.rmdoc'
         path.write_bytes(Notebook.new('From Workspaces').to_bytes())
         original = path.read_bytes()
         app.loop.run_until_complete(app.show_files())
@@ -288,7 +270,7 @@ class NotebookPanelTests(unittest.TestCase):
         from commonUtils.runtime.resources.local import LocalFiles
         app = self.app
         owner = app.read_managed_file.__self__
-        path = Path(self.temp.name) / 'veto.rmdoc'
+        path = self.app.storage_root / 'veto.rmdoc'
         path.write_bytes(Notebook.new().to_bytes())
         provider = LocalFiles(path.parent)
         # Build ordinary local controls before supplying an explicit selection.
@@ -303,7 +285,7 @@ class NotebookPanelTests(unittest.TestCase):
         app=self.app
         app.loop.run_until_complete(open_notebook(app))
         panel=app.notebook_panel
-        path=Path(self.temp.name)/'sample.rmdoc'
+        path=self.app.storage_root/'sample.rmdoc'
         path.write_bytes(Notebook.new('Original').to_bytes())
         original=path.read_bytes()
         app.loop.run_until_complete(panel.open_path(path))
@@ -314,7 +296,7 @@ class NotebookPanelTests(unittest.TestCase):
     def test_invalid_workspace_import_reports_failure(self):
         from unittest.mock import patch
         from commonUtils.runtime.resources.local import LocalFiles
-        path = Path(self.temp.name) / 'damaged.rmdoc'
+        path = self.app.storage_root / 'damaged.rmdoc'
         path.write_bytes(b'not a ZIP')
         owner = self.app.read_managed_file.__self__
         self.app.loop.run_until_complete(self.app.show_files())

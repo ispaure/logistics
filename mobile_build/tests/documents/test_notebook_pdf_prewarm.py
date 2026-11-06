@@ -10,6 +10,7 @@ from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
 from features.notebooks.mobile.panel import NotebookPanel
 from services.documents.mobile_notebooks import open_notebook, notes_editor
+from mobile_build.tests.support.notebooks import create_template_notebook_app
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -24,8 +25,7 @@ def protected_book():
 
 class PdfPrewarmTests(unittest.TestCase):
     def setUp(self):
-        from mobile_build.tests.documents.test_notebook_panel import NotebookPanelTests
-        NotebookPanelTests.setUp(self)
+        self.app = create_template_notebook_app(self)
 
     def blocked_classifier(self):
         started, released = threading.Event(), threading.Event()
@@ -115,7 +115,7 @@ class PdfPrewarmTests(unittest.TestCase):
                     raise ValueError('Synthetic credentials expired')
                 return super().entry(path)
         book = protected_book()
-        path = Path(self.temp.name) / 'private.rmdoc'
+        path = self.app.storage_root / 'private.rmdoc'
         path.write_bytes(book.to_bytes())
         provider = PrivateFiles(path.parent)
         resource = DocumentResource(provider, path.name, max_bytes=1024 * 1024)
@@ -162,7 +162,7 @@ class PdfPrewarmTests(unittest.TestCase):
         for mutate in ('epoch', 'provider'):
             with self.subTest(mutate=mutate):
                 book = protected_book()
-                path = Path(self.temp.name) / (mutate + '.rmdoc')
+                path = self.app.storage_root / (mutate + '.rmdoc')
                 path.write_bytes(book.to_bytes())
                 library = NS(provider=LocalFiles(path.parent), epoch=1, valid=lambda:True, session=NS(dirty=False))
                 started, released, _, classify = self.blocked_classifier()
