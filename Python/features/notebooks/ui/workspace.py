@@ -468,6 +468,14 @@ class NotebookWindow(qt.QMainWindow):
                 self.pending_close = panel.save_document()
                 event.ignore()
                 return
+            if answer == qt.QMessageBox.StandardButton.Discard:
+                try:
+                    panel.document.discard()
+                except (OSError, ValueError, KeyError) as error:
+                    event.ignore()
+                    qt.QMessageBox.warning(self, 'Notebook could not close',
+                        'Could not discard the changes. Your draft remains open. ' + str(error))
+                    return
         panel.dispose()
         event.accept()
 
