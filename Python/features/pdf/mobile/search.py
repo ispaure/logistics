@@ -6,7 +6,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.pdf.search import search_pdf
 from features.pdf.search_controller import PDFSearchController, SearchRequest
-from mobile.worker_retirement import drain_worker
+from services.worker_retirement import drain_worker
 
 
 class PDFSearchBar(toga.Box):
