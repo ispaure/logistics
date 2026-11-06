@@ -35,10 +35,19 @@ class NotebookDocument:
             raise ValueError('This notebook is read-only. Make a local copy before editing.')
         if self.resource is not None:
             self.resource.check()
-        if self.recovery is not None:
-            self.recovery.save(self.key, book)
+        previous_dirty = self.dirty
         self.dirty = self.resource is not None or self.recovery is None
-        self.changed(self)
+        try:
+            # Publish the host's dirty/source binding before committing recovery.
+            # A rejected binding must not leave a durable edit that Editor rolls
+            # back in memory. If recovery then fails, a dirty binding safely
+            # selects the previous recovery draft instead of hiding a saved edit.
+            self.changed(self)
+            if self.recovery is not None:
+                self.recovery.save(self.key, book)
+        except Exception:
+            self.dirty = previous_dirty
+            raise
 
     def save(self, *, cancelled=lambda: False):
         self._check_editable()
