@@ -90,6 +90,9 @@ Use an ordinary `unittest.TestCase` for portable behavior. Desktop GUI tests use
 the shared `QtTestCase`, its `temporary_directory()` and condition-based
 `wait_until()` so workers, windows and watchers retire before temporary storage.
 Do not copy ad hoc application/loop teardown from older tests.
+Leave widget deletion to that fixture after worker retirement; eager `deleteLater()`
+can destroy a window while its worker still owns callbacks. Keep synthetic patches
+and storage alive until retirement finishes.
 
 Mobile host tests belong under `mobile_build/tests/<owner>/` and run with
 `dev.py test mobile FILENAME`. Synchronous app tests use
@@ -99,6 +102,18 @@ and `localcrypt.py` where applicable; inspect their arguments before use. These
 fixtures run Toga dummy and do not certify native controls. Async tests need a
 lifecycle appropriate to their running loop; the synchronous app fixture rejects
 an already-running loop.
+
+`support/readers.py:MemoryWebView` provides a host reader double.
+`support/localcrypt.py` owns reusable crypt protocol doubles; they do not exercise
+real encryption. `support/notebooks.py` supplies separate storage/canvas and
+template app fixtures with cleanup registered before temporary resources expire.
+Choose the helper matching the behavior under test; these additions do not imply
+that every notebook test uses the same fixture or validates native input.
+
+Wait for a bounded observable milestone such as task admission, published rows or
+an attached/dismissed dialog. Retain assertions that cancelled work cannot publish
+and overlays stay attached until dismissal. Replacing a fixed delay must preserve
+those behaviors, not merely wait for a convenient helper call.
 
 Keep setup proportional to the behavior under test. Command-routing and report
 tests can stub the repository-wide preflight; separate small fixtures must still
@@ -175,6 +190,7 @@ finish. See [storage lifecycle and native setup](mobile-handbook.md).
 | Symptom | Next check |
 | --- | --- |
 | No matching files | Filename/glob, suite root and quoted shell wildcard; compare the inventory |
+| Exact-file selection rejected | Use a declared repository-relative path for desktop/mobile, no positional glob or duplicate `--exact-file`; see [focused selection](testing.md#run-everyday-checks) |
 | Test exists but owner shortcut omits it | `Scripts/ownership.json` patterns and dry-run output |
 | Classification preflight fails | File/line diagnostic, one valid default, overrides and declared root patterns |
 | File is listed but no cases execute | `unittest` discovery, `TestCase` inheritance, method names and selected stage |

@@ -383,6 +383,14 @@ revalidation, application and launcher restart, recording failures for startup
 notifications. Recovery staging is retained. A rollback failure requires manual
 recovery; it never launches a partially restored installation.
 
+If preparation fails, `services.updates.prepare()` attempts to remove its own
+staging workspace. Successful cleanup re-raises the original error. If cleanup
+also raises `OSError`, ordinary preparation errors report both failures and the
+incomplete staging path, with the preparation error as their cause. Control-flow
+exceptions retain their identity and receive a cleanup note. Failed preparation
+does not hand a request to installation. `test_update_preparation.py` covers these
+paths with synthetic staging; update application and restart remain separate.
+
 The controller validates receipt object/field types before consuming them.
 Malformed receipts remain available for inspection and cannot prevent startup;
 valid failure receipts notify once. If update settings become invalid or change

@@ -418,15 +418,45 @@ chooses its destination. Cancelling Save retains the draft, and closing a dirty
 draft uses the ordinary Save/Discard/Cancel guard. Untouched blank drafts close
 without a prompt.
 
+Desktop `NotebookWindow.closeEvent()` calls `NotebookDocument.discard()` before
+disposing a dirty document when the user chooses Discard. For a source-backed
+document with ordinary recovery, Discard replaces its recovery base with
+the exact saved source archive bytes, preserving document identity, embedded
+assets/templates, opaque members and legacy missing ink members. It never writes
+the source. An orphaned draft deletes only the recovery revision this editor
+observed. A failed discard keeps the draft open and reports the failure; newer
+recovery from another window cannot be silently overwritten.
+Without a recovery repository, Discard clears the dirty flag before disposal.
+
 `editor.py` owns commands and session undo/redo. `recovery.py` owns the local
 repository and observed manifest revisions, kept outside the format model. New and
 imported notebooks receive independent local identities. The repository stores
 an immutable source archive, content-addressed ink pages and an atomically
 published recovery manifest. Ink commands update page blobs rather than rewriting
 the complete archive. Structural edits additionally publish a new base containing
-page resources. Publication precedes pruning of superseded recovery objects.
+page resources. Confirmed publication precedes pruning of superseded recovery objects.
 A process mutation lock and manifest revision check reject stale writers in
 other windows. This is not a cross-process notebook collaboration protocol.
+
+`NotebookDocument.checkpoint()` checks the observed recovery revision before the
+host publishes source-binding intent. `services.documents.mobile_storage` supplies
+a rollback that restores the exact prior binding only while its own write remains
+current. Recovery then distinguishes these outcomes:
+
+| Observed outcome | Retained state |
+| --- | --- |
+| Publication rejected and the prior manifest is still present | Conditionally restore the prior binding while the intent write remains current; restore prior command state and preserve the earlier recovery revision |
+| Expected manifest is visible, but directory durability confirmation failed | Keep the edit, Undo/Redo and adopted revision; retain objects from the prior manifest until a later confirmed checkpoint can prune them |
+| Manifest publication or binding rollback cannot be verified | Keep the RAM draft/history and mark recovery unconfirmed; ordinary retirement is refused until a confirmed retry or Save As, with explicit Discard handled separately |
+
+`protocol.RecoveryIncomplete` carries the latter two outcomes to `Editor` and the
+hosts. A clean source reopen and explicit Discard pass the original archive bytes
+to recovery rather than serializing a newly parsed model as the replacement base.
+Binding and recovery publication remain separate files, without a crash-atomic
+transaction or schema change. `test_recovery_sharing.py`,
+`test_notebook_desktop.py` and mobile `test_notebook_storage.py` cover rejected,
+published and unknown outcomes, exact-base preservation and retained drafts on
+the host; these checks do not establish native event ordering or device durability.
 
 `canvas.py` supplies offline HTML/Canvas rendering and pointer input to Qt
 WebEngine and native Toga WebViews. It records coalesced pointer samples, uses

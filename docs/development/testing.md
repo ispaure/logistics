@@ -98,6 +98,22 @@ Replace `python3` with `py` on Windows. Quote wildcard patterns so the shell doe
 not expand them. Omit the filename/pattern to run the whole selected suite.
 No matching files is an error. Each test file runs in a fresh process; failing
 files or timeouts fail the command. The helper returns the check's exit status.
+
+Desktop and mobile also accept repeated `--exact-file` arguments with declared,
+repository-relative POSIX paths, useful when filenames repeat across folders:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/tooling/test_regression_runner.py
+python3 dev.py test mobile --exact-file mobile_build/tests/documents/test_editor_picker.py
+```
+
+Do not combine exact files with the positional filename/glob. Missing, duplicate,
+escaping or wrong-suite paths fail before execution. `test-owner` resolves and
+deduplicates its selected files once, filters them by profile and invokes one
+runner per selected environment. Files with no selected stages are omitted; an
+entirely empty owner selection is an error. Each file/stage still gets a fresh
+child process. Use `--dry-run` to inspect the suite and exact paths.
+
 Lint covers `dev.py`, `Python`, `mobile_build`, `Scripts`, `logistics_build` and `.github/scripts`, matching CI's scope.
 The Ruff configuration retains its default environment/cache exclusions and
 explicitly excludes mobile build, payload, log, deployment-workspace and downloaded
@@ -182,6 +198,13 @@ selection, stage, mode, failures and unrun work; JUnit marks unrun work skipped 
 its reason. `coverage_complete` means all work in the selected scope ran, even if
 assertions failed; it does not mean a smoke profile covered the full suite.
 
+For an owner spanning environments, this stage-first gate applies within each
+environment. Fast mode stops later environments after a failed environment;
+diagnostic mode continues them. Grouping does not create a persistent test process
+or a preflight cache. A skipped setup fixture leaves its planned methods explicitly
+`not_run`, never passed. `python3 dev.py test bridge --profile smoke --inventory`
+uses the execution profile to list bridge sources without starting Go.
+
 Pass `--timings path/to/previous.json` to read an existing report and order files
 by successful duration within a stage. This is an input path, not a destination
 for the new report. It requires the same root, interpreter, platform and Qt/Toga
@@ -204,6 +227,13 @@ independent ciphertext into a published mapping. Cached fixture assets contain
 only immutable synthetic bytes; credentials, providers and mutable repositories
 remain independent per case. Git UI workflows use `test_git_ui*.py` with copied
 repository templates; watcher tests live in `test_git_watchers.py`.
+
+`Python/tests/local_crypt_fixture.py:require_pinned_rclone()` skips a missing pinned
+binary for optional local coverage. Any nonempty `LOGISTICS_REQUIRE_LOCALCRYPT_TESTS`
+makes that prerequisite failure an error, so required coverage cannot succeed via
+a skip. The fixture never downloads software; the existing managed desktop
+prerequisite setup provisions it. Notebook routing cases that do not use rclone
+remain runnable without that binary.
 
 The daily profile keeps the standard encrypted rename and batching modes. The
 alternate encryption-mode matrices and exhaustive documentation-viewer sweeps use
@@ -341,7 +371,7 @@ Existing explicit app fixtures use `commonUtils.testing.event_loop.close_loop()`
 before removing their root. A bare `loop.close()` leaves default-executor
 filesystem workers alive. Inside a temporary-directory context, use `mobile_app()`
 there too; a later unittest cleanup runs after that directory has already exited.
-`mirror.py`, `readers.py`, `pdf.py` and `localcrypt.py` own backend fakes and
+`mirror.py`, `readers.py`, `pdf.py`, `localcrypt.py` and `notebooks.py` own backend fakes and
 document fixtures reused across test files. Import them directly rather than
 importing another `test_*.py` module for these helpers.
 
@@ -367,6 +397,7 @@ Every host regression run through `dev.py test` or `dev.py test-owner` saves a
 timestamped JSON report under ignored `test-results/test-timings/` and prints
 the ten slowest tests and files. The runner also accepts `--report PATH` when
 invoked directly. Desktop, mobile and shared matrix legs produce separate reports.
+Grouped `test-owner` runs likewise produce one report per selected environment.
 Direct `python -m unittest` invocations bypass this reporting.
 
 Reports include UTC start/end timestamps, elapsed seconds, test IDs and outcomes,
@@ -381,8 +412,12 @@ distinct from passes.
 The parent checkpoints the report after each isolated file. Crashes and the
 existing 300-second file timeout retain file elapsed time and exit status even
 when the child cannot finish a test report. `complete` means the runner finished,
-not that tests passed; inspect `exit_code` and outcomes as well. Incomplete child
-reports cannot establish which tests ran before a crash or timeout. An interrupted
+not that tests passed; inspect `exit_code` and outcomes as well. Valid completed
+records can survive a malformed or incomplete child report. The parent validates
+evidence against the launch/source context and the runtime-discovered case IDs
+saved before execution, rather than treating static declarations as actual cases.
+Missing, mismatched or unexplained omitted evidence fails that child even if its
+process exits zero; diagnostic mode continues independent files. An interrupted
 run retains completed files, but its active file may be absent.
 
 Compare repeated runs with the same selection, interpreter and host before
