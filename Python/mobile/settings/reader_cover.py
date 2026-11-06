@@ -4,7 +4,7 @@ from toga.style import Pack
 from services.mobile_features import enabled
 
 from ..reader_cover_display import BOOK_COVER, COMIC_COVER, native_bridge
-from .forms import save_boolean_switch, switch_row
+from .forms import SettingsLabel, save_boolean_switch, switch_row
 
 
 def available(app):
@@ -22,6 +22,10 @@ def controls(app, box):
         if not enabled(app.preferences, feature):
             continue
         add_switch(app, box, status, key, title)
+    display = getattr(getattr(app, 'scene_manager', None), 'external_comics', None)
+    last = getattr(getattr(display, 'reader_cover', None), 'status', '')
+    if last and any(app.preferences.values[key] == 'true' for key in (BOOK_COVER, COMIC_COVER)):
+        box.add(SettingsLabel('Last cover attempt. ' + last))
 
 
 def add_switch(app, box, status, key, title):

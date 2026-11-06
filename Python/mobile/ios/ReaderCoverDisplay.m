@@ -2,6 +2,7 @@
 #import <AVFoundation/AVFoundation.h>
 
 @interface LogisticsReaderCoverDisplay : NSObject
+@property (atomic, copy) NSString *lastStatus;
 + (BOOL)supported;
 + (BOOL)ownsSceneRole:(UISceneSessionRole)role;
 + (instancetype)sharedDisplay;
@@ -84,6 +85,7 @@
     UIWindow *window = self.readerController.viewIfLoaded.window;
     if (!self.cover || !window ||
         window.windowScene.activationState != UISceneActivationStateForegroundActive) {
+        self.lastStatus = @"The iOS window is not in the foreground.";
         [self stopPresentation];
         return;
     }
@@ -91,15 +93,21 @@
     AVAuthorizationStatus authorization = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
     if (authorization == AVAuthorizationStatusNotDetermined && !self.requestingPermission) {
         self.requestingPermission = YES;
+        self.lastStatus = @"Waiting for camera permission.";
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 self.requestingPermission = NO;
-                if (granted) [self updatePresentation];
+                if (granted && self.cover) [self updatePresentation];
+                if (!granted) self.lastStatus = @"Camera access is denied.";
             });
         }];
     }
+    if (authorization == AVAuthorizationStatusDenied || authorization == AVAuthorizationStatusRestricted) {
+        self.lastStatus = @"Camera access is denied or restricted.";
+    }
     if (authorization != AVAuthorizationStatusAuthorized || self.captureToken) return;
 
+    self.lastStatus = @"Starting the rear camera.";
     NSString *token = NSUUID.UUID.UUIDString;
     UISceneConfiguration *configuration = [[UISceneConfiguration alloc]
         initWithName:@"Logistics reader cover" sessionRole:UIWindowSceneSessionRoleCameraCaptureAccessory];
@@ -117,9 +125,15 @@
         AVCaptureSession *session = [AVCaptureSession new];
         AVCaptureVideoDataOutput *output = [AVCaptureVideoDataOutput new];
         // Keep a live video pipeline while discarding every frame.
-        if (!input || ![session canAddInput:input]) return;
+        if (!input || ![session canAddInput:input]) {
+            if ([self.captureToken isEqualToString:token]) self.lastStatus = @"The rear camera input is unavailable.";
+            return;
+        }
         [session addInput:input];
-        if (![session canAddOutput:output]) return;
+        if (![session canAddOutput:output]) {
+            if ([self.captureToken isEqualToString:token]) self.lastStatus = @"The camera could not provide video frames.";
+            return;
+        }
         [session addOutput:output];
         output.alwaysDiscardsLateVideoFrames = YES;
         [output setSampleBufferDelegate:self queue:self.frameQueue];
@@ -127,6 +141,13 @@
         if (![self.captureToken isEqualToString:token]) return;
         self.session = session;
         [session startRunning];
+        BOOL running = session.isRunning;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([self.captureToken isEqualToString:token] && !self.coverWindow) {
+                self.lastStatus = running ? @"Camera running. Waiting for iOS to present the cover."
+                                          : @"The camera session did not start.";
+            }
+        });
     });
 }
 
@@ -169,6 +190,7 @@
     controller.view = image;
     window.rootViewController = controller;
     self.coverWindow = window;
+    self.lastStatus = @"iOS connected the outer-display cover scene.";
     window.hidden = NO;
     return window;
 #else

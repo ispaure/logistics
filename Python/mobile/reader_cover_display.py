@@ -70,12 +70,16 @@ class ReaderCoverDisplay:
         self.native = None
         self.reader = None
         self.task = None
+        self.status = ''
 
     def clear(self):
         if self.task is not None:
             self.task.cancel()
             self.task = None
         if self.native is not None:
+            native_status = self.native.lastStatus
+            if native_status:
+                self.status = str(native_status)
             self.native.clearCover()
             self.native = None
         self.reader = None
@@ -85,7 +89,7 @@ class ReaderCoverDisplay:
         if app is None or getattr(app, '_hinge_status', 0) not in (2, 3) or not allowed(app):
             return None
         privacy = app.screen_privacy
-        if privacy.interrupted or privacy.captured or not getattr(app, 'scene_active', False):
+        if privacy.interrupted or privacy.captured or getattr(app, 'scene_active', None) is False:
             return None
         if all(app.preferences.values[key] != 'true' for key in (BOOK_COVER, COMIC_COVER)):
             return None
@@ -95,6 +99,15 @@ class ReaderCoverDisplay:
         candidate = self.candidate(app, allowed)
         if candidate is None:
             self.clear()
+            if (app is not None and getattr(app, 'visible_reader', lambda: None)() is not None
+                    and any(app.preferences.values[key] == 'true' for key in (BOOK_COVER, COMIC_COVER))):
+                if getattr(app, '_hinge_status', 0) not in (2, 3):
+                    self.status = 'The inner display must be open.'
+                elif (not allowed(app) or app.screen_privacy.interrupted or app.screen_privacy.captured
+                        or getattr(app, 'scene_active', None) is False):
+                    self.status = 'The reader is inactive or protected.'
+                else:
+                    self.status = 'This document is ineligible or its cover switch is off.'
             return
         reader, load = candidate
         if reader is self.reader:
@@ -103,7 +116,10 @@ class ReaderCoverDisplay:
         bridge = native_bridge(app)
         if bridge is not None:
             self.reader = reader
+            self.status = 'Loading the cover.'
             self.task = app.loop.create_task(self.load(app, reader, load, allowed, bridge))
+        else:
+            self.status = 'iOS camera accessory support is unavailable.'
 
     async def load(self, app, reader, load, allowed, bridge):
         try:
@@ -111,16 +127,20 @@ class ReaderCoverDisplay:
             from features.images.mobile.decoding import decode_page
             data = await asyncio.to_thread(load)
             current = self.candidate(app, allowed)
-            if not data or current is None or current[0] is not reader:
+            if current is None or current[0] is not reader:
+                return
+            if not data:
+                self.status = 'The EPUB has no supported cover image.'
                 return
             image = decode_page(data, image_dimensions(data), (1200, 1200), 'toga_iOS.')
             controller = app.main_window._impl.native.rootViewController
             if controller is not None:
                 self.native = bridge.sharedDisplay()
                 self.native.showCover(image._impl.native, fromController=controller)
+            else:
+                self.status = 'The reader has no active iOS window.'
         except Exception:
-            # A missing or unreadable cover must never interfere with reading.
-            return
+            self.status = 'The cover could not be read or shown.'
         finally:
             if self.task is asyncio.current_task():
                 self.task = None
