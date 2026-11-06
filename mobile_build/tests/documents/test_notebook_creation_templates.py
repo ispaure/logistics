@@ -93,6 +93,20 @@ class NotebookCreationTemplateTests(unittest.TestCase):
         self.assertEqual(picker.notebook_templates.template.value, CATALOG['Blank'])
         picker.cancel_text_destination()
 
+    def test_retired_template_callback_cannot_change_fresh_creation(self):
+        self.app.loop.run_until_complete(self.app.choose_document_type())
+        picker = self.app.editor_picker()
+        retired = picker.operation
+        changed = picker.notebook_templates.changed
+        picker.cancel_text_destination()
+
+        self.app.loop.run_until_complete(self.app.choose_document_type())
+        current = picker.operation
+        self.assertIsNot(current, retired)
+        changed('Logistics Cornell notes', 'move')
+        self.assertEqual((retired.notebook_template, retired.notebook_format), ('Blank', 'pro'))
+        self.assertEqual((current.notebook_template, current.notebook_format), ('Blank', 'pro'))
+
     def test_late_native_creation_does_not_replace_a_new_navigation(self):
         from types import SimpleNamespace
         from features.notebooks.mobile.panel import NotebookPanel

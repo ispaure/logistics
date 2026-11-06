@@ -7,36 +7,14 @@ import threading
 from dataclasses import dataclass, replace
 
 import toga
-from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, NONE
 from commonUtils.runtime.operations import MutationIncomplete
 from commonUtils.runtime.resources.selection import ResourceSelection
 from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.runtime.resources.provider import capabilities
-from .control_icons import icon_button
+from .document_destination_form import PickerMessage as PickerMessage, build_destination_form
 from services.documents.storage import DocumentPolicy
 from services.workflow_host import HostService, StateAttribute
-
-
-class PickerMessage(toga.Box):
-    """A message only occupies space when present; it is never a text field."""
-    def __init__(self, width):
-        from commonUtils.ui.native.forms import FittedLabel, fit_text
-        self.label = FittedLabel('', style=Pack(font_size=14, margin_top=8))
-        fit_text(self.label, max(120, width - 48))
-        super().__init__(style=Pack(direction=COLUMN))
-
-    @property
-    def value(self):
-        return self.label.text
-
-    @value.setter
-    def value(self, message):
-        self.label.text = message
-        if message and not self.children:
-            self.add(self.label)
-        elif not message and self.children:
-            self.remove(self.label)
 
 
 @dataclass(frozen=True)
@@ -384,125 +362,8 @@ class EditorPicker:
             self.editor_storage_roots[source_label] = source_provider
             source_folder = (self.operation.binary_owner.document.resource.path if self.operation.binary_owner is not None
                              else getattr(source_reader, 'key', '') or '').rpartition('/')[0]
-        roots = list(self.editor_storage_roots)
-        self.editor_picker_rows = {}
-        self.save_as_storage = toga.Selection(items=roots, style=Pack(height=48))
-        self.picker_folder = toga.TextInput(placeholder='Folder within storage', style=Pack(height=48))
-        if source_label is not None:
-            self.save_as_storage.value = source_label
-            self.picker_folder.value = source_folder
-        self.picker_entries = toga.Selection(style=Pack(height=48))
-        from .browser_ui import FileBrowser as NativeBrowser
-        self.editor_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_editor_selected, open_folder=self.browser_editor_folder, navigate=self.browser_editor_location, open_file=self.browser_editor_file, contextual_selection=False, preview=False)
-        self.save_as_name = toga.TextInput(value=name, placeholder='File name', style=Pack(height=48))
-        self.creation_type = None
-        if creation is not None:
-            from .document_choices import available_choices
-            CHOICES = self.creation_choices = available_choices(self.app)
-            self.creation_type = toga.Selection(items=[label for label, extension in CHOICES],
-                                                 style=Pack(height=48))
-            suffix = Path(name).suffix.lower().removeprefix('.')
-            self.creation_type.value = next((label for label, extension in CHOICES
-                if extension == ('md' if suffix == 'markdown' else suffix)), CHOICES[0][0])
-            self.creation_type.on_change = self.change_creation_type
-            self.operation.filename = 'Untitled.' + dict(CHOICES)[self.creation_type.value]
-        self.effective_name = self.editor_browser.status_label('')
-        self.effective_name.style.flex = 0
-        self.save_as_name.on_change = self.update_effective_name
-        self.update_effective_name()
-        self.save_as_status = PickerMessage(self.app.main_window.size.width)
-        self.move_progress = toga.ProgressBar(max=None)
-        self.move_notice = toga.Box(style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
-        title = getattr(destination_action, 'title', 'Move') if destination_action is not None else 'New document' if creation is not None else 'Open file' if mode == 'open' else 'Save As'
-        primary = getattr(destination_action, 'primary', 'Move here') if destination_action is not None else 'Create here' if creation is not None else 'Open file' if mode == 'open' else 'Save here'
-        self.picker_parent = icon_button('up', 'Parent folder', on_press=self.parent_editor_folder)
-        self.picker_header = self.editor_browser.attach_location_header(
-            self.editor_browser.status_label(''), self.picker_parent)
-        if creation is not None:
-            self.picker_parent.on_press = self.parent_editor_folder
-        if creation is not None:
-            from commonUtils.ui.native.forms import FittedLabel, fit_text
-            self.picker_destination = FittedLabel('', style=Pack(font_size=13))
-            fit_text(self.picker_destination, max(120, self.app.main_window.size.width - 48))
-        else:
-            self.picker_destination = self.editor_browser.status_label('')
-        self.picker_destination.style.flex = 0
-        from .appearance import action_button
-        self.picker_primary = action_button(toga.Button(primary, on_press=self.confirm_editor_file, style=Pack(height=48, flex=1)))
-        self.picker_new_folder = toga.Button('New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48))
-        self.new_folder_name = toga.TextInput(placeholder='New folder name', style=Pack(height=48, flex=0 if creation is not None else 1))
-        from .keyboard import prepare_picker_input
-        for control in (self.save_as_name, self.new_folder_name):
-            prepare_picker_input(control)
-        folder_actions = toga.Box(children=[toga.Button('Create folder' if creation is not None else 'Create', on_press=self.create_picker_folder, style=Pack(height=48)),
-            toga.Button('Cancel', on_press=self.hide_new_folder, style=Pack(height=48))], style=Pack(direction=ROW))
-        self.new_folder_form = toga.Box(children=[self.new_folder_name, folder_actions], style=Pack(
-            direction=COLUMN if creation is not None else ROW))
-        name_fields = [toga.Label('Name' if destination_action is not None else 'File name'), self.save_as_name]
-        location_fields = [self.picker_destination, self.save_as_status]
-        if creation is not None:
-            self.save_as_name.on_confirm = self.choose_creation_location
-            self.name_view = toga.Box(children=[*name_fields, self.effective_name],
-                style=Pack(direction=COLUMN, margin=20))
-            from .creation_layout import CreationFormats, CreationNameForm
-            if any(extension == 'rmdoc' for _, extension in self.creation_choices):
-                from features.notebooks.mobile.setup import NotebookTemplateChoices
-                def selected(template, paper_format):
-                    if self.operation is operation and self._work is None:
-                        operation.notebook_template, operation.notebook_format = template, paper_format
-                self.notebook_templates = NotebookTemplateChoices(selected)
-                self.sync_notebook_templates()
-            self.creation_formats = CreationFormats(self)
-            self.name_form = CreationNameForm(content=self.name_view, horizontal=False, style=Pack(flex=1))
-            self.next_button = toga.Button('Next', on_press=self.choose_creation_location,
-                                           style=Pack(height=48, flex=1), enabled=self._creation_name_valid)
-            self.name_actions = toga.Box(children=[
-                toga.Button('Cancel', on_press=self.cancel_text_destination, style=Pack(height=48)),
-                self.next_button], style=Pack(direction=ROW, margin_left=12, margin_right=12, margin_bottom=12))
-            self.name_content = toga.Box(children=[self.name_form], style=Pack(direction=COLUMN, flex=1))
-            self.creation_formats.fit(False, 0, self.app.main_window.size.width)
-            self.name_panel = toga.Box(children=[self.name_content, self.name_actions], style=Pack(direction=COLUMN, flex=1))
-            self.save_as_view = toga.Box(children=location_fields,
-                                        style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
-        else:
-            self.save_as_view = toga.Box(children=[*name_fields, self.effective_name, *location_fields],
-                                        style=Pack(direction=COLUMN, margin=12))
-        self.picker_actions = toga.Box(children=[
-                toga.Button('Cancel', on_press=self.cancel_text_destination, style=Pack(height=48)),
-                self.picker_primary],
-                style=Pack(direction=ROW, margin_left=12, margin_right=12, margin_bottom=12))
-        self.picker_form = toga.ScrollContainer(content=self.save_as_view, horizontal=False,
-                                                style=Pack(height=80 if creation is not None else 180))
-        # Keep the named action outside the compact location header: that
-        # header reserves icon-sized slots and truncates "New folder" on phones.
-        storage_row = self.save_as_storage
-        if creation is not None and not type(self.save_as_storage._impl).__module__.startswith('toga_iOS.'):
-            self.save_as_storage.style.flex = 1
-            storage_row = toga.Box(children=[self.save_as_storage], style=Pack(direction=ROW))
-        self._browse_controls = (storage_row, self.picker_header,
-                                 self.picker_new_folder, self.editor_browser.scroll_container())
-        if creation is not None:
-            from .creation_layout import CreationLocation
-            self.creation_location = CreationLocation(self)
-            apple = type(self.save_as_storage._impl).__module__.startswith('toga_iOS.')
-            self._browse_controls = (*(() if apple else (self.creation_location.heading,)),
-                self.creation_location.storage, self.creation_location.header,
-                self.editor_browser.scroll_container())
-        contents = [*self._browse_controls, self.picker_form, self.picker_actions]
-        panel = toga.Box(children=contents,
-            style=Pack(direction=COLUMN, flex=1))
-        from .ios_toolbar import prepare_form
-        if creation is not None:
-            self.location_panel = panel
-            from .creation_layout import CreationLayout
-            self.creation_layout = CreationLayout(self)
-            self.listed_path = ''
-        else:
-            prepare_form(panel, primary=primary, cancel='Cancel')
-        self.panel = panel
-        self._compact_keyboard = False
-        self._naming_keyboard_active = False
-        self.save_as_storage.on_change = self.change_editor_storage
+        panel, title = build_destination_form(
+            self, source_label=source_label, source_folder=source_folder)
         if creation is not None:
             self.show_creation_name()
             if self.creation_layout.paired:
