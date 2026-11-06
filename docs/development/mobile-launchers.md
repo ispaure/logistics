@@ -125,37 +125,54 @@ Before running Briefcase directly, follow the [project tooling readiness and rep
 
 ```sh
 python mobile_build/tools.py stage mobile_build/payload
-cd mobile_build
-python cloud_build.py licenses
-briefcase create android --no-input
-python cloud_build.py android
-briefcase build android --no-input
-# On a Mac with the iOS platform installed:
-briefcase create iOS --no-input
-python cloud_build.py ios
-briefcase build iOS --no-input
+```
+
+Stage once, then choose a platform block below. Each block starts from the
+repository root and uses a subshell for `mobile_build`, leaving the calling
+shell at the repository root.
+
+For Android, with its SDK and JDK prepared:
+
+```sh
+(
+  cd mobile_build &&
+  python cloud_build.py licenses &&
+  briefcase create android --no-input &&
+  python cloud_build.py android &&
+  briefcase build android --no-input
+)
+```
+
+For iOS on a Mac, select Xcode with an installed iOS Simulator SDK in the
+default 27.1.x series before creating or building the app. Run this block from
+the repository root. The separate assignment preserves the selector's exit
+status; a failed selection prevents the build block from running.
+
+```sh
+logistics_developer_dir="$(python mobile_build/select_ios_sdk.py --path-only)" &&
+(
+  export DEVELOPER_DIR="$logistics_developer_dir"
+  cd mobile_build &&
+  python cloud_build.py licenses &&
+  briefcase create iOS --no-input &&
+  python cloud_build.py ios &&
+  briefcase build iOS --no-input
+)
 ```
 
 Staging creates a new directory and refuses to replace an existing payload. Move
 or remove your previous generated `mobile_build/payload` before staging again. For local
 development, `--allow-dirty` permits uncommitted mobile and tracked shared sources.
-The release evidence verifier still rejects dirty payloads. Explicit local runs
-use `python validation/ui_tools.py run android --device <device> --local` (or `ios`), verify
+The release evidence verifier still rejects dirty payloads. From `mobile_build`,
+explicit local runs use `python validation/ui_tools.py run android --device <device> --local` (or `ios`), verify
 the staged source fingerprint, and retain a separate `*-native-ui-local.json` report.
 
 Briefcase needs the Android SDK/JDK or Xcode/iOS platform resources. A listed iOS
 SDK alone may be insufficient: install the matching simulator runtime through
 Xcode Settings → Components before trying a simulator run.
 
-For native iPhone Duo display and bar adaptation, select Xcode with an installed
-iOS Simulator SDK in the default 27.1.x series before creating or building the iOS app.
-
-```sh
-export DEVELOPER_DIR="$(python mobile_build/select_ios_sdk.py --path-only)"
-```
-
-Run this from the repository root. It selects a compatible installed Xcode;
-it does not install one. The iOS native CI job uses GitHub's `xcode-27` image and
+The selector chooses a compatible installed Xcode; it does not install one.
+The iOS native CI job uses GitHub's `xcode-27` image and
 rejects an older SDK rather than claiming Duo adaptation. The declared iOS 15
 deployment minimum is retained, with newer sidebar APIs guarded at runtime;
 an iOS 15 device/runtime remains a separate compatibility check.

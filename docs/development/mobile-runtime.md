@@ -106,7 +106,13 @@ Builds and devices have manager-owned cleanup; reports/screenshots remain under
 ignored test evidence. This matrix is diagnostic native acceptance, not a claim
 of testing every physical device or a private movie's decoder corruption.
 
-From the repository root, using the prepared mobile environment:
+Before a fresh probe build, follow the [pinned wheel setup](mobile-device-deployment.md)
+and export `PIP_FIND_LINKS` in the same shell so Briefcase's
+child installers can find it. The `--family all` matrix also needs network access
+to download the runner's pinned, hash-checked Duo helper, or an existing reviewed
+helper supplied with `--duoctl /absolute/path/to/duoctl`.
+
+Then run from the repository root, using the prepared mobile environment:
 
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe viewer-layout --family all --output test-results/viewer-layout
@@ -330,7 +336,9 @@ failure/cancellation. iOS video uses the same native lease, preserving the prior
 idle-timer setting only when the final transfer/player releases its request.
 These are automatic-idle-sleep requests, not CPU/background execution locks.
 
-From the repository root with the prepared mobile environment:
+Before a fresh probe build, follow the [pinned wheel setup](mobile-device-deployment.md)
+and export `PIP_FIND_LINKS` in the same shell. Then run from
+the repository root with the prepared mobile environment:
 
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe file-transfer --family 'iPhone Duo' --output test-results/file-transfer-progress
