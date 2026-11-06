@@ -107,11 +107,21 @@ class PrivateController(ReaderHost, ProviderUI):
     def resume_suspended_page(self):
         """Reload released pixels without changing the retained route or chrome."""
         task = getattr(self, '_resume_page_task', None)
-        if (not getattr(self, 'page_suspended', False) or self.cloud_busy
+        if (not getattr(self, 'page_suspended', False)
                 or not self.manager.available(self.session.id)
                 or (task is not None and not task.done())):
             return
-        self._resume_page_task = self.app.loop.create_task(self.read_crypt_page())
+
+        async def reload_when_idle():
+            # Leaving a reader cancels its layout reload, but the decode worker
+            # can still be draining when the user returns to the same page.
+            await self.operation_idle.wait()
+            if (self.page_suspended and not self.cloud_busy and self.manager.active is self
+                    and self.manager.available(self.session.id)
+                    and self.app.visible_reader() == self.session.id):
+                await self.read_crypt_page()
+
+        self._resume_page_task = self.app.loop.create_task(reload_when_idle())
 
     def close_crypt(self, widget=None, **kwargs):
         return self.app.request_reader_close(self.session.id)

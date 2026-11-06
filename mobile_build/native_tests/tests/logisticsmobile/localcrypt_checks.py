@@ -130,7 +130,19 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
             owner.resume_crypt()
             # Leaving the reader releases its decoded pixels. Resume schedules
             # a reload, so wait for the actual canvas before sending input.
-            await assert_comic_centered(lambda: canvas(owner), fullscreen=True)
+            try:
+                await assert_comic_centered(lambda: canvas(owner), fullscreen=True)
+            except AssertionError as error:
+                task = getattr(owner, '_resume_page_task', None)
+                document = owner.provider_document()
+                raise AssertionError(dict(comic=name, suspended=owner.page_suspended,
+                    busy=owner.cloud_busy, resume=('none' if task is None else
+                        'cancelled' if task.cancelled() else 'done' if task.done() else 'pending'),
+                    task_error=repr(task.exception()) if task is not None and task.done() and not task.cancelled() else None,
+                    current=document.capture()(), can_start=document.can_start(),
+                    destination=app.native_host.state.destination, active=owner.manager.active is owner,
+                    displayed=owner.crypt_view in app.body.children,
+                    spread=hasattr(owner, 'provider_spread'), title=owner.crypt_title.text)) from error
             assert owner.crypt_immersive
             canvas(owner).toggle_controls()
             assert not owner.crypt_immersive
