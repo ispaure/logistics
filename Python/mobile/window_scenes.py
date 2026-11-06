@@ -37,7 +37,14 @@ class SceneManager:
                               and bool(application.supportsMultipleScenes))
 
     @staticmethod
+    def accepts_scene_events(host):
+        owner = host.__dict__.get('_host_lifecycle')
+        return getattr(host, 'active_host', True) and not getattr(owner, 'secondary_retired', False)
+
+    @staticmethod
     def scene_activity(host, active):
+        if not SceneManager.accepts_scene_events(host):
+            return
         host.scene_active = active
         # UIKit may activate the startup window before workspace construction
         # has installed privacy/focus handlers. Its privacy owner refreshes on
@@ -226,7 +233,7 @@ class SceneManager:
 
             @objc_method
             def sceneDidEnterBackground_(self, scene) -> None:
-                if hasattr(self, 'host'):
+                if hasattr(self, 'host') and manager.accepts_scene_events(self.host):
                     privacy = getattr(self.host, 'screen_privacy', None)
                     if privacy is not None:
                         privacy.conceal()
@@ -308,42 +315,37 @@ class SceneManager:
         return host
 
     def disconnect(self, host):
-        if not host.active_host or (host is self.app and self.primary_disconnected):
-            return
-        from commonUtils.ui.native.documents import cancel_document_picker
-        cancel_document_picker(host.main_window)
         if host is self.app:
+            if not host.active_host or self.primary_disconnected:
+                return
+            from commonUtils.ui.native.documents import cancel_document_picker
+            cancel_document_picker(host.main_window)
             host.checkpoint()
             self.primary_disconnected = True
             self.primary_disconnects += 1
             self.scenes = {key: value for key, value in self.scenes.items() if value is not host}
             return
-        host.checkpoint()
-        host.release_disposable_resources()
-        for view in host.text_views.values():
-            view.dispose()
-        keyboard = getattr(host, '_keyboard_dismissal', None)
-        if keyboard is not None:
-            keyboard.dispose()
-        host.memory_pressure.dispose()
-        host.screen_privacy.dispose()
-        host.seasonal_snow.dispose()
-        host.adaptive.uninstall()
-        host.routes.uninstall()
-        host.native_host.dispose()
-        host.navigation.window = None
-        host.navigation.app = None
-        host.active_host = False
-        for session in host.workspace.sessions.values():
-            host.workspace.invalidate(session.id)
-        self.owners.detach(host.window_id)
-        from .app import _active_hosts
-        identity = str(host.private_root.resolve()) + ':' + host.window_id
-        if _active_hosts.get(identity) is host:
-            _active_hosts.pop(identity)
-        self.scenes = {key: value for key, value in self.scenes.items() if value is not host}
-        self.app.windows.remove(host.main_window)
-        if len(self.owners.hosts) == 1 and hasattr(self.app, 'native_scene'):
+        from .application_lifecycle import lifecycle
+        owner = lifecycle(host)
+        if owner.secondary_retiring or (not host.active_host and not owner.secondary_retired):
+            return
+        detached = False
+        try:
+            owner.retire_secondary_scene()
+        finally:
+            # A duplicate native notification may retry failed cleanup after a
+            # new host has claimed the same workspace. Release only this host.
+            if self.owners.hosts.get(host.window_id) is host:
+                self.owners.detach(host.window_id)
+                detached = True
+            from .app import _active_hosts
+            identity = str(host.private_root.resolve()) + ':' + host.window_id
+            if _active_hosts.get(identity) is host:
+                _active_hosts.pop(identity)
+            self.scenes = {key: value for key, value in self.scenes.items() if value is not host}
+            if host.main_window in self.app.windows:
+                self.app.windows.remove(host.main_window)
+        if detached and len(self.owners.hosts) == 1 and hasattr(self.app, 'native_scene'):
             from rubicon.objc import ObjCClass
             ObjCClass('UIApplication').sharedApplication.requestSceneSessionActivation(
                 None if self.primary_disconnected else self.app.native_scene.session,
