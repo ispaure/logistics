@@ -23,6 +23,7 @@
     "application_lifecycle.py",
     "audio_output.py",
     "audio_output_native.py",
+    "browser_location.py",
     "browser_preview.py",
     "browser_ui.py",
     "chapter_drawer.py",
@@ -188,6 +189,7 @@
     "workspace.py",
     "workspace_navigation.py",
     "workspace_policy.py",
+    "workspaces_screen.py",
     "ios_notebook_window.py"
   ]
 }
