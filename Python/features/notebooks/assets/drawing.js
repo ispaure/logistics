@@ -297,7 +297,7 @@ function clipPaintbrush(target, points) {
   target.clip();
 }
 
-function line(s, target = ctx) {
+function line(s, target = ctx, outline = true) {
   let p = s.points;
   if (!p.length) return;
   let brush = brushFor(s.tool),
@@ -331,16 +331,118 @@ function line(s, target = ctx) {
     geometry(target, p, family);
     target.restore()
   } else geometry(target, p, family);
-  if (selected.has(s.id) && mode !== 'select') {
-    target.globalAlpha = 1;
-    target.globalCompositeOperation = 'source-over';
-    target.filter = 'none';
-    target.strokeStyle = '#2877cb';
-    target.lineWidth = 2;
-    let bounds = p.reduce((b, p) => [Math.min(b[0], p[0] - p[3] / 2), Math.min(b[1], p[1] - p[3] / 2), Math.max(b[2], p[0] + p[3] / 2), Math.max(b[3], p[1] + p[3] / 2)], [Infinity, Infinity, -Infinity, -Infinity]);
-    target.strokeRect(bounds[0] - 5, bounds[1] - 5, bounds[2] - bounds[0] + 10, bounds[3] - bounds[1] + 10)
-  }
   target.restore();
+  if (outline) strokeOutline(s, target);
+}
+
+function strokeOutline(s, target) {
+  if (!selected.has(s.id) || mode === 'select') return;
+  target.save();
+  target.strokeStyle = '#2877cb';
+  target.lineWidth = 2;
+  const [left, top, right, bottom] = strokeBounds(s.points, 0);
+  target.strokeRect(left - 5, top - 5, right - left + 10, bottom - top + 10);
+  target.restore();
+}
+
+const highlightBoundsCache = new WeakMap();
+function highlightBounds(points) {
+  if (!highlightBoundsCache.has(points)) highlightBoundsCache.set(points, strokeBounds(points, 2));
+  return highlightBoundsCache.get(points);
+}
+
+function strokeBounds(points, padding) {
+  const bounds = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [x, y, , width] of points) {
+    const radius = width / 2 + padding;
+    bounds[0] = Math.min(bounds[0], x - radius);
+    bounds[1] = Math.min(bounds[1], y - radius);
+    bounds[2] = Math.max(bounds[2], x + radius);
+    bounds[3] = Math.max(bounds[3], y + radius);
+  }
+  return bounds;
+}
+
+function paintOrderedInk(items, target = ctx, showSelection = true, region = null) {
+  const colors = new Map(), highlights = new Map();
+  for (const item of items) {
+    if (item.corners || !item.points.length || brushFor(item.tool).family !== 'highlighter') continue;
+    const {rgb, alpha} = inkColor(item), key = [...rgb, alpha].join(',');
+    if (!colors.has(key)) colors.set(key, []);
+    const group = colors.get(key);
+    const entry = {item, bounds: highlightBounds(item.points), group, index: group.length};
+    group.push(entry);
+    highlights.set(item, entry);
+  }
+  let scratch;
+  const transform = target.getTransform();
+  for (const item of items) {
+    if (item.corners) {
+      paintPicture(item, target, showSelection);
+      continue;
+    }
+    const entry = highlights.get(item);
+    if (!entry || entry.index === entry.group.length - 1) {
+      line(item, target, showSelection);
+      continue;
+    }
+    const [left, top, right, bottom] = entry.bounds;
+    const later = entry.group.slice(entry.index + 1).filter(({bounds: [l, t, r, b]}) =>
+      l < right && r > left && t < bottom && b > top);
+    if (!later.length) {
+      line(item, target, showSelection);
+      continue;
+    }
+    // A fully retraced path has no independent edge coverage to paint.
+    if (later.some(({item: next}) => sameHighlightPath(item.points, next.points))) {
+      if (showSelection) strokeOutline(item, target);
+      continue;
+    }
+    // The last pass of this color owns the tint at each covered pixel. Moving
+    // that tint forward lets intervening pen/image pixels receive it only where
+    // a later highlight actually covers them.
+    const [l, t, r, b] = region || [left, top, right, bottom];
+    const x = Math.max(0, Math.floor(Math.max(left, l) * transform.a + transform.e));
+    const y = Math.max(0, Math.floor(Math.max(top, t) * transform.d + transform.f));
+    const width = Math.min(target.canvas.width, Math.ceil(Math.min(right, r) * transform.a + transform.e)) - x;
+    const height = Math.min(target.canvas.height, Math.ceil(Math.min(bottom, b) * transform.d + transform.f)) - y;
+    if (width <= 0 || height <= 0) continue;
+    scratch ||= document.createElement('canvas');
+    scratch.width = width;
+    scratch.height = height;
+    const g = scratch.getContext('2d');
+    g.setTransform(transform.a, 0, 0, transform.d, transform.e - x, transform.f - y);
+    line(item, g, false);
+    g.globalCompositeOperation = 'destination-out';
+    g.strokeStyle = g.fillStyle = '#000';
+    g.lineCap = 'butt';
+    g.lineJoin = 'round';
+    const masked = [];
+    for (const {item: next} of later) {
+      if (masked.some(points => sameHighlightPath(points, next.points))) continue;
+      geometry(g, next.points, 'highlighter');
+      masked.push(next.points);
+    }
+    target.save();
+    target.resetTransform();
+    target.globalCompositeOperation = 'multiply';
+    target.drawImage(scratch, x, y);
+    target.restore();
+    if (showSelection) strokeOutline(item, target);
+  }
+}
+
+function sameHighlightPath(points, other) {
+  return points.length === other.length && points.every(([x, y, , width], i) => {
+    const [otherX, otherY, , otherWidth] = other[i];
+    return x === otherX && y === otherY && width === otherWidth;
+  });
+}
+
+function activeHighlight() {
+  if (!inkSettings || brushFor(inkSettings.tool).family !== 'highlighter' || !points.length) return null;
+  const {tool, color, width} = inkSettings;
+  return {tool, ...nativeColor(tool, color), points: strokePoints(points, tool, width)};
 }
 
 function clearDraft() {
@@ -385,7 +487,21 @@ function flushPreview() {
   if (previewFrame !== null) cancelAnimationFrame(previewFrame);
   previewFrame = null;
   if (mode === 'ink' && points.length > previewCount) {
-    preview(points.slice(Math.max(0, previewCount - 1)));
+    const highlight = activeHighlight();
+    if (highlight) {
+      const region = highlightBounds(highlight.points);
+      const [left, top, right, bottom] = region;
+      const transform = ctx.getTransform();
+      const x = Math.floor(left * transform.a), y = Math.floor(top * transform.d);
+      ctx.save();
+      ctx.resetTransform();
+      ctx.beginPath();
+      ctx.rect(x, y, Math.ceil(right * transform.a) - x, Math.ceil(bottom * transform.d) - y);
+      ctx.clip();
+      ctx.setTransform(transform);
+      draw(highlight, region);
+      ctx.restore();
+    } else preview(points.slice(Math.max(0, previewCount - 1)));
     previewCount = points.length
   }
 }

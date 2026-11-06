@@ -202,9 +202,9 @@ function paintBackground(target, image = $('pdfBackground')) {
     bounds.y + (bounds.height - height) / 2, width, height);
 }
 
-$('pdfBackground').addEventListener('load', draw);
+$('pdfBackground').addEventListener('load', () => draw());
 
-function draw() {
+function draw(highlight = mode === 'ink' ? activeHighlight() : null, region = null) {
   if (typeof imageRender === 'function') imageRender();
   clearDraft();
   ctx.clearRect(0, 0, state.width, state.height);
@@ -216,23 +216,24 @@ function draw() {
     paintBackground(ctx);
   }
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
-  for (let s of sceneItems())
-    if (visible.has(s.layer)) { if (s.corners) paintPicture(s); else line(s) }
-  if (mode === 'capture' && points.length && !imageGesture) {
-    ctx.save(); ctx.strokeStyle='#2877cb'; ctx.lineWidth=3; ctx.setLineDash([8,6]); ctx.beginPath(); ctx.moveTo(points[0][0],points[0][1]); for(const p of points.slice(1))ctx.lineTo(p[0],p[1]); ctx.stroke(); ctx.restore()
-  }
+  const items = sceneItems().filter(s => visible.has(s.layer));
   if (continuousInk)
     for (let action of queue)
-      if (action.op === 'stroke') line({
+      if (action.op === 'stroke') items.push({
         tool: action.tool,
         ...nativeColor(action.tool, action.color),
         points: strokePoints(action.points, action.tool, action.width)
       });
-  if (pendingInk) line(pendingInk);
+  if (pendingInk) items.push(pendingInk);
+  if (highlight) items.push(highlight);
+  paintOrderedInk(items, ctx, true, region);
+  if (mode === 'capture' && points.length && !imageGesture) {
+    ctx.save(); ctx.strokeStyle='#2877cb'; ctx.lineWidth=3; ctx.setLineDash([8,6]); ctx.beginPath(); ctx.moveTo(points[0][0],points[0][1]); for(const p of points.slice(1))ctx.lineTo(p[0],p[1]); ctx.stroke(); ctx.restore()
+  }
   if (pendingErase) previewErase(pendingErase.points, pendingErase.radius);
   if (points.length && mode === 'erase' && eraserKind === 'partial') previewErase(points);
   if (points.length && mode === 'ink') {
-    preview(points);
+    if (!highlight) preview(points);
     previewCount = points.length
   }
   if (typeof paintSelection === 'function') paintSelection();
