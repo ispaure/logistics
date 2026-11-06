@@ -96,6 +96,18 @@ class FolderSourceTests(QtTestCase):
         self.locals = []
         self.remotes = []
         self.settings = {}
+
+        from services.folders.policy import read_exclusions
+
+        def read_fixture_exclusions(_path):
+            # Each read gets its own file because a refresh can run in a worker.
+            lines = ['[Folders]']
+            lines.extend(f'{key} = {", ".join(values)}' for key, values in self.settings.items())
+            with TemporaryDirectory(dir=self.root) as directory:
+                path = Path(directory) / 'config.ini'
+                path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+                return read_exclusions(path)
+
         class BrowserStub(qt.QWidget):
             idle = qt.Signal()
             def prepare_close(self):
@@ -106,7 +118,7 @@ class FolderSourceTests(QtTestCase):
         self.addCleanup(patcher.stop)
         for target, options in (
             ('services.folders.entries.folder_discovery.get_local_folders', {'side_effect': lambda: self.local_folders}),
-            ('services.folders.entries._get_configured_name_values', {'side_effect': lambda key: self.settings.get(key, [])}),
+            ('services.folders.entries.read_exclusions', {'side_effect': read_fixture_exclusions}),
             ('features.application.registry.get_local_folder_sources', {'side_effect': lambda: self.locals}),
             ('features.application.registry.get_remote_folder_sources', {'side_effect': lambda: self.remotes}),
             ('features.application.registry.get_folder_features', {'return_value': []}),
