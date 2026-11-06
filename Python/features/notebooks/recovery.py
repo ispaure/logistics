@@ -10,6 +10,7 @@ from commonUtils.persistence.publication import serialize_mutation
 from commonUtils.persistence.atomic import atomic_write_bytes
 from .notebook import Notebook, Page, identifier
 from .ink import InkPage
+from .protocol import RecoveryIncomplete
 
 
 class Repository:
@@ -59,12 +60,22 @@ class Repository:
         self.revisions.setdefault(notebook, {})[key] = self.revisions[recovered][key]
 
     @serialize_mutation
-    def save(self, key, notebook, *, replace_base=False):
-        directory = self.root / identifier(key)
-        manifest = directory / 'state.json'
-        revision = sha256(manifest.read_bytes()).hexdigest() if manifest.exists() else None
+    def check_revision(self, key, notebook):
+        manifest = self.root / identifier(key) / 'state.json'
+        previous = manifest.read_bytes() if manifest.exists() else None
+        revision = sha256(previous).hexdigest() if previous is not None else None
         if self.revisions.get(notebook, {}).get(key) != revision:
             raise ValueError('This notebook changed in another window. Reopen its saved copy before editing.')
+        return previous
+
+    @serialize_mutation
+    def save(self, key, notebook, *, source_bytes=None):
+        directory = self.root / identifier(key)
+        manifest = directory / 'state.json'
+        previous = self.check_revision(key, notebook)
+        # Explicit source adoption preserves the archive exactly, including
+        # missing legacy ink members. Loading a blank page may synthesize ink.
+        source_baseline = Notebook.read(source_bytes) if source_bytes is not None else None
         # Each immutable page snapshot precedes publication of its manifest.
         # Interrupted saves leave the previous manifest and pages recoverable.
         pages = []
@@ -88,21 +99,36 @@ class Repository:
         for page, ink in zip(notebook.pages, normalized):
             page.ink = ink
         structural = notebook.structure_dirty
-        if structural or replace_base:
-            base = notebook.to_bytes()
+        baseline = None
+        if structural or source_bytes is not None:
+            base = source_bytes if source_bytes is not None else notebook.to_bytes()
+            baseline = source_baseline if source_bytes is not None else Notebook.read(base)
             digest = sha256(base).hexdigest()
             target = directory / (digest + '.rmdoc')
             if not target.exists():
                 atomic_write_bytes(target, base)
             base_name = target.name
         else:
-            previous = directory / 'state.json'
-            base_name = json.loads(previous.read_text()).get('base', 'base.rmdoc') if previous.exists() else 'base.rmdoc'
-        atomic_write_json(directory / 'state.json', dict(schema=1, name=notebook.name,
-            base=base_name, pages=pages), durable_directory=True)
-        self.revisions.setdefault(notebook, {})[key] = sha256((directory / 'state.json').read_bytes()).hexdigest()
+            base_name = json.loads(previous).get('base', 'base.rmdoc') if previous is not None else 'base.rmdoc'
+        state = dict(schema=1, name=notebook.name, base=base_name, pages=pages)
+        expected = json.dumps(state, ensure_ascii=False, allow_nan=False).encode('utf-8')
+        publication_error = None
+        try:
+            atomic_write_json(manifest, state, durable_directory=True)
+        except Exception as error:
+            try:
+                current = manifest.read_bytes() if manifest.exists() else None
+            except OSError as read_error:
+                raise RecoveryIncomplete('Notebook recovery could not be verified. Keep this draft open and use Save As.',
+                                         published=None) from read_error
+            if current != expected:
+                if current == previous:
+                    raise
+                raise RecoveryIncomplete('Notebook recovery changed during publication. Keep this draft open and use Save As.',
+                                         published=None) from error
+            publication_error = error
+        self.revisions.setdefault(notebook, {})[key] = sha256(expected).hexdigest()
         if structural:
-            baseline = Notebook.read(base)
             notebook.members, notebook.content = baseline.members, baseline.content
         notebook.structure_dirty = False
         # Keep only objects referenced by the published manifest. In-memory undo
@@ -114,6 +140,9 @@ class Repository:
                     path.unlink(missing_ok=True)
         except OSError:
             pass  # Published recovery remains valid; retry pruning on the next save.
+        if publication_error is not None:
+            raise RecoveryIncomplete('Notebook recovery was published, but durability confirmation failed. '
+                                     'The edit remains in this draft.', published=True) from publication_error
 
     @serialize_mutation
     def open(self, key):

@@ -15,6 +15,200 @@ from features.notebooks._vendor.rmscene import scene_stream as ss
 
 
 class RecoverySharingTests(unittest.TestCase):
+    def test_discard_keeps_exact_legacy_source_base_and_retries_after_fsync_failure(self):
+        import json
+        import os
+        import stat
+        from io import BytesIO
+        from zipfile import ZipFile
+        from unittest.mock import patch
+        from commonUtils.persistence import atomic_write_json
+        from features.notebooks.notebook import MAX_ARCHIVE, MAX_MEMBERS, read_archive
+        from features.notebooks.recovery import RecoveryIncomplete
+        from features.notebooks.storage import NotebookDocument
+        from services.documents.storage import local_document_resource
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'source.rmdoc'
+            source.write_bytes(Notebook.new('Original').to_bytes())
+            repository = Repository(root / 'recovery')
+            with local_document_resource(source, max_bytes=MAX_ARCHIVE) as resource:
+                document = NotebookDocument(Notebook.read(resource.read()), resource=resource, recovery=repository)
+                editor = Editor(document.book, document.checkpoint)
+                editor.apply(dict(op='rename', name='Draft'))
+                members = read_archive(Notebook.new('Legacy replacement').to_bytes())
+                members = {name: data for name, data in members.items() if not name.endswith('.rm')}
+                for index in range(MAX_MEMBERS - len(members)):
+                    members[f'opaque/{index}.bin'] = b'\xfffuture'
+                stream = BytesIO()
+                with ZipFile(stream, 'w') as archive:
+                    for name, data in members.items():
+                        archive.writestr(name, data)
+                original_bytes = stream.getvalue()
+                source.write_bytes(original_bytes)
+                fsync = os.fsync
+                def fail_directory(fd):
+                    if stat.S_ISDIR(os.fstat(fd).st_mode):
+                        raise OSError('Directory sync unavailable')
+                    return fsync(fd)
+                def write_manifest(*args, **kwargs):
+                    with patch('os.fsync', side_effect=fail_directory):
+                        return atomic_write_json(*args, **kwargs)
+                with patch('features.notebooks.recovery.atomic_write_json', side_effect=write_manifest):
+                    with self.assertRaises(RecoveryIncomplete) as failure:
+                        document.discard()
+                self.assertTrue(failure.exception.published)
+                self.assertTrue(document.dirty)
+                self.assertEqual(document.book.name, 'Draft')
+                state = json.loads((repository.root / document.key / 'state.json').read_bytes())
+                self.assertEqual((repository.root / document.key / state['base']).read_bytes(), original_bytes)
+                self.assertEqual(repository.open(document.key).members, members)
+                editor.apply(dict(op='rename', name='Retry draft'))
+                self.assertEqual(repository.open(document.key).name, 'Retry draft')
+                document.discard()
+                state = json.loads((repository.root / document.key / 'state.json').read_bytes())
+                self.assertEqual((repository.root / document.key / state['base']).read_bytes(), original_bytes)
+                self.assertEqual(source.read_bytes(), original_bytes)
+                self.assertFalse(document.dirty)
+
+    def test_checkpoint_publication_receipts_preserve_edit_undo_redo_and_revision(self):
+        import json
+        import os
+        import stat
+        from unittest.mock import patch
+        from commonUtils.persistence import atomic_write_json
+        from features.notebooks.notebook import MAX_ARCHIVE
+        from features.notebooks.recovery import RecoveryIncomplete
+        from features.notebooks.storage import NotebookDocument
+        from services.documents.storage import local_document_resource
+        from services.documents.mobile_storage import notebook_binding, remember_notebook_resource
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'source.rmdoc'
+            source.write_bytes(Notebook.new('Saved').to_bytes())
+            original = source.read_bytes()
+            repository = Repository(root / 'recovery')
+            with local_document_resource(source, max_bytes=MAX_ARCHIVE) as resource:
+                document = NotebookDocument(Notebook.read(resource.read()), resource=resource,
+                    recovery=repository, changed=remember_notebook_resource)
+                remember_notebook_resource(document)
+                editor = Editor(document.book, document.checkpoint)
+                fsync = os.fsync
+                def fail_directory(fd):
+                    if stat.S_ISDIR(os.fstat(fd).st_mode):
+                        raise OSError('Directory sync unavailable')
+                    return fsync(fd)
+                def write_manifest(*args, **kwargs):
+                    with patch('os.fsync', side_effect=fail_directory):
+                        return atomic_write_json(*args, **kwargs)
+                for action, strokes, history in [(dict(op='stroke', points=[[20, 30, .5]]), 1, (1, 0)),
+                                                 (dict(op='undo'), 0, (0, 1)), (dict(op='redo'), 1, (1, 0))]:
+                    with patch('features.notebooks.recovery.atomic_write_json', side_effect=write_manifest):
+                        with self.assertRaises(RecoveryIncomplete) as failure:
+                            editor.apply(action)
+                    self.assertTrue(failure.exception.published)
+                    self.assertEqual(len(document.book.page(0).strokes), strokes)
+                    self.assertEqual(len(repository.open(document.key).page(0).strokes), strokes)
+                    self.assertEqual((len(editor.undo), len(editor.redo)), history)
+                    self.assertTrue(document.dirty)
+                    self.assertTrue(json.loads(notebook_binding(repository, document.key).read_bytes())['dirty'])
+                with patch('features.notebooks.recovery.atomic_write_json', side_effect=OSError('Before publication')):
+                    with self.assertRaisesRegex(OSError, 'Before publication'):
+                        editor.apply(dict(op='undo'))
+                self.assertEqual(len(document.book.page(0).strokes), 1)
+                self.assertEqual((len(editor.undo), len(editor.redo)), (1, 0))
+                editor.apply(dict(op='undo'))
+                self.assertEqual(len(repository.open(document.key).page(0).strokes), 0)
+                self.assertEqual(source.read_bytes(), original)
+
+    def test_stale_checkpoint_and_failed_rollback_preserve_newer_source_binding(self):
+        from unittest.mock import patch
+        from features.notebooks.notebook import MAX_ARCHIVE
+        from features.notebooks.recovery import RecoveryIncomplete
+        from features.notebooks.storage import NotebookDocument
+        from services.documents.storage import local_document_resource
+        from services.documents.mobile_storage import notebook_binding, remember_notebook_resource
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'source.rmdoc'
+            source.write_bytes(Notebook.new('Saved').to_bytes())
+            repository = Repository(root / 'recovery')
+            with local_document_resource(source, max_bytes=MAX_ARCHIVE) as resource:
+                document = NotebookDocument(Notebook.read(resource.read()), resource=resource,
+                    recovery=repository, changed=remember_notebook_resource)
+                remember_notebook_resource(document)
+                binding = notebook_binding(repository, document.key)
+                other = NotebookDocument(repository.open(document.key), resource=resource,
+                    recovery=repository, key=document.key, changed=remember_notebook_resource)
+                Editor(other.book, other.checkpoint).apply(dict(op='rename', name='Other window'))
+                before = binding.read_bytes()
+                editor = Editor(document.book, document.checkpoint)
+                with self.assertRaisesRegex(ValueError, 'another window'):
+                    editor.apply(dict(op='rename', name='Stale window'))
+                self.assertEqual(binding.read_bytes(), before)
+                self.assertEqual(document.book.name, 'Saved')
+                self.assertFalse(document.dirty)
+                newer_binding = b'{"future": "another writer"}'
+                def reject(*args):
+                    binding.write_bytes(newer_binding)
+                    raise OSError('Recovery unavailable')
+                with patch.object(repository, 'save', side_effect=reject):
+                    with self.assertRaisesRegex(RecoveryIncomplete, 'binding could not be restored'):
+                        Editor(other.book, other.checkpoint).apply(dict(op='rename', name='Keep in RAM'))
+                self.assertEqual(binding.read_bytes(), newer_binding)
+                self.assertEqual(other.book.name, 'Keep in RAM')
+                self.assertTrue(other.dirty)
+
+    def test_binding_publication_and_rollback_write_failures_report_the_retained_state(self):
+        import json
+        from unittest.mock import patch
+        from commonUtils.persistence import atomic_write_json
+        from commonUtils.persistence.atomic import atomic_write_bytes
+        from features.notebooks.notebook import MAX_ARCHIVE
+        from features.notebooks.recovery import RecoveryIncomplete
+        from features.notebooks.storage import NotebookDocument
+        from services.documents.storage import local_document_resource
+        from services.documents.mobile_storage import notebook_binding, remember_notebook_resource
+
+        for rollback_fails in (False, True):
+            with self.subTest(rollback_fails=rollback_fails), TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = root / 'source.rmdoc'
+                source.write_bytes(Notebook.new('Saved').to_bytes())
+                repository = Repository(root / 'recovery')
+                with local_document_resource(source, max_bytes=MAX_ARCHIVE) as resource:
+                    document = NotebookDocument(Notebook.read(resource.read()), resource=resource,
+                        recovery=repository, changed=remember_notebook_resource)
+                    remember_notebook_resource(document)
+                    binding = notebook_binding(repository, document.key)
+                    before = binding.read_bytes()
+                    editor = Editor(document.book, document.checkpoint)
+                    def write_binding(*args, **kwargs):
+                        atomic_write_json(*args, **kwargs)
+                        raise OSError('Binding durability unavailable')
+                    def reject_rollback(path, data, **kwargs):
+                        if Path(path) == binding and data == before:
+                            raise OSError('Rollback unavailable')
+                        return atomic_write_bytes(path, data, **kwargs)
+                    with patch('commonUtils.persistence.atomic_write_json', side_effect=write_binding):
+                        if rollback_fails:
+                            with patch('commonUtils.persistence.atomic.atomic_write_bytes', side_effect=reject_rollback):
+                                with self.assertRaisesRegex(RecoveryIncomplete, 'binding could not be restored'):
+                                    editor.apply(dict(op='stroke', points=[[20, 30, .5]]))
+                        else:
+                            with self.assertRaisesRegex(OSError, 'Binding durability unavailable'):
+                                editor.apply(dict(op='stroke', points=[[20, 30, .5]]))
+                    self.assertEqual(len(document.book.page(0).strokes), int(rollback_fails))
+                    self.assertEqual(len(editor.undo), int(rollback_fails))
+                    self.assertEqual(document.dirty, rollback_fails)
+                    self.assertEqual(json.loads(binding.read_bytes())['dirty'], rollback_fails)
+                    self.assertEqual(len(repository.open(document.key).page(0).strokes), 0)
+                    if not rollback_fails:
+                        self.assertEqual(binding.read_bytes(), before)
+
     def test_discard_replaces_recovery_base_with_complete_saved_archive(self):
         from features.notebooks.notebook import MAX_ARCHIVE
         from features.notebooks.storage import NotebookDocument
@@ -184,9 +378,10 @@ class RecoverySharingTests(unittest.TestCase):
             self.assertFalse(document.dirty)
             self.assertEqual((editor.undo, editor.redo), ([], []))
             self.assertEqual(source.read_bytes(), original)
-            # The conservative marker selects this still-valid old recovery
-            # after a restart; the next accepted edit commits exactly once.
-            self.assertTrue(json.loads(binding.read_bytes())['dirty'])
+            # No edit published: preserve the observed clean binding so a
+            # newer source remains authoritative after a restart.
+            self.assertFalse(json.loads(binding.read_bytes())['dirty'])
+            self.assertEqual(binding.read_bytes(), binding_before)
             editor.apply(action)
             self.assertEqual(len(repository.open(document.key).page(0).strokes), 1)
             self.assertEqual(len(editor.undo), 1)

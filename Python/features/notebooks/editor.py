@@ -1,7 +1,7 @@
 """Reversible notebook commands independent of hosts and storage backends."""
 from copy import copy, deepcopy
 
-from .protocol import validate_action
+from .protocol import validate_action, RecoveryIncomplete
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS
 from .brushes import BRUSHES, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
 
@@ -10,6 +10,7 @@ class Editor:
     def __init__(self, notebook, checkpoint=lambda book: None):
         self.notebook = notebook
         self.checkpoint = checkpoint
+        self.checkpoint_unconfirmed = False
         self.index = 0
         self.undo = []
         self.redo = []
@@ -174,7 +175,13 @@ class Editor:
                 self.restore(source[-1])
                 try:
                     self.checkpoint(book)
-                except Exception:
+                    self.checkpoint_unconfirmed = False
+                except Exception as error:
+                    if isinstance(error, RecoveryIncomplete):
+                        self.checkpoint_unconfirmed = error.published is not True
+                        source.pop()
+                        target.append(previous)
+                        raise
                     self.restore(previous)
                     raise
                 source.pop()
@@ -336,14 +343,22 @@ class Editor:
             else:
                 raise ValueError('Unknown notebook command.')
             self.checkpoint(book)
-        except Exception:
-            self.restore(previous)
-            raise
+            self.checkpoint_unconfirmed = False
+        except Exception as error:
+            if not isinstance(error, RecoveryIncomplete):
+                self.restore(previous)
+                raise
+            self.checkpoint_unconfirmed = error.published is not True
+            checkpoint_error = error
+        else:
+            checkpoint_error = None
         self._stroke_clipboard = clipboard
         self._selection_ids = [book.page(self.index).strokes[i].id for i in selection_indexes]
         self.undo.append(previous)
         del self.undo[:-50]
         self.redo.clear()
+        if checkpoint_error is not None:
+            raise checkpoint_error
 
     @staticmethod
     def selected_strokes(ink, ids):

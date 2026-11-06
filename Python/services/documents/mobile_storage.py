@@ -119,14 +119,52 @@ def restore_notebook_resource(recovery, key):
 
 
 def remember_notebook_resource(document):
-    """Host policy permits ordinary references; format code supplies no paths."""
+    """Publish ordinary references and return a rollback for this exact write."""
+    import json
     from commonUtils.persistence import atomic_write_json
+    from commonUtils.persistence.atomic import atomic_write_bytes
+    from commonUtils.persistence.publication import mutation_lock
+    from features.notebooks.protocol import RecoveryIncomplete
     resource = document.resource
     if resource is None or not resource.policy.persistent or document.recovery is None:
         return
-    atomic_write_json(notebook_binding(document.recovery, document.key),
-        dict(root=str(resource.provider.root), path=resource.path,
-             revision=resource.revision, dirty=document.dirty), durable_directory=True)
+    path = notebook_binding(document.recovery, document.key)
+    state = dict(root=str(resource.provider.root), path=resource.path,
+                 revision=resource.revision, dirty=document.dirty)
+    expected = json.dumps(state, ensure_ascii=False, allow_nan=False).encode('utf-8')
+    def observed():
+        try:
+            return path.read_bytes()
+        except FileNotFoundError:
+            return None
+    with mutation_lock:
+        previous = observed()
+        def rollback():
+            with mutation_lock:
+                def validate():
+                    if observed() != expected:
+                        raise ValueError('Notebook source binding changed in another window.')
+                if observed() == previous:
+                    return
+                validate()
+                try:
+                    if previous is None:
+                        path.unlink()
+                    else:
+                        atomic_write_bytes(path, previous, validate=validate)
+                except Exception:
+                    if observed() != previous:
+                        raise
+        try:
+            atomic_write_json(path, state, durable_directory=True)
+        except Exception:
+            try:
+                rollback()
+            except Exception as error:
+                raise RecoveryIncomplete('Notebook source binding could not be restored. '
+                                         'Keep this draft open and use Save As.', published=None) from error
+            raise
+        return rollback
 
 
 class NotesDocumentAccess:

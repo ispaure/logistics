@@ -236,6 +236,71 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertTrue(self.run_async(open_notebook(self.app, path=source)))
         self.assertEqual(len(self.app.notebook_panel.editor.notebook.page(0).strokes), 1)
 
+    def test_rejected_first_checkpoint_reopens_latest_clean_source(self):
+        from services.documents.mobile_storage import notebook_binding
+        panel = self.create(private=False)
+        document = panel.document
+        key = document.key
+        binding = notebook_binding(document.recovery, key)
+        before = binding.read_bytes()
+        source = document.resource.provider.root / document.resource.path
+        replacement = Notebook.new('Replacement source', template='Logistics Daily planner')
+        replacement.members['opaque/future.bin'] = b'new source asset'
+        saved = replacement.to_bytes()
+        source.write_bytes(saved)
+        with patch('features.notebooks.recovery.atomic_write_json', side_effect=OSError('Recovery unavailable')):
+            with self.assertRaisesRegex(OSError, 'Recovery unavailable'):
+                self.stroke(panel)
+        self.assertFalse(document.dirty)
+        self.assertEqual(binding.read_bytes(), before)
+        self.assertEqual(len(document.book.page(0).strokes), 0)
+        self.assertTrue(self.app.close_session(panel.session.id))
+        self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
+        reopened = self.app.notebook_panel.document
+        self.assertEqual(reopened.book.id, replacement.id)
+        self.assertEqual(reopened.book.name, 'Replacement source')
+        self.assertIsNotNone(reopened.resource)
+        self.assertFalse(reopened.dirty)
+        self.assertEqual(reopened.recovery.open(key).members, Notebook.read(saved).members)
+        self.assertEqual(source.read_bytes(), saved)
+
+    def test_unconfirmed_recovery_blocks_close_until_confirmed_retry(self):
+        from features.notebooks.recovery import RecoveryIncomplete
+        self.assertTrue(self.run_async(open_notebook(self.app, name='Recovery-only draft')))
+        panel = self.app.notebook_panel
+        document = panel.document
+        self.assertIsNone(document.resource)
+        original_read = Path.read_bytes
+        manifest = document.recovery.root / document.key / 'state.json'
+        attempted = False
+        def reject_publication(*args, **kwargs):
+            nonlocal attempted
+            attempted = True
+            raise OSError('Publication interrupted')
+        def unreadable(path):
+            if attempted and path == manifest:
+                raise OSError('Recovery readback unavailable')
+            return original_read(path)
+        with patch('features.notebooks.recovery.atomic_write_json', side_effect=reject_publication), \
+                patch.object(Path, 'read_bytes', unreadable):
+            with self.assertRaisesRegex(RecoveryIncomplete, 'could not be verified'):
+                self.stroke(panel)
+        self.assertTrue(panel.editor.checkpoint_unconfirmed)
+        self.assertTrue(document.dirty)
+        self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)
+        responses = self.app.main_window._impl.dialog_responses
+        responses['ErrorDialog'] = [None]
+        self.assertFalse(self.app.close_session(panel.session.id))
+        self.run_async(asyncio.sleep(0))
+        self.assertEqual(responses['ErrorDialog'], [])
+        self.assertIn(panel.session.id, self.app.workspace.sessions)
+        self.assertIn('Save As', panel.status.text)
+        self.stroke(panel)
+        self.assertFalse(panel.editor.checkpoint_unconfirmed)
+        self.assertFalse(document.dirty)
+        self.assertEqual(len(document.recovery.open(document.key).page(0).strokes), 2)
+        self.assertTrue(self.app.close_session(panel.session.id))
+
     def test_discard_recovery_failure_keeps_session_and_dirty_draft(self):
         panel = self.create(private=False)
         self.stroke(panel)

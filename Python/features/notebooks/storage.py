@@ -1,6 +1,8 @@
 """Notebook editing over a host-supplied document resource and recovery adapter."""
 from uuid import uuid4
+from commonUtils.persistence.publication import serialize_mutation
 from .notebook import Notebook
+from .protocol import RecoveryIncomplete
 
 
 class NotebookDocument:
@@ -29,23 +31,35 @@ class NotebookDocument:
         if self.deletion_started:
             raise ValueError('This notebook was deleted. Retry Delete to finish cleanup, or use Save As.')
 
+    @serialize_mutation
     def checkpoint(self, book):
         self._check_editable()
         if not self.writable:
             raise ValueError('This notebook is read-only. Make a local copy before editing.')
         if self.resource is not None:
             self.resource.check()
+        if self.recovery is not None:
+            self.recovery.check_revision(self.key, book)
         previous_dirty = self.dirty
         self.dirty = self.resource is not None or self.recovery is None
+        rollback = None
         try:
-            # Publish the host's dirty/source binding before committing recovery.
-            # A rejected binding must not leave a durable edit that Editor rolls
-            # back in memory. If recovery then fails, a dirty binding safely
-            # selects the previous recovery draft instead of hiding a saved edit.
-            self.changed(self)
+            # The host publishes intent and owns its conditional rollback.
+            # Recovery's receipt decides whether the edit may be rolled back.
+            rollback = self.changed(self)
             if self.recovery is not None:
                 self.recovery.save(self.key, book)
+        except RecoveryIncomplete as error:
+            if error.published is not True:
+                self.dirty = True
+            raise  # Preserve the edit, history and dirty intent for the caller.
         except Exception:
+            if callable(rollback):
+                try:
+                    rollback()
+                except Exception as error:
+                    raise RecoveryIncomplete('Notebook source binding could not be restored. '
+                                             'Keep this draft open and use Save As.', published=None) from error
             self.dirty = previous_dirty
             raise
 
@@ -59,6 +73,7 @@ class NotebookDocument:
         self.dirty = False
         self.changed(self)
 
+    @serialize_mutation
     def discard(self):
         """Retire an explicit discard without leaving a resumable dirty draft."""
         if not self.dirty or self.deletion_started:
@@ -76,11 +91,18 @@ class NotebookDocument:
             return
         revision = self.resource.revision
         try:
-            saved = Notebook.read(self.resource.read())
+            source_bytes = self.resource.read()
+            saved = Notebook.read(source_bytes)
             # Use this editor's observed recovery revision: never discard changes
             # checkpointed by another window after this editor last wrote.
             self.recovery.adopt(self.key, saved, self.book)
-            self.recovery.save(self.key, saved, replace_base=True)
+            publication_error = None
+            try:
+                self.recovery.save(self.key, saved, source_bytes=source_bytes)
+            except RecoveryIncomplete as error:
+                if error.published is not True:
+                    raise
+                publication_error = error
             # If source-binding publication fails, the still-open draft must
             # remain able to checkpoint again against the new recovery revision.
             self.recovery.adopt(self.key, self.book, saved)
@@ -88,6 +110,8 @@ class NotebookDocument:
             # Its next checkpoint must restore its own archive, not reuse the
             # freshly published source's identity, artwork and sidecars.
             self.book.structure_dirty = True
+            if publication_error is not None:
+                raise publication_error
             self.dirty = False
             self.changed(self)
         except Exception:

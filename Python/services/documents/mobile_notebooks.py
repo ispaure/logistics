@@ -95,7 +95,8 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             active_resource = resource
             if resource is not None:
                 try:
-                    book = Notebook.read(resource.read())
+                    source_bytes = resource.read()
+                    book = Notebook.read(source_bytes)
                 except (OSError, ValueError):
                     if recovery is None or key is None:
                         raise
@@ -114,7 +115,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                             book = recovered
                         else:
                             recovery.adopt(key, book, recovered)
-                            recovery.save(key, book)
+                            recovery.save(key, book, source_bytes=source_bytes)
             else:
                 book = recovery.open(key) if key else Notebook.new(name or 'Untitled notebook')
             document = NotebookDocument(book, resource=active_resource, recovery=recovery, key=key,
@@ -199,6 +200,9 @@ def close_notebook(app, key, choice, *, leaving_reader=False):
     if panel is not None and (panel.busy or (choice != 'discard' and getattr(panel, 'native_input_pending', False))):
         return False
     if panel is not None and panel.document is not None and panel.document.dirty:
+        if choice != 'discard' and getattr(panel.editor, 'checkpoint_unconfirmed', False):
+            show_notebook_close_error(app, panel, OSError('Recovery is unconfirmed. Use Save As before closing.'))
+            return False
         if choice == 'save':
             # Native handlers use the async save action before requesting close.
             return False
@@ -272,6 +276,7 @@ def adopt_notebook_document(app, panel, document):
         owners.release(app.workspace.window_id, previous_identity)
     panel.document, panel.key = document, document.key
     panel.editor.checkpoint = document.checkpoint
+    panel.editor.checkpoint_unconfirmed = False
     session.resource, session.transient = document.key, not resource.policy.persistent
     session.history_source = None
     if not resource.policy.persistent:
