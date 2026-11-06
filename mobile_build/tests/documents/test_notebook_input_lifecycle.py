@@ -5,19 +5,17 @@ TEST_STAGE = TestStage.REGRESSION
 import unittest
 from unittest.mock import Mock, patch
 
-import test_notebook_storage as fixture
+from mobile_build.tests.support.notebooks import create_notebook, create_storage_notebook_app
 
 
 class NotebookInputLifecycleTests(unittest.TestCase):
-    setUp = fixture.NotebookStorageTests.setUp
-    tearDown = fixture.NotebookStorageTests.tearDown
-    run_async = fixture.NotebookStorageTests.run_async
-    create = fixture.NotebookStorageTests.create
+    def setUp(self):
+        self.app, self.client, self.provider = create_storage_notebook_app(self)
 
     def test_remount_and_dispose_close_each_owned_hover_observer_once(self):
         first, second = Mock(), Mock()
         with patch('features.notebooks.mobile.ios_input.attach', side_effect=[first, second]) as attach:
-            panel = self.create(private=False)
+            panel = create_notebook(self, private=False)
             original = panel.web
             self.assertIs(panel.pencil_hover, first)
             panel.mount_canvas()
@@ -70,7 +68,7 @@ class NotebookInputLifecycleTests(unittest.TestCase):
             attach=Mock(return_value=refresh if name.endswith('BooxRefresh') else pen)))
         with patch('services.documents.mobile_views.document_webview', side_effect=canvas), patch.dict(
                 sys.modules, {'java': java}):
-            panel = self.create(private=True)
+            panel = create_notebook(self, private=True)
             self.assertIs(panel.boox_refresh, refresh)
             self.assertIs(panel.pen_input, pen)
             panel.retire_canvas()
