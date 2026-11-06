@@ -151,16 +151,21 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         install_appearance(self)
         self._startup_in_progress = True
         native = type(self._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
-        if native and getattr(self, 'window_id', 'primary') == 'primary':
-            self._async_startup = True
-            from .startup import begin_startup
-            begin_startup(self)
-        else:
-            # Scene creation needs a fully constructed host before attaching its
-            # native window. Non-native callers retain synchronous startup too.
-            for _ in self._startup_steps():
-                pass
-            self._startup_in_progress = False
+        try:
+            if native and getattr(self, 'window_id', 'primary') == 'primary':
+                self._async_startup = True
+                from .startup import begin_startup
+                begin_startup(self)
+            else:
+                # Scene creation needs a fully constructed host before attaching
+                # its native window. Other callers retain synchronous startup.
+                for _ in self._startup_steps():
+                    pass
+                self._startup_in_progress = False
+        except BaseException:
+            from .application_lifecycle import lifecycle
+            lifecycle(self).abort_startup()
+            raise
 
     async def _prepare_startup_phase(self, index):
         from .startup import StartupPhase

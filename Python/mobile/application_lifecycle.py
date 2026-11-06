@@ -3,6 +3,12 @@
 The host supplies session, privacy, checkpoint and cancellation services. Keep this
 order stable: a veto must leave the active document and native controls usable.
 """
+import asyncio
+import logging
+
+
+logger = logging.getLogger(__name__)
+
 
 class HostLifecycle:
     """One owner for replacement, exit decisions and disposable memory."""
@@ -12,6 +18,37 @@ class HostLifecycle:
         self.replacement_prepared = False
         self.replaced = False
         self.exited = False
+        self.startup_aborted = False
+        self._retired_actions = set()
+
+    def _retire(self, resource, method):
+        """Finish independent cleanup even if one native adapter fails.
+
+        Successful actions run once; a later lifecycle notification can retry
+        failed actions. Never include provider paths or exception text in logs.
+        """
+        if resource is None:
+            return
+        action = (id(resource), method)
+        if action in self._retired_actions:
+            return
+        try:
+            getattr(resource, method)()
+        except Exception:
+            logger.error('Host resource cleanup failed: %s.%s', type(resource).__name__, method)
+        else:
+            self._retired_actions.add(action)
+
+    def _cancel_task(self, name):
+        task = getattr(self.host, name, None)
+        try:
+            current = asyncio.current_task()
+        except RuntimeError:
+            current = None
+        # finish_startup also retires its host from inside its own exception
+        # handler. Cancelling that task again interrupts failure presentation.
+        if task is not current:
+            self._retire(task, 'cancel')
 
     def stop_local_searches(self):
         from .notes_discovery import cancel
@@ -28,82 +65,106 @@ class HostLifecycle:
         host = self.host
         from .session_workflows.transitions import transitions_for
         transitions_for(host).preserve_for_replacement()
-        pending = getattr(host, 'startup_task', None)
-        if pending is not None and not pending.done():
-            pending.cancel()
+        self._cancel_task('startup_task')
         host.active_host = False
-        self.stop_local_searches()
+        self._retire(self, 'stop_local_searches')
         self.replacement_prepared = True
 
     def retire_for_replacement(self):
         """Retire callbacks/resources once, after successful preservation."""
-        if self.replaced:
-            return
         self.prepare_replacement()
+        self._retire_resources()
+        self.replaced = True
+
+    def abort_startup(self):
+        """Retire only initialized resources, without checkpointing partial state."""
+        self.startup_aborted = True
+        screen = getattr(self.host, 'startup_screen', None)
+        self._retire(getattr(screen, 'cover', None), 'dispose')
+        self._retire_resources()
+
+    def _retire_resources(self):
+        """Shared final teardown for exit, replacement and abandoned startup.
+
+        Session save/close policy runs before this boundary. This method owns
+        host tasks and presentation resources, never persistent document state.
+        """
         host = self.host
-        layout = getattr(host, '_layout_participants', None)
-        if layout is not None:
-            layout.dispose()
+        host.active_host = False
+        for name in ('startup_task', 'startup_document_task', 'cloud_startup_task', 'incoming_task'):
+            self._cancel_task(name)
+        self._retire(self, 'stop_local_searches')
+        self._retire(getattr(host, '_layout_participants', None), 'dispose')
         from .markdown_speech import stop_markdown_speech
-        video = getattr(host, 'video_player', None)
-        if video is not None:
-            video.retire()
+        self._retire(getattr(host, 'video_player', None), 'retire')
         from features.books.mobile.media_controls import stop_media
-        stop_markdown_speech(host)
-        stop_media(host)
-        transfer = getattr(host, '_transfer_controller', None)
-        if transfer is not None:
-            transfer.dispose()
-        for panel in getattr(host, '_notebook_views', {}).values():
-            panel.dispose()
+        self._stop_playback(stop_markdown_speech)
+        self._stop_playback(stop_media)
+        self._retire(getattr(host, '_transfer_controller', None), 'dispose')
+        for panel in tuple(getattr(host, '_notebook_views', {}).values()):
+            self._retire(panel, 'dispose')
         for name in ('vault_browser', 'notebook_panel', 'memory_pressure', 'screen_privacy', 'audio_output'):
-            resource = getattr(host, name, None)
-            if resource is not None:
-                resource.dispose()
-        background = getattr(host, 'cloud_startup_task', None)
-        if background is not None:
-            background.cancel()
+            self._retire(getattr(host, name, None), 'dispose')
         if getattr(host, 'cloud_client', None) is not None:
-            host.cancel_cloud()
-        picker = getattr(host, '_editor_picker', None)
-        if picker is not None:
-            picker.clear()
-        workspace = getattr(host, 'workspace', None)
-        for session in getattr(workspace, 'sessions', {}).values():
-            workspace.invalidate(session.id)
-        cancelled = getattr(host, '_crypt_cancel', None)
-        if cancelled is not None:
-            cancelled.set()
-            client = getattr(host, 'cloud_client', None)
-            if client is not None:
-                client.cancel()
+            self._retire(host, 'cancel_cloud')
+            self._retire(host.cloud_client, 'cancel')
+        self._retire(getattr(host, 'chat_client', None), 'cancel')
+        self._retire(getattr(host, '_editor_picker', None), 'clear')
+        self._retire(self, '_invalidate_sessions')
+        self._retire(getattr(host, '_crypt_cancel', None), 'set')
         # Activity recreation keeps the Python process alive. Retire the old
         # presentation explicitly; native destruction alone leaves Python
         # callbacks, Back delegates and scheduled effects attached to it.
         for view in tuple(getattr(host, 'text_views', {}).values()):
-            view.dispose()
+            self._retire(view, 'dispose')
         for name in ('_keyboard_dismissal', 'seasonal_snow'):
-            resource = getattr(host, name, None)
-            if resource is not None:
-                resource.dispose()
+            self._retire(getattr(host, name, None), 'dispose')
         for name in ('adaptive', 'routes'):
-            resource = getattr(host, name, None)
-            if resource is not None:
-                resource.uninstall()
-        navigation = getattr(host, 'native_host', None)
-        if navigation is not None:
-            navigation.dispose()
-        self.replaced = True
+            self._retire(getattr(host, name, None), 'uninstall')
+        self._retire(getattr(host, 'native_host', None), 'dispose')
+        # Android navigation restores its previous window resize handler while
+        # disposing, so detach callbacks after the native adapter is retired.
+        self._detach_window_callbacks()
+        if self.exited:
+            manager = getattr(host, 'scene_manager', None)
+            self._retire(getattr(manager, 'external_comics', None), 'dispose')
+
+    def _detach_window_callbacks(self):
+        try:
+            window = self.host.main_window
+        except (AttributeError, ValueError):
+            # Toga raises before startup assigns its main window.
+            return
+        if window is not None:
+            try:
+                window.on_lose_focus = None
+                window.on_gain_focus = None
+                window.on_resize = None
+            except Exception:
+                logger.error('Host window callback cleanup failed')
+
+    def _invalidate_sessions(self):
+        workspace = getattr(self.host, 'workspace', None)
+        for session in tuple(getattr(workspace, 'sessions', {}).values()):
+            workspace.invalidate(session.id)
+
+    def _stop_playback(self, stop):
+        if stop in self._retired_actions:
+            return
+        try:
+            stop(self.host)
+        except Exception:
+            logger.error('Host playback cleanup failed')
+        else:
+            self._retired_actions.add(stop)
 
     def request_exit(self):
         host = self.host
         if self.exited:
+            self._retire_resources()
             return True
         if getattr(host, '_startup_in_progress', False):
-            pending = getattr(host, 'startup_task', None)
-            if pending is not None:
-                pending.cancel()
-            host.active_host = False
+            self.abort_startup()
             return True
         if getattr(host, '_reset_scheduled', False):
             return True
@@ -130,41 +191,8 @@ class HostLifecycle:
         from .session_workflows.transitions import transitions_for
         saved = transitions_for(host).checkpoint_for_exit()
         if saved:
-            if restoring:
-                host.active_host = False
-                background.cancel()
-            from .markdown_speech import stop_markdown_speech
-            video = getattr(host, 'video_player', None)
-            if video is not None:
-                video.retire()
-            stop_markdown_speech(host)
-            from features.books.mobile.media_controls import stop_media
-            stop_media(host)
-            for panel in getattr(host, '_notebook_views', {}).values():
-                panel.dispose()
-            vault = getattr(host, 'vault_browser', None)
-            if vault is not None:
-                vault.dispose()
-            picker = getattr(host, '_editor_picker', None)
-            if picker is not None:
-                picker.clear()
-            dismissal = getattr(host, '_keyboard_dismissal', None)
-            if dismissal is not None:
-                dismissal.dispose()
-            host.memory_pressure.dispose()
-            host.scene_manager.external_comics.dispose()
-            host.screen_privacy.dispose()
-            if getattr(host, 'audio_output', None) is not None:
-                host.audio_output.dispose()
-            host.seasonal_snow.dispose()
-        if saved:
-            # Queued view refreshes must retire with the successfully closed host.
-            host.active_host = False
-            layout = getattr(host, '_layout_participants', None)
-            if layout is not None:
-                layout.dispose()
-            self.stop_local_searches()
             self.exited = True
+            self._retire_resources()
         return saved
 
     def trim_memory(self):

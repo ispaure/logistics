@@ -121,8 +121,10 @@ def load_startup_models(root, workspace_root):
 
 async def finish_startup(app):
     """Run UI work on its native thread, allowing a frame between real phases."""
+    phase = 0
     try:
         for index, name in enumerate(app._startup_steps()):
+            phase = index + 1
             app.startup_screen.show_step(index, name)
             # A timed yield gives UIKit/Android a draw turn; sleep(0) can keep
             # draining Python callbacks without presenting the updated screen.
@@ -143,22 +145,20 @@ async def finish_startup(app):
             start_cloud()
         return True
     except asyncio.CancelledError:
-        cover = getattr(app.startup_screen, 'cover', None)
-        if cover is not None:
-            cover.dispose()
+        from .application_lifecycle import lifecycle
+        lifecycle(app).abort_startup()
         raise
-    except Exception:
-        logging.getLogger(__name__).exception('Application startup failed')
-        app.active_host = False
+    except Exception as error:
+        # Storage/provider errors may contain private paths or account details.
+        logging.getLogger(__name__).error('Application startup failed at phase %s (%s)',
+                                         phase, type(error).__name__)
+        from .application_lifecycle import lifecycle
+        lifecycle(app).abort_startup()
         app._startup_in_progress = True
         app.startup_screen.failed()
         app.main_window.content = app.startup_screen.view
-        cover = getattr(app.startup_screen, 'cover', None)
-        if cover is not None:
-            cover.dispose()
         app.main_window.on_lose_focus = None
         app.main_window.on_resize = None
-        app.on_exit = lambda app: True
         return False
 
 
@@ -181,6 +181,9 @@ async def restore_cloud_in_background(app):
 
 def begin_startup(app):
     app.active_host = False
+    from functools import partial
+    from .application_lifecycle import exit_app
+    app.on_exit = partial(exit_app, app)
     app.startup_screen = StartupScreen()
     from .ios_notebook_window import main_window_class
     app._startup_window = app.main_window = main_window_class(app)(title='Logisticks', content=app.startup_screen.view)
@@ -267,6 +270,8 @@ class AndroidStartupCover:
         self.future.set_result(True)
 
     def dispose(self):
+        if getattr(self, 'disposed', False):
+            return
         if self.observer is not None and self.observer.isAlive():
             self.observer.removeOnPreDrawListener(self.listener)
         self.root.setImportantForAccessibility(self.accessibility)
@@ -276,3 +281,4 @@ class AndroidStartupCover:
         self.bitmap = None
         if not self.future.done():
             self.future.cancel()
+        self.disposed = True

@@ -59,6 +59,19 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(app._startup_in_progress)
         app.resize_workspace.assert_called_once_with()
 
+    async def test_native_exit_before_first_startup_turn_cancels_owned_task(self):
+        screen = SimpleNamespace(view=object(), hide_chrome=Mock())
+        app = SimpleNamespace(backend_name='toga_dummy.app', loop=asyncio.get_running_loop(),
+            on_running=Mock(), _startup_in_progress=True, checkpoint=Mock())
+        with patch('mobile.startup.StartupScreen', return_value=screen), \
+                patch('mobile.startup.toga.MainWindow', return_value=Mock()):
+            begin_startup(app)
+        self.assertTrue(app.on_exit(app))
+        with self.assertRaises(asyncio.CancelledError):
+            await app.startup_task
+        self.assertFalse(app.active_host)
+        app.checkpoint.assert_not_called()
+
     async def test_failed_phase_keeps_loading_screen_without_false_completion(self):
         def steps():
             yield STEPS[0]
@@ -68,14 +81,19 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
         app = SimpleNamespace(_startup_steps=steps, startup_screen=screen,
             _startup_in_progress=True, resize_workspace=Mock(),
             main_window=SimpleNamespace(content=object(), on_resize=Mock(), on_lose_focus=Mock()))
-        with self.assertLogs('mobile.startup', level='ERROR'):
+        app.memory_pressure, app.native_host = Mock(), Mock()
+        with self.assertLogs('mobile.startup', level='ERROR') as logs:
             self.assertFalse(await finish_startup(app))
+        self.assertNotIn('private/path/account-name', '\n'.join(logs.output))
         screen.failed.assert_called_once_with()
         self.assertIs(app.main_window.content, screen.view)
         self.assertLess(screen.progress.value, len(STEPS))
         self.assertTrue(app._startup_in_progress)
         self.assertIsNone(app.main_window.on_lose_focus)
         app.resize_workspace.assert_not_called()
+        app.memory_pressure.dispose.assert_called_once_with()
+        app.native_host.dispose.assert_called_once_with()
+        self.assertFalse(app.active_host)
 
     async def test_cancelled_startup_does_not_show_failure_or_open_workspace(self):
         def steps():
@@ -88,6 +106,42 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
             await finish_startup(app)
         screen.failed.assert_not_called()
         app.resize_workspace.assert_not_called()
+
+    async def test_cancellation_retires_resources_without_cancelling_its_own_handler(self):
+        ready = asyncio.Event()
+        async def phase(index):
+            ready.set()
+            await asyncio.Future()
+        screen = SimpleNamespace(show_step=Mock(), failed=Mock(), cover=Mock())
+        app = SimpleNamespace(_startup_steps=lambda: iter(STEPS), startup_screen=screen,
+            _prepare_startup_phase=phase, _startup_in_progress=True, active_host=True,
+            memory_pressure=Mock(), screen_privacy=Mock(), checkpoint=Mock())
+        app.startup_task = asyncio.create_task(finish_startup(app))
+        await ready.wait()
+        app.startup_task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await app.startup_task
+        self.assertEqual(app.startup_task.cancelling(), 1)
+        self.assertFalse(app.active_host)
+        app.memory_pressure.dispose.assert_called_once_with()
+        app.screen_privacy.dispose.assert_called_once_with()
+        screen.cover.dispose.assert_called_once_with()
+        screen.failed.assert_not_called()
+        app.checkpoint.assert_not_called()
+
+    async def test_failed_synchronous_startup_retires_resources_and_keeps_original_error(self):
+        def steps():
+            yield STEPS[0]
+            raise ValueError('synthetic startup failure')
+        app = SimpleNamespace(_impl=object(), commands={}, _startup_steps=steps,
+                              active_host=True, memory_pressure=Mock(), checkpoint=Mock())
+        with patch('mobile.appearance.install_appearance'):
+            with self.assertRaisesRegex(ValueError, 'synthetic startup failure'):
+                LogisticsMobile.startup(app)
+        app.memory_pressure.dispose.assert_called_once_with()
+        app.checkpoint.assert_not_called()
+        self.assertFalse(app.active_host)
+        self.assertTrue(app._startup_in_progress)
 
 
 class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
@@ -114,6 +168,7 @@ class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
         modules['android.graphics'].Bitmap.createBitmap.assert_called_once_with(900, 1200, 1)
         container.native_parent.addView.assert_called_once()
         cover.observer = Mock()
+        cover.dispose()
         cover.dispose()
         cover.observer.removeOnPreDrawListener.assert_called_once_with(cover.listener)
         container.native_parent.removeView.assert_called_once_with(image)
