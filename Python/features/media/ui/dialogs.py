@@ -32,7 +32,8 @@ class RenameMkaDialog(ToolDialog):
                 self._run_background(lambda report, cancelled: mka.plan_from_csv(target), self._reviewed)
         elif self._confirm():
             plan = self.plan
-            self._run_background(lambda report, cancelled: apply_renames(plan, cancelled=cancelled), self._applied)
+            self._invalidate()
+            self._run_background(lambda report, cancelled: apply_renames(plan, cancelled=cancelled, report=report), self._applied)
 
     def _reviewed(self, plan):
         if plan is None:
@@ -45,8 +46,6 @@ class RenameMkaDialog(ToolDialog):
         self.task.message.setText(f'{len(plan.changes)} files to rename.')
 
     def _applied(self, result):
-        self.plan = None
-        self.action_button.setText('Review names')
         if result.success:
             self.task.message.setText(f'Renamed {len(result.entries)} files.')
         else:
