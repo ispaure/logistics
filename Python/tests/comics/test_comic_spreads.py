@@ -9,6 +9,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from io import BytesIO
 from pathlib import Path
 import time
+from unittest import TestCase
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 import zipfile
@@ -18,6 +19,72 @@ from features.comics.pages import ComicPages, load_preview
 from features.comics.reading import comic_siblings, visible_pages
 from features.comics.ui.reader import ComicReaderWindow, read_previous
 from tests.comics.fixtures import encoded_page
+
+
+class MobileSpreadTests(TestCase):
+    def navigation(self, *, right_to_left=False, failed_page=None):
+        from features.comics.mobile.navigation import ComicNavigation
+        portrait = encoded_page('red', (80, 120))
+        wide = encoded_page('blue', (160, 100))
+        pages = (portrait, portrait, wide, portrait)
+
+        def read_page(index):
+            if index == failed_page:
+                raise ValueError('Unreadable previous page')
+            return pages[index], 'image/png'
+
+        return ComicNavigation(read_page, len(pages), right_to_left=right_to_left)
+
+    def test_previous_probe_preserves_pending_display_and_committed_progress(self):
+        for rtl in (False, True):
+            with self.subTest(right_to_left=rtl):
+                nav = self.navigation(right_to_left=rtl)
+                indices, _ = nav.load(3, viewport=(400, 800))
+                nav.commit(indices)
+                nav.requested_half = 1
+                pending, _ = nav.load(2, viewport=(400, 800))
+
+                self.assertEqual(nav.previous(2, viewport=(800, 400)), 0)
+                self.assertEqual(nav.progress_label, '4 / 4')
+                self.assertEqual(nav.crop, (0.0, 0.54) if rtl else (0.46, 1.0))
+                nav.commit(pending)
+                self.assertEqual(nav.progress_label, '3 2/2 / 4')
+                self.assertEqual(nav.viewport, (400, 800))
+                self.assertEqual(nav.visits.previous, [(3, 0)])
+
+    def test_previous_probe_does_not_consume_half_request_even_on_failure(self):
+        for failed_page in (None, 1):
+            with self.subTest(failed_page=failed_page):
+                nav = self.navigation(failed_page=failed_page)
+                indices, _ = nav.load(2, viewport=(400, 800))
+                nav.commit(indices)
+                nav.requested_half = 1
+
+                if failed_page is None:
+                    self.assertEqual(nav.previous(2, viewport=(800, 400)), 0)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'Unreadable previous page'):
+                        nav.previous(2, viewport=(800, 400))
+                self.assertEqual(nav.progress_label, '3 1/2 / 4')
+                indices, _ = nav.load(2, viewport=(400, 800))
+                nav.commit(indices)
+                self.assertEqual(nav.progress_label, '3 2/2 / 4')
+
+    def test_previous_target_respects_mobile_layout_and_double_pages(self):
+        cases = (
+            ('auto', (400, 800), (), 2, 1),
+            ('auto', (800, 400), (), 2, 0),
+            ('single', (800, 400), (), 2, 1),
+            ('double', (400, 800), (), 2, 0),
+            ('double', (800, 400), (0,), 2, 1),
+            ('double', (800, 400), (1,), 2, 1),
+            ('double', (800, 400), (), 3, 2),  # Wide page cannot pair.
+        )
+        for mode, viewport, double_pages, start, expected in cases:
+            with self.subTest(mode=mode, viewport=viewport, double_pages=double_pages, start=start):
+                nav = self.navigation()
+                nav.double_pages = set(double_pages)
+                self.assertEqual(nav.previous(start, viewport=viewport, mode=mode), expected)
 
 
 class SpreadTests(QtTestCase):
