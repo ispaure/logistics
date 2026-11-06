@@ -1,6 +1,7 @@
 """
 Feature system for Logistics.
 
-Each subpackage in this directory represents an optional Logistics feature.
-Features are discovered and loaded dynamically at application startup.
+Feature packages are discovered and loaded dynamically at application startup.
+The runtime package and the modules beside it are application infrastructure;
+discovery keeps those owners out of the optional feature catalog.
 """

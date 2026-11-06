@@ -6,7 +6,9 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-INFRASTRUCTURE = {'application', 'feature_runtime', 'contributions', 'preferences', 'settings', 'discovery'}
+# Application infrastructure is a valid feature dependency, not another feature.
+# Still scan its packages below so outgoing host/feature edges remain reviewed.
+INFRASTRUCTURE = {'application', 'feature_runtime', 'contributions', 'preferences', 'settings', 'discovery', 'runtime'}
 
 
 def references(path, source_root):
