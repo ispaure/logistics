@@ -16,6 +16,8 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+if __package__ in (None, ""):
+    sys.path.insert(0, str(ROOT))
 _MUTATION = ContextVar('tooling_mutation', default=None)
 
 

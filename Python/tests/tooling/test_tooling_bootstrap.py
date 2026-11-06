@@ -242,6 +242,20 @@ class ToolingBootstrapTests(TestCase):
         self.assertNotIn('Traceback', failed.stderr)
         self.assertIn('tooling', failed.stderr)
 
+    def test_direct_script_status_uses_own_checkout_from_foreign_working_directory(self):
+        # The documented script entry must reach native readiness without an
+        # installed manager, site packages, inherited PYTHONPATH or project cwd.
+        result = subprocess.run([sys.executable, '-I', '-S', tooling.__file__,
+                                 'status', '--root', str(self.root)],
+                                cwd=self.root, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report['status'], 'blocked')
+        self.assertEqual(report['declared_revision'], self.declared['revision'])
+        self.assertFalse(report['ready'])
+        self.assertFalse(report['native']['applicable'])
+        self.assertFalse(tooling.private(self.root).exists())
+
     def test_confirmation_and_owned_environment_checks_precede_every_effect(self):
         with patch.object(tooling, 'run') as run:
             with self.assertRaises(ValueError):
