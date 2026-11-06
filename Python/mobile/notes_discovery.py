@@ -83,6 +83,10 @@ def populate(app, container, *, title='Notes Library', refresh=True):
             for label, linked in app.linked_crypt_locations().items():
                 location = linked.location
                 linked.close()
+                # A copy named after its remote needs only one name in the hub.
+                remote_label = 'LocalCrypt: ' + location.remote
+                if label == f'{remote_label} · {location.remote}':
+                    label = remote_label
                 factories.append((label, lambda location=location: native_service(client).localcrypt.open(location)))
         found, errors = [], []
         for label, factory in factories:

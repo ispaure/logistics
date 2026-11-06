@@ -1,4 +1,4 @@
-$('grayscale').onchange = draw;
+$('grayscale').onchange = () => draw();
 let resizeFrame = null, viewportResizePending = false;
 new ResizeObserver(() => {
   if (resizeFrame !== null) return;

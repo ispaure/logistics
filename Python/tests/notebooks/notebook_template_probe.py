@@ -29,6 +29,8 @@ def pdf_highlighter(view, desktop):
     for tool, color, points in (
         (17, 0, [[600, 150, .5], [600, 200, .5]]),
         (18, 13, [[500, 173, .5], [900, 173, .5]]),
+        (17, 2, [[730, 150, .5], [730, 200, .5]]),
+        (18, 13, [[650, 173, .5], [770, 173, .5]]),
         (17, 2, [[800, 150, .5], [800, 200, .5]]),
     ):
         editor.apply(dict(op='stroke', tool=tool, color=color, width=3, points=points))
@@ -49,12 +51,32 @@ def pdf_highlighter(view, desktop):
       const plain = pixel(700, 166);
       const rule = [171,172,173,174,175].map(y=>pixel(700,y)).reduce((a,b)=>a[0]<b[0]?a:b);
       const black = pixel(600,173), white = pixel(800,173);
-      return JSON.stringify({plain,rule,black,white});
+      const overlap = pixel(690,166), single = pixel(560,166), intervening = pixel(730,173);
+      const singleRule = [171,172,173,174,175].map(y=>pixel(560,y)).reduce((a,b)=>a[0]<b[0]?a:b);
+      const crossSection = () => Array.from({length: 35}, (_, i) => pixel(700, 156+i));
+      const beforeLive = crossSection();
+      inkSettings = {tool:18,color:13,width:1};
+      points = [[650,173,.5],[770,173,.5]];
+      const retrace = points;
+      flushPreview();
+      const live = crossSection();
+      points = [];
+      queue.push({op:'stroke', ...inkSettings, points:retrace});
+      draw();
+      const queued = crossSection();
+      queue.pop();
+      draw();
+      return JSON.stringify({plain,rule,black,white,overlap,single,intervening,singleRule,
+        liveMatches: JSON.stringify(beforeLive) === JSON.stringify(live),
+        queuedMatches: JSON.stringify(beforeLive) === JSON.stringify(queued)});
     })()"""))
     plain, rule, black, white = (pixels[key] for key in ('plain', 'rule', 'black', 'white'))
     assert plain[0] >= 245 and plain[2] <= 130, pixels
     assert rule[0] < plain[0] - 10 and rule[2] < plain[2] - 5, pixels
     assert max(black[:3]) <= 20 and min(white[:3]) >= 235, pixels
+    assert pixels['overlap'] == pixels['single'] == pixels['intervening'], pixels
+    assert pixels['singleRule'] == rule, pixels
+    assert pixels['liveMatches'] and pixels['queuedMatches'], pixels
     return pixels
 
 
