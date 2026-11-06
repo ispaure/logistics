@@ -59,7 +59,7 @@ class Repository:
         self.revisions.setdefault(notebook, {})[key] = self.revisions[recovered][key]
 
     @serialize_mutation
-    def save(self, key, notebook):
+    def save(self, key, notebook, *, replace_base=False):
         directory = self.root / identifier(key)
         manifest = directory / 'state.json'
         revision = sha256(manifest.read_bytes()).hexdigest() if manifest.exists() else None
@@ -82,11 +82,13 @@ class Repository:
             normalized.append(decoded)
             pages.append(dict(id=page.id, record=page.record, template=page.template, ink=digest))
         # Copied page sidecars and unknown document members remain in a bounded base.
-        # This archive is updated only by structural changes, never per pen sample.
+        # Update it for structural changes or an explicit source replacement,
+        # never per pen sample. Replacing a clean source must not mark its
+        # structure dirty: its original archive members remain authoritative.
         for page, ink in zip(notebook.pages, normalized):
             page.ink = ink
         structural = notebook.structure_dirty
-        if structural:
+        if structural or replace_base:
             base = notebook.to_bytes()
             digest = sha256(base).hexdigest()
             target = directory / (digest + '.rmdoc')

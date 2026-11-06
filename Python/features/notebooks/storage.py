@@ -80,10 +80,14 @@ class NotebookDocument:
             # Use this editor's observed recovery revision: never discard changes
             # checkpointed by another window after this editor last wrote.
             self.recovery.adopt(self.key, saved, self.book)
-            self.recovery.save(self.key, saved)
+            self.recovery.save(self.key, saved, replace_base=True)
             # If source-binding publication fails, the still-open draft must
             # remain able to checkpoint again against the new recovery revision.
             self.recovery.adopt(self.key, self.book, saved)
+            # If the host rejects the binding, this draft remains editable.
+            # Its next checkpoint must restore its own archive, not reuse the
+            # freshly published source's identity, artwork and sidecars.
+            self.book.structure_dirty = True
             self.dirty = False
             self.changed(self)
         except Exception:
