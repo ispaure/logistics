@@ -39,6 +39,7 @@
     "mobile/host.py",
     "mobile/messages.py",
     "mobile/remote_readers.py",
+    "mobile/remote_source.py",
     "mobile/service.py",
     "mobile/session_privacy.py",
     "mobile/smb_connection.py",
