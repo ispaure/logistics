@@ -253,8 +253,8 @@ class CredentialWorkflow:
         client = cloud.cloud_client
         generation = getattr(client, 'generation', 0)
         # Alternate client adapters may not expose crypt support.
-        kinds = getattr(cloud.cloud_client, 'crypt_remotes', lambda: ())
-        records = getattr(cloud.cloud_client, 'package_records', ())
+        kinds = getattr(client, 'crypt_remotes', lambda: ())
+        records = getattr(client, 'package_records', ())
         if records and all('crypt_identities' in record for record in records):
             crypt_remotes = {remote for record in records for remote in record['crypt_identities']}
         else:
@@ -266,24 +266,30 @@ class CredentialWorkflow:
             cache = cloud.retained_packages()
             update = getattr(cache, 'update_crypt_remotes', None)
             if update is not None:
-                records = {item['package_name']: item for item in getattr(cloud.cloud_client, 'package_records', ())}
+                records = {item['package_name']: item for item in getattr(client, 'package_records', ())}
                 for key, item in tuple(cache.items.items()):
                     record = records.get(item['zip'])
                     if record is not None and record.get('document_cache_id') != key:
                         continue
-                    if record is not None or item['zip'] == getattr(cloud.cloud_client, 'package_name', ''):
+                    if record is not None or item['zip'] == getattr(client, 'package_name', ''):
                         from .credential_retention import NativeCredentialMetadata
                         await run_credentials(native_service(client).credentials.retain,
                             NativeCredentialMetadata(cache, key, generation, tuple(cloud.cloud_crypt_remotes),
                                 record.get('aliases', {}) if record else {}),
-                            valid=lambda: cloud.active_host and cloud.cloud_client is client)
+                            valid=lambda: self._current(client, generation=generation))
+                        if not self._current(client, generation=generation):
+                            return False
         except (OSError, ValueError) as error:
+            if not self._current(client, generation=generation):
+                return False
             cloud.folder_hub_error = 'Could not save folder type metadata: ' + str(error)[:200]
         if not self._current(client, generation=generation):
             return False
         try:
             await cloud.refresh_hub_crypt_locations()
         except (OSError, ValueError) as error:
+            if not self._current(client, generation=generation):
+                return False
             cloud.folder_hub_error = str(error)[:300]
         if not self._current(client, generation=generation):
             return False
@@ -561,28 +567,30 @@ class CredentialWorkflow:
             if cloud.show_view(box, destination=destination, route='unlock-credential', title='Unlock credential ZIP'):
                 password.focus()
 
-    async def restore_cloud(self, widget=None, *, initial=False, **kwargs):
+    async def restore_cloud(self, widget=None, *, initial=False, initial_client=None, **kwargs):
         cloud = self.cloud
-        if (cloud.cloud_busy and not initial) or cloud.cloud_client is None:
+        client = initial_client if initial_client is not None else cloud.cloud_client
+        if client is None or not self._current(client) or (cloud.cloud_busy and not initial):
             return
         if not initial and not cloud.clear_private_reader():
             return
         if not initial:
             cloud.set_cloud_busy(True)
+        generation = getattr(client, 'generation', 0)
         cloud._cloud_restore_error = ''
         try:
             # Initial restore has no old credential state to retire. Home and
             # ordinary local browsers may already be in use while it runs.
             if not initial:
                 cloud.clear_private_catalog()
-            client = cloud.cloud_client
             result = await run_credentials(native_service(client).credentials.restore,
-                valid=lambda: self._current(client))
+                valid=lambda: self._current(client, generation=generation))
+            generation = result.generation
             names = list(result.remotes)
-            if not self._current(client, generation=result.generation):
+            if not self._current(client, generation=generation):
                 return
             await cloud._load_crypt_remote_names()
-            if not self._current(client, generation=result.generation):
+            if not self._current(client, generation=generation):
                 return
             cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
             if names and cloud.cloud_client.package_name:
@@ -591,11 +599,16 @@ class CredentialWorkflow:
             cloud._publish_restored_connections(names)
         except Exception as error:
             report_failure('restore saved credentials', error)
+            if not self._current(client, generation=generation):
+                return
             cloud._cloud_restore_error = 'Saved credentials are unavailable. Unlock the device and reload, or forget saved credentials to import again.'
             if hasattr(cloud, 'cloud_status'):
                 cloud.cloud_status.value = cloud._cloud_restore_error
         finally:
-            cloud.set_cloud_busy(False)
+            # A new credential generation does not acquire this host's busy
+            # flag. A retired host or replacement client owns its own controls.
+            if self._current(client):
+                cloud.set_cloud_busy(False)
 
     def _publish_restored_connections(self, names):
         cloud = self.cloud
