@@ -79,7 +79,9 @@ const {chromium} = require('playwright');
    for(const viewport of [{width:390,height:844},{width:844,height:390},{width:1200,height:800},
                           {width:800,height:1200}]){
     await page.setViewportSize(viewport);
-    await page.waitForTimeout(60);
+    await page.waitForFunction(({width,height})=>
+     innerWidth===width && innerHeight===height &&
+      Math.abs(document.body.firstElementChild.getBoundingClientRect().height-height)<.5,viewport);
     const box=await page.evaluate(()=>{
      reader.setMotion(false);reader.seek(0);
      const css=getComputedStyle(document.body),view=document.body.firstElementChild.getBoundingClientRect();

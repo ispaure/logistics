@@ -7,7 +7,7 @@ COMIC_COVER = 'comic_outer_cover'
 
 
 def native_bridge(app):
-    if not type(app._impl).__module__.startswith('toga_iOS.'):
+    if not type(getattr(app, '_impl', None)).__module__.startswith('toga_iOS.'):
         return None
     from rubicon.objc import ObjCClass
     try:
