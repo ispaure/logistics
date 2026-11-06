@@ -71,7 +71,7 @@ func downloadSync(ctx context.Context, request bridgeRequest) (int64, error) {
 	if remoteRoot == "." {
 		remoteRoot = ""
 	}
-	source, err := fs.NewFs(ctx, request.Remote+":"+remoteRoot)
+	source, err := remoteRootFs(ctx, request.Remote, remoteRoot)
 	if err != nil {
 		return 0, err
 	}
