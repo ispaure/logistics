@@ -46,7 +46,20 @@ def reordered(rows, order, seed, *, group=None):
     return [row for batch in batches for row in batch]
 
 
-def matching_sources(directory, pattern, include_patterns):
+def matching_sources(directory, pattern, include_patterns, exact_files=()):
+    if exact_files:
+        paths = []
+        for name in exact_files:
+            relative = Path(name)
+            path = directory / relative
+            if (relative.is_absolute() or '..' in relative.parts or relative.as_posix() != name
+                    or path.suffix != '.py' or not path.stem.isidentifier() or not path.is_file()
+                    or path.resolve() != directory.resolve() / relative):
+                raise ValueError(f'Invalid exact test file: {name!r}')
+            paths.append(path)
+        if len(set(paths)) != len(paths):
+            raise ValueError('Duplicate --exact-file selection.')
+        return sorted(paths)
     return sorted(path for path in directory.rglob(pattern)
                   if path.is_file() and all(fnmatchcase(path.name, extra) for extra in include_patterns))
 
@@ -74,9 +87,9 @@ def source_inventory(row, levels):
 
 def run_isolated(directory, pattern, interval, include_patterns=(), report=None, *,
                  stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None,
-                 order='default', seed=None):
+                 order='default', seed=None, exact_files=()):
     """Validate first, then run isolated files by stage and known duration."""
-    selected = select_sources(matching_sources(directory, pattern, include_patterns), stages)
+    selected = select_sources(matching_sources(directory, pattern, include_patterns, exact_files), stages)
     durations = {}
     if timings is not None:
         previous = json.loads(Path(timings).read_text())
@@ -195,7 +208,10 @@ def report_stalls(interval, stopped, status):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
-    parser.add_argument('--pattern', default='test*.py', help='unittest discovery filename pattern')
+    files = parser.add_mutually_exclusive_group()
+    files.add_argument('--pattern', default='test*.py', help='unittest discovery filename pattern')
+    files.add_argument('--exact-file', action='append', default=[],
+                       help='Select a file relative to the test directory (repeatable)')
     parser.add_argument('--include-pattern', action='append', default=[],
                         help='Require this additional filename glob (isolated mode only)')
     parser.add_argument('--require-module', action='append', default=[],
@@ -222,6 +238,8 @@ def main():
     args = parser.parse_args()
     if args.traceback_after <= 0:
         parser.error('--traceback-after must be positive')
+    if args.exact_file and (not args.isolate_modules or args.include_pattern or args.single_file):
+        parser.error('--exact-file requires --isolate-modules without other file filters')
     if args.include_pattern and not args.isolate_modules:
         parser.error('--include-pattern requires --isolate-modules')
     if (args.order == 'random') != (args.seed is not None):
@@ -238,7 +256,7 @@ def main():
     args.stages = tuple(s for s in STAGE_ORDER if s.value in args.stage) if args.stage else PROFILES[args.profile]
     if args.inventory:
         try:
-            paths = matching_sources(args.directory, args.pattern, args.include_pattern)
+            paths = matching_sources(args.directory, args.pattern, args.include_pattern, args.exact_file)
             if not paths:
                 raise ValueError('No matching test sources for inventory.')
             rows = select_sources(paths, args.stages)
@@ -253,14 +271,17 @@ def main():
     # timeout. Avoid repeatedly rewriting a large standalone suite report.
     report.checkpoint_cases = args.timing_child
     report.data['include_patterns'] = args.include_pattern
+    if args.exact_file:
+        report.data['exact_files'] = args.exact_file
     report.data.update(order=args.order, seed=args.seed)
     report.save()
     try:
         code = run_with_report(args, report)
     except ValueError as error:
+        requested = args.exact_file or [str(p.relative_to(args.directory))
+                                       for p in matching_sources(args.directory, args.pattern, args.include_pattern)]
         report.data.update(preflight_error=str(error), coverage_complete=False,
-                           not_run=[dict(file=str(p.relative_to(args.directory)), reason='Preflight failed')
-                                    for p in matching_sources(args.directory, args.pattern, args.include_pattern)])
+                           not_run=[dict(file=name, reason='Preflight failed') for name in requested])
         print(str(error), file=sys.stderr, flush=True)
         code = 2
     except BaseException:
@@ -276,7 +297,8 @@ def run_with_report(args, report):
     if args.isolate_modules:
         return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after,
                             args.include_pattern, report, stages=args.stages, mode=args.mode,
-                            fail_fast=args.fail_fast, timings=args.timings, order=args.order, seed=args.seed)
+                            fail_fast=args.fail_fast, timings=args.timings, order=args.order, seed=args.seed,
+                            exact_files=args.exact_file)
     validate(args.directory.rglob(args.pattern))
     # Keep default storage and preferences away from the contributor's live data,
     # including during test discovery. Children running isolated modules create

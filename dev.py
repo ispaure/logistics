@@ -35,8 +35,10 @@ def main(argv=None):
     commands.add_parser('doctor', help='Inspect contributor environments without changing them')
     tests = commands.add_parser('test', help='Run desktop, mobile or shared host tests in isolated processes')
     tests.add_argument('suite', choices=('desktop', 'mobile', 'shared', 'bridge'))
-    tests.add_argument('pattern', nargs='?', default='test*.py',
+    tests.add_argument('pattern', nargs='?',
                        help='Test filename or quoted glob (default: all test files)')
+    tests.add_argument('--exact-file', action='append', default=[],
+                       help='Select a repository-relative desktop or mobile test file (repeatable)')
     tests.add_argument('--native-python', type=Path,
                        help='Override the shared matrix Toga interpreter; --python overrides its Qt interpreter')
     tests.add_argument('--profile', choices=('smoke', 'daily', 'full'), default='full')
@@ -89,6 +91,9 @@ def main(argv=None):
         return doctor(ROOT, environment_python)
     from Scripts.development import run_checks, shared_test_groups
     if args.command == 'test':
+        if args.exact_file and (args.pattern is not None or args.suite not in ('desktop', 'mobile')):
+            parser.error('--exact-file requires desktop or mobile selection without a filename pattern.')
+        args.pattern = 'test*.py' if args.pattern is None else args.pattern
         from logistics_build.test_structure import inventory
         try:
             structure_rows = inventory(ROOT)
@@ -120,7 +125,17 @@ def main(argv=None):
             suite = ROOT / ('mobile_build/tests' if mobile else 'Python/tests')
             groups = [(args.suite, mobile, suite, args.pattern, [])]
         suite = groups[0][2]
-        if not any(path.is_file() for path in suite.rglob(args.pattern)):
+        if args.exact_file:
+            prefix = suite.relative_to(ROOT).as_posix() + '/'
+            declared = {row['path'] for row in structure_rows if row['path'].startswith(prefix)}
+            if len(set(args.exact_file)) != len(args.exact_file):
+                parser.error('Duplicate --exact-file selection.')
+            for path in args.exact_file:
+                if path not in declared:
+                    parser.error(f'Not a declared {args.suite} test file: {path!r}')
+            groups = [(args.suite, mobile, suite, args.pattern,
+                       [item for path in args.exact_file for item in ('--exact-file', path.removeprefix(prefix))])]
+        elif not any(path.is_file() for path in suite.rglob(args.pattern)):
             parser.error(f'No test files match {args.pattern!r} in {suite.relative_to(ROOT)}.')
     else:
         groups = [('lint', False, None, None, [])]
@@ -138,8 +153,9 @@ def main(argv=None):
         elif args.command == 'test' and args.suite == 'shared':
             environment.pop('TOGA_BACKEND', None)
         if args.command == 'test':
+            pattern_args = [] if args.exact_file else ['--pattern', pattern]
             command = [str(interpreter), str(ROOT / 'Python/tests/run_regressions.py'),
-                       str(suite), '--pattern', pattern, '--isolate-modules', *extra,
+                       str(suite), *pattern_args, '--isolate-modules', *extra,
                        '--profile', args.profile, '--mode', args.mode]
             if args.fail_fast:
                 command.append('--fail-fast')
