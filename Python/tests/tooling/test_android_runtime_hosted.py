@@ -55,7 +55,8 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
                     source=dict(dirty=False, logistics_commit='a' * 40, commonUtils_commit='b' * 40))
 
     @contextmanager
-    def fixture(self, *, changes=None, driver_code=0, receipt_code=0, cleanup_error=False):
+    def fixture(self, *, changes=None, driver_code=0, receipt_code=0, cleanup_error=False,
+                driver_error=None, receipt_error=None, scratch_error=None, startup_error=None):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             cpython, payload, reports, workspace = (root / name for name in ('cpython', 'payload', 'reports', 'scratch'))
@@ -71,6 +72,8 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
                     yield workspace
                 finally:
                     events.append('scratch-preserved' if (workspace / '.keep').exists() else 'scratch-released')
+                    if scratch_error is not None:
+                        raise scratch_error
             class Emulator:
                 def __init__(_self, sdk, path, **options):
                     events.append(('execution-context', options.get('execution_context')))
@@ -84,6 +87,8 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
                     _self.marker.write_text('{}')
                     (_self.workspace / 'emulator.log').write_text('owned emulator diagnostics')
                     try:
+                        if startup_error is not None:
+                            raise startup_error
                         yield {'serial': 'emulator-5554'}
                     finally:
                         events.append('cleanup')
@@ -102,17 +107,27 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
                     self.assertNotIn('--managed', argv)
                     self.assertEqual(argv[argv.index('--connected') + 1], 'emulator-5554')
                     options['stdout'].write('Gradle testPython PASSED; logcat lost, no JSON marker\n')
+                    if driver_error is not None:
+                        raise driver_error
                     return driver_code
+                raise AssertionError('Unexpected command: ' + str(argv))
+            def receipt(argv, **options):
+                commands.append(list(argv))
                 if 'run-as' in argv:
                     self.assertNotIn('cleanup', events)
                     events.append('receipt')
-                    self.assertEqual(timeout, 30)
-                    options['stdout'].write('not found' if receipt_code else json.dumps(report))
-                    return receipt_code
+                    self.assertEqual(options['timeout'], 30)
+                    self.assertEqual(options['max_output'], hosted.MAX_RECEIPT_BYTES)
+                    if receipt_error is not None:
+                        raise receipt_error
+                    if receipt_code:
+                        raise OSError('receipt not found')
+                    return json.dumps(report).encode()
                 raise AssertionError('Unexpected command: ' + str(argv))
             with patch.object(hosted, 'scratch', scratch), patch.object(hosted, 'AndroidEmulator', Emulator), \
                     patch.object(hosted, 'load', return_value={'android_api': '36', 'android_github_abi': 'x86_64', 'android_model': 'pixel_9'}), \
-                    patch.object(hosted, 'command', side_effect=command), patch.dict('os.environ', {'ANDROID_HOME': str(root / 'sdk')}):
+                    patch.object(hosted, 'command', side_effect=command), patch.object(hosted, 'run_bytes', side_effect=receipt), \
+                    patch.dict('os.environ', {'ANDROID_HOME': str(root / 'sdk')}):
                 yield root, cpython, payload, reports, events, commands
 
     def run_fixture(self, root, cpython, payload, reports):
@@ -172,3 +187,149 @@ class HostedAndroidRuntimeTests(unittest.TestCase):
             receipt.write_bytes(b' ' * (hosted.MAX_RECEIPT_BYTES + 1))
             with self.assertRaisesRegex(ValueError, 'bounded'):
                 hosted.verify_receipt(receipt, root / 'missing-source', root / 'result.json')
+
+
+    def test_driver_failure_remains_primary_when_receipt_diagnostics_and_cleanup_also_fail(self):
+        primary = RuntimeError('original driver failure')
+        with self.fixture(driver_error=primary, receipt_error=OSError('receipt unavailable'),
+                          cleanup_error=True, scratch_error=OSError('scratch retirement failed')) as fixture:
+            with patch.object(hosted, 'diagnostics', side_effect=OSError('diagnostics copy failed')):
+                with self.assertRaises(RuntimeError) as raised:
+                    self.run_fixture(*fixture[:4])
+            self.assertIs(raised.exception, primary)
+            notes = '\n'.join(primary.__notes__)
+            for phase in ('Receipt collection', 'Runtime diagnostics', 'Owned emulator cleanup', 'Scratch cleanup'):
+                self.assertIn(phase, notes)
+            self.assertIn('receipt', fixture[4])
+            self.assertIn('cleanup', fixture[4])
+            self.assertFalse((fixture[3] / 'android-result.json').exists())
+            self.assertTrue((fixture[3] / 'android-cleanup-incomplete.txt').exists())
+
+    def test_nonzero_driver_exit_precedes_missing_receipt(self):
+        with self.fixture(driver_code=7, receipt_code=1) as fixture:
+            with self.assertRaisesRegex(RuntimeError, 'driver failed: 7') as raised:
+                self.run_fixture(*fixture[:4])
+            self.assertIn('Receipt collection failed', '\n'.join(raised.exception.__notes__))
+            self.assertIn('cleanup', fixture[4])
+
+    def test_cancellation_still_collects_receipt_and_preserves_cancel_after_cleanup_failure(self):
+        cancelled = KeyboardInterrupt('synthetic cancellation')
+        with self.fixture(driver_error=cancelled, cleanup_error=True) as fixture:
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                self.run_fixture(*fixture[:4])
+            self.assertIs(raised.exception, cancelled)
+            self.assertIn('receipt', fixture[4])
+            self.assertIn('cleanup', fixture[4])
+            self.assertTrue((fixture[3] / 'android-receipt.json').exists())
+            self.assertFalse((fixture[3] / 'android-result.json').exists())
+
+    def test_verification_failure_remains_primary_after_device_cleanup_failure(self):
+        with self.fixture(changes={'skipped': 1}, cleanup_error=True) as fixture:
+            with self.assertRaises(ValueError) as raised:
+                self.run_fixture(*fixture[:4])
+            self.assertIn('Owned emulator cleanup failed', '\n'.join(raised.exception.__notes__))
+            self.assertFalse((fixture[3] / 'android-result.json').exists())
+
+    def test_output_limit_failure_does_not_leave_a_stale_or_unbounded_receipt(self):
+        with self.fixture(receipt_error=ValueError('output limit')) as fixture:
+            fixture[3].mkdir()
+            receipt = fixture[3] / 'android-receipt.json'
+            receipt.write_text('old successful receipt')
+            with self.assertRaisesRegex(RuntimeError, 'receipt could not be retrieved'):
+                self.run_fixture(*fixture[:4])
+            self.assertFalse(receipt.exists())
+            self.assertFalse((fixture[3] / 'android-result.json').exists())
+            self.assertIn('cleanup', fixture[4])
+
+    def test_final_diagnostic_copy_failure_does_not_replace_primary_or_lose_cleanup_marker(self):
+        primary = RuntimeError('driver failed first')
+        with self.fixture(driver_error=primary, cleanup_error=True) as fixture:
+            with patch.object(hosted.shutil, 'copyfile', side_effect=OSError('copy failed')):
+                with self.assertRaises(RuntimeError) as raised:
+                    self.run_fixture(*fixture[:4])
+            self.assertIs(raised.exception, primary)
+            self.assertIn('Final emulator diagnostics failed', '\n'.join(primary.__notes__))
+            self.assertTrue((fixture[3] / 'android-cleanup-incomplete.txt').exists())
+            self.assertEqual(fixture[4][-1], 'scratch-preserved')
+
+
+    def test_invalid_receipt_remains_primary_when_diagnostic_collection_fails(self):
+        with self.fixture(changes={'skipped': 1}) as fixture:
+            with patch.object(hosted, 'diagnostics', side_effect=OSError('diagnostics unavailable')) as collect:
+                with self.assertRaises(ValueError) as raised:
+                    self.run_fixture(*fixture[:4])
+            collect.assert_called_once()
+            self.assertIn('Runtime diagnostics failed', '\n'.join(raised.exception.__notes__))
+            self.assertIn('cleanup', fixture[4])
+            self.assertFalse((fixture[3] / 'android-result.json').exists())
+
+
+    def test_retention_pin_is_required_before_any_device_start(self):
+        with self.fixture() as fixture:
+            touch = Path.touch
+            def reject_pin(path, *args, **kwargs):
+                if path.name == '.keep':
+                    raise OSError('cannot establish retention')
+                return touch(path, *args, **kwargs)
+            with patch.object(Path, 'touch', reject_pin):
+                with self.assertRaisesRegex(OSError, 'cannot establish retention'):
+                    self.run_fixture(*fixture[:4])
+            self.assertNotIn('start', fixture[4])
+            self.assertEqual(fixture[4][-1], 'scratch-released')
+
+    def test_failed_device_cleanup_does_not_depend_on_a_late_pin_write(self):
+        with self.fixture(cleanup_error=True) as fixture:
+            touch = Path.touch
+            pins = []
+            def only_initial_pin(path, *args, **kwargs):
+                if path.name == '.keep':
+                    pins.append(path)
+                    self.assertNotIn('start', fixture[4], 'Retention was established after device startup')
+                return touch(path, *args, **kwargs)
+            with patch.object(Path, 'touch', only_initial_pin):
+                with self.assertRaisesRegex(RuntimeError, 'cleanup failed'):
+                    self.run_fixture(*fixture[:4])
+            self.assertEqual(len(pins), 1)
+            self.assertTrue(pins[0].exists())
+            self.assertEqual(fixture[4][-1], 'scratch-preserved')
+
+    def test_startup_failure_cannot_leave_an_old_verified_receipt_or_device_record(self):
+        with self.fixture(startup_error=RuntimeError('startup failed')) as fixture:
+            reports = fixture[3]
+            reports.mkdir()
+            stale = [reports / name for name in ('android-result.json', 'android-result.receipt.log',
+                     'android-receipt.json', 'android-testbed.log', 'android-runtime-device.json')]
+            for path in stale:
+                path.write_text('earlier run')
+            unrelated = reports / 'unrelated-owner.json'
+            unrelated.write_text('preserve')
+            with self.assertRaisesRegex(RuntimeError, 'startup failed'):
+                self.run_fixture(*fixture[:4])
+            self.assertFalse(any(path.exists() for path in stale))
+            self.assertEqual(unrelated.read_text(), 'preserve')
+            self.assertIn('cleanup', fixture[4])
+            self.assertEqual(fixture[4][-1], 'scratch-released')
+
+
+    def test_valid_receipt_is_not_published_when_live_diagnostics_fail(self):
+        with self.fixture() as fixture:
+            with patch.object(hosted, 'diagnostics', side_effect=OSError('diagnostics failed')):
+                with self.assertRaisesRegex(OSError, 'diagnostics failed'):
+                    self.run_fixture(*fixture[:4])
+            self.assertTrue((fixture[3] / 'android-receipt.json').exists())
+            self.assertFalse((fixture[3] / 'android-result.json').exists())
+            self.assertFalse((fixture[3] / 'android-result.receipt.log').exists())
+            self.assertIn('cleanup', fixture[4])
+
+    def test_retry_preserves_previous_retained_workspace_pointer(self):
+        with self.fixture(cleanup_error=True) as fixture:
+            reports = fixture[3]
+            reports.mkdir()
+            incomplete = reports / 'android-cleanup-incomplete.txt'
+            previous = 'Earlier retained workspace: synthetic-previous-owner\n'
+            incomplete.write_text(previous)
+            with self.assertRaisesRegex(RuntimeError, 'cleanup failed'):
+                self.run_fixture(*fixture[:4])
+            text = incomplete.read_text()
+            self.assertTrue(text.startswith(previous))
+            self.assertIn('retained workspace: ' + str(fixture[0] / 'scratch'), text)
