@@ -12,7 +12,7 @@ from unittest.mock import patch
 from tests.books_fixture import make_book, isolate_appearance
 from commonUtils.ui import pyside as qt
 from features.books import register
-from features.books.epub import EPUBBook
+from features.books.epub import EPUBBook, BookError
 from features.books.ui.reader import BooksPage, BookWindow
 from features.books.ui.metadata_editor import MetadataEditor
 from features.books.preferences import ReadingState
@@ -292,6 +292,49 @@ class ReaderTests(QtTestCase):
         self.assertEqual(self.page._current, 0)
         self.page._link_clicked(qt.QUrl('https://example.com'))
         self.assertIn('inside the EPUB', self.page.status.text())
+
+    def test_failed_chapter_navigation_keeps_visible_and_saved_location(self):
+        page = self.page
+        for error_type in (OSError, BookError):
+            for command in ('chapter', 'contents', 'link', 'next', 'previous', 'progress', 'bookmark'):
+                with self.subTest(error=error_type.__name__, command=command):
+                    current, target = (1, 0) if command == 'previous' else (0, 1)
+                    page.go_chapter(current)
+                    self.app.processEvents()
+                    page.text.show_page(page.text.page_count - 1 if command == 'next' else 0)
+                    target_path = page.book.spine[target]
+                    page._bookmarks = [dict(label='Destination', path=target_path, position=0, location=0)]
+                    actions = {
+                        'chapter': lambda: page.go_chapter(target),
+                        'contents': lambda: page._chapter_selected(page._chapter_items[(target_path, '')]),
+                        'link': lambda: page._link_clicked(qt.QUrl('epub:/' + target_path)),
+                        'next': lambda: page.turn_page(1),
+                        'previous': lambda: page.turn_page(-1),
+                        'progress': lambda: page.seek_book(target, .5),
+                        'bookmark': lambda: page.open_bookmark(0),
+                    }
+                    visible, path, location = page.text.toPlainText(), page._path, page.text.location()
+                    read = page.book.read
+                    def unavailable(member):
+                        if member == target_path:
+                            raise error_type('Chapter is unavailable')
+                        return read(member)
+                    with patch.object(page.book, 'read', side_effect=unavailable):
+                        actions[command]()
+                    self.assertEqual(page.status.text(), 'Chapter is unavailable')
+                    self.assertEqual(page.text.toPlainText(), visible)
+                    self.assertEqual(page._path, path)
+                    self.assertEqual(page._current, current)
+                    self.assertFalse(page._loading)
+                    page._save_state()
+                    saved = page._state.load()
+                    self.assertEqual((saved['path'], saved['chapter'], saved['location']),
+                                     (path, current, location))
+                    actions[command]()
+                    self.app.processEvents()
+                    self.assertEqual(page._current, target)
+                    self.assertEqual(page._path, target_path)
+                    self.assertNotEqual(page.text.toPlainText(), visible)
 
     def test_automatic_font_keeps_application_family_and_normal_space_metrics(self):
         font = self.page.text.document().defaultFont()

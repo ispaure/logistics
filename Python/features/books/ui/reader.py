@@ -333,17 +333,21 @@ class BooksPage(Bookmarks, qt.QWidget):
         chapter = item.data(0, qt.Qt.ItemDataRole.UserRole)
         self.go_chapter(self.book.spine.index(chapter.path), fragment=chapter.fragment)
 
+    def _show_chapter(self, index, *, position=0, fragment='', location=None, turn=0):
+        """Keep the selected chapter aligned with the visible text if loading fails."""
+        previous = self._current
+        self._current = index
+        try:
+            self._render(position=position, fragment=fragment, location=location, turn=turn)
+        except (OSError, BookError) as error:
+            self._current = previous
+            self.status.setText(str(error))
+
     def go_chapter(self, index, *, fragment=''):
         if not self.book or self.worker or not 0 <= index < len(self.book.spine):
             return
         self.speech.stop()
-        previous = self._current
-        self._current = index
-        try:
-            self._render(fragment=fragment, turn=index - previous)
-        except (OSError, BookError) as error:
-            self._current = previous
-            self.status.setText(str(error))
+        self._show_chapter(index, fragment=fragment, turn=index - self._current)
         self._set_busy(False)
 
     def continue_speech(self):
@@ -391,20 +395,11 @@ class BooksPage(Bookmarks, qt.QWidget):
         elif direction > 0 and self._current + 1 < len(self.book.spine):
             self.go_chapter(self._current + 1)
         elif direction < 0 and self._current > 0:
-            self._current -= 1
-            try:
-                self._render(position=1, turn=-1)
-            except (OSError, BookError) as error:
-                self._current += 1
-                self.status.setText(str(error))
+            self._show_chapter(self._current - 1, position=1, turn=-1)
 
     def seek_book(self, chapter, fraction):
         if self.book is not None and not self.worker and not self._loading:
-            self._current = chapter
-            try:
-                self._render(position=fraction)
-            except (OSError, BookError) as error:
-                self.status.setText(str(error))
+            self._show_chapter(chapter, position=fraction)
 
     def follow_speech(self, start, end):
         previous = self.text.read_pointer
