@@ -85,8 +85,16 @@ def prepare(available, root=ROOT, state_root=None):
                                        'status': str(state_root / 'last-result.json')}, indent=2), encoding='utf-8')
         request.chmod(0o600)
         return request
-    except BaseException:
-        shutil.rmtree(workspace)
+    except BaseException as preparation_error:
+        try:
+            shutil.rmtree(workspace)
+        except OSError as cleanup_error:
+            cleanup_note = f'Staging cleanup could not complete at {workspace}: {cleanup_error}'
+            if isinstance(preparation_error, Exception):
+                raise RuntimeError(
+                    f'Update preparation failed: {preparation_error}. {cleanup_note}'
+                ) from preparation_error
+            preparation_error.add_note(cleanup_note)
         raise
 
 
