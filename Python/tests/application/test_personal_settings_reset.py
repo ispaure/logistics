@@ -167,6 +167,42 @@ class PersonalSettingsResetTests(unittest.TestCase):
             self.assertEqual(read_values(self.config / 'features/git/config.ini'), {})
         self.assertEqual(legacy.read_bytes(), original)
 
+    def test_ledger_restore_failure_reports_restored_configuration_and_metadata(self):
+        from features.settings import migration_ledger
+        original = self.write('configuration/configFile.ini', '[Other]\nvalue_str=old\n')
+        ledger = migration_ledger()
+        ledger.complete('another-tool-v1')
+        before = original.read_bytes()
+        with patch('commonUtils.persistence.atomic_write_bytes', side_effect=OSError('Metadata restore failed')):
+            with self.assertRaises(OSError) as raised, reset_personal_configuration():
+                raise RuntimeError('Activation failed')
+        self.assertIn('migration metadata', str(raised.exception))
+        self.assertIn(str(ledger.path), str(raised.exception))
+        self.assertIn(str(self.config), str(raised.exception))
+        self.assertNotIn('reset-backup-', str(raised.exception))
+        self.assertEqual(original.read_bytes(), before)
+        self.assertEqual(list(self.root.glob('configuration.reset-backup-*')), [])
+        self.assertEqual(ledger.state('feature-enable-v1'), 'done')
+        self.assertEqual(str(raised.exception.__cause__), 'Metadata restore failed')
+
+    def test_new_ledger_removal_failure_reports_restored_empty_configuration(self):
+        from features.settings import migration_ledger
+        ledger = migration_ledger()
+        unlink = Path.unlink
+        def deny_ledger(path, *args, **kwargs):
+            if path == ledger.path:
+                raise OSError('Metadata removal failed')
+            return unlink(path, *args, **kwargs)
+        with patch.object(Path, 'unlink', deny_ledger):
+            with self.assertRaises(OSError) as raised, reset_personal_configuration():
+                raise RuntimeError('Activation failed')
+        self.assertIn('migration metadata', str(raised.exception))
+        self.assertIn(str(ledger.path), str(raised.exception))
+        self.assertIn('previous empty configuration', str(raised.exception))
+        self.assertNotIn('reset-backup-', str(raised.exception))
+        self.assertFalse(self.config.exists())
+        self.assertTrue(ledger.path.exists())
+
 
 if __name__ == '__main__':
     unittest.main()

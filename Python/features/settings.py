@@ -99,14 +99,20 @@ def reset_personal_configuration():
                     shutil.rmtree(root)
                 if previous:
                     rename_exclusive(backup, root)
-                if published:
+            except OSError as error:
+                recovery = f' Previous settings are kept at {backup}' if previous else ''
+                raise OSError('Could not restore personal configuration.' + recovery) from error
+            if published:
+                try:
                     if ledger_snapshot is None:
                         ledger.path.unlink(missing_ok=True)
                     else:
                         atomic_write_bytes(ledger.path, ledger_snapshot)
-            except OSError as error:
-                recovery = f' Previous settings are kept at {backup}' if previous else ''
-                raise OSError('Could not restore personal configuration.' + recovery) from error
+                except OSError as error:
+                    restored = (f'Personal configuration was restored at {root}.' if previous else
+                                'The previous empty configuration state was restored.')
+                    raise OSError(f'{restored} Could not restore settings migration metadata at {ledger.path}; '
+                                  'the reset may still be marked complete.') from error
             raise
         else:
             if previous:
