@@ -10,11 +10,11 @@ def owners(root=ROOT):
     return json.loads((root / 'Scripts/ownership.json').read_text())['owners']
 
 
-def selected_tests(root, owner):
+def _selected_test_files(root, owner):
     groups = owners(root)
     if owner not in groups:
         raise ValueError('Unknown owner. Choose: ' + ', '.join(sorted(groups)))
-    selected = []
+    selected = set()
     for suite, patterns in groups[owner]['tests'].items():
         folders = {'desktop': 'Python/tests', 'mobile': 'mobile_build/tests'}
         if suite not in folders:
@@ -24,24 +24,37 @@ def selected_tests(root, owner):
             matches = sorted(path for path in folder.rglob(pattern) if path.is_file())
             if not matches:
                 raise ValueError(f'{owner}: no {suite} tests match {pattern}')
-            selected.extend((suite, path.name) for path in matches)
-    return sorted(set(selected))
+            for path in matches:
+                if path.resolve() != folder.resolve() / path.relative_to(folder):
+                    raise ValueError(f'{owner}: linked test source: {path}')
+                selected.add((suite, path.relative_to(root).as_posix()))
+    return sorted(selected)
+
+
+def selected_tests(root, owner):
+    return sorted({(suite, Path(path).name) for suite, path in _selected_test_files(root, owner)})
 
 
 def test_owner(root, owner, python, *, dry_run=False, profile='full', mode='diagnostic', fail_fast=False):
     try:
-        selected = selected_tests(root, owner)
+        selected = _selected_test_files(root, owner)
     except ValueError as error:
         print(error)
         return 2
+    groups = {}
+    for suite, path in selected:
+        groups.setdefault(suite, []).append(path)
     failed = False
-    for suite, pattern in selected:
-        command = [str(python), str(root / 'dev.py'), 'test', suite, pattern,
+    for suite, paths in groups.items():
+        command = [str(python), str(root / 'dev.py'), 'test', suite,
                    '--profile', profile, '--mode', mode]
+        for path in paths:
+            command.extend(['--exact-file', path])
         if fail_fast:
             command.append('--fail-fast')
         if dry_run:
-            print(f'{suite}: {pattern}')
+            for path in paths:
+                print(f'{suite}: {path}')
         else:
             code = subprocess.run(command, cwd=root).returncode
             failed |= code != 0

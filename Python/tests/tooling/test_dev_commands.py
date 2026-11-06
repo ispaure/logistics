@@ -62,6 +62,63 @@ class DeveloperCommandTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 2)
             run.assert_not_called()
 
+    def test_exact_files_route_to_their_owning_environment(self):
+        for suite, folder in (('desktop', 'Python'), ('mobile', 'mobile_build')):
+            first = f'{folder}/tests/first/test_same.py'
+            second = f'{folder}/tests/second/test_same.py'
+            with self.subTest(suite=suite), patch.object(development.subprocess, 'run') as run, \
+                    patch.object(Path, 'is_file', return_value=True), \
+                    patch('logistics_build.test_structure.inventory', return_value=[{'path': first}, {'path': second}]):
+                run.return_value.returncode = 0
+                self.assertEqual(dev.main(['test', suite, '--exact-file', first, '--exact-file', second]), 0)
+                command = run.call_args.args[0]
+                self.assertEqual(command[0], str(dev.environment_python(suite == 'mobile')))
+                self.assertEqual(command[command.index('--exact-file'):][:4],
+                                 ['--exact-file', 'first/test_same.py', '--exact-file', 'second/test_same.py'])
+                self.assertNotIn('--pattern', command)
+
+    def test_invalid_exact_file_selection_starts_nothing(self):
+        path = 'Python/tests/tooling/test_dev_commands.py'
+        with patch.object(development.subprocess, 'run') as run, \
+                patch('logistics_build.test_structure.inventory', return_value=[{'path': path}]):
+            for options in (['desktop', '--exact-file', path, '--exact-file', path],
+                            ['desktop', '--exact-file', 'Python/tests/../test_missing.py'],
+                            ['desktop', 'test*.py', '--exact-file', path],
+                            ['mobile', '--exact-file', path], ['bridge', '--exact-file', path],
+                            ['shared', '--exact-file', path]):
+                with self.subTest(options=options), self.assertRaises(SystemExit) as error:
+                    dev.main(['test', *options])
+                self.assertEqual(error.exception.code, 2)
+            run.assert_not_called()
+
+    def test_owner_batches_overlapping_patterns_and_preserves_failure_policy(self):
+        from Scripts import ownership
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = ('Python/tests/a/test_same.py', 'Python/tests/b/test_same.py',
+                     'mobile_build/tests/c/test_same.py')
+            for path in paths:
+                source = root / path
+                source.parent.mkdir(parents=True)
+                source.touch()
+            declaration = {'fixture': {'tests': {'desktop': ['test*.py', 'test_same.py'],
+                                                 'mobile': ['test_same.py']}}}
+            for options, count in (({}, 2), ({'mode': 'fast'}, 1), ({'fail_fast': True}, 1)):
+                with self.subTest(options=options), patch.object(ownership, 'owners', return_value=declaration), \
+                        patch.object(ownership.subprocess, 'run', return_value=SimpleNamespace(returncode=7)) as run:
+                    self.assertEqual(ownership.test_owner(root, 'fixture', sys.executable, profile='daily', **options), 1)
+                    self.assertEqual(run.call_count, count)
+                    for call, suite, expected in zip(run.call_args_list, ('desktop', 'mobile'),
+                                                     (paths[:2], paths[2:])):
+                        command = call.args[0]
+                        self.assertEqual(command[2:4], ['test', suite])
+                        self.assertEqual(command[4:8], ['--profile', 'daily', '--mode', options.get('mode', 'diagnostic')])
+                        self.assertEqual([command[i + 1] for i, arg in enumerate(command) if arg == '--exact-file'],
+                                         list(expected))
+                        self.assertEqual('--fail-fast' in command, bool(options.get('fail_fast')))
+                        self.assertEqual(call.kwargs['cwd'], root)
+
     def test_dry_run_accepts_custom_interpreter_without_executing(self):
         with patch.object(development.subprocess, 'run') as run:
             self.assertEqual(dev.main(['test', 'desktop', 'test_dev_commands.py',

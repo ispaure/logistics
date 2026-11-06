@@ -170,6 +170,48 @@ class Cases(unittest.TestCase):
                              {(case['case'], case['stage']) for case in rows[0]['cases']})
             self.assertIn('test_keep_mixed.py [stage=smoke]', execution.stdout.split('Slowest files')[1])
 
+    def test_exact_file_inventory_and_execution_do_not_broaden_same_basename(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for folder, content in (('first', ' def test_first(self): pass'),
+                                    ('second', ' raise RuntimeError("wrong source imported")'),
+                                    ('third', ' def test_third(self): pass')):
+                source = root / folder / 'test_same.py'
+                source.parent.mkdir()
+                source.write_text('# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                                  'class Cases(unittest.TestCase):\n' + content + '\n')
+            selection = ('--exact-file', 'third/test_same.py', '--exact-file', 'first/test_same.py')
+            inventory = self.run_modules(root, *selection, '--inventory')
+            self.assertEqual(inventory.returncode, 0, inventory.stderr)
+            rows = json.loads(inventory.stdout)
+            report = root / 'report.json'
+            execution = self.run_modules(root, *selection, '--report', str(report))
+            self.assertEqual(execution.returncode, 0, execution.stdout + execution.stderr)
+            data = json.loads(report.read_text())
+            self.assertEqual([row['file'] for row in rows], ['first/test_same.py', 'third/test_same.py'])
+            self.assertEqual(data['classified_files'],
+                             [dict(path=row['file'], **{k: v for k, v in row.items() if k != 'file'}) for row in rows])
+            self.assertEqual([(row['path'], row['stage']) for row in data['modules']],
+                             [(row['file'], 'regression') for row in rows])
+            self.assertEqual([(row['file'], row['id']) for row in data['tests']],
+                             [('first/test_same.py', 'test_same.Cases.test_first'),
+                              ('third/test_same.py', 'test_same.Cases.test_third')])
+
+    def test_exact_file_rejects_missing_duplicate_and_escaping_paths(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_present.py').write_text('# TEST_STAGE = TestStage.REGRESSION\n')
+            for options in (('--exact-file', 'test_missing.py'),
+                            ('--exact-file', '../test_present.py'),
+                            ('--exact-file', str(root / 'test_present.py')),
+                            ('--exact-file', 'test_present.py', '--exact-file', 'test_present.py')):
+                for mode in (('--inventory',), ('--report', str(root / 'report.json'))):
+                    with self.subTest(options=options, mode=mode):
+                        result = self.run_modules(root, *options, *mode)
+                        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                        self.assertIn('exact', result.stderr)
+                        self.assertNotIn('Running isolated test file', result.stdout)
+
     def test_inventory_and_execution_reject_empty_stage_selection(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
