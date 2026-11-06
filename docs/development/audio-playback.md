@@ -111,8 +111,14 @@ for isolated app/device authorization, source freshness, evidence and cleanup.
 
 ## Disposable read-aloud playback acceptance
 
-Run `python -m mobile_build.validation.document_storage_tools ios --probe speech-playback`
-with the owning mobile environment. `--ios-runtime` accepts an installed CoreSimulator
+From the repository root, run the probe with the prepared mobile interpreter.
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios \
+  --probe speech-playback --output test-results/speech-playback
+```
+
+`--ios-runtime` accepts an installed CoreSimulator
 runtime identifier; combine it with a supported `--family` when comparing OS versions.
 The lease records the exact selected runtime and model. Existing devices are only
 read to select a compatible model; the runner creates and removes its own simulator.

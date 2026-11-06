@@ -147,7 +147,7 @@ Use **Adopt disposable build folder…** for a reviewed temporary build checkout
 **Adopt legacy build folder…** for a disposable direct child of `mobile_build/build`,
 or **Adopt disposable simulator…** with an exact QA simulator UUID. Adoption gives
 project cleanup permission to delete the selected state; save needed evidence
-first. Temporary directories receive a seven-day window; explicitly adopted
+first. Explicitly adopted temporary directories receive a five-day window; explicitly adopted
 simulators and abandoned project simulator leases receive one day. Neither a
 Logistics-looking folder name nor a simulator display name proves ownership.
 

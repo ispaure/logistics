@@ -1,6 +1,6 @@
 # Local iPhone and iPad deployment
 
-Mobile packaging installs binary distributions only. Before deploying or preparing
+Mobile packaging installs binary distributions only. Before direct Briefcase diagnostics, device deployment, or preparing
 TestFlight/Firebase builds, build the pinned pure-Python language detector wheel
 and expose it to the child package installers (run from the repository root):
 
@@ -136,7 +136,7 @@ After refreshing requirements and installing in place over Wi-Fi, the app
 remained running and a physical-device screenshot showed Workspaces with its
 existing configured folders. All 11 deployment tests passed; the screenshot is
 retained locally at `mobile_build/logs/iphone-startup-dependencies-fixed.png`.
-The toolchain selector requires SDK 27.1 or newer and supplies `DEVELOPER_DIR`
+The toolchain selector defaults to the 27.1.x iOS Simulator SDK series and supplies `DEVELOPER_DIR`
 to child processes without changing the global `xcode-select` setting.
 `cloud_build.ios_compiler` quotes the SDK path in Go's `CC` argument string so
 installations such as `Xcode 27.1.app` compile correctly.

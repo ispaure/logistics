@@ -8,7 +8,8 @@ The shared Python `NavigationState` owns destination IDs and independent routes.
 `commonUtils.ui.native.navigation` now isolates backend access, following the
 local architecture cleanup. Toga 0.5.7 and Briefcase 0.4.5
 remain pinned. Android explicitly depends on Material 1.12.0. Apple builds select
-an installed iOS 27.1 SDK or newer to opt into Duo bar adaptation, retaining the
+an installed iOS Simulator SDK in the default 27.1.x series to opt into Duo bar
+adaptation, retaining the
 declared iOS 15 minimum and guarding newer controller APIs.
 
 ## Local evidence
