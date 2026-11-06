@@ -15,6 +15,7 @@ from commonUtils.ui import pyside as qt
 from features.application import registry
 from features.contributions import SettingsContribution, RegisteredContribution
 from desktop.pages.settings import SettingsPage, ConfigurationPanel
+from desktop.settings.feature_settings import FeatureSettingsPanel
 
 
 class SettingsPageTests(QtTestCase):
@@ -254,7 +255,7 @@ class SettingsPageTests(QtTestCase):
             self.assertIs(panel.custom['custom'], custom)
             factory.assert_called_once()
 
-    def test_commonutils_settings_expose_ini_and_preserve_edits(self):
+    def test_appearance_exposes_shared_controls_and_preserves_edits(self):
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'settings.ini'
             path.write_text('[WheelNavigation]\nsensitivity=20\n')
@@ -264,7 +265,8 @@ class SettingsPageTests(QtTestCase):
                     patch('pathlib.Path.home', return_value=Path(temporary) / 'marca'):
                 page = SettingsPage(); self.addCleanup(page.deleteLater)
                 item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).data(0, qt.Qt.ItemDataRole.UserRole) == 'commonutils')
-                page.sidebar.setCurrentItem(item)
+                self.assertEqual(item.text(0), 'Appearance & shared controls')
+                page.show_category('commonutils')
                 editor = page.panels['commonutils'].editors[path]
                 editor.fields['WheelNavigation', 'sensitivity'].setText('10')
                 page.sidebar.setCurrentItem(page.sidebar.topLevelItem(0))
@@ -316,7 +318,6 @@ class SettingsPageTests(QtTestCase):
         self.assertEqual(contributions.settings[0].scope, 'personal')
 
     def test_feature_guide_is_in_header_and_available_when_disabled(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             guide = root / 'test' / 'user_docs' / 'index.md'
@@ -329,14 +330,13 @@ class SettingsPageTests(QtTestCase):
                 self.assertTrue(panel.guide_button.isEnabled())
                 self.assertGreater(panel.guide_button.x(), panel.width() / 2)
                 self.assertLess(panel.guide_button.y(), 60)
-                with patch('desktop.pages.settings.open_markdown') as opened:
+                with patch('desktop.settings.feature_settings.open_markdown') as opened:
                     panel.guide_button.click()
                 opened.assert_called_once_with(guide, directory=guide.parent, parent=panel.window(), detached=True, allow_new_tabs=False)
                 self.assertIn('Alt', panel.guide_button.toolTip())
                 panel.close()
 
     def test_feature_guide_opens_owned_wiki_scope(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             guide = root / 'test/docs/user/user.md'
@@ -346,14 +346,13 @@ class SettingsPageTests(QtTestCase):
                     patch.object(registry, 'get_settings', return_value=[]):
                 panel = FeatureSettingsPanel(self.state())
                 self.addCleanup(panel.deleteLater)
-                with patch('desktop.pages.settings.open_markdown') as opened:
+                with patch('desktop.settings.feature_settings.open_markdown') as opened:
                     panel.guide_button.click()
                 opened.assert_called_once_with(guide, directory=root / 'test/docs',
                                               parent=panel.window(), detached=True, allow_new_tabs=False)
                 panel.close()
 
     def test_tabbed_settings_retain_custom_state_and_unsaved_ini_edits(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'config.ini'; path.write_text('[Test]\nkey=value\n')
             factory = Mock(side_effect=lambda parent: qt.QLineEdit('credential state', parent))
@@ -392,7 +391,6 @@ class SettingsPageTests(QtTestCase):
 
 
     def test_ini_files_are_combined_once_per_scope_with_retained_buffers(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             paths = [Path(temporary) / name for name in ('app.ini', 'another.ini', 'personal.ini')]
             for path in paths:
@@ -436,7 +434,6 @@ class SettingsPageTests(QtTestCase):
             editor.text.document().setModified(False)
 
     def test_feature_status_directs_enablement_to_features_and_reports_missing_dependencies(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         state = self.state()
         state.enabled = False
         with patch.object(registry, 'get_settings', return_value=[]):
@@ -448,7 +445,6 @@ class SettingsPageTests(QtTestCase):
             self.assertIn('dependencies are unavailable', panel.status.text())
 
     def test_empty_feature_settings_keep_heading_and_status_at_top(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         with patch.object(registry, 'get_settings', return_value=[]):
             panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
             panel.resize(850, 800); panel.show(); self.app.processEvents()
@@ -457,7 +453,6 @@ class SettingsPageTests(QtTestCase):
             panel.close()
 
     def test_description_is_compact_and_configuration_editor_fills_page(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'config.ini'; path.write_text('[Test]\nkey=value\n')
             contribution = RegisteredContribution('test', 'Test', SettingsContribution(
@@ -472,7 +467,6 @@ class SettingsPageTests(QtTestCase):
                 panel.close()
 
     def test_custom_expanding_layout_fills_available_space(self):
-        from desktop.pages.settings import FeatureSettingsPanel
         def factory(parent):
             widget = qt.QWidget(parent)
             layout = qt.QVBoxLayout(widget)
