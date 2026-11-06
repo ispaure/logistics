@@ -255,6 +255,28 @@ class ArchiveWorkspaceUITests(QtTestCase):
         _manage(context)
         self.assertEqual(len([view for view in _windows if not view.page.closing]), 1)
 
+    def test_standalone_window_reuses_only_its_current_archive(self):
+        from features.archives.ui.window import open_archive_window
+
+        first = self.path
+        second = self.root / 'other.zip'
+        archives.create([self.root / 'source'], second)
+        window = open_archive_window(first)
+        self.assertIs(open_archive_window(first), window)
+        self.wait_until(lambda: not window.page.busy)
+        self.assertEqual(window.page.path, first)
+
+        window.page.open_archive(second)
+        self.wait_until(lambda: not window.page.busy)
+        self.assertEqual(window.page.path, second)
+
+        reopened = open_archive_window(first)
+        self.assertIsNot(reopened, window)
+        self.wait_until(lambda: not reopened.page.busy)
+        self.assertEqual(reopened.page.path, first)
+        self.assertIs(open_archive_window(second), window)
+        self.assertIs(open_archive_window(first), reopened)
+
 
 class ArchiveDeclarationTests(unittest.TestCase):
     def test_archive_contributes_document_launcher(self):
