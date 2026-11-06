@@ -24,8 +24,8 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(self.manager, 'visible', return_value=True))
         self.manager.web = self.panel.web
         self.manager.header = NS(parent=object())
-        self.manager.strip = NS(parent=self.manager.header)
-        self.manager.buttons = {name:NS(enabled=False) for name in TOOLS}
+        self.manager.strip = NS(parent=self.manager.header, _impl=NS(native=NS(hidden=False)))
+        self.manager.buttons = {name:NS(enabled=False, _impl=NS(native=NS(hidden=False))) for name in TOOLS}
         self.manager.anchor = lambda name: [100, -48, 44, 48]
         self.state = {name:dict(disabled=name == 'redo', active=name == 'pen') for name in TOOLS}
 
@@ -74,14 +74,38 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         self.manager.query.assert_awaited_once_with('window.notebookNativeTools?.(null)')
         self.assertFalse(self.panel.busy)
 
-    async def test_busy_and_pending_ink_never_query_or_change_worker_ownership(self):
-        self.manager.query = AsyncMock()
+    async def test_busy_and_pending_ink_renew_lease_without_dispatching_actions(self):
+        self.manager.query = AsyncMock(return_value=json.dumps(self.state))
         for field in ('busy', 'native_input_pending'):
-            setattr(self.panel, field, True)
-            await self.manager.refresh('undo')
-            self.manager.query.assert_not_awaited()
-            self.assertTrue(getattr(self.panel, field))
-            setattr(self.panel, field, False)
+            with self.subTest(field=field):
+                self.manager.query.reset_mock()
+                setattr(self.panel, field, True)
+                await self.manager.activate('undo')
+                self.manager.query.assert_not_awaited()
+                await self.manager.refresh()
+                self.manager.query.assert_awaited_once_with('window.notebookNativeTools?.(null)')
+                self.assertTrue(all(not button.enabled for button in self.manager.buttons.values()))
+                self.assertTrue(getattr(self.panel, field))
+                setattr(self.panel, field, False)
+
+    async def test_hidden_lease_keeps_strip_mounted_but_hides_flattened_buttons(self):
+        strip = self.manager.strip
+        buttons = self.manager.buttons.copy()
+        self.manager.query = AsyncMock(side_effect=[json.dumps(self.state), 'null', json.dumps(self.state)])
+        await self.manager.refresh()
+        self.assertTrue(buttons['undo'].enabled)
+        await self.manager.refresh()
+        self.assertIs(self.manager.strip, strip)
+        self.assertIs(strip.parent, self.manager.header)
+        self.assertTrue(strip._impl.native.hidden)
+        self.assertTrue(all(button._impl.native.hidden and not button.enabled for button in buttons.values()))
+        await self.manager.refresh()
+        self.assertIs(self.manager.strip, strip)
+        self.assertFalse(strip._impl.native.hidden)
+        for name, button in buttons.items():
+            self.assertIs(self.manager.buttons[name], button)
+            self.assertFalse(button._impl.native.hidden)
+            self.assertEqual(button.enabled, not self.state[name]['disabled'])
 
     async def test_retired_canvas_cannot_receive_actions(self):
         self.panel.web = object()
@@ -193,16 +217,18 @@ class NativeToolsMountTests(unittest.TestCase):
         panel.app = create_app(self)
         panel._canvas_ready = True
         panel.view = toga.Box()
-        panel.web = NS()
+        panel.web = NS(_impl=NS())
         panel.web.evaluate_javascript = AsyncMock(return_value=None)
         controller = NS(view=NS(bounds=NS(size=NS(width=951, height=669)),
-            safeAreaInsets=NS(left=0, right=84)))
+            safeAreaLayoutGuide=NS(layoutFrame=NS(size=NS(width=867)))),
+            traitCollection=NS(preferredContentSizeCategory="normal"))
         window = NS(bounds=NS(size=NS(width=951, height=669)))
         header = toga.Box(style=Pack(height=37))
         panel.view.add(header)
         manager = NativeDrawingTools(panel)
         with patch.object(panel.app.main_window._impl, 'native', window, create=True), \
                 patch.object(panel.app, '_presentation', replace(panel.app.presentation, fold_division=lambda web:None)):
+            self.assertTrue(manager.fits(controller))
             manager.mount(header, controller)
         self.assertEqual(len(manager.buttons), 5)
         self.assertEqual([button.style.width for button in manager.buttons.values()], [44] * 5)
@@ -216,23 +242,23 @@ class NativeToolsMountTests(unittest.TestCase):
         self.assertEqual(len(header.children), 0)
         panel.app.loop.run_until_complete(asyncio.sleep(0))
 
-    def test_portrait_and_narrow_landscape_do_not_mount_or_start_queries(self):
+    def test_narrow_viewport_is_not_eligible_for_native_strip(self):
         import toga
         from mobile_build.tests.support.app import create_app
-        for width, height in ((466,678), (390,300)):
+        for width, height, safe_width in ((320, 678, 320), (390, 300, 320)):
             panel = Panel()
             panel.app = create_app(self)
             panel._canvas_ready = True
             panel.view = toga.Box()
             panel.web = NS()
             manager=NativeDrawingTools(panel)
-            header=toga.Box()
             controller=NS(view=NS(bounds=NS(size=NS(width=width,height=height)),
-                safeAreaInsets=NS(left=0,right=0)))
+                safeAreaLayoutGuide=NS(layoutFrame=NS(size=NS(width=safe_width)))),
+                traitCollection=NS(preferredContentSizeCategory="normal"))
             window=NS(bounds=NS(size=NS(width=width,height=height)))
             with patch.object(panel.app.main_window._impl,'native',window,create=True), \
                     patch.object(panel.app, '_presentation', replace(panel.app.presentation, fold_division=lambda web:None)):
-                manager.mount(header,controller)
+                self.assertFalse(manager.fits(controller))
             self.assertIsNone(manager.task)
             self.assertIsNone(manager.strip)
 

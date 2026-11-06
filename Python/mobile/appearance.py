@@ -226,10 +226,10 @@ def reserve_navigation(app, *, view=None):
         window = app.main_window._impl.native
         viewport = container.native.convertRect(container.native.bounds, toView=window)
         bounds = bar.convertRect(bar.bounds, toView=window)
-        from features.lm.mobile.presentation import navigation_clearance
+        from features.lm.mobile.presentation import COMPOSER_BOTTOM_GAP, navigation_clearance
         extra = navigation_clearance(float(viewport.origin.y + container.top_inset),
             float(viewport.origin.y + viewport.size.height - container.bottom_inset),
-            float(bounds.origin.y), float(bounds.size.height), bar_width=float(bounds.size.width)) - 12
+            float(bounds.origin.y), float(bounds.size.height), bar_width=float(bounds.size.width)) - COMPOSER_BOTTOM_GAP
     # A vertical bar can leave the root container's bottom inset at zero
     # while the window still reserves a Home-indicator strip. Foreground rows
     # must honor that strip independently of the destination bar's axis.

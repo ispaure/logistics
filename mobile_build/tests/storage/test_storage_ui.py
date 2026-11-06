@@ -190,7 +190,10 @@ class StorageUITests(unittest.TestCase):
             self.app.storage_controller()._show_storage_target('wipe')
             page = self.app.collection_storage_page
             footer = self.app.storage_controller()._collection_delete_footer
-            self.assertIs(self.app.body.children[0].children[-1], footer)
+            self.assertIn(footer, list(widgets(self.app.body)))
+            scroll, mounted_footer = footer.parent.children
+            self.assertIs(scroll.content, page)
+            self.assertIs(mounted_footer, footer)
             self.assertIs(footer.children[-1], self.app.collection_erase)
             self.assertFalse(any(getattr(widget, 'text', '') == 'Continue' for widget in widgets(page)))
             self.assertEqual(self.app.collection_erase._impl._surface_roles[:2], ('destructive_fill', 'on_destructive'))

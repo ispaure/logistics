@@ -182,5 +182,5 @@ class SavedFilesTests(unittest.TestCase):
             app.scene_manager.owners.hosts.pop('other')
             app.reader_manager().catalog.book_busy = True
             app.loop.run_until_complete(app.delete_saved_file('a' * 32))
-            self.assertIn('Wait for the reader', app.saved_files_status.text)
+            self.assertIn('Wait for the reader', ' '.join(app.saved_files_status.text.split()))
             self.drain(app)
