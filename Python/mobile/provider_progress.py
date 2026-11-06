@@ -20,6 +20,8 @@ class ProviderProgress:
         )
         self.restored = {}
         self.live = False
+        self.worker = None
+        self.generation = 0
 
     def load(self):
         self.restored = self.state.load()
@@ -56,35 +58,123 @@ class ProviderProgress:
         if navigation is not None:
             navigation.requested_half = 1 if state.get("half") == 1 else 0
 
-    def capture(self):
+    def available(self):
+        owner = self.owner
+        app = getattr(owner, 'app', owner)
+        document = owner.__dict__.get('_provider_document')
+        manager = getattr(owner, 'manager', None)
+        return (not self.closed and self.live and getattr(app, 'active_host', True)
+                and not getattr(document, 'terminal', False) and not getattr(manager, 'terminal', False))
+
+    def snapshot(self):
         owner = self.owner
         reader = getattr(owner, "crypt_reader", None)
-        if self.closed or not self.live or reader is None:
+        if not self.available() or reader is None:
             return
         value = getattr(owner.crypt_page, "value", None)
         if value not in reader.labels:
             return
-        self.pending = dict(
+        return dict(
             page=reader.labels.index(value),
             locations=deepcopy(getattr(owner, "_provider_epub_locations", {})),
             half=getattr(owner, "_provider_displayed_half", 0),
             bookmarks=sorted(getattr(owner, "crypt_bookmarks", set())),
             epub_bookmarks=sorted(getattr(owner, "epub_session_bookmarks", set())),
         )
+    def capture(self):
+        state = self.snapshot()
+        if state is None:
+            return
+        self.pending = state
+        self.generation += 1
         if self.task is None or self.task.done():
-            app = getattr(owner, "app", owner)
+            app = getattr(self.owner, "app", self.owner)
             self.task = app.loop.create_task(self.write())
 
-    async def write(self):
-        await asyncio.sleep(0.4)
-        while self.pending is not None and not self.closed:
+    def require_idle(self):
+        if self.closed or self.worker is not None or (self.task is not None and not self.task.done()):
+            raise OSError('Finish saving reader progress before replacing this workspace.')
+
+    async def prepare_replacement(self):
+        """Persist the final observed position with its source still owned/live.
+
+        Existing queued/writing progress conservatively vetoes replacement. This
+        prevents an older worker from overwriting this final capture.
+        """
+        self.require_idle()
+        state = self.snapshot()
+        if state is None:
+            return
+        self.pending = state
+        self.generation += 1
+        generation = self.generation
+        app = getattr(self.owner, 'app', self.owner)
+        task = self.task = app.loop.create_task(self.write(delay=False, strict=True))
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            from services.worker_retirement import drain_worker
+            await drain_worker(task)
+            raise
+        if self.generation != generation or self.snapshot() != state:
+            raise OSError('Reader progress changed during replacement.')
+
+    def checkpoint_replacement(self):
+        """Synchronous route: no previous worker may overlap this checkpoint."""
+        self.require_idle()
+        state = self.snapshot()
+        if state is not None:
+            self.state.save(state)
+            self.generation += 1
+            self.pending = None
+            if self.snapshot() != state:
+                raise OSError('Reader progress changed during replacement.')
+
+    async def write(self, *, delay=True, strict=False):
+        if not self.available():
+            return
+        if delay:
+            await asyncio.sleep(0.4)
+        while self.pending is not None and self.available():
+            idle = getattr(self.owner, 'operation_idle', None)
+            if idle is not None:
+                await idle.wait()
+            if not self.available() or self.pending is None:
+                return
             state, self.pending = self.pending, None
+            worker = self.worker = asyncio.create_task(asyncio.to_thread(self.state.save, state))
             try:
-                await asyncio.to_thread(self.state.save, state)
+                try:
+                    await asyncio.shield(worker)
+                except asyncio.CancelledError:
+                    from services.worker_retirement import drain_worker
+                    await drain_worker(worker)
+                    raise
             except (OSError, ValueError):
-                pass  # Locked/passwordless credentials never publish weaker state.
+                if strict:
+                    raise
+                # Locked/passwordless credentials never publish weaker state.
+            finally:
+                self.worker = None
+                owner = self.owner
+                manager = getattr(owner, 'manager', None)
+                app = getattr(owner, 'app', owner)
+                if (manager is not None and getattr(app, 'active_host', False)
+                        and getattr(app, 'private_sessions', None) is manager
+                        and manager.controllers.get(owner.session.id) is owner and not manager.terminal):
+                    manager.revoke_stale()
+
+    def retire(self):
+        """Terminal replacement cleanup only; preparation owns persistence."""
+        if self.closed:
+            return
+        self.require_idle()
+        self.closed = True
+        self.pending = None
 
     def close(self):
+        if self.worker is not None:
+            raise OSError('Reader progress is still using this document.')
         self.capture()
         # The source must still be active for publication. Closing never schedules
         # a delayed write against a reader whose credential grant has retired.

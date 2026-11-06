@@ -50,8 +50,11 @@ class SessionTransitions:
     def close(self, key, *, choice='keep'):
         return self.commit(self.prepare(key, choice=choice))
 
-    def preserve_for_replacement(self):
+    def preserve_for_replacement(self, receipt=None):
         host = self.host
+        private = getattr(host, 'private_sessions', None)
+        if private is not None:
+            private.require_replacement_safe(receipt)
         library = getattr(host, 'vault_browser', None)
         if library is not None and library.__dict__.get('embedded') is not None:
             # A native DOM/ink event may still be queued even when dirty is false.
@@ -64,6 +67,10 @@ class SessionTransitions:
             lists.flush_writes()
         if hasattr(host, 'chat_current') and not host.checkpoint_chat():
             raise OSError('Could not preserve the previous conversation.')
+        if private is not getattr(host, 'private_sessions', None):
+            raise OSError('The private workspace changed during replacement.')
+        if private is not None:
+            private.require_replacement_safe(receipt)
 
     def checkpoint_for_exit(self):
         host = self.host

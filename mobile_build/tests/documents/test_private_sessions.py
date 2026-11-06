@@ -560,3 +560,394 @@ class PrivateSessionTests(unittest.TestCase):
             self.assertFalse(self.app.cloud_busy)
 
         self.run_async(exercise())
+
+    def test_replacement_veto_retains_dirty_text_metadata_and_source(self):
+        from mobile.application_lifecycle import lifecycle
+        from mobile.app import _active_hosts
+        from types import SimpleNamespace as NS
+        owner = self.open('draft.txt')
+        manager, reader = self.app.private_sessions, owner.crypt_reader
+        token = self.app.workspace.token(owner.session.id)
+        identity = str(self.root.resolve()) + ':primary'
+        for metadata in (False, True):
+            with self.subTest(metadata=metadata):
+                owner.crypt_text.value = reader.text if metadata else 'Synthetic retained draft'
+                owner.crypt_metadata_fields = {'title': NS(value='Edited')} if metadata else {}
+                owner.crypt_metadata_initial = {'title': 'Original'} if metadata else {}
+                with patch.object(self.app, 'save_workspace') as save, \
+                        self.assertRaises(OSError):
+                    lifecycle(self.app).retire_for_replacement()
+                save.assert_not_called()
+                self.assertTrue(self.app.active_host)
+                self.assertIs(_active_hosts[identity], self.app)
+                self.assertIs(owner.crypt_reader, reader)
+                self.assertIs(manager.controllers[owner.session.id], owner)
+                self.assertTrue(self.app.workspace.accepts(token))
+
+    def native_editor(self, owner, flush):
+        from types import SimpleNamespace as NS
+        view = object()
+        editor = NS(view=view, closed=False, bridge='synthetic-bridge', _revision=0)
+        async def snapshot():
+            await flush()
+            editor._revision += 1
+        editor.flush = snapshot
+        workflow = NS(formatted=editor, content=NS(children=[view]), closed=False,
+                      source=owner.crypt_text, pending=None, preparing_formatted=None,
+                      source_changed=lambda *args, **kwargs: None)
+        original = owner.__dict__.get('_provider_markdown')
+        owner._provider_markdown = workflow
+        self.addCleanup(setattr, owner, '_provider_markdown', original)
+        return editor, workflow
+
+    def test_replacement_native_flush_is_ephemeral_owner_evidence(self):
+        owner = self.open('native.txt')
+        manager = self.app.private_sessions
+        editor, workflow = self.native_editor(owner, AsyncMock())
+        with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'):
+            with self.assertRaises(OSError):
+                manager.require_replacement_safe()
+            receipt = self.run_async(manager.prepare_replacement())
+            manager.require_replacement_safe(receipt)
+            editor._revision += 1
+            with self.assertRaises(OSError):
+                manager.require_replacement_safe(receipt)
+            async def dirty():
+                owner.crypt_text.value = 'Native queued draft'
+                editor._revision += 1
+            editor.flush = dirty
+            with self.assertRaises(OSError):
+                self.run_async(manager.prepare_replacement())
+            self.assertEqual(owner.crypt_text.value, 'Native queued draft')
+            self.assertFalse(workflow.closed)
+
+    def test_replacement_native_flush_failure_and_changed_earlier_provider_veto(self):
+        first, second = self.open('one.txt'), self.open('two.txt')
+        manager = self.app.private_sessions
+        editor, _ = self.native_editor(first, AsyncMock())
+        _, second_workflow = self.native_editor(second, AsyncMock())
+        with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_android.test'):
+            for change in ('bridge', 'revision', 'busy', 'token'):
+                with self.subTest(change=change):
+                    async def changed():
+                        second_workflow.formatted._revision += 1
+                        if change == 'bridge':
+                            editor.bridge += '-changed'
+                        elif change == 'revision':
+                            editor._revision += 1
+                        elif change == 'busy':
+                            first.operation_busy = True
+                        else:
+                            self.app.workspace.invalidate(first.session.id)
+                    second_workflow.formatted.flush = changed
+                    with self.assertRaises(OSError):
+                        self.run_async(manager.prepare_replacement())
+                    first.operation_busy = False
+            editor.flush = AsyncMock(side_effect=ValueError('Synthetic flush failed'))
+            with self.assertRaises(OSError):
+                self.run_async(manager.prepare_replacement())
+        self.assertTrue(self.app.active_host)
+
+    def test_cancelled_text_save_drains_and_reconciles_committed_reader(self):
+        import asyncio
+        from threading import Event
+        owner = self.open('late.txt')
+        owner.crypt_text.value = 'Committed synthetic draft'
+        document, original = owner.provider_document(), owner.crypt_reader
+        save = self.copies.save
+        release, finished = Event(), Event()
+        async def exercise():
+            started = asyncio.Event()
+            results = []
+            def blocking(*args, **kwargs):
+                self.app.loop.call_soon_threadsafe(started.set)
+                if not release.wait(5):
+                    raise RuntimeError('Fixture not released')
+                try:
+                    result = save(*args, **dict(kwargs, cancelled=lambda: False))
+                    results.append(result)
+                    return result
+                finally:
+                    finished.set()
+            with patch.object(self.copies, 'save', side_effect=blocking):
+                task = asyncio.create_task(owner.save_crypt())
+                try:
+                    await asyncio.wait_for(started.wait(), 2)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    self.assertFalse(task.done())
+                    self.assertTrue(owner.operation_busy)
+                    self.assertFalse(owner.operation_idle.is_set())
+                    self.assertIsNotNone(owner._crypt_cancel)
+                    with self.assertRaises(OSError):
+                        document.dispose()
+                    self.assertIs(owner.crypt_reader, original)
+                finally:
+                    release.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+                    self.assertTrue(await asyncio.to_thread(finished.wait, 2))
+            self.assertIs(owner.crypt_reader, results[0])
+            self.assertFalse(owner.private_dirty())
+            self.assertFalse(owner.operation_busy)
+            self.assertTrue(owner.operation_idle.is_set())
+            self.assertIsNone(owner._crypt_cancel)
+        self.run_async(exercise())
+        self.assertEqual((self.local / 'late.txt').read_text(), 'Committed synthetic draft')
+
+    def test_terminal_retirement_closes_source_despite_presentation_failure_and_retries(self):
+        from unittest.mock import Mock
+        from types import SimpleNamespace as NS
+        owner = self.open('terminal.txt')
+        manager, document, reader = self.app.private_sessions, owner.provider_document(), owner.crypt_reader
+        reader.source = NS(close=Mock())
+        reader.pdf = NS(close=Mock())
+        owner.pdf_search = NS(dispose=Mock(side_effect=[ValueError('synthetic'), None]))
+        with patch.object(self.app, 'save_workspace') as save, \
+                patch.object(self.app.workspace, 'close') as close, \
+                patch.object(self.app.credential_document_lists, 'closed') as history:
+            with self.assertRaises(OSError):
+                manager.retire()
+            self.assertFalse(manager.available(owner.session.id))
+            self.assertTrue(document.terminal)
+            reader.source.close.assert_called_once_with()
+            reader.pdf.close.assert_called_once_with()
+            manager.retire()
+            reader.source.close.assert_called_once_with()
+            reader.pdf.close.assert_called_once_with()
+            save.assert_not_called()
+            close.assert_not_called()
+            history.assert_not_called()
+        with self.assertRaises(OSError):
+            document.reader = reader
+
+    def test_credential_revocation_defers_source_close_until_borrow_retires(self):
+        import asyncio
+        from threading import Event
+        from unittest.mock import Mock
+        owner = self.open('revoked.txt')
+        owner.crypt_text.value = 'Submitted'
+        original = owner.crypt_reader
+        original.source.close = Mock(wraps=original.source.close)
+        manager = self.app.private_sessions
+        revoked = [False]
+        def access():
+            if revoked[0]:
+                raise ValueError('Synthetic grant revoked')
+        owner.document_access = access
+        release, finished = Event(), Event()
+        async def exercise():
+            started = asyncio.Event()
+            def save(*args, **kwargs):
+                self.app.loop.call_soon_threadsafe(started.set)
+                try:
+                    if not release.wait(5):
+                        raise RuntimeError('Fixture not released')
+                    raise ValueError('Synthetic save failed')
+                finally:
+                    finished.set()
+            with patch.object(self.copies, 'save', side_effect=save):
+                task = asyncio.create_task(owner.save_crypt())
+                try:
+                    await asyncio.wait_for(started.wait(), 2)
+                    revoked[0] = True
+                    manager.revoke_stale()
+                    original.source.close.assert_not_called()
+                    self.assertTrue(owner.operation_busy)
+                    self.assertTrue(owner._crypt_cancel.is_set())
+                    self.assertEqual(len(owner.crypt_view.children), 1)
+                    self.assertIn('locked', owner.crypt_view.children[0].text)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    self.assertFalse(task.done())
+                finally:
+                    release.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+                    self.assertTrue(await asyncio.to_thread(finished.wait, 2))
+            self.assertNotIn(owner.session.id, manager.controllers)
+            self.assertIsNone(owner.crypt_reader)
+            original.source.close.assert_called_once_with()
+        self.run_async(exercise())
+
+    def test_receipt_rejects_owner_reader_editor_and_membership_changes(self):
+        from types import SimpleNamespace as NS
+        first, second = self.open('receipt-one.txt'), self.open('receipt-two.txt')
+        manager = self.app.private_sessions
+        editor, workflow = self.native_editor(first, AsyncMock())
+        second_editor, _ = self.native_editor(second, AsyncMock())
+        original_reader = first.crypt_reader
+        for changed in ('reader', 'source', 'workflow', 'editor', 'session', 'manager', 'member'):
+            with self.subTest(changed=changed), patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'):
+                receipt = self.run_async(manager.prepare_replacement())
+                if changed == 'reader':
+                    from copy import copy
+                    target, name, value = first.provider_document(), '_reader', copy(original_reader)
+                elif changed == 'source':
+                    target, name, value = original_reader, 'source', object()
+                elif changed == 'workflow':
+                    target, name, value = first, '_provider_markdown', NS(**vars(workflow))
+                elif changed == 'editor':
+                    target, name, value = workflow, 'formatted', NS(**vars(editor))
+                elif changed == 'session':
+                    target, name, value = first, 'session', NS(**vars(first.session))
+                elif changed == 'manager':
+                    target, name, value = first, 'manager', object()
+                else:
+                    target, name, value = manager, 'controllers', {first.session.id: first}
+                previous = getattr(target, name)
+                setattr(target, name, value)
+                try:
+                    with self.assertRaises(OSError):
+                        manager.require_replacement_safe(receipt)
+                finally:
+                    setattr(target, name, previous)
+                manager.require_replacement_safe(receipt)
+        self.assertGreater(second_editor._revision, 0)
+
+    def test_provider_receipt_rechecked_after_preservation_callbacks_and_veto_keeps_host(self):
+        from mobile.application_lifecycle import lifecycle
+        from mobile.app import _active_hosts
+        owner = self.open('preserved.txt')
+        manager = self.app.private_sessions
+        _, _ = self.native_editor(owner, AsyncMock())
+        token = self.app.workspace.token(owner.session.id)
+        identity = str(self.root.resolve()) + ':primary'
+        with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'):
+            receipt = self.run_async(manager.prepare_replacement())
+            with patch.object(self.app.store, 'flush_checkpoints', side_effect=lambda: setattr(owner.crypt_text, 'value', 'Reentrant draft')):
+                with self.assertRaises(OSError):
+                    lifecycle(self.app).retire_for_replacement(receipt)
+        self.assertIs(_active_hosts[identity], self.app)
+        self.assertTrue(self.app.active_host)
+        self.assertTrue(self.app.workspace.accepts(token))
+        self.assertEqual(owner.crypt_text.value, 'Reentrant draft')
+        self.assertFalse(manager.terminal)
+
+    def test_startup_veto_and_shell_abort_preserve_exact_private_owner(self):
+        from mobile.application_lifecycle import lifecycle
+        from mobile.app import _active_hosts
+        from mobile.startup import StartupPhase
+        owner = self.open('startup-draft.txt')
+        owner.crypt_text.value = 'RAM only synthetic draft'
+        reader, token = owner.crypt_reader, self.app.workspace.token(owner.session.id)
+        class Shell:
+            pass
+        shell = Shell()
+        shell.private_root, shell._async_startup = self.root, True
+        shell.active_host = False
+        with patch('mobile.startup.load_startup_models') as load:
+            with self.assertRaises(OSError):
+                self.run_async(LogisticsMobile._prepare_startup_phase(shell, StartupPhase.PREFERENCES))
+            load.assert_not_called()
+        lifecycle(shell).abort_startup()
+        self.assertIs(_active_hosts[str(self.root.resolve()) + ':primary'], self.app)
+        self.assertTrue(self.app.active_host)
+        self.assertIs(owner.crypt_reader, reader)
+        self.assertTrue(self.app.workspace.accepts(token))
+        self.assertEqual(owner.crypt_text.value, 'RAM only synthetic draft')
+        for path in self.root.rglob('*.json'):
+            self.assertNotIn('RAM only synthetic draft', path.read_text())
+
+    def test_terminal_failed_reader_close_retains_failed_handle_and_retries_only_it(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        for failing in ('pdf', 'source'):
+            with self.subTest(failing=failing):
+                owner = self.open('retry-' + failing + '.txt')
+                document, reader = owner.provider_document(), owner.crypt_reader
+                reader.pdf, reader.source = NS(close=Mock()), NS(close=Mock())
+                getattr(reader, failing).close.side_effect = [OSError('Synthetic close failed'), None]
+                # Retire this one document independently; do not terminalize the
+                # fixture's whole manager before the next scenario.
+                document.terminal = True
+                with self.assertRaises(OSError):
+                    document.dispose()
+                self.assertIs(document.reader, reader)
+                self.assertFalse(document.closed)
+                self.assertEqual(len(document._reader_cleanup), 1)
+                with self.assertRaises(OSError):
+                    document.reader = reader
+                document.dispose()
+                document.dispose()
+                self.assertTrue(document.closed)
+                self.assertIsNone(document.reader)
+                self.assertEqual(document._reader_cleanup, [])
+                self.assertEqual(reader.pdf.close.call_count, 2 if failing == 'pdf' else 1)
+                self.assertEqual(reader.source.close.call_count, 2 if failing == 'source' else 1)
+                self.app.private_sessions.controllers.pop(owner.session.id)
+                self.app.private_sessions.active = None
+
+    def test_native_flush_must_act_on_a_live_editor_but_readonly_preview_needs_no_flush(self):
+        owner = self.open('native-proof.txt')
+        manager = self.app.private_sessions
+        editor, workflow = self.native_editor(owner, AsyncMock())
+        with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'):
+            editor.flush = AsyncMock()  # A returned await without a revision is no proof.
+            with self.assertRaises(OSError):
+                self.run_async(manager.prepare_replacement())
+            editor.closed = True
+            with self.assertRaises(OSError):
+                self.run_async(manager.prepare_replacement())
+            editor.closed = False
+            owner.crypt_reader.read_only = True
+            workflow.content.children.clear()
+            editor.flush.reset_mock()
+            receipt = self.run_async(manager.prepare_replacement())
+            manager.require_replacement_safe(receipt)
+            editor.flush.assert_not_awaited()
+
+    def test_progress_borrow_vetoes_clear_before_any_owner_closes(self):
+        from mobile.application_lifecycle import lifecycle
+        first, second = self.open('clear-first.txt'), self.open('clear-second.txt')
+        manager = self.app.private_sessions
+        readers = [owner.crypt_reader for owner in (first, second)]
+        tokens = [self.app.workspace.token(owner.session.id) for owner in (first, second)]
+        manager.positions['synthetic'] = {'index': 0}
+        positions = dict(manager.positions)
+        progress = second._provider_progress
+        progress.worker = object()  # Actual-borrow marker; completion is owner-controlled.
+        try:
+            self.assertFalse(self.app.clear_private_reader(discard=True))
+            self.assertFalse(lifecycle(self.app).request_exit())
+            self.assertTrue(self.app.active_host)
+            self.assertEqual(list(manager.controllers.values()), [first, second])
+            self.assertEqual(manager.positions, positions)
+            for owner, reader, token in zip((first, second), readers, tokens):
+                self.assertIs(owner.crypt_reader, reader)
+                self.assertTrue(self.app.workspace.accepts(token))
+        finally:
+            progress.worker = None
+
+    def test_each_presentation_cleanup_failure_cannot_skip_terminal_source_cleanup(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        for failing in ('footer', 'progress', 'search'):
+            with self.subTest(failing=failing):
+                owner = self.open('presentation-' + failing + '.txt')
+                document, reader = owner.provider_document(), owner.crypt_reader
+                reader.source.close()
+                reader.source, reader.pdf = NS(close=Mock()), NS(close=Mock())
+                failure = Mock(side_effect=[OSError('Synthetic presentation failure'), None])
+                if failing == 'footer':
+                    owner.crypt_view.page_footer = NS(dispose=failure)
+                elif failing == 'progress':
+                    owner._provider_progress.retire = failure
+                else:
+                    owner.pdf_search = NS(dispose=failure)
+                document.terminal = True
+                with self.assertRaises(OSError):
+                    document.dispose()
+                reader.source.close.assert_called_once_with()
+                reader.pdf.close.assert_called_once_with()
+                document.dispose()
+                document.dispose()
+                self.assertEqual(failure.call_count, 2)
+                reader.source.close.assert_called_once_with()
+                reader.pdf.close.assert_called_once_with()
+                self.app.private_sessions.controllers.pop(owner.session.id)
+                self.app.private_sessions.active = None

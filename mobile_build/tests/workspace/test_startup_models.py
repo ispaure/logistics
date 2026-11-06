@@ -118,3 +118,264 @@ class StartupModelTests(TestCase):
                     app.loop.run_until_complete(asyncio.sleep(0))
                     close_loop(app.loop)
                 LogisticsMobile.storage_root = None
+
+
+class ReplacementAdmissionTests(TestCase):
+    def test_overlapping_model_loads_keep_newest_pending_claim_in_both_orders(self):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        from mobile.startup import StartupPhase
+        from types import SimpleNamespace as NS
+        class Host:
+            pass
+        async def exercise(root, reverse):
+            hosts = [Host(), Host()]
+            for host in hosts:
+                host.private_root, host.active_host, host._async_startup = root, False, True
+            gates = [asyncio.Event(), asyncio.Event()]
+            entered = [asyncio.Event(), asyncio.Event()]
+            calls = 0
+            async def load(*args):
+                nonlocal calls
+                index = calls
+                calls += 1
+                entered[index].set()
+                try:
+                    await gates[index].wait()
+                except asyncio.CancelledError:
+                    # A real to_thread worker can still complete after its wrapper
+                    # is cancelled; simulate delivery of that late result too.
+                    await gates[index].wait()
+                return {'preferences': NS(values={'accent_hue': 1, 'accent_saturation': 1})}
+            key = str(root.resolve()) + ':primary'
+            with patch('mobile.app.asyncio.to_thread', side_effect=load):
+                tasks = []
+                try:
+                    for index, host in enumerate(hosts):
+                        task = asyncio.create_task(LogisticsMobile._prepare_startup_phase(host, StartupPhase.PREFERENCES))
+                        host.startup_task = task
+                        tasks.append(task)
+                        await entered[index].wait()
+                    self.assertIs(_active_hosts[key], hosts[1])
+                    self.assertFalse(hosts[0].active_host)
+                    self.assertTrue(lifecycle(hosts[0]).replaced)
+                    for index in ([1, 0] if reverse else [0, 1]):
+                        gates[index].set()
+                        await asyncio.sleep(0)
+                    outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+                    self.assertIsInstance(outcomes[0], asyncio.CancelledError)
+                    self.assertIsNone(outcomes[1])
+                    self.assertNotIn('_startup_models', hosts[0].__dict__)
+                    self.assertIn('_startup_models', hosts[1].__dict__)
+                    lifecycle(hosts[0]).abort_startup()
+                    self.assertIs(_active_hosts[key], hosts[1])
+                finally:
+                    for gate in gates:
+                        gate.set()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    _active_hosts.pop(key, None)
+        with TemporaryDirectory() as directory:
+            for reverse in (False, True):
+                with self.subTest(reverse=reverse):
+                    asyncio.run(exercise(Path(directory), reverse))
+
+    def host(self, root, *, window='primary', provider=False):
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        from mobile.private_sessions import PrivateSessions
+        from mobile.provider_document import ProviderDocumentSession
+        class Host:
+            pass
+        host = Host()
+        host.private_root, host.window_id, host.active_host = root, window, True
+        host._async_startup = True
+        host.store = NS(flush_checkpoints=Mock())
+        host.credential_document_lists = NS(flush_writes=Mock())
+        host.screen_privacy = NS(dispose=Mock())
+        if provider:
+            manager = PrivateSessions.__new__(PrivateSessions)
+            manager.app, manager.terminal, manager.positions = host, False, {}
+            session = NS(id='doc')
+            generation = [0]
+            host.workspace = NS(sessions={'doc': session}, token=lambda key: ('doc', generation[0]),
+                                accepts=lambda token: token == ('doc', generation[0]),
+                                invalidate=lambda key: generation.__setitem__(0, generation[0] + 1))
+            reader = NS(source=NS(close=Mock()), text='Saved', editable=True, read_only=False, kind='.md')
+            owner = NS(app=host, manager=manager, session=session, workspace=host.workspace,
+                       document_access=lambda: None, private_dirty=lambda: owner.crypt_text.value != reader.text,
+                       crypt_text=NS(value='Saved'), set_document_busy=lambda busy: None)
+            document = ProviderDocumentSession(owner)
+            owner.provider_document = lambda: document
+            owner._provider_document = document
+            document.reader = reader
+            editor = NS(view=object(), closed=False, bridge='synthetic', _revision=0)
+            owner._provider_markdown = NS(formatted=editor, content=NS(children=[editor.view]),
+                                           source=owner.crypt_text, closed=False, dispose=Mock())
+            manager.controllers, manager.active = {'doc': owner}, owner
+            host.private_sessions = manager
+        return host
+
+    def test_overlapping_flushes_newest_attempt_wins_including_newer_failure(self):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        from mobile.startup import StartupPhase
+        from unittest.mock import AsyncMock
+        async def exercise(root, order, failure):
+            old = self.host(root, provider=True)
+            incoming = [self.host(root), self.host(root)]
+            key = str(root.resolve()) + ':primary'
+            _active_hosts[key] = old
+            editor = old.private_sessions.active._provider_markdown.formatted
+            entered = [asyncio.Event(), asyncio.Event()]
+            release = [asyncio.Event(), asyncio.Event()]
+            calls = 0
+            async def flush():
+                nonlocal calls
+                index = calls
+                calls += 1
+                entered[index].set()
+                await release[index].wait()
+                if failure and index == 1:
+                    if failure == 'cancelled':
+                        raise asyncio.CancelledError
+                    raise ValueError('Synthetic newer failure')
+                editor._revision += 1
+            editor.flush = flush
+            tasks = []
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'), \
+                    patch('mobile.app.asyncio.to_thread', new=AsyncMock(return_value={})) as load:
+                try:
+                    for index, host in enumerate(incoming):
+                        host.startup_task = asyncio.create_task(LogisticsMobile._prepare_startup_phase(host, StartupPhase.PREFERENCES))
+                        tasks.append(host.startup_task)
+                        await entered[index].wait()
+                    for index in order:
+                        release[index].set()
+                        await asyncio.gather(tasks[index], return_exceptions=True)
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    self.assertIsInstance(results[0], asyncio.CancelledError)
+                    if failure:
+                        self.assertIsInstance(results[1], asyncio.CancelledError if failure == 'cancelled' else OSError)
+                        self.assertIs(_active_hosts[key], old)
+                        self.assertTrue(old.active_host)
+                        self.assertFalse(old.private_sessions.terminal)
+                        load.assert_not_awaited()
+                    else:
+                        self.assertIsNone(results[1])
+                        self.assertIs(_active_hosts[key], incoming[1])
+                        self.assertTrue(lifecycle(old).replaced)
+                        self.assertTrue(old.private_sessions.terminal)
+                        load.assert_awaited_once()
+                    lifecycle(incoming[0]).abort_startup()
+                    self.assertIs(_active_hosts[key], old if failure else incoming[1])
+                finally:
+                    for gate in release:
+                        gate.set()
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    _active_hosts.pop(key, None)
+        with TemporaryDirectory() as directory:
+            for order in ((0, 1), (1, 0)):
+                for failure in (False, 'error', 'cancelled'):
+                    with self.subTest(order=order, failure=failure):
+                        asyncio.run(exercise(Path(directory), order, failure))
+
+    def test_preservation_and_disposal_reentrancy_do_not_overwrite_successor(self):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        from unittest.mock import Mock
+        from types import SimpleNamespace as NS
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            key = str(root.resolve()) + ':primary'
+            for during in ('preserve', 'dispose'):
+                with self.subTest(during=during):
+                    old, middle, winner = [self.host(root) for _ in range(3)]
+                    middle._async_startup = winner._async_startup = False
+                    _active_hosts[key] = old
+                    prefs = NS(values={'accent_hue': 1, 'accent_saturation': 1})
+                    def enter():
+                        # One-shot callback avoids recursive preservation.
+                        old.store.flush_checkpoints = Mock()
+                        LogisticsMobile._prepare_startup_preferences(winner, root)
+                    callback = old.store.flush_checkpoints if during == 'preserve' else old.screen_privacy.dispose
+                    callback.side_effect = enter
+                    with patch('mobile.app.Preferences', return_value=prefs), \
+                            patch('mobile.appearance.configure_android_eink'), patch('mobile.palette.set_accent'):
+                        with self.assertRaises(asyncio.CancelledError):
+                            LogisticsMobile._prepare_startup_preferences(middle, root)
+                    self.assertIs(_active_hosts[key], winner)
+                    self.assertTrue(winner.active_host)
+                    lifecycle(middle).abort_startup()
+                    self.assertIs(_active_hosts[key], winner)
+                    _active_hosts.pop(key, None)
+
+    def test_failed_model_load_releases_only_own_claim_and_other_windows_survive(self):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        from mobile.startup import StartupPhase
+        from unittest.mock import AsyncMock
+        async def exercise(root):
+            old, incoming = self.host(root), self.host(root)
+            unrelated = self.host(root, window='secondary')
+            key = str(root.resolve()) + ':primary'
+            other_key = str(root.resolve()) + ':secondary'
+            _active_hosts[key], _active_hosts[other_key] = old, unrelated
+            try:
+                with patch('mobile.app.asyncio.to_thread', new=AsyncMock(side_effect=OSError('Synthetic load failure'))):
+                    with self.assertRaises(OSError):
+                        await LogisticsMobile._prepare_startup_phase(incoming, StartupPhase.PREFERENCES)
+                self.assertNotIn(key, _active_hosts)
+                self.assertIs(_active_hosts[other_key], unrelated)
+                self.assertTrue(unrelated.active_host)
+                self.assertTrue(lifecycle(old).replaced)
+                self.assertTrue(lifecycle(incoming).startup_aborted)
+                self.assertNotIn('_startup_models', incoming.__dict__)
+            finally:
+                _active_hosts.pop(key, None)
+                _active_hosts.pop(other_key, None)
+        with TemporaryDirectory() as directory:
+            asyncio.run(exercise(Path(directory)))
+
+    def test_preservation_callback_aborting_incoming_keeps_old_host_in_both_startup_routes(self):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        from mobile.startup import StartupPhase
+        from unittest.mock import AsyncMock
+        async def exercise(root, asynchronous):
+            old, incoming = self.host(root, provider=True), self.host(root)
+            incoming._async_startup = asynchronous
+            key = str(root.resolve()) + ':primary'
+            _active_hosts[key] = old
+            owner = old.private_sessions.active
+            reader = owner.provider_document().reader
+            token = old.workspace.token('doc')
+            editor = owner._provider_markdown.formatted
+            async def flush():
+                editor._revision += 1
+            editor.flush = flush
+            # Sync uses source mode: no unresolved native input to mask the
+            # later callback-triggered cancellation being tested.
+            if not asynchronous:
+                owner._provider_markdown.content.children.clear()
+            old.store.flush_checkpoints.side_effect = lambda: lifecycle(incoming).abort_startup()
+            try:
+                with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'), \
+                        patch('mobile.app.asyncio.to_thread', new=AsyncMock()) as load:
+                    with self.assertRaises(asyncio.CancelledError):
+                        if asynchronous:
+                            await LogisticsMobile._prepare_startup_phase(incoming, StartupPhase.PREFERENCES)
+                        else:
+                            LogisticsMobile._prepare_startup_preferences(incoming, root)
+                    load.assert_not_awaited()
+                self.assertIs(_active_hosts[key], old)
+                self.assertTrue(old.active_host)
+                self.assertFalse(old.private_sessions.terminal)
+                self.assertIs(owner.provider_document().reader, reader)
+                self.assertTrue(old.workspace.accepts(token))
+                reader.source.close.assert_not_called()
+            finally:
+                _active_hosts.pop(key, None)
+        with TemporaryDirectory() as directory:
+            for asynchronous in (False, True):
+                with self.subTest(asynchronous=asynchronous):
+                    asyncio.run(exercise(Path(directory), asynchronous))

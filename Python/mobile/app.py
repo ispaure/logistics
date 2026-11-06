@@ -172,13 +172,40 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if index != StartupPhase.PREFERENCES:
             return
         from .startup import load_startup_models
+        from .application_lifecycle import lifecycle
         root = self.private_root
-        previous = _active_hosts.get(str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary'))
-        if previous is not None and previous is not self:
-            from .application_lifecycle import lifecycle
-            lifecycle(previous).prepare_replacement()
-        self._startup_models = await asyncio.to_thread(load_startup_models, root,
-            getattr(self, 'workspace_root', root))
+        identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
+        own = lifecycle(self)
+        if own.replaced or own.startup_aborted or '_startup_claim' in self.__dict__:
+            raise asyncio.CancelledError
+        previous = _active_hosts.get(identity)
+        try:
+            if previous is not None and previous is not self:
+                predecessor = lifecycle(previous)
+                attempt = predecessor.replacement_attempt = object()
+                def valid():
+                    return (predecessor.replacement_attempt is attempt and _active_hosts.get(identity) is previous
+                            and not own.startup_aborted and not own.replaced)
+                private = getattr(previous, 'private_sessions', None)
+                receipt = await private.prepare_replacement(valid=valid) if private is not None else None
+                if not valid():
+                    raise asyncio.CancelledError
+                if private is not getattr(previous, 'private_sessions', None):
+                    raise OSError('The private workspace changed during replacement.')
+                predecessor.retire_for_replacement(receipt, incoming=self, identity=identity, attempt=attempt)
+            else:
+                self.active_host = False
+                self._startup_claim = identity
+                _active_hosts[identity] = self
+            if _active_hosts.get(identity) is not self or own.replaced or own.startup_aborted:
+                raise asyncio.CancelledError
+            models = await asyncio.to_thread(load_startup_models, root, getattr(self, 'workspace_root', root))
+            if _active_hosts.get(identity) is not self or own.replaced or own.startup_aborted:
+                raise asyncio.CancelledError
+            self._startup_models = models
+        except BaseException:
+            own.abort_startup()
+            raise
 
     def _start_background_cloud(self):
         from .startup import restore_cloud_in_background
@@ -216,16 +243,33 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def _prepare_startup_preferences(self, root):
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
-        previous_host = _active_hosts.get(host_identity)
-        if previous_host is not None and previous_host is not self:
-            from .application_lifecycle import lifecycle
-            lifecycle(previous_host).retire_for_replacement()
+        from .application_lifecycle import lifecycle
+        own = lifecycle(self)
+        if own.replaced or own.startup_aborted:
+            raise asyncio.CancelledError
+        if getattr(self, '_async_startup', False):
+            if self.__dict__.get('_startup_claim') != host_identity or _active_hosts.get(host_identity) is not self:
+                raise asyncio.CancelledError
+        else:
+            previous_host = _active_hosts.get(host_identity)
+            if previous_host is not None and previous_host is not self:
+                predecessor = lifecycle(previous_host)
+                attempt = predecessor.replacement_attempt = object()
+                predecessor.retire_for_replacement(incoming=self, identity=host_identity, attempt=attempt)
+            else:
+                self.active_host = False
+                self._startup_claim = host_identity
+                _active_hosts[host_identity] = self
+        if _active_hosts.get(host_identity) is not self or own.replaced or own.startup_aborted:
+            raise asyncio.CancelledError
         self.active_host = True
         self.navigation_generation = 0
-        _active_hosts[host_identity] = self
         workspace_root = getattr(self, 'workspace_root', root)
         models = self.__dict__.pop('_startup_models', None)
-        self.preferences = models['preferences'] if models is not None else Preferences(workspace_root)
+        preferences = models['preferences'] if models is not None else Preferences(workspace_root)
+        if _active_hosts.get(host_identity) is not self or own.replaced or own.startup_aborted:
+            raise asyncio.CancelledError
+        self.preferences = preferences
         from .palette import set_accent
         set_accent(self.preferences.values['accent_hue'], self.preferences.values['accent_saturation'])
         manager = getattr(self, 'scene_manager', None)

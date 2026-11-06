@@ -82,3 +82,255 @@ class DocumentReadingTests(unittest.TestCase):
                 for resource in (media, pdf, source):
                     resource.close.assert_called_once_with()
                 self.assertEqual(reader.password, '')
+
+
+class ProviderWorkerLifetimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_page_and_previous_pdf_borrow_survives_repeated_cancellation(self):
+        import asyncio
+        from threading import Event
+        from unittest.mock import patch
+        from mobile.provider_ui import ProviderUI
+        from mobile.provider_document import ProviderDocumentSession
+        for previous in (False, True):
+            with self.subTest(previous=previous):
+                release, started = Event(), asyncio.Event()
+                loop = asyncio.get_running_loop()
+                def blocking(*args):
+                    loop.call_soon_threadsafe(started.set)
+                    if not release.wait(5):
+                        raise RuntimeError('Fixture not released')
+                    return 0 if previous else ('text', 'synthetic')
+                reader = NS(kind='.pdf', editable=False, labels=['one'], book=None,
+                            source=NS(close=Mock()), pdf_navigation=NS(previous=blocking))
+                owner = NS(active_host=True, cloud_busy=False, crypt_reader=reader,
+                           workspace=NS(token=lambda key: ('doc', 0), accepts=lambda token: True),
+                           session=NS(id='doc'), crypt_title=NS(text='Unchanged'),
+                           crypt_read_page=NS(enabled=True), crypt_page=NS(value='one'),
+                           crypt_content=NS(children=[]), private_comic_mode=lambda: 'single',
+                           private_comic_seam=lambda: 0, format_services=NS(comic_sharing=lambda: False),
+                           provider_page_content=blocking, move_private_page=Mock())
+                owner.app = owner
+                owner.manager = NS(active=owner, controllers={'doc': owner})
+                owner.document_access = lambda: None
+                owner.set_document_busy = owner.set_cloud_busy = lambda busy: setattr(owner, 'cloud_busy', busy)
+                owner.workspace.sessions = {'doc': owner.session}
+                document = owner._provider_document = ProviderDocumentSession(owner)
+                document.reader = reader
+                owner.provider_document = lambda: document
+                with patch('features.pdf.mobile.canvas.pdf_viewport', return_value=(100, 100)):
+                    task = asyncio.create_task((ProviderUI.previous_private_page if previous else ProviderUI.read_crypt_page)(owner))
+                    try:
+                        await asyncio.wait_for(started.wait(), 2)
+                        task.cancel()
+                        await asyncio.sleep(0)
+                        task.cancel()
+                        await asyncio.sleep(0)
+                        self.assertFalse(task.done())
+                        self.assertTrue(owner.cloud_busy)
+                        with self.assertRaises(OSError):
+                            document.dispose()
+                        reader.source.close.assert_not_called()
+                    finally:
+                        release.set()
+                        with self.assertRaises(asyncio.CancelledError):
+                            await task
+                self.assertFalse(owner.cloud_busy)
+                self.assertEqual(owner.crypt_title.text, 'Unchanged')
+                owner.move_private_page.assert_not_called()
+
+    def save_owner(self, *, metadata=False):
+        import asyncio
+        from mobile.provider_ui import ProviderUI
+        class Owner(ProviderUI):
+            @property
+            def cloud_busy(self):
+                return self.provider_document().busy
+            def set_cloud_busy(self, busy):
+                self.provider_document().busy = busy
+                (self.operation_idle.clear if busy else self.operation_idle.set)()
+            set_document_busy = set_cloud_busy
+        owner = Owner()
+        owner.app, owner.active_host = owner, True
+        owner.session = NS(id='doc')
+        generation = [0]
+        owner.workspace = NS(token=lambda key: ('doc', generation[0]),
+                             accepts=lambda token: token == ('doc', generation[0]),
+                             invalidate=lambda key: generation.__setitem__(0, generation[0] + 1),
+                             sessions={'doc': owner.session})
+        owner.manager = NS(controllers={'doc': owner}, active=owner, terminal=False)
+        owner.document_access = lambda: None
+        owner.operation_idle = asyncio.Event()
+        owner.operation_idle.set()
+        owner.crypt_reader = NS(kind='.cbz' if metadata else '.txt', editable=not metadata,
+                                text='Original', name='synthetic', labels=['page'], book=None,
+                                source=NS(close=Mock()), comic=NS(info=NS(get_field=lambda key: 'Saved')))
+        owner.crypt_text = NS(value='Submitted', readonly=False)
+        owner.crypt_title = NS(text='Unchanged')
+        owner.crypt_save = NS(enabled=True)
+        owner.crypt_metadata_save = NS(enabled=True)
+        owner.crypt_metadata_status = NS(text='Unchanged')
+        owner.crypt_metadata_initial = {'title': 'Original'}
+        owner.crypt_metadata_fields = {'title': NS(value='Submitted', readonly=False)}
+        owner.crypt_page = NS(items=['page'], value='page')
+        owner._crypt_reader_store = NS()
+        owner.private_comic_mode = lambda: 'single'
+        owner.private_comic_seam = lambda: 0
+        owner.format_services = NS(comic_sharing=lambda: False)
+        owner.provider_page_content = Mock(return_value=('image', 'synthetic'))
+        for name in ('_show_crypt_content', 'refresh_private_bookmarks', 'watch_provider_layout',
+                     'watch_provider_epub_width', 'refresh_private_text_controls'):
+            setattr(owner, name, Mock())
+        return owner
+
+    async def test_cancelled_save_actual_outcome_reconciles_live_stale_and_failed_owners(self):
+        import asyncio
+        from threading import Event
+        from unittest.mock import patch
+        for metadata in (False, True):
+            for outcome in ('success', 'failed', 'stale', 'later-edit', 'close-reenters'):
+                with self.subTest(metadata=metadata, outcome=outcome):
+                    owner = self.save_owner(metadata=metadata)
+                    document, original = owner.provider_document(), owner.crypt_reader
+                    returned = NS(**vars(original))
+                    returned.source = NS(close=Mock())
+                    returned.text = 'Submitted'
+                    returned.password = 'synthetic'
+                    entered, release, finished = asyncio.Event(), Event(), Event()
+                    loop = asyncio.get_running_loop()
+                    def save(*args, **kwargs):
+                        loop.call_soon_threadsafe(entered.set)
+                        try:
+                            if not release.wait(5):
+                                raise RuntimeError('Fixture not released')
+                            if outcome == 'failed':
+                                raise ValueError('Synthetic save failed')
+                            return returned
+                        finally:
+                            finished.set()
+                    owner._crypt_reader_store.save = owner._crypt_reader_store.save_metadata = save
+                    if outcome == 'close-reenters':
+                        original.source.close.side_effect = lambda: owner.workspace.invalidate('doc')
+                    with patch('services.documents.access.can_write', return_value=True), \
+                            patch('features.comics.mobile.metadata.patch', return_value={'title': 'Submitted'}):
+                        task = asyncio.create_task(owner.save_crypt_metadata() if metadata else owner.save_crypt())
+                        try:
+                            await asyncio.wait_for(entered.wait(), 2)
+                            if outcome == 'stale':
+                                owner.workspace.invalidate('doc')
+                            elif outcome == 'later-edit':
+                                owner.crypt_text.value = owner.crypt_metadata_fields['title'].value = 'Later draft'
+                            task.cancel()
+                            await asyncio.sleep(0)
+                            task.cancel()
+                            await asyncio.sleep(0)
+                            self.assertTrue(owner.cloud_busy)
+                            self.assertFalse(owner.operation_idle.is_set())
+                            self.assertTrue(document.cancel.is_set())
+                            with self.assertRaises(OSError):
+                                document.reader = returned
+                            original.source.close.assert_not_called()
+                        finally:
+                            release.set()
+                            with self.assertRaises(asyncio.CancelledError):
+                                await task
+                            self.assertTrue(await asyncio.to_thread(finished.wait, 2))
+                    self.assertFalse(owner.cloud_busy)
+                    self.assertTrue(owner.operation_idle.is_set())
+                    self.assertIsNone(document.cancel)
+                    self.assertEqual(owner.crypt_title.text, 'Unchanged')
+                    self.assertEqual(owner.crypt_metadata_status.text, 'Unchanged')
+                    owner._show_crypt_content.assert_not_called()
+                    if outcome in ('failed', 'stale'):
+                        self.assertIs(owner.crypt_reader, original)
+                        original.source.close.assert_not_called()
+                        self.assertTrue(owner.private_dirty())
+                        if outcome == 'stale':
+                            returned.source.close.assert_called_once_with()
+                            self.assertEqual(returned.password, '')
+                    else:
+                        self.assertIs(owner.crypt_reader, returned)
+                        original.source.close.assert_called_once_with()
+                        returned.source.close.assert_not_called()
+                        if metadata and outcome != 'close-reenters':
+                            self.assertEqual(owner.crypt_metadata_initial, {'title': 'Saved'})
+                        if outcome == 'later-edit':
+                            self.assertTrue(owner.private_dirty())
+                            self.assertEqual(owner.crypt_metadata_fields['title'].value, 'Later draft')
+                    if outcome in ('stale', 'close-reenters'):
+                        self.assertFalse((owner.crypt_metadata_save if metadata else owner.crypt_save).enabled)
+                    else:
+                        self.assertTrue((owner.crypt_metadata_save if metadata else owner.crypt_save).enabled)
+                        self.assertFalse(owner.crypt_text.readonly if not metadata else owner.crypt_metadata_fields['title'].readonly)
+
+    async def test_metadata_refresh_is_a_second_borrow_after_committed_save(self):
+        import asyncio
+        from threading import Event
+        from unittest.mock import patch
+        owner = self.save_owner(metadata=True)
+        returned = NS(**vars(owner.crypt_reader))
+        returned.source = NS(close=Mock())
+        owner._crypt_reader_store.save_metadata = lambda *args, **kwargs: returned
+        entered, release = asyncio.Event(), Event()
+        loop = asyncio.get_running_loop()
+        def page(*args):
+            loop.call_soon_threadsafe(entered.set)
+            if not release.wait(5):
+                raise RuntimeError('Fixture not released')
+            return 'image', 'synthetic'
+        owner.provider_page_content = page
+        with patch('features.comics.mobile.metadata.patch', return_value={'title': 'Submitted'}):
+            task = asyncio.create_task(owner.save_crypt_metadata())
+            try:
+                await asyncio.wait_for(entered.wait(), 2)
+                self.assertIs(owner.crypt_reader, returned)
+                self.assertEqual(owner.crypt_metadata_initial, {'title': 'Saved'})
+                task.cancel()
+                await asyncio.sleep(0)
+                task.cancel()
+                await asyncio.sleep(0)
+                self.assertFalse(task.done())
+                self.assertTrue(owner.cloud_busy)
+                with self.assertRaises(OSError):
+                    owner.provider_document().dispose()
+                returned.source.close.assert_not_called()
+            finally:
+                release.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+        owner._show_crypt_content.assert_not_called()
+        self.assertFalse(owner.cloud_busy)
+
+    async def test_stale_page_success_error_and_finally_do_not_publish_controls(self):
+        from threading import Event
+        import asyncio
+        for fails in (False, True):
+            with self.subTest(fails=fails):
+                owner = self.save_owner(metadata=True)
+                owner.crypt_read_page = NS(enabled=True)
+                owner.crypt_content = NS(children=[])
+                owner.private_comic_viewport = lambda: (100, 100)
+                owner.manager.revoke_stale = Mock()
+                entered, release = asyncio.Event(), Event()
+                loop = asyncio.get_running_loop()
+                def page(*args):
+                    loop.call_soon_threadsafe(entered.set)
+                    if not release.wait(5):
+                        raise RuntimeError('Fixture not released')
+                    if fails:
+                        raise ValueError('Synthetic decoder failure')
+                    return 'image', 'synthetic'
+                owner.provider_page_content = page
+                task = asyncio.create_task(owner.read_crypt_page())
+                try:
+                    await asyncio.wait_for(entered.wait(), 2)
+                    owner.active_host = False
+                finally:
+                    release.set()
+                    await task
+                self.assertFalse(owner.cloud_busy)
+                self.assertTrue(owner.operation_idle.is_set())
+                self.assertFalse(owner.crypt_read_page.enabled)
+                self.assertEqual(owner.crypt_title.text, 'Unchanged')
+                owner._show_crypt_content.assert_not_called()
+                owner.manager.revoke_stale.assert_not_called()
+                owner.crypt_reader.source.close.assert_not_called()
