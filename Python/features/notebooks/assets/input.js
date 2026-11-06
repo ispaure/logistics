@@ -22,6 +22,56 @@ for(const kind of ['pointerdown','pointerup','pointercancel','lostpointercapture
   canvas.addEventListener(kind,event=>inputTrace('delivered-'+kind,event),{capture:true,passive:true});
 
 let erasePreviewCount = 0, pendingErase = null;
+const wholeErasePreview = new Set();
+let wholeEraseCandidates = [];
+
+function sweepHitsSegment(a, b, c, d) {
+  const reach = eraserRadius + Math.max(a[3], b[3]) / 2;
+  if (Math.max(a[0], b[0]) + reach < Math.min(c[0], d[0]) ||
+      Math.min(a[0], b[0]) - reach > Math.max(c[0], d[0]) ||
+      Math.max(a[1], b[1]) + reach < Math.min(c[1], d[1]) ||
+      Math.min(a[1], b[1]) - reach > Math.max(c[1], d[1])) return false;
+  // Match the host's tapered-segment/capsule test. Split where the closest
+  // point on the sweep changes between an endpoint and its interior.
+  const vx = b[0] - a[0], vy = b[1] - a[1];
+  const dx = d[0] - c[0], dy = d[1] - c[1], length = dx * dx + dy * dy;
+  const projection = length ? ((a[0] - c[0]) * dx + (a[1] - c[1]) * dy) / length : 0;
+  const slope = length ? (vx * dx + vy * dy) / length : 0;
+  const cuts = slope ? [-projection / slope, (1 - projection) / slope]
+    .filter(t => t > 0 && t < 1).sort((a, b) => a - b) : [];
+  const boundaries = [0, ...cuts, 1];
+  const radius = eraserRadius + a[3] / 2, dr = (b[3] - a[3]) / 2;
+  for (let i = 1; i < boundaries.length; i++) {
+    const lo = boundaries[i - 1], hi = boundaries[i];
+    const u = projection + slope * (lo + hi) / 2;
+    const interior = length && u > 0 && u < 1;
+    const end = u >= 1 ? d : c;
+    const x = interior ? a[0] - c[0] - projection * dx : a[0] - end[0];
+    const y = interior ? a[1] - c[1] - projection * dy : a[1] - end[1];
+    const sx = interior ? vx - slope * dx : vx, sy = interior ? vy - slope * dy : vy;
+    const aa = sx * sx + sy * sy - dr * dr;
+    const bb = 2 * (x * sx + y * sy - radius * dr);
+    const cc = x * x + y * y - radius * radius;
+    const t = aa > 0 ? Math.max(lo, Math.min(hi, -bb / (2 * aa)))
+      : (aa * (lo + hi) + bb > 0 ? lo : hi);
+    if ((aa * t + bb) * t + cc < 0 || (aa === 0 && bb === 0 && cc === 0)) return true
+  }
+  return false
+}
+
+function previewWholeErase(from, to) {
+  const left = Math.min(from[0], to[0]) - eraserRadius;
+  const top = Math.min(from[1], to[1]) - eraserRadius;
+  const right = Math.max(from[0], to[0]) + eraserRadius;
+  const bottom = Math.max(from[1], to[1]) + eraserRadius;
+  for (const {stroke, bounds: [l, t, r, b]} of wholeEraseCandidates) {
+    if (wholeErasePreview.has(stroke.id) || l > right || t > bottom || r < left || b < top) continue;
+    const samples = stroke.points;
+    const hit = samples.length === 1 ? sweepHitsSegment(samples[0], samples[0], from, to)
+      : samples.some((point, i) => i > 0 && sweepHitsSegment(samples[i - 1], point, from, to));
+    if (hit) wholeErasePreview.add(stroke.id)
+  }
+}
 function sample(event, bounds) {
   let point = coord(event, bounds);
   last = point;
@@ -30,7 +80,7 @@ function sample(event, bounds) {
   if (previous && point.every((v, i) => v === previous[i])) return;
   points.push(point);
   if (mode === 'erase' && eraserKind === 'whole')
-    for (let id of hits(point)) selected.add(id)
+    previewWholeErase(previous || point, point)
 }
 
 function coord(e, r = canvas.getBoundingClientRect()) {
@@ -47,7 +97,7 @@ function distance(p, a, b) {
 
 function hits(p) {
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
-  return state.strokes.filter(s => visible.has(s.layer) && s.points.some((v, i) => distance(p, i ? s.points[i - 1] : v, v) < (mode === 'erase' ? eraserRadius + v[3] / 2 : Math.max(12, v[3] / 2)))).map(s => s.id)
+  return state.strokes.filter(s => visible.has(s.layer) && s.points.some((v, i) => distance(p, i ? s.points[i - 1] : v, v) < Math.max(12, v[3] / 2))).map(s => s.id)
 }
 function beginPan(e, capture = canvas) {
   if (e.pointerType === 'touch' && penTouchBlocked()) return;
@@ -97,11 +147,13 @@ canvas.onpointerdown = e => {
   previewCount = 0;
   erasePreviewCount = 0;
   if (mode === 'erase') {
-    selected = new Set(eraserKind === 'whole' ? hits(start) : []);
-    // Partial erasing edits the existing bitmap incrementally. Replaying every
-    // stored stroke here delays the first eraser sample on dense pages.
-    if (eraserKind === 'whole') draw();
-    else previewErase(points)
+    if (eraserKind === 'whole') {
+      const visible = new Set(state.layers.filter(layer => layer[2]).map(layer => layer[0]));
+      wholeEraseCandidates = state.strokes.filter(stroke => visible.has(stroke.layer) && stroke.points.length)
+        .map(stroke => ({stroke, bounds: strokeBounds(stroke.points, 0)}));
+      previewWholeErase(start, start);
+      if (wholeErasePreview.size) draw()
+    } else previewErase(points)
   } else if (mode === 'select') {
     let ids = hits(start);
     selected = new Set(ids.slice(-1));
@@ -125,6 +177,7 @@ canvas.onpointermove = e => {
   // Sampling changes ink data, not layout. Reuse one geometry read for this
   // delivered batch, and refresh it on the next event after scroll/resize.
   const bounds = canvas.getBoundingClientRect();
+  const previousEraseHits = wholeErasePreview.size;
   for (let event of events) sample(event, bounds);
   sample(e, bounds);
   // Mobile paints the delivered batch immediately. Desktop coalesces batches
@@ -136,7 +189,7 @@ canvas.onpointermove = e => {
   else if (mode === 'erase' && eraserKind === 'partial') {
     previewErase(points.slice(Math.max(0, erasePreviewCount - 1)));
     erasePreviewCount = points.length
-  } else draw()
+  } else if (mode !== 'erase' || wholeErasePreview.size !== previousEraseHits) draw()
 };
 
 function finish(e, cancelled = false) {
@@ -160,6 +213,8 @@ function finish(e, cancelled = false) {
   active = null;
   if (cancelled) {
     cancelPreview();
+    wholeErasePreview.clear();
+    wholeEraseCandidates = [];
     points = [];
     // Applying a deferred viewport size redraws the page itself. Avoid
     // replaying all stored ink immediately before that same redraw.
@@ -173,6 +228,7 @@ function finish(e, cancelled = false) {
   let captured = points;
   points = [];
   if (mode === 'erase') {
+    wholeEraseCandidates = [];
     if (eraserKind === 'partial') pendingErase = {points: captured, radius: eraserRadius};
     send({
       op: 'erase',

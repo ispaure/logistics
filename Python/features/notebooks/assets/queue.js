@@ -17,6 +17,7 @@ function pump() {
     queue = [];
     pendingInk = null;
     pendingErase = null;
+    wholeErasePreview.clear();
     draw();
     $('status').textContent = 'Command too large. Draw a shorter stroke.';
     return
@@ -34,6 +35,7 @@ window.notebookUpdate = function(next, error) {
   state = next;
   pendingInk = null;
   pendingErase = null;
+  wholeErasePreview.clear();
   busy = false;
   queue.shift();
   $('status').textContent = error || state.save_status || 'Saved on this device. Export a copy to share.';
@@ -76,6 +78,7 @@ window.notebookInkUpdate = function(patch) {
   state.redo = patch.redo;
   state.save_status = patch.save_status;
   pendingErase = null;
+  wholeErasePreview.clear();
   pendingInk = null;
   busy = false;
   queue.shift();
