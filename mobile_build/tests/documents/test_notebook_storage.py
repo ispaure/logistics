@@ -1,6 +1,5 @@
 """Notebook storage parity, privacy, failure retention and destination handoff."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -10,64 +9,25 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch, AsyncMock
 
-from mobile.app import LogisticsMobile
 from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.mobile.documents import open_notebook
-from features.rclone.localcrypt.mobile.resources import CryptFiles
 from services.documents.storage import DocumentResource
-from mobile_build.tests.documents.test_document_creation import CreationClient
+from mobile_build.tests.support.notebooks import create_notebook, create_storage_notebook_app, draw_stroke
 
 
 class NotebookStorageTests(unittest.TestCase):
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.root = Path(self.temp.name)
-        LogisticsMobile.storage_root = self.root
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.app.show_home()
-        import toga
-        def canvas(resource=None, **kwargs):
-            view = toga.WebView(**kwargs)
-            view.evaluate_javascript = AsyncMock(return_value=None)
-            return view
-        factory = patch('services.documents.mobile_views.document_webview', side_effect=canvas)
-        factory.start()
-        self.addCleanup(factory.stop)
-        self.client = CreationClient()
-        self.app.cloud_client = self.client
-        self.provider = CryptFiles(self.root / 'LocalCryptFolders', self.client, 'Secret')
-
-    def tearDown(self):
-        for panel in getattr(self.app, '_notebook_views', {}).values():
-            panel.dispose()
-        self.app.main_window.close()
-        self.app.loop.run_until_complete(self.app.loop.shutdown_default_executor())
-        close_loop(self.app.loop)
-        LogisticsMobile.storage_root = None
-        self.temp.cleanup()
+        self.app, self.client, self.provider = create_storage_notebook_app(self)
+        self.root = self.app.storage_root
 
     def run_async(self, action):
         return self.app.loop.run_until_complete(action)
 
     def create(self, *, private=True):
-        with patch.object(self.app, 'existing_crypt_locations', return_value={'LocalCrypt: Secret': self.provider}):
-            with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='rmdoc')):
-                self.run_async(self.app.choose_document_type())
-            picker = self.app.editor_picker()
-            picker.creation_type.value = 'Remarkable Document (.rmdoc)'
-            picker.save_as_name.value = 'Private sketch'
-            self.run_async(picker.choose_creation_location())
-        picker = self.app.editor_picker()
-        picker.save_as_storage.value = 'LocalCrypt: Secret' if private else 'Local'
-        self.run_async(picker.refresh_editor_browser())
-        self.run_async(picker.confirm_editor_file())
-        panel = self.app.notebook_panel
-        self.assertIsNotNone(panel.editor, picker.save_as_status.value)
-        panel.web.evaluate_javascript = AsyncMock(return_value=None)
-        return panel
+        return create_notebook(self, private=private)
 
     def stroke(self, panel):
-        panel.editor.apply(dict(op='stroke', points=[[20,30,.4],[40,50,.8]], tool=12, width=2))
+        draw_stroke(panel)
 
     def select_missing_collection(self):
         import json
