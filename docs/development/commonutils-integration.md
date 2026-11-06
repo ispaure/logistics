@@ -36,19 +36,19 @@ policies stay with the caller even when publication mechanics are shared.
 
 Before adding a utility, check these existing shared guides:
 
-- [Feature declarations](https://github.com/ispaure/commonUtils/blob/main/ui/features/README.md)
-- [File browser](https://github.com/ispaure/commonUtils/blob/main/ui/file_browser/README.md)
-- [Indexing](https://github.com/ispaure/commonUtils/blob/main/filesystem/index/README.md)
-- [Markdown](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/README.md)
-- [Code editor](https://github.com/ispaure/commonUtils/blob/main/ui/code_editor/README.md)
-- [Configuration](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
-- [Workspaces, document hosts and notifications](https://github.com/ispaure/commonUtils/blob/main/ui/workspaces.md)
-- [Operation progress and close handling](https://github.com/ispaure/commonUtils/blob/main/ui/operation_progress.md)
-- [Atomic persistence](https://github.com/ispaure/commonUtils/blob/main/persistence/README.md)
+- [Feature declarations](../../Python/commonUtils/docs/development/reference/ui/features/features.md)
+- [File browser](../../Python/commonUtils/docs/development/reference/ui/file_browser/file_browser.md)
+- [Indexing](../../Python/commonUtils/docs/development/reference/filesystem/index/index.md)
+- [Markdown](../../Python/commonUtils/docs/development/reference/ui/markdown/markdown.md)
+- [Code editor](../../Python/commonUtils/docs/development/reference/ui/code_editor/code_editor.md)
+- [Configuration](../../Python/commonUtils/docs/development/reference/configuration/configuration.md)
+- [Workspaces, document hosts and notifications](../../Python/commonUtils/docs/development/reference/ui/workspaces.md)
+- [Operation progress and close handling](../../Python/commonUtils/docs/development/reference/ui/operation_progress.md)
+- [Atomic persistence](../../Python/commonUtils/docs/development/reference/persistence/persistence.md)
 
-These links follow the shared project's main branch. For an API change, inspect
-the actual pinned checkout as well. Missing shared documentation should be recorded
-against the owning component, not recreated as a second Logistics API manual.
+These links open the shared wiki in Logistics' pinned submodule checkout.
+Initialize that checkout before following them. Missing shared documentation belongs
+with the owning component; keep its API manual there.
 See the [audit follow-ups](documentation-audit.md#commonutils-documentation-ownership-and-gaps).
 
 ## Current import contract
@@ -57,7 +57,7 @@ The pinned shared revision now uses direct Python packages. Historical root impo
 such as `commonUtils.fileUtils`, `commonUtils.fileTypes` and `commonUtils.osUtils`
 are no longer supplied by an import adapter. Use the current filesystem, formats,
 runtime and integration packages shown in the
-[shared API guide](https://github.com/ispaure/commonUtils/blob/main/docs/development/public-apis.md).
+[shared API guide](../../Python/commonUtils/docs/development/public-apis.md).
 Do not restore the removed compatibility hook to fix a consumer import. This is
 separate from Logistics' feature hooks and persisted settings migration rules.
 Settings callers import shared editors and schemas directly and request typed keys
@@ -85,8 +85,8 @@ constructing its replacement. Scrolled-out tiles may still have cooperative
 storage reads retiring; removing their controls or stopping the visible browser
 is not evidence that those reads finished. Keep source dependencies alive until
 retirement. Credential revocation still invalidates private generations immediately.
-The shared [browser lifetime guide](https://github.com/ispaure/commonUtils/blob/main/ui/native_browser/README.md#shared-work-and-thumbnail-lifetime)
-describes task ownership; the pinned checkout is authoritative for local changes.
+The shared [browser lifetime guide](../../Python/commonUtils/docs/development/reference/ui/native_browser/native_browser.md#shared-work-and-thumbnail-lifetime)
+describes task ownership at the pinned shared revision.
 
 Within mobile, Files, Move and editor Open/Save As now resolve storage through
 `FilesUI.storage_provider`. Existing pulled providers are reused with their
@@ -121,7 +121,7 @@ and validation sequence.
 Logistics uses `commonUtils.ui.workspaces`, `tasks`, `readers`, `settings` and
 `appearance` for their owning implementations. Former flat forwarding modules
 have been removed; imports and mock patch targets use the grouped paths. Keep
-application navigation and document policy in Logistics. See the [shared module map](https://github.com/ispaure/commonUtils/blob/main/ui/README.md#module-organization)
+application navigation and document policy in Logistics. See the [shared module map](../../Python/commonUtils/docs/development/reference/ui/ui.md#module-organization)
 for ownership and canonical paths.
 
 ## Consumer consolidation (October 14, 2026)
@@ -224,13 +224,13 @@ resource paths have no forwarding aliases. Native message boxes resolve through
 the ordinary `commonUtils.ui.native.dialogs` package owner. Keep deferred imports,
 mock patch targets and curated mobile source manifests aligned with the pin.
 
-The shared [resource map](https://github.com/ispaure/commonUtils/blob/main/runtime/resources/README.md)
-and [Qt resource guide](https://github.com/ispaure/commonUtils/blob/main/ui/resources/README.md)
+The shared [resource map](../../Python/commonUtils/docs/development/reference/runtime/resources/resources.md)
+and [Qt resource guide](../../Python/commonUtils/docs/development/reference/ui/resources/resources.md)
 record those APIs. The shared reader/browser, configuration, persistence, archive,
 index and workspace guides describe the consolidated lifecycle and phase owners.
 Logistics keeps voice preferences/privacy, source/credential identity, transfer
-approval and document routing. As with the other links here, inspect the pinned
-checkout for locally committed changes before they are published upstream.
+approval and document routing. Check these contracts in the pinned checkout when
+changing a consumer or advancing the dependency.
 
 ## Readability extraction boundaries
 
