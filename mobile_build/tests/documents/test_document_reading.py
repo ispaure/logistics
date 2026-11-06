@@ -70,3 +70,15 @@ class DocumentReadingTests(unittest.TestCase):
             close_document_reader(reader)
         reader.pdf.close.assert_called_once_with()
         self.assertEqual(reader.password, '')
+
+    def test_media_or_pdf_failure_cannot_skip_remaining_reader_cleanup(self):
+        for failing in ('media', 'pdf'):
+            with self.subTest(failing=failing):
+                media, pdf, source = Mock(), Mock(), Mock()
+                {'media': media, 'pdf': pdf}[failing].close.side_effect = OSError(failing + ' close failed')
+                reader = NS(_markdown_media=media, pdf=pdf, source=source, password='synthetic-password')
+                with self.assertRaisesRegex(OSError, failing + ' close failed'):
+                    close_document_reader(reader)
+                for resource in (media, pdf, source):
+                    resource.close.assert_called_once_with()
+                self.assertEqual(reader.password, '')

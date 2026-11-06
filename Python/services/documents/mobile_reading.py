@@ -42,21 +42,23 @@ def close_document_reader(reader):
     """Retire a reader acquired by an opening or retained by one session."""
     if reader is None:
         return
-    media = getattr(reader, '_markdown_media', None)
-    if media is not None:
-        media.close()
     try:
-        pdf = getattr(reader, 'pdf', None)
-        if pdf is not None:
-            pdf.close()
+        media = getattr(reader, '_markdown_media', None)
+        if media is not None:
+            media.close()
     finally:
         try:
-            source = getattr(reader, 'source', None)
-            if hasattr(source, 'close'):
-                source.close()
+            pdf = getattr(reader, 'pdf', None)
+            if pdf is not None:
+                pdf.close()
         finally:
-            if hasattr(reader, 'password'):
-                reader.password = ''
+            try:
+                source = getattr(reader, 'source', None)
+                if hasattr(source, 'close'):
+                    source.close()
+            finally:
+                if hasattr(reader, 'password'):
+                    reader.password = ''
 
 
 @dataclass(frozen=True)
