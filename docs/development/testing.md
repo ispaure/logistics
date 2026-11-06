@@ -190,7 +190,8 @@ New reports are saved automatically under `test-results/test-timings/`. Bridge G
 tests run by stage with native Go fail-fast support; they currently report outcomes
 and gated stages on the console rather than the Python JSON timing schema.
 
-Use `dev.py --timings` only for a single test leg. Shared selections that include
+Use `python3 dev.py test <suite> [filename] --timings REPORT.json` only for a
+single Python test leg, with an existing matching report. Shared selections that include
 both Qt and Toga currently forward the same input path to both legs, whose roots,
 interpreters and backends differ. Use default ordering for that combined command,
 or run each owning isolated-runner command with its own matching report.
