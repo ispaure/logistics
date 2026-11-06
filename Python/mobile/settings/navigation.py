@@ -1,10 +1,10 @@
-"""Compact preference rows and offline installed-build information."""
+"""Retained Settings pages and native compact/wide category navigation."""
 from collections.abc import Mapping
 
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from .categories import display_title
+from .categories import BY_TITLE, display_title
 from .titles import show_body_title
 from .forms import settings_presentation, fit_section, disclosure, group_rows
 
@@ -53,16 +53,13 @@ class SettingsNavigation(toga.Box):
         from ..control_icons import button_icons
         surface(self, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         menu = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        icons = {'Privacy & Security': 'storage_crypt', 'Features': 'preferences', 'Camera': 'preferences', 'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
-                 'Markdown': 'edit', 'Text': 'edit', 'EPUB': 'books', 'Books & Comics': 'books', 'LM Chat': 'chat',
-                 'Workspaces': 'folder', 'Reset': 'preferences', 'Help': 'help', 'About': 'info'}
         rows = []
         for title in sections:
             def choose(widget=None, selected=title, **kwargs):
                 self.choose(selected)
             button = list_button(toga.Button(display_title(app, title), on_press=choose, style=Pack(height=52)))
             button._settings_list_styled = True
-            button_icons(button, [(icons[title], '')])
+            button_icons(button, [(BY_TITLE[title].icon, '')])
             disclosure(button)
             button._settings_row = True
             # Match the initial unselected state during detached construction,
