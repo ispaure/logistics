@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
-import toga
+from mobile_build.tests.support.readers import MemoryWebView
 from commonUtils.runtime.resources.documents import LocalDocuments
 from features.books.epub import EPUBBook
 from features.books.mobile.provider_reader import RichBookView
@@ -191,10 +191,6 @@ class EpubUXTests(unittest.TestCase):
             panel.dispose()
 
     def test_private_tools_preserve_passage_and_search_feedback(self):
-        class MemoryWebView(toga.WebView):
-            def clear_private_content(self):
-                self.set_content('about:blank', '')
-
         async def exercise():
             with TemporaryDirectory() as directory:
                 epub, _ = make_books(Path(directory))
