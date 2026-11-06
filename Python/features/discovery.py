@@ -3,18 +3,26 @@ from pathlib import Path
 import importlib
 from types import ModuleType
 
+# This package implements the registry; it is never an optional user feature.
+INFRASTRUCTURE_PACKAGES = frozenset({'runtime'})
+
 
 def get_feature_names(features_path=None) -> list[str]:
     """
     Return the package names of features available in the features directory.
 
-    A valid feature is a direct subdirectory containing an __init__.py file.
+    A valid feature is a public direct package, excluding registry infrastructure.
+    Discovery does not import packages or require modern registration metadata:
+    legacy features and failed imports remain visible to the registry.
     """
 
     features_path = Path(features_path) if features_path is not None else Path(__file__).parent
     feature_names = []
 
     for path in features_path.iterdir():
+        if path.name.startswith('_') or path.name in INFRASTRUCTURE_PACKAGES:
+            continue
+
         if not path.is_dir():
             continue
 
@@ -22,9 +30,6 @@ def get_feature_names(features_path=None) -> list[str]:
             from services.ally_integration import is_active
             if not is_active(path):
                 continue
-
-        if path.name.startswith('_'):
-            continue
 
         if not (path / '__init__.py').is_file():
             continue

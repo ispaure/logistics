@@ -11,6 +11,22 @@ from Scripts.architecture import ROOT, check, feature_edges, portable_sources, r
 
 
 class ArchitectureTests(unittest.TestCase):
+    def test_runtime_is_infrastructure_but_its_outgoing_dependencies_remain_visible(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            feature = root / 'Python/features/books'
+            runtime = root / 'Python/features/runtime'
+            feature.mkdir(parents=True)
+            runtime.mkdir()
+            (feature / 'registration.py').write_text(
+                'from features.runtime import dependencies\n')
+            (runtime / 'example.py').write_text(
+                'from desktop import dialogs\nfrom features.books import epub\n')
+            self.assertEqual(feature_edges(root), (
+                {('Python/features/runtime/example.py', 'desktop.dialogs'),
+                 ('Python/features/runtime/example.py', 'desktop')},
+                {('runtime', 'books')}))
+
     def test_mobile_feature_adapters_do_not_import_application_host(self):
         for owner in ('rclone', 'lm', 'text_editor', 'notes_library', 'notebooks'):
             for path in (ROOT / 'Python/features' / owner).rglob('*.py'):
