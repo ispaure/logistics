@@ -94,6 +94,7 @@ class ContentBackgroundTests(unittest.TestCase):
                  native_host=NS(adapter=adapter), resize_workspace=Mock())
         privacy = object.__new__(ScreenPrivacy)
         privacy.app = app
+        privacy.disposed = False
         with patch('mobile.ios_content_background.sync') as refresh:
             privacy.artwork_accessibility_changed()
         adapter.layout_content.assert_called_once_with(container)

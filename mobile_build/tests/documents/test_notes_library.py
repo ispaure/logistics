@@ -840,6 +840,20 @@ class NotesLibraryTests(unittest.TestCase):
         from features.rclone.localcrypt.mobile.resources import encrypted_storage
         fixture = json.loads(Path('mobile_build/native_tests/tests/logisticsmobile/localcrypt_fixture.json').read_text())
         self.app.show_cloud(present=False)
+
+        async def wait_for_discovery():
+            while True:
+                discovery = self.app._notes_discovery_task
+                try:
+                    await asyncio.shield(discovery)
+                except asyncio.CancelledError:
+                    # A hub refresh can cancel a scan before it starts.
+                    if (asyncio.current_task().cancelling() or not discovery.cancelled()
+                            or discovery is self.app._notes_discovery_task):
+                        raise
+                if discovery is self.app._notes_discovery_task:
+                    return
+
         async def exercise():
             restore = getattr(self.app, 'cloud_restore_task', None)
             if restore is not None:
@@ -860,11 +874,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertEqual(self.app.existing_crypt_locations(), {'LocalCrypt: Secret': 'Secret'})
                 self.app.show_documents_hub()
                 self.app.document_view_buttons['Libraries'].on_press()
-                while True:
-                    discovery = self.app._notes_discovery_task
-                    await discovery
-                    if discovery is self.app._notes_discovery_task:
-                        break
+                await wait_for_discovery()
                 buttons = self.app.document_notes_list.children[1].children
                 self.assertIn('Secret', [button.text for button in buttons],
                               self.app.document_notes_list.children[2].text)
@@ -927,7 +937,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertIsNone(owner.path)
                 self.app.show_documents_hub()
                 self.app.document_view_buttons['Libraries'].on_press()
-                await self.app._notes_discovery_task
+                await wait_for_discovery()
                 self.assertFalse(self.app.document_notes_list.children[1].children)
             finally:
                 client.clear()
