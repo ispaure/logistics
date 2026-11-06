@@ -197,6 +197,37 @@ class Cases(unittest.TestCase):
                              [('first/test_same.py', 'test_same.Cases.test_first'),
                               ('third/test_same.py', 'test_same.Cases.test_third')])
 
+    def test_exact_file_ignores_unselected_descendant_metadata(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            nested = root / 'nested'
+            nested.mkdir()
+            (nested / 'test_same.py').write_text('# TEST_STAGE = TestStage.INVALID\n')
+            (root / 'test_same.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                'class Selected(unittest.TestCase):\n def test_runs(self): pass\n')
+            report = root / 'report.json'
+            result = self.run_modules(root, '--exact-file', 'test_same.py', '--report', str(report))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual([row['id'] for row in json.loads(report.read_text())['tests']],
+                             ['test_same.Selected.test_runs'])
+
+    def test_exact_file_rejects_shadowing_package_before_import(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shadow = root / 'test_same'
+            shadow.mkdir()
+            marker = root / 'shadow-imported'
+            (shadow / '__init__.py').write_text(
+                f'from pathlib import Path\nPath({str(marker)!r}).touch()\n')
+            (root / 'test_same.py').write_text(
+                '# TEST_STAGE = TestStage.REGRESSION\nimport unittest\n'
+                'class Selected(unittest.TestCase):\n def test_runs(self): pass\n')
+            result = self.run_modules(root, '--exact-file', 'test_same.py', '--report', str(root / 'report.json'))
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("Selected test module 'test_same' did not resolve to", result.stderr)
+            self.assertFalse(marker.exists())
+
     def test_exact_file_rejects_missing_duplicate_and_escaping_paths(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -298,6 +329,10 @@ class Cases(unittest.TestCase):
                           started_at='start', finished_at='finish', duration_seconds=0.25,
                           message='original failure')
             schema = dict(schema_version=1, complete=True, exit_code=0)
+            passed = dict(prefix, outcome='passed')
+            unexplained = dict(id='test_first.Cases.test_unreported', stage='regression')
+            wrong_fixture = dict(prefix, id='setUpClass (test_first.Other)', outcome='skipped',
+                                 fixture_event=True, message='fixture unavailable')
             defects = (
                 ('{broken', 'Cannot read child timing report', []),
                 ('[]', 'Invalid child timing report schema', []),
@@ -308,6 +343,10 @@ class Cases(unittest.TestCase):
                     dict(id='test_first.Cases.test_case', stage='regression'),
                     dict(id='test_first.Cases.test_unreported', stage='regression'),
                 ])), 'does not account for all planned cases', [dict(prefix, outcome='passed')]),
+                (json.dumps(dict(schema, tests=[passed, wrong_fixture], planned_tests=[
+                    dict(id=passed['id'], stage='regression'), unexplained,
+                ], not_run=[dict(unexplained, reason='Fixture skipped: fixture unavailable')])),
+                 'without matching setup fixture skip', [passed, wrong_fixture]),
             )
             real_run = subprocess.run
             for payload, reason, kept in defects:

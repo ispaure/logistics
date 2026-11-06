@@ -139,6 +139,18 @@ def read_child_evidence(path, stage, exit_code):
     accounted.update(row['id'] for row in not_run)
     if not planned or accounted != Counter(row['id'] for row in planned):
         return records, not_run, True, 'Child timing report does not account for all planned cases.'
+    if exit_code == 0 and not_run:
+        skips = {row['id']: 'Fixture skipped: ' + row.get('message', '')
+                 for row in records if row.get('fixture_event') and row['outcome'] == 'skipped'}
+        for row in not_run:
+            class_name, _, _ = row['id'].rpartition('.')
+            fixture_ids = [f'setUpClass ({class_name})']
+            module_name, _, _ = class_name.rpartition('.')
+            while module_name:
+                fixture_ids.append(f'setUpModule ({module_name})')
+                module_name, _, _ = module_name.rpartition('.')
+            if not any(skips.get(fixture_id) == row['reason'] for fixture_id in fixture_ids):
+                return records, not_run, True, 'Successful child omitted a case without matching setup fixture skip.'
     return records, not_run, True, None
 
 
@@ -313,9 +325,10 @@ def main():
         if not available:
             parser.error(f'Required test dependency is unavailable: {name}. Use the owning suite environment.')
     args.stages = tuple(s for s in STAGE_ORDER if s.value in args.stage) if args.stage else PROFILES[args.profile]
+    exact_files = [args.pattern] if args.single_file else args.exact_file
     if args.inventory:
         try:
-            paths = matching_sources(args.directory, args.pattern, args.include_pattern, args.exact_file)
+            paths = matching_sources(args.directory, args.pattern, args.include_pattern, exact_files)
             if not paths:
                 raise ValueError('No matching test sources for inventory.')
             rows = select_sources(paths, args.stages)
@@ -337,7 +350,7 @@ def main():
     try:
         code = run_with_report(args, report)
     except ValueError as error:
-        requested = args.exact_file or [str(p.relative_to(args.directory))
+        requested = exact_files or [str(p.relative_to(args.directory))
                                        for p in matching_sources(args.directory, args.pattern, args.include_pattern)]
         report.data.update(preflight_error=str(error), coverage_complete=False,
                            not_run=[dict(file=name, reason='Preflight failed') for name in requested])
@@ -358,7 +371,8 @@ def run_with_report(args, report):
                             args.include_pattern, report, stages=args.stages, mode=args.mode,
                             fail_fast=args.fail_fast, timings=args.timings, order=args.order, seed=args.seed,
                             exact_files=args.exact_file)
-    validate(args.directory.rglob(args.pattern))
+    exact = [args.pattern] if args.single_file else []
+    rows = validate(matching_sources(args.directory, args.pattern, (), exact))
     # Keep default storage and preferences away from the contributor's live data,
     # including during test discovery. Children running isolated modules create
     # their own scope; ordinary helper subprocesses inherit private cache roots.
@@ -377,10 +391,10 @@ def run_with_report(args, report):
             'LOCALAPPDATA': str(home / 'AppData' / 'Local'),
         }
         with patch.dict(os.environ, environment), patch.object(Path, 'home', return_value=home):
-            return run_suite(args, report)
+            return run_suite(args, report, rows)
 
 
-def run_suite(args, report):
+def run_suite(args, report, rows):
     # The runner itself lives in Python/tests. A mobile suite can contain the
     # same module name (e.g. test_pdf_reader); discovery must import its own file
     # even when its directory already appears later in PYTHONPATH.
@@ -421,6 +435,13 @@ def run_suite(args, report):
                 package_root = package_root.parent
             # Preserve a nested test package's relative fixture imports.
             sys.path.insert(0, str(package_root))
+            try:
+                spec = find_spec(module)
+            except (ImportError, ValueError) as error:
+                raise ValueError(f'Cannot resolve selected test module {module!r}: {error}') from error
+            expected = rows[0].path.resolve()
+            if spec is None or not spec.origin or Path(spec.origin).resolve() != expected:
+                raise ValueError(f'Selected test module {module!r} did not resolve to {expected}.')
             suite = unittest.defaultTestLoader.loadTestsFromName(module)
         else:
             suite = unittest.defaultTestLoader.discover(str(args.directory), pattern=args.pattern)
@@ -435,7 +456,6 @@ def run_suite(args, report):
                     yield from flatten(test)
                 else:
                     yield test
-        rows = validate(args.directory.rglob(args.pattern))
         by_path = {r.path.resolve(): r for r in rows}
         cases = []
         for test in flatten(suite):
