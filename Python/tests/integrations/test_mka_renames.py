@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from commonUtils.filesystem import rename as renameUtils
 from commonUtils.filesystem.directories import Directory
+from commonUtils.tests.qt_test_case import QtTestCase
 from features.media import mka
 
 
@@ -58,3 +59,52 @@ class MkaRenameTests(unittest.TestCase):
         self.assertEqual((self.root/'2 - Second.mka').read_bytes(), b'\x02')
         self.assertFalse((self.root/'Chapter_1.mka').exists())
         self.assertFalse((self.root/'Chapter_2.mka').exists())
+
+
+class MkaRenameDialogTests(QtTestCase):
+    def test_confirmed_rename_failure_requires_a_fresh_review(self):
+        from features.media.ui import dialogs
+
+        root = Path(self.temporary_directory().name)
+        source = root / 'Chapter_1.mka'
+        source.write_bytes(b'original')
+        (root / 'names.csv').write_text('1,First\n')
+        dialog = dialogs.RenameMkaDialog(root)
+
+        dialog.action_button.click()
+        self.wait_until(lambda: not dialog.busy)
+        approved_plan = dialog.plan
+        self.assertIsNotNone(approved_plan)
+        self.assertEqual(dialog.results.topLevelItemCount(), 1)
+
+        with patch.object(dialog, '_confirm', return_value=False):
+            dialog.action_button.click()
+        self.assertIs(dialog.plan, approved_plan)
+        self.assertEqual(dialog.action_button.text(), 'Apply reviewed names')
+        self.assertEqual(dialog.results.topLevelItemCount(), 1)
+
+        source.write_bytes(b'changed after review')
+        with (patch.object(dialog, '_confirm', return_value=True),
+              patch.object(dialogs, 'apply_renames', wraps=renameUtils.apply_renames) as apply):
+            dialog.action_button.click()
+            self.wait_until(lambda: not dialog.busy)
+        apply.assert_called_once()
+        self.assertIs(apply.call_args.args[0], approved_plan)
+        self.assertIn('Operation failed: Source changed since preview', dialog.task.message.text())
+        self.assertIsNone(dialog.plan)
+        self.assertEqual(dialog.action_button.text(), 'Review names')
+        self.assertEqual(dialog.results.topLevelItemCount(), 0)
+
+        dialog.action_button.click()
+        self.wait_until(lambda: not dialog.busy)
+        self.assertIsNotNone(dialog.plan)
+        self.assertIsNot(dialog.plan, approved_plan)
+        self.assertEqual(dialog.action_button.text(), 'Apply reviewed names')
+
+        reports = []
+        dialog.task.progress_changed.connect(lambda *report: reports.append(report))
+        with patch.object(dialog, '_confirm', return_value=True):
+            dialog.action_button.click()
+            self.wait_until(lambda: not dialog.busy)
+        self.assertIn((2, 2, 'Renamed 1 - First.mka'), reports)
+        self.assertEqual((root / '1 - First.mka').read_bytes(), b'changed after review')
