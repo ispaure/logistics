@@ -28,6 +28,42 @@ class AsyncStartupApp(LogisticsMobile):
 
 
 class StartupModelTests(TestCase):
+    def test_confirmed_exit_with_private_manager_allows_sync_and_async_restart(self):
+        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import lifecycle
+        for app_type in (LogisticsMobile, AsyncStartupApp):
+            with self.subTest(startup=app_type.__name__), TemporaryDirectory() as directory:
+                LogisticsMobile.storage_root = Path(directory)
+                self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+                old = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                incoming = None
+                try:
+                    manager = old.provider_sessions()
+                    self.assertIs(old.private_sessions, manager)
+                    old.main_window.close()
+                    self.assertTrue(lifecycle(old).exited)
+                    self.assertFalse(old.active_host)
+                    self.assertNotIn(old._startup_claim, _active_hosts)
+                    close_loop(old.loop)
+                    # Keep the exited predecessor alive while the real startup
+                    # runs, as embedded runtimes and the saved-files test do.
+                    with patch.object(manager, 'prepare_replacement_sync') as sync, \
+                            patch.object(manager, 'prepare_replacement') as asynchronous:
+                        incoming = app_type('Logistics', 'io.github.ispaure.logisticsmobile')
+                        if app_type is AsyncStartupApp:
+                            self.assertTrue(incoming.loop.run_until_complete(incoming.startup_task))
+                        sync.assert_not_called()
+                        asynchronous.assert_not_called()
+                    self.assertIs(_active_hosts[old._startup_claim], incoming)
+                    self.assertTrue(incoming.active_host)
+                    self.assertTrue(lifecycle(old).request_exit())
+                    self.assertIs(_active_hosts[old._startup_claim], incoming)
+                finally:
+                    for host in (old, incoming):
+                        if host is not None and not host.loop.is_closed():
+                            host.main_window.close()
+                            close_loop(host.loop)
+
     def test_restart_cleanup_preserves_only_active_saved_document_when_restore_enabled(self):
         for restore in ('true', 'false'):
             with self.subTest(restore=restore), TemporaryDirectory() as directory:

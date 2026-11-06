@@ -131,15 +131,20 @@ class HostLifecycleTests(unittest.TestCase):
         host.checkpoint = Mock(return_value=True)
         host.scene_manager = NS(external_comics=Mock())
         host.seasonal_snow = Mock()
+        host._startup_claim = 'exit-veto:primary'
+        registered = {host._startup_claim: host}
         owner = lifecycle(host)
-        self.assertFalse(owner.request_exit())
-        self.assertTrue(host.active_host)
-        host.checkpoint.assert_not_called()
-        host.screen_privacy.dispose.assert_not_called()
-        host.clear_private_reader.return_value = True
-        with patch('mobile.markdown_speech.stop_markdown_speech'), \
+        with patch('mobile.app._active_hosts', registered), \
+                patch('mobile.markdown_speech.stop_markdown_speech'), \
                 patch('features.books.mobile.media_controls.stop_media'):
+            self.assertFalse(owner.request_exit())
+            self.assertIs(registered[host._startup_claim], host)
+            self.assertTrue(host.active_host)
+            host.checkpoint.assert_not_called()
+            host.screen_privacy.dispose.assert_not_called()
+            host.clear_private_reader.return_value = True
             self.assertTrue(owner.request_exit())
+            self.assertNotIn(host._startup_claim, registered)
             self.assertTrue(owner.request_exit())
         self.assertFalse(host.active_host)
         host.checkpoint.assert_called_once_with()
@@ -183,9 +188,20 @@ class HostLifecycleTests(unittest.TestCase):
         panel = Mock()
         host._notebook_views, host.notebook_panel = {'doc': panel}, panel
         panel.busy, panel.document = False, None
+        host._startup_claim = 'exit-reentry:primary'
+        registered = {host._startup_claim: host}
+        successor = object()
         owner = lifecycle(host)
-        self.assertTrue(owner.request_exit())
-        self.assertTrue(owner.request_exit())
+        def restart():
+            self.assertTrue(owner.exited)
+            self.assertFalse(host.active_host)
+            self.assertNotIn(host._startup_claim, registered)
+            registered[host._startup_claim] = successor
+        host.native_host.dispose.side_effect = restart
+        with patch('mobile.app._active_hosts', registered):
+            self.assertTrue(owner.request_exit())
+            self.assertTrue(owner.request_exit())
+            self.assertIs(registered[host._startup_claim], successor)
         host.checkpoint.assert_called_once_with()
         for task in (host.startup_document_task, host.incoming_task):
             task.cancel.assert_called_once_with()
@@ -203,7 +219,11 @@ class HostLifecycleTests(unittest.TestCase):
         host.retire_private_comic_batch = Mock()
         host.checkpoint = Mock(return_value=False)
         host.native_host, host.incoming_task = Mock(), Mock()
-        self.assertFalse(lifecycle(host).request_exit())
+        host._startup_claim = 'checkpoint-veto:primary'
+        registered = {host._startup_claim: host}
+        with patch('mobile.app._active_hosts', registered):
+            self.assertFalse(lifecycle(host).request_exit())
+            self.assertIs(registered[host._startup_claim], host)
         self.assertTrue(host.active_host)
         host.native_host.dispose.assert_not_called()
         host.incoming_task.cancel.assert_not_called()

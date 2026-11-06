@@ -106,14 +106,18 @@ class HostLifecycle:
             self._retire(private, 'retire')
         self._retire_resources()
 
-    def abort_startup(self):
-        """Retire only initialized resources, without checkpointing partial state."""
-        self.startup_aborted = True
+    def _release_startup_claim(self):
+        """Forget this host without disturbing a successor's registration."""
         identity = self.host.__dict__.get('_startup_claim')
         if identity is not None:
             from .app import _active_hosts
             if _active_hosts.get(identity) is self.host:
                 del _active_hosts[identity]
+
+    def abort_startup(self):
+        """Retire only initialized resources, without checkpointing partial state."""
+        self.startup_aborted = True
+        self._release_startup_claim()
         screen = getattr(self.host, 'startup_screen', None)
         self._retire(getattr(screen, 'cover', None), 'dispose')
         self._retire_resources()
@@ -241,6 +245,7 @@ class HostLifecycle:
     def request_exit(self):
         host = self.host
         if self.exited:
+            self._release_startup_claim()
             self._retire_resources()
             return True
         if self.startup_aborted or getattr(host, '_startup_in_progress', False):
@@ -272,6 +277,9 @@ class HostLifecycle:
         saved = transitions_for(host).checkpoint_for_exit()
         if saved:
             self.exited = True
+            # Preservation already succeeded. A later startup must not ask this
+            # exited host's unavailable private manager to preserve it again.
+            self._release_startup_claim()
             self._retire_resources()
         return saved
 
