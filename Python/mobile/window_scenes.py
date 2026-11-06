@@ -261,7 +261,7 @@ class SceneManager:
         self.delegate_class = LogisticsSceneAppDelegate
 
     def make_host(self, identifier):
-        from .app import LogisticsMobile
+        from .app import LogisticsMobile, _active_hosts
         host = object.__new__(workspace_class())
         # Only application infrastructure is shared. Feature state, callbacks,
         # routes, native containers, preferences and drafts belong to this host.
@@ -278,7 +278,27 @@ class SceneManager:
             destination = self.read_destination(host)
         except (OSError, ValueError):
             destination = 'home'
-        LogisticsMobile.startup(host)
+        try:
+            LogisticsMobile.startup(host)
+        except BaseException:
+            # startup retires the partial host's resources. The scene manager
+            # owns its registration and exclusive writers, including failures
+            # after bind_workspace but before returning a usable window.
+            if self.owners.hosts.get(identifier) is host:
+                self.owners.detach(identifier)
+            identity = str(host.storage_root.resolve()) + ':' + identifier
+            if _active_hosts.get(identity) is host:
+                _active_hosts.pop(identity)
+            window = host._main_window
+            if window is not None and window in self.app.windows:
+                try:
+                    window.close()
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).error('Failed to close unfinished workspace window')
+                    if window in self.app.windows:
+                        self.app.windows.remove(window)
+            raise
         try:
             host.native_host.activate(destination)
             host.body = host.routes.body()
