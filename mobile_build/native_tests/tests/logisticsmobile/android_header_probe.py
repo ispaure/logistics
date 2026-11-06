@@ -123,6 +123,12 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 assert margins.getMarginStart() == 2 * unit
                 assert margins.getMarginEnd() == unit
                 close_rect = self.native_rect(owner.close_button._impl.native)
+                close = owner.close_button._impl.native
+                icon = owner.close_button._impl._control_drawable.getBounds()
+                bubble = close.getBackground().getDrawable(0).getBounds()
+                assert abs(close.getPaddingStart() + icon.width() / 2 - bubble.exactCenterX()) <= 1
+                assert abs(bubble.exactCenterY() - close_rect[3] / 2) <= 1
+                assert bubble.height() < close_rect[3] and bubble.width() < close_rect[2]
                 links_rect = self.native_rect(owner.links_button._impl.native)
                 assert abs(close_rect[0] - rects[0][0]) <= 2, (close_rect, rects[0])
                 assert abs(sum((links_rect[0], links_rect[2])) - sum((rects[-1][0], rects[-1][2]))) <= 2, (

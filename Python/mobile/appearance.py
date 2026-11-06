@@ -48,6 +48,16 @@ def _prepare_surface_button(impl):
 
 
 def _refresh_surface_icon(impl):
+    size = getattr(impl, '_android_surface_size', None)
+    if size is not None:
+        from android.graphics.drawable import LayerDrawable
+        from android.view import Gravity
+        from commonUtils.ui.native.appearance import set_android_background
+        background = LayerDrawable([impl.native.getBackground()])
+        extent = impl.scale_in(size)
+        background.setLayerSize(0, extent, extent)
+        background.setLayerGravity(0, Gravity.CENTER)
+        set_android_background(impl.native, background)
     if hasattr(impl, '_control_drawable'):
         from .control_icons import tint_android
         tint_android(impl)
