@@ -58,6 +58,7 @@
     "protection.py",
     "seasonal.py",
     "session_auth.py",
-    "workflow_host.py"
+    "workflow_host.py",
+    "worker_retirement.py"
   ]
 }
