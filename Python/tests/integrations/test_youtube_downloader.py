@@ -144,8 +144,10 @@ class DownloaderTests(unittest.TestCase):
         for name in ('Season 1', 'Seasonal Extras', 'Old Season 2'):
             (self.root / 'Channel' / name).mkdir(parents=True)
         (self.root / 'Channel/Season 3').symlink_to(self.root / 'Channel/Season 1', target_is_directory=True)
-        with patch('features.rclone.transfers.workflow.sync_transfer') as transfer:
-            sync.push_seasons(folder, '/credentials.ini')
+        from features.rclone.transfers.launch import SyncOutcome, SyncState
+        with patch('features.rclone.transfers.workflow.sync_transfer',
+                   return_value=SyncOutcome(SyncState.SUCCEEDED)) as transfer:
+            self.assertIs(sync.push_seasons(folder, '/credentials.ini'), True)
         transfer.assert_called_once_with(self.root / 'Channel/Season 1', 'Videos:Channel/Season 1',
                                          config_path='/credentials.ini', operation='Push', review=False, wait_for_output=True)
 
@@ -158,6 +160,64 @@ class DownloaderTests(unittest.TestCase):
             transfer.assert_called_with(self.root / 'Configs/YouTube', 'Videos:Configs/YouTube', config_path='/credentials.ini', operation='Push', review=False)
             sync.pull_config(folder, '/credentials.ini')
             transfer.assert_called_with('Videos:Configs/YouTube', self.root / 'Configs/YouTube', config_path='/credentials.ini', operation='Pull', review=False)
+
+    def test_season_batch_handles_transfer_outcomes(self):
+        from features.rclone.transfers.launch import SyncOutcome, SyncState
+        from features.youtube_downloader import sync
+
+        folder = SimpleNamespace(path=self.root, name='Videos')
+        (self.root / 'remoteConfig.ini').write_text('[Youtube-Download]\nconfig_sub_path=Download Config\n')
+        with patch('features.rclone.transfers.workflow.sync_transfer') as transfer:
+            self.assertIs(sync.push_seasons(folder, '/credentials.ini'), True)
+            transfer.assert_not_called()
+
+        for name in ('Season 1', 'Season 2'):
+            (self.root / 'Channel' / name).mkdir(parents=True)
+        with patch('features.rclone.transfers.workflow.sync_transfer') as transfer:
+            self.assertIs(sync.push_seasons(folder, '/credentials.ini', cancelled=lambda: True), False)
+            transfer.assert_not_called()
+        for review, state, accepted in (
+            (False, SyncState.SUCCEEDED, True),
+            (False, SyncState.FAILED, False),
+            (False, SyncState.CANCELLED, False),
+            (False, SyncState.STARTED, False),
+            (True, SyncState.STARTED, True),
+            (True, SyncState.SUCCEEDED, True),
+            (True, SyncState.FAILED, False),
+            (True, SyncState.CANCELLED, False),
+            (True, None, False),
+        ):
+            with self.subTest(review=review, state=state):
+                outcome = False if state is None else SyncOutcome(state)
+                with patch('features.rclone.transfers.workflow.sync_transfer', return_value=outcome) as transfer:
+                    self.assertIs(sync.push_seasons(folder, '/credentials.ini', review=review), accepted)
+                self.assertEqual(transfer.call_count, 2 if accepted else 1)
+                self.assertIs(transfer.call_args.kwargs['wait_for_output'], not review)
+
+    def test_config_sync_captures_local_and_remote_paths_together(self):
+        from features.youtube_downloader import sync
+
+        folder = SimpleNamespace(path=self.root, name='Videos')
+        config = self.root / 'remoteConfig.ini'
+        get_sub_path = detection.get_config_sub_path
+
+        def read_then_edit(folder):
+            sub_path = get_sub_path(folder)
+            config.write_text('[Youtube-Download]\nconfig_sub_path=Changed\n')
+            return sub_path
+
+        for action, operation in ((sync.push_config, 'Push'), (sync.pull_config, 'Pull')):
+            with self.subTest(operation=operation):
+                config.write_text('[Youtube-Download]\nconfig_sub_path=Configs\\YouTube\n')
+                with patch.object(detection, 'get_config_sub_path', side_effect=read_then_edit) as read, \
+                        patch('features.rclone.transfers.workflow.sync_transfer') as transfer:
+                    self.assertIs(action(folder, '/credentials.ini', review=True), transfer.return_value)
+                operands = (self.root / 'Configs/YouTube', 'Videos:Configs/YouTube')
+                if operation == 'Pull':
+                    operands = operands[::-1]
+                transfer.assert_called_once_with(*operands, config_path='/credentials.ini',
+                                                 operation=operation, review=True)
+                read.assert_called_once_with(folder)
 
 
     def test_numbering_continues_after_highest_episode_despite_gaps(self):
