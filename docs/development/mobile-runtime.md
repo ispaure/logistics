@@ -1368,8 +1368,21 @@ partial-startup cleanup and memory trimming. Ordinary exit checks notebook,
 transfer and private-reader guards, then asks `session_workflows.transitions` to
 checkpoint. A pending close or save veto leaves the host and callbacks live for
 retry; workflow-specific cancellation or reader cleanup may already have run.
-Replacement flushes document checkpoints, credential lists and chat first. A
-preservation failure leaves the old host active.
+Replacement keeps the old host active during preservation. Private-session
+preflight flushes mounted native formatted input and checkpoints final reader
+progress while its source is live. Busy/dirty or locked owners, queued progress
+writes and changed owner identities veto replacement. The synchronous path
+refuses mounted native formatted input without a flush receipt. Document,
+credential-list and chat checkpoints then run, followed by final private-session
+and notebook checks. A preservation failure leaves the old host active.
+
+After those checks, `retire_for_replacement` marks private sessions terminal and
+claims the successor's active-host entry before cleanup callbacks or background
+model loading. Startup verifies that claim again before publishing loaded models;
+an aborted startup removes only its own claim. This prevents a stale startup from
+replacing a newer host. Cleanup failures remain retryable after the claim; they
+do not reactivate the predecessor. `test_startup_models.py` and
+`test_private_sessions.py` cover these host-level boundaries.
 
 Accepted exit and replacement share final host retirement: cancel owned tasks,
 invalidate session presentation, dispose host adapters and detach window callbacks.
@@ -1419,8 +1432,15 @@ LocalCrypt and speech media.
 `provider_presentation.py` builds the provider reader chrome only after the session
 owner opens a document. `provider_document.ProviderDocumentSession` owns the current reader and metadata
 draft state and disposes its format resources after the busy/dirty guards accept
-closure. Compatibility attributes on the controller forward to this session;
-repeated disposal is harmless, and adopting a reader starts a new lifetime.
+closure. Compatibility attributes on the controller forward to this session.
+Disposal retains failed cleanup steps for retry and skips successful steps;
+terminal replacement retirement refuses new readers and operations. Provider
+save, metadata and page workers retain their reader until they settle, including
+after repeated cancellation. Results and control updates require the captured
+owner to remain current; a new reader returned to a stale owner is reclaimed.
+Progress replacement preflight persists the final snapshot before terminal
+retirement, whose cleanup performs no new progress writes. Credential revocation
+detaches visible controls immediately but retains sources still used by workers.
 `provider_opening.ProviderDocumentOpening` owns document preparation, credential
 identity checks, cancellation and publication, with
 `provider_view.ProviderDocumentView` constructing the unpublished controls. Each
@@ -1567,7 +1587,9 @@ Formats retain decoding, page targets, reading progress and private-source polic
 
 `ProviderUI._show_crypt_content()` names the host's page-publication sequence:
 prepare a spread if needed, calculate direction, enter the validity scope, build
-the surface, mount it, then update positions and chrome. Its existing call
+the surface, mount it, then update positions and chrome. PDF spread pixels are
+assigned in the accepted mount callback, keeping the previous image and link
+geometry together when mount admission is rejected. Its existing call
 signature still supports the application host, private controller and retained view
 as distinct participants. `provider_presentation.prepare_comic_spread()` prepares
 a replacement without committing its pixels; `prepare_epub_page()` constructs
@@ -1727,10 +1749,11 @@ process-wide installation guards and the existing backend hooks.
   Cancel reaches both owners; cancelling only a transfer must not cancel an
   independent file operation. Review approval remains a captured session decision.
 - **Replace or close a host:** session transitions preserve/checkpoint state before
-  accepting removal. `HostLifecycle.prepare_replacement` preserves durable state
-  before background model loading; `retire_for_replacement` retires callbacks,
-  invalidates sessions and disposes resources once. A veto leaves the document
-  and controls usable. Shared worker cancellation alone does not prove retirement.
+  accepting removal. Replacement revalidates private-session receipts and notebook
+  retention before claiming the successor; cleanup follows the claim and retries
+  failed steps. A preflight veto leaves the old document and controls usable.
+  See [host retirement](#application-shutdown-and-disposable-resources).
+  Shared worker cancellation alone does not prove retirement.
 
 ## Picker and layout composition
 
