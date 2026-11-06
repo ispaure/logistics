@@ -19,6 +19,124 @@ from features.rclone.localcrypt.mobile.resources import encrypted_copies
 TEST_STAGE = TestStage.REGRESSION
 
 
+class NativeArchiveLifetimeTests(unittest.TestCase):
+    """Exercise only synthetic ciphertext and fake native plaintext responses."""
+
+    def source(self, root):
+        from features.rclone.localcrypt.mobile.archive_source import NativeSource
+        path = Path(root) / 'ciphertext'
+        path.write_bytes(b'opaque synthetic ciphertext')
+        calls = []
+
+        def request(action, **values):
+            calls.append(action)
+            if action == 'crypt_stat':
+                return dict(name='fixture.cbz', size=7)
+            if action == 'crypt_archive' and 'member' not in values:
+                return [dict(name='page.txt', size=7, crc=0, flags=0, directory=False)]
+            return dict(data=base64.b64encode(b'fixture').decode())
+
+        client = SimpleNamespace(generation=1, request=request)
+        source = NativeSource(client, dict(remote='Fixture', identity='synthetic',
+                                          encrypted_path='ciphertext'), path,
+                              password='synthetic-inner-password')
+        self.addCleanup(source.close)
+        return source, calls
+
+    def test_close_retires_cached_and_direct_native_access(self):
+        with TemporaryDirectory() as root:
+            source, calls = self.source(root)
+            with source.open(source.path) as stream:
+                self.assertEqual(stream.read(3), b'fix')
+                stream.seek(0)
+                self.assertEqual(stream.read(3), b'fix')
+                source.read_member('page.txt')
+                source.close()
+                source.close()
+                before = list(calls)
+                for action in (lambda: stream.seek(0), lambda: stream.read(1),
+                               lambda: source.request('crypt_stat'),
+                               lambda: source.read_member('page.txt')):
+                    with self.subTest(action=action), self.assertRaises(ValueError):
+                        action()
+                self.assertEqual(calls, before)
+                self.assertIsNone(source.password)
+                self.assertIsNone(source.headers)
+                self.assertFalse(source.cache)
+
+    def test_close_during_native_request_rejects_late_archive_headers(self):
+        with TemporaryDirectory() as root:
+            source, calls = self.source(root)
+            request = source.client.request
+
+            def close_during_request(action, **values):
+                result = request(action, **values)
+                source.close()
+                return result
+
+            source.client.request = close_during_request
+            with self.assertRaises(ValueError):
+                source.request('crypt_archive')
+            self.assertIsNone(source.headers)
+            self.assertFalse(source.cache)
+
+    def test_close_during_member_decode_cannot_restore_plaintext_cache(self):
+        with TemporaryDirectory() as root:
+            source, calls = self.source(root)
+            decode = base64.b64decode
+
+            def close_during_decode(*args, **kwargs):
+                data = decode(*args, **kwargs)
+                source.close()
+                return data
+
+            with patch('services.documents.archive_access.base64.b64decode',
+                       side_effect=close_during_decode), self.assertRaises(ValueError):
+                source.read_member('page.txt')
+            self.assertFalse(source.cache)
+            self.assertEqual(source.cache_bytes, 0)
+
+    def test_credential_expiry_retires_password_and_archive_metadata(self):
+        with TemporaryDirectory() as root:
+            source, calls = self.source(root)
+            source.request('crypt_archive')
+            source.read_member('page.txt')
+            source.client.generation += 1
+            with self.assertRaisesRegex(ValueError, 'Credentials'):
+                source.request('crypt_stat')
+            self.assertIsNone(source.password)
+            self.assertIsNone(source.headers)
+            self.assertFalse(source.cache)
+
+    def test_cancellation_callback_cannot_close_then_release_cached_bytes(self):
+        with TemporaryDirectory() as root:
+            source, calls = self.source(root)
+            with source.open(source.path) as stream:
+                self.assertEqual(stream.read(1), b'f')
+                source.cancelled = lambda: source.close() or False
+                with self.assertRaises(ValueError):
+                    stream.read(1)
+
+    def test_concurrent_member_reads_count_the_cached_block_once(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        with TemporaryDirectory() as root:
+            source, calls = self.source(root)
+            request, ready = source.client.request, Barrier(2)
+
+            def read_together(action, **values):
+                result = request(action, **values)
+                ready.wait(5)
+                return result
+
+            source.client.request = read_together
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                reads = [workers.submit(source.read_member, 'page.txt') for _ in range(2)]
+                self.assertEqual([read.result(5) for read in reads], [b'fixture', b'fixture'])
+            self.assertEqual(len(source.cache), 1)
+            self.assertEqual(source.cache_bytes, len(b'fixture'))
+
+
 class Client:
     generation = 0
 
@@ -323,6 +441,28 @@ class LocalCryptAccessTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'Invalid archive'):
                     ProviderDocuments(provider).open('broken.cbz')
             source.close.assert_called_once_with()
+
+    def test_password_retry_keeps_the_explicit_read_provider(self):
+        from commonUtils.archives.zip_access import ArchivePasswordError
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.provider_documents import ProviderDocuments
+        with TemporaryDirectory() as root:
+            Path(root, 'fixture.cbz').write_bytes(b'opaque synthetic ciphertext')
+            original, selected = LocalFiles(root), LocalFiles(root)
+            original.archive_password = Mock(side_effect=AssertionError('Read provider was replaced'))
+            selected.archive_password = Mock(return_value='synthetic-inner-password')
+            sources = [SimpleNamespace(close=Mock()), SimpleNamespace(close=Mock())]
+            selected.content_source = Mock(side_effect=sources)
+            prepared = SimpleNamespace()
+            with patch('services.documents.readers.PrivateReader',
+                       side_effect=[ArchivePasswordError('Synthetic locked archive'), prepared]):
+                reader = ProviderDocuments(original).open('fixture.cbz', read_provider=selected)
+            self.addCleanup(reader.source.close)
+            self.assertIs(reader.source.provider, selected)
+            self.assertEqual(reader.password, 'synthetic-inner-password')
+            selected.archive_password.assert_called_once_with('fixture.cbz', cancelled=reader.source.cancelled)
+            sources[0].close.assert_called_once_with()
+            sources[1].close.assert_not_called()
 
     def test_revocation_after_loading_releases_the_unpublished_reader(self):
         from commonUtils.runtime.resources.local import LocalFiles
