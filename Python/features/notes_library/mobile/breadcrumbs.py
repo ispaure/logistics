@@ -41,6 +41,20 @@ class BreadcrumbScroll(toga.ScrollContainer):
         if type(self._impl).__module__.startswith('toga_iOS.'):
             # Keep ownership of horizontal drags even when the path fits.
             self._impl.native.alwaysBounceHorizontal = True
+            self.on_scroll = self.update_edge_fade
+        elif type(self._impl).__module__.startswith('toga_android.'):
+            native = self._impl.hScrollView
+            native.setHorizontalFadingEdgeEnabled(True)
+            native.setFadingEdgeLength(self._impl.scale_in(8))
+
+    def update_edge_fade(self, widget=None, **kwargs):
+        if not type(self._impl).__module__.startswith('toga_iOS.'):
+            return
+        from commonUtils.ui.native.panning_title import apple_title_class
+        native = self._impl.native
+        offset = float(native.contentOffset.x)
+        remaining = float(native.contentSize.width - native.bounds.size.width) - offset
+        apple_title_class().updateFadeMaskForLayer(native.layer, leading=offset > 1, trailing=remaining > 1)
 
     def watch_swipes(self, expand):
         handler = WeakMethod(expand)
@@ -150,4 +164,5 @@ class BreadcrumbScroll(toga.ScrollContainer):
                 return
             self._needs_end = False
             self.horizontal_position = self.max_horizontal_position
+            self.update_edge_fade()
         self._pending_end = loop.call_soon(reveal)

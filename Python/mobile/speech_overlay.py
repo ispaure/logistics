@@ -39,13 +39,14 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False, edge_panel=False):
+    def __init__(self, panel, owner, app, *, anchor=None, leading=False, full_height=False, label=None, passthrough_controls=False, dim=False, edge_panel=False, android_radius=0):
         self.leading = leading
         self.full_height = full_height or leading
         self.label = label
         self.passthrough_controls = passthrough_controls
         self.dim = dim
         self.edge_panel = edge_panel
+        self.android_radius = android_radius
         self.backdrop = None
         self.owner = owner
         self.anchor = anchor
@@ -177,7 +178,18 @@ class SpeechOverlay:
         from android.util import TypedValue
         value = TypedValue()
         context.getTheme().resolveAttribute(16842801, value, True)  # colorBackground
-        self.popup.setBackgroundDrawable(ColorDrawable(value.data))
+        if self.android_radius:
+            from android.graphics.drawable import GradientDrawable
+            from android.view import ViewOutlineProvider
+            background = GradientDrawable()
+            background.setColor(value.data)
+            background.setCornerRadius(self.container.scale_in(self.android_radius))
+            root.setBackground(background)
+            root.setOutlineProvider(ViewOutlineProvider.BACKGROUND)
+            root.setClipToOutline(True)
+            self.popup.setBackgroundDrawable(ColorDrawable(0))
+        else:
+            self.popup.setBackgroundDrawable(ColorDrawable(value.data))
         self.popup.setElevation(self.container.scale_in(12))
         self.popup.setOutsideTouchable(True)
         overlay = self

@@ -126,7 +126,7 @@ class NotesDrawers:
         panel = self.sidebar if side == 'files' else self.links
         self.overlay = SpeechOverlay(panel, self.view, self.app, leading=side == 'files',
                                      full_height=True, label='Files' if side == 'files' else 'Links',
-                                     dim=True, edge_panel=True)
+                                     dim=True, edge_panel=True, android_radius=8)
         self.overlay.chapter_owner = self.view
         panel.overlay = self.overlay
         self.install_swipe(panel)

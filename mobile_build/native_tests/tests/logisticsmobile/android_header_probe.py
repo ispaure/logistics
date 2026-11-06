@@ -165,6 +165,9 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 await self.wait_for(lambda: owner.panel_tab == 'Files'
                     and (owner.sidebar.expanded or owner.sidebar.sidebar_open),
                     'Root breadcrumb tap did not reveal Files')
+                if orientation == 'portrait':
+                    await asyncio.sleep(.45)
+                    await self.capture_header(evidence / 'notes-files-portrait.png')
                 owner.sidebar.show_detail()
                 owner.sidebar.finish_dismissals()
                 await asyncio.sleep(.4)
