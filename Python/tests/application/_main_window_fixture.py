@@ -7,7 +7,7 @@ from desktop import main_window
 
 
 class MainWindowFixture:
-    """Compose with QtTestCase so each focused module owns its windows."""
+    """Build synthetic main windows and let QtTestCase retire their workers and widgets."""
 
     def run(self, result=None):
         self._window_contributions = None
@@ -26,7 +26,7 @@ class MainWindowFixture:
 
     def setUp(self):
         super().setUp()
-        self.app = qt.QApplication.instance() or qt.QApplication([])
+        self.app = qt.QApplication.instance()
         self.pages = []
 
     def page(self, parent=None):
@@ -47,7 +47,6 @@ class MainWindowFixture:
                 main_window.registry, 'get_pages', return_value=contributions):
             window = main_window.MainWindow()
             window._launch('hub')
-        self.addCleanup(window.dlg.deleteLater)
         return window
 
     def browser_window(self, extensions=()):
@@ -65,7 +64,6 @@ class MainWindowFixture:
             window = main_window.MainWindow()
         window.dlg.show()
         window._launch('hub')
-        self.addCleanup(window.dlg.deleteLater)
         return window
 
     def wait_browser(self, page):
