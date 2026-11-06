@@ -1,8 +1,14 @@
 # Mobile UI refresh — local development
 
-The user requested implementation of the reviewed UI improvements, with Transfers
-last to avoid overlap with rclone work. All changes remain local; no commits,
-pushes, tags or releases were made for this refresh.
+This page records the October 2026 UI refresh and its follow-up checkpoints.
+The refresh left Transfers until last to avoid overlap with rclone work. The
+initial October 14 review used local changes. At that checkpoint the refresh
+had no commits, pushes, tags or releases.
+
+The test results below apply to the snapshots and devices named in each
+checkpoint. For current ownership and validation procedures, see the
+[mobile runtime](mobile-runtime.md), [workspace navigation](mobile-workspace-navigation.md)
+and [platform checks](platform-checks.md).
 
 ## Implemented presentation
 
@@ -279,9 +285,9 @@ pages at original dimensions, with compiled thumbnail decoding tested separately
 
 ## Verification scope
 
-The frozen source is `/private/tmp/logistics-ui-refresh-snapshot`, based on alpha
-`6f954a1` plus local UI, audit and rclone changes. The native bridge is rebuilt from
-that snapshot, rather than reusing an older binary with newer Python modules.
+The October 14 validation used the frozen source at `/private/tmp/logistics-ui-refresh-snapshot`, based on alpha
+`6f954a1` plus local UI, audit and rclone changes. The team rebuilt the native bridge from that snapshot so the binary and Python
+modules used the same sources.
 The final snapshot includes the completed concurrent crypt-sync progress changes.
 
 Host tests: 100 passing. Portable core: 39 passing. All 25 native cases and the actual workflow review passed on each of iPhone,
@@ -402,7 +408,7 @@ The local iPhone build matches all 57 runtime modules in this snapshot.
 
 The final comic refinement build was installed and launched on the configured
 iPhone over localNetwork. It includes the local-opening-during-pull fix. Source
-changes remain local; no commits, pushes or releases were made.
+changes were local at this checkpoint, with no commits, pushes or releases.
 
 
 ## Home Browse files re-entry
@@ -436,7 +442,7 @@ Installation is not claimed without a successful device response.
 
 The retry successfully installed the Home Browse update on the configured iPhone
 over localNetwork. Launch was blocked by iOS because the phone was locked.
-All changes remain local, with no commits, pushes or releases.
+At this checkpoint the changes were local, with no commits, pushes or releases.
 
 ## Folder selector and native transfer confirmations (local follow-up)
 
@@ -572,7 +578,7 @@ The signed iPhone app matches all 58 staged runtime modules byte for byte.
 The final build was installed and launched on the configured physical iPhone over
 the local network. Both light and dark editor images, and final unclipped Android
 file rows, were visually reviewed. Temporary inspection emulators were closed.
-All requested changes remain uncommitted and unpushed.
+At the October 14 dark-mode checkpoint, the changes were uncommitted and unpushed.
 
 ## Comic re-entry and Local/LocalCrypt audit
 
@@ -702,7 +708,7 @@ data. This also includes the generic `Remote:`/`Remote:subfolder` display fix.
 
 Evidence: iPhone native checks (local artifact `test-results/mobile-evidence/2026-10-14-browser-back-iphone-native-ui-local.json`)
 and Android native checks (local artifact `test-results/mobile-evidence/2026-10-14-browser-back-android-native-ui-local.json`).
-Changes remain local; no commit or push was performed.
+The changes were local at this checkpoint, with no commit or push.
 
 ## Mobile architecture cleanup
 
@@ -1050,7 +1056,7 @@ Back remains owned by native navigation; no synthetic forward-history route was
 added. CommonUtils remains untouched; Logistics decorates its browser/search
 controls at the host boundary.
 
-Current source comparison:
+Source comparison from the October 15 parity review:
 
 | Area | iOS / iPadOS | Android |
 | --- | --- | --- |

@@ -2,30 +2,32 @@
 
 [Developer index](development.md)
 
-Assessment date: October 14, 2026. This roadmap covers reader controls,
-session ownership, reusable native UI, and Books/Comics feature organization.
-The proposed changes preserve the Toga mobile interface and the Qt desktop
-interface while making their shared logic and platform boundaries clearer.
-Implementation should begin with explicit session ownership, because extracting
-components before resolving their reliance on app-wide state would export that
-coupling into new packages.
+The October 14, 2026 assessment covered reader controls, session ownership,
+reusable native UI, and Books/Comics feature organization. It proposed resolving
+session ownership before extracting components so reusable code would have
+explicit dependencies.
 
-The assessment below records the pre-refactor baseline and delivery plan. The
-local implementation status describes the resulting code. Keep changes local
-until the user authorizes commits and pushes.
+The implementation summary describes the source at checkpoint `d10ac2f89`.
+From [Baseline boundaries and assessment](#baseline-boundaries-and-assessment)
+onward, the page retains the October baseline, proposals and planned acceptance
+gates for historical context. See the [mobile runtime](mobile-runtime.md),
+[reader state](reader-state.md) and [mobile preparation](mobile-preparation.md)
+for the current contracts.
 
-## Local implementation status
+<a id="local-implementation-status"></a>
+
+## Implementation at the reviewed checkpoint
 
 The subsequent host restructuring gives text Open/Save As a composed
 `EditorPicker` in `mobile.editor_picker`, with state and cancellation
 owned outside `FilesUI`. Saved-import inventory/deletion is now a composed
 `SavedFilesController`, rather than an application mixin. `composition/assembly.py`
-installs enumerated compatibility accessors; `services/workflow_host.py` declares
+installs enumerated compatibility accessors. `services/workflow_host.py` declares
 read-only host capabilities and explicit writable state descriptors.
 See the [mobile module/test map](mobile-runtime.md) for the
 current boundaries, payload registrations and worker invalidation contract.
-These changes have host-level verification; they do not replace native evidence
-for actual Open/Save As layout, Back and encrypted transfers.
+The restructuring had host-level verification. Open/Save As layout, Back and
+encrypted transfers also require native checks.
 
 The October 16 cleanup consolidates library and provider gesture scheduling in
 `mobile.reader_controls.schedule_swipe`. Both spread-relative and
@@ -37,7 +39,7 @@ immersive transitions; comics retain their image gesture for restoring controls.
 
 Retained import inventory/deletion lives in `mobile.saved_files_ui`,
 separate from preference rows and installed-build information in `mobile.settings`.
-The new owner is explicitly included in the curated payload list. Its existing
+The owner is explicitly included in the curated payload list. Its existing
 multi-window, busy-reader, confirmation and original-source protections remain
 part of the deletion workflow. The Settings page remains named Saved books &
 comics because its inventory covers retained CBZ/EPUB imports and their records.
@@ -47,17 +49,15 @@ closes affected sessions and forgets Recent and source-import mappings. Local an
 LocalCrypt collections are outside this inventory. Failed inventory entries are
 preserved, and a deletion failure reports how many copies were already removed.
 
-The native acceptance runner composes document, reader, chat and connection
-workflows. Reader import/password/large-archive cases now sit with the existing
-native reader geometry checks in `reader_checks`; WebView readiness is shared
-through `web_checks`. The ordered 31-case contract and exact-source/backend
-verification remain mandatory. Scenario extraction does not convert host checks
-into native evidence or remove any acceptance assertions.
+The October acceptance work grouped reader import, password and large-archive
+cases with reader geometry checks in `reader_checks` and shared WebView readiness
+through `web_checks`. The historical run used a 31-case inventory. Consult
+[adding and diagnosing tests](adding-tests.md) for current native suite selection
+and source/backend verification.
 
-The core cleanup is implemented locally in the delivery order below. Reader
-controllers now use enumerated host services rather than broad app fallback or
-state publication. Provider cancellation/busy state belongs to its controller;
-reader tools have a separate route before Back returns to the originating folder.
+Reader controllers use enumerated host services. The provider controller owns
+cancellation and busy state. Reader tools have a separate route before Back
+returns to the originating folder.
 The shared reading frame and page commands preserve separate library/provider
 progress, bookmark and cleanup policies.
 
@@ -70,13 +70,16 @@ bridges and packaging documentation in the shared repository. The obsolete
 Logistics canvas/navigation/routing implementations have been removed.
 
 Host composition, private-content policy, adaptive document workspace and scene
-writers remain Logistics responsibilities. The delivery milestones have local
-implementation and integration evidence in the [mobile UI refresh guide](mobile-ui-refresh.md#mobile-architecture-cleanup),
-including iPhone/Android/iPad native runs and physical iPhone screenshots/geometry.
+writers remain Logistics responsibilities. The [October UI refresh record](mobile-ui-refresh.md#mobile-architecture-cleanup)
+documents integration runs and physical iPhone screenshots for the earlier
+snapshots. Each platform gate requires matching evidence for the source and
+environment under review.
 
 ## Baseline boundaries and assessment
 
-| Area | Current owner | Assessment |
+The owners in this table describe the October 14 baseline before the refactor.
+
+| Area | Owner at baseline | Assessment |
 | --- | --- | --- |
 | EPUB package parsing and resource resolution | `Python/features/books/epub.py` | Useful portable core already reused by mobile |
 | Comic archive access, page ordering and metadata | `Python/features/comics/{archive_io,library,pages,comicinfo}.py` | Useful feature ownership already reused by mobile |
@@ -339,9 +342,12 @@ staging desktop-only UI. Benefit: future EPUB/comic changes have an obvious owne
 
 ## Delivery sequence
 
+The October plan sequenced the work as follows. The gates describe the intended
+acceptance for each milestone.
+
 | Milestone | Deliverable | Dependency | Completion gate |
 | --- | --- | --- | --- |
-| M0 | Record baseline contracts and source snapshot | Current local work | Preserve known Back/fullscreen/transfer behavior and existing data formats |
+| M0 | Record baseline contracts and source snapshot | Initial assessment | Preserve known Back/fullscreen/transfer behavior and existing data formats |
 | M1 | Explicit controller state, services and operation ownership | M0; Point 2 | No reader-state publication or broad app fallback; origin-bound async checks pass |
 | M2 | Shared reader controls with library/provider adapters | M1; Point 1 | Same comic UX on Local/LocalCrypt, with distinct storage/cleanup policies |
 | M3 | Books/Comics mobile adapters and rendering ownership | M2; Point 4 | Portable, desktop and staged mobile imports pass; no circular host dependencies |
@@ -360,6 +366,9 @@ requires coordinated changes in Logistics and commonUtils, but does not require
 a new framework, a Swift rewrite or a switch to PySide on mobile.
 
 ## Validation and documentation
+
+This section preserves the October validation plan. Use the [current testing
+guide](testing.md) for suite locations and commands.
 
 Existing tests to retain include `mobile_build/tests/reading/test_reader_sessions.py`,
 `test_mobile_ui_workflows.py`, `test_files_ui.py`, `test_window_owners.py`, and

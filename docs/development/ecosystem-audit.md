@@ -1,63 +1,55 @@
 # Ecosystem refactoring assessment
 
-## Current assessment — October 28, 2026
+This page preserves two October 2026 assessments, their proposals and the
+follow-up recorded at the time. For present work, use the committed source and
+dependency pins for the Logistics revision under review. See the
+[commonUtils integration contract](commonutils-integration.md), the
+[build ownership map](build-deployment-audit.md), the [mobile runtime](mobile-runtime.md)
+and the [optional feature host boundary](optional-integration.md).
 
-Use the Logistics commonUtils **working tree**, including uncommitted changes,
-as the design baseline. This assessment inspects Logistics `69933ade`, shared
-`22b962f`, manager `d9baf99`, Ally `502f1f6` and Blue Hole `388da80`, plus visible
-working-tree edits. Blue Hole remains on `blender-5.2.2/alpha`; its shared library
-is a subtree, not a submodule. No commits, pushes, branch changes or dependency
-pin updates were made for this assessment.
+<a id="current-assessment--october-28-2026"></a>
+
+## Historical assessment — October 28, 2026
+
+The review compared Logistics `69933ade`, shared `22b962f`, manager
+`d9baf99` and Blue Hole `388da80`, including visible working-tree edits.
+Blue Hole used its namespaced shared subtree on `blender-5.2.2/alpha`.
+The assessment itself made no commits, pushes, branch changes or pin updates.
 
 ### Recommendation
 
-Continue with bounded ownership changes rather than another package-wide move.
-The useful next work is consumer compatibility coverage, manager results-view
-composition, then Logistics picker state and layout coordination. Shared index
-scan context is a later, higher-risk internal cleanup. File length alone is not
-a reason to move code. Existing media, privacy, navigation and build work in the
-working tree must be preserved and validated by its owners.
+The review recommended bounded ownership changes, starting with consumer
+compatibility coverage, manager results-view composition, then Logistics picker
+state and layout coordination. Shared index scan context was a later,
+higher-risk cleanup. File length alone was insufficient grounds for a move.
 
 ### Shared baseline and all consumers
 
-| Consumer | Actual shared source | Alignment finding |
+| Consumer | Shared source at review | Alignment finding |
 | --- | --- | --- |
-| Logistics | Real `Python/commonUtils` submodule at `22b962f`, with local edits | Authoritative working baseline for this review |
-| Ally Tools | The Logistics host's commonUtils namespace and checkout | Moves with Logistics; validate the private consumer before shared API changes |
+| Logistics | Real `Python/commonUtils` submodule at `22b962f`, with local edits | Included five local shared changes |
 | Build manager | Independent real `Python/commonUtils` submodule at `22b962f` | Clean shared checkout; differs from Logistics only in the five uncommitted shared files |
 | Blue Hole | Namespaced `Lib/commonUtils` subtree; recorded revision `efabc66` | Exact match to its recorded source; six shared commits behind Logistics HEAD |
 
-The five local shared changes concern native recycled lists and their tests/guide.
-There is no evidence of a newer independent manager or Blue Hole shared change
-that should replace Logistics as the baseline. Blue Hole's older copy lacks later
-shared locking, private publication, line redaction, layered-settings invalidation
-and inline-content-origin changes. Its absence of upstream `.github/` files is
-intentional, not drift. Compare subtree membership and bytes against its recorded
-revision before calling missing files a defect; that comparison passed here.
+The five local shared changes covered native recycled lists, tests and
+documentation. The review compared Blue Hole's subtree membership and bytes
+with its recorded revision and confirmed the expected contents, including its
+intentional omission of upstream `.github/` files.
 
-Keep each consumer's source identity and import model. Do not turn the subtree
-into a submodule, redirect the manager to a sibling checkout, or collapse Blue
-Hole's namespaced registries into the standalone namespace. Once shared changes
-are ready and committing is authorized, validate the commonUtils change, its
-Logistics/Ally consumers, the manager's independent environment and Blue Hole's
-subtree integration before moving any consumer pin. A working-tree assessment
-cannot give uncommitted code a reproducible Git revision.
-
-Ally's manifest already includes all 14 Logistics runtime requirements at the
-same exact versions, the same Python 3.12.2 requirement, pycryptodomex constraint
-and development Ruff pin, plus its emulator requirements. Both `uv.lock` root
-package records agree with those manifests. The existing private dependency-parity
-regression passes; no dependency rewrite or lock regeneration is needed.
+The review recommended preserving each consumer's source identity and import
+model, including the manager's independent pin and Blue Hole's namespaced
+subtree. Its proposed pin changes required validation in each affected consumer
+environment. Local edits were part of the inspection and have no Git revision
+of their own.
 
 ### Implemented assessment follow-up
 
-The bounded follow-up is implemented in the current uncommitted trees:
+The October 28 follow-up recorded these changes in the working trees it reviewed:
 
 - The manager's `consumer_acceptance` prepares ordinary before/checks/after plans
   with explicit sources, interpreters, branches and trusted test commands. Blue
   Hole's fixture hook can inspect the Logistics shared working tree under the
-  add-on namespace without changing its subtree or recorded revision. Ally's
-  parity check now includes Python/dev policy and lock root requirements.
+  add-on namespace without changing its subtree or recorded revision.
 - Manager `RunInspectorView` and `RunOutputView` own selected-phase rendering,
   stable details and scoped/bounded output. `RunView` retains timers, facts,
   selection and subtest coordination. The dormant nested browser stays untouched.
@@ -72,26 +64,23 @@ The bounded follow-up is implemented in the current uncommitted trees:
 - Logistics build adapters moved from `Scripts/` into `logistics_build/`. Native
   process supervision and exact pinned-source transfer moved to manager owners;
   their duplicate project implementation/tests were removed. Imports, bridge
-  registration, CI, package requirements, evidence/lint scopes and guides use
-  the current paths. Machine `.bat` files remain byte-for-byte unchanged.
+  registration, CI, package requirements, evidence/lint scopes and guides were updated to use
+  the new paths. Machine `.bat` files remain byte-for-byte unchanged.
 
 The [current build ownership map](build-deployment-audit.md) replaces the old
 keep-launcher inventory. Project builders, source/privacy rules, test/release
 gates, signing/package compatibility, destination policy and retention policy
 remain in Logistics. Dependency bootstrap remains project-owned because it must
-work before the external manager can be imported. No real repository commits,
-pushes, branch changes, pin changes, subtree refreshes or physical installs are
-part of this pass. Consumer pins can be updated together after the shared/manager
-changes are reviewed and committing is authorized.
+work before the external manager can be imported. The October 28 pass left Git history, branches and consumer pins as they were.
+It performed no subtree refreshes or physical installs.
 
-Verification for the implementation includes all 551 manager contracts, the
+The October 28 verification included all 551 manager contracts, the
 Logistics tooling selection, shared index contracts, picker/publication cases,
 layout subscriptions, the 289-case dummy-host workspace selection, payload/release
-packaging checks, architecture/wiki checks, and source lint. An explicit eleven-
-check cross-consumer plan passes both its before/after identity gates, including
-Ally parity and Blue Hole's pinned and candidate-library namespace/index checks.
-The two macOS watcher modules and the dummy-host localhost fixture needed their
-actual event/socket access; their initial restricted failures remain recorded.
+packaging checks, architecture/wiki checks, and source lint. A cross-consumer plan passed its before/after identity gates,
+including Blue Hole's pinned and candidate-library namespace/index checks.
+The two macOS watcher modules and the dummy-host localhost fixture needed
+native event or socket access. The initial restricted runs recorded failures.
 No assertions were weakened to make restricted runs pass. Full platform builds,
 physical devices, Blender and emulator execution are not newly certified.
 
@@ -102,13 +91,13 @@ rather than an instruction to repeat the completed extraction.
 
 1. **Make the cross-consumer acceptance selection explicit.** Existing checks
    are distributed between Logistics architecture/import suites, commonUtils
-   contracts, Ally shared-health/dependency tests, manager contracts and Blue
-   Hole shared-import/copy tests. Record the exact shared working identity and
+   contracts, manager contracts and Blue
+   Hole shared-import/copy tests. Record the exact source identity and
    run these owners together before changing a shared API. Reuse the existing
    project adapters and suite manifests; do not add another build hierarchy.
    Keep Blue Hole's Blender 5.2.2 alpha packaging and exact subtree-copy check.
    Acceptance must distinguish portable import/signature coverage from real Qt,
-   Toga, Blender and emulator behavior.
+   Toga and Blender behavior.
 
 2. **Split manager result presentation by responsibility.** `RunView` in
    `run_ui.py` currently owns live timing/facts, workflow selection, subtest
@@ -155,9 +144,8 @@ rather than an instruction to repeat the completed extraction.
    and Blue Hole index consumers. This is an internal candidate, not evidence
    of a current failing index or a reason to reopen completed reconciliation.
 
-No source evidence warrants moving emulator schemas, Blender operations,
-application privacy/routing, release gates or dependency installation policy
-into commonUtils. Keep those policies in their current consumers.
+The assessment kept Blender operations, application privacy and routing,
+release gates and dependency installation policy with their respective owners.
 
 ### Build-only follow-up implemented
 
@@ -178,7 +166,6 @@ store-ready signed package or passing native acceptance.
 
 ### Initial assessment validation and limits
 
-- Ally: all 48 fixture tests passed, including dependency parity and shared health.
 - Manager: 50 focused build-only, workflow, goal/layout, preset, workflow-option
   and proposal checks passed; the earlier guided UI selection also passed.
 - Logistics: all 14 build-adapter contracts and 13 architecture checks passed
@@ -192,8 +179,7 @@ These checks use the consumers' own interpreters. Raw logs remain in ignored
 `test-results/`; public documentation does not depend on them. No physical
 installation, full APK/iOS compilation, native Blender session, real emulator,
 controller, VM, hosted dispatch or release was run for this change. Compatibility
-checks against Blue Hole's recorded subtree do not certify a future subtree
-refresh to uncommitted Logistics source.
+checks against Blue Hole's recorded subtree apply only to the versions tested.
 
 ## Historical October 25 assessment
 
@@ -205,11 +191,10 @@ not a frozen release or a new native acceptance run.
 
 ## Implemented follow-up
 
-The scoped recommendations are now implemented. commonUtils `933c398` adds an
+The October 25 follow-up recorded these implementations. commonUtils `933c398` adds an
 explicit reconciliation writer context. Manager `9225924` (building on `bb34d5f`) provides bounded
 artifact hashing, cancellable background review, configuration/run-session
-owners and common retained-result loading. Logistics adopts that exact local
-manager pin; those commits have not been pushed.
+owners and common retained-result loading. Logistics adopted that exact local manager pin during the follow-up.
 
 `services.documents.destinations` captures filename, bytes, format and provider
 before worker I/O, resolves conflicts and returns unchanged, published or
@@ -249,7 +234,8 @@ comes from finishing a few ownership seams than from another package-wide move.
 | commonUtils | Portable resources/streams/persistence, indexing, reusable Qt/native controls and their contracts | Application destinations, credential workflow, feature discovery and dependency installation policy |
 | Build manager | Plans, execution, locking, resources, registration, transport, recovery/review and retention mechanics | Logistics source layout, signing destinations, suite inventory and project storage policy |
 
-The manager has its own commonUtils pin (`f2a0cf1`), independent of Logistics.
+At the October 25 checkpoint the manager's independent commonUtils pin was
+`f2a0cf1`.
 Use each project's environment and dependency identity during validation. A shared
 API change requires consumer checks before either pin changes.
 
@@ -271,6 +257,10 @@ API change requires consumer checks before either pin changes.
 
 The [earlier implementation record](maintenance/remaining-work-audit.md) remains
 useful evidence. Its completed C/L/T headings are not today's backlog.
+
+The following priority headings preserve the October 25 proposals and their
+acceptance criteria. For later implementation, see the follow-up above and the
+current owner guides linked at the start of this page.
 
 ## Priority 1: separate mobile picker requests from publication and presentation
 
@@ -389,6 +379,8 @@ profiles, dependency wheels and retained distribution outcomes.
 
 ## Implementation order and completion criteria
 
+The October 25 plan proposed this order.
+
 1. Adopt bounded hashing and responsive artifact verification without altering
    checksum or approval contracts.
 2. Capture picker requests/publication outcomes while retaining its epoch and
@@ -412,7 +404,7 @@ not found within the scanned production code; similar workflows still need human
 review. Generated outputs, ignored external feature links and raw evidence stay
 outside this wiki. Vendored notebook codecs are not refactoring targets.
 
-Fresh checks in this pass all passed:
+The October 25 audit recorded these passing checks:
 
 | Selection | Cases |
 | --- | ---: |
