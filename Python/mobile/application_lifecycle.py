@@ -19,6 +19,9 @@ class HostLifecycle:
         self.replaced = False
         self.exited = False
         self.startup_aborted = False
+        self.secondary_retired = False
+        self.secondary_retiring = False
+        self.secondary_checkpoint_saved = None
         self._retired_actions = {}
 
     def _retire(self, resource, method):
@@ -84,6 +87,51 @@ class HostLifecycle:
         screen = getattr(self.host, 'startup_screen', None)
         self._retire(getattr(screen, 'cover', None), 'dispose')
         self._retire_resources()
+
+    def retire_secondary_scene(self):
+        """Preserve once, then retire a secondary scene the OS disconnected.
+
+        Unlike voluntary close, destruction cannot be vetoed here. Keep the
+        checkpoint result for recovery/diagnostics, without deleting sessions
+        or clearing process credentials. Primary disconnect never calls this.
+        """
+        if self.secondary_retiring:
+            return self.secondary_checkpoint_saved
+        self.secondary_retiring = True
+        try:
+            first = not self.secondary_retired
+            # Block reentrant/queued scene events even while checkpoint still
+            # needs an active host. Teardown closes active_host immediately after.
+            self.secondary_retired = True
+            self._retire(self, '_cancel_scene_picker')
+            try:
+                if first:
+                    self.secondary_checkpoint_saved = False
+                    try:
+                        self.secondary_checkpoint_saved = bool(self.host.checkpoint())
+                    except Exception:
+                        # A provider's exception may contain private paths or data.
+                        pass
+                    if not self.secondary_checkpoint_saved:
+                        logger.error('Secondary scene checkpoint failed before terminal retirement')
+            finally:
+                self._retire_resources()
+                self._retire(self, '_detach_scene_navigation')
+        finally:
+            self.secondary_retiring = False
+        return self.secondary_checkpoint_saved
+
+    def _cancel_scene_picker(self):
+        from commonUtils.ui.native.documents import cancel_document_picker
+        cancel_document_picker(self.host.main_window)
+
+    def _detach_scene_navigation(self):
+        navigation = getattr(self.host, 'navigation', None)
+        if navigation is not None:
+            try:
+                navigation.window = None
+            finally:
+                navigation.app = None
 
     def _retire_resources(self):
         """Shared final teardown for exit, replacement and abandoned startup.

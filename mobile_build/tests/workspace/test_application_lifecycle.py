@@ -20,6 +20,72 @@ class HostLifecycleTests(unittest.TestCase):
                   _editor_picker=Mock(), workspace=NS(sessions={'doc': NS(id='doc')}, invalidate=Mock()),
                   _crypt_cancel=Mock())
 
+    def test_secondary_retirement_checkpoints_before_teardown_without_closing_sessions(self):
+        host = self.host()
+        host.checkpoint = Mock(return_value=True)
+        host.main_window = NS(on_gain_focus=Mock(), on_lose_focus=Mock(), on_resize=Mock())
+        host.navigation = NS(window=host.main_window, app=host)
+        host.scene_manager = NS(external_comics=Mock())
+        host.audio_output, host._layout_participants = Mock(), Mock()
+        host.startup_document_task = Mock()
+        host.clear_private_reader, host.release_disposable_resources = Mock(), Mock()
+        order = []
+        host.checkpoint.side_effect = lambda: order.append(('checkpoint', host.active_host)) or True
+        host.audio_output.dispose.side_effect = lambda: order.append(('audio', host.active_host))
+        owner = lifecycle(host)
+        with patch('commonUtils.ui.native.documents.cancel_document_picker') as picker:
+            self.assertTrue(owner.retire_secondary_scene())
+            self.assertTrue(owner.retire_secondary_scene())
+        self.assertEqual(order, [('checkpoint', True), ('audio', False)])
+        picker.assert_called_once_with(host.main_window)
+        host.checkpoint.assert_called_once_with()
+        host.audio_output.dispose.assert_called_once_with()
+        host._layout_participants.dispose.assert_called_once_with()
+        host.startup_document_task.cancel.assert_called_once_with()
+        host._editor_picker.clear.assert_called_once_with()
+        host.cloud_client.lock.assert_not_called()
+        host.clear_private_reader.assert_not_called()
+        host.release_disposable_resources.assert_not_called()
+        host.scene_manager.external_comics.dispose.assert_not_called()
+        self.assertEqual(set(host.workspace.sessions), {'doc'})
+        host.workspace.invalidate.assert_called_once_with('doc')
+        self.assertIsNone(host.navigation.app)
+        self.assertIsNone(host.navigation.window)
+        self.assertIsNone(host.main_window.on_gain_focus)
+
+    def test_forced_secondary_retirement_reports_failed_preservation_and_still_retires(self):
+        for result in (False, OSError('private-provider-detail')):
+            with self.subTest(result=type(result).__name__):
+                host = self.host()
+                host.main_window = NS()
+                host.checkpoint = Mock(return_value=result) if result is False else Mock(side_effect=result)
+                owner = lifecycle(host)
+                with patch('commonUtils.ui.native.documents.cancel_document_picker'), \
+                        self.assertLogs('mobile.application_lifecycle', level='ERROR') as logs:
+                    self.assertFalse(owner.retire_secondary_scene())
+                    self.assertFalse(owner.retire_secondary_scene())
+                self.assertNotIn('private-provider-detail', '\n'.join(logs.output))
+                host.checkpoint.assert_called_once_with()
+                host.screen_privacy.dispose.assert_called_once_with()
+                self.assertFalse(host.active_host)
+                self.assertFalse(owner.secondary_checkpoint_saved)
+
+    def test_secondary_picker_failure_does_not_skip_checkpoint_or_disposal_and_retries(self):
+        host = self.host()
+        host.checkpoint = Mock(return_value=True)
+        host.main_window = NS()
+        owner = lifecycle(host)
+        with patch('commonUtils.ui.native.documents.cancel_document_picker',
+                   side_effect=[RuntimeError('private-picker-detail'), None]) as picker:
+            with self.assertLogs('mobile.application_lifecycle', level='ERROR') as logs:
+                self.assertTrue(owner.retire_secondary_scene())
+            host.screen_privacy.dispose.assert_called_once_with()
+            self.assertTrue(owner.retire_secondary_scene())
+        self.assertNotIn('private-picker-detail', '\n'.join(logs.output))
+        self.assertEqual(picker.call_count, 2)
+        host.checkpoint.assert_called_once_with()
+        host.screen_privacy.dispose.assert_called_once_with()
+
     def test_failed_checkpoint_keeps_old_host_and_resources_available_for_retry(self):
         host = self.host()
         host.checkpoint_chat.return_value = False
