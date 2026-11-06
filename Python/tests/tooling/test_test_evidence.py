@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
+import hashlib
 import os
 from unittest.mock import patch
 from pathlib import Path
@@ -12,10 +13,30 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from build_manager import Phase
+from commonUtils.runtime.streams import CHUNK_SIZE
 from logistics_build.test_evidence import inputs, key_for
 
 
 class InputIdentityTests(unittest.TestCase):
+    def test_streamed_inputs_match_legacy_composite_digest(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            sources = {
+                'z.bin': b'\xff' * CHUNK_SIZE + b'\x00' * CHUNK_SIZE + b'tail',
+                'a.bin': b'',
+            }
+            for name, content in sources.items():
+                (root / name).write_bytes(content)
+            subprocess.run(['git', '-C', str(root), 'add', '--', *sources], check=True)
+            expected = hashlib.sha256()
+            for name in sorted(sources):
+                expected.update(name.encode() + b'\0')
+                expected.update(hashlib.sha256(sources[name]).digest())
+
+            with patch.object(Path, 'read_bytes', side_effect=AssertionError('Use bounded reads')):
+                self.assertEqual(inputs(root, list(sources)), expected.hexdigest())
+
     def test_changed_runtime_new_tests_toolchain_and_command_invalidate_but_output_paths_do_not(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
