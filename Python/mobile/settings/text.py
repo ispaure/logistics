@@ -1,0 +1,54 @@
+"""Shared font-size and justification panel for Markdown, Text and EPUB."""
+import toga
+from toga.style import Pack
+from toga.style.pack import ROW, CENTER
+from ..preferences import DEFAULTS
+from .forms import page, SettingsLabel, switch_row, group_rows, OPTION_FONT_SIZE
+
+
+def text_size(app, title, key):
+    box = page(title)
+    from ..control_icons import icon_button
+    box.add(SettingsLabel(title + ' font size', style=Pack(font_weight='bold')))
+    choice = toga.Selection(items=[str(size) for size in range(12, 33)],
+        value=app.preferences.values[key], style=Pack(height=48))
+    setattr(app, key + '_choice', choice)
+    def save_size(widget, **kwargs):
+        from ..font_scaling import refresh
+        if choice.value == app.preferences.values[key]:
+            return
+        try:
+            app.preferences.save(**{key: choice.value})
+        except (OSError, ValueError) as error:
+            choice.on_change = None
+            try:
+                choice.value = app.preferences.values[key]
+            finally:
+                choice.on_change = save_size
+            app.settings_status.text = str(error)
+            return
+        refresh(app)
+        app.settings_status.text = ''
+    choice.on_change = save_size
+
+    def reset(widget, **kwargs):
+        choice.value = DEFAULTS[key]
+
+    choice.style.flex = 1
+    choice.style.font_size = OPTION_FONT_SIZE
+    reset_button = icon_button('reset', f'Reset {title} font size to default', on_press=reset)
+    reset_button.style.margin_left = 8
+    row = toga.Box(children=[choice, reset_button], style=Pack(direction=ROW, align_items=CENTER))
+    row._settings_size_row = True
+    group = group_rows([row])
+    group._settings_managed_content = True
+    box.add(group)
+    box.add(SettingsLabel('Pinch while reading to change this size.'))
+    if title in {'Markdown', 'EPUB'}:
+        justify_key = title.lower() + '_justify'
+        justify = toga.Switch('Justify text', value=app.preferences.values[justify_key] == 'true', style=Pack(height=48))
+        setattr(app, justify_key + '_choice', justify)
+        box.add(switch_row(app, 'Justify text', justify,
+            'Align text to both the left and right edges.'))
+        justify.on_change = app.save_preferences
+    return box

@@ -438,7 +438,7 @@ class SettingsUITests(unittest.TestCase):
         from mobile.preferences import Preferences
         app = self.make_app()
         with patch.object(app.adaptive, 'content_width', return_value=390), \
-                patch('mobile.settings.categories.build_information', return_value='Fixture build') as about:
+                patch('mobile.settings.help.build_information', return_value='Fixture build') as about:
             app.show_settings()
             nav = app.settings_navigation
             self.assertEqual(nav.sections.built, {})
@@ -575,7 +575,7 @@ class SettingsUITests(unittest.TestCase):
             entered.set()
             release.wait(5)
             return 'Installed build\n' + 'abcdef' * 30
-        with patch('mobile.settings.categories.build_information', side_effect=slow_information), \
+        with patch('mobile.settings.help.build_information', side_effect=slow_information), \
                 patch.object(app.adaptive, 'content_width', return_value=390):
             app.show_settings()
             app.settings_navigation.buttons['About'].on_press()
@@ -623,7 +623,7 @@ class SettingsUITests(unittest.TestCase):
 
     def test_about_keeps_licenses_reachable_when_build_information_fails(self):
         app = self.make_app()
-        with patch('mobile.settings.categories.build_information', side_effect=ValueError('old manifest')):
+        with patch('mobile.settings.help.build_information', side_effect=ValueError('old manifest')):
             app.show_settings()
             app.settings_navigation.choose('About')
             app.loop.run_until_complete(app.build_information_task)

@@ -1,15 +1,15 @@
-"""Compact preference rows and offline installed-build information."""
-import asyncio
+"""Ordered Settings categories and their lazy page factories.
+
+Substantial panels live in modules named for their visible Settings entry.
+The owner methods remain the entry points for existing host integrations.
+"""
 from dataclasses import dataclass
 
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW, CENTER
 from services.mobile_features import enabled
-from ..preferences import DEFAULTS
 
-from .forms import SettingsLabel, switch_row, page_button, group_rows, OPTION_FONT_SIZE
-from .information import build_information
+from .forms import page, SettingsLabel, switch_row, page_button
 from .speech import speech_voice_setting
 
 
@@ -24,54 +24,17 @@ class SettingsCategories:
         self.app = app
 
     def category(self, title):
-        from .titles import page_title
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(page_title(title))
-        return box
+        return page(title)
 
 
     def application(self):
-        app = self.app
-        box = self.category('App')
-        app.restore_choice = toga.Switch('Restore last document',
-            value=app.preferences.values['restore_last_document'] == 'true', style=Pack(height=48))
-        app.clear_documents_choice = toga.Switch('Clear on restart',
-            value=app.preferences.values['clear_unmodified_documents_on_restart'] == 'true',
-            style=Pack(height=48))
-        box.add(switch_row(app, 'Restore last document', app.restore_choice,
-            'Resume the last active document when the app starts.'))
-        box.add(switch_row(app, 'Close saved documents on restart', app.clear_documents_choice,
-            'Close documents with no unsaved changes when the app restarts. Files and drafts are kept. '
-            'The last active document stays open if Restore last document is on.'))
-        if app.scene_manager.supported:
-            box.add(toga.Button('New window', on_press=app.scene_manager.new_window, style=Pack(height=48)))
-            if app.window_id != 'primary':
-                box.add(toga.Button('Close window', on_press=lambda widget, **kw:
-                    app.scene_manager.close_window(app), style=Pack(height=48)))
-        app.restore_choice.on_change = app.save_preferences
-        app.clear_documents_choice.on_change = app.save_preferences
-        return box
+        from .app import application
+        return application(self.app)
 
 
     def appearance(self):
-        app = self.app
-        box = self.category('Appearance')
-        from .accent import AccentControls
-        app.accent_controls = AccentControls(app)
-        box.add(app.accent_controls)
-        app.snow_choice = toga.Switch('Seasonal snow',
-            value=app.preferences.values['seasonal_snow'] == 'true', style=Pack(height=48))
-        box.add(switch_row(app, 'Seasonal snow', app.snow_choice,
-            'Show falling snow from December 15 to January 2. Hidden in high-contrast / E Ink mode.'))
-        app.snow_choice.on_change = app.change_seasonal_snow
-        if not type(app._impl).__module__.startswith('toga_android.'):
-            return box
-        app.android_eink_choice = toga.Switch('High contrast / E Ink',
-            value=app.preferences.values['android_eink'] == 'true', style=Pack(height=48))
-        box.add(switch_row(app, 'High contrast / E Ink', app.android_eink_choice,
-            'Use black text on white, stronger borders and simpler controls. Overrides dark mode and reader colors; images stay unchanged.'))
-        app.android_eink_choice.on_change = app.change_android_eink
-        return box
+        from .appearance import appearance
+        return appearance(self.app)
 
     def features(self):
         from ..feature_settings import feature_controls
@@ -98,80 +61,13 @@ class SettingsCategories:
         return box
 
     def privacy(self):
-        app = self.app
-        box = self.category('Privacy & Security')
-        box.add(SettingsLabel('Session-only access', style=Pack(font_weight='bold')))
-        box.add(SettingsLabel(
-            'When you import a credential ZIP as session-only, Logistics keeps the unlocked '
-            'credentials in memory. Quitting or choosing Lock session clears them. Logistics '
-            'keeps the encrypted ZIP. Unlock it again to reconnect.'))
-        box.add(SettingsLabel(
-            'When the screen sleeps or you leave the app, Logistics hides protected content. '
-            'Enter the credential or session password when you return.'))
-        box.add(SettingsLabel('Trusted Wi-Fi', style=Pack(font_weight='bold')))
-        from .trusted_wifi import controls as trusted_wifi_controls
-        trusted_wifi_controls(app, box)
-        box.add(SettingsLabel('Playback while locked', style=Pack(font_weight='bold')))
-        app.session_speech_choice = toga.Switch('Session-only speech while locked',
-            value=app.preferences.values['session_speech_when_locked'] == 'true',
-            on_change=app.change_session_speech, style=Pack(height=48))
-        box.add(switch_row(app, 'Session-only speech while locked', app.session_speech_choice,
-            'Let read-aloud that is already playing continue when a protected session locks. '
-            'Use the system playback controls to pause or resume that reading. Protected video '
-            'pauses and opening new protected files still requires unlocking.'))
-        box.add(SettingsLabel('Protected audio outputs', style=Pack(font_weight='bold')))
-        from .audio import controls as audio_controls
-        audio_controls(app, box)
-        return box
+        from .privacy_security import privacy
+        return privacy(self.app)
 
 
     def text_size(self, title, key):
-        app = self.app
-        box = self.category(title)
-        from ..control_icons import icon_button
-        box.add(SettingsLabel(title + ' font size', style=Pack(font_weight='bold')))
-        choice = toga.Selection(items=[str(size) for size in range(12, 33)],
-            value=app.preferences.values[key], style=Pack(height=48))
-        setattr(app, key + '_choice', choice)
-        def save_size(widget, **kwargs):
-            from ..font_scaling import refresh
-            if choice.value == app.preferences.values[key]:
-                return
-            try:
-                app.preferences.save(**{key: choice.value})
-            except (OSError, ValueError) as error:
-                choice.on_change = None
-                try:
-                    choice.value = app.preferences.values[key]
-                finally:
-                    choice.on_change = save_size
-                app.settings_status.text = str(error)
-                return
-            refresh(app)
-            app.settings_status.text = ''
-        choice.on_change = save_size
-
-        def reset(widget, **kwargs):
-            choice.value = DEFAULTS[key]
-
-        choice.style.flex = 1
-        choice.style.font_size = OPTION_FONT_SIZE
-        reset_button = icon_button('reset', f'Reset {title} font size to default', on_press=reset)
-        reset_button.style.margin_left = 8
-        row = toga.Box(children=[choice, reset_button], style=Pack(direction=ROW, align_items=CENTER))
-        row._settings_size_row = True
-        group = group_rows([row])
-        group._settings_managed_content = True
-        box.add(group)
-        box.add(SettingsLabel('Pinch while reading to change this size.'))
-        if title in {'Markdown', 'EPUB'}:
-            justify_key = title.lower() + '_justify'
-            justify = toga.Switch('Justify text', value=app.preferences.values[justify_key] == 'true', style=Pack(height=48))
-            setattr(app, justify_key + '_choice', justify)
-            box.add(switch_row(app, 'Justify text', justify,
-                'Align text to both the left and right edges.'))
-            justify.on_change = app.save_preferences
-        return box
+        from .text import text_size
+        return text_size(self.app, title, key)
 
 
     def camera(self):
@@ -202,21 +98,8 @@ class SettingsCategories:
 
 
     def workspaces(self):
-        app = self.app
-        box = self.category('Workspaces')
-        if type(app._impl).__module__.startswith('toga_android.'):
-            box.add(page_button('File storage…', on_press=app.show_collection_storage, style=Pack(height=48)))
-        app.show_legacy_choice = toga.Switch('Show Legacy',
-            value=getattr(app, 'show_legacy_session', False),
-            on_change=app.change_show_legacy, style=Pack(height=48))
-        box.add(switch_row(app, 'Show Legacy', app.show_legacy_choice,
-            'Show older folders and credentials named Legacy. Resets when the app closes.'))
-        if enabled(app.preferences, 'rclone'):
-            from .reader_history import migration_controls
-            migration_controls(app, box)
-            box.add(page_button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))
-            box.add(page_button('SMB shares…', on_press=app.show_smb_connection, style=Pack(height=48)))
-        return box
+        from .workspaces import workspaces
+        return workspaces(self.app)
 
 
     def reset(self):
@@ -230,54 +113,16 @@ class SettingsCategories:
 
 
     def help(self):
-        app = self.app
-        box = self.category('Help')
-        from ..documentation_ui import show_documentation
-        box.add(page_button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(app),
-                            style=Pack(height=48)))
-        box.add(page_button('About', on_press=self.show_about, style=Pack(height=48)))
-        if type(app._impl).__module__.startswith('toga_android.'):
-            from .forms import connection_disclosure, settings_presentation, fit_section
-            developer = toga.Button('Android Developer Settings…',
-                on_press=app.open_android_developer_settings, style=Pack(height=48))
-            more, _ = connection_disclosure('More', [developer],
-                on_toggle=lambda panel: fit_section(panel, app.settings_navigation.detail_width - 32))
-            settings_presentation(developer.parent)
-            more._settings_managed_content = True
-            box.add(more)
-        return box
+        from .help import help
+        return help(self.app)
 
     def show_about(self, widget=None, **kwargs):
-        app = self.app
-        if not app.checkpoint():
-            return
-        navigation = app.settings_navigation
-        navigation.fit_detail('About')
-        view = navigation.options['About']
-        navigation.detach(view)
-        app.show_view(view, checkpoint=False, destination='settings', route='settings-about', title='About')
+        from .help import show_about
+        return show_about(self.app, widget, **kwargs)
 
     def about(self):
-        app = self.app
-        box = self.category('About')
-        label = app.build_version_label = SettingsLabel(
-            (app.version or 'Development build') + '\nLoading build information…',
-            style=Pack(font_size=12, color='#808080'))
-        box.add(label)
-
-        async def load_information():
-            try:
-                text = await asyncio.to_thread(build_information, app.version)
-            except Exception:
-                # Keep About usable even if an old/malformed payload cannot be read.
-                text = (app.version or 'Development build') + '\nBuild information unavailable.'
-            label.text = text
-
-        app.build_information_task = app.loop.create_task(load_information())
-        from .licenses import show_licenses
-        box.add(page_button('Open-source licenses', on_press=lambda widget, **kw: show_licenses(app),
-                            style=Pack(height=48)))
-        return box
+        from .help import about
+        return about(self.app)
 
 
 @dataclass(frozen=True)
