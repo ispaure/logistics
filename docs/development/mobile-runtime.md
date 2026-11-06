@@ -1394,6 +1394,13 @@ signal cancellation, adopt the result or decide publication: provider opening,
 credential loading, transfer review/execution and file-operation callers retain those
 policies and re-raise their original cancellation after draining.
 
+Incoming-file intake uses the same drain helper after receiver cancellation.
+Admission is checked under the publication lock; cancellation waits for an
+admitted batch's publication and receipt worker to settle before the receiver
+retires. See the
+[incoming-file contract](mobile-preparation.md#incoming-files-and-inbox) for
+queued handoffs and suppression of retired-host updates.
+
 Android Activity replacement also disposes old text views, keyboard dismissal
 and seasonal effects, then uninstalls adaptive navigation and native Back before
 disposing the old navigation host. This happens after durable preservation and

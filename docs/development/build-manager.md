@@ -720,11 +720,16 @@ Logistics snapshot file hashing and Firebase APK reporting use bounded shared
 SHA-256 reads; source fingerprint bytes and artifact digest formats are unchanged.
 The manager's CPython preparation uses shared verified downloads and bounded
 file/member hashing, retaining its cache paths, pins and corrupt-cache rejection.
+JUnit report publication and local build-number reservations also use shared
+atomic byte writes; reservation locking and remote uniqueness remain
+manager/provider responsibilities. Local manager test manifests hash files with
+bounded reads while retaining their existing fingerprint format.
 
 Project policy, manager orchestration and platform-specific process ownership stay
 with their current owners. Shared API contracts are documented in commonUtils.
-These changes require coordinated commonUtils and manager dependency updates
-before distribution; working-tree changes alone do not update published pins.
+The adopted versions are recorded by the `Python/commonUtils` gitlink and
+`build-manager-dependency.json`. Use the normal project tooling update to install
+the declared manager revision; working-tree changes alone do not update either pin.
 Portable/offscreen tests cover the consolidation; Windows sharing/locking branches
 use synthetic fixtures and do not establish new native device or Windows acceptance.
 
@@ -880,11 +885,10 @@ Logistics retains source membership, container/platform setup, dependency pins,
 application gates and storage policy. The descriptor explicitly lists optional
 adapter actions so the manager can expose supported storage and verification UI.
 
-These source changes require a manager version containing adapter_sdk and
-guest_workload. Candidate compatibility tests use the explicit local manager;
-the dependency pin must be updated to the reviewed committed revision before
-fresh hosted installation. No hosted dispatch or native VM acceptance is implied
-by portable contract results.
+The declared manager revision supplies `adapter_sdk` and `guest_workload`.
+An explicit local manager used for candidate compatibility tests must still match
+the reviewed dependency contract before adoption. Portable contract results do
+not establish hosted dispatch or native VM acceptance.
 
 ### Project-owned native prerequisite setup
 
