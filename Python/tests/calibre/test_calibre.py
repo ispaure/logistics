@@ -285,6 +285,47 @@ class CalibreLaunchTests(unittest.TestCase):
 
 
 class CalibreDialogFailureTests(QtTestCase):
+    def test_confirmed_export_failure_requires_a_fresh_review(self):
+        from features.calibre.ui import export_dialog
+
+        root = Path(self.temporary_directory().name).resolve()
+        library_path = root / 'Library'
+        book = library_path / 'Author' / 'Book (1)' / 'book.epub'
+        book.parent.mkdir(parents=True)
+        book.write_bytes(b'original')
+        (library_path / 'metadata.db').touch()
+        dialog = export_dialog.ExportDialog(library.CalibreLibrary(library_path), root / 'Device')
+
+        dialog.action_button.click()
+        self.wait_until(lambda: not dialog.busy)
+        approved_plan = dialog.plan
+        self.assertIsNotNone(approved_plan)
+        self.assertEqual(dialog.results.topLevelItemCount(), 1)
+
+        with patch.object(dialog, '_confirm', return_value=False):
+            dialog.action_button.click()
+        self.assertIs(dialog.plan, approved_plan)
+        self.assertEqual(dialog.action_button.text(), 'Apply reviewed export')
+        self.assertEqual(dialog.results.topLevelItemCount(), 1)
+
+        book.write_bytes(b'changed after review')
+        with (patch.object(dialog, '_confirm', return_value=True),
+              patch.object(export_dialog, 'execute_export_plan', wraps=execute_export_plan) as apply):
+            dialog.action_button.click()
+            self.wait_until(lambda: not dialog.busy)
+        apply.assert_called_once()
+        self.assertIs(apply.call_args.args[0], approved_plan)
+        self.assertIn('Operation failed: Book changed since export planning', dialog.task.message.text())
+        self.assertIsNone(dialog.plan)
+        self.assertEqual(dialog.action_button.text(), 'Review export')
+        self.assertEqual(dialog.results.topLevelItemCount(), 0)
+
+        dialog.action_button.click()
+        self.wait_until(lambda: not dialog.busy)
+        self.assertIsNotNone(dialog.plan)
+        self.assertIsNot(dialog.plan, approved_plan)
+        self.assertEqual(dialog.action_button.text(), 'Apply reviewed export')
+
     def test_management_dialog_reports_export_failure(self):
         from features.calibre.ui.manage_dialog import CalibreManageDialog
         from commonUtils.ui import pyside as qt

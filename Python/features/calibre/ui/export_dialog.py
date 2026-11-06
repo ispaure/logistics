@@ -39,6 +39,7 @@ class ExportDialog(ToolDialog):
                     return execute_export_plan(plan, cancelled=cancelled, report=report)
                 except OperationCancelled:
                     return BatchResult(cancelled=True)
+            self._invalidate()
             self._run_background(apply, self._applied)
 
     def _reviewed(self, plan):
@@ -53,8 +54,6 @@ class ExportDialog(ToolDialog):
         self.task.message.setText(f'{sum(entry.needs_copy for entry in plan.files)} copies; {len(plan.obsolete)} deletions. ' + '\n'.join(plan.warnings))
 
     def _applied(self, result):
-        self.plan = None
-        self.action_button.setText('Review export')
         if getattr(result, 'cancelled', False):
             self.task.message.setText('Cancelled. Completed changes remain; review again before retrying.')
         else:
