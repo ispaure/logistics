@@ -522,7 +522,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self._document_return_side = None
         self._notes_available = available
         for state in self._row_panels.values():
-            state['rows'].style.width = max(0, self.sidebar.policy.sidebar_width - 24)
+            if not getattr(state['rows'], 'recycled', False):
+                state['rows'].style.width = max(0, self.sidebar.policy.sidebar_width - 24)
         self.refresh_chrome()
 
     def refresh_reader_actions(self):

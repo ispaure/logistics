@@ -76,6 +76,7 @@ class FileBrowser(RecycledBrowser):
     def __init__(self, *, folder_visible=None, local_search=None, **kwargs):
         self._resource_provider = None
         self._release_resource = lambda: None
+        from functools import partial
         from .recycled_file_list import RecycledFileList
         self.folder_visible = folder_visible
         if local_search is None and getattr(toga.App.app, 'private_root', None) is not None:
@@ -88,7 +89,7 @@ class FileBrowser(RecycledBrowser):
         if local_search is not None:
             kwargs['resource_search'] = local_search.search
         super().__init__(presentation=LogisticsBrowserPresentation(),
-                         list_factory=RecycledFileList, inline_details=False, **kwargs)
+                         list_factory=partial(RecycledFileList, title_lines=2), inline_details=False, **kwargs)
         self.widget._clear_return_selection = self.clear_selection
 
     def clear_selection(self):

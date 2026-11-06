@@ -253,7 +253,7 @@ def notes_host(app):
         from ..recycled_file_list import RecycledFileList
         from ..hub_icons import icon
         def row_list(**kwargs):
-            result = RecycledFileList(icon_size=20, **kwargs)
+            result = RecycledFileList(icon_size=20, title_lines=2, **kwargs)
             landing = icon('folder_document')
             if app.routes.apple:
                 from ..appearance import apple_color

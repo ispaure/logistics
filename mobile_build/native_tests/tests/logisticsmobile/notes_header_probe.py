@@ -47,6 +47,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Home.md').write_text('# Home\n\n[[Other]]\n')
             (root / 'Other.md').write_text('# Other\n\n[[Home]]\n')
+            long_name = 'Weekly environment art and lighting production references.md'
+            (root / long_name).write_text('# Weekly review')
             large = root / 'Large folder'
             large.mkdir()
             for index in range(55):
@@ -235,8 +237,21 @@ class NotesHeaderProbe(NotesDrawersProbe):
             await owner.toggle_folder('Large folder')
             assert owner.rows.recycled
             assert any(row.path == 'Large folder/Note 54.md' for row in owner.rows.native_list.data)
+            await owner.toggle_folder('Large folder')
             drawer = owner.sidebar.overlay
             if drawer is not None:
+                from toga_iOS.libs import NSIndexPath
+                listing = owner.rows.native_list
+                entry = next(row for row in listing.data if row.path == long_name)
+                native_list = listing._impl.native
+                native_list.scrollToRowAtIndexPath(
+                    NSIndexPath.indexPathForRow(entry.index, inSection=0), atScrollPosition=2, animated=False)
+                await asyncio.sleep(.3)
+                cell = native_list.cellForRowAtIndexPath(NSIndexPath.indexPathForRow(entry.index, inSection=0))
+                label = cell.wrapping_title
+                assert label.numberOfLines == 2
+                assert label.frame.size.height > label.font.lineHeight * 1.5, 'Long note title did not wrap'
+                await capture_window(self, evidence / 'notes-files-wrapped-portrait.png')
                 pending = asyncio.create_task(owner.file_actions('Home.md'))
                 await asyncio.sleep(.3)
                 choice = owner.sidebar.action_overlay

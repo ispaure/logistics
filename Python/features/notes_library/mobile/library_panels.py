@@ -87,7 +87,7 @@ class LibraryPanels:
         self.calendar_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
         self.calendar_scroll = toga.ScrollContainer(content=self.calendar_content, horizontal=False, style=Pack(flex=1))
         self.panel_body = toga.Box(children=[self.files_content], style=Pack(direction=COLUMN, flex=1))
-        self.panel_body.style.margin_left = self.panel_body.style.margin_right = 8
+        self.panel_body.style.margin_left = self.panel_body.style.margin_right = 4
         self.panel_body.style.margin_top = 8
         # Symmetric flex spaces make Pack allocate the complete pane width.
         # Justify alone leaves a fixed-width command row at its intrinsic width.
