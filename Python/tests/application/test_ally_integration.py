@@ -30,12 +30,80 @@ class AllyIntegrationTests(unittest.TestCase):
         env.start(); self.addCleanup(env.stop)
         os.environ.pop('LOGISTICS_ALLY_ROOT', None)
 
+    def _replacement_package(self):
+        replacement = self.root / 'replacement'
+        package = replacement / 'Python/ally_feature'
+        package.mkdir(parents=True)
+        (package / '__init__.py').write_text('')
+        return replacement
+
+    def _assert_original_active(self):
+        self.assertEqual(self.link.readlink(), self.source)
+        self.assertEqual(os.environ.get('LOGISTICS_ALLY_ROOT'), str(self.ally))
+        self.assertEqual(list(self.link.parent.iterdir()), [self.link])
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
+    def test_failed_staging_preserves_active_link(self):
+        activate(self.logistics, self.ally)
+        replacement = self._replacement_package()
+        with patch.object(Path, 'symlink_to', side_effect=OSError('creation failed')):
+            with self.assertRaisesRegex(OSError, 'creation failed'):
+                activate(self.logistics, replacement)
+        self._assert_original_active()
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
+    def test_failed_switch_preserves_active_link_and_cleans_staging(self):
+        activate(self.logistics, self.ally)
+        replacement = self._replacement_package()
+        with patch.object(Path, 'replace', side_effect=OSError('switch failed')):
+            with self.assertRaisesRegex(OSError, 'switch failed'):
+                activate(self.logistics, replacement)
+        self._assert_original_active()
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
+    def test_retarget_refuses_link_changed_while_staging(self):
+        activate(self.logistics, self.ally)
+        replacement = self._replacement_package()
+        concurrent = self.root / 'concurrent'
+        symlink_to = Path.symlink_to
+
+        def stage_and_change(path, target, target_is_directory=False):
+            symlink_to(path, target, target_is_directory)
+            self.link.unlink(missing_ok=True)
+            symlink_to(self.link, concurrent)
+
+        with patch.object(Path, 'symlink_to', stage_and_change):
+            with self.assertRaisesRegex(RuntimeError, 'changed'):
+                activate(self.logistics, replacement)
+        self.assertEqual(self.link.readlink(), concurrent)
+        self.assertEqual(os.environ.get('LOGISTICS_ALLY_ROOT'), str(self.ally))
+        self.assertEqual(list(self.link.parent.iterdir()), [self.link])
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
+    def test_retarget_switches_link_and_environment(self):
+        activate(self.logistics, self.ally)
+        replacement = self._replacement_package()
+        activate(self.logistics, replacement)
+        self.assertEqual(self.link.readlink(), replacement / 'Python/ally_feature')
+        self.assertEqual(os.environ.get('LOGISTICS_ALLY_ROOT'), str(replacement))
+        self.assertEqual(list(self.link.parent.iterdir()), [self.link])
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
+    def test_missing_retarget_package_preserves_active_link(self):
+        activate(self.logistics, self.ally)
+        with self.assertRaisesRegex(RuntimeError, 'missing'):
+            activate(self.logistics, self.root / 'missing')
+        self._assert_original_active()
+
     @unittest.skipIf(os.name == 'nt', 'Unix symlink behavior')
     def test_link_created_reused_and_updated(self):
         activate(self.logistics, self.ally)
         self.assertEqual(self.link.resolve(), self.source)
         self.assertTrue(is_active(self.link))
-        activate(self.logistics, self.ally)
+        with patch.object(Path, 'symlink_to') as create, patch.object(Path, 'replace') as switch:
+            activate(self.logistics, self.ally)
+        create.assert_not_called()
+        switch.assert_not_called()
         self.link.unlink()
         self.link.symlink_to(self.root / 'missing')
         activate(self.logistics, self.ally)
