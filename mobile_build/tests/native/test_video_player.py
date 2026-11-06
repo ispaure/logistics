@@ -558,6 +558,103 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
 
 
 class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cancelled_acquisition_reclaims_late_content(self):
+        from threading import Event
+        from features.video.mobile.player import open_video
+
+        for fails in (False, True):
+            with self.subTest(fails=fails):
+                loop = asyncio.get_running_loop()
+                entered, release = asyncio.Event(), Event()
+                app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True)
+                content = Mock()
+
+                def acquire(*args):
+                    loop.call_soon_threadsafe(entered.set)
+                    if not release.wait(5):
+                        raise TimeoutError('Acquisition test gate timed out')
+                    if fails:
+                        raise OSError('Source unavailable')
+                    return content
+
+                with patch('features.video.mobile.player.VideoContent', side_effect=acquire), patch(
+                        'features.video.mobile.player.MobileVideo') as player:
+                    opening = asyncio.create_task(open_video(app, Mock(), 'movie.mp4'))
+                    try:
+                        await asyncio.wait_for(entered.wait(), 2)
+                        for reason in ('original cancellation', 'repeated cancellation'):
+                            opening.cancel(reason)
+                            await asyncio.sleep(0)
+                            self.assertFalse(opening.done())
+                            content.close.assert_not_called()
+                        release.set()
+                        with self.assertRaisesRegex(asyncio.CancelledError, 'original cancellation'):
+                            await opening
+                    finally:
+                        release.set()
+                        await asyncio.gather(opening, return_exceptions=True)
+                    player.assert_not_called()
+                self.assertEqual(content.close.call_count, 0 if fails else 1)
+
+    async def test_cancelled_preparation_retires_before_cleanup_and_waits_for_close(self):
+        from threading import Event
+        from features.video.mobile.player import open_video
+
+        loop = asyncio.get_running_loop()
+        preparing, closing, finish_close = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        finish_prepare, prepared = Event(), Event()
+        app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True,
+            active_host=True, video_player=None)
+        content = Mock()
+
+        def prepare():
+            loop.call_soon_threadsafe(preparing.set)
+            if not finish_prepare.wait(5):
+                raise TimeoutError('Preparation test gate timed out')
+            prepared.set()
+            return 0, []
+
+        async def close():
+            self.assertTrue(prepared.is_set())
+            closing.set()
+            await finish_close.wait()
+            content.close()
+
+        player = SimpleNamespace(prepare=prepare, close=close, present=Mock(),
+            allowed=lambda: True, closed=False, native=SimpleNamespace(play=Mock()))
+        with patch('features.video.mobile.player.VideoContent', return_value=content), patch(
+                'features.video.mobile.player.MobileVideo', return_value=player), patch(
+                'services.documents.mobile_storage.remember_video') as remember:
+            opening = asyncio.create_task(open_video(app, Mock(), 'movie.mp4'))
+            try:
+                await asyncio.wait_for(preparing.wait(), 2)
+                opening.cancel('original cancellation')
+                await asyncio.sleep(0)
+                opening.cancel('during preparation')
+                await asyncio.sleep(0)
+                self.assertFalse(closing.is_set())
+                self.assertFalse(opening.done())
+                finish_prepare.set()
+                await asyncio.wait_for(closing.wait(), 2)
+                opening.cancel('during close')
+                await asyncio.sleep(0)
+                opening.cancel('again during close')
+                await asyncio.sleep(0)
+                self.assertFalse(opening.done())
+                content.close.assert_not_called()
+                finish_close.set()
+                with self.assertRaisesRegex(asyncio.CancelledError, 'original cancellation'):
+                    await opening
+            finally:
+                finish_prepare.set()
+                finish_close.set()
+                await asyncio.gather(opening, return_exceptions=True)
+            player.present.assert_not_called()
+            player.native.play.assert_not_called()
+            remember.assert_not_called()
+            self.assertIsNone(app.video_player)
+            content.close.assert_called_once()
+
     async def test_open_waits_for_native_presentation_and_rechecks_navigation(self):
         from unittest.mock import AsyncMock
         from features.video.mobile.player import open_video

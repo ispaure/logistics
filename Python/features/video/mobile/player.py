@@ -6,6 +6,7 @@ from pathlib import Path
 from features.video.playback import VideoContent, SubtitleContent
 from services.documents.video_progress import VideoProgress
 from features.video.transport import VideoTransport
+from mobile.worker_retirement import drain_worker
 from services.access_policy import display_allowed
 
 
@@ -284,7 +285,18 @@ async def open_video(app, provider, path):
         return False
     previous = getattr(app, 'video_player', None)
     navigation = getattr(app, 'navigation_generation', None)
-    content = await asyncio.to_thread(VideoContent, provider, path)
+    acquisition = asyncio.create_task(asyncio.to_thread(VideoContent, provider, path))
+    try:
+        content = await asyncio.shield(acquisition)
+    except asyncio.CancelledError:
+        await drain_worker(acquisition)
+        if not acquisition.cancelled() and acquisition.exception() is None:
+            try:
+                acquisition.result().close()
+            except Exception as error:
+                asyncio.get_running_loop().call_exception_handler(
+                    dict(message='Could not close cancelled video source', exception=error))
+        raise
     try:
         if previous is not None:
             await previous.close()
@@ -297,7 +309,12 @@ async def open_video(app, provider, path):
         content.close()
         raise
     try:
-        position, subtitles = await asyncio.to_thread(player.prepare)
+        preparation = asyncio.create_task(asyncio.to_thread(player.prepare))
+        try:
+            position, subtitles = await asyncio.shield(preparation)
+        except asyncio.CancelledError:
+            await drain_worker(preparation)
+            raise
         if (not app.active_host or not player.allowed()
                 or getattr(app, 'navigation_generation', None) != navigation):
             await player.close()
@@ -330,6 +347,17 @@ async def open_video(app, provider, path):
             if manager is not None:
                 manager.notice()
         return True
-    except BaseException:
-        await player.close()
+    except BaseException as opening_error:
+        cleanup = asyncio.create_task(player.close())
+        if isinstance(opening_error, asyncio.CancelledError):
+            await drain_worker(cleanup)
+            if not cleanup.cancelled() and (error := cleanup.exception()) is not None:
+                asyncio.get_running_loop().call_exception_handler(
+                    dict(message='Could not retire cancelled video opening', exception=error))
+        else:
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                await drain_worker(cleanup)
+                raise
         raise

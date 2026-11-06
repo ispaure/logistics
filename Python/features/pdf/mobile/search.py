@@ -6,6 +6,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.pdf.search import search_pdf
 from features.pdf.search_controller import PDFSearchController, SearchRequest
+from mobile.worker_retirement import drain_worker
 
 
 class PDFSearchBar(toga.Box):
@@ -54,17 +55,10 @@ class PDFSearchBar(toga.Box):
                 results = await asyncio.shield(worker)
             except asyncio.CancelledError as error:
                 action.cancelled.set()
-                # Keep the request busy until extraction retires. Cancelling
-                # asyncio.wait does not cancel the underlying worker task.
+                # Keep the request busy until extraction retires.
                 try:
                     if worker is not None:
-                        while not worker.done():
-                            try:
-                                await asyncio.wait((worker,))
-                            except asyncio.CancelledError:
-                                continue
-                        if not worker.cancelled():
-                            worker.exception()
+                        await drain_worker(worker)
                 finally:
                     self.controller.fail(action, error)
                 raise
