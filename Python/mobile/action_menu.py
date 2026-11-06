@@ -267,7 +267,8 @@ class DocumentNativeMenu(NativeMenu):
         menu = self
         class Listener(dynamic_proxy(PopupMenu.OnMenuItemClickListener)):
             def onMenuItemClick(self, item):
-                menu.invoke(menu.actions[item.getItemId()][1])
+                if not menu.disposed:
+                    menu.invoke(menu.actions[item.getItemId()][1])
                 return True
         self.listener = Listener()
         native = self.popup.getMenu()
