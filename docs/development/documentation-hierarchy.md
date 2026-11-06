@@ -57,8 +57,14 @@ and [Google's clear-sentence guidance](https://developers.google.com/tech-writin
 
 ## Validation
 
-Run `Python/tests/tooling/test_documentation_layout.py` for H1s, landing-page ownership,
-parent-child links, migrated Markdown links and the repository boundary.
+Run the existing layout check from the repository root:
+
+```sh
+python3 dev.py test desktop test_documentation_layout.py
+```
+
+It checks H1s, landing-page ownership, parent-child links, migrated Markdown links
+and the repository boundary. Its source is `Python/tests/tooling/test_documentation_layout.py`.
 Desktop Settings and shared wiki tests cover guide entry points and scope changes;
 mobile documentation tests cover offline rendering and scope/history navigation.
 Native appearance still requires device validation.
