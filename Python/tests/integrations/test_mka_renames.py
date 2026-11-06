@@ -108,3 +108,32 @@ class MkaRenameDialogTests(QtTestCase):
             self.wait_until(lambda: not dialog.busy)
         self.assertIn((2, 2, 'Renamed 1 - First.mka'), reports)
         self.assertEqual((root / '1 - First.mka').read_bytes(), b'changed after review')
+
+    def test_cancelled_and_unresolved_rollback_results_are_visible(self):
+        from features.media.ui import dialogs
+
+        root = Path(self.temporary_directory().name)
+        source = root / 'Chapter_1.mka'
+        source.write_bytes(b'original')
+        (root / 'names.csv').write_text('1,First\n')
+        dialog = dialogs.RenameMkaDialog(root)
+        staged = root / '.bulk-rename-staged'
+        cases = (
+            (renameUtils.RenameResult(cancelled=True, error='Rename cancelled'),
+             ['Rename stopped: Rename cancelled']),
+            (renameUtils.RenameResult(error='Publication failed', recovery=((staged, source, 'Access denied'),)),
+             ['Rename stopped: Publication failed', f'{staged} → {source}: Access denied']),
+        )
+        for result, expected in cases:
+            with self.subTest(error=result.error):
+                dialog.action_button.click()
+                self.wait_until(lambda: not dialog.busy)
+                self.assertIsNotNone(dialog.plan)
+
+                with (patch.object(dialog, '_confirm', return_value=True),
+                      patch.object(dialogs, 'apply_renames', return_value=result) as apply):
+                    dialog.action_button.click()
+                    self.wait_until(lambda: not dialog.busy)
+                apply.assert_called_once()
+                self.assertEqual(dialog.task.message.text().splitlines(), expected)
+                self.assertEqual(dialog.action_button.text(), 'Review names')
