@@ -203,9 +203,13 @@ async def exercise_navigation(app):
             assert diagnostics['editor_focused']
             await capture('keyboard')
             editor._impl.native.resignFirstResponder()
+            # Each native host owns the window hierarchy until it uninstalls.
+            # Restore the toolkit root before exercising the legacy host.
+            host.uninstall()
+            assert app.main_window._impl.native.rootViewController == adapter.outer_navigation
             fallback = NativeNavigationHost(DESTINATION_ITEMS, prefer_sidebar=False)
-            app.main_window.content = fallback.root
             try:
+                app.main_window.content = fallback.root
                 fallback.install(app.main_window)
                 fallback.activate('settings')
                 await asyncio.sleep(.2)
@@ -214,7 +218,6 @@ async def exercise_navigation(app):
                 diagnostics['legacy_bar_path_checked'] = True
             finally:
                 fallback.dispose()
-                app.main_window.content = host.root
         else:
             adapter = host.adapter
             adapter.set_mode('rail')
