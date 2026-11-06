@@ -448,18 +448,20 @@ class AppleRouteEventTests(unittest.TestCase):
             return AppleOutputs(changed, interrupted)
 
     def test_partial_registration_is_rolled_back(self):
-        token = object()
-        failure = RuntimeError('registration failed')
-        center = NS(addObserverForName=Mock(side_effect=[token, failure]), removeObserver=Mock())
-        changed, interrupted = Mock(), Mock()
-        with self.assertRaises(RuntimeError) as raised:
-            self.make_monitor(center, changed, interrupted)
-        self.assertIs(raised.exception, failure)
-        center.removeObserver.assert_called_once_with(token)
-        for call in center.addObserverForName.call_args_list:
-            call.kwargs['usingBlock'](None)
-        changed.assert_not_called()
-        interrupted.assert_not_called()
+        for index in range(2):
+            with self.subTest(index=index):
+                tokens = [object() for _ in range(index)]
+                failure = RuntimeError('registration failed')
+                center = NS(addObserverForName=Mock(side_effect=[*tokens, failure]), removeObserver=Mock())
+                changed, interrupted = Mock(), Mock()
+                with self.assertRaises(RuntimeError) as raised:
+                    self.make_monitor(center, changed, interrupted)
+                self.assertIs(raised.exception, failure)
+                self.assertEqual([call.args[0] for call in center.removeObserver.call_args_list], tokens)
+                for call in center.addObserverForName.call_args_list:
+                    call.kwargs['usingBlock'](None)
+                changed.assert_not_called()
+                interrupted.assert_not_called()
 
     def test_failed_token_removal_does_not_block_other_tokens_and_can_retry(self):
         first, second = object(), object()
