@@ -117,3 +117,56 @@ class HomeHeaderTests(TestCase):
         self.assertFalse(home_header.sync(app, view))
         self.assertEqual([button.on_press for button in actions], callbacks)
         self.assertEqual([button.style.height for button in actions], [72, 72])
+
+    def test_native_rail_and_safe_horizontal_row_reuse_the_same_actions(self):
+        from mobile.destination_actions import prepare
+
+        primary = [toga.Button(title, style=Pack(height=48, flex=1))
+                   for title in ('Open Document', 'New Document')]
+        row = toga.Box(children=primary)
+        original = toga.Box(children=[row])
+        original._home_primary_actions, original._home_primary_buttons = row, tuple(primary)
+        frame = NS(origin=NS(x=0, y=50), size=NS(width=390, height=840))
+        controller = NS(view=NS(bounds=frame, convertRect=lambda *a, **kw: frame,
+                                safeAreaInsets=NS(left=0, right=0)))
+        app = NS(routes=NS(apple=True), show_home_unlock=Mock(),
+                 native_host=NS(adapter=NS(content_controller=lambda _: controller)),
+                 home_unlock_candidates=Mock(return_value=[]),
+                 main_window=NS(_impl=NS(native=NS(safeAreaInsets=NS(top=50)))))
+        view = prepare(app, original, 'home')
+        unlock = view._destination_actions[1][0]
+        for button in [*primary, unlock]:
+            size = NS(width=48 if button is unlock else 120, height=38)
+            self.enterContext(patch.object(button._impl, 'native', NS(sizeThatFits=lambda _, size=size: size),
+                                           create=True))
+        self.enterContext(patch.dict('sys.modules', {'rubicon.objc': NS(CGSize=lambda *args: args)}))
+        self.enterContext(patch('mobile.fold_layout.division', return_value=None))
+        edge = self.enterContext(patch('mobile.ios_toolbar.vertical_edge', return_value=2))
+
+        self.assertFalse(home_header.sync(app, view))
+        self.assertEqual(view._ios_toolbar_buttons(), primary)
+        app.home_unlock_candidates.return_value = ['fixture']
+        self.assertEqual(view._ios_toolbar_buttons(), [unlock, *primary])
+        for button in primary:
+            row.remove(button)  # Shared toolbar projection detaches the targets.
+
+        edge.return_value = 0
+        self.assertTrue(home_header.sync(app, view))
+        self.assertEqual(row.children, [*primary, unlock])
+        self.assertTrue(view._home_inline_unlock)
+        frame.size.width = 320
+        self.assertFalse(home_header.sync(app, view))
+        self.assertEqual(row.children, primary)
+        self.assertEqual(view._ios_toolbar_buttons(), [unlock])
+        self.assertFalse(view._home_inline_unlock)
+
+    def test_inline_row_avoids_detached_activity_below_the_safe_top(self):
+        home = NS(_home_inline_unlock=True)
+        root = NS(children=[home])
+        native = NS(bounds=NS(size=NS(width=390)))
+        container = NS(content=NS(interface=root), native=native,
+                       left_inset=0, right_inset=0, top_inset=50)
+        with patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=((100, 48, 190, 50),)):
+            self.assertTrue(home_header.compact_content_top(container))
+            self.assertEqual(container.top_inset, 106)
+            self.assertFalse(home_header.compact_content_top(container))

@@ -98,30 +98,25 @@ renamed files. The first search in a large folder may take longer while the inde
 is built. Private, session-only and virtual sources use background scans without
 saving their names to this database. Search covers names, not file contents.
 
-On iPhone Duo, pages retain their full available height when the system moves
-the destination bar into a vertical rail. The rail uses the native side safe
-area; bottom-bar clearance applies only to a horizontal destination bar.
-In landscape, Home and the Documents list use two independently scrolling
-sections when there is enough room. Home puts file actions on the left, with
-its short Recent list on the right. Documents puts search and All open on the
-left, with Recent and Saved documents on the right. On Duo, both fully open and
-partially open landscape layouts align these sections to the physical crease,
-including when the navigation rail makes the usable area asymmetric. Cards,
-filenames and buttons stay within their section. Returning to a narrow portrait
-layout stacks the same controls into one scrolling page.
+Home puts **Open Document** and **New Document** above the overview. **Open
+now** returns to the active document and preserves its draft and view. **Recent**
+shows the last used closed document. Each **See all** action opens the matching
+collection in Documents. Open now offers **See all** when more than one document
+is open. **Favourites** stays available on Home alongside transfer and recovery
+notices.
 
-Home shows **Your workspace**, **Open file…**, **New document**, and up to five
-recent files. **See all in Documents** opens the full document workspace. Tapping
-an already open recent file restores its existing draft and Edit/Preview mode.
-Open file browses existing Local/LocalCrypt files and detects the supported format
-when you open one. Active transfer and recovery notices remain on Home.
+On a narrow screen, the overview appears above Favourites. When the window has
+room for two panes, or the fold reserves two separate regions, the overview can
+scroll independently from Favourites and the other Home controls.
 
-When an unloaded credential ZIP is retained on disk, a bordered lock icon button
-(**Unlock credentials**) appears beside **Your workspace**. Choose a credential and enter its ZIP password to unlock it
-for this app session, then return to Home. Home does not list credential or remote
-names in this button. Disabled Legacy credentials are excluded from the chooser;
-if only Legacy is available and Show Legacy is off, the button stays hidden.
-Passwords are never saved.
+When an unloaded credential ZIP is retained on disk, **Unlock LocalCrypt**
+appears. Choose a credential and enter its ZIP password to unlock it for this
+app session. On iOS, the credential icon can share the Open and New row when the
+controls fit. When UIKit supplies a side rail, as on the Duo cover display and
+inner landscape, it places the three actions in the native bar and handles
+space for the Dynamic Island and overflow. Home's credential icon keeps
+credential and remote names private. Disabled Legacy credentials are excluded
+from the chooser. Passwords are never saved.
 
 Documents shows **Search documents**, **All open**, **Recent**, **Saved documents**,
 and **Open Books & Comics library**. All open lists every visible open

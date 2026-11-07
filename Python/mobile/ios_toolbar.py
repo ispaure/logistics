@@ -238,7 +238,8 @@ def sync_screen(app, view, destination):
     controller = app.native_host.adapter.content_controller(destination)
     screens = app.routes.screens[destination]
     if not screens and hasattr(view, '_destination_actions'):
-        if (getattr(view, '_home_top_band', None) is not None
+        if (getattr(view, '_home_inline_unlock', False)
+                or getattr(view, '_home_top_band', None) is not None
                 or getattr(view, '_destination_top_band', None) is not None):
             clear_actions(controller.navigationItem)
             mount_leading(controller, [])

@@ -360,10 +360,13 @@ establish physical fold-pose behavior or live provider operation.
 
 ## Home and Documents hub sections
 
-`hub_controls.HubSections` retains the existing controls and moves Recent between the
-compact page and a second scroll container. Home has Open/New actions without
-introductory copy. Its content status row is mounted only for transfer shortcuts,
-with five recent entries and a Documents link in the trailing section.
+`hub_controls.HubSections` moves Home's overview between the compact page and a
+second scroll container while Favourites stays with the main content. Open now
+uses the same visible-session ordering as Documents and shows the first session.
+Recent shows the latest history entry after excluding open document identities.
+The overview's See all commands select Open or Recent in Documents, clearing
+the retained search after the navigation checkpoint succeeds. Home keeps the
+existing transfer, recovery and camera actions.
 Documents starts with Libraries selected. Its selector orders Libraries, the
 heart-only Favourites control, Open, Recent and Saved. Favourites reuses the
 credential-aware saved reference catalog and its existing open/remove actions;
@@ -1846,9 +1849,13 @@ system rail only for a measured unoccupied content column. Visible native titles
 and prompts retain their space. Home and Documents can place their retained
 actions in a measured free leading status-band column, with full-width content
 reserved below the complete system cluster. Home keeps its two-column landscape
-layout. Insufficient width/height, active folds and unsupported reservations
-restore the regular layout and toolbar. Home uses native fitting sizes, including
-the current text size, before moving Open/New and the conditional Unlock action.
+layout. In a single horizontal pane, Home measures the native fitting sizes
+before placing Open, New and conditional Unlock together. The measured top
+band can host this row when clear. Otherwise, a row that fits uses normal safe
+area and reserved-region clearance, and Unlock falls back to the native bar
+when it cannot fit. When UIKit supplies a vertical edge, the shared toolbar
+projects the same Open and New controls after the conditional Unlock group.
+UIKit owns the side, placement and overflow.
 
 `reader_top_band` can project storage-backed reader chrome into a native content
 header when a measured, tall system region occupies one edge and leaves enough

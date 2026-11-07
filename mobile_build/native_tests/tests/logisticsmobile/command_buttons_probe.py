@@ -49,7 +49,7 @@ class Probe(LogisticsMobile):
                     show()
                     await asyncio.sleep(.4)
                     await capture_window(self, output / f'{name}-{mode}.png')
-                for button in (*self.home_actions.children, self.chat_setup):
+                for button in (*self.home_sections._home_primary_buttons, self.chat_setup):
                     self.assert_command(button, apple)
                 # A long title can shrink inside the border, and disabling or
                 # recolouring must not lose either its boundary or callback.
@@ -68,7 +68,7 @@ class Probe(LogisticsMobile):
                 refresh_appearance(self)
                 self.show_home()
                 await asyncio.sleep(.4)
-                for button in self.home_actions.children:
+                for button in self.home_sections._home_primary_buttons:
                     self.assert_command(button, False)
                 await capture_window(self, output / 'home-eink.png')
                 report['checks'].append('eink-commands')
@@ -82,7 +82,8 @@ class Probe(LogisticsMobile):
     @staticmethod
     def assert_command(button, apple):
         impl = button._impl
-        assert impl._surface_roles == ('surface', 'text', True), (button.text, impl._surface_roles)
+        roles = ('alternate', 'accent', True) if button.text == 'Open Document' else ('surface', 'text', True)
+        assert impl._surface_roles == roles, (button.text, impl._surface_roles)
         if apple:
             from rubicon.objc import CGPoint
             assert impl.native.layer.borderWidth == 1, button.text

@@ -103,8 +103,10 @@ def native_geometry(app, *, verify=True):
     view = body.children[0] if body.children else None
     reader_header = getattr(view, '_reader_top_band_state', None)
     home_header = getattr(view, '_home_top_band', None)
+    home_row = (home_header['row'] if home_header else
+                view._home_primary_actions if getattr(view, '_home_inline_unlock', False) else None)
     destination_header = getattr(view, '_destination_top_band', None)
-    controls = (reader_header['buttons'] if reader_header else home_header['row'].children if home_header
+    controls = (reader_header['buttons'] if reader_header else home_row.children if home_row is not None
                 else destination_header['buttons'] if destination_header else ())
     for button in controls:
         native = button._impl.native

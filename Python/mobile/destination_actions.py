@@ -14,6 +14,7 @@ def prepare(app, view, destination):
         view = toga.Box(children=[original], style=Pack(direction=COLUMN, flex=1))
         view.content = getattr(original, 'content', original)
         if destination == 'home' and hasattr(original, '_home_primary_actions'):
+            view._home_sections = original
             view._home_primary_actions = original._home_primary_actions
             view._home_primary_buttons = original._home_primary_buttons
     if hasattr(view, '_destination_actions'):
@@ -50,7 +51,10 @@ def prepare(app, view, destination):
         controller = app.native_host.adapter.content_controller(destination)
         # Horizontal groups run left-to-right; vertical groups run top-to-bottom.
         # Keep Unlock outermost horizontally and first in a vertical action rail.
-        if buttons[0] in actions and not vertical_edge(controller):
+        vertical = vertical_edge(controller)
+        if destination == 'home' and vertical:
+            return [*actions, *getattr(view, '_home_primary_buttons', ())]
+        if buttons[0] in actions and not vertical:
             actions = [*actions[1:], actions[0]]
         return actions
     view._ios_toolbar_buttons = apple_actions
@@ -101,16 +105,13 @@ def sync_native_host(app, view, destination):
     adapter = app.native_host.adapter
     overview = (not app.routes.screens[destination]
                 and hasattr(view, '_destination_actions'))
-    if overview:
-        overview = bool(selected(app, view._destination_actions[1]))
-    if destination == 'home' and not app.routes.screens[destination]:
+    if overview and destination == 'home':
         from .home_header import sync
-        if sync(app, view):
-            overview = False
-    elif destination == 'files' and not app.routes.screens[destination] and hasattr(view, '_destination_actions'):
-        # The Documents collection selector owns the body. Keep its commands
-        # in the native navigation bar so system placement also owns hit testing.
-        if project_header(app, view, destination):
+        overview = not sync(app, view) and bool(view._ios_toolbar_buttons())
+    elif overview:
+        overview = bool(selected(app, view._destination_actions[1]))
+        # Documents commands stay in UIKit's bar for native hit testing.
+        if destination == 'files' and project_header(app, view, destination):
             overview = False
     outer = adapter.outer_navigation
     if not outer.isNavigationBarHidden():

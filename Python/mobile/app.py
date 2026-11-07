@@ -673,8 +673,15 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         # remote/private location and its search filter.
         self.show_locations()
 
-    def show_documents_hub(self, widget=None, **kwargs):
-        self.show_view(self.build_documents_hub(), destination='documents', root=True)
+    def show_documents_hub(self, widget=None, *, collection=None, **kwargs):
+        if collection is not None:
+            if not self.checkpoint():
+                return False
+            self.documents_query = ''
+            self.documents_search_open = False
+            self.documents_view = collection
+        return self.show_view(self.build_documents_hub(), checkpoint=collection is None,
+                              destination='documents', root=True)
 
     def stored_document_opener(self, resource):
         def activate(widget=None, **kwargs):
