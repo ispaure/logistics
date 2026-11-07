@@ -58,7 +58,7 @@ class AndroidBackTests(unittest.TestCase):
         (local / '.obsidian').mkdir(parents=True)
         (local / 'Child').mkdir()
         (local / 'note.md').write_text('# Notes')
-        crypt_label = 'LocalCrypt: Notes'
+        crypt_label = 'Notes - Encrypted Copy'
         # The provider is a fixture; the LocalCrypt entry/navigation path is real.
         with patch.object(app, 'existing_crypt_locations', return_value={crypt_label: LocalFiles(local)}):
             for width in (390, 840, 1100):

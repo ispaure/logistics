@@ -943,7 +943,7 @@ class NotesLibraryTests(unittest.TestCase):
                 self.app.cloud_crypt_remotes = {'Secret'}
                 self.app.set_loaded_remote_names(['Secret'])
                 self.app.remember_credential_association('Synthetic.zip', ['Secret'], session_only=True)
-                self.assertEqual(self.app.existing_crypt_locations(), {'LocalCrypt: Secret': 'Secret'})
+                self.assertEqual(self.app.existing_crypt_locations(), {'Secret - Encrypted Copy': 'Secret'})
                 self.app.show_documents_hub()
                 self.app.document_view_buttons['Libraries'].on_press()
                 await wait_for_discovery()

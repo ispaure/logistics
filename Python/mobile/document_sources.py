@@ -318,7 +318,6 @@ def folder_location(app, session, owner=None):
         if resource is not None:
             resource.check()
             return dict(provider=resource.provider, key=resource.path)
-        return None
     manager = getattr(app, 'private_sessions', None)
     owner = owner or (manager.controllers.get(session.id) if manager else None)
     reader = getattr(owner, 'crypt_reader', None)
@@ -373,7 +372,35 @@ async def show_in_folder(app, session, owner=None):
     return await show_folder_location(app, location)
 
 
-async def show_folder_location(app, location):
+def ordinary_browser_location(app, path):
+    path = path.resolve()
+    matching = []
+    try:
+        roots = app.ordinary_file_roots()
+    except (OSError, ValueError):
+        return None
+    for label in roots:
+        try:
+            candidate = app.storage_provider(label, roots)
+        except (OSError, ValueError):
+            continue
+        root = Path(candidate.root).resolve()
+        if candidate.private or not path.is_relative_to(root):
+            continue
+        relative = path.relative_to(root).as_posix()
+        try:
+            row = candidate.entry(relative)
+        except (OSError, ValueError):
+            # An ancestor can be a restricted browse root.
+            continue
+        matching.append((len(root.parts), label, candidate, row))
+    if matching:
+        _, label, provider, row = max(matching, key=lambda item: item[0])
+        return label, provider, row
+    return None
+
+
+async def show_folder_location(app, location, *, on_selected=None):
     """Reveal and select an admitted reader source in the shared file browser."""
     if location is None or not app.checkpoint():
         return False
@@ -398,21 +425,10 @@ async def show_folder_location(app, location):
             path = Path(provider.root) / location['key']
         if path is not None:
             await app.show_files()
-            matching = []
-            for label in app.ordinary_file_roots():
-                candidate = app.file_provider_for(label)
-                if not candidate.private and path.resolve().is_relative_to(Path(candidate.root).resolve()):
-                    relative = path.resolve().relative_to(Path(candidate.root).resolve()).as_posix()
-                    try:
-                        candidate.entry(relative)
-                    except (OSError, ValueError):
-                        # A physical ancestor can be a restricted browse root;
-                        # only use it when this specific file is admitted.
-                        continue
-                    matching.append((len(Path(candidate.root).parts), label, candidate))
+            matching = ordinary_browser_location(app, path)
             if matching:
-                _, label, provider = max(matching, key=lambda item: item[0])
-                key = path.resolve().relative_to(Path(provider.root).resolve()).as_posix()
+                label, provider, row = matching
+                key = row['path']
                 if not await app.browser_file_location((label, key.rpartition('/')[0])):
                     return False
                 browser = app.file_browser
@@ -433,4 +449,18 @@ async def show_folder_location(app, location):
     entry = next((entry for entry in browser.entries if entry.payload['path'] == key), None)
     if entry is not None:
         await browser.select(entry)
-    return True
+        if on_selected is not None and browser.selected == entry.identity:
+            return await on_selected(browser, entry)
+    return entry is not None
+
+
+
+def comic_file_entries(app, session, owner):
+    """Resolve original-folder siblings through the document storage boundary."""
+    from commonUtils.runtime.resources.local import LocalFiles
+    from features.comics.mobile.navigation import folder_comics
+    location = folder_location(app, session, owner)
+    if not location or location.get('cached') or 'path' not in location:
+        return None, []
+    path = location['path']
+    return path, folder_comics(LocalFiles(path.parent).list(''), path.name)

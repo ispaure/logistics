@@ -456,16 +456,15 @@ class FolderHubUI(WorkspacesScreen):
             button.enabled = not busy or (not needs_idle and (
                 not getattr(button, '_requires_crypt_session', False) or getattr(self, 'transfer_busy', False)
                 or getattr(self, 'remote_read_busy', False)))
-        # Credential restore can finish while Workspaces is already showing its root.
-        # Refresh the list in place instead of leaving a local-only snapshot.
-        host = getattr(self, 'native_host', None)
-        if (refresh_choices and not busy and hasattr(self, 'folder_list') and host is not None
-                and host.state.destination == 'files' and not self.routes.screens['files']):
+        # The retained tree can remain visible beside a browser, and credentials
+        # can change during transfers or in another window. Discovery reads only
+        # published metadata/local names, so it is safe while the bridge is busy.
+        if refresh_choices and hasattr(self, 'folder_list'):
             choices = self.folder_choices()
             self.update_folder_list(choices)
         status = getattr(self, 'folder_picker_status', None)
         if status is not None and not getattr(self, '_folder_opening', False):
-            status.text = import_hint('A transfer is running. Local and LocalCrypt files remain available; online operations wait.'
+            status.text = import_hint('A transfer is running. Local folders and encrypted copies remain available; online operations wait.'
                 if getattr(self, 'transfer_busy', False) else 'A connection is busy. Local folders remain available.') if busy else ''
 
     async def delete_picker_folder(self, entry):

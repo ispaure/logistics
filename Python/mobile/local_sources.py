@@ -3,6 +3,12 @@ from commonUtils.runtime.resources.local import LocalFiles
 from services.documents.locations import shared_documents_path
 
 
+def destination_location_labels(roots):
+    """Name ordinary destinations consistently and retain provider-specific labels."""
+    labels = {'Local files': 'Local', 'Shared files': 'Shared Files'}
+    return {labels.get(label, label): provider for label, provider in roots.items()}
+
+
 class SharedFiles(LocalFiles):
     def __init__(self, root, *, include_collections=True):
         super().__init__(root)

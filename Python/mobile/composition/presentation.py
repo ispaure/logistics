@@ -83,6 +83,8 @@ def mobile_presentation(app):
     from mobile.reader_top_band import reset_notebook_clearance
     from mobile.layout_participants import participants
     from mobile.favourites import favourite_resource
+    from mobile.filename_input import FilenameInput
+    from mobile.scroll_edges import fill_bottom
 
     return MobilePresentation(
         icon_button=icon_button,
@@ -106,6 +108,8 @@ def mobile_presentation(app):
         fold_division=lambda widget: division(app, widget),
         reset_reader_layout=reset_notebook_clearance,
         register_layout=lambda *args, **kwargs: participants(app).register(*args, **kwargs),
+        filename_input=FilenameInput,
+        fill_scroll_bottom=fill_bottom,
         favourite_resource=lambda provider, path, **kwargs: favourite_resource(app, provider, path, **kwargs),
     )
 

@@ -43,6 +43,7 @@ class FileOperationRequest:
     target: str = ''
     destination: FileDestination | None = None
     plaintext_approved: bool = False
+    expected_revision: object = None
 
     def execute(self, cancelled, *, destination=None, progress=None):
         check_cancelled(cancelled)
@@ -64,7 +65,12 @@ class FileOperationRequest:
             from services.documents.mutations import copy_document_sibling
             return copy_document_sibling(self.provider, self.path, cancelled=cancelled)
         if self.kind == 'delete':
-            return delete_resource(self.provider, self.path, cancelled=cancelled)
+            from commonUtils.persistence.publication import mutation_lock
+            with mutation_lock:
+                if (self.expected_revision is not None
+                        and self.provider.entry(self.path)['revision'] != self.expected_revision):
+                    raise ValueError('The selected item changed. Review it before deleting.')
+                return delete_resource(self.provider, self.path, cancelled=cancelled)
         if self.kind == 'move':
             return move_resource(self.provider, self.path, destination or self.destination.resolve(), self.target,
                                  cancelled=cancelled, progress=progress)

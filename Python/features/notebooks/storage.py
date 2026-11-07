@@ -11,6 +11,7 @@ class NotebookDocument:
         self.book, self.resource, self.recovery = book, resource, recovery
         self.key = key or (recovery.create(book) if recovery else uuid4().hex)
         self.dirty = False
+        self.source_unavailable = False
         self.source_deleted = False
         self.recovery_deleted = False
         self.changed = changed
@@ -41,7 +42,7 @@ class NotebookDocument:
         if self.recovery is not None:
             self.recovery.check_revision(self.key, book)
         previous_dirty = self.dirty
-        self.dirty = self.resource is not None or self.recovery is None
+        self.dirty = self.source_unavailable or self.resource is not None or self.recovery is None
         rollback = None
         try:
             # The host publishes intent and owns its conditional rollback.

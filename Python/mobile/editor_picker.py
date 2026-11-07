@@ -13,6 +13,7 @@ from commonUtils.runtime.resources.selection import ResourceSelection
 from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.runtime.resources.provider import capabilities
 from .document_destination_form import PickerMessage as PickerMessage, build_destination_form
+from .local_sources import destination_location_labels
 from services.documents.storage import DocumentPolicy
 from services.workflow_host import HostService, StateAttribute
 
@@ -334,10 +335,13 @@ class EditorPicker:
         for_app(self.app).changed()
         ordinary = self.app.ordinary_file_roots(
             include_collections=getattr(destination_action, 'kind', '') != 'download')
-        self.editor_storage_roots = ({'All files': ordinary['Shared files'], 'Local': None,
-            'Received Files': ordinary['Received Files']} if creation is not None else dict(ordinary))
-        if destination_action is not None:
-            self.editor_storage_roots = dict(ordinary if getattr(destination_action, 'kind', '') == 'download' else self.app.file_roots)
+        roots = ordinary
+        if creation is not None:
+            # Creation starts in the shared root, with the collections alongside it.
+            roots = {'Shared files': ordinary['Shared files'], **ordinary}
+        elif destination_action is not None and getattr(destination_action, 'kind', '') != 'download':
+            roots = self.app.file_roots
+        self.editor_storage_roots = destination_location_labels(roots)
         if self.app.feature_enabled('rclone'):
             if getattr(destination_action, 'kind', '') == 'download':
                 unlocked = {}
@@ -847,12 +851,12 @@ class EditorPicker:
         if self.cloud_busy or self.entering_creation_folder():
             return False
         label, folder = location
-        if (self.operation.creation is not None and label == 'All files') or label == 'Shared files':
+        if label == 'Shared Files':
             # Collection roots have their own providers, just as in Workspaces.
             # In particular, iOS protects the shared Local directory itself.
             from services.documents.locations import collection_path
             from .incoming_files import inbox_path
-            for name, root in (('Local' if self.operation.creation is not None else 'Local files', collection_path(self.app.private_root)),
+            for name, root in (('Local', collection_path(self.app.private_root)),
                                ('Received Files', inbox_path(self.app.private_root))):
                 if folder == root.name or folder.startswith(root.name + '/'):
                     location = name, folder.removeprefix(root.name).lstrip('/')
@@ -957,7 +961,7 @@ class EditorPicker:
         if not self.cloud_busy and not self.entering_creation_folder():
             if (not self.picker_folder.value and self.operation.creation is not None
                     and self.save_as_storage.value in ('Local', 'Received Files')):
-                return await self.browser_editor_location(('All files', ''))
+                return await self.browser_editor_location(('Shared Files', ''))
             self.picker_folder.value = self.picker_folder.value.rpartition('/')[0]
             await self.refresh_editor_browser()
 

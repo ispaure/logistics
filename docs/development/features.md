@@ -125,8 +125,8 @@ mount-path identity from that config path; do not discard it when mounting.
 
 The desktop category adapter is `services/folders/workspaces.py`. Local merges
 physical copies by path while retaining the provider context used by sync tools.
-The Local Source dropdown filters that merged list into Dropbox, Rclone and
-Others, defaulting to Rclone; there is no combined All option locally. Classification uses provider ownership and physical paths: managed Local
+The Local source tabs display Dropbox, Rclone Copies and
+On This Computer, defaulting to Rclone Copies; there is no combined All option locally. Classification uses provider ownership and physical paths: managed Local
 folders and rclone-supplied LocalCrypt copies belong to Rclone, Dropbox sources
 belong to Dropbox, and remaining copies belong to Others. Refresh preserves the
 filter and selected entry; changing tabs resets Local to Rclone and remote

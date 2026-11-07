@@ -214,6 +214,9 @@ class NotebookPanel:
 
     def state(self):
         state = document_state(self.editor, self.document)
+        if self.document is not None and self.document.resource is not None:
+            from services.documents.mobile_notebooks import notebook_title
+            state['display_name'] = notebook_title(self)
         band = getattr(self.view, '_reader_top_band_state', None)
         state['native_top_band'] = bool(band is not None and band.get('notebook_candidate') is not None)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
@@ -234,10 +237,14 @@ class NotebookPanel:
     def native_input_pending(self):
         return self.native_transport and bool(self.pen_input.pending)
 
+    @property
+    def has_native_canvas(self):
+        return self.web is not None and native_backend(self.web).startswith(('toga_iOS.', 'toga_android.'))
+
     async def flush_input(self, *, timeout=4):
         """Lifecycle barrier only; never called from a busy JS command."""
         web, canvas = self.web, self.bridge
-        if web is None or not native_backend(web).startswith(('toga_iOS.', 'toga_android.')):
+        if not self.has_native_canvas:
             return
         deadline = asyncio.get_running_loop().time() + timeout
         for _ in range(200):
@@ -532,7 +539,8 @@ class NotebookPanel:
             elif op not in {'save', 'save-as', 'show-in-folder', 'document-location', 'delete-file', 'page-previews'}:
                 await canvas.wait(asyncio.to_thread(editor.apply, action))
                 if hasattr(self, 'session') and op == 'rename':
-                    self.session.title = editor.notebook.name
+                    from services.documents.mobile_notebooks import notebook_title
+                    self.session.title = notebook_title(self)
                     self.app.refresh_document_list()
                     self.app.adaptive.render()
         except asyncio.CancelledError:

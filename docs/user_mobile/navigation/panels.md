@@ -120,7 +120,7 @@ transfer cancellation handle. LocalCrypt operations that need the cloud engine
 remain serialized.
 
 Home’s **Workspaces** opens the same folder list each time. Choosing
-**All files → Browse Local** refreshes the local root and clears an old
+**Shared Files** refreshes the shared root and clears an old
 search filter. Local browsing does not wait for a credential restore or an
 unrelated cloud request.
 

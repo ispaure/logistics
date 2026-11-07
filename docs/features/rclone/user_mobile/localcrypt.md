@@ -12,7 +12,7 @@ no crypt remote, the loaded ZIP must include both the crypt configuration and
 its backing remote configuration; choosing only the backing Dropbox/Drive/etc.
 remote does not apply crypt decryption.
 For a new offline folder, tap **Pull** in Workspaces. A session-only crypt
-remote opens a popup strongly recommending LocalCrypt: choose **Yes** to keep
+remote opens a popup strongly recommending an encrypted copy: choose **Yes** to keep
 the existing ciphertext or **No** for a regular Local copy. Regular Local files
 remain decrypted and readable after credentials lock or the app exits. Both kinds
 of copy persist on disk. You can cancel in the transfer review before any pull.
@@ -26,7 +26,7 @@ prompt open; unlocking resumes the selected folder automatically. Home’s unloc
 button remains available too.
 
 The browser title shows the current folder name. LocalCrypt copies identify
-**On-device · Unlocked · LocalCrypt** underneath; credentials loaded for this
+**On-device · Unlocked · Encrypted Copy** underneath; credentials loaded for this
 session show **Unlocked (Session Only)**. On iOS, swipe a long description
 horizontally to read it in full. Android and iOS both use this single header;
 there is no extra “On this device / LocalCrypt” source strip. Choose another
@@ -34,7 +34,7 @@ workspace to change sources.
 
 Remote browsing and unlocked copies show decrypted names. **Manage local files
 and folders** opens a local browser with **Local files** and existing
-**LocalCrypt** copies. **List** and **Tiles** show filenames and generic file/folder
+`<foldername> - Encrypted Copy` destinations. **List** and **Tiles** show filenames and generic file/folder
 icons. Browsing reads basic filesystem information and decrypts LocalCrypt names;
 it does not open file contents, load covers or parse comic/EPUB metadata. Open a
 file to read it and load its reader metadata.

@@ -299,9 +299,9 @@ class DocumentStorageProbe(LogisticsMobile):
             self.cloud_crypt_remotes = {remote}
             await asyncio.sleep(.3)
             await self.verify_formats(remote, fixture, report)
-            for location in ('Local', 'LocalCrypt: ' + remote):
+            for location in ('Local', remote + ' - Encrypted Copy'):
                 await self.verify_notebook_deletion(location, report)
-            for location in ('Local', 'LocalCrypt: ' + remote):
+            for location in ('Local', remote + ' - Encrypted Copy'):
                 panel = await self.create_notebook(location, 'Storage acceptance')
                 if location.startswith('LocalCrypt'):
                     assert panel.web.private_configured
@@ -386,7 +386,7 @@ class DocumentStorageProbe(LogisticsMobile):
                 report['cases'].append('native-decrypted-export-cancel')
                 await picker.show_notebook_destination(panel)
                 await asyncio.sleep(.4)
-                picker.save_as_storage.value = 'Local files'
+                picker.save_as_storage.value = 'Local'
                 await asyncio.sleep(.3)
                 assert await picker.refresh_editor_browser()
                 picker.save_as_name.value = 'Decrypted copy.rmdoc'

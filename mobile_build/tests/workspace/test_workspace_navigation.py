@@ -765,8 +765,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.cloud_busy = app.transfer_busy = True
         drawer = self.navigation.browser('documents')
         async def exercise():
-            self.assertIn('LocalCrypt: Remote', drawer.available_roots())
-            self.assertTrue(await drawer.show_main_browser('LocalCrypt: Remote', folder='Collection/Comics'))
+            self.assertIn('Remote - Encrypted Copy', drawer.available_roots())
+            self.assertTrue(await drawer.show_main_browser('Remote - Encrypted Copy', folder='Collection/Comics'))
             self.assertEqual([row.label for row in drawer.browser.entries], ['note.md'])
             with patch.object(app, 'open_crypt', new=AsyncMock(return_value=True)) as opened:
                 self.assertTrue(await drawer.open_file({'path': logical}))
@@ -791,7 +791,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 opened.assert_not_awaited()
             self.assertIn('Unlock', drawer.status.text)
             app.transfer_busy = False
-            self.assertNotIn('LocalCrypt: Remote', drawer.available_roots())
+            self.assertNotIn('Remote - Encrypted Copy', drawer.available_roots())
         try:
             app.loop.run_until_complete(exercise())
         finally:

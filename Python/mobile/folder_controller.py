@@ -53,6 +53,8 @@ class FolderController(FolderHubUI):
         "folder_all_choices",
         "folder_local_group",
         "folder_local_tabs",
+        "folder_cloud_tab",
+        "folder_cloud_tabs",
         "folder_local_buttons",
         "folder_local_header",
         "folder_loading_progress",

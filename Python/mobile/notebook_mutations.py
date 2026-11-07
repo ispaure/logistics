@@ -66,6 +66,7 @@ class NotebookMutations:
         from features.notebooks.mobile.documents import adopt_notebook_document, repository
         from features.notebooks.storage import NotebookDocument
         from services.documents.mobile_storage import remember_notebook_resource
+        from services.documents.mobile_notebooks import remember_notebook
         for panel, previous, resource, token in updated:
             if not self.app.active_host or not self.app.workspace.accepts(token) or panel.document is not previous:
                 resource.close()
@@ -77,7 +78,10 @@ class NotebookMutations:
             remember_notebook_resource(document)
             adopt_notebook_document(self.app, panel, document)
             panel.session.dirty = document.dirty
+            remember_notebook(self.app, panel)
         self.app.save_workspace()
+        if updated:
+            self.app.refresh_document_list()
 
     def release(self):
         for panel, *_ in self.bindings:

@@ -83,8 +83,8 @@ class CredentialMetadataPreparationTests(TestCase):
             roots = {}
             with patch('features.rclone.transfers.mobile.ui.collection_path', return_value=base):
                 locations = MirrorUI.existing_crypt_locations(app, roots=roots)
-            self.assertEqual(locations, {'LocalCrypt: Secret': 'Secret'})
-            self.assertEqual(roots, {'LocalCrypt: Secret': ('Secret', identity)})
+            self.assertEqual(locations, {'Secret - Encrypted Copy': 'Secret'})
+            self.assertEqual(roots, {'Secret - Encrypted Copy': ('Secret', identity)})
             client.request.assert_not_called()
 
     def test_unchanged_association_does_not_rewrite_preferences(self):

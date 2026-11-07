@@ -1,5 +1,6 @@
 """Managed copies and transfers which keep ordinary Documents usable."""
 from services.documents.locations import collection_path
+from services.folders.labels import encrypted_copy_label
 import asyncio
 import toga
 from toga.style import Pack
@@ -43,12 +44,12 @@ class MirrorUI(TransferReviewUI):
             try:
                 identity = identities.get(remote) or client.request('crypt_path', remote=remote, path='', directory=True)['identity']
                 if roots is not None:
-                    roots['LocalCrypt: ' + remote] = (remote, identity)
+                    roots[encrypted_copy_label(remote)] = (remote, identity)
                 if base is None:
                     base = collection_path(self.private_root, True)
                 path = base / identity
                 if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
-                    result['LocalCrypt: ' + remote] = remote
+                    result[encrypted_copy_label(remote)] = remote
             except (OSError, ValueError):
                 continue
         return result
@@ -82,7 +83,7 @@ class MirrorUI(TransferReviewUI):
                     storage_root=self.private_root, create=False, cipher_identity=job['cipher_identity']))
                 # Name the actual saved copy, keeping distinct storage namespaces
                 # selectable without adding a transfer-status annotation.
-                result['LocalCrypt: ' + remote + ' · ' + job['target']] = provider
+                result[encrypted_copy_label(remote + ' · ' + job['target'])] = provider
             except (OSError, ValueError):
                 continue
         return result
@@ -162,10 +163,10 @@ class MirrorUI(TransferReviewUI):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Choose local copy', style=Pack(font_size=22)))
         for job in jobs:
-            storage = 'LocalCrypt' if job['crypt'] else 'Local'
+            label = encrypted_copy_label(job['target']) if job['crypt'] else job['target']
             def choose(widget=None, selected=job['id'], **kwargs):
                 (self.start_mirror_review if push else self.start_mirror_pull)(selected)
-            box.add(toga.Button(storage + '/' + job['target'], on_press=choose, style=Pack(height=48)))
+            box.add(toga.Button(label, on_press=choose, style=Pack(height=48)))
         box.add(toga.Button('Choose another workspace', on_press=self.show_locations, style=Pack(height=44)))
         self.show_view(box, destination='files', route='transfer-copy', title='Choose local copy')
 
@@ -260,8 +261,8 @@ class MirrorUI(TransferReviewUI):
         storage = 'Local'
         if raw['crypt'] and session_only:
             encrypted = await self.main_window.dialog(toga.QuestionDialog(
-                'Use LocalCrypt (recommended)?',
-                'LocalCrypt is strongly recommended for session-only credentials. '
+                'Use an encrypted copy (recommended)?',
+                'An encrypted copy is strongly recommended for session-only credentials. '
                 'Yes: keep the existing encrypted names and file contents on disk. '
                 'No: create a regular Local copy with decrypted files that remain '
                 'readable after credentials lock or the app exits. Both copies remain '
@@ -380,7 +381,7 @@ class MirrorUI(TransferReviewUI):
                 or generation != getattr(client, 'generation', None)):
             provider.close()
             return False
-        label = 'LocalCrypt: ' + remote + ' · ' + job['target']
+        label = encrypted_copy_label(remote + ' · ' + job['target'])
         self.file_roots[label] = provider
         self.update_file_locations()
         self.files_view._folder_entry_location = (label, folder)

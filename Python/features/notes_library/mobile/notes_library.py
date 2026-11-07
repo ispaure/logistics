@@ -1170,10 +1170,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         return self.host.loop.create_task(choose())
 
     def name_document(self, extension, filename=''):
-        from mobile.filename_input import FilenameInput
         suffix = PurePosixPath(filename).suffix
         suffix = suffix if suffix.lower() in (MARKDOWN if extension == 'md' else {'.' + extension}) else '.' + extension
-        name = FilenameInput(value=filename, extension=suffix, placeholder='Untitled', style=Pack(height=48))
+        name = self.host.presentation.filename_input(value=filename, extension=suffix, placeholder='Untitled', style=Pack(height=48))
         status = toga.Label('')
         async def next_step(widget=None, **kwargs):
             try:
@@ -1336,8 +1335,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return False
         title = 'Rename' if move else 'New folder'
         initial = PurePosixPath(source).name if move else ''
-        from mobile.filename_input import FilenameInput
-        name = FilenameInput(value=initial, directory=not move or self.library.provider.entry(source)['directory'],
+        name = self.host.presentation.filename_input(value=initial, directory=not move or self.library.provider.entry(source)['directory'],
                              style=Pack(height=48))
         status = toga.Label('Links are not rewritten.' if move else '')
         submit_button = toga.Button('Rename' if move else 'Create folder', style=Pack(height=48))

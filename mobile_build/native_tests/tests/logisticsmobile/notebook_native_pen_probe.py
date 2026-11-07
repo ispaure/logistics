@@ -287,7 +287,7 @@ class NativePencilProbe(NotebookProbe):
             form.creation_type.value = 'Remarkable Document (.rmdoc)'
             await form.choose_creation_location()
             picker = app.editor_picker()
-            await ready(lambda: picker.editor_picker_location == ('All files', '') and not picker.cloud_busy,
+            await ready(lambda: picker.editor_picker_location == ('Shared Files', '') and not picker.cloud_busy,
                         'Local picker did not finish')
             row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Local')
             assert await picker.browser_editor_folder(row)

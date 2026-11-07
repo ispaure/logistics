@@ -178,7 +178,7 @@ class MirrorUITests(unittest.TestCase):
                     patch('features.rclone.mobile.service.native_service', return_value=service):
                 locations = MirrorUI.linked_crypt_locations(owner)
             self.assertEqual(list(locations.values()), providers)
-            self.assertEqual(list(locations), ['LocalCrypt: Secret · Notes', 'LocalCrypt: Secret · Comics'])
+            self.assertEqual(list(locations), ['Secret · Notes - Encrypted Copy', 'Secret · Comics - Encrypted Copy'])
 
     def test_pull_replaces_an_open_document_without_losing_its_unsaved_draft(self):
         from commonUtils.runtime.resources.local import LocalFiles

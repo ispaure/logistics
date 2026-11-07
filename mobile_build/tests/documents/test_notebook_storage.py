@@ -355,13 +355,13 @@ class NotebookStorageTests(unittest.TestCase):
         self.stroke(panel)
         self.run_async(self.app.editor_picker().show_notebook_destination(panel))
         picker = self.app.editor_picker()
-        picker.save_as_storage.value = 'Local files'
+        picker.save_as_storage.value = 'Local'
         picker.save_as_name.value = 'Copy.rmdoc'
         self.run_async(picker.refresh_editor_browser())
         with patch.object(self.app.main_window, 'dialog', return_value=False):
             self.run_async(picker.confirm_editor_file())
         self.assertTrue(panel.session.transient)
-        self.assertFalse((picker.editor_provider('Local files').root / 'Copy.rmdoc').exists())
+        self.assertFalse((picker.editor_provider('Local').root / 'Copy.rmdoc').exists())
         with patch.object(self.app.main_window, 'dialog', return_value=True):
             self.run_async(picker.confirm_editor_file())
         self.assertFalse(panel.session.transient, picker.save_as_status.value)
@@ -394,6 +394,44 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertEqual(panel.editor.notebook.name, 'Retained private draft')
         self.assertEqual(list((self.root / 'notebooks').glob('**/base.rmdoc')), [])
         self.assertIn('draft retained', panel.status.text)
+
+    def test_closed_notebook_rename_reopens_the_file_from_recents(self):
+        from mobile.document_mutations import prepare_document_mutation
+        from mobile.file_operations import FileOperationRequest, retiring_work
+        from threading import Event
+
+        panel = self.create(private=False)
+        resource = panel.document.resource
+        request = FileOperationRequest('rename', resource.provider, resource.path, 'Renamed.rmdoc')
+        self.assertTrue(self.app.close_session(panel.session.id))
+
+        async def rename():
+            plan = await prepare_document_mutation(self.app, request)
+            try:
+                await retiring_work(plan.execute, Event(), completed=plan.apply)
+            finally:
+                plan.release()
+
+        self.run_async(rename())
+        [(session, summary)] = self.app.recent_items()
+        self.assertEqual(summary[0], 'Renamed.rmdoc')
+        [menu_button] = self.app.hub_controller().document_row_menu(session)
+        commands = dict(menu_button.document_actions.raw_actions)
+        self.assertIn('Rename…', commands)
+        self.assertIn('Delete…', commands)
+        self.assertTrue(self.run_async(commands['Document location']()))
+        self.assertEqual(self.app.selected_file()[1], 'Renamed.rmdoc')
+        self.run_async(self.app.recent_opener(session)())
+        reopened = self.app.notebook_panel
+        self.assertEqual(reopened.document.resource.path, 'Renamed.rmdoc')
+        self.stroke(reopened)
+        with patch.object(self.app, 'document_close_dialog', return_value=True) as dialog:
+            self.assertTrue(self.app.request_close_session(reopened.session.id))
+        dialog.assert_called_once()
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as confirm:
+            self.assertFalse(self.run_async(reopened.delete_document()))
+        self.assertEqual(confirm.call_args.args[0].title, 'Delete Renamed.rmdoc?')
+        self.assertIn('Renamed.rmdoc', confirm.call_args.args[0].message)
 
     def test_live_notebook_rename_retains_draft_and_saves_only_to_new_name(self):
         from mobile.document_mutations import prepare_document_mutation
@@ -454,10 +492,10 @@ class NotebookStorageTests(unittest.TestCase):
         self.stroke(panel)
         source = panel.document.resource.provider.root / panel.document.resource.path
         original = source.read_bytes()
-        with patch.object(self.app, 'existing_crypt_locations', return_value={'LocalCrypt: Secret': self.provider}):
+        with patch.object(self.app, 'existing_crypt_locations', return_value={'Secret - Encrypted Copy': self.provider}):
             self.run_async(self.app.editor_picker().show_notebook_destination(panel))
         picker = self.app.editor_picker()
-        picker.save_as_storage.value = 'LocalCrypt: Secret'
+        picker.save_as_storage.value = 'Secret - Encrypted Copy'
         picker.save_as_name.value = 'Encrypted.rmdoc'
         self.run_async(picker.refresh_editor_browser())
         self.run_async(picker.confirm_editor_file())

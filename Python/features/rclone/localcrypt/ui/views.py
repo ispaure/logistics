@@ -199,14 +199,14 @@ class CryptBrowserView(qt.QMainWindow):
         from features.rclone.localcrypt.mapping import for_path, storage_root
         if self.file_browser.operation.busy:
             return
-        selected = (qt.QFileDialog.getExistingDirectory(self, 'Move local folder into LocalCrypt') if folder else
-                    qt.QFileDialog.getOpenFileName(self, 'Move local file into LocalCrypt')[0])
+        selected = (qt.QFileDialog.getExistingDirectory(self, 'Move local folder into encrypted copy') if folder else
+                    qt.QFileDialog.getOpenFileName(self, 'Move local file into encrypted copy')[0])
         if not selected:
             return
         path = Path(selected)
         boundary = storage_root().absolute()
         if for_path(path) or path == boundary or boundary in path.parents:
-            qt.QMessageBox.warning(self, 'Move', 'Use Move to from the decrypted LocalCrypt browser for encrypted files.')
+            qt.QMessageBox.warning(self, 'Move', 'Use Move to from the unlocked encrypted-copy browser for encrypted files.')
             return
         source = LocalFiles(path.parent)
         target = '/'.join(p for p in (self.provider.relative(self.file_browser.navigation.directory), path.name) if p)
@@ -229,7 +229,7 @@ class CryptBrowserView(qt.QMainWindow):
     @property
     def view_title(self):
         directory = self.file_browser.navigation.directory if self.file_browser else self.item.data
-        return f'🕵️ Private - {self.item.remote} · {directory.name if directory != self.item.data else "LocalCrypt"}'
+        return f'🕵️ Private - {self.item.remote} · {directory.name if directory != self.item.data else "Encrypted Copy"}'
 
     def edit_epub_metadata(self, path):
         from features.books.ui.metadata_window import MetadataWindow

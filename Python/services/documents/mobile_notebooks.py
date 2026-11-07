@@ -98,7 +98,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                     source_bytes = resource.read()
                     book = Notebook.read(source_bytes)
                 except (OSError, ValueError):
-                    if recovery is None or key is None:
+                    if recovery is None or key is None or (binding and not binding.get('dirty')):
                         raise
                     book = recovery.open(key)
                     resource.close()
@@ -117,6 +117,8 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                             recovery.adopt(key, book, recovered)
                             recovery.save(key, book, source_bytes=source_bytes)
             else:
+                if binding and not binding.get('dirty'):
+                    raise FileNotFoundError('The notebook moved or was deleted. Open it from its current folder.')
                 book = recovery.open(key) if key else Notebook.new(name or 'Untitled notebook')
             document = NotebookDocument(book, resource=active_resource, recovery=recovery, key=key,
                                          changed=remember_notebook_resource)
@@ -166,18 +168,38 @@ def present(app, panel, *, destination=None):
     session = panel.session
     app.notebook_panel = panel
     app.workspace.activate(session.id)
-    if not session.transient:
-        app.recent_documents.remember(session)
+    remember_notebook(app, panel)
     from mobile.document_location import install_document_location
     install_document_location(panel.view, copies=panel.document.resource if panel.document is not None else None)
-    panel.view._native_reader_title = lambda: panel.editor.notebook.name if panel.editor is not None else ''
+    panel.view._native_reader_title = lambda: notebook_title(panel) if panel.editor is not None else ''
     panel.view._document_path = lambda: notebook_location(panel)
     app.show_view(panel.view, destination=destination, route='notebook:' + session.id,
-                  title=panel.editor.notebook.name)
+                  title=notebook_title(panel))
     if panel.web is None:
         panel.mount_canvas()
     app.save_workspace()
     app.refresh_document_list()
+
+
+def remember_notebook(app, panel):
+    session, document = panel.session, panel.document
+    resource = document.resource if document is not None else None
+    if session.transient:
+        return
+    if resource is None:
+        app.recent_documents.remember(session)
+        return
+    path = Path(resource.provider.root) / resource.path
+    session.title = path.name
+    session.history_source = app.recent_documents.normalize_source(dict(type='local', path=str(path.resolve())))
+    app.recent_documents.remember_file(session, session.history_source)
+    if not app.recent_documents.error:
+        app.recent_documents.forget('notebook', session.resource)
+
+
+def notebook_title(panel):
+    path = getattr(getattr(panel.document, 'resource', None), 'path', None)
+    return Path(path).name if path else panel.editor.notebook.name
 
 
 def notebook_location(panel):
@@ -186,13 +208,15 @@ def notebook_location(panel):
         return None
     document = panel.document
     if document is not None and document.resource is not None:
-        return display_path(document.resource.provider, document.resource.path)
-    name = panel.editor.notebook.name
-    if document is not None and document.recovery is not None and document.key:
-        return f'{name}\n\n{document.recovery.root / document.key}'
-    if document is None and panel.key:
-        return f'{name}\n\n{panel.repository.root / panel.key}'
-    return name
+        resource = document.resource
+        if resource.policy.persistent:
+            from services.documents.locations import shared_documents_path
+            root = shared_documents_path(panel.app.private_root)
+            path = Path(resource.provider.root) / resource.path
+            if root is not None and path.resolve().is_relative_to(root.resolve()):
+                return str(Path('Documents') / path.resolve().relative_to(root.resolve()))
+        return display_path(resource.provider, resource.path)
+    return f'{panel.editor.notebook.name}\n\nNotebook draft'
 
 
 def close_notebook(app, key, choice, *, leaving_reader=False):
@@ -222,6 +246,11 @@ def close_notebook(app, key, choice, *, leaving_reader=False):
         except (OSError, ValueError, KeyError) as error:
             show_notebook_close_error(app, panel, error)
             return False
+    if panel is not None and panel.document is not None and panel.document.dirty and not panel.session.transient:
+        app.recent_documents.remember(panel.session)
+        source = getattr(panel.session, 'history_source', None)
+        if source is not None and not app.recent_documents.error:
+            app.recent_documents.forget('file-reference', app.recent_documents.reference_id(source))
     app.workspace.close(key, guard=lambda session: True)
     panels(app).pop(key, None)
     if panel is not None:
@@ -406,13 +435,13 @@ async def delete_notebook(panel):
     if document.deletion_started:
         warning = 'Notebook data was already deleted in part or in full. Retry the remaining cleanup?'
     elif resource is not None:
-        warning += ' The file will be deleted from its folder.'
+        warning += '\n\n' + notebook_location(panel)
     canvas = getattr(panel, 'bridge', None)
     was_busy, panel.busy = panel.busy, True
     panel._delete_pending = True
     try:
         choice = await app.main_window.dialog(DocumentDialog(
-            'Delete ' + document.book.name + '?', warning, delete=True))
+            'Delete ' + notebook_title(panel) + '?', warning, delete=True))
         if choice != 'delete' or not current():
             return False
         single_window()
@@ -435,6 +464,9 @@ async def delete_notebook(panel):
         if not current():
             return False
         app.recent_documents.forget('notebook', session_resource)
+        source = getattr(session, 'history_source', None)
+        if source is not None:
+            app.recent_documents.forget('file-reference', app.recent_documents.reference_id(source))
         imports = getattr(app, 'resource_imports', None) or ResourceImports(app.private_root)
         imports.forget('notebook', session_resource)
         panel.busy = False

@@ -147,7 +147,8 @@ class SessionTransitions:
         if book is not None and host.book_edits_dirty(book):
             return host.request_book_close(book)
         notebook = getattr(host, '_notebook_views', {}).get(key)
-        if notebook is not None and not _notebook_flushed and getattr(notebook, 'native_transport', False):
+        if notebook is not None and not _notebook_flushed and (getattr(notebook, 'native_transport', False)
+                or getattr(notebook, 'has_native_canvas', False)):
             if getattr(notebook, '_native_close_task', None) is None:
                 token = host.workspace.token(key)
                 async def flush_notebook_then_close():
@@ -168,7 +169,7 @@ class SessionTransitions:
                 or _notebook_unflushed or getattr(notebook, 'native_input_pending', False)):
             async def save_notebook():
                 try:
-                    if getattr(notebook, 'native_transport', False):
+                    if getattr(notebook, 'native_transport', False) or getattr(notebook, 'has_native_canvas', False):
                         if not await notebook.save_from_view():
                             return
                     else:
@@ -178,7 +179,8 @@ class SessionTransitions:
                 except (OSError, ValueError, TimeoutError) as error:
                     from services.documents.mobile_notebooks import show_notebook_close_error
                     show_notebook_close_error(host, notebook, error)
-            return host.document_close_dialog(key, notebook.editor.notebook.name,
+            from services.documents.mobile_notebooks import notebook_title
+            return host.document_close_dialog(key, notebook_title(notebook),
                 lambda: host.loop.create_task(save_notebook()),
                 lambda: host.close_session(key, choice='discard'))
         private = host.provider_sessions().controllers.get(key)
