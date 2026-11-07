@@ -370,8 +370,7 @@ class DocumentsHub:
         for section in (self.document_open_list, self.document_recent_list, self.document_saved_list):
             for child in list(section.children):
                 section.remove(child)
-        sessions = [session for session in self.workspace.sessions.values() if self.session_visible(session)]
-        sessions.sort(key=lambda session: session.id != self.workspace.active)
+        sessions = self.open_document_sessions()
         entries = self.document_open_list
         rows = []
         for session in sessions:

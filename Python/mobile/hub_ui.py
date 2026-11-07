@@ -55,6 +55,10 @@ class HubUI(HomeScreen, DocumentsHub):
             return manager is not None and manager.available(session.id)
         return True
 
+    def open_document_sessions(self):
+        sessions = [session for session in self.workspace.sessions.values() if self.session_visible(session)]
+        return sorted(sessions, key=lambda session: session.id != self.workspace.active)
+
     def recent_items(self, *, excluding=()):
         """Merge history with live owners, resolving file aliases only in RAM."""
         excluded = set(excluding)
@@ -183,8 +187,10 @@ class HubUI(HomeScreen, DocumentsHub):
         button.document_actions = FeatureCommands(button, app, actions, None, document=True)
         return [button]
 
-    def recent_row(self, session, summary):
+    def recent_row(self, session, summary, *, show_kind=False):
         title, kind, details = summary
+        if show_kind:
+            details = [DOCUMENT_TYPES.get(kind, 'Document'), *details]
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         opener = self.recent_opener(session)
         from .browser_ui import middle_filename
@@ -307,9 +313,11 @@ class HubUI(HomeScreen, DocumentsHub):
         if destination == 'documents':
             self.refresh_documents()
         if destination == 'home' and hasattr(self, 'home_sections'):
-            recent = self.recent_items()[:5]
-            if _home_state(self, recent) == getattr(self, '_home_content_state', None):
-                for button, (session, _) in zip(self._home_recent_buttons, recent):
+            overview = self._home_overview()
+            if _home_state(self, overview) == getattr(self, '_home_content_state', None):
+                _, opened, recent = overview
+                for button, (session, _) in zip(
+                        [*self._home_open_buttons, *self._home_recent_buttons], [*opened, *recent]):
                     self.document_button_icons(button, session)
                 return
         root = self.routes.roots[destination]

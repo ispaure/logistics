@@ -436,7 +436,8 @@ async def exercise_ui_review(app):
         app.private_sessions.close(owner.session.id, discard=True)
         app.show_home()
         assert app.home_continue is None
-        assert [button.text for button in app.home_actions.children] == ['Open Document', 'New Document']
+        assert [button.text for button in app.home_sections._home_primary_buttons] == [
+            'Open Document', 'New Document']
         await capture('home-' + mode)
         app.show_locations()
         await capture('folder-picker-' + mode)
