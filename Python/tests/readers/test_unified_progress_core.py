@@ -291,6 +291,30 @@ print(json.dumps([loaded, state.load_status.value]))
         self.assertEqual(reopened.load(), {})
         self.assertIs(reopened.load_status, ProgressStatus.SESSION_ONLY)
 
+    def test_mobile_progress_uses_the_admitted_alias_credential(self):
+        for field in ('identities', 'crypt_identities'):
+            with self.subTest(field=field):
+                client = SimpleNamespace(generation=1, package_records=[
+                    dict(saved=False, document_cache_id='first-zip', **{field: {'Drive': 'same-settings'}}),
+                    dict(saved=True, **{field: {'Drive @ Saved': 'same-settings'}}),
+                    dict(saved=False, document_cache_id='second-zip', **{field: {'Drive @ Second': 'same-settings'}}),
+                ])
+                app = SimpleNamespace(cloud_client=client, private_root=self.root)
+
+                def provider(alias):
+                    return SimpleNamespace(client=client, remote=alias, private=True, identity='same-settings')
+
+                saved = self.private_progress(provider('Drive @ Saved'), app=app)
+                self.assertIs(saved.mode, ProgressMode.SESSION_MEMORY)
+                for alias, grant in (('Drive', 'first-zip'), ('Drive @ Second', 'second-zip')):
+                    state = CredentialState(provider(alias), 'book.epub', self.root, kind='epub', app=app)
+                    self.assertEqual(state.cipher.identity, grant)
+                missing = self.private_progress(provider('Drive @ Missing'), app=app)
+                self.assertIs(missing.mode, ProgressMode.SESSION_MEMORY)
+                client.package_records.append(dict(saved=True, remotes=['Drive']))
+                ambiguous = self.private_progress(provider('Drive'), app=app)
+                self.assertIs(ambiguous.mode, ProgressMode.SESSION_MEMORY)
+
     def test_offline_download_and_remote_original_are_distinct(self):
         client = SimpleNamespace(generation=1, connection_identity=lambda remote: 'connection')
         app = SimpleNamespace(cloud_client=client, private_root=self.root)
