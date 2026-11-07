@@ -231,8 +231,21 @@ async def exercise_destination_edges(app):
                 sample['keyboard_top'] = top
                 assert native.isShown() and int(point[1]) + int(native.getHeight()) <= top + 1, sample
                 action = picker.picker_primary._impl.native
-                action.getLocationOnScreen(point)
+                # Native IME readiness precedes Toga's resized child layout.
+                # Require the actual completion target to reach the viewport.
+                deadline = asyncio.get_running_loop().time() + 5
+                while True:
+                    action.getLocationOnScreen(point)
+                    if action.isShown() and int(point[1]) + int(action.getHeight()) <= top + 1:
+                        break
+                    if asyncio.get_running_loop().time() >= deadline:
+                        break
+                    await asyncio.sleep(.05)
                 sample['save_bounds'] = [int(point[0]), int(point[1]), int(action.getWidth()), int(action.getHeight())]
+                sample['picker_compact'] = picker._compact_keyboard
+                sample['form_flex'] = picker.picker_form.style.flex
+                sample['panel_height'] = picker.panel.layout.height
+                sample['mounted_browse_controls'] = sum(control.parent is not None for control in picker._browse_controls)
                 assert action.isShown() and int(point[1]) + int(action.getHeight()) <= top + 1, sample
                 density = float(native.getResources().getDisplayMetrics().density)
                 assert int(action.getHeight()) >= 44 * density, sample
