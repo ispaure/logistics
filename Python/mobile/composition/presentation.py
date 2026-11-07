@@ -300,7 +300,7 @@ def notes_host(app):
         entry_icon=entry_icon,
         highlight_entry=highlight_entry,
         preview=lambda text, **kwargs: obsidian.markdown_preview(
-            text, int(app.preferences.values["markdown_font_size"]), local_links=True, limits=preview_limits, compact_top=True, **kwargs
+            text, int(app.preferences.values["markdown_font_size"]), local_links=True, limits=preview_limits, compact_top=True, callouts=True, **kwargs
         ),
     )
 

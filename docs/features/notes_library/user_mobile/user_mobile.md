@@ -14,6 +14,10 @@ Use Files, Calendar and Links to navigate, and the library's close control to
 leave. Unsaved changes retain their save/discard/cancel choices. Folder-backed
 Markdown uses the [shared mobile editing controls](../../text_editor/user_mobile/user_mobile.md).
 
+Markdown callouts such as `[!NOTE]` display as titled panels with their
+headings, paragraphs, and lists inside. Tap the title of a foldable callout to
+expand or collapse it. Reading and folding leave the source unchanged.
+
 Notes Library accepts Markdown files up to 16 MiB. Reading allows up to 96 MiB
 of rendered HTML and 128 MiB for the final private page. Embedded images share a
 48 MiB file-byte budget per render; each image remains limited to 8 MiB and 16
