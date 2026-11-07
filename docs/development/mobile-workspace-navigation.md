@@ -1849,10 +1849,10 @@ preserving other owners' insets.
 
 The shared container policy reclaims the rectangular top inset beside a vertical
 system rail only for a measured unoccupied content column. Visible native titles
-and prompts retain their space. Home and Documents can place their retained
-actions in a measured free leading status-band column, with full-width content
-reserved below the complete system cluster. Home keeps its two-column landscape
-layout. In a single horizontal pane, Home measures the native fitting sizes
+and prompts retain their space. Documents keeps its actions in the native
+navigation bar for placement and hit testing. Home can use a measured free
+leading status-band column, with full-width content below the system cluster.
+Home keeps its two-column landscape layout. In a single horizontal pane, Home measures the native fitting sizes
 before placing Open, New and conditional Unlock together. The measured top
 band can host this row when clear. Otherwise, a row that fits uses normal safe
 area and reserved-region clearance, and Unlock falls back to the native bar
