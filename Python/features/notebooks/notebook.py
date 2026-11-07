@@ -12,10 +12,9 @@ from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
 from .ink import InkPage
 
-MAX_ARCHIVE = 32 * 1024 * 1024
-MAX_EXPANDED = 128 * 1024 * 1024
-MAX_MEMBERS = 4096
-MAX_PAGES = 1000
+MAX_ARCHIVE = 128 * 1024 * 1024
+MAX_EXPANDED = 256 * 1024 * 1024
+MAX_MEMBERS = 65536
 
 
 def identifier(value):
@@ -49,7 +48,7 @@ def page_index(index, count, *, insertion=False):
 
 def read_archive(data):
     if len(data) > MAX_ARCHIVE:
-        raise ValueError('RMDOC imports are limited to 32 MiB compressed.')
+        raise ValueError('RMDOC imports are limited to 128 MiB compressed.')
     members = {}
     seen = set()
     try:
@@ -84,6 +83,7 @@ class Page:
     record: dict = field(default_factory=dict)
     template: str = 'Blank'
     ink: InkPage | None = None
+    recovered_ink: bytes | None = None
 
 
 class Notebook:
@@ -147,8 +147,8 @@ class Notebook:
                     redirect = record.get('redir', {}).get('value', -1)
                     if type(redirect) is not int or not -1 <= redirect < 10000:
                         raise ValueError('Invalid PDF page mapping.')
-            if not 1 <= len(records) <= MAX_PAGES:
-                raise ValueError('Notebooks must contain 1–1000 pages with explicit page IDs.')
+            if not records:
+                raise ValueError('Notebooks must contain at least one page with an explicit page ID.')
             pages = [Page(identifier(r['id']), deepcopy(r),
                 r.get('template', {}).get('value', templates[i] if i < len(templates) else 'Blank'))
                 for i, r in enumerate(records)]
@@ -168,13 +168,16 @@ class Notebook:
     def page(self, index):
         page = self.pages[index]
         if page.ink is None:
-            raw = self.members.get(f'{self.id}/{page.id}.rm')
+            raw = self.unloaded_ink(page)
             page.ink = InkPage.read(raw) if raw is not None else InkPage.blank()
         return page.ink
 
+    def unloaded_ink(self, page):
+        if page.recovered_ink is not None:
+            return page.recovered_ink
+        return self.members.get(f'{self.id}/{page.id}.rm')
+
     def add_page(self, at=None):
-        if len(self.pages) >= MAX_PAGES:
-            raise ValueError('A notebook is limited to 1000 pages.')
         at = len(self.pages) if at is None else page_index(at, len(self.pages), insertion=True)
         page = Page(str(uuid4()), ink=InkPage.blank())
         if self.content.get('fileType') == 'pdf':
@@ -198,8 +201,6 @@ class Notebook:
 
     def copy_page(self, source, index, at=None):
         """Copy opaque page data with a fresh ID. Never remove the source first."""
-        if len(self.pages) >= MAX_PAGES:
-            raise ValueError('A notebook is limited to 1000 pages.')
         page_index(index, len(source.pages))
         at = len(self.pages) if at is None else page_index(at, len(self.pages), insertion=True)
         original = source.pages[index]
@@ -244,9 +245,9 @@ class Notebook:
         members = dict(self.members)
         content, metadata = deepcopy(self.content), deepcopy(self.metadata)
         changed = self.structure_dirty or self.metadata_dirty
-        for index, page in enumerate(self.pages):
-            if page.ink is not None:
-                raw = page.ink.to_bytes()
+        for page in self.pages:
+            raw = page.ink.to_bytes() if page.ink is not None else page.recovered_ink
+            if raw is not None:
                 path = f'{self.id}/{page.id}.rm'
                 if members.get(path) != raw:
                     members[path] = raw
@@ -288,5 +289,5 @@ class Notebook:
                 archive.writestr(name, data)
         data = output.getvalue()
         if len(data) > MAX_ARCHIVE:
-            raise ValueError('Export exceeds the 32 MiB compressed limit.')
+            raise ValueError('Export exceeds the 128 MiB compressed limit.')
         return data

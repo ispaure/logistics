@@ -36,8 +36,8 @@ def document_webview(resource=None, *, inline_video=False, **options):
     view_type = toga.WebView
     if private:
         from commonUtils.ui.native.private_webview import PrivateWebView
-        # Notebook archives allow 128 MiB expanded; an initial page can exceed
-        # the text reader's HTML bound. The private adapter never stages HTML.
+        # An initial notebook page can exceed the text reader's HTML bound.
+        # The private adapter keeps a separate in-memory HTML limit.
         view_type = PrivateWebView
         options['max_html_bytes'] = 128 * 1024 * 1024
     if inline_video and backend.startswith('toga_iOS.'):
