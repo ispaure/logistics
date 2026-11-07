@@ -115,6 +115,34 @@ def create_document_folder(provider, path, *, cancelled=lambda: False):
         return create_resource_folder(provider, path, cancelled=cancelled)
 
 
+def create_marked_document_folder(provider, folder, marker, *, cancelled=lambda: False):
+    """Publish an empty marker and roll back only the folder this call created."""
+    from io import BytesIO
+    from posixpath import join
+    from commonUtils.persistence.publication import mutation_lock
+    from commonUtils.runtime.resources.provider import require_capability
+
+    if not document_writable(provider):
+        raise PermissionError('This location is read-only.')
+    require_capability(provider, 'create')
+    require_capability(provider, 'delete')
+    with mutation_lock, document_operation(provider, lambda: False):
+        check_document_access(provider)
+        check_cancelled(cancelled)
+        provider.mkdir(folder)
+        revision = provider.entry(folder)['revision']
+        try:
+            check_cancelled(cancelled)
+            provider.create_file(join(folder, marker), BytesIO(), cancelled=cancelled)
+        except Exception:
+            try:
+                provider.remove_empty(folder, revision)
+            except (OSError, ValueError) as cleanup:
+                raise ValueError('Could not finish creating the folder. Inspect it before retrying.') from cleanup
+            raise
+    return folder
+
+
 def move_document_resource(provider, source, destination, *, cancelled=lambda: False):
     from commonUtils.runtime.resources.mutations import rename_resource
     if not document_writable(provider):
