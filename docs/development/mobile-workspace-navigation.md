@@ -679,7 +679,8 @@ checks discard stale results.
 `mobile.obsidian` retains the native adaptive folder/page reader and
 owns a transient `notes-library` Documents session. Its hamburger, history,
 parent navigation and read-aloud controls stay with the reader. Closing the
-library removes its session and returns to the Workspaces overview, including
+library removes its session and returns to Documents when opened there. A library
+opened through Workspaces returns to the Workspaces overview, including
 when opened from a file browser. Leaving a folder or closing its library resets
 the opening choice, so revisiting the same `.obsidian` folder prompts again;
 refreshing within the same visit does not. Private catalog revocation clears its tree, speech

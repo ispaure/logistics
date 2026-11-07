@@ -43,6 +43,10 @@ class NotesHeaderProbe(NotesDrawersProbe):
         drive_touches = (output / 'drive-notes-touches').exists()
         owner = None
         try:
+            deadline = self.loop.time() + 120
+            while getattr(self, '_startup_in_progress', False) and self.loop.time() < deadline:
+                await asyncio.sleep(.1)
+            assert not getattr(self, '_startup_in_progress', False), 'Startup did not settle'
             root = output / 'Art'
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Home.md').write_text('# Home\n\n[[Other]]\n')
@@ -273,11 +277,14 @@ class NotesHeaderProbe(NotesDrawersProbe):
             else:
                 raise AssertionError('Native Close did not dismiss the library')
             for _ in range(100):
-                if not self.native_host.adapter.tabs_hidden():
+                if (self.native_host.state.destination == 'documents'
+                        and not self.native_host.adapter.tabs_hidden()):
                     break
                 await asyncio.sleep(.05)
             else:
                 raise AssertionError('Documents destination bar did not return after Close')
+            await asyncio.sleep(.4)
+            assert self.native_host.root.current_tab.index == self.native_host.destinations.index('documents')
             report['native_breadcrumb_swipes'] = drive_touches
             report['success'] = True
         except Exception:
