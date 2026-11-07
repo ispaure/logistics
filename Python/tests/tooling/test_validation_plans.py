@@ -31,13 +31,15 @@ class ValidationPlanTests(unittest.TestCase):
             linux = desktop_checks('Linux', Path('reports'))
         self.assertEqual([p[0] for p in posix], ['test-structure', 'commonutils.smoke', 'logistics.smoke',
                          'commonutils', 'logistics', 'compression-parity'])
-        self.assertEqual([p[2] for p in posix], [120, 1800, 1800, 1800, 1800, 600])
-        self.assertEqual(linux, posix)
+        self.assertEqual([p[2] for p in posix], [120, 1800, 1800, 1800, 2400, 600])
+        self.assertEqual([p[2] for p in linux], [120, 1800, 1800, 1800, 1800, 600])
+        self.assertEqual([(name, argv) for name, argv, _ in linux],
+                         [(name, argv) for name, argv, _ in posix])
         windows_full = [windows[0], *windows[2:]]
         self.assertEqual([(name, command) for name, command, _ in windows_full],
                          [(name, command) for name, command, _ in posix])
         self.assertEqual([timeout for _, _, timeout in windows_full],
-                         [120, 1800, 1800, 1800, 2100, 600])
+                         [120, 1800, 1800, 1800, 2700, 600])
         self.assertEqual({name for (name, _, timeout), (_, _, previous) in zip(windows_full, posix)
                           if timeout != previous}, {'logistics'})
         from tests.runner_settings import ISOLATED_FILE_TIMEOUT
@@ -51,13 +53,13 @@ class ValidationPlanTests(unittest.TestCase):
                 self.assertNotIn('--profile', command)  # Full coverage stays the default.
 
     def test_windows_full_suite_floor_never_shortens_larger_declared_budget(self):
-        suites = [dict(id='logistics', directory='Python/tests', timeout=2400,
+        suites = [dict(id='logistics', directory='Python/tests', timeout=3000,
                        smoke_args=['--profile', 'smoke', '--mode', 'fast'])]
         with patch('build_manager.test_manifest.discover', return_value=suites):
             checks = desktop_checks('Windows', Path('reports'))
         budgets = {name: timeout for name, _, timeout in checks}
-        self.assertEqual(budgets['logistics'], 2400)
-        self.assertEqual(budgets['logistics.smoke'], 2400)
+        self.assertEqual(budgets['logistics'], 3000)
+        self.assertEqual(budgets['logistics.smoke'], 3000)
         self.assertNotIn('manager-contracts', budgets)
 
     def test_full_logistics_gates_keep_consumer_contracts_without_implicit_sdk_self_tests(self):
