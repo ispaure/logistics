@@ -51,6 +51,41 @@ class XcodeStorageTests(unittest.TestCase):
             for processes, now in [('', 10001), ('/Applications/Xcode 27.1.app/Contents/MacOS/Xcode', 100000)]:
                 self.assertFalse(storage_group(root, processes=processes, now=now)['eligible'](path))
 
+    def test_temporary_root_alias_uses_the_same_ownership_activity_and_snapshot_lock(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            temp_root = root / 'private' / 'tmp'
+            alias = root / 'tmp'
+            project = temp_root / 'checkout'
+            snapshot = project / 'mobile_build/.tools/build-manager/snapshots' / ('a' * 64)
+            snapshot.mkdir(parents=True)
+            alias.symlink_to(temp_root, target_is_directory=True)
+            source = snapshot / 'mobile_build/build/App.xcodeproj'
+            alias_source = alias / source.relative_to(temp_root)
+            cache_root = root / 'caches'
+            cache = cache_root / 'owned'
+            cache.mkdir(parents=True)
+            metadata = cache / 'info.plist'
+
+            with patch('logistics_build.xcode_storage.TEMP_ALIAS', alias):
+                for recorded, active in ((alias_source, source), (source, alias_source)):
+                    metadata.write_bytes(plistlib.dumps(dict(WorkspacePath=str(recorded))))
+                    os.utime(cache, (1, 1))
+                    options = dict(cache_root=cache_root, now=100000)
+                    idle = storage_group(project, processes='', **options)
+                    running = storage_group(project, processes='xcodebuild -project ' + str(active), **options)
+                    self.assertTrue(idle['eligible'](cache))
+                    self.assertFalse(running['eligible'](cache))
+                    self.assertEqual(idle['lock_path'](cache), snapshot.with_suffix('.lock'))
+                    with workspace_lock(snapshot.with_suffix('.lock')):
+                        self.assertEqual(prune(**idle, keep=0, age_days=0), [])
+                    pin = snapshot / '.keep'
+                    pin.touch()
+                    self.assertFalse(idle['eligible'](cache))
+                    pin.unlink()
+
+                self.assertEqual(prune(**idle, keep=0, age_days=0, apply=True), [str(cache)])
+
     def test_unavailable_process_inventory_fails_closed(self):
         with patch('logistics_build.xcode_storage.subprocess.check_output', side_effect=PermissionError):
             with self.assertRaises(PermissionError):
