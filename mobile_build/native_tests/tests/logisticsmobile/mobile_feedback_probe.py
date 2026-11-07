@@ -98,11 +98,11 @@ class FeedbackProbe(LogisticsMobile):
                 await asyncio.sleep(.4)
                 assert not any(hasattr(owner, name) for name in
                                ('panel_footer', 'panel_identity', 'panel_metadata', 'panel_menu', 'root_drop_button'))
-                assert owner.tree.children[1:3] == [owner.panel_actions, owner.panel_body]
+                assert owner.files_content.children == [owner.panel_actions, owner.rows_scroll]
                 commands = [child for child in owner.panel_actions.children if isinstance(child, toga.Button)]
                 assert [w.accessible_name for w in commands] == ['New document', 'New folder', 'Collapse all folders']
                 pane, first, last = frame(owner.tree), frame(commands[0]), frame(commands[-1])
-                tabs, row, body = frame(owner.panel_tabs['Files']), frame(owner.panel_actions), frame(owner.panel_body)
+                tabs, row, body = frame(owner.panel_tabs['Files']), frame(owner.panel_actions), frame(owner.rows_scroll)
                 assert all(r[2] > 0 and r[3] > 0 for r in (pane, first, last, tabs, row, body)), (pane, first, last, tabs, row, body)
                 assert abs((first[0] + last[0] + last[2]) / 2 - (pane[0] + pane[2] / 2)) <= 2, (pane, first, last)
                 assert tabs[1] + tabs[3] <= row[1] + 2 and row[1] + row[3] <= body[1] + 2, (tabs, row, body)
@@ -113,10 +113,10 @@ class FeedbackProbe(LogisticsMobile):
                 await capture_window(self, output / f'feedback-notes-{orientation}.png')
                 tap(owner.panel_tabs['Search'])
                 await asyncio.sleep(.2)
-                assert owner.panel_tab == 'Search' and owner.panel_actions.parent is None
+                assert owner.panel_tab == 'Search' and owner.files_content.parent is None
                 tap(owner.panel_tabs['Calendar'])
                 await until(lambda: owner.calendar_task is not None and owner.calendar_task.done(), 'Calendar did not load')
-                assert owner.panel_tab == 'Calendar' and owner.panel_actions.parent is None
+                assert owner.panel_tab == 'Calendar' and owner.files_content.parent is None
                 tap(owner.panel_tabs['Files'])
                 report['items']['18'].append(dict(orientation=orientation, pane=pane, commands=[first, last]))
             owner.dispose()

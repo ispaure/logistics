@@ -2,6 +2,7 @@
 import asyncio
 import json
 from pathlib import Path
+import sys
 import traceback
 
 from commonUtils.runtime.resources.local import LocalFiles
@@ -11,6 +12,37 @@ from .chat_settings_probe import ChatSettingsProbe
 from .fixtures import capture_window
 
 TEST_STAGE = TestStage.REGRESSION
+
+
+def assert_panel_tabs_reachable(owner):
+    from rubicon.objc import CGPoint
+    window = owner.view.window._impl.native
+    for name, button in owner.panel_tabs.items():
+        native = button._impl.native
+        width, height = native.bounds.size.width, native.bounds.size.height
+        assert native.window is not None and not native.isHidden() and width > 0 and height > 0, (
+            'Notes tab is missing', owner.panel_tab, name)
+        point = native.convertPoint(CGPoint(width / 2, height / 2), toView=window)
+        hit = window.hitTest(point, withEvent=None)
+        while hit is not None and hit != native:
+            hit = hit.superview
+        assert hit == native, ('Notes tab is covered', owner.panel_tab, name, point)
+
+
+async def check_panel_tab_switching(owner):
+    pane_children = tuple(owner.tree.children)
+    query = owner.search.value
+    owner.search.focus()
+    await asyncio.sleep(.4)
+    assert owner.search._impl.has_focus
+    assert_panel_tabs_reachable(owner)
+    for name in ('Files', 'Search', 'Files', 'Calendar', 'Search'):
+        owner.panel_tabs[name]._impl.native.sendActionsForControlEvents(1 << 6)
+        await asyncio.sleep(.4)
+        assert owner.panel_tab == name
+        assert tuple(owner.tree.children) == pane_children
+        assert_panel_tabs_reachable(owner)
+    assert owner.search.value == query
 
 
 class NotesSearchProbe(ChatSettingsProbe):
@@ -50,6 +82,9 @@ class NotesSearchProbe(ChatSettingsProbe):
                     assert owner.rows_scroll.parent is owner.search_content
                     await capture_window(self, output / f'notes-search-{pose}-{suffix}.png')
                     report['samples'].append(dict(pose=pose, scope=scope, result=path))
+                if sys.platform == 'ios' and pose.startswith('landscape'):
+                    await check_panel_tab_switching(owner)
+                    report['native_panel_tabs'] = pose
             owner.dispose()
             owner = None
             assert names_input.value == documents_input.value == ''
