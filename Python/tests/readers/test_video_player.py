@@ -65,7 +65,7 @@ class VideoContracts(unittest.TestCase):
             self.assertEqual(restored.load(), 5678)
             self.assertEqual(restored.settings.rate, 1.5)
 
-    def test_local_settings_and_position_follow_moves_and_survive_completion(self):
+    def test_local_settings_and_position_follow_moves_survive_completion_and_isolate_copies(self):
         from dataclasses import asdict
         from features.video.session import PlaybackSettings
         from services.documents.video_settings import VideoSettingsStore
@@ -82,19 +82,23 @@ class VideoContracts(unittest.TestCase):
             content.close()
             target = root / 'subfolder'
             target.mkdir()
+            shutil.copyfile(movie, target / 'copied.mp4')
             movie.rename(target / 'renamed.mp4')
-            moved = VideoContent(LocalFiles(target), 'renamed.mp4')
+            copied = VideoContent(LocalFiles(target), 'copied.mp4')
+            original = VideoContent(LocalFiles(target), 'renamed.mp4')
             try:
-                restored = VideoProgress(moved, root / 'state')
+                self.assertEqual(VideoProgress(copied, root / 'state').load(), 0)
+                restored = VideoProgress(original, root / 'state')
                 self.assertEqual(restored.load(), 12345)
                 self.assertEqual(restored.settings, preferences)
                 restored.save(99999, completed=True)
-                reopened = VideoProgress(moved, root / 'state')
+                reopened = VideoProgress(original, root / 'state')
                 self.assertEqual(reopened.load(), 0)
                 self.assertEqual(reopened.settings, preferences)
                 self.assertFalse((root / 'state' / 'playback-settings.json').exists())
             finally:
-                moved.close()
+                copied.close()
+                original.close()
 
 
     @stage(TestStage.EXTENDED)
@@ -128,7 +132,7 @@ class VideoContracts(unittest.TestCase):
                 self.assertEqual(state.settings.rate, 1.25)
                 state.save(13579)
                 self.assertEqual(state.load(), 13579)
-                encrypted = state.credential_state.root / (state.credential_state.binding() + '.zip')
+                encrypted, = (Path(directory) / 'ReaderPositions').glob('*.zip')
                 self.assertNotIn(b'position', encrypted.read_bytes())
                 self.assertFalse((Path(directory) / 'public-cache').exists())
                 reopened = VideoProgress(content, Path(directory) / 'public-cache')

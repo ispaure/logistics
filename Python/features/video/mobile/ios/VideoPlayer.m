@@ -38,6 +38,7 @@
 @property(nonatomic, strong) LGScreenAwakeLease *awakeLease;
 @property(nonatomic, copy) NSString *subtitleJSON;
 @property(nonatomic, copy) NSString *pendingSubtitleURL;
+@property(nonatomic, copy) NSSet<NSString *> *subtitleTracksBeforeAttachment;
 @property(nonatomic) int64_t startMilliseconds; // Deferred resume/paused seek; -1 means no pending seek.
 @property(nonatomic) int64_t knownDuration;
 @property(nonatomic) BOOL resumeSeekSubmitted;
@@ -109,6 +110,8 @@
 @property(nonatomic) BOOL surfaceVisible;
 @property(nonatomic, strong) CXCallObserver *callObserver;
 @property(nonatomic) int64_t lastPosition;
+@property(nonatomic) int64_t progressSeek;
+@property(nonatomic) NSUInteger lastAudioTrackCount, lastTextTrackCount;
 @property(nonatomic, copy) NSString *optionsJSON, *queueJSON, *pictureGeometry;
 @property(nonatomic, copy) void (^command)(NSString *, NSString *);
 @property(nonatomic) BOOL controlsLocked, cacheApproximate;
@@ -116,9 +119,9 @@
 @property(nonatomic, strong) UIView *cacheStrip, *pauseSnapshot;
 @property(nonatomic, copy) NSString *languageSignature;
 @property(nonatomic) CGSize lastVideoSize;
-@property(nonatomic) CGFloat sessionSubtitleScale; // Zero means use configured preference.
 @property(nonatomic) BOOL forceMaximumHDR; // Session-only diagnostic; default uses automatic HDR.
 - (void)invalidatePiPPlaybackState;
+- (NSString *)trackKey:(VLCMediaPlayerTrack *)track;
 @end
 
 static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoController *owner);
@@ -173,6 +176,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.extendedLayoutIncludesOpaqueBars = YES;
     self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
     self.lastPosition = self.startMilliseconds;
+    self.progressSeek = -1;
     self.observedClock = -1;
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
     self.movie = [[UIView alloc] init];
@@ -715,6 +719,8 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.lastRenderedClock = target;
     if (self.networkResumePending) self.bufferPosition = target;
     self.startMilliseconds = self.player.isPlaying ? -1 : target;
+    self.resumeSeekSubmitted = NO;
+    self.progressSeek = target;
     self.player.time = [VLCTime timeWithNumber:@(target)];
 }
 - (void)skipMilliseconds:(int64_t)offset { [self seekToMilliseconds:[self positionMilliseconds] + offset]; }
@@ -942,6 +948,12 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         [self pause]; [self clearPausePresentation]; self.movie.hidden = YES;
     } else if (!self.lockHidden && [self canPlay:NO]) self.movie.hidden = NO;
 }
+- (int64_t)progressPosition {
+    if (self.ended) return 0;
+    if (self.progressSeek >= 0 || self.networkResumePending || self.resumeSeekSubmitted || self.startMilliseconds >= 0)
+        return -1;
+    return self.player.time.value ? self.player.time.value.longLongValue : -1;
+}
 - (int64_t)positionMilliseconds {
     if (self.ended) return 0;
     if (self.networkResumePending) return self.bufferPosition;
@@ -982,6 +994,19 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         self.resumeSeekSubmitted = NO;
     }
     if (![self canPlay:NO]) [self pause];
+    if (self.progressSeek >= 0 && self.player.time.value) {
+        int64_t position = self.player.time.value.longLongValue;
+        if (position >= 0 && llabs(position - self.progressSeek) <= 750) {
+            self.progressSeek = -1;
+            [self emitCommand:@"progress" value:[NSString stringWithFormat:@"%lld", position]];
+        }
+    }
+    NSUInteger audioCount = self.player.audioTracks.count, textCount = self.player.textTracks.count;
+    if (audioCount != self.lastAudioTrackCount || textCount != self.lastTextTrackCount) {
+        self.lastAudioTrackCount = audioCount;
+        self.lastTextTrackCount = textCount;
+        [self applyPlaybackOptions];
+    }
     [self updatePlaybackProgress];
     // Playing can arrive before the first frame/seek acknowledgement. Revisit
     // eligibility once those arrive without postponing an existing deadline.
@@ -1112,6 +1137,24 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)audioTracks:(id)sender { [self tracks:sender subtitles:NO]; }
 - (void)subtitleTracks:(id)sender { [self tracks:sender subtitles:YES]; }
+- (NSString *)trackKey:(VLCMediaPlayerTrack *)track {
+    NSArray *fields = @[@"ios-vlc", track.language ?: @"", track.trackDescription ?: @"",
+                        [track codecName] ?: @"", track.trackName ?: @""];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:fields options:0 error:nil];
+    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
+}
+- (void)selectTrack:(NSString *)field index:(NSInteger)index key:(NSString *)key {
+    NSMutableDictionary *options = [[self playbackOptions] mutableCopy];
+    options[field] = @(index);
+    options[[field stringByAppendingString:@"_key"]] = key;
+    if ([field isEqualToString:@"subtitle_track"]) options[@"subtitle_file"] = @"";
+    NSData *data = [NSJSONSerialization dataWithJSONObject:options options:0 error:nil];
+    if (!data) return;
+    self.optionsJSON = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSDictionary *update = @{field: @(index), [field stringByAppendingString:@"_key"]: key};
+    data = [NSJSONSerialization dataWithJSONObject:update options:0 error:nil];
+    [self emitCommand:@"settings" value:[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]];
+}
 - (NSString *)trackLabel:(VLCMediaPlayerTrack *)track index:(NSUInteger)index {
     NSMutableArray *parts = [NSMutableArray array];
     if (track.trackName.length) [parts addObject:track.trackName];
@@ -1131,20 +1174,20 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self setControlsShown:YES];
     UIAlertController *menu = [self menu:text ? @"Subtitles" : @"Audio tracks" sender:sender];
     if (text) [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitles off" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        if ([self canPlay:NO]) { [self.player deselectAllTextTracks]; [self setting:@"subtitle_track" value:@(-1)]; }
+        if ([self canPlay:NO]) { [self.player deselectAllTextTracks]; [self selectTrack:@"subtitle_track" index:-1 key:@""]; }
     }]];
     NSArray<VLCMediaPlayerTrack *> *tracks = text ? self.player.textTracks : self.player.audioTracks;
     for (NSUInteger index = 0; index < tracks.count; index++) {
         VLCMediaPlayerTrack *track = tracks[index];
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[self trackLabel:track index:index] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            if ([self canPlay:NO]) { track.selectedExclusively = YES; [self setting:text ? @"subtitle_track" : @"audio_track" value:@(index)]; }
+            if ([self canPlay:NO]) { track.selectedExclusively = YES; [self selectTrack:text ? @"subtitle_track" : @"audio_track" index:(NSInteger)index key:[self trackKey:track]]; }
         }]];
     }
     if (text) {
         NSArray *subtitles = [NSJSONSerialization JSONObjectWithData:[self.subtitleJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
         for (NSDictionary *subtitle in subtitles) {
             [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:subtitle[@"name"] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-                if ([self canPlay:NO]) { [self.player addPlaybackSlave:[NSURL URLWithString:subtitle[@"url"]] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES]; [self emitCommand:@"subtitleSelect" value:subtitle[@"name"]]; }
+                [self emitCommand:@"subtitleSelect" value:subtitle[@"name"]];
             }]];
         }
     }

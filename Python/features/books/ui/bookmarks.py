@@ -22,7 +22,7 @@ class Bookmarks:
         if accepted and label.strip():
             self._bookmarks.append(dict(label=label.strip(), path=self._path, position=self._position(), location=self.text.location()))
             self._populate_bookmarks()
-            self._save_state()
+            self._save_bookmarks()
 
     def open_bookmark(self, index):
         if self.worker or not 0 <= index < len(self._bookmarks):
@@ -39,5 +39,5 @@ class Bookmarks:
         if 0 <= index < len(self._bookmarks):
             del self._bookmarks[index]
             self._populate_bookmarks()
-            self._save_state()
+            self._save_bookmarks()
 

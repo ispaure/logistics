@@ -13,6 +13,7 @@ from commonUtils.archives.zip_access import ArchivePasswordError
 from .reader_chrome import ReaderChrome
 from .library_ui import LibraryCatalog
 from .reader_controls import page_buttons
+from .provider_progress import ProgressWrites
 
 
 class ReaderUI(LibraryCatalog, ReaderChrome):
@@ -127,7 +128,20 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         finally:
             self.set_book_busy(False)
 
+    @property
+    def _epub_location_task(self):
+        return getattr(getattr(self, '_book_progress', None), 'task', None)
+
+    def request_position_flush(self):
+        progress = getattr(self, '_book_progress', None)
+        if progress is not None:
+            return progress.schedule(immediate=True)
+
     def release_book_reader(self):
+        progress = getattr(self, '_book_progress', None)
+        if progress is not None:
+            progress.close()
+            self._book_progress = None
         self.format_services.clear_comic_boundary()
         from .page_animation import cancel_page_slide
         cancel_page_slide(self.book_content)
@@ -136,7 +150,6 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if sidebar is not None:
             sidebar.show_detail()
         self.book_epoch = getattr(self, 'book_epoch', 0) + 1
-        self._epub_pending = None
         for name in ('_comic_layout_task', '_epub_width_task'):
             task = getattr(self, name, None)
             if task is not None:
@@ -207,14 +220,20 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         epoch = self.book_epoch
         navigation, selection = self.navigation_generation, self.workspace.active
         try:
-            record, reader = await asyncio.to_thread(self.library_store.open, key, password=password)
+            record, reader, state, restored = await asyncio.to_thread(
+                self.library_store.open_reading, key, password=password, app=self.app)
             if epoch != self.book_epoch or not self.active_host:
+                state.retire()
                 source = getattr(getattr(reader, 'document', None), 'source', None)
                 if hasattr(source, 'close'):
                     source.close()
                 return
             self.hide_book_unlock()
+            self._library_baseline = record
+            record = self._restored_record(record, reader, restored)
             self.book_record, self.book_reader = record, reader
+            self._book_progress = ProgressWrites(self, state)
+            self._book_location = None
             count = len(reader.spine if record['kind'] == 'epub' else reader.pages)
             self.book_loading = True
             if record['kind'] == 'epub':
@@ -233,7 +252,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 self.render_chapters()
             self.book_loading = False
             self.refresh_library()
-            await self.display_book_page(min(record['position'], count - 1))
+            await self.display_book_page(min(record['position'], count - 1), initial=True)
+            self._book_progress.report_load()
         except ArchivePasswordError:
             if epoch != self.book_epoch or not self.active_host:
                 return
@@ -258,7 +278,47 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                     and self.navigation_generation == navigation and self.workspace.active == selection):
                 self.book_password.focus()
 
-    async def display_book_page(self, index, *, preserve_speech=False):
+    @staticmethod
+    def _restored_record(record, reader, restored):
+        names = reader.spine if record['kind'] == 'epub' else reader.pages
+        resource, index = restored.get('resource'), restored.get('page', 0)
+        if type(index) is not int or not 0 <= index < len(names):
+            index = 0
+        if isinstance(resource, str) and resource in names and names[index] != resource:
+            index = names.index(resource)
+        record = dict(record, position=index, bookmarks=restored.get('bookmarks', []))
+        record.pop('location', None)
+        record.pop('comic_half', None)
+        if record['kind'] == 'epub':
+            from features.books.locations import valid_location
+            location = dict(path=names[index], offset=restored.get('offset', 0))
+            if valid_location(location):
+                record['location'] = location
+            record['epub_bookmarks'] = [value for value in restored.get('epub_bookmarks', [])
+                                        if valid_location(value)]
+        else:
+            record['comic_half'] = 1 if restored.get('half') == 1 else 0
+        record['bookmarks'] = [value for value in record['bookmarks']
+                               if type(value) is int and 0 <= value < len(names)]
+        return record
+
+    def observe_book_location(self, index, *, offset=None, initial=False):
+        progress = getattr(self, '_book_progress', None)
+        if (progress is None or not self.active_host or self.manager.active is not self
+                or self.app.visible_reader() != self.session.id):
+            return
+        reader = self.book_reader
+        if offset is None:
+            value = dict(page=index, resource=reader.pages[index], half=self.comic_navigation.half)
+        else:
+            value = dict(page=index, resource=reader.spine[index], offset=offset)
+            self.book_record = dict(self.book_record, location=dict(path=reader.spine[index], offset=offset))
+        if value != self._book_location:
+            self._book_location = value
+            if not initial:
+                progress.observe(value)
+
+    async def display_book_page(self, index, *, preserve_speech=False, initial=False):
         if not preserve_speech:
             self.close_read_aloud()
         sidebar = getattr(self, 'chapter_sidebar', None)
@@ -300,7 +360,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             if not current:
                 return
             if record['kind'] == 'epub':
-                view = self._prepare_library_epub_view(reader, epoch, index, prepared_epub)
+                view = self._prepare_library_epub_view(reader, epoch, index, prepared_epub, initial=initial)
             if not preserve_speech:
                 self.close_read_aloud()
             if not publication.mount(view, direction=direction,
@@ -333,26 +393,30 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         self.previous_page.enabled = (index > 0 or self.epub_offset > 0) if record['kind'] == 'epub' else self.comic_navigation.can_previous(index)
         self.next_page.enabled = index + 1 < count if record['kind'] == 'epub' else self.comic_navigation.next(index) is not None
         self.book_loading = False
-        # Mount the prepared page before filesystem latency; the loop can paint
-        # while the worker publishes ordinary imported-library progress.
-        try:
-            saved = await asyncio.to_thread(self.library_store.progress, record, index, location=location,
-                **({'comic_half': self.comic_navigation.half} if record['kind'] == 'comic' else {}))
-            if self.book_reader is reader and self.book_epoch == epoch and self.book_record['position'] == index:
-                self.book_record = saved
-        except (OSError, ValueError) as error:
-            if self.book_reader is reader and self.book_epoch == epoch:
-                self.book_status.text = 'Cannot save reading position: ' + str(error)[:300]
+        if record['kind'] == 'comic':
+            self.observe_book_location(index, initial=initial)
+        elif getattr(view._impl, 'native', None) is None:
+            # Host backends mount static HTML without a native navigation bridge.
+            self.observe_book_location(index, offset=self.epub_offset, initial=initial)
 
-    def _prepare_library_epub_view(self, reader, epoch, index, prepared_epub):
-        """Bind chapter events to the captured reader and epoch before mounting."""
+    def _prepare_library_epub_view(self, reader, epoch, index, prepared_epub, *, initial):
+        """Accept callbacks only from the exact chapter currently mounted."""
         from .reading.epub_resume import appearance
         self._epub_appearance = appearance(self.preferences.values)
         self.epub_text, self.epub_offset, content = prepared_epub
+        bridge = None
+
+        def event(action, value):
+            nonlocal initial
+            if bridge is None or self.epub_view._chapter_bridge is not bridge:
+                return
+            self.epub_event(reader, epoch, index, action, value, initial=initial)
+            initial = False
+
         self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
-            on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
-            on_link=lambda href: self.epub_link(reader, epoch, index, href),
+            on_event=event, on_link=lambda href: self.epub_link(reader, epoch, index, href),
             motion_enabled=self.preferences.values.get('android_eink') != 'true')
+        bridge = self.epub_view._chapter_bridge
         from .fold_layout import bind_epub_geometry
         bind_epub_geometry(self.epub_view)
         from .font_scaling import bind
@@ -459,26 +523,36 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             await pending
         if self.book_busy or self.book_record is None:
             return
-        self.set_book_busy(True)
+        record, reader = self.book_record, self.book_reader
+        index = record['position']
+        marks = list(record['bookmarks'])
+        locations = list(record.get('epub_bookmarks', []))
+        if record['kind'] == 'epub':
+            location = dict(path=reader.spine[index], offset=self.epub_offset)
+            if index in marks and self.epub_offset == 0:
+                marks.remove(index)
+            elif location in locations:
+                locations.remove(location)
+            elif len(marks) + len(locations) < 200:
+                locations.append(location)
+        elif index in marks:
+            marks.remove(index)
+        elif len(marks) < 200:
+            marks.append(index)
+            marks.sort()
+        self.book_record = dict(record, bookmarks=marks, epub_bookmarks=locations)
+        count = len(reader.spine if record['kind'] == 'epub' else reader.pages)
+        self.book_loading = True
         try:
-            self.book_record = await asyncio.to_thread(self.library_store.progress, self.book_record,
-                self.book_record['position'], bookmark=True,
-                location=dict(path=self.book_reader.spine[self.book_record['position']], offset=self.epub_offset)
-                    if self.book_record['kind'] == 'epub' else None)
-            await self.display_book_page(self.book_record['position'])
-        except Exception as error:
-            self.book_status.text = 'Cannot save bookmark: ' + str(error)[:500]
+            self._project_book_navigation(reader, record, self.book_record, count, index)
         finally:
-            self.set_book_busy(False)
+            self.book_loading = False
+        progress = self._book_progress
+        progress.observe(dict(bookmarks=marks, epub_bookmarks=locations), bookmarks=True)
+        await progress.flush()
 
     def epub_event(self, *args, **kwargs):
         return self.epub_controller().epub_event(*args, **kwargs)
-
-    def request_position_flush(self, *args, **kwargs):
-        return self.epub_controller().request_position_flush(*args, **kwargs)
-
-    async def save_epub_location(self, *args, **kwargs):
-        return await self.epub_controller().save_epub_location(*args, **kwargs)
 
     async def epub_boundary(self, *args, **kwargs):
         return await self.epub_controller().epub_boundary(*args, **kwargs)
@@ -570,10 +644,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             field.readonly = True
         try:
             index, reader, epoch = self.book_record['position'], self.book_reader, self.book_epoch
-            record, updated = await asyncio.to_thread(self.library_store.save_metadata, self.book_record, reader, changes)
+            record, updated = await asyncio.to_thread(
+                self.library_store.save_metadata, self._library_baseline, reader, changes)
             if self.book_reader is not reader or self.book_epoch != epoch or not self.active_host:
                 return
-            self.book_reader, self.book_record = updated, record
+            self._library_baseline = record
+            # Metadata edits leave the archive-member revision unchanged.
+            self.book_reader = updated
+            self.book_record = dict(self.book_record, digest=record['digest'], revision=record['revision'])
             self.book_metadata_initial = edited
             if record['kind'] == 'epub':
                 from features.books.library.metadata import values

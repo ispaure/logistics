@@ -109,7 +109,7 @@ class ProviderDocumentView:
             *mutation_controls,
             toga.Button('Open…', on_press=owner.show_editor_open, style=Pack(height=44)),
             toga.Label(private_label('Remote preview · Read-only' if read_only else
-                ('Edits stay in memory until saved to the selected local file.' if reader.editable else 'Reading position stays in this session'))),
+                ('Edits stay in memory until saved to the selected local file.' if reader.editable else 'Reading position is saved when available'))),
             toga.Button('Cancel request', on_press=owner.cancel_cloud, style=Pack(height=44)),
             *([] if read_only or not reader.editable else [toga.Button('Discard changes and close', on_press=owner.discard_crypt, style=Pack(height=44))]),
             toga.Button('Close private reader', on_press=owner.close_crypt, style=Pack(height=44))],

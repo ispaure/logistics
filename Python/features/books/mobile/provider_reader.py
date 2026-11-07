@@ -15,6 +15,7 @@ class RichBookView(toga.Box):
         self.book, self.index, self.offset = book, index, offset
         self.on_chapter, self.on_position = on_chapter, on_position
         self.disposed, self.loading = False, True
+        self.position_ready = False
         if prepared is None:
             content = chapter_html(book, index, font_size, margin=margin, theme=theme, links=True, **(typography or {}))
             self.chapter = ChapterText(content)
@@ -78,6 +79,7 @@ class RichBookView(toga.Box):
         if self.disposed:
             return
         self.offset = min(max(0, offset), self.chapter.length)
+        self.position_ready = True
         self.on_position(self.offset)
         if action in {'previous', 'next'}:
             target = self.index + (1 if action == 'next' else -1)
@@ -97,9 +99,7 @@ class RichBookView(toga.Box):
 
     def seek(self, offset):
         if not self.disposed:
-            self.offset = min(max(0, offset), self.chapter.length)
-            self.webview._chapter_bridge.seek(self.offset)
-            self.on_position(self.offset)
+            self.webview._chapter_bridge.seek(min(max(0, offset), self.chapter.length))
 
     def turn(self, direction):
         if self.disposed:
@@ -115,9 +115,7 @@ class RichBookView(toga.Box):
             self.status.text = 'No matching text in this chapter.'
             return
         start, end = found
-        self.offset = start
         self.webview._chapter_bridge.seek(start, end)
-        self.on_position(start)
         self.tools.close()
         self.close_find()
 
@@ -157,9 +155,7 @@ class RichBookView(toga.Box):
             if not view.disposed:
                 if (highlight_allowed() if highlight_allowed is not None else (app is None or not app.screen_privacy.inactive)):
                     view.webview._chapter_bridge.highlight(start, end)
-                if start >= 0:
-                    view.offset = start
-                    view.on_position(start)
+
         panel = self.speech_panel = ReadAloudPanel(loop=loop, source=source, on_range=follow, close=self.close_read_aloud,
             app=app, presentation=presentation, privacy_gate=privacy_gate, valid=valid, next_chapter=next_chapter)
         panel.book_view = self

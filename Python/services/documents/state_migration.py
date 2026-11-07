@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from zipfile import ZipFile, BadZipFile
 
 from commonUtils.persistence import atomic_write_bytes
-from .credential_state import LIMIT, DesktopCredentialCipher, _io_lock
+from .credential_state import LIMIT, DesktopCredentialCipher, _io_lock, checkpoint_write_lock
 
 
 def _member(data):
@@ -117,7 +117,7 @@ def migrate(root, previous_password, *, app=None):
         files += list((root / "CredentialDocumentLists").glob("*/*.zip"))
     from features.rclone.mobile.document_lists import _cache_io_lock
 
-    with _io_lock, _cache_io_lock:
+    with _io_lock, checkpoint_write_lock(root), _cache_io_lock:
         for path in files:
             try:
                 if path.is_symlink() or path.parent.is_symlink():

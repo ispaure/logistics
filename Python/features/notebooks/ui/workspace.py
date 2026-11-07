@@ -11,6 +11,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from ..notebook import Notebook, MAX_ARCHIVE
 from ..recovery import Repository
 from ..editor import Editor
+from ..progress import open_notebook_progress, page_location
 from ..bridge import Bridge
 from ..protocol import document_state, save_status, stroke_script, update_script, validate_action
 from ..canvas import editor_html
@@ -60,6 +61,7 @@ class NotebookWorkspace(qt.QWidget):
         self._repository = None
         self.document = None
         self.editor = None
+        self.progress = None
         self.web = None
         self.busy = False
         qt.QApplication.instance().paletteChanged.connect(self.refresh_appearance)
@@ -75,7 +77,21 @@ class NotebookWorkspace(qt.QWidget):
             self._repository = Repository(self.repository_root)
         return self._repository
 
+    def load_progress(self, book, key):
+        from commonUtils.filesystem.storage import cache_directory
+
+        resource = self.document.resource if self.document else None
+        draft_path = self.repository_root / key / 'base.rmdoc' if resource is None and key else None
+        return open_notebook_progress(book, cache_directory(create=False), resource=resource, draft_path=draft_path)
+
+    def retire_progress(self):
+        if self.progress is not None:
+            self.progress.flush()
+            self.progress.retire()
+            self.progress = None
+
     def clear(self):
+        self.retire_progress()
         if self.web is not None:
             self.web.page().bridge.retire()
         self.web = None
@@ -199,7 +215,9 @@ class NotebookWorkspace(qt.QWidget):
             self.document_window.setWindowTitle(book.name)
         self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
         self.clear()
+        self.progress, self.editor.index = self.load_progress(book, key)
         self.bridge = Bridge()
+        self._position_sequence = -1
         self.web = QWebEngineView(self)
         page = CanvasPage(self.web, self.bridge)
         self.web.setPage(page)
@@ -278,6 +296,7 @@ class NotebookWorkspace(qt.QWidget):
             return self.save_document(save_as=op == 'save-as')
         self.busy = True
         error = ''
+        previous_page = page_location(self.editor)
         try:
             if op == 'page-previews':
                 from ..previews import page_previews
@@ -319,7 +338,22 @@ class NotebookWorkspace(qt.QWidget):
         if op == 'stroke' and not error:
             self.acknowledge_stroke()
         else:
-            self.web.page().runJavaScript(update_script(self.state(), error))
+            script = update_script(self.state(), error)
+            location = page_location(self.editor)
+            progress = self.progress
+            page = self.web.page()
+            position_sequence = page.bridge.sequence
+            if not error and progress is not None and location != previous_page:
+                script += ';state.page_id === ' + json.dumps(location['page_id']) + ' && state.index === ' + str(location['index'])
+                def displayed(result):
+                    if (result is True and self.progress is progress and self.web is not None
+                            and self.web.page() is page and position_sequence >= self._position_sequence):
+                        self._position_sequence = position_sequence
+                        if progress.save(location) == 'write-failed':
+                            page.runJavaScript("document.getElementById('status').textContent='Could not save the notebook page position.'")
+                page.runJavaScript(script, displayed)
+            else:
+                page.runJavaScript(script)
 
     def export_document(self):
         """Keep archive encoding and publication off the UI event loop."""
@@ -423,9 +457,13 @@ class NotebookWorkspace(qt.QWidget):
             self.editor.checkpoint_unconfirmed = False
         if document is not None and not error:
             previous = self.document
+            self.retire_progress()
             self.document = document
             self.key = document.key
             self.editor.checkpoint = document.checkpoint
+            self.progress, _ = self.load_progress(document.book, document.key)
+            if self.progress is not None:
+                self.progress.save(page_location(self.editor))
             if previous is not None:
                 previous.close()
         self.busy = False
@@ -440,6 +478,7 @@ class NotebookWorkspace(qt.QWidget):
                 self.document_window.close()
 
     def dispose(self):
+        self.retire_progress()
         if self.document is not None:
             self.document.close()
             self.document = None

@@ -24,6 +24,8 @@ class MobileVideo:
         self.native_restricted = None
         self.task = None
         self.retirement = None
+        self.progress_workers = set()
+        self.last_sample = None
         self.discovery = None
         self._release_retirement = None
         self.audio_output = app.audio_output
@@ -77,7 +79,7 @@ class MobileVideo:
         self.failure_message = None
         return True
 
-    def retire(self, *, checkpoint=None):
+    def retire(self):
         """Revoke playback immediately; retain resources until native teardown ends."""
         if self.retirement is not None:
             return self.retirement
@@ -93,22 +95,23 @@ class MobileVideo:
         # Native disposal closes controls/mutes synchronously, then returns its
         # completion barrier. A failed disposal must retain the source and scope.
         disposal = self.native.dispose() if self.native is not None else None
-        self.retirement = self.app.loop.create_task(self._finish_retirement(disposal, checkpoint))
+        self.retirement = self.app.loop.create_task(self._finish_retirement(disposal))
         return self.retirement
 
-    async def _finish_retirement(self, disposal, checkpoint):
+    async def _finish_retirement(self, disposal):
         if disposal is not None:
             await asyncio.shield(disposal)
         if self.discovery is not None:
             await asyncio.shield(self.discovery)
         await self.controls.finish()
         self.native = None
-        if checkpoint is not None:
-            position, completed = checkpoint
-            try:
-                await asyncio.to_thread(self.progress.save, position, completed=completed)
-            except (OSError, ValueError, PermissionError):
-                pass
+        for worker in tuple(self.progress_workers):
+            await drain_worker(worker)
+        try:
+            await self.flush_progress()
+        except (OSError, ValueError):
+            pass
+        self.progress.retire()
         await asyncio.to_thread(self.transport.close)
         for subtitle in self.subtitles:
             subtitle.close()
@@ -204,6 +207,9 @@ class MobileVideo:
         import json
         self.native.configure(self.controls.settings.json(), json.dumps(self.controls.queue.rows()))
         self.restore_subtitle(external)
+        self.last_sample = (position, False)
+        if self.progress.resume_notice:
+            self.native.status(self.progress.resume_notice)
         self.task = self.app.loop.create_task(self.watch())
         self.app.routes.sync_back()
 
@@ -223,6 +229,27 @@ class MobileVideo:
         except (OSError, ValueError, PermissionError):
             return False
 
+    async def flush_progress(self, observation=None):
+        worker = self.app.loop.create_task(asyncio.to_thread(self.progress.flush, observation))
+        self.progress_workers.add(worker)
+        worker.add_done_callback(self.progress_workers.discard)
+        try:
+            status = await asyncio.shield(worker)
+            if status == 'locked' and not self.closed and not self.hidden and self.native is not None:
+                self.native.status(self.progress.resume_notice)
+            return status
+        except asyncio.CancelledError:
+            await drain_worker(worker)
+            raise
+
+    def accept_sample(self, position, completed=False):
+        sample = position, completed
+        if position < 0 or sample == self.last_sample:
+            return None
+        observation = self.progress.observe(position, completed=completed)
+        self.last_sample = sample
+        return observation
+
     async def watch(self):
         checkpoints = 0
         try:
@@ -236,21 +263,20 @@ class MobileVideo:
                     else:
                         self.transport.resume()
                         self.native.cached_ranges(self.content.buffered_ranges())
-                        if checkpoints % 5:
-                            continue
-                        position, completed = self.native.position()
                         try:
-                            await asyncio.to_thread(self.progress.save, position, completed=completed)
-                        except (OSError, ValueError, PermissionError) as error:
-                            self.native.status('Resume unavailable: ' + str(error)[:150])
+                            sample = self.native.progress_position()
+                            self.accept_sample(*sample)
+                            if checkpoints % 5 == 0 or sample[1]:
+                                await self.flush_progress()
+                        except (OSError, ValueError) as error:
+                            if not self.closed and not self.hidden and self.native is not None:
+                                self.native.status('Resume unavailable: ' + str(error)[:150])
         except asyncio.CancelledError:
             pass
 
     def conceal(self):
         if self.closed or self.native is None or self.hidden:
             return
-        # Snapshot the native position before the host locks credential gates.
-        position, completed = self.native.position()
         self.native.pause_for_background()
         if self.restricted:
             self.transport.suspend()
@@ -258,7 +284,7 @@ class MobileVideo:
             self.hidden = True
         async def save():
             try:
-                await asyncio.to_thread(self.progress.save, position, completed=completed)
+                await self.flush_progress()
             except (OSError, ValueError, PermissionError):
                 pass  # The last durable checkpoint remains; never write plaintext.
         self.app.loop.create_task(save())
@@ -273,11 +299,8 @@ class MobileVideo:
             self.native.show()  # Authentication restores controls, never autoplay.
 
     async def close(self):
-        checkpoint = None
-        if not self.closed and self.native is not None:
-            checkpoint = self.native.position()
         # Cancellation of a navigation request must not cancel decoder cleanup.
-        await asyncio.shield(self.retire(checkpoint=checkpoint))
+        await asyncio.shield(self.retire())
 
 
 async def open_video(app, provider, path, *, fullscreen=False):

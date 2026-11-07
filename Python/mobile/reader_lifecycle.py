@@ -264,3 +264,145 @@ class ReaderLifecycle:
     def reader_closed(self, key, *, refresh_roots=False):
         from .session_workflows.transitions import transitions_for
         return transitions_for(self).reader_closed(key, refresh_roots=refresh_roots)
+
+
+def source_scroll_anchor(widget):
+    """UTF-16 start of the rendered line, plus the fraction scrolled into it."""
+    from commonUtils.ui.native.text_size import native_backend
+    backend = native_backend(widget)
+    native = getattr(widget._impl, 'native', None)
+    if native is None:
+        return None
+    try:
+        if backend.startswith('toga_iOS.'):
+            from rubicon.objc import CGPoint
+            manager, container = native.layoutManager, native.textContainer
+            manager.ensureLayoutForTextContainer(container)
+            if manager.numberOfGlyphs == 0:
+                return None
+            y = max(0, float(native.contentOffset.y - native.textContainerInset.top))
+            glyph = manager.glyphIndexForPoint(CGPoint(0, y), inTextContainer=container,
+                                               fractionOfDistanceThroughGlyph=None)
+            line = manager.lineFragmentRectForGlyphAtIndex(glyph, effectiveRange=None)
+            offset = int(manager.characterIndexForGlyphAtIndex(glyph))
+            top, height = float(line.origin.y), float(line.size.height)
+        elif backend.startswith('toga_android.'):
+            layout = native.getLayout()
+            if layout is None:
+                return None
+            y = int(native.getScrollY()) - int(native.getTotalPaddingTop())
+            line = layout.getLineForVertical(max(0, y))
+            offset = int(layout.getLineStart(line))
+            top = int(layout.getLineTop(line))
+            height = int(layout.getLineBottom(line)) - top
+        else:
+            return None
+        return [offset, round(max(0, min(1, (y - top) / max(1, height))), 5)]
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        return None
+
+
+def source_anchor_offset(widget, anchor):
+    """Resolve a line anchor after native text layout has adopted the content."""
+    if (not isinstance(anchor, list) or len(anchor) != 2 or type(anchor[0]) is not int
+            or anchor[0] < 0 or type(anchor[1]) not in (int, float) or not 0 <= anchor[1] <= 1):
+        return None
+    from commonUtils.ui.native.text_size import native_backend
+    backend = native_backend(widget)
+    native = getattr(widget._impl, 'native', None)
+    offset, fraction = anchor
+    try:
+        if backend.startswith('toga_iOS.'):
+            if offset >= int(native.textStorage.length()):
+                return None
+            manager, container = native.layoutManager, native.textContainer
+            manager.ensureLayoutForTextContainer(container)
+            glyph = manager.glyphIndexForCharacterAtIndex(offset)
+            line = manager.lineFragmentRectForGlyphAtIndex(glyph, effectiveRange=None)
+            return round(line.origin.y + native.textContainerInset.top + line.size.height * fraction)
+        if backend.startswith('toga_android.'):
+            layout = native.getLayout()
+            if layout is None or offset >= native.length():
+                return None
+            line = layout.getLineForOffset(offset)
+            top = layout.getLineTop(line)
+            return round(top + native.getTotalPaddingTop() + (layout.getLineBottom(line) - top) * fraction)
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        pass
+    return None
+
+
+def _scroll_extent(widget):
+    native = getattr(widget._impl, 'native', None)
+    backend = getattr(widget, 'backend_name', type(widget._impl).__module__)
+    if native is None:
+        return None
+    if backend.startswith('toga_iOS.'):
+        scroll = native.scrollView if hasattr(native, 'scrollView') else native
+        content, bounds = scroll.contentSize, scroll.bounds.size
+        return max(0, content.width - bounds.width), max(0, content.height - bounds.height)
+    if backend.startswith('toga_android.'):
+        if hasattr(native, 'getContentHeight'):
+            return 0, max(0, native.getContentHeight() * native.getScale() - native.getHeight())
+        if hasattr(native, 'getLayout'):
+            layout = native.getLayout()
+            if layout is not None:
+                return (max(0, layout.getWidth() - native.getWidth()),
+                        max(0, layout.getHeight() - native.getHeight()
+                            + native.getTotalPaddingTop() + native.getTotalPaddingBottom()))
+    return None
+
+
+async def restore_reading_scroll(widget, position, valid, *, source_anchor=None):
+    """Wait for settled text geometry and confirm the restored native offset."""
+    import asyncio
+    from commonUtils.ui.native.text_size import native_backend
+    if (not isinstance(position, list) or len(position) != 2
+            or any(type(value) not in (float, int) or not 0 <= value <= 1 for value in position)):
+        return
+    if not native_backend(widget).startswith(('toga_iOS.', 'toga_android.')):
+        restore_normalized_scroll(widget, position)
+        return
+    pending = getattr(getattr(widget, '_font_binding', None), 'task', None)
+    if pending is not None and not pending.done():
+        await asyncio.wait({pending}, timeout=.5)
+    previous = None
+    settled = 0
+    for _ in range(20):
+        if not valid():
+            return
+        extent = _scroll_extent(widget)
+        if extent is not None and all(size > 0 or not fraction for size, fraction in zip(extent, position)):
+            x, y = (round(fraction * size) for fraction, size in zip(position, extent))
+            anchor_y = source_anchor_offset(widget, source_anchor)
+            if anchor_y is not None:
+                y = max(0, min(extent[1], anchor_y))
+            target = x, int(y)
+            actual = scroll_position(widget)
+            if actual is not None and all(abs(a - b) <= 2 for a, b in zip(actual, target)):
+                settled = settled + 1 if target == previous else 1
+                if settled >= 2:
+                    return
+            else:
+                restore_scroll(widget, target)
+                settled = 0
+            previous = target
+        await asyncio.sleep(.05)
+
+
+def normalized_scroll(widget):
+    extent = _scroll_extent(widget)
+    if extent is None:
+        return None
+    position = scroll_position(widget)
+    return [round(max(0, min(1, offset / size)), 5) if size else 0
+            for offset, size in zip(position, extent)]
+
+
+def restore_normalized_scroll(widget, position):
+    if (not isinstance(position, list) or len(position) != 2
+            or any(type(value) not in (float, int) or not 0 <= value <= 1 for value in position)):
+        return
+    extent = _scroll_extent(widget)
+    if extent is not None:
+        restore_scroll(widget, tuple(round(fraction * size) for fraction, size in zip(position, extent)))

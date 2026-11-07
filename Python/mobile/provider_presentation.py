@@ -373,17 +373,25 @@ def prepare_epub_page(host, controller, view, content):
                   else content[1].anchors.get(target, 0) if isinstance(target, str) else target)
     from .palette import themed_chapter
     content = (themed_chapter(content[0], host.preferences.values['reading_theme']), content[1])
+    panel = None
+    initial_position = view is not controller or getattr(controller, 'page_suspended', False)
+
     def position_changed(value):
+        nonlocal initial_position
+        if panel is None or getattr(controller, 'provider_epub_view', None) is not panel:
+            return
         locations[book.spine[index]] = value
-        progress = getattr(view, '_provider_progress', None)
+        progress = getattr(controller, '_provider_progress', None)
         if progress is not None:
-            progress.capture()
-        if hasattr(view, 'page_footer'):
-            view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
+            progress.capture(initial=initial_position and value == restored_offset)
+        initial_position = False
+        if hasattr(controller, 'page_footer'):
+            controller.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
     from .chapter_drawer import ChapterDrawer
     old_panel = getattr(view, 'provider_epub_view', None)
     speech = getattr(old_panel, 'speech_panel', None)
-    view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
+    restored_offset = max(0, min(offset, content[1].length))
+    panel = view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
         font_size=int(host.preferences.values['epub_font_size']),
         margin=int(host.preferences.values['reading_margin']), theme=host.preferences.values['reading_theme'], typography=typography_options(host.preferences.values),
         on_chapter=controller.open_provider_epub_chapter,
@@ -426,5 +434,4 @@ def prepare_epub_page(host, controller, view, content):
         if control.parent is not None:
             control.parent.remove(control)
         tools.panel.add(control)
-    tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
     return view.provider_epub_view

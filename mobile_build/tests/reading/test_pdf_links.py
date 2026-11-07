@@ -78,7 +78,8 @@ class PDFMobileLinkTests(unittest.TestCase):
                 # A reader progress write owns the document without setting
                 # cloud_busy. The accepted link must wait before selecting.
                 release_progress = asyncio.Event()
-                progress = SimpleNamespace(worker=None, task=None)
+                progress = SimpleNamespace(worker=None, task=None,
+                                           sample_surface=lambda: None, stop_surface=lambda: None)
                 async def save_progress():
                     await release_progress.wait()
                     progress.worker = None
@@ -95,7 +96,7 @@ class PDFMobileLinkTests(unittest.TestCase):
                     finally:
                         release_progress.set()
                     # Publication can now capture progress again.
-                    progress.capture = lambda: None
+                    progress.capture = lambda **kw: None
                     await link
                 self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 2)
                 self.assertEqual(canvas.return_page, (0, 2))

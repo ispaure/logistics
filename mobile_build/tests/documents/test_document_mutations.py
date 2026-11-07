@@ -16,6 +16,7 @@ from features.text_editor.resources import LocalTextCopies
 from mobile.app import LogisticsMobile
 from mobile.file_operations import FileDestination, FileOperationRequest, retiring_work
 from mobile.document_mutations import prepare_document_mutation
+from services.documents.progress import open_progress, ProgressStatus
 
 
 class DocumentMutationTests(unittest.TestCase):
@@ -106,6 +107,44 @@ class DocumentMutationTests(unittest.TestCase):
         self.run_async(owner.save_crypt())
         self.assertEqual((self.destination.root / 'Moved folder/nested.txt').read_text(), 'Nested draft')
         self.assertFalse(folder.exists())
+
+    def test_local_rename_and_move_carry_progress_but_sibling_copy_does_not(self):
+        source = self.source.root / 'first.epub'
+        source.write_bytes(b'Synthetic document for mutation testing')
+
+        def state(provider, key):
+            return open_progress(provider, key, self.root, kind='.epub', app=self.app,
+                                 revision=provider.entry(key)['revision'])
+
+        original = state(self.source, source.name)
+        self.assertIs(original.save({'page': 7, 'bookmarks': [2]}), ProgressStatus.SAVED)
+        copy = FileOperationRequest('copy', self.source, source.name).execute(lambda: False)
+        self.assertEqual(state(self.source, copy).load(), {})
+
+        self.move(FileOperationRequest('rename', self.source, source.name, 'renamed.epub'))
+        self.assertEqual(state(self.source, 'renamed.epub').load(), {'page': 7, 'bookmarks': [2]})
+        conflict = self.destination.root / 'moved.epub'
+        conflict.write_bytes(b'Existing document')
+        with self.assertRaises(FileExistsError):
+            self.move(self.move_request('renamed.epub', conflict.name))
+        self.assertEqual(state(self.source, 'renamed.epub').load(), {'page': 7, 'bookmarks': [2]})
+        self.assertEqual(state(self.destination, conflict.name).load(), {})
+        conflict.unlink()
+        self.move(self.move_request('renamed.epub', conflict.name))
+        self.assertEqual(state(self.destination, conflict.name).load(), {'page': 7, 'bookmarks': [2]})
+
+    def test_unreadable_progress_does_not_turn_a_completed_move_into_a_file_error(self):
+        source = self.source.root / 'first.epub'
+        source.write_bytes(b'Synthetic document for mutation testing')
+        state = open_progress(self.source, source.name, self.root, kind='.epub', app=self.app)
+        self.assertIs(state.save({'page': 7}), ProgressStatus.SAVED)
+        path, = (self.root / 'ReaderPositions').rglob('*.json')
+        path.write_bytes(b'Unrecognized progress')
+        self.move(self.move_request(source.name, 'moved.epub'))
+        self.assertFalse(source.exists())
+        self.assertTrue((self.destination.root / 'moved.epub').is_file())
+        self.assertEqual(path.read_bytes(), b'Unrecognized progress')
+        self.assertIn('Files moved.', self.app.recovery_notice.text)
 
     def test_external_change_and_destination_conflict_preserve_draft_and_bindings(self):
         owner = self.open()

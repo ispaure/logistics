@@ -280,6 +280,9 @@
     "services.documents.metadata",
     "services.documents.mobile_reading",
     "services.documents.preparation",
+    "services.documents.progress",
+    "services.documents.progress_identity",
+    "services.documents.progress_store",
     "services.documents.readers",
     "services.documents.zip_passwords",
     "services.folders.catalog",
@@ -381,9 +384,9 @@
     },
     {
       "module": "features.books.preferences",
-      "scope": "ReadingState.load",
+      "scope": "ReadingState.legacy_load",
       "operation": "raw-method:open",
-      "reason": "Ordinary reader resume/bookmark state; shared persistence policy excludes private and remote documents."
+      "reason": "Bounded ordinary reader resume/bookmark migration; private and remote documents use the shared progress policy."
     },
     {
       "module": "features.books.preferences",

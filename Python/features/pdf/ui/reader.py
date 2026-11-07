@@ -29,9 +29,20 @@ class PDFWindow(qt.QMainWindow):
             self.deleteLater()
             raise ValueError('Cannot open PDF. It may be damaged or password protected.')
         self.position_state = None
-        if annotation_provider is not None:
-            from services.documents.reader_positions import desktop_state
-            self.position_state = desktop_state(annotation_provider, annotation_path, 'pdf')
+        self._position_ready = False
+        if annotation_provider is not None or Path(name).is_absolute():
+            from hashlib import sha256
+            from commonUtils.filesystem.storage import cache_directory
+            from services.documents.progress import open_progress
+
+            self.position_state = open_progress(
+                annotation_provider, annotation_path if annotation_provider is not None else name,
+                cache_directory(create=False), kind='desktop-pdf', revision=sha256(data).hexdigest(),
+            )
+        self.position_timer = QTimer(self)
+        self.position_timer.setSingleShot(True)
+        self.position_timer.setInterval(300)
+        self.position_timer.timeout.connect(self.flush_position)
         self.view = QPdfView(self)
         self.view.setDocument(self.document)
         self.view.setPageMode(QPdfView.PageMode.SinglePage)
@@ -104,8 +115,24 @@ class PDFWindow(qt.QMainWindow):
         self.setCentralWidget(root)
         self.document.pageCountChanged.connect(lambda count: self.number.setMaximum(max(1, count)))
         self.view.pageNavigator().currentPageChanged.connect(self.sync_page)
-        saved = self.position_state.load().get('page', 0) if self.position_state else 0
-        self.go(saved if type(saved) is int and 0 <= saved < self.document.pageCount() else 0)
+        saved = self.position_state.load() if self.position_state is not None else {}
+        if (self.position_state is not None and self.position_state.can_import_legacy
+                and self.position_state.load_status == 'absent' and self.position_state.mode == 'encrypted'):
+            from services.documents.reader_positions import desktop_state
+
+            previous = desktop_state(annotation_provider, annotation_path, 'pdf')
+            legacy = previous.load()
+            if previous.locked_state:
+                self.position_state.load_status = 'locked'
+                self.position_state.retire()
+            if type(legacy.get('page')) is int and 0 <= legacy['page'] < self.document.pageCount():
+                saved = legacy
+                self.position_state.save(saved)
+        page = saved.get('page', 0)
+        self.go(page if type(page) is int and 0 <= page < self.document.pageCount() else 0)
+        self._position_ready = True
+        if self.position_state is not None:
+            self.position_notice(self.position_state.load_status)
 
     def show_find(self):
         self.find_button.setChecked(True)
@@ -141,19 +168,29 @@ class PDFWindow(qt.QMainWindow):
         slide.finish()
 
     def sync_page(self, index):
-        if index != getattr(self, 'index', index):
+        changed = index != getattr(self, 'index', index)
+        if changed:
             self.clear_link_return()
         self.index = index
-        if self.position_state is not None:
-            try:
-                self.position_state.save(dict(page=index))
-            except (OSError, ValueError):
-                pass
+        if changed and self._position_ready and self.position_state is not None:
+            if self.position_state.observe(dict(page=index)) is not None:
+                self.position_timer.start()
         self.number.blockSignals(True)
         self.number.setValue(index + 1)
         self.number.blockSignals(False)
         self.previous.setEnabled(index > 0)
         self.following.setEnabled(index + 1 < self.document.pageCount())
+
+    def flush_position(self):
+        if self.position_state is not None:
+            self.position_notice(self.position_state.flush())
+
+    def position_notice(self, status):
+        from services.documents.ui.position_notice import position_notice
+
+        message = position_notice(self.position_state, status)
+        if message:
+            self.statusBar().showMessage(message)
 
     def eventFilter(self, watched, event):
         kind = event.type()
@@ -191,6 +228,10 @@ class PDFWindow(qt.QMainWindow):
         return super().eventFilter(watched, event)
 
     def closeEvent(self, event):
+        self.position_timer.stop()
+        self.flush_position()
+        if self.position_state is not None:
+            self.position_state.retire()
         self.clear_link_return()
         self.search.dispose()
         self.view.setDocument(None)

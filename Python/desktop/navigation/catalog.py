@@ -8,7 +8,7 @@ def _open_markdown(parent):
     install_local_storage_policy()
     from services.documents.ui.editors import install_editor_dialogs
     install_editor_dialogs()
-    from commonUtils.ui.markdown.window import open_markdown
+    from services.documents.ui.markdown import open_markdown
     from services.documents.ui.editors import choose_editor_resource, open_editor_choice
     choice = choose_editor_resource(parent, 'open', markdown=True)
     if choice is None:
@@ -25,7 +25,7 @@ def _new_markdown(parent):
     install_local_storage_policy()
     from services.documents.ui.editors import install_editor_dialogs
     install_editor_dialogs()
-    from commonUtils.ui.markdown.window import open_markdown
+    from services.documents.ui.markdown import open_markdown
     return open_markdown(None, allow_edit=True)
 
 

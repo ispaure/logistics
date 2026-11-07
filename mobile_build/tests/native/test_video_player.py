@@ -57,14 +57,15 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner = self.player(restricted=False)
         entered, release = Event(), Event()
         persisted = []
-        def save(values):
-            if values['rate'] == 2.:
+        def flush(rate):
+            if rate == 2.:
                 entered.set()
                 if not release.wait(2):
                     raise TimeoutError('Controlled preference write timed out')
-            persisted.append(values['rate'])
-            return PlaybackSettings.from_dict(values)
-        owner.controls.store.save = Mock(side_effect=save)
+            if rate is not None:
+                persisted.append(rate)
+        owner.controls.store.observe = Mock(side_effect=lambda values, **kwargs: (PlaybackSettings.from_dict(values), values['rate']))
+        owner.progress.flush.side_effect = flush
         first = asyncio.create_task(owner.controls.command('settings', '{"rate": 2.0}'))
         try:
             self.assertTrue(await asyncio.to_thread(entered.wait, 1))
@@ -89,13 +90,14 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
                 subtitle = Mock(path='movie.en.srt', size=100)
                 entered, release = Event(), Event()
 
-                def save(values):
-                    entered.set()
-                    if not release.wait(2):
-                        raise TimeoutError('Controlled subtitle write timed out')
-                    return PlaybackSettings.from_dict(values)
+                def flush(token):
+                    if token is not None:
+                        entered.set()
+                        if not release.wait(2):
+                            raise TimeoutError('Controlled subtitle write timed out')
 
-                owner.controls.store.save = Mock(side_effect=save)
+                owner.controls.store.observe = Mock(side_effect=lambda values, **kwargs: (PlaybackSettings.from_dict(values), object()))
+                owner.progress.flush.side_effect = flush
                 retirement = None
                 with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
                     owner.controls.dispatch('subtitleAttach', subtitle.path)
@@ -126,7 +128,7 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner = self.player(restricted=False)
         native = owner.native
         subtitle = Mock(path='movie.en.srt', size=100)
-        owner.controls.store.save = Mock(side_effect=PlaybackSettings.from_dict)
+        owner.controls.store.observe = Mock(side_effect=lambda values, **kwargs: (PlaybackSettings.from_dict(values), None))
         owner.transport.add_subtitle.return_value = 'http://127.0.0.1/subtitle'
         with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
             await owner.controls.command('subtitleAttach', subtitle.path)
@@ -140,10 +142,29 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         await owner.close()
         subtitle.close.assert_called_once()
 
+    async def test_discovered_sidecar_selection_configures_then_attaches(self):
+        from features.video.session import PlaybackSettings
+        owner = self.player(restricted=False)
+        subtitle = Mock(path='Subtitles/movie.fr.srt')
+        owner.subtitles = [subtitle]
+        owner.transport.add_subtitle.return_value = 'http://127.0.0.1/subtitle.srt'
+        owner.controls.settings = PlaybackSettings(subtitle_track=0)
+        owner.controls.store.observe = Mock(
+            side_effect=lambda values, **kwargs: (PlaybackSettings.from_dict(values), None))
+        calls = []
+        owner.native.configure.side_effect = lambda *args: calls.append('configure')
+        owner.native.add_subtitle.side_effect = lambda *args: calls.append('attach')
+        await owner.controls.command('subtitleSelect', 'movie.fr.srt')
+        self.assertEqual(calls, ['configure', 'attach'])
+        owner.transport.add_subtitle.assert_called_once_with(subtitle)
+        owner.native.add_subtitle.assert_called_once_with('http://127.0.0.1/subtitle.srt')
+        self.assertIsNone(owner.controls.settings.subtitle_track)
+        self.assertEqual(owner.controls.settings.subtitle_file, subtitle.path)
+
     async def test_failed_subtitle_preference_write_releases_unpublished_resource(self):
         owner = self.player(restricted=False)
         subtitle = Mock(path='movie.en.srt', size=100)
-        owner.controls.store.save = Mock(side_effect=OSError('Cannot save settings'))
+        owner.controls.store.observe = Mock(side_effect=OSError('Cannot save settings'))
         with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
             await owner.controls.command('subtitleAttach', subtitle.path)
         owner.native.status.assert_called_with('Cannot save settings')
@@ -156,12 +177,12 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_subtitle_transport_is_rejected_before_saving_selection(self):
         owner = self.player(restricted=False)
         subtitle = Mock(path='movie.en.srt', size=100)
-        owner.controls.store.save = Mock()
+        owner.controls.store.observe = Mock()
         owner.transport.add_subtitle.side_effect = ValueError('Subtitle changed')
         with patch('features.video.mobile.controls.SubtitleContent', return_value=subtitle):
             await owner.controls.command('subtitleAttach', subtitle.path)
         owner.transport.add_subtitle.assert_called_once_with(subtitle)
-        owner.controls.store.save.assert_not_called()
+        owner.controls.store.observe.assert_not_called()
         owner.native.add_subtitle.assert_not_called()
         owner.native.status.assert_called_with('Subtitle changed')
         subtitle.close.assert_called_once()
@@ -431,8 +452,94 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_checkpoint_finishes_before_protected_source_disposal(self):
         owner = self.player()
-        owner.content.close.side_effect = lambda: owner.progress.save.assert_called_once_with(12000, completed=False)
+        def assert_flushed():
+            owner.progress.flush.assert_called_once_with(None)
+            owner.progress.retire.assert_called_once()
+        native = owner.native
+        owner.content.close.side_effect = assert_flushed
         await owner.close()
+        native.position.assert_not_called()
+        native.progress_position.assert_not_called()
+
+
+    async def test_confirmed_native_seek_is_published_before_close_without_resampling(self):
+        owner = self.player()
+        native = owner.native
+        observation = object()
+        owner.progress.observe.return_value = observation
+        await owner.controls.command('progress', '15000')
+        owner.progress.observe.assert_called_once_with(15000, completed=False)
+        owner.progress.flush.assert_called_once_with(observation)
+        await owner.close()
+        native.position.assert_not_called()
+        native.progress_position.assert_not_called()
+        self.assertEqual(owner.progress.flush.call_args.args, (None,))
+
+
+    async def test_locked_video_history_status_reaches_native_surface(self):
+        owner = self.player()
+        owner.progress.flush.return_value = 'locked'
+        owner.progress.resume_notice = 'Previous ZIP password needed.'
+        await owner.flush_progress(object())
+        owner.native.status.assert_called_once_with(owner.progress.resume_notice)
+
+
+    async def test_protected_controls_save_through_mobile_credential_cipher(self):
+        import base64
+        import json
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from os import urandom
+        from features.video.mobile.controls import PlaybackControls
+        from services.documents.video_progress import VideoProgress
+
+        class Client:
+            generation = 1
+            identity = 'a' * 64
+            package_records = (dict(saved=False, document_cache_id='fixture',
+                                    crypt_identities={'Secret': identity}),)
+
+            def connection_identity(self, remote):
+                return 'b' * 64
+
+            def request(self, action, **values):
+                assert values['id'] == 'fixture'
+                cipher = AESGCM(b'p' * 32)
+                data = base64.b64decode(values['data'])
+                if action == 'document_lists_seal':
+                    nonce = urandom(12)
+                    result = nonce + cipher.encrypt(nonce, data, None)
+                elif action == 'document_lists_open':
+                    result = cipher.decrypt(data[:12], data[12:], None)
+                else:
+                    raise AssertionError(action)
+                return base64.b64encode(result).decode()
+
+        owner = self.player()
+        root = Path(self.enterContext(TemporaryDirectory()))
+        owner.app.private_root = root
+        owner.app.cloud_client = client = Client()
+        owner.content.provider = SimpleNamespace(private=True, client=client, remote='Secret',
+                                                  identity=client.identity, storage_id='fixture',
+                                                  storage_namespace='localcrypt', relative=lambda path: path,
+                                                  entry=Mock(side_effect=FileNotFoundError))
+        owner.content.path = 'Hidden-film.mkv'
+        owner.content.check = Mock()
+        owner.progress = VideoProgress(owner.content, root / 'Video', app=owner.app)
+        self.assertEqual(owner.progress.load(), 0)
+        self.assertEqual(owner.progress.state.mode, 'encrypted')
+        owner.controls = PlaybackControls(owner)
+        values = dict(audio_track=1, audio_track_key='voice-choice', subtitle_track=-1,
+                      subtitle_delay_ms=350, subtitle_scale=1.25)
+        await owner.controls.command('settings', json.dumps(values))
+        self.assertEqual(owner.progress.state.write_status, 'saved')
+        self.assertFalse((root / 'ReaderPositions/Local').exists())
+        encrypted, = (root / 'ReaderPositions').glob('*.zip')
+        for private_value in (b'Hidden-film', b'voice-choice', b'subtitle_delay_ms'):
+            self.assertNotIn(private_value, encrypted.read_bytes())
+        reopened = VideoProgress(owner.content, root / 'Video', app=owner.app)
+        reopened.load()
+        for key, value in values.items():
+            self.assertEqual(getattr(reopened.settings, key), value)
 
 
 class VideoBuildTests(unittest.TestCase):
@@ -538,7 +645,7 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OSError):
             owner.prepare()
 
-    async def test_encrypted_remote_resume_does_not_perform_network_metadata_on_controls(self):
+    async def test_session_remote_resume_does_not_perform_network_metadata_on_controls(self):
         from services.documents.video_progress import VideoProgress
         content = SimpleNamespace(provider=SimpleNamespace(remote_storage=True, identity='test'),
             path='movie.mkv', source=SimpleNamespace(expected=(1,)),
@@ -547,7 +654,10 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         with TemporaryDirectory() as root:
             progress = VideoProgress(content, root, remote_cipher=cipher)
             progress.save(3456)
-            self.assertEqual(VideoProgress(content, root, remote_cipher=cipher).load(), 3456)
+            restored = VideoProgress(content, root, remote_cipher=cipher)
+            self.assertEqual(restored.load(), 3456)
+            self.assertEqual(restored.state.mode, 'session-memory')
+            self.assertFalse(list(Path(root).rglob('*.bin')))
             content.check.assert_not_called()
 
     async def test_video_feature_cannot_be_disabled_while_player_is_open(self):

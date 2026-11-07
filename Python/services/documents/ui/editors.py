@@ -87,8 +87,8 @@ def make_private_editor(choice, session, *, markdown=False, edit=True):
         window = PrivateMarkdownWindow(storage.path, storage, edit=edit)
         window.destroyed.connect(choice.close)
     else:
-        from commonUtils.ui.resources.editor import ResourceTextWindow
-        window = ResourceTextWindow(choice, session, choose_editor_resource, open_editor_choice)
+        from services.documents.ui.resource_text import ResourceTextReader
+        window = ResourceTextReader(choice, session, choose_editor_resource, open_editor_choice)
     from services.documents.ui.private_views import protect_private_view
     protect_private_view(window, choice.provider)
     return retain(window)

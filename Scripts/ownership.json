@@ -53,7 +53,9 @@
           "test_chapter_drawer.py",
           "test_contents_hierarchy.py",
           "test_reading_publication.py",
-          "test_collection_parity.py"
+          "test_collection_parity.py",
+          "test_unified_progress_acceptance.py",
+          "test_mobile_provider_checkpoints.py"
         ]
       },
       "mobile_manifest": "Python/features/books/mobile_sources.json"
@@ -87,7 +89,9 @@
           "test_reader_parity.py",
           "test_comic*.py",
           "test_collection_parity.py",
-          "test_reading_publication.py"
+          "test_reading_publication.py",
+          "test_unified_progress_acceptance.py",
+          "test_mobile_provider_checkpoints.py"
         ]
       },
       "mobile_manifest": "Python/features/comics/mobile_sources.json"
@@ -243,11 +247,14 @@
       "guide": "docs/features/pdf/development/development.md",
       "tests": {
         "desktop": [
-          "test_pdf*.py"
+          "test_pdf*.py",
+          "test_formats_progress.py"
         ],
         "mobile": [
           "test_pdf_reader.py",
-          "test_remote_readers.py"
+          "test_remote_readers.py",
+          "test_unified_progress_acceptance.py",
+          "test_mobile_provider_checkpoints.py"
         ]
       },
       "mobile_manifest": "Python/features/pdf/mobile_sources.json"
@@ -346,14 +353,16 @@
         "desktop": [
           "test_text_editor*.py",
           "test_editor*.py",
-          "test_document_launchers.py"
+          "test_document_launchers.py",
+          "test_formats_progress.py"
         ],
         "mobile": [
           "test_editor_picker.py",
           "test_source_editor.py",
           "test_markdown_editor.py",
           "test_provider_markdown.py",
-          "test_provider_opening.py"
+          "test_provider_opening.py",
+          "test_mobile_provider_checkpoints.py"
         ]
       },
       "mobile_manifest": "Python/features/text_editor/mobile_sources.json"
@@ -423,12 +432,20 @@
           "test_document_storage*.py",
           "test_document_preparation.py",
           "test_desktop_video_privacy.py",
-          "test_mobile_packaging.py"
+          "test_mobile_packaging.py",
+          "test_unified_progress_core.py",
+          "test_credential_reader_state.py",
+          "test_formats_progress.py",
+          "test_unified_video_progress_acceptance.py"
         ],
         "mobile": [
           "test_protection_scope.py",
           "test_screen_privacy.py",
-          "test_audio_output.py"
+          "test_audio_output.py",
+          "test_unified_progress_acceptance.py",
+          "test_mobile_provider_checkpoints.py",
+          "test_reader_history_controls.py",
+          "test_notebook_page_progress.py"
         ]
       },
       "mobile_manifest": "Python/services/mobile_sources.json"
@@ -452,7 +469,10 @@
           "test_provider_opening.py",
           "test_reading_publication.py",
           "test_locations.py",
-          "test_composition_contracts.py"
+          "test_composition_contracts.py",
+          "test_unified_progress_acceptance.py",
+          "test_mobile_provider_checkpoints.py",
+          "test_notebook_page_progress.py"
         ],
         "desktop": [
           "test_workspace_policy.py"
@@ -479,7 +499,9 @@
           "test_credential_document_lists.py",
           "test_file_operations.py",
           "test_storage_independence.py",
-          "test_document_reading.py"
+          "test_document_reading.py",
+          "test_unified_progress_acceptance.py",
+          "test_mobile_provider_checkpoints.py"
         ]
       }
     },
@@ -496,6 +518,9 @@
           "test_document_architecture.py",
           "test_documentation_layout.py",
           "test_source_hygiene.py"
+        ],
+        "mobile": [
+          "test_unified_progress_driver.py"
         ]
       }
     },
@@ -541,7 +566,9 @@
       "tests": {
         "desktop": [
           "test_feature_registry.py",
-          "test_video*.py"
+          "test_video*.py",
+          "test_unified_video_progress_acceptance.py",
+          "test_formats_progress.py"
         ],
         "mobile": [
           "test_video_player.py"

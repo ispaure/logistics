@@ -17,6 +17,7 @@ from features.books.mobile.provider_reader import RichBookView
 from features.books.mobile.text_reader import TextBookView
 from mobile.app import LogisticsMobile
 from mobile_build.tests.support.app import mobile_app
+from mobile_build.tests.support.localcrypt import seed_offline_copy
 from services.documents.readers import PrivateReader
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 
@@ -128,12 +129,12 @@ class EpubUXTests(unittest.TestCase):
                 async def exercise():
                     await app.open_book(record['id'])
                     owner = app.readers.active
-                    with patch.object(owner.library_store, 'progress', wraps=owner.library_store.progress) as write:
+                    with patch.object(owner._book_progress.state, 'flush', wraps=owner._book_progress.state.flush) as write:
                         for offset in range(20):
                             owner.epub_event(owner.book_reader, owner.book_epoch, 0, 'position', offset)
                         await __import__('asyncio').sleep(0)
                         app.checkpoint()
-                        self.assertTrue(owner._epub_flush.is_set())
+                        self.assertTrue(owner._book_progress._wake.is_set())
                         await owner._epub_location_task
                         self.assertEqual(write.call_count, 1)
                         self.assertEqual(owner.book_record['location']['offset'], min(19, owner.epub_text.length))
@@ -152,16 +153,24 @@ class EpubUXTests(unittest.TestCase):
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             try:
                 record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
-                def write(*args, **kwargs):
-                    owner = next(iter(app.readers.controllers.values()))
-                    self.assertTrue(owner.book_content.children)
+                async def exercise():
+                    await app.open_book(record['id'])
+                    owner = app.readers.active
+                    self.assertIsNone(owner._book_progress.pending)
+
+                    def write(*args, **kwargs):
+                        self.assertIs(owner.book_content.children[0], owner.epub_view)
+                        self.assertEqual(owner.book_record['position'], 1)
+                        raise OSError('synthetic progress failure')
+
+                    with patch.object(owner._book_progress.state, 'flush', side_effect=write):
+                        await owner.move_book_page(1)
+                        await owner._book_progress.flush()
+                    self.assertIn('Could not save reading progress', owner.book_status.text)
                     self.assertIs(owner.book_content.children[0], owner.epub_view)
-                    raise OSError('synthetic progress failure')
-                with patch('mobile.library.LibraryStore.progress', side_effect=write):
-                    app.loop.run_until_complete(app.open_book(record['id']))
-                owner = app.readers.active
-                self.assertTrue(owner.book_content.children)
-                self.assertIn('Cannot save reading position', owner.book_status.text)
+                    self.assertIsNotNone(owner._book_progress.pending)
+
+                app.loop.run_until_complete(exercise())
             finally:
                 app.loop.run_until_complete(app.reader_manager().catalog.wait_for_refresh())
                 app.main_window.close()
@@ -217,6 +226,9 @@ class EpubUXTests(unittest.TestCase):
                         panel.query.value = 'Native'
                         panel.find()
                         self.assertNotIn(panel.tools.panel, panel.tools.widget.children)
+                        if isinstance(panel, RichBookView):
+                            on_position.assert_not_called()
+                            panel.event('position', panel.webview._chapter_bridge.offset)
                         on_position.assert_called_with(panel.offset)
                         offset = panel.offset
                         panel.tools.toggle()
@@ -279,13 +291,15 @@ class EpubUXTests(unittest.TestCase):
             epub, _ = make_books(Path(directory))
             private = PrivateReader('Private.epub', epub.read_bytes())
             app.show_cloud()
+            key = seed_offline_copy(app.crypt_copies)
 
             async def exercise():
                 with patch.object(app.crypt_copies, 'open', return_value=private):
-                    self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key='a' * 32))
+                    self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key=key))
                 owner = app.private_sessions.active
                 release = asyncio.Event()
-                progress = SimpleNamespace(worker=None, task=None, capture=lambda: None)
+                progress = SimpleNamespace(worker=None, task=None, capture=lambda **kw: None,
+                                           sample_surface=lambda: None)
 
                 async def save():
                     await release.wait()
@@ -315,10 +329,11 @@ class EpubUXTests(unittest.TestCase):
             epub, _ = make_books(fixtures)
             app.show_cloud()
             private = PrivateReader('Private.epub', epub.read_bytes())
+            key = seed_offline_copy(app.crypt_copies)
 
             async def exercise():
                 with patch.object(app.crypt_copies, 'open', return_value=private):
-                    self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key='a' * 32))
+                    self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key=key))
                 owner = app.private_sessions.active
                 panel = owner.provider_epub_view
                 panel.seek(7)
@@ -337,6 +352,7 @@ class EpubUXTests(unittest.TestCase):
                 self.assertNotIn(panel.tools.panel, panel.tools.widget.children)
                 await owner.move_private_page(1)
                 self.assertIs(owner.crypt_bookmark_selector.parent, owner.provider_epub_view.tools.panel)
+                await owner._provider_progress.flush()
                 self.assertTrue(app.private_sessions.close(owner.session.id, discard=True))
 
             app.loop.run_until_complete(exercise())

@@ -102,7 +102,11 @@ class PrivateController(ReaderHost, ProviderUI):
             elif (mode == 'edit' and getattr(self.crypt_edit_mode, 'value', '') == 'Formatted'
                   and getattr(self, 'crypt_formatted', None) is None):
                 self.show_private_markdown_editor()
-            self.resume_suspended_page()
+            resume = self.resume_suspended_page()
+            progress = getattr(self, '_provider_progress', None)
+            if progress is not None and self.crypt_reader.editable:
+                progress.watch_surface(initial=True)
+            return resume
 
     def resume_suspended_page(self):
         """Reload released pixels without changing the retained route or chrome."""
@@ -126,12 +130,18 @@ class PrivateController(ReaderHost, ProviderUI):
                 await self.read_crypt_page()
 
         self._resume_page_task = self.app.loop.create_task(reload_when_idle())
+        return self._resume_page_task
 
     def close_crypt(self, widget=None, **kwargs):
         return self.app.request_reader_close(self.session.id)
 
-    def discard_crypt(self, widget=None, **kwargs):
-        return self.app.close_session(self.session.id, choice='discard')
+    async def discard_crypt(self, widget=None, **kwargs):
+        progress = getattr(self, '_provider_progress', None)
+        if progress is not None:
+            progress.sample_surface()
+            await progress.flush()
+        if self.app.active_host and self.manager.controllers.get(self.session.id) is self:
+            return self.app.close_session(self.session.id, choice='discard')
 
     async def show_editor_open(self, widget=None, **kwargs):
         return await self.app.show_editor_open(widget, **kwargs)
@@ -154,7 +164,6 @@ class PrivateSessions:
         self.app = app
         self.controllers = {}
         self.active = None
-        self.positions = {}
         self.terminal = False
         from .protection import for_app
         for_app(app).register(self, self.privacy_gates)
@@ -215,6 +224,15 @@ class PrivateSessions:
         return observations
 
     async def prepare_replacement(self, *, valid=lambda: True):
+        # Complete already admitted observations before taking the receipt.
+        # Receipt validation still rejects page/editor changes during preparation.
+        for owner in tuple(self.controllers.values()):
+            progress = getattr(owner, '_provider_progress', None)
+            if progress is not None and not owner.operation_busy:
+                await progress.prepare_replacement()
+            if not valid():
+                import asyncio
+                raise asyncio.CancelledError
         observations = self._replacement_observations()
         for index, (owner, editor, state, references) in enumerate(observations):
             if editor is None:
@@ -253,6 +271,10 @@ class PrivateSessions:
         return receipt
 
     def prepare_replacement_sync(self):
+        for owner in tuple(self.controllers.values()):
+            progress = getattr(owner, '_provider_progress', None)
+            if progress is not None and not owner.operation_busy:
+                progress.checkpoint_sync()
         self.require_replacement_safe()
         observations = self._replacement_observations()
         for index, (owner, editor, state, references) in enumerate(observations):
@@ -336,16 +358,12 @@ class PrivateSessions:
                     view.remove(child)
                 view.add(toga.Label('Private session locked. Reopen after unlocking.'))
 
-    @staticmethod
-    def identity(copies, key):
-        provider = getattr(copies, 'provider', None)
-        root = getattr(provider, 'root', getattr(copies, 'root', None))
-        if root is None:
-            raise ValueError('Provider sessions require a stable storage namespace.')
-        namespace = str(Path(root).resolve())
-        if not reading_capabilities(copies).writable:
-            namespace = 'read-only:' + namespace
-        return sha256((namespace + '\0' + str(key)).encode()).hexdigest()
+    def identity(self, copies, key):
+        from services.documents.progress import document_identity
+        identity = document_identity(copies, key, app=self.app)
+        # The transient workspace model uses strings. Keep protected lookup
+        # tuples inside the progress layer and never publish them as references.
+        return sha256(repr(identity).encode()).hexdigest()
 
     def available(self, key):
         owner = self.controllers.get(key)
@@ -371,47 +389,12 @@ class PrivateSessions:
     def update_session(self, owner):
         owner.session.dirty = owner.private_dirty()
 
-    def remember_position(self, owner):
-        reader = owner.crypt_reader
-        if reader is None:
-            return
-        from .reader_lifecycle import scroll_position
-        position = self.positions.pop(owner.session.resource, {})
-        if reader.editable:
-            text = getattr(owner, 'crypt_text', None)
-            preview = getattr(owner, 'crypt_preview', None)
-            content = getattr(owner, 'crypt_content', None)
-            if content is not None and preview is not None and preview in content.children:
-                position['preview_scroll'] = scroll_position(preview)
-            if content is not None and text in content.children:
-                position['text_scroll'] = scroll_position(text)
-        else:
-            index = getattr(owner, '_provider_displayed_index', 0)
-            panel = getattr(owner, 'provider_epub_view', None)
-            offset = getattr(panel, 'offset', 0)
-            if panel is None and reader.book is not None:
-                offset = getattr(owner, '_provider_epub_locations', {}).get(reader.book.spine[index], 0)
-            position.update(index=index, offset=offset)
-        self.positions[owner.session.resource] = position
-        while len(self.positions) > 256:
-            del self.positions[next(iter(self.positions))]
-
-    async def restore_text_position(self, owner, position):
-        from .reader_lifecycle import restore_scroll, restore_loaded_scroll, restore_drawn_scroll
-        from commonUtils.ui.native.draw_ready import wait_for_draw
-        await wait_for_draw(owner.crypt_view)
-        if not self.available(owner.session.id):
-            return
-        restore_scroll(owner.crypt_text, position.get('text_scroll'))
-        preview = getattr(owner, 'crypt_preview', None)
-        if preview is None or position.get('preview_scroll') is None:
-            return
-        valid = lambda: self.available(owner.session.id) and owner.crypt_preview is preview
-        if not getattr(owner.crypt_preview_search, 'ready', False):
-            restore_loaded_scroll(preview, position['preview_scroll'],
-                valid)
-        if valid():
-            await restore_drawn_scroll(preview, position['preview_scroll'], valid)
+    def flush_visible_progress(self):
+        owner = self.active
+        progress = getattr(owner, '_provider_progress', None)
+        if progress is not None:
+            progress.sample_surface()
+            progress.schedule(immediate=True)
 
     def suspend(self, *, except_owner=None, keep_active_markdown=False):
         from .ios_content_background import clear
@@ -419,13 +402,18 @@ class PrivateSessions:
         for owner in self.controllers.values():
             if owner is except_owner:
                 continue
-            self.remember_position(owner)
+            progress = getattr(owner, '_provider_progress', None)
+            if progress is not None:
+                progress.sample_surface()
+                progress.schedule(immediate=True)
             # Memory trimming also runs when Android backgrounds the activity.
             # The retained reader must still show the same surface on wake;
             # clearing its preview would expose the source input underneath.
             if (keep_active_markdown and owner is self.active
                     and getattr(owner.crypt_reader, 'kind', None) in {'.md', '.markdown'}):
                 continue
+            if progress is not None:
+                progress.stop_surface()
             for name in ('_provider_layout_task', '_provider_width_task'):
                 task = getattr(owner, name, None)
                 if task is not None:
@@ -472,17 +460,36 @@ class PrivateSessions:
                 from features.rclone.mobile.cloud_ui import explain_remote_busy
                 await explain_remote_busy(self.app)
             return False
-        identity = self.identity(copies, key)
+        try:
+            identity = self.identity(copies, key)
+        except (OSError, ValueError) as error:
+            return await self.opening_rejected(str(error))
         existing = next((owner for owner in self.controllers.values()
                          if owner.session.resource == identity), None)
         if existing is not None and prepared is None and not self.available(existing.session.id):
             self.app.document_status.value = 'Unlock the connection again before reopening this private document.'
             return False
         if existing is not None and prepared is None:
+            held = reading_capabilities(existing._crypt_reader_store)
+            gate_for = getattr(copies, 'privacy_gate_for', None)
+            incoming_gate = privacy_gate if privacy_gate is not None else (
+                gate_for(key) if gate_for is not None else getattr(copies, 'privacy_gate', None))
+            if (held != reading_capabilities(copies)
+                    or (incoming_gate is not None and incoming_gate is not existing.privacy_gate)):
+                return await self.opening_rejected(
+                    'Close this document before reopening it with different access.')
+            capture = getattr(copies, 'capture_access', None)
+            if capture is not None:
+                try:
+                    capture(key)()
+                except (OSError, ValueError):
+                    return await self.opening_rejected('Unlock this document before opening it again.')
             existing.presentation_destination = destination
             self.app.document_password.value = ''
             self.bind(existing)
-            existing.resume_crypt()
+            resume = existing.resume_crypt()
+            if resume is not None:
+                await resume
             if edit and existing.crypt_reader.kind in {'.md', '.markdown'} and not getattr(existing.crypt_reader, 'read_only', False):
                 existing.clear_private_preview()
                 existing.show_private_markdown_editor()
@@ -507,8 +514,15 @@ class PrivateSessions:
                     self.app.workspace.close(pending.id, guard=lambda session: True)
         selection = self.app.workspace.active
         origin = self.app.native_host.state.destination, self.app.navigation_generation, selection
+        capabilities = reading_capabilities(copies)
+        password = self.app.document_password.value
+        protected = capabilities.private or capabilities.credential_bound or bool(password) or privacy_gate is not None
+        from features.images.document import IMAGE_EXTENSIONS
+        suffix = Path(key).suffix.lower()
+        shared_read = not protected and (not capabilities.writable or suffix in {'.pdf', *IMAGE_EXTENSIONS})
         try:
-            session = self.app.workspace.open('provider-session', identity, 'text', transient=True)
+            session = self.app.workspace.open('provider-session', identity, 'text', transient=True,
+                                              protected=protected, shared_read=shared_read)
         except ValueError as error:
             return await self.opening_rejected(str(error) + '\n\nGo to Documents → Open documents to manage open items.')
         self.app.workspace.active = selection
@@ -551,7 +565,7 @@ class PrivateSessions:
                     'Go to Documents → Open documents and close an item, then try again. '
                     'A document that exceeds the budget by itself cannot be opened. Existing documents and unsaved edits were kept.')
             return await self._publish_opened_session(owner, session, reader, copies, key,
-                                                      identity=identity, privacy_gate=privacy_gate)
+                                                      privacy_gate=privacy_gate)
         except (Exception, asyncio.CancelledError):
             retire_open()
             raise
@@ -580,14 +594,7 @@ class PrivateSessions:
         for_app(self.app).changed()
         return owner
 
-    async def _publish_opened_session(self, owner, session, reader, copies, key, *, identity, privacy_gate):
-        position = self.positions.get(identity)
-        if position is not None and not reader.editable:
-            index, offset = position.get('index', 0), position.get('offset', 0)
-            index = min(index, len(reader.labels) - 1)
-            if reader.book is not None:
-                owner._provider_epub_locations = {reader.book.spine[index]: offset}
-            await owner.move_private_page(index)
+    async def _publish_opened_session(self, owner, session, reader, copies, key, *, privacy_gate):
         # Initial resume is one opening, not a user visit to the placeholder page.
         for name in ('comic_navigation', 'pdf_navigation'):
             navigation = getattr(reader, name, None)
@@ -612,8 +619,6 @@ class PrivateSessions:
         else:
             self.suspend(except_owner=self.active)
         self.app.save_workspace()
-        if position is not None and reader.editable:
-            await self.restore_text_position(owner, position)
         return True
 
     @staticmethod
@@ -659,9 +664,11 @@ class PrivateSessions:
             return False
         if getattr(getattr(owner, '_provider_progress', None), 'worker', None) is not None:
             return False
-        reader = owner.crypt_reader
-        if reader is not None and not force:
-            self.remember_position(owner)
+        progress = getattr(owner, '_provider_progress', None)
+        if not force and progress is not None:
+            progress.sample_surface()
+            if progress.schedule(immediate=True) is not None:
+                return False
         if not ProviderUI.clear_private_reader(owner, discard=True):
             return False
         if not force:
@@ -693,8 +700,11 @@ class PrivateSessions:
             dirty.resume_crypt()
             dirty.crypt_title.text = 'Unsaved changes: save,\nor discard and close.'
             return False
+        self.flush_visible_progress()
+        if any(progress.schedule(immediate=True) is not None for owner in owners
+               if (progress := getattr(owner, '_provider_progress', None)) is not None):
+            return False
         for owner in owners:
             if not self.close(owner.session.id, discard=True, force=True):
                 return False
-        self.positions.clear()
         return True

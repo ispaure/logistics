@@ -58,8 +58,11 @@ class IOSVideo:
         self.native.showCachedRanges(json.dumps(value))
 
     def position(self):
-        self.owner.progress.duration = int(self.native.durationMilliseconds())
         return int(self.native.positionMilliseconds()), bool(self.native.completed())
+
+    def progress_position(self):
+        self.owner.progress.duration = int(self.native.durationMilliseconds())
+        return int(self.native.progressPosition()), bool(self.native.completed())
 
     def network_waiting(self, waiting):
         self.native.setNetworkWaiting(waiting)

@@ -1,6 +1,7 @@
 """Mobile command routing; native surfaces own gestures, this owner retains resources."""
 
 import asyncio
+from dataclasses import asdict
 import json
 from pathlib import Path
 
@@ -62,24 +63,27 @@ class PlaybackControls:
         if jobs:
             await asyncio.gather(*jobs, return_exceptions=True)
 
+    async def save_settings(self, updates):
+        self.settings, observation = self.store.observe(
+            {**asdict(self.settings), **updates}, explicit=updates.keys(),
+        )
+        if observation is not None:
+            await self.owner.flush_progress(observation)
+
     async def command(self, name, value):
         owner = self.owner
         if owner.closed or owner.hidden or not owner.allowed():
             return
         try:
             if name == "settings":
-                values = json.loads(value)
-                if values.get('subtitle_track') is not None:
-                    values['subtitle_file'] = ''
-                PlaybackSettings.from_dict(values)
+                updates = json.loads(value)
+                if updates.get('subtitle_track') is not None:
+                    updates['subtitle_file'] = ''
+                PlaybackSettings.from_dict(updates)
                 self.settings_revision += 1
                 revision = self.settings_revision
                 async with self.settings_lock:
-                    if revision != self.settings_revision:
-                        return
-                    self.settings = await asyncio.to_thread(
-                        self.store.save, values
-                    )
+                    await self.save_settings(updates)
                     if revision != self.settings_revision:
                         return
                     if not owner.closed and not owner.hidden and owner.allowed():
@@ -87,18 +91,26 @@ class PlaybackControls:
                             self.settings.json(), json.dumps(self.queue.rows())
                         )
             elif name == "subtitleSelect":
-                from dataclasses import asdict
                 subtitle = next((item for item in owner.subtitles if Path(item.path).name == value), None)
                 if subtitle is None:
                     raise ValueError('The selected subtitle is no longer available.')
                 async with self.settings_lock:
-                    self.settings = await asyncio.to_thread(self.store.save,
-                        dict(asdict(self.settings), subtitle_file=subtitle.path, subtitle_track=None))
-                if not owner.closed and owner.allowed():
-                    owner.native.configure(self.settings.json(), json.dumps(self.queue.rows()))
+                    url = owner.transport.add_subtitle(subtitle)
+                    await self.save_settings(dict(subtitle_file=subtitle.path, subtitle_track=None, subtitle_track_key=''))
+                    if not owner.closed and not owner.hidden and owner.allowed():
+                        owner.native.configure(self.settings.json(), json.dumps(self.queue.rows()))
+                        owner.native.add_subtitle(url)
+            elif name == "progress":
+                observation = owner.accept_sample(int(value))
+                if observation is not None:
+                    await owner.flush_progress(observation)
             elif name == "seek":
                 owner.native.seek(parse_time(value))
             elif name in ("previous", "next", "queue", "ended"):
+                if name == 'ended':
+                    observation = owner.accept_sample(0, completed=True)
+                    if observation is not None:
+                        await owner.flush_progress(observation)
                 if self.busy or (name == "ended" and not self.settings.autoplay_next):
                     return
                 path = (
@@ -151,13 +163,11 @@ class PlaybackControls:
                         raise ValueError("Subtitles must be smaller than 8 MiB.")
                     if owner.closed or owner.hidden or not owner.allowed():
                         return
-                    from dataclasses import asdict
                     async with self.settings_lock:
                         if owner.closed or owner.hidden or not owner.allowed():
                             return
                         url = owner.transport.add_subtitle(subtitle)
-                        self.settings = await asyncio.to_thread(self.store.save,
-                            dict(asdict(self.settings), subtitle_file=subtitle.path, subtitle_track=None))
+                        await self.save_settings(dict(subtitle_file=subtitle.path, subtitle_track=None, subtitle_track_key=''))
                     # Persistence can outlive this presentation. Publish the
                     # retained subtitle only while native controls are live.
                     if owner.closed or owner.hidden or not owner.allowed():

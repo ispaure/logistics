@@ -29,17 +29,18 @@ class EpubBoundaryFlushTests(unittest.TestCase):
                     await app.open_book(record['id'])
                     owner = app.readers.active
                     started = asyncio.Event()
-                    original = owner.library_store.progress
+                    original = owner._book_progress.state.flush
                     def delayed(*args, **kwargs):
                         app.loop.call_soon_threadsafe(started.set)
                         if not release.wait(5):
                             raise TimeoutError('Synthetic position write did not release')
                         return original(*args, **kwargs)
-                    with patch.object(owner.library_store, 'progress', side_effect=delayed):
+                    with patch.object(owner._book_progress.state, 'flush', side_effect=delayed):
                         owner.epub_event(owner.book_reader, owner.book_epoch, 0, 'position', 5)
                         owner.request_position_flush()
                         await asyncio.wait_for(started.wait(), 2)
-                        self.assertTrue(owner.book_busy)
+                        self.assertIsNotNone(owner._book_progress.worker)
+                        self.assertFalse(owner.book_busy)
                         owner.epub_event(owner.book_reader, owner.book_epoch, 0, 'next', 5)
                         await asyncio.sleep(0)
                         self.assertEqual(owner.book_record['position'], 0)
@@ -52,7 +53,8 @@ class EpubBoundaryFlushTests(unittest.TestCase):
                         self.assertEqual(owner.book_record['position'], 1)
                         self.assertFalse(owner.book_busy)
                     await app.reader_manager().catalog.wait_for_refresh()
-                    app.readers.close(owner.session.id)
+                    await owner._book_progress.flush()
+                    self.assertTrue(app.readers.close(owner.session.id))
                 app.loop.run_until_complete(exercise())
             finally:
                 release.set()

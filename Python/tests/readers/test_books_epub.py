@@ -233,7 +233,7 @@ class EPUBTests(unittest.TestCase):
         state.path.parent.mkdir()
         state.path.write_text(json.dumps({'position': .5, 'padding': 'x' * (128 * 1024)}))
         before = state.path.read_bytes()
-        with patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=0)):
+        with patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=0, st_mode=0)):
             self.assertEqual(state.load(), {})
         self.assertEqual(state.path.read_bytes(), before)
 

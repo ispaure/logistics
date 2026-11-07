@@ -98,7 +98,8 @@ class SessionTransitions:
             return False
         return host.checkpoint()
 
-    def request_close_session(self, key, *, _markdown_flushed=False, _notebook_flushed=False, _notebook_unflushed=False):
+    def request_close_session(self, key, *, _markdown_flushed=False, _notebook_flushed=False,
+                              _notebook_unflushed=False, _progress_flushed=False):
         host = self.host
         library = getattr(host, 'vault_browser', None)
         if (not _markdown_flushed and library is not None and library.session is not None
@@ -186,6 +187,23 @@ class SessionTransitions:
         private = host.provider_sessions().controllers.get(key)
         if private is not None and private.private_dirty():
             return host.request_provider_close(private)
+        progress = getattr(private, '_provider_progress', None)
+        if progress is not None and not _progress_flushed:
+            progress.sample_surface()
+            if progress.schedule(immediate=True) is not None:
+                if getattr(private, '_progress_close_task', None) is None:
+                    token = host.workspace.token(key)
+
+                    async def close_after_progress():
+                        try:
+                            await progress.flush()
+                            if progress.pending is None and host.active_host and host.workspace.accepts(token):
+                                self.request_close_session(key, _markdown_flushed=True, _progress_flushed=True)
+                        finally:
+                            private._progress_close_task = None
+
+                    private._progress_close_task = host.loop.create_task(close_after_progress())
+                return True
         owner = host.text_views.get(key)
         if owner is None or not owner.document.modified:
             return host.close_session(key)
@@ -212,12 +230,8 @@ class SessionTransitions:
         host.__dict__.setdefault('_reader_closing', set()).add(key)
         readers = getattr(host, 'readers', None)
         owner = readers.controllers.get(key) if readers is not None else None
-        pending = getattr(owner, '_epub_location_task', None)
-        if pending is not None and pending.done():
-            pending = None
-        if pending is not None:
-            owner.request_position_flush()
-        else:
+        pending = owner.request_position_flush() if owner is not None else None
+        if pending is None:
             private = host.provider_sessions().controllers.get(key)
             progress = getattr(private, '_provider_progress', None)
             if private is not None and (private.operation_busy

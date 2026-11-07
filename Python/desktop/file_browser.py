@@ -129,6 +129,8 @@ class _BrowserHost:
                                        directory_boundary=self._directory_boundary,
                                        calculate_folder_sizes=calculate_folder_sizes,
                                        index_settings_path=Path(__file__).resolve().parents[1]/'configFile.ini')
+        from services.documents.ui.markdown import activate_markdown
+        self.file_browser.install_extension('markdown-reader', activation_handlers=(activate_markdown,))
         self.file_browser.model.fileRenamed.connect(self._relocate_renamed)
         self.extensions = []
         self._extensions_by_feature = {}

@@ -135,6 +135,10 @@ class EPUBBook:
                     visit(body)
                     self.section_offsets.update({(target, anchor): offset / max(1, length)
                                                  for anchor, offset in offsets.items()})
+                # ZIP header data binds the locator to the reading content.
+                # Updating OPF metadata or the cover does not change these members.
+                self.progress_revision = [(name, archive.getinfo(name).CRC,
+                                           archive.getinfo(name).file_size) for name in self.spine]
                 self.signature = self._signature()
                 if self.signature != initial_signature:
                     raise BookError('This EPUB changed while loading; reopen it.')

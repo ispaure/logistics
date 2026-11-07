@@ -299,6 +299,8 @@ class ReaderTests(QtTestCase):
             for command in ('chapter', 'contents', 'link', 'next', 'previous', 'progress', 'bookmark'):
                 with self.subTest(error=error_type.__name__, command=command):
                     current, target = (1, 0) if command == 'previous' else (0, 1)
+                    page.go_chapter(target)
+                    self.app.processEvents()
                     page.go_chapter(current)
                     self.app.processEvents()
                     page.text.show_page(page.text.page_count - 1 if command == 'next' else 0)
@@ -450,10 +452,11 @@ class ReaderTests(QtTestCase):
     def test_bookmarks_and_saved_chapter_keep_appearance_in_global_settings(self):
         self.page.go_chapter(1)
         self.page.font_size.setValue(25)
+        self.app.processEvents()
         with patch.object(qt.QInputDialog, 'getText', return_value=('My place', True)):
             self.page.add_bookmark()
         self.page._save_state()
-        state = ReadingState(self.path, folder=self.folder / 'state').load()
+        state = self.page._state.load()
         self.assertNotIn('font_size', state)
         self.assertNotIn('theme', state)
         self.assertEqual(state['path'], 'OPS/Text/two.xhtml')

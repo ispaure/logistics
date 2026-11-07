@@ -55,19 +55,24 @@ class ProviderDocumentOpening:
                 owner._provider_comic_seam = owner.private_comic_seam()
                 owner._provider_viewport = (max(1, owner.main_window.size.width), max(1, owner.main_window.size.height))
                 from .provider_progress import ProviderProgress
-                progress = ProviderProgress(owner, copies, reader, key)
-                restored = await _await_opening_worker(asyncio.to_thread(progress.load), cancelled)
+                def load_progress():
+                    progress = ProviderProgress(owner, copies, reader, key)
+                    progress.load()
+                    return progress
+                progress = await _await_opening_worker(asyncio.to_thread(load_progress), cancelled)
                 check_cancelled(cancelled.is_set)
-                index = restored.get('page', 0)
-                if type(index) is not int or not 0 <= index < len(reader.labels):
-                    index = 0
+                index = progress.page()
                 navigation = getattr(reader, 'comic_navigation', None)
                 if navigation is not None:
-                    navigation.requested_half = 1 if restored.get('half') == 1 else 0
+                    navigation.requested_half = 1 if progress.restored.get('half') == 1 else 0
                 kind, content = await _await_opening_worker(
                     asyncio.to_thread(owner.provider_page_content, reader, index), cancelled)
             else:
                 reader, kind, content = prepared
+                from .provider_progress import ProviderProgress
+                progress = await _await_opening_worker(
+                    asyncio.to_thread(ProviderProgress, owner, copies, reader, key), cancelled)
+                await _await_opening_worker(asyncio.to_thread(progress.load), cancelled)
             check_cancelled(cancelled.is_set)
             if not owner.app.require_document_feature(reader.name):
                 return False
@@ -100,6 +105,8 @@ class ProviderDocumentOpening:
                     reader = acquisition.result()
                 if view is not None:
                     view.discard()
+                if progress is not None and session.reader is not reader:
+                    progress.close()
                 if prepared is None and session.reader is not reader:
                     close_document_reader(reader)
             finally:
@@ -129,17 +136,21 @@ class ProviderDocumentOpening:
         progress = getattr(owner, "_provider_progress", None)
         if progress is not None:
             progress.live = True
-            if progress.state.locked_state:
-                notice = getattr(owner.app, 'recovery_notice', None)
-                if notice is not None:
-                    notice.text = 'Saved reader history needs the previous ZIP password. Use Settings → Workspaces → Migrate protected reader history.'
+            progress.report_load()
         if reader.editable and reader.kind in {'.md', '.markdown'}:
-            if edit and not getattr(reader, 'read_only', False):
+            mode = progress.restored.get('mode') if progress is not None else None
+            if (edit or mode in {'source', 'formatted'}) and not getattr(reader, 'read_only', False):
+                if mode == 'source' and not edit:
+                    owner.crypt_edit_mode.value = 'Source'
                 owner.show_private_markdown_editor()
+            elif mode == 'source':
+                pass  # Source text is already mounted for read-only readers.
             elif initial_preview_error is not None:
                 owner.crypt_title.text = private_label(initial_preview_error)
             else:
                 owner.toggle_private_preview(initial=True, rendered=initial_preview)
+        if progress is not None:
+            progress.capture(initial=True)
         privacy = getattr(getattr(owner, 'app', owner), 'screen_privacy', None)
         if privacy is not None:
             privacy.refresh()

@@ -44,6 +44,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         self.external = False
         self.external_selection = None
         self.ended = False
+        self._last_progress_position = None
         self.chapter_cancelled, self.chapter_worker = Event(), None
         self.chapter_data, self.chapter_menu = None, None
         self.transport_failure = None
@@ -72,10 +73,8 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.build_presentation()
             self.sidecar_result.connect(self.sidecars_loaded)
             self.start_sidecars()
-            state = getattr(self.progress, 'credential_state', None)
-            if state is not None and state.locked_state:
-                self.status.setText('Saved position needs the previous ZIP password. Use Settings → Reader history → Migrate.')
-            elif self.progress.resume_notice:
+            self._last_progress_position = self.progress.position
+            if self.progress.resume_notice:
                 self.status.setText(self.progress.resume_notice)
             self.closing = False
             self.initialized = True
@@ -237,6 +236,10 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         self.time.setText(f'{clock(position)} / {clock(duration) if duration else "Loading duration…"}')
         self.caption.setText(self.subtitles.at(position - self.settings.subtitle_delay_ms) if self.external and self.subtitles else '')
         self.caption.setVisible(bool(self.caption.text()))
+        if (not self.closing and self.resume_at is None and not self.ended and self.player.duration() > 0
+                and position != self._last_progress_position):
+            self.progress.observe(position)
+            self._last_progress_position = position
 
     def refresh_tracks(self):
         def label(track, index):
@@ -543,11 +546,12 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
     def checkpoint(self, completed=False):
         if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
             return
-        if self.player.duration() <= 0:
-            return
         try:
-            self.content.check_access()
-            self.progress.save(self.player.position(), completed=completed or self.ended)
+            if completed:
+                self.progress.observe(0, completed=True)
+                self._last_progress_position = 0
+            if self.progress.flush() == 'locked':
+                self.status.setText(self.progress.resume_notice)
         except (OSError, ValueError, PermissionError) as error:
             try:
                 self.content.check_access()
@@ -604,6 +608,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         for resource in self.subtitle_resources:
             resource.close()
         self.subtitle_resources = []
+        self.progress.retire()
         self.content.close()
         self.lifecycle.close()
 

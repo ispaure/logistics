@@ -39,6 +39,7 @@ class ComicBrowserMixin:
         try:
             pages = ComicPages(self.path)
             self._reading_pages = tuple(pages.pages)
+            self._reading_revisions = pages.progress_pages
             return pages.cover(size)
         except ArchivePasswordError:
             return locked_preview(size)
@@ -47,4 +48,5 @@ class ComicBrowserMixin:
         from .reading_state import ReadingState, remember_position
         if not remember_position():
             return ''
-        return ReadingState(self.path).badge(getattr(self, '_reading_pages', None))
+        return ReadingState(self.path).badge(getattr(self, '_reading_pages', None),
+                                             revisions=getattr(self, '_reading_revisions', None))

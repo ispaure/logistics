@@ -12,9 +12,6 @@ from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
 from commonUtils.archives.zip_access import open_archive
-from features.rclone import executable, session
-from local_crypt_fixture import crypt_fixture
-from books_fixture import make_book
 
 
 def encrypted_package(package, password='synthetic-package-password'):
@@ -25,7 +22,16 @@ def encrypted_package(package, password='synthetic-package-password'):
     return base64.b64encode(output.getvalue()).decode()
 
 
+def stage_encrypted_package(source, destination, password):
+    fixture = json.loads(Path(source).read_text())
+    Path(destination).write_text(encrypted_package(base64.b64decode(fixture['package']), password))
+
+
 def generate(destination):
+    from features.rclone import executable, session
+    from local_crypt_fixture import crypt_fixture
+    from books_fixture import make_book
+
     with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
         settings = dict(session.credentials(fixture.context)['Secret'], remote='Cloud:native-fixture')
         package = BytesIO()

@@ -47,12 +47,16 @@ class VideoSettingsStore:
         self.defaults = SettingsStore(root)
 
     def load(self):
-        self.progress.settings = self.progress.settings or self.defaults.load()
-        return self.progress.settings
+        return self.progress.settings or self.defaults.load()
 
-    def save(self, values):
+    def observe(self, values, *, explicit=()):
         settings = PlaybackSettings.from_dict(values)
         with self.progress.lock:
-            self.progress.settings = settings
-            self.progress.save(self.progress.position)
+            self.progress.apply_settings(settings, self.defaults.load(), explicit=explicit)
+            return settings, self.progress.observe(self.progress.position)
+
+    def save(self, values, *, explicit=()):
+        settings, observation = self.observe(values, explicit=explicit)
+        if observation is not None:
+            self.progress.flush(observation)
         return settings

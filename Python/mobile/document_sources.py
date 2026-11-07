@@ -188,26 +188,8 @@ async def reopen_file(app, source, *, kind=None):
 
 def local_document_path(app, path):
     """Recover iOS Documents references after an app container relocation."""
-    path = Path(path)
-    if path.exists():
-        return path
-    from services.documents.locations import shared_documents_path
-    root = shared_documents_path(getattr(app, 'private_root', Path('/')))
-    if root is None:
-        return path
-    parts = path.parts
-    # Only historical iOS application Documents paths can be relocated. Never
-    # turn an arbitrary missing file into a same-named file in this app.
-    if parts[:3] == ('/', 'private', 'var'):
-        parts = ('/', *parts[2:])
-    prefix = ('/', 'var', 'mobile', 'Containers', 'Data', 'Application')
-    if parts[:len(prefix)] != prefix or len(parts) < 9 or parts[7] != 'Documents':
-        return path
-    relative = Path(*parts[8:])
-    if '..' in relative.parts:
-        return path
-    candidate = root / relative
-    return candidate if candidate.is_file() else path
+    from services.documents.progress_identity import local_document_path as relocate
+    return relocate(getattr(app, 'private_root', Path('/')), path)
 
 
 def local_reference_available(app, source):

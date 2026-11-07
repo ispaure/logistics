@@ -21,6 +21,9 @@ async def prepare_document_mutation(app, request, *, progress=None):
             workflow = getattr(owner, '_provider_markdown', None)
             if workflow is not None:
                 await workflow.flush()
+            reading = getattr(owner, '_provider_progress', None)
+            if reading is not None:
+                await reading.flush()
     return DocumentMutation(app, request, progress=progress)
 
 
@@ -110,6 +113,8 @@ class DocumentMutation:
 
     def execute(self, cancelled):
         from services.documents.mobile_storage import document_source
+        from services.documents.progress import prepare_local_progress_move
+
         request = self.request
         destination = request.provider if request.kind == 'rename' else request.destination.resolve()
         target = (('/'.join(p for p in (request.path.rpartition('/')[0], request.target) if p))
@@ -131,8 +136,21 @@ class DocumentMutation:
                 if current.data != binding.reader.data or current.revision != binding.reader.revision:
                     raise ValueError('An open document changed on disk. Reload or use Save As before moving it.')
             self.notebooks.prepare(destination, target, cancelled)
+            reference_error = progress_error = None
+            relocate_progress = None
+            try:
+                relocate_progress = prepare_local_progress_move(
+                    self.app, request.provider, request.path, destination, target, cancelled=cancelled,
+                )
+            except (OSError, ValueError) as error:
+                progress_error = error
             result = request.execute(cancelled, destination=destination, progress=self.progress)
-            reference_error = None
+            if (relocate_progress is not None and result.destination_published
+                    and result.source_state == 'removed'):
+                try:
+                    relocate_progress()
+                except (OSError, ValueError) as error:
+                    progress_error = error
             if request.kind == 'rename':
                 try:
                     from .favourites import relocate
@@ -150,25 +168,37 @@ class DocumentMutation:
                     reader = copies.open(key)
                     if reader.data != binding.reader.data:
                         raise ValueError('The moved document changed before reopening.')
-                    updated.append((binding, copies, reader))
+                    capture = getattr(copies, 'capture_access', None)
+                    access = capture(key) if capture is not None else lambda: None
+                    progress = None
+                    if getattr(binding.owner, '_provider_progress', None) is not None:
+                        from .provider_progress import ProviderProgress
+
+                        try:
+                            progress = ProviderProgress(binding.owner, copies, reader, key, check=access)
+                            progress.load()
+                        except (OSError, ValueError) as error:
+                            progress_error = error
+                    updated.append((binding, copies, reader, access, progress))
             except Exception as error:
                 raise MutationIncomplete('The file was moved, but the editor could not follow it. '
                     'Edits are retained; use Save As and inspect the destination before retrying.',
                     MutationResult(destination_published=True, source_state='removed')) from error
-        return result, updated, notebooks, reference_error
+        return result, updated, notebooks, reference_error, progress_error
 
     def apply(self, result):
-        from .private_sessions import PrivateSessions
         from .provider_ui import private_label
         from .document_sources import file_source
         app = self.app
-        for binding, copies, reader in result[1]:
+        for binding, copies, reader, access, progress in result[1]:
             from services.documents.mobile_reading import reading_capabilities
             private = reading_capabilities(copies).private
             owner, session = binding.owner, binding.owner.session
             if (not app.active_host or not app.workspace.accepts(binding.token)
                     or owner.crypt_reader is not binding.reader
                     or not app.private_sessions.available(session.id)):
+                if progress is not None:
+                    progress.close()
                 continue
             old_identity = session.identity
             previous_source = getattr(session, 'history_source', None)
@@ -180,13 +210,14 @@ class DocumentMutation:
             except (OSError, ValueError):
                 app.credential_document_lists.notice()
             owner.crypt_reader, owner._crypt_reader_store = reader, copies
+            owner.document_access = access
             owner.credential_client = app.cloud_client
             owner.credential_generation = getattr(app.cloud_client, 'generation', None)
-            session.resource = PrivateSessions.identity(copies, reader.key)
+            session.resource = app.private_sessions.identity(copies, reader.key)
             session.title = Path(reader.name).name
             owners = getattr(app.workspace, 'window_owners', None)
             if owners is not None and session.identity != old_identity:
-                owners.claim(app.workspace.window_id, session.identity, private=session.transient)
+                owners.claim(app.workspace.window_id, session.identity, private=session.private_access)
                 owners.release(app.workspace.window_id, old_identity)
             app.workspace.invalidate(session.id)
             owner.crypt_text.set_filename(reader.name)
@@ -194,6 +225,16 @@ class DocumentMutation:
             owner.crypt_page.items = reader.labels
             owner.crypt_page.value = reader.labels[0]
             owner.crypt_save.text = 'Save'
+            previous = getattr(owner, '_provider_progress', None)
+            if previous is not None:
+                # The verified move already relocated durable local state.
+                # Install a new handle instead of replaying stale observations
+                # or carrying a private locator into a different trust domain.
+                previous.close()
+                owner._provider_progress = progress
+                if progress is not None:
+                    progress.live = True
+                    progress.capture(initial=True)
             workflow = getattr(owner, '_provider_markdown', None)
             if workflow is not None:
                 workflow.relocated(private=private)
@@ -219,6 +260,8 @@ class DocumentMutation:
                 app.credential_document_lists.notice()
         self.notebooks.apply(result[2])
         app.save_workspace()
+        if result[4] is not None:
+            app.recovery_notice.text = 'Files moved. Some reading progress could not be carried forward.'
         if result[3] is not None:
             raise ValueError('Files changed; some saved references could not be updated.') from result[3]
 

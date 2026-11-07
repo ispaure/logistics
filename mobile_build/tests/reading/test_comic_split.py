@@ -157,8 +157,10 @@ class ComicSplitTests(unittest.TestCase):
                             self.assertEqual((nav.page, nav.half), (0, 0))
                             await move(1)
                             if not provider:
-                                saved, _ = owner.library_store.read_record(record['id'])
-                                self.assertEqual((saved['position'], saved['comic_half']), (0, 1))
+                                await owner._book_progress.flush()
+                                state, saved = owner.library_store.reading_progress(owner._library_baseline, owner.book_reader, app)
+                                self.assertEqual((saved['page'], saved['half']), (0, 1))
+                                state.retire()
                             app.preferences.save(comic_split_wide='false')
                             await jump(0)
                             self.assertFalse(nav.split)
@@ -168,6 +170,8 @@ class ComicSplitTests(unittest.TestCase):
                             if provider:
                                 app.private_sessions.close(owner.session.id, discard=True)
                         # Imported progress restores the half as well as the original page.
+                        if imported._book_progress is not None:
+                            await imported._book_progress.flush()
                         self.assertTrue(app.close_session(imported.session.id))
                         await app.open_book(record['id'])
                         owner = app.readers.active
@@ -175,6 +179,8 @@ class ComicSplitTests(unittest.TestCase):
                         await owner.move_comic(1)
                         self.assertEqual(owner.comic_navigation.half, 1)
                         key = owner.session.id
+                        if owner._book_progress is not None:
+                            await owner._book_progress.flush()
                         self.assertTrue(app.close_session(key))
                         await app.open_book(record['id'])
                         owner = app.readers.active

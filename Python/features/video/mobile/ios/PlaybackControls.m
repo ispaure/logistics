@@ -63,26 +63,27 @@
 }
 - (void)applyPlaybackOptions {
     if (!self.player || self.retired) return;
-    if (self.pendingSubtitleURL.length) [self attachSubtitleURL:self.pendingSubtitleURL];
     NSDictionary *options = [self playbackOptions];
+    if ([options[@"subtitle_track"] isKindOfClass:NSNumber.class]) {
+        self.pendingSubtitleURL = nil;
+        self.subtitleTracksBeforeAttachment = nil;
+    }
+    if (self.pendingSubtitleURL.length) [self attachSubtitleURL:self.pendingSubtitleURL];
     float rate = [options[@"rate"] floatValue];
     UIButtonConfiguration *speed = self.portraitSpeedButton.configuration;
     speed.title = [NSString stringWithFormat:@"%g×", rate >= .5 && rate <= 2. ? rate : 1.];
     self.portraitSpeedButton.configuration = speed;
     self.player.currentVideoSubTitleDelay = [options[@"subtitle_delay_ms"] longLongValue] * 1000;
     self.player.currentAudioPlaybackDelay = [options[@"audio_delay_ms"] longLongValue] * 1000;
-    // A session subtitle-menu adjustment wins over later settings refreshes.
-    // A new controller starts with zero and therefore uses the configured default.
-    // 20/22 is approximately two points smaller than the former 22 pt
-    // baseline. VLCKit exposes a *relative scale*, not a point-size setter.
+    // VLCKit uses a relative font scale. Preserve the established baseline.
     float configuredScale = options[@"subtitle_scale"] ? [options[@"subtitle_scale"] floatValue] : 1.f;
     if (!isfinite(configuredScale) || configuredScale <= 0) configuredScale = 1.f;
-    float subtitleScale = self.sessionSubtitleScale > 0 ? self.sessionSubtitleScale : configuredScale * (20.f / 22.f);
-    self.player.currentSubTitleFontScale = MAX(.5f, MIN(3.f, subtitleScale));
+    self.player.currentSubTitleFontScale = MAX(.5f, MIN(3.f, configuredScale * (20.f / 22.f)));
     [self.view setNeedsLayout];
     [self.view layoutIfNeeded];
     [self applyPictureSize];
-    NSString *audio = options[@"audio_language"] ?: @"", *subtitle = options[@"subtitle_language"] ?: @"";
+    NSString *audio = options[@"audio_language"] ?: @"";
+    NSString *subtitle = [options[@"subtitle_file"] length] ? @"" : (options[@"subtitle_language"] ?: @"");
     NSString *signature = [NSString stringWithFormat:@"%@:%@:%lu:%lu", audio, subtitle, (unsigned long)self.player.audioTracks.count, (unsigned long)self.player.textTracks.count];
     if (![self.languageSignature isEqualToString:signature]) {
         self.languageSignature = signature;
@@ -100,9 +101,29 @@
         NSArray *tracks = text ? self.player.textTracks : self.player.audioTracks;
         NSInteger index = selected.integerValue;
         if (text && index == -1) [self.player deselectAllTextTracks];
-        else if (index >= 0 && index < (NSInteger)tracks.count) {
-            VLCMediaPlayerTrack *track = tracks[index];
-            if (!track.isSelected) track.selectedExclusively = YES;
+        else {
+            NSString *identity = options[[key stringByAppendingString:@"_key"]];
+            VLCMediaPlayerTrack *match = nil;
+            if ([identity isKindOfClass:NSString.class] && identity.length) {
+                for (VLCMediaPlayerTrack *track in tracks) {
+                    if (![[self trackKey:track] isEqualToString:identity]) continue;
+                    if (match) { match = nil; break; }
+                    match = track;
+                }
+            } else if (index >= 0 && index < (NSInteger)tracks.count) match = tracks[index];
+            if (match && !match.isSelected) match.selectedExclusively = YES;
+        }
+    }
+    if (self.subtitleTracksBeforeAttachment) {
+        VLCMediaPlayerTrack *external = nil;
+        for (VLCMediaPlayerTrack *track in self.player.textTracks) {
+            if (!track.trackId.length || [self.subtitleTracksBeforeAttachment containsObject:track.trackId]) continue;
+            if (external) { external = nil; break; }
+            external = track;
+        }
+        if (external) {
+            external.selectedExclusively = YES;
+            self.subtitleTracksBeforeAttachment = nil;
         }
     }
     // Apply requested speed after the other output and track preferences.
@@ -154,7 +175,8 @@
     NSData *data = [NSJSONSerialization dataWithJSONObject:options options:0 error:nil];
     self.optionsJSON = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
     [self applyPlaybackOptions];
-    [self emitCommand:@"settings" value:self.optionsJSON];
+    NSData *update = [NSJSONSerialization dataWithJSONObject:@{key: value} options:0 error:nil];
+    [self emitCommand:@"settings" value:[[NSString alloc] initWithData:update encoding:NSUTF8StringEncoding]];
 }
 - (void)promptValue:(NSString *)title key:(NSString *)key numeric:(BOOL)numeric {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleAlert];
@@ -170,10 +192,7 @@
             NSScanner *scan = [NSScanner scannerWithString:text]; long long value;
             if (![scan scanLongLong:&value] || !scan.isAtEnd || llabs(value) > 600000) { [self showStatus:@"Enter a delay within ±600000 ms."]; return; }
             [self setting:key value:@(value)];
-        } else [self emitCommand:@"settings" value:({
-            NSMutableDictionary *settings = [[self playbackOptions] mutableCopy]; settings[key] = text;
-            [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:settings options:0 error:nil] encoding:NSUTF8StringEncoding];
-        })];
+        } else [self setting:key value:text];
     }]];
     [self presentPlaybackDialog:alert];
 }
@@ -254,19 +273,12 @@
     [self presentPlaybackDialog:menu];
 }
 - (void)subtitleSizeOptions:(id)sender {
-    UIAlertController *menu = [self menu:@"Subtitle size · current session" sender:sender];
+    UIAlertController *menu = [self menu:@"Subtitle size" sender:sender];
     for (NSNumber *scale in @[@.75,@1.,@1.25,@1.5,@2.]) {
-        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[NSString stringWithFormat:@"Subtitle size %@× (session)",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            self.sessionSubtitleScale = MAX(.5f, MIN(3.f, scale.floatValue * (20.f / 22.f)));
-            self.player.currentSubTitleFontScale = self.sessionSubtitleScale;
-            [self showStatus:[NSString stringWithFormat:@"Subtitle size %.0f%% (session)", self.sessionSubtitleScale * 100]];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[NSString stringWithFormat:@"Subtitle size %@×",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            [self setting:@"subtitle_scale" value:scale];
         }]];
     }
-    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Reset subtitle size (session)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        self.sessionSubtitleScale = 0;
-        [self applyPlaybackOptions];
-        [self showStatus:@"Subtitle size reset"];
-    }]];
     [self presentPlaybackDialog:menu];
 }
 - (void)hdrDisplayOptions:(id)sender {
@@ -320,9 +332,17 @@
 }
 - (void)attachSubtitleURL:(NSString *)url {
     self.pendingSubtitleURL = url;
-    if ([self canPlay:NO] && self.player.isPlaying &&
-        [self.player addPlaybackSlave:[NSURL URLWithString:url] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES])
+    if (![self canPlay:NO] || !self.player.isPlaying) return;
+    NSMutableSet<NSString *> *before = [NSMutableSet set];
+    for (VLCMediaPlayerTrack *track in self.player.textTracks) {
+        if (track.trackId.length) [before addObject:track.trackId];
+    }
+    if ([self.player addPlaybackSlave:[NSURL URLWithString:url] type:VLCMediaPlaybackSlaveTypeSubtitle enforce:YES] == 0) {
         self.pendingSubtitleURL = nil;
+        // VLC can attach the sidecar while leaving the previous embedded
+        // stream selected. Select the uniquely added track once it appears.
+        self.subtitleTracksBeforeAttachment = before;
+    }
 }
 - (void)showSubtitleBrowser:(NSString *)json {
     if (![self canPlay:NO]) return;

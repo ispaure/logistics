@@ -190,6 +190,12 @@ class ScreenPrivacy:
         # Invalidate outstanding authentication before invoking any of them.
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         self.prepare_native_protection()
+        private = getattr(self.app, 'private_sessions', None)
+        if private is not None:
+            private.flush_visible_progress()
+        readers = getattr(self.app, 'readers', None)
+        if readers is not None:
+            readers.flush_progress()
         if self.sensitive():
             from .privacy_effects import dismiss_floating_panels
             dismiss_floating_panels(self.app)

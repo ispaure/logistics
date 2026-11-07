@@ -7,7 +7,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import style_status_bar
 from features.comics.pages import ComicPages
 from features.comics.reading import comic_siblings, visible_pages
-from features.comics.reading_state import ReadingState, remember_position
+from features.comics.reading_state import comic_location, open_comic_progress, remember_position
 from commonUtils.ui.tasks.operations import Operation
 from services.documents.storage import document_writable
 from services.documents.zip_passwords import is_password_error
@@ -40,7 +40,8 @@ class ComicReaderWindow(qt.QMainWindow):
         self.pages = pages
         self._state_folder = state_folder
         self._remember_position = remember_position()
-        self._has_position = False
+        self._state = None
+        self._initial_page = True
         self.save_timer = qt.QTimer(self)
         self.save_timer.setSingleShot(True)
         self.save_timer.setInterval(600)
@@ -89,19 +90,18 @@ class ComicReaderWindow(qt.QMainWindow):
         self.next_button.pressed.connect(lambda: self.keys.start(1))
         self.previous_button.released.connect(self.keys.stop)
         self.next_button.released.connect(self.keys.stop)
-        self._configure_file()
-        self.go(self._state.position(self.pages.pages) if self._remember_position else 0)
+        progress, index = open_comic_progress(self.pages, self._state_folder) if self._remember_position else (None, 0)
+        self._configure_file(progress)
+        self.go(index)
 
     def showEvent(self, event):
         super().showEvent(event)
         self.canvas.setFocus(qt.Qt.FocusReason.OtherFocusReason)
 
-    def _configure_file(self):
-        if self.pages.document.private:
-            from services.documents.reader_positions import PrivateComicState
-            self._state = PrivateComicState(self.pages)
-        else:
-            self._state = ReadingState(self.pages.path, folder=self._state_folder)
+    def _configure_file(self, progress):
+        if self._state is not None:
+            self._state.retire()
+        self._state = progress
         self.page_cache.set_pages(self.pages)
         self.setWindowTitle(('🕵️ Private - ' if getattr(self.pages.document, 'private', False) else '') + self.pages.path.name)
         self.setWindowFilePath(str(self.pages.path))
@@ -185,6 +185,8 @@ class ComicReaderWindow(qt.QMainWindow):
         if clear_history:
             self.previous_starts.clear()
         index = max(0, min(index, len(self.pages.pages) - 1))
+        if self._initial_page and (self.busy or self.images):
+            self._initial_page = False
         self.page = index
         self._update_controls()
         if self.busy:
@@ -269,11 +271,14 @@ class ComicReaderWindow(qt.QMainWindow):
             slide = page_slide(self.canvas)
             slide.begin((index - self.shown_page) * (-1 if self.pages.right_to_left else 1))
             self.shown_page = index
-            self._has_position = True
-            self.save_timer.start()
             self.images = images
             self._update_spread()
             slide.finish()
+            if not self._initial_page:
+                self._observe_page()
+            elif self._state is not None:
+                self._progress_notice(self._state.load_status)
+            self._initial_page = False
             self.page_cache.update(images, self.shown_page, self.displayed_pages[-1])
             self.keys.page_shown()
 
@@ -321,11 +326,10 @@ class ComicReaderWindow(qt.QMainWindow):
             from features.comics.library import ComicDocument
             source = self.pages.document.source
             pages = ComicPages(path, ComicDocument(path, password=password, source=source))
-            index = page if page is not None else 0
-            if page is None and not from_end and self._remember_position:
-                index = ReadingState(pages.path, folder=self._state_folder).position(pages.pages)
+            progress, restored = open_comic_progress(pages, self._state_folder) if self._remember_position else (None, 0)
+            index = restored if page is None else page
             start = len(pages.pages) - 1 if from_end else max(0, min(index, len(pages.pages) - 1))
-            return pages, start, read_candidates(pages, start)
+            return pages, start, read_candidates(pages, start), progress, from_end or page is not None
         self._start(read, self._file_loaded)
 
     def _file_loaded(self, result, error):
@@ -342,25 +346,40 @@ class ComicReaderWindow(qt.QMainWindow):
                     self.pending_file = (path, from_end, page, password)
             self._refresh_siblings()
             return
-        self.pages, self.page, self.images = result
+        self.pages, self.page, self.images, progress, explicit_page = result
         self.shown_page = self.page
-        self._has_position = True
         self.previous_starts.clear()
         self.displayed_pages = (self.page,)
-        self._configure_file()
+        self._configure_file(progress)
         self._update_spread()
         self.page_cache.update(self.images, self.shown_page, self.displayed_pages[-1])
         self.statusBar().clearMessage()
-        self.save_timer.start()
+        if self._state is not None:
+            self._progress_notice(self._state.load_status)
+        if explicit_page:
+            self._observe_page()
+
+    def _observe_page(self):
+        if self._state is not None and self._state.observe(comic_location(self.pages, self.shown_page)) is not None:
+            self.save_timer.start()
 
     def _save_state(self):
         self.save_timer.stop()
-        if not self._remember_position or not self._has_position:
-            return
-        try:
-            self._state.save(self.shown_page, self.pages.pages)
-        except (OSError, ValueError) as error:
-            log(Severity.WARNING, 'Comic Reader', f'Reading position could not be saved: {error}')
+        if self._state is not None:
+            self._progress_notice(self._state.flush())
+
+    def _progress_notice(self, status):
+        from services.documents.ui.position_notice import position_notice
+
+        message = position_notice(self._state, status)
+        if message:
+            self.statusBar().showMessage(message)
+
+    def _retire_state(self):
+        self._save_state()
+        if self._state is not None:
+            self._state.retire()
+            self._state = None
 
     def _choose_file(self):
         from services.documents.ui.readers import choose_reader_document
@@ -428,7 +447,7 @@ class ComicReaderWindow(qt.QMainWindow):
             close_document(self)
 
     def shutdown(self):
-        self._save_state()
+        self._retire_state()
         self.keys.stop()
         self.page_cache.stop()
         self.closing = True
@@ -462,7 +481,7 @@ class ComicReaderWindow(qt.QMainWindow):
         for window in owned:
             if window.isVisible():
                 window.reject()
-        self._save_state()
+        self._retire_state()
         self.keys.stop()
         self.page_cache.stop()
         self.closing = True

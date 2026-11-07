@@ -5,7 +5,7 @@ import json
 from weakref import WeakSet
 
 from commonUtils.persistence import atomic_write_json
-from .credential_state import clear_positions, _io_lock
+from .credential_state import clear_positions, position_generation, _io_lock
 
 _libraries = WeakSet()
 _recent = WeakSet()
@@ -161,10 +161,7 @@ class PositionLease:
         self.generation = self.current()
 
     def current(self):
-        try:
-            return (self.root / "ReaderPositions/generation").read_text()[:64]
-        except FileNotFoundError:
-            return ""
+        return position_generation(self.root)
 
     def valid(self):
         return self.current() == self.generation

@@ -125,13 +125,20 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             document.dirty = bool(binding and binding.get('dirty'))
             document.source_unavailable = bool(binding and active_resource is None)
             remember_notebook_resource(document)
-            return document
-        document = await asyncio.to_thread(load)
+            try:
+                progress = panel.load_progress(book, document.key, active_resource)
+            except Exception:
+                document.close()
+                raise
+            return document, progress
+        document, progress = await asyncio.to_thread(load)
         if app.navigation_generation != generation or not app.active_host:
+            if progress[0] is not None:
+                progress[0].retire()
             document.close()
             panel.dispose()
             return False
-        panel.open_resource(document, mount=False)
+        panel.open_resource(document, mount=False, progress=progress)
         if resource is not None and not resource.policy.persistent:
             panel.privacy_gate = getattr(resource.provider, 'privacy_gate', None)
             from mobile.protection import for_app
@@ -303,7 +310,12 @@ def adopt_notebook_document(app, panel, document):
     if owners is not None:
         owners.claim(app.workspace.window_id, ('notebook', document.key), private=not resource.policy.persistent)
         owners.release(app.workspace.window_id, previous_identity)
+    panel.retire_progress()
     panel.document, panel.key = document, document.key
+    panel.progress, _ = panel.load_progress(document.book, document.key, resource)
+    if panel.progress is not None:
+        from features.notebooks.progress import page_location
+        panel.progress.save(page_location(panel.editor))
     panel.editor.checkpoint = document.checkpoint
     panel.editor.checkpoint_unconfirmed = False
     session.resource, session.transient = document.key, not resource.policy.persistent

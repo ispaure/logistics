@@ -383,6 +383,9 @@ class ReaderResumeTests(unittest.TestCase):
                     routes = tuple(route for route, _, _ in app.routes.screens[destination])
                     app.screen_privacy.conceal()
                     app.release_disposable_resources()
+                    pending_trim = getattr(owner, '_suspend_book_task', None)
+                    if pending_trim is not None:
+                        await pending_trim
                     self.assertIsNone(owner.book_reader)
                     app.screen_privacy.reveal()
                     task = getattr(owner, '_resume_book_task', None)

@@ -59,6 +59,7 @@ class FileOperations:
         document.editor.textChanged.connect(lambda: self._refresh_document_language(document))
         self._document_changed(document)
         document.editor.setFocus()
+        document.bind_position()
         return document
 
     def open_dialog(self, force=False):
@@ -261,6 +262,7 @@ class FileOperations:
             document.external_acknowledged = False
             document.editor.document().setModified(False)
             document.changed.emit()
+            document.bind_position(restore=False)
             self._remember_path(path)
             self._watch_paths()
             self.statusBar().showMessage("Saved.", 3000)
@@ -332,6 +334,7 @@ class FileOperations:
                     ),
                 )
                 return False
+        document.position.retire()
         self.document_stack.removeWidget(document)
         document.deleteLater()
         self._watch_paths()

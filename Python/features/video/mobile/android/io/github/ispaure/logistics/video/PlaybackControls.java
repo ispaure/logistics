@@ -95,18 +95,12 @@ final class PlaybackControls {
         media.addOption(":freetype-rel-fontsize=" + Math.round(16 / settings.optDouble("subtitle_scale", 1)));
     }
     void apply() {
+        if (!settings.isNull("subtitle_track")) owner.pendingSubtitleURL = null;
         if (owner.pendingSubtitleURL != null) owner.attachSubtitleURL(owner.pendingSubtitleURL);
-        int audio = settings.optInt("audio_track", Integer.MIN_VALUE);
-        int text = settings.optInt("subtitle_track", Integer.MIN_VALUE);
-        MediaPlayer.TrackDescription[] audioTracks = owner.player.getAudioTracks();
-        if (audioTracks != null) for (MediaPlayer.TrackDescription track : audioTracks)
-            if (track.id == audio && owner.player.getAudioTrack() != audio) owner.player.setAudioTrack(audio);
-        if (text == -1) owner.selectSubtitleTrack(-1);
-        else {
-            MediaPlayer.TrackDescription[] textTracks = owner.player.getSpuTracks();
-            if (textTracks != null) for (MediaPlayer.TrackDescription track : textTracks)
-                if (track.id == text && owner.player.getSpuTrack() != text) owner.selectSubtitleTrack(text);
-        }
+        int audio = resolveTrack("audio_track", owner.player.getAudioTracks(), false);
+        int text = resolveTrack("subtitle_track", owner.player.getSpuTracks(), true);
+        if (audio != Integer.MIN_VALUE && owner.player.getAudioTrack() != audio) owner.player.setAudioTrack(audio);
+        if (text != Integer.MIN_VALUE && owner.player.getSpuTrack() != text) owner.selectSubtitleTrack(text);
         owner.player.setRate((float) settings.optDouble("rate", 1));
         owner.player.setAudioDelay(settings.optLong("audio_delay_ms") * 1000);
         owner.player.setSpuDelay(settings.optLong("subtitle_delay_ms") * 1000);
@@ -114,9 +108,31 @@ final class PlaybackControls {
         owner.player.setVideoScale(aspect.equals("fill") ? MediaPlayer.ScaleType.SURFACE_FIT_SCREEN :
             aspect.equals("original") ? MediaPlayer.ScaleType.SURFACE_ORIGINAL : MediaPlayer.ScaleType.SURFACE_BEST_FIT);
     }
+    private int resolveTrack(String field, MediaPlayer.TrackDescription[] tracks, boolean text) {
+        int id = settings.optInt(field, Integer.MIN_VALUE);
+        if (id == -1) return id;
+        String key = settings.optString(field + "_key", "");
+        int match = Integer.MIN_VALUE;
+        if (tracks != null) for (MediaPlayer.TrackDescription track : tracks) {
+            if (track.id < 0) continue;
+            if (key.isEmpty() ? track.id != id : !key.equals(owner.trackKey(track, text))) continue;
+            if (match != Integer.MIN_VALUE) return Integer.MIN_VALUE;
+            match = track.id;
+        }
+        return match;
+    }
+    void selectTrack(String field, int id, String key) {
+        try {
+            JSONObject next = new JSONObject();
+            next.put(field, id);
+            next.put(field + "_key", key);
+            if (field.equals("subtitle_track")) next.put("subtitle_file", "");
+            emit("settings", next.toString());
+        } catch (Exception error) { owner.status("Invalid playback track."); }
+    }
     void setting(String key, Object value) {
         try {
-            JSONObject next = new JSONObject(settings.toString()); next.put(key, value);
+            JSONObject next = new JSONObject(); next.put(key, value);
             emit("settings", next.toString());
         } catch (Exception error) { owner.status("Invalid playback preference."); }
     }
